@@ -40,6 +40,7 @@ export default function AdminNovoLeadPage() {
     plano_atual: '',
     investimento: '',
     cidade: '',
+    operadora: '',
     status: 'Aguardando atendimento' as LeadStatus,
     data_entrada: new Date().toISOString().split('T')[0]
   });
@@ -80,6 +81,7 @@ export default function AdminNovoLeadPage() {
           plano_atual: formData.plano_atual,
           investimento: formData.investimento,
           cidade: formData.cidade,
+          operadora: formData.operadora || null,
           status: formData.status,
           data_entrada: new Date(formData.data_entrada).toISOString()
         }]);
@@ -108,6 +110,10 @@ export default function AdminNovoLeadPage() {
     'Em negociação',
     'Sem interesse'
   ];
+
+  const selectedCorretor = corretores.find(c => c.id === formData.corretor_id);
+  const operadorasSelecionadas = selectedCorretor?.operadoras_info?.selecionadas;
+  const operadorasDoCorretor = Array.isArray(operadorasSelecionadas) ? operadorasSelecionadas : [];
 
   return (
     <InternalLayout>
@@ -153,7 +159,7 @@ export default function AdminNovoLeadPage() {
                     <select 
                       required
                       value={formData.corretor_id}
-                      onChange={e => setFormData({...formData, corretor_id: e.target.value})}
+                      onChange={e => setFormData({...formData, corretor_id: e.target.value, operadora: ''})}
                       className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-bold appearance-none"
                     >
                       <option value="">Selecione um corretor...</option>
@@ -178,7 +184,7 @@ export default function AdminNovoLeadPage() {
               </div>
 
               {/* Dados Pessoais */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="space-y-2 group">
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">NOME</label>
                   <div className="relative">
@@ -190,6 +196,22 @@ export default function AdminNovoLeadPage() {
                       placeholder="Nome completo do lead"
                       className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium"
                     />
+                  </div>
+                </div>
+                <div className="space-y-2 group">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">OPERADORA</label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <select
+                      value={formData.operadora}
+                      onChange={e => setFormData({...formData, operadora: e.target.value})}
+                      className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-bold appearance-none"
+                    >
+                      <option value="">Não informada</option>
+                      {operadorasDoCorretor.map((operadora) => (
+                        <option key={operadora} value={operadora}>{operadora}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <div className="space-y-2 group">
