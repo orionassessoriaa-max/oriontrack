@@ -64,6 +64,13 @@ export default function PrimeiroAcessoPage() {
     }
 
     setSuccess(true);
+    await supabase.auth.signInWithOtp({
+      email: emailReal,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: `${window.location.origin}/login`
+      }
+    });
     await refreshProfile();
     await supabase.auth.signOut();
     setTimeout(() => router.push('/login'), 2600);
@@ -96,7 +103,7 @@ export default function PrimeiroAcessoPage() {
             <CheckCircle2 className="mx-auto text-emerald-300" size={42} />
             <h2 className="text-xl font-black">Acesso atualizado</h2>
             <p className="text-sm font-medium text-emerald-100">
-              Entre novamente usando seu email real e a nova senha.
+              Enviamos a verificação para seu email real. Depois, entre usando esse email e a nova senha.
             </p>
           </div>
         ) : (
