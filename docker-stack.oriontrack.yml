@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  oriontrack:
+    image: oriontrack:latest
+    networks:
+      - Orionvps
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      NEXT_PUBLIC_SUPABASE_URL: "https://nfkgrmzuizfxuoiwxcbm.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ma2dybXp1aXpmeHVvaXd4Y2JtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzODIzNzQsImV4cCI6MjA5Mzk1ODM3NH0.x-5kD0xVnNB3MRK6aUOuUkHC0-cEID6BBPCGYMFCdvc"
+      SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ma2dybXp1aXpmeHVvaXd4Y2JtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODM4MjM3NCwiZXhwIjoyMDkzOTU4Mzc0fQ.x-MORQ0Zsu05UJYBSpzkl8ewrAbU9J0EgPHETGrsIS8"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=Orionvps"
+        - "traefik.http.routers.oriontrack.rule=Host(`track.orionassessoriaa.com.br`)"
+        - "traefik.http.routers.oriontrack.entrypoints=websecure"
+        - "traefik.http.routers.oriontrack.tls=true"
+        - "traefik.http.routers.oriontrack.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.oriontrack.loadbalancer.server.port=3000"
+
+networks:
+  Orionvps:
+    external: true

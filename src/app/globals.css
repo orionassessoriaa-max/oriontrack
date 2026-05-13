@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: #e2e8f0;
+}
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --sidebar-background: #0f172a;
+  --sidebar-foreground: #f8fafc;
+  --card-background: #ffffff;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+}
+
+@layer base {
+  * {
+    @apply border-[#e2e8f0];
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+.glass {
+  @apply bg-white/80 backdrop-blur-md border border-white/20;
+}
+
+.card-shadow {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+}
+
+.status-badge {
+  @apply px-2.5 py-0.5 rounded-full text-xs font-medium inline-flex items-center;
+}
+
+.status-aguardando-atendimento { @apply bg-blue-100 text-blue-700; }
+.status-contato-feito { @apply bg-yellow-100 text-yellow-700; }
+.status-cotacao-enviada { @apply bg-purple-100 text-purple-700; }
+.status-em-negociacao { @apply bg-orange-100 text-orange-700; }
+.status-venda-realizada { @apply bg-green-100 text-green-700; }
+.status-sem-interesse { @apply bg-gray-100 text-gray-700; }
