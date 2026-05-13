@@ -1,0 +1,29 @@
+﻿version: "3.8"
+
+services:
+  oriontrack:
+    image: oriontrack:latest
+    networks:
+      - Orionvps
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      NEXT_PUBLIC_SUPABASE_URL: "https://nfkgrmzuizfxuoiwxcbm.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "REDACTED_JWT"
+      SUPABASE_SERVICE_ROLE_KEY: "REDACTED_JWT"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=Orionvps"
+        - "traefik.http.routers.oriontrack.rule=Host(`track.orionassessoriaa.com.br`)"
+        - "traefik.http.routers.oriontrack.entrypoints=websecure"
+        - "traefik.http.routers.oriontrack.tls=true"
+        - "traefik.http.routers.oriontrack.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.oriontrack.loadbalancer.server.port=3000"
+
+networks:
+  Orionvps:
+    external: true
