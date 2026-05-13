@@ -38,6 +38,7 @@ export default function AdminNovoLeadPage() {
     possui_cnpj: 'Não informado',
     tem_plano_ativo: 'Não informado',
     plano_atual: '',
+    custo_plano_atual: '',
     investimento: '',
     cidade: '',
     operadora: '',
@@ -79,6 +80,7 @@ export default function AdminNovoLeadPage() {
           possui_cnpj: formData.possui_cnpj,
           tem_plano_ativo: formData.tem_plano_ativo,
           plano_atual: formData.plano_atual,
+          custo_plano_atual: formData.custo_plano_atual,
           investimento: formData.investimento,
           cidade: formData.cidade,
           operadora: formData.operadora || null,
@@ -277,7 +279,7 @@ export default function AdminNovoLeadPage() {
               </div>
 
               {/* Informações Complementares */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="space-y-2 group">
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">PLANO ATUAL</label>
                   <div className="relative">
@@ -292,14 +294,27 @@ export default function AdminNovoLeadPage() {
                   </div>
                 </div>
                 <div className="space-y-2 group">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">INVESTIMENTO</label>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">CUSTO DO PLANO ATUAL</label>
+                  <div className="relative">
+                    <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={formData.custo_plano_atual}
+                      onChange={e => setFormData({...formData, custo_plano_atual: e.target.value})}
+                      placeholder="Quanto paga hoje?"
+                      className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2 group">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">INVESTIMENTO PRETENDIDO</label>
                   <div className="relative">
                     <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input 
                       type="text"
                       value={formData.investimento}
                       onChange={e => setFormData({...formData, investimento: e.target.value})}
-                      placeholder="Ex: R$ 1.200"
+                      placeholder="Quanto pretende investir?"
                       className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium"
                     />
                   </div>

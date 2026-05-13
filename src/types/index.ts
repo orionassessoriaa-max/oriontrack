@@ -62,6 +62,7 @@ export interface Lead {
   possui_cnpj: string; // 'Sim' | 'Não' | 'Não informado'
   tem_plano_ativo: string; // 'Sim' | 'Não' | 'Não informado'
   plano_atual: string | null;
+  custo_plano_atual?: string | null;
   investimento: string;
   cidade: string;
   operadora?: string | null;
