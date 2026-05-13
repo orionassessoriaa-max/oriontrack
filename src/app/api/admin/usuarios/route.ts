@@ -5,6 +5,11 @@ import { UserRole } from '@/types';
 
 const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
 
+function isMasterAdmin(profile: { email?: string | null; email_real?: string | null }) {
+  const email = String(profile.email_real || profile.email || '').toLowerCase();
+  return email === MASTER_ADMIN_EMAIL;
+}
+
 async function requireAdmin(request: Request) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -64,7 +69,11 @@ export async function GET(request: Request) {
     if (profilesError) throw profilesError;
     if (corretoresError) throw corretoresError;
 
-    return NextResponse.json({ profiles: profiles || [], corretores: corretores || [] });
+    return NextResponse.json({
+      profiles: profiles || [],
+      corretores: corretores || [],
+      isMasterAdmin: isMasterAdmin(guard.profile)
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao listar usuários.' }, { status: 500 });
   }
@@ -86,6 +95,10 @@ export async function POST(request: Request) {
 
     if (!nome || !role || !['admin', 'gestor_trafego', 'corretor'].includes(role)) {
       return NextResponse.json({ error: 'Nome e tipo de usuário são obrigatórios.' }, { status: 400 });
+    }
+
+    if (role === 'admin' && !isMasterAdmin(guard.profile)) {
+      return NextResponse.json({ error: 'Apenas o admin master Ewertton pode criar outros admins.' }, { status: 403 });
     }
 
     if (role === 'corretor' && !telefone) {
@@ -194,8 +207,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
     }
 
-    const requesterEmail = String(guard.profile.email_real || guard.profile.email || '').toLowerCase();
-    if (profile.tipo_usuario === 'admin' && requesterEmail !== MASTER_ADMIN_EMAIL) {
+    if (profile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
       return NextResponse.json({ error: 'Apenas o admin mestre pode remover outro admin.' }, { status: 403 });
     }
 
