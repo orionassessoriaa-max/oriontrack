@@ -20,7 +20,8 @@ import {
   TrendingUp,
   UserCog,
   RotateCcw,
-  Bell
+  Bell,
+  Shield
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -36,6 +37,7 @@ export default function Sidebar() {
 
   const adminMenu = [
     { icon: Home, label: 'Visão Geral', href: '/admin' },
+    { icon: Shield, label: 'Usuários', href: '/admin/usuarios' },
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
     { icon: UserCog, label: 'Gestores de Tráfego', href: '/admin/gestores' },
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },

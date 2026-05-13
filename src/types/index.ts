@@ -4,10 +4,14 @@ export type TipoCampanha = 'pme' | 'adesao' | 'ambos';
 export interface Profile {
   id: string;
   email: string;
+  email_real?: string | null;
   nome: string;
   tipo_usuario: UserRole;
   corretor_id: string | null;
   status: 'active' | 'inactive' | 'ativo' | 'inativo' | 'Ativo' | 'Inativo';
+  foto_url?: string | null;
+  nome_empresa?: string | null;
+  precisa_trocar_senha?: boolean | null;
   created_at: string;
 }
 
@@ -60,6 +64,7 @@ export interface Lead {
   plano_atual: string | null;
   investimento: string;
   cidade: string;
+  operadora?: string | null;
   status: LeadStatus;
   etiqueta?: string;
   observacoes?: string;

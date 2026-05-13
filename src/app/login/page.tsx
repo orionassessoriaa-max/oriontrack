@@ -48,6 +48,12 @@ export default function LoginPage() {
         throw new Error('Usuário sem perfil vinculado. Fale com a Orion.');
       }
 
+      if (profile.precisa_trocar_senha) {
+        router.push('/primeiro-acesso');
+        router.refresh();
+        return;
+      }
+
       // Redirection logic based on tipo_usuario
       if (profile.tipo_usuario === 'admin') {
         router.push('/admin');

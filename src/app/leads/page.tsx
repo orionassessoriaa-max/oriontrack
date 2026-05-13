@@ -38,6 +38,8 @@ export default function BrokerLeadsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [minLives, setMinLives] = useState('');
+  const [operadoraFilter, setOperadoraFilter] = useState('todas');
+  const [operadorasDisponiveis, setOperadorasDisponiveis] = useState<string[]>([]);
   const [showCrmModal, setShowCrmModal] = useState(false);
   const [crmApiUrl, setCrmApiUrl] = useState('');
 
@@ -92,11 +94,13 @@ export default function BrokerLeadsPage() {
 
     const { data } = await supabase
       .from('corretores')
-      .select('crm_api_url')
+      .select('crm_api_url, operadoras_info')
       .eq('id', profile.corretor_id)
       .maybeSingle();
 
     setCrmApiUrl(data?.crm_api_url || '');
+    const operadoras = data?.operadoras_info?.selecionadas;
+    setOperadorasDisponiveis(Array.isArray(operadoras) ? operadoras : []);
   };
 
   const updateLeadStatus = async (leadId: string, status: LeadStatus) => {
@@ -142,12 +146,13 @@ export default function BrokerLeadsPage() {
 
     const cnpjMatch = cnpjFilter === 'todos' || lead.possui_cnpj === cnpjFilter;
     const statusMatch = statusFilter === 'todos' || lead.status === statusFilter;
+    const operadoraMatch = operadoraFilter === 'todas' || lead.operadora === operadoraFilter;
     const livesMatch = !minLives || countLives(lead.idades) >= Number(minLives);
     const leadDate = lead.data_entrada ? new Date(lead.data_entrada) : null;
     const fromMatch = !dateFrom || (leadDate && leadDate >= new Date(dateFrom));
     const toMatch = !dateTo || (leadDate && leadDate <= new Date(dateTo + 'T23:59:59'));
 
-    return searchMatch && cnpjMatch && statusMatch && livesMatch && fromMatch && toMatch;
+    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && livesMatch && fromMatch && toMatch;
   });
 
   return (
@@ -171,6 +176,36 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="mb-6 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm">
+        {operadorasDisponiveis.length > 0 && (
+          <div className="mb-5 rounded-[1.5rem] border border-blue-100 bg-blue-50 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-xs font-black text-white">OP</span>
+              <div>
+                <p className="text-sm font-black text-blue-950">Filtro por operadora da sua campanha</p>
+                <p className="text-xs font-bold text-blue-600">Aparecem apenas as operadoras marcadas no cadastro do corretor.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setOperadoraFilter('todas')}
+                className={`rounded-2xl px-4 py-3 text-xs font-black transition-all ${operadoraFilter === 'todas' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
+              >
+                Todas
+              </button>
+              {operadorasDisponiveis.map((operadora) => (
+                <button
+                  key={operadora}
+                  type="button"
+                  onClick={() => setOperadoraFilter(operadora)}
+                  className={`rounded-2xl px-4 py-3 text-xs font-black transition-all ${operadoraFilter === operadora ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
+                >
+                  {operadora}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-6">
           <div className="relative lg:col-span-2">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -218,20 +253,21 @@ export default function BrokerLeadsPage() {
               <thead>
                 <tr className="bg-gray-50/50">
                   <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Data</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Lead</th>
+                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome</th>
                   <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">CNPJ</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Vidas</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Plano</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Cidade</th>
+                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Idades</th>
+                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Possui CNPJ</th>
+                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Tem plano ativo?</th>
+                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Plano atual</th>
                   <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Investimento</th>
+                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Cidade</th>
                   <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="py-20 text-center">
+                    <td colSpan={10} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -243,11 +279,9 @@ export default function BrokerLeadsPage() {
                     <td className="px-5 py-5 text-[13px] font-bold text-slate-500">
                       {lead.data_entrada ? format(new Date(lead.data_entrada), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '-'}
                     </td>
-                    <td className="px-5 py-5">
-                      <p className="text-sm font-bold text-gray-900">{lead.nome}</p>
-                      <p className="mt-1 max-w-xs truncate text-[11px] font-medium text-slate-400">{lead.observacoes || '-'}</p>
-                    </td>
+                    <td className="px-5 py-5 text-sm font-bold text-gray-900">{lead.nome}</td>
                     <td className="px-5 py-5 text-sm font-medium text-slate-600">{lead.telefone}</td>
+                    <td className="px-5 py-5 text-sm font-bold text-slate-600">{lead.idades || '-'}</td>
                     <td className="px-5 py-5">
                       <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
                         lead.possui_cnpj === 'Sim' ? 'bg-emerald-50 text-emerald-700' :
@@ -257,10 +291,18 @@ export default function BrokerLeadsPage() {
                         {lead.possui_cnpj || 'Nao informado'}
                       </span>
                     </td>
-                    <td className="px-5 py-5 text-sm font-bold text-slate-600">{countLives(lead.idades) || '-'}</td>
+                    <td className="px-5 py-5">
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
+                        lead.tem_plano_ativo === 'Sim' ? 'bg-blue-50 text-blue-700' :
+                        lead.tem_plano_ativo === 'Não' ? 'bg-slate-100 text-slate-600' :
+                        'bg-slate-50 text-slate-500'
+                      }`}>
+                        {lead.tem_plano_ativo || 'Nao informado'}
+                      </span>
+                    </td>
                     <td className="px-5 py-5 text-sm font-medium text-slate-500">{lead.plano_atual || '-'}</td>
-                    <td className="px-5 py-5 text-sm font-medium text-slate-500">{lead.cidade || '-'}</td>
                     <td className="px-5 py-5 text-sm font-bold text-slate-600">{lead.investimento || '-'}</td>
+                    <td className="px-5 py-5 text-sm font-medium text-slate-500">{lead.cidade || '-'}</td>
                     <td className="px-5 py-5">
                       <div className="flex items-center gap-2">
                         <select
