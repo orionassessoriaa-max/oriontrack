@@ -259,7 +259,8 @@ export default function BrokerLeadsPage() {
                   <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Possui CNPJ</th>
                   <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Tem plano ativo?</th>
                   <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Plano atual</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Investimento</th>
+                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Custo atual</th>
+                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Investimento pretendido</th>
                   <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Cidade</th>
                   <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
                 </tr>
@@ -267,7 +268,7 @@ export default function BrokerLeadsPage() {
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="py-20 text-center">
+                    <td colSpan={11} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -301,6 +302,7 @@ export default function BrokerLeadsPage() {
                       </span>
                     </td>
                     <td className="px-5 py-5 text-sm font-medium text-slate-500">{lead.plano_atual || '-'}</td>
+                    <td className="px-5 py-5 text-sm font-bold text-slate-600">{lead.custo_plano_atual || '-'}</td>
                     <td className="px-5 py-5 text-sm font-bold text-slate-600">{lead.investimento || '-'}</td>
                     <td className="px-5 py-5 text-sm font-medium text-slate-500">{lead.cidade || '-'}</td>
                     <td className="px-5 py-5">
