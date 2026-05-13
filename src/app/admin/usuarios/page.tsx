@@ -34,6 +34,7 @@ export default function AdminUsuariosPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
+  const [isMasterAdmin, setIsMasterAdmin] = useState(false);
 
   const accessEmail = useMemo(() => generateOrionEmail(form.nome), [form.nome]);
 
@@ -66,6 +67,7 @@ export default function AdminUsuariosPage() {
 
     setProfiles(payload.profiles || []);
     setCorretores(payload.corretores || []);
+    setIsMasterAdmin(Boolean(payload.isMasterAdmin));
     setLoading(false);
   }
 
@@ -243,8 +245,13 @@ export default function AdminUsuariosPage() {
               >
                 <option value="corretor">Corretor</option>
                 <option value="gestor_trafego">Gestor de tráfego</option>
-                <option value="admin">Admin / Diretor</option>
+                {isMasterAdmin && <option value="admin">Admin / Diretor</option>}
               </select>
+              {!isMasterAdmin && (
+                <p className="mt-2 text-[11px] font-bold text-amber-600">
+                  Somente o admin master Ewertton pode criar outros admins.
+                </p>
+              )}
             </div>
 
             {form.tipo_usuario === 'corretor' && (

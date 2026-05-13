@@ -7,6 +7,29 @@ import { motion } from 'framer-motion';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 
+function getPasswordStrength(password: string) {
+  let score = 0;
+  if (password.length >= 8) score += 1;
+  if (password.length >= 12) score += 1;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1;
+  if (/\d/.test(password)) score += 1;
+  if (/[^a-zA-Z0-9]/.test(password)) score += 1;
+
+  if (!password) {
+    return { label: 'Digite uma senha', className: 'bg-slate-700', textClassName: 'text-slate-400', width: 'w-0' };
+  }
+
+  if (score <= 2) {
+    return { label: 'Senha fraca', className: 'bg-red-500', textClassName: 'text-red-300', width: 'w-1/3' };
+  }
+
+  if (score <= 4) {
+    return { label: 'Senha boa', className: 'bg-amber-400', textClassName: 'text-amber-200', width: 'w-2/3' };
+  }
+
+  return { label: 'Senha forte', className: 'bg-emerald-400', textClassName: 'text-emerald-200', width: 'w-full' };
+}
+
 export default function PrimeiroAcessoPage() {
   const router = useRouter();
   const { user, profile, loading, refreshProfile } = useAuth();
@@ -16,6 +39,7 @@ export default function PrimeiroAcessoPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const passwordStrength = getPasswordStrength(senha);
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
@@ -140,6 +164,14 @@ export default function PrimeiroAcessoPage() {
                   onChange={(event) => setSenha(event.target.value)}
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.03] py-4 pl-12 pr-4 font-bold text-white outline-none transition-all focus:ring-2 focus:ring-blue-500/50"
                 />
+              </div>
+              <div className="space-y-2 px-1">
+                <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                  <div className={`h-full rounded-full transition-all ${passwordStrength.width} ${passwordStrength.className}`} />
+                </div>
+                <p className={`text-xs font-black uppercase tracking-widest ${passwordStrength.textClassName}`}>
+                  {passwordStrength.label}
+                </p>
               </div>
             </div>
 
