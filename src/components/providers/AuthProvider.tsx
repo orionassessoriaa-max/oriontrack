@@ -152,50 +152,46 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   useEffect(() => {
-    const initializeAuth = async () => {
+    let active = true;
+
+    const applySession = async (session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']) => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
         if (session?.user) {
+          if (!active) return;
           setUser(session.user);
           const p = await fetchProfile(session.user.id);
+          if (!active) return;
           setActualProfile(p);
         } else {
+          if (!active) return;
           setUser(null);
           setActualProfile(null);
           setViewingProfile(null);
+          window.sessionStorage.removeItem('orion:viewing_corretor_id');
+          window.sessionStorage.removeItem('orion:viewing_gestor_id');
+
+          const currentPath = window.location.pathname;
+          const publicPaths = ['/login', '/primeiro-acesso', '/resetar-senha'];
+          if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/c/')) {
+            router.push('/login');
+          }
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
-    initializeAuth();
+    void supabase.auth.getSession().then(({ data }) => applySession(data.session));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        const p = await fetchProfile(session.user.id);
-        setActualProfile(p);
-      } else {
-        setUser(null);
-        setActualProfile(null);
-        setViewingProfile(null);
-        window.sessionStorage.removeItem('orion:viewing_corretor_id');
-        window.sessionStorage.removeItem('orion:viewing_gestor_id');
-
-        const currentPath = window.location.pathname;
-        const publicPaths = ['/login', '/primeiro-acesso', '/resetar-senha'];
-        if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/c/')) {
-          router.push('/login');
-        }
-      }
-      setLoading(false);
+      if (event === 'INITIAL_SESSION') return;
+      await applySession(session);
     });
 
     return () => {
+      active = false;
       subscription.unsubscribe();
     };
   }, [router]);
