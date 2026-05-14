@@ -34,7 +34,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, stopViewingAsCorretor } = useAuth();
   const isViewingAsUser = isViewingAsCorretor || isViewingAsGestor;
-  const isMasterAdmin = [actualProfile?.email, actualProfile?.email_real]
+  const isMasterAdmin = Boolean(actualProfile?.is_admin_master) || [actualProfile?.email, actualProfile?.email_real]
     .filter(Boolean)
     .map((email) => String(email).toLowerCase())
     .includes('ewerttonherculano@gmail.com');

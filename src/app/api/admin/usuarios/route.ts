@@ -3,11 +3,10 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateOrionEmail, generateStrongPassword } from '@/lib/users';
 import { UserRole } from '@/types';
 
-const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
-
-function isMasterAdmin(profile: { email?: string | null; email_real?: string | null }) {
+function isMasterAdmin(profile: { email?: string | null; email_real?: string | null; is_admin_master?: boolean | null }) {
+  if (profile.is_admin_master) return true;
   const email = String(profile.email_real || profile.email || '').toLowerCase();
-  return email === MASTER_ADMIN_EMAIL;
+  return email === 'ewerttonherculano@gmail.com';
 }
 
 async function requireAdmin(request: Request) {
@@ -24,7 +23,7 @@ async function requireAdmin(request: Request) {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('tipo_usuario,email,email_real')
+    .select('tipo_usuario,email,email_real,is_admin_master')
     .eq('id', user.id)
     .single();
 
@@ -69,13 +68,8 @@ export async function GET(request: Request) {
     if (profilesError) throw profilesError;
     if (corretoresError) throw corretoresError;
 
-    const profilesWithMasterFlag = (profiles || []).map((profile) => ({
-      ...profile,
-      is_admin_master: isMasterAdmin(profile)
-    }));
-
     return NextResponse.json({
-      profiles: profilesWithMasterFlag,
+      profiles: profiles || [],
       corretores: corretores || [],
       isMasterAdmin: isMasterAdmin(guard.profile)
     });
