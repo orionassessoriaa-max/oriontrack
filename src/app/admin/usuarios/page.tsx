@@ -25,6 +25,8 @@ const initialForm = {
   operadoras: [] as string[],
 };
 
+const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
+
 export default function AdminUsuariosPage() {
   const { user } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -352,6 +354,10 @@ export default function AdminUsuariosPage() {
                 const corretor = corretores.find((item) => item.id === profile.corretor_id);
                 const operadoras = corretor?.operadoras_info?.selecionadas;
                 const isOwnAccess = profile.id === user?.id;
+                const isMasterAccess = [profile.email, profile.email_real]
+                  .filter(Boolean)
+                  .map((email) => String(email).toLowerCase())
+                  .includes(MASTER_ADMIN_EMAIL);
 
                 return (
                   <div key={profile.id} className="flex flex-col gap-4 p-5 transition-colors hover:bg-blue-50/30 md:flex-row md:items-center md:justify-between">
@@ -381,7 +387,7 @@ export default function AdminUsuariosPage() {
                       </div>
                     </div>
 
-                    {isOwnAccess ? (
+                    {isOwnAccess || isMasterAccess ? (
                       <span className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">
                         Admin master
                       </span>
