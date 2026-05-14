@@ -48,7 +48,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       // Buscamos campos garantidos. Se houver erro de coluna status, o log detalhado avisará.
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, created_at')
+        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, created_at')
         .eq('id', userId)
         .maybeSingle();
 
@@ -60,7 +60,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           console.warn('Tentando carregar profile sem o campo status...');
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('profiles')
-            .select('id, email, email_real, nome, tipo_usuario, corretor_id, foto_url, nome_empresa, precisa_trocar_senha, created_at')
+            .select('id, email, email_real, nome, tipo_usuario, corretor_id, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, created_at')
             .eq('id', userId)
             .maybeSingle();
           
@@ -112,7 +112,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const fetchGestorViewProfile = async (gestorId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, created_at')
+      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, created_at')
       .eq('id', gestorId)
       .eq('tipo_usuario', 'gestor_trafego')
       .maybeSingle();

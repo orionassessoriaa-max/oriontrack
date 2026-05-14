@@ -12,6 +12,7 @@ export interface Profile {
   foto_url?: string | null;
   nome_empresa?: string | null;
   precisa_trocar_senha?: boolean | null;
+  is_admin_master?: boolean | null;
   created_at: string;
 }
 
