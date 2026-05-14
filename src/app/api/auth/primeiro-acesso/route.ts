@@ -27,9 +27,7 @@ export async function POST(request: Request) {
     }
 
     const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-      email: emailReal,
       password: senha,
-      email_confirm: false,
       user_metadata: {
         ...user.user_metadata,
         email_real: emailReal,
@@ -45,7 +43,6 @@ export async function POST(request: Request) {
       .from('profiles')
       .update({
         email_real: emailReal,
-        email: emailReal,
         precisa_trocar_senha: false
       })
       .eq('id', user.id);

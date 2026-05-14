@@ -187,7 +187,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         window.sessionStorage.removeItem('orion:viewing_gestor_id');
 
         const currentPath = window.location.pathname;
-        if (currentPath !== '/login' && !currentPath.startsWith('/c/')) {
+        const publicPaths = ['/login', '/primeiro-acesso', '/resetar-senha'];
+        if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/c/')) {
           router.push('/login');
         }
       }
