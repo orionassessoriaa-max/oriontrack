@@ -34,6 +34,10 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, stopViewingAsCorretor } = useAuth();
   const isViewingAsUser = isViewingAsCorretor || isViewingAsGestor;
+  const isMasterAdmin = [actualProfile?.email, actualProfile?.email_real]
+    .filter(Boolean)
+    .map((email) => String(email).toLowerCase())
+    .includes('ewerttonherculano@gmail.com');
 
   const adminMenu = [
     { icon: Home, label: 'Visão Geral', href: '/admin' },
@@ -79,7 +83,7 @@ export default function Sidebar() {
     : '??';
 
   const roleLabel = profile?.tipo_usuario === 'admin' 
-    ? 'Admin Orion' 
+    ? isMasterAdmin ? 'Admin master' : 'Admin Orion' 
     : profile?.tipo_usuario === 'gestor_trafego' 
       ? 'Gestor de Tráfego' 
       : 'Corretor Parceiro';

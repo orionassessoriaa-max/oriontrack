@@ -27,9 +27,9 @@ export function getLeadQualification(lead: Lead, tipoCampanha?: TipoCampanha | n
 
   if (tipoCampanha === 'adesao') {
     return {
-      label: 'Perfil adesão',
+      label: 'Perfil individual',
       tone: 'good',
-      description: 'Para adesão, CNPJ não é critério obrigatório.',
+      description: 'Para individual, CNPJ não é critério obrigatório.',
     };
   }
 

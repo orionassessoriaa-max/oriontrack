@@ -69,8 +69,13 @@ export async function GET(request: Request) {
     if (profilesError) throw profilesError;
     if (corretoresError) throw corretoresError;
 
+    const profilesWithMasterFlag = (profiles || []).map((profile) => ({
+      ...profile,
+      is_admin_master: isMasterAdmin(profile)
+    }));
+
     return NextResponse.json({
-      profiles: profiles || [],
+      profiles: profilesWithMasterFlag,
       corretores: corretores || [],
       isMasterAdmin: isMasterAdmin(guard.profile)
     });
@@ -205,6 +210,10 @@ export async function DELETE(request: Request) {
 
     if (profileError || !profile) {
       return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
+    }
+
+    if (isMasterAdmin(profile)) {
+      return NextResponse.json({ error: 'O admin master não pode ser removido.' }, { status: 403 });
     }
 
     if (profile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {

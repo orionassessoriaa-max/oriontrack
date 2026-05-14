@@ -16,6 +16,10 @@ type Credentials = {
   link_login: string;
 };
 
+type AdminProfile = Profile & {
+  is_admin_master?: boolean;
+};
+
 const initialForm = {
   nome: '',
   email_real: '',
@@ -29,7 +33,7 @@ const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
 
 export default function AdminUsuariosPage() {
   const { user } = useAuth();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useState('');
@@ -279,7 +283,7 @@ export default function AdminUsuariosPage() {
                     className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
                   >
                     <option value="pme">PME</option>
-                    <option value="adesao">Adesão</option>
+                    <option value="adesao">Individual</option>
                     <option value="ambos">Ambos</option>
                   </select>
                 </div>
@@ -354,7 +358,7 @@ export default function AdminUsuariosPage() {
                 const corretor = corretores.find((item) => item.id === profile.corretor_id);
                 const operadoras = corretor?.operadoras_info?.selecionadas;
                 const isOwnAccess = profile.id === user?.id;
-                const isMasterAccess = [profile.email, profile.email_real]
+                const isMasterAccess = Boolean(profile.is_admin_master) || [profile.email, profile.email_real]
                   .filter(Boolean)
                   .map((email) => String(email).toLowerCase())
                   .includes(MASTER_ADMIN_EMAIL);
@@ -368,8 +372,10 @@ export default function AdminUsuariosPage() {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-black text-gray-900">{profile.nome}</p>
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
-                            {getRoleLabel(profile.tipo_usuario)}
+                          <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
+                            isMasterAccess ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {isMasterAccess ? 'Admin master' : getRoleLabel(profile.tipo_usuario)}
                           </span>
                           {profile.precisa_trocar_senha && (
                             <span className="rounded-full bg-amber-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-amber-700">
