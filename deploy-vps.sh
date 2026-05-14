@@ -18,3 +18,7 @@ docker build \
   -t oriontrack:latest .
 
 docker stack deploy -c docker-stack.oriontrack.yml oriontrack
+
+# The service uses the local tag oriontrack:latest. Docker Swarm does not always
+# recreate tasks when the tag name is unchanged, so force a rolling restart.
+docker service update --force oriontrack_oriontrack
