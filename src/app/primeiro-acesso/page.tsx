@@ -32,7 +32,7 @@ function getPasswordStrength(password: string) {
 
 export default function PrimeiroAcessoPage() {
   const router = useRouter();
-  const { user, profile, loading, refreshProfile } = useAuth();
+  const { user, profile, loading } = useAuth();
   const [emailReal, setEmailReal] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
@@ -88,14 +88,6 @@ export default function PrimeiroAcessoPage() {
     }
 
     setSuccess(true);
-    await supabase.auth.signInWithOtp({
-      email: emailReal,
-      options: {
-        shouldCreateUser: false,
-        emailRedirectTo: `${window.location.origin}/login`
-      }
-    });
-    await refreshProfile();
     await supabase.auth.signOut();
     setTimeout(() => router.push('/login'), 2600);
   };
@@ -127,7 +119,7 @@ export default function PrimeiroAcessoPage() {
             <CheckCircle2 className="mx-auto text-emerald-300" size={42} />
             <h2 className="text-xl font-black">Acesso atualizado</h2>
             <p className="text-sm font-medium text-emerald-100">
-              Enviamos a verificação para seu email real. Depois, entre usando esse email e a nova senha.
+              Agora entre usando seu email Orion e a nova senha criada.
             </p>
           </div>
         ) : (
