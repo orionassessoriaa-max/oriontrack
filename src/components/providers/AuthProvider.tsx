@@ -226,13 +226,18 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }, [actualProfile, user, viewingProfile]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+    } catch (error) {
+      console.error('Erro ao sair:', error);
+    }
     setUser(null);
     setActualProfile(null);
     setViewingProfile(null);
-    window.sessionStorage.removeItem('orion:viewing_corretor_id');
-    window.sessionStorage.removeItem('orion:viewing_gestor_id');
+    window.sessionStorage.clear();
+    window.localStorage.clear();
     router.push('/login');
+    window.location.href = '/login';
   };
 
   const profile = actualProfile?.tipo_usuario === 'admin' && viewingProfile

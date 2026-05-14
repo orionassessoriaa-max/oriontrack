@@ -275,7 +275,7 @@ export default function NovoCorretorPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { value: 'pme', label: 'PME', desc: 'CNPJ é critério de fit' },
-                    { value: 'adesao', label: 'Adesão', desc: 'CNPJ não é obrigatório' },
+                    { value: 'adesao', label: 'Individual', desc: 'CNPJ não é obrigatório' },
                     { value: 'ambos', label: 'Ambos', desc: 'Avaliação flexível' },
                   ].map((option) => (
                     <button
