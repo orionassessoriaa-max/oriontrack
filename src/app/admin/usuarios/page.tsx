@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile, TipoCampanha, UserRole } from '@/types';
 import { generateOrionEmail, getRoleLabel } from '@/lib/users';
 import { OPERADORAS_ONBOARDING } from '@/lib/onboarding';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { CheckCircle2, Copy, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
 
 type Credentials = {
@@ -25,6 +26,7 @@ const initialForm = {
 };
 
 export default function AdminUsuariosPage() {
+  const { user } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [form, setForm] = useState(initialForm);
@@ -349,6 +351,7 @@ export default function AdminUsuariosPage() {
               {filteredProfiles.map((profile) => {
                 const corretor = corretores.find((item) => item.id === profile.corretor_id);
                 const operadoras = corretor?.operadoras_info?.selecionadas;
+                const isOwnAccess = profile.id === user?.id;
 
                 return (
                   <div key={profile.id} className="flex flex-col gap-4 p-5 transition-colors hover:bg-blue-50/30 md:flex-row md:items-center md:justify-between">
@@ -378,14 +381,20 @@ export default function AdminUsuariosPage() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleDelete(profile)}
-                      disabled={removingId === profile.id}
-                      className="flex items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600 transition-all hover:bg-red-100 disabled:opacity-50"
-                    >
-                      {removingId === profile.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                      Remover
-                    </button>
+                    {isOwnAccess ? (
+                      <span className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">
+                        Admin master
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleDelete(profile)}
+                        disabled={removingId === profile.id}
+                        className="flex items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600 transition-all hover:bg-red-100 disabled:opacity-50"
+                      >
+                        {removingId === profile.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                        Remover
+                      </button>
+                    )}
                   </div>
                 );
               })}
