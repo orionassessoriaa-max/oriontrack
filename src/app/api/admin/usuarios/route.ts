@@ -125,6 +125,10 @@ export async function POST(request: Request) {
 
     try {
       if (role === 'corretor') {
+        const timeOperacional = Array.isArray(body.time_operacional)
+          ? body.time_operacional.filter((member: any) => member?.nome && member?.cargo)
+          : [];
+
         const { data: corretor, error: corretorError } = await supabaseAdmin
           .from('corretores')
           .insert([{
@@ -134,7 +138,7 @@ export async function POST(request: Request) {
             status,
             tipo_campanha: tipoCampanha,
             operadoras_info: { selecionadas: Array.isArray(body.operadoras) ? body.operadoras : [] },
-            time_operacional: [],
+            time_operacional: timeOperacional,
             observacoes: body.observacoes || null,
           }])
           .select()

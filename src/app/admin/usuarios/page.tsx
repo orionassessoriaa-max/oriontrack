@@ -6,8 +6,9 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile, TipoCampanha, UserRole } from '@/types';
 import { generateOrionEmail, getRoleLabel } from '@/lib/users';
 import { OPERADORAS_ONBOARDING } from '@/lib/onboarding';
+import { ORION_TEAM_MEMBERS } from '@/lib/orionTeam';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { CheckCircle2, Copy, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
+import { CheckCircle2, Copy, KeyRound, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
 
 type Credentials = {
   email: string;
@@ -27,6 +28,7 @@ const initialForm = {
   telefone: '',
   tipo_campanha: 'ambos' as TipoCampanha,
   operadoras: [] as string[],
+  time_operacional: [] as Array<{ nome: string; cargo: string }>,
 };
 
 const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
@@ -164,8 +166,8 @@ export default function AdminUsuariosPage() {
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Admin mestre</p>
-          <h1 className="text-3xl font-black tracking-tight text-gray-900">Usuários e acessos</h1>
-          <p className="font-medium text-gray-500">Crie admins, gestores e corretores com email Orion e primeiro acesso obrigatório.</p>
+          <h1 className="text-3xl font-black tracking-tight text-gray-900">Acessos</h1>
+          <p className="font-medium text-gray-500">Cadastre admins, gestores e corretores em um só lugar.</p>
         </div>
         <button
           onClick={fetchUsers}
@@ -178,19 +180,24 @@ export default function AdminUsuariosPage() {
       {error && <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold text-red-600">{error}</div>}
 
       {credentials && (
-        <div className="mb-8 rounded-[2rem] border border-emerald-100 bg-emerald-50 p-6">
+        <div className="mb-8 rounded-[2rem] border-2 border-emerald-200 bg-emerald-50 p-6 shadow-lg shadow-emerald-100/60">
           <div className="mb-4 flex items-center gap-3 text-emerald-700">
             <CheckCircle2 size={24} />
-            <h2 className="text-lg font-black">Acesso criado</h2>
+            <div>
+              <h2 className="text-lg font-black">Acesso criado com senha provisória</h2>
+              <p className="text-xs font-bold text-emerald-700/80">Envie esses dados para o primeiro login. Depois a pessoa troca a senha.</p>
+            </div>
           </div>
           <div className="grid gap-3 text-sm font-bold text-emerald-950 md:grid-cols-3">
             <div className="rounded-2xl bg-white/70 p-4">
               <p className="text-[10px] uppercase tracking-widest text-emerald-600">Login provisório</p>
               <p className="mt-1 break-all">{credentials.email}</p>
             </div>
-            <div className="rounded-2xl bg-white/70 p-4">
+            <div className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
               <p className="text-[10px] uppercase tracking-widest text-emerald-600">Senha provisória</p>
-              <p className="mt-1">{credentials.senha_provisoria}</p>
+              <p className="mt-1 flex items-center gap-2 text-xl font-black text-emerald-950">
+                <KeyRound size={18} /> {credentials.senha_provisoria}
+              </p>
             </div>
             <button
               onClick={copyCredentials}
@@ -227,6 +234,32 @@ export default function AdminUsuariosPage() {
             </div>
 
             <div>
+              <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Tipo de usuário</label>
+              <select
+                value={form.tipo_usuario}
+                onChange={(event) => {
+                  const tipo_usuario = event.target.value as UserRole;
+                  setForm((current) => ({
+                    ...current,
+                    tipo_usuario,
+                    time_operacional: tipo_usuario === 'corretor' ? current.time_operacional : [],
+                    operadoras: tipo_usuario === 'corretor' ? current.operadoras : []
+                  }));
+                }}
+                className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="corretor">Corretor</option>
+                <option value="gestor_trafego">Gestor de tráfego</option>
+                {isMasterAdmin && <option value="admin">Admin / Diretor</option>}
+              </select>
+              {!isMasterAdmin && (
+                <p className="mt-2 text-[11px] font-bold text-amber-600">
+                  Somente o admin master Ewertton pode criar outros admins.
+                </p>
+              )}
+            </div>
+
+            <div>
               <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Email de acesso</label>
               <div className="mt-2 flex items-center gap-3 rounded-2xl bg-blue-50 px-5 py-4 text-sm font-black text-blue-700">
                 <Mail size={16} /> {accessEmail}
@@ -244,48 +277,33 @@ export default function AdminUsuariosPage() {
               />
             </div>
 
-            <div>
-              <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Tipo de usuário</label>
-              <select
-                value={form.tipo_usuario}
-                onChange={(event) => setForm((current) => ({ ...current, tipo_usuario: event.target.value as UserRole }))}
-                className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
-              >
-                <option value="corretor">Corretor</option>
-                <option value="gestor_trafego">Gestor de tráfego</option>
-                {isMasterAdmin && <option value="admin">Admin / Diretor</option>}
-              </select>
-              {!isMasterAdmin && (
-                <p className="mt-2 text-[11px] font-bold text-amber-600">
-                  Somente o admin master Ewertton pode criar outros admins.
-                </p>
-              )}
-            </div>
-
             {form.tipo_usuario === 'corretor' && (
               <>
                 <div>
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</label>
-                  <input
-                    required
-                    value={form.telefone}
-                    onChange={(event) => setForm((current) => ({ ...current, telefone: event.target.value }))}
-                    placeholder="(00) 00000-0000"
-                    className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Tipo de campanha</label>
-                  <select
-                    value={form.tipo_campanha}
-                    onChange={(event) => setForm((current) => ({ ...current, tipo_campanha: event.target.value as TipoCampanha }))}
-                    className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    <option value="pme">PME</option>
-                    <option value="adesao">Individual</option>
-                    <option value="ambos">Ambos</option>
-                  </select>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Time Orion</label>
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {ORION_TEAM_MEMBERS.map((member) => {
+                      const selected = form.time_operacional.some((item) => item.nome === member.nome);
+                      return (
+                        <button
+                          key={member.nome}
+                          type="button"
+                          onClick={() => setForm((current) => ({
+                            ...current,
+                            time_operacional: selected
+                              ? current.time_operacional.filter((item) => item.nome !== member.nome)
+                              : [...current.time_operacional, member]
+                          }))}
+                          className={`rounded-2xl border px-4 py-3 text-left transition-all ${
+                            selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-100 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <p className="text-xs font-black">{member.nome}</p>
+                          <p className={`mt-1 text-[10px] font-bold ${selected ? 'text-blue-100' : 'text-slate-400'}`}>{member.cargo}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div>
@@ -312,6 +330,30 @@ export default function AdminUsuariosPage() {
                       );
                     })}
                   </div>
+                </div>
+
+                <div>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</label>
+                  <input
+                    required
+                    value={form.telefone}
+                    onChange={(event) => setForm((current) => ({ ...current, telefone: event.target.value }))}
+                    placeholder="(00) 00000-0000"
+                    className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Tipo de campanha</label>
+                  <select
+                    value={form.tipo_campanha}
+                    onChange={(event) => setForm((current) => ({ ...current, tipo_campanha: event.target.value as TipoCampanha }))}
+                    className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="pme">PME</option>
+                    <option value="adesao">Individual</option>
+                    <option value="ambos">Ambos</option>
+                  </select>
                 </div>
               </>
             )}
