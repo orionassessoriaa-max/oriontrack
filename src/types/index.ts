@@ -38,6 +38,8 @@ export interface Corretor {
   regioes_campanha?: string | null;
   onboarding_status?: 'pendente' | 'dados_completos' | 'campanhas_ativas' | null;
   campanhas_ativas?: boolean | null;
+  meta_ad_account_id?: string | null;
+  meta_ad_account_name?: string | null;
   created_at: string;
 }
 
@@ -96,4 +98,61 @@ export interface Material {
   title: string;
   description: string;
   category: string;
+}
+
+export interface LeadAtividade {
+  id: string;
+  lead_id: string;
+  profile_id: string | null;
+  tipo: 'nota' | 'status' | 'ligacao' | 'whatsapp' | 'email' | 'tarefa' | 'sistema';
+  titulo: string;
+  descricao?: string | null;
+  created_at: string;
+}
+
+export interface LeadTarefa {
+  id: string;
+  lead_id: string;
+  corretor_id: string | null;
+  responsavel_profile_id?: string | null;
+  titulo: string;
+  descricao?: string | null;
+  vencimento?: string | null;
+  status: 'pendente' | 'concluida' | 'cancelada';
+  prioridade: 'baixa' | 'normal' | 'alta';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetaAdAccount {
+  id: string;
+  meta_account_id: string;
+  nome: string;
+  currency?: string | null;
+  timezone_name?: string | null;
+  status?: string | null;
+  last_synced_at?: string | null;
+}
+
+export interface MetaCampaign {
+  id: string;
+  meta_campaign_id: string;
+  meta_account_id: string;
+  nome: string;
+  status?: string | null;
+  objective?: string | null;
+  corretor_id?: string | null;
+}
+
+export interface MetaMetricaDiaria {
+  id: string;
+  meta_account_id: string;
+  meta_campaign_id?: string | null;
+  corretor_id?: string | null;
+  data: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  cpl?: number | null;
 }
