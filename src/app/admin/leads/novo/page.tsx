@@ -92,9 +92,9 @@ export default function AdminNovoLeadPage() {
 
       setSuccess(true);
       setTimeout(() => router.push('/admin/leads'), 3000);
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error saving lead:', err);
-      setError(err instanceof Error ? err.message : 'Erro ao salvar lead.');
+      setError(err?.message || err?.details || err?.hint || 'Erro ao salvar lead.');
     } finally {
       setLoading(false);
     }
@@ -363,6 +363,7 @@ export default function AdminNovoLeadPage() {
                   {loading ? <Loader2 className="animate-spin" size={24} /> : <><Save size={24} /> Salvar Lead</>}
                 </button>
               </div>
+              <p className="text-right text-xs font-bold text-slate-400">Ao salvar, o lead aparece automaticamente no CRM do corretor.</p>
             </div>
           </form>
         )}
