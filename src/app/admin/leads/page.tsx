@@ -215,7 +215,7 @@ export default function AdminLeadsPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="scrollbar-hidden overflow-x-auto">
           {error ? (
             <div className="py-24 text-center">
               <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">

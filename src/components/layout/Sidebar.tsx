@@ -47,7 +47,7 @@ export default function Sidebar() {
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: Globe, label: 'Páginas', href: '/admin/paginas' },
-    { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
+    ...(isMasterAdmin ? [{ icon: Settings, label: 'Meta Ads', href: '/admin/meta' }] : []),
     { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
     { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Solicitações de suporte', href: '/admin/suporte' },

@@ -303,7 +303,7 @@ export default function CrmPage() {
               <Loader2 className="animate-spin text-blue-600" size={42} />
             </div>
           ) : (
-            <div className="flex min-h-[calc(100vh-330px)] snap-x gap-5 overflow-x-auto pb-8">
+            <div className="scrollbar-hidden flex min-h-[calc(100vh-330px)] snap-x gap-5 overflow-x-auto pb-8">
               {columns.map((column) => {
                 const columnLeads = getLeadsByStatus(column.id);
                 const statusStyle = getLeadStatusStyle(column.id);

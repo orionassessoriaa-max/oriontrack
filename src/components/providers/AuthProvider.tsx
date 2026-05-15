@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { User } from '@supabase/supabase-js';
@@ -41,6 +41,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const [actualProfile, setActualProfile] = useState<Profile | null>(null);
   const [viewingProfile, setViewingProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const sessionRequestRef = useRef(0);
   const router = useRouter();
 
   const fetchProfile = async (userId: string) => {
@@ -155,12 +156,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     let active = true;
 
     const applySession = async (session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']) => {
+      const requestId = ++sessionRequestRef.current;
       try {
         if (session?.user) {
           if (!active) return;
           setUser(session.user);
           const p = await fetchProfile(session.user.id);
-          if (!active) return;
+          if (!active || requestId !== sessionRequestRef.current) return;
           setActualProfile(p);
         } else {
           if (!active) return;
@@ -187,7 +189,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') return;
-      await applySession(session);
+      setTimeout(() => {
+        void applySession(session);
+      }, 0);
     });
 
     return () => {
@@ -231,10 +235,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setUser(null);
     setActualProfile(null);
     setViewingProfile(null);
-    window.sessionStorage.clear();
-    window.localStorage.clear();
-    router.push('/login');
-    window.location.href = '/login';
+    window.sessionStorage.removeItem('orion:viewing_corretor_id');
+    window.sessionStorage.removeItem('orion:viewing_gestor_id');
+    router.replace('/login');
   };
 
   const profile = actualProfile?.tipo_usuario === 'admin' && viewingProfile
