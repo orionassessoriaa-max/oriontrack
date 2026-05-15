@@ -68,16 +68,12 @@ export default function TrafficReportsPage() {
     corretor: ReportCorretor;
     cpl: number | null;
     fonteLeads: 'sistema' | 'manual';
+    valorInvestido: number;
   } | null>(null);
 
   useEffect(() => {
     fetchData();
   }, [profile?.id, profile?.tipo_usuario]);
-
-  useEffect(() => {
-    if (!formData.corretor_id || !formData.data_inicio || !formData.data_fim) return;
-    void fetchMetaSpend();
-  }, [formData.corretor_id, formData.data_inicio, formData.data_fim]);
 
   async function fetchData() {
     if (!profile?.id) {
@@ -133,7 +129,7 @@ export default function TrafficReportsPage() {
   async function fetchMetaSpend() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
-    if (!token) return;
+    if (!token) throw new Error('Sessao expirada. Entre novamente.');
 
     setFetchingMetaSpend(true);
     setMetaSpendError(null);
@@ -156,12 +152,15 @@ export default function TrafficReportsPage() {
       if (!response.ok) {
         setMetaSpendError(payload.error || 'Nao foi possivel puxar o investimento Meta.');
         setFormData((current) => ({ ...current, valor_investido: '' }));
-        return;
+        throw new Error(payload.error || 'Nao foi possivel puxar o investimento Meta.');
       }
 
-      setFormData((current) => ({ ...current, valor_investido: String(Number(payload.spend || 0).toFixed(2)) }));
+      const spend = Number(payload.spend || 0);
+      setFormData((current) => ({ ...current, valor_investido: String(spend.toFixed(2)) }));
+      return spend;
     } catch (err: any) {
       setMetaSpendError(err.message || 'Erro ao buscar investimento Meta.');
+      throw err;
     } finally {
       setFetchingMetaSpend(false);
     }
@@ -174,11 +173,6 @@ export default function TrafficReportsPage() {
       return;
     }
 
-    if (!formData.usar_leads_manuais && metaSpendError) {
-      alert(metaSpendError);
-      return;
-    }
-
     if (formData.usar_leads_manuais && formData.valor_investido.trim() === '') {
       alert('Informe o valor investido manual.');
       return;
@@ -188,19 +182,15 @@ export default function TrafficReportsPage() {
       return;
     }
 
-    const investido = parseFloat(formData.valor_investido || '0');
-    if (Number.isNaN(investido) || investido < 0) {
-      alert('Informe um valor investido valido.');
-      return;
-    }
-
     setGenerating(true);
     try {
       let numLeads = 0;
       let fonteLeads: 'sistema' | 'manual' = 'sistema';
+      let investido = 0;
 
       if (formData.usar_leads_manuais) {
         const leadsManual = Number(formData.quantidade_leads_manual);
+        investido = parseFloat(formData.valor_investido || '0');
         if (formData.quantidade_leads_manual.trim() === '') {
           alert('Informe a quantidade de leads gerados.');
           return;
@@ -210,10 +200,15 @@ export default function TrafficReportsPage() {
           alert('Informe uma quantidade de leads valida.');
           return;
         }
+        if (Number.isNaN(investido) || investido < 0) {
+          alert('Informe um valor investido valido.');
+          return;
+        }
 
         numLeads = Math.floor(leadsManual);
         fonteLeads = 'manual';
       } else {
+        investido = await fetchMetaSpend();
         const { count, error: supabaseError } = await supabase
           .from('leads')
           .select('*', { count: 'exact', head: true })
@@ -241,11 +236,12 @@ export default function TrafficReportsPage() {
         leads: numLeads,
         corretor,
         cpl,
-        fonteLeads
+        fonteLeads,
+        valorInvestido: investido
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error generating preview:', err);
-      alert('Erro inesperado ao buscar leads.');
+      alert(err.message || 'Erro inesperado ao gerar previa.');
     } finally {
       setGenerating(false);
     }
@@ -278,7 +274,7 @@ export default function TrafficReportsPage() {
           data_inicio: formData.data_inicio,
           data_fim: formData.data_fim,
           quantidade_leads: preview.leads,
-          valor_investido: parseFloat(formData.valor_investido),
+          valor_investido: preview.valorInvestido,
           cpl: preview.cpl
         })
       });
@@ -303,7 +299,7 @@ export default function TrafficReportsPage() {
     
     const dataInicioFmt = format(new Date(formData.data_inicio), 'dd/MM/yyyy');
     const dataFimFmt = format(new Date(formData.data_fim), 'dd/MM/yyyy');
-    const valorFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(formData.valor_investido));
+    const valorFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.valorInvestido);
     const cplFmt = preview.cpl ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.cpl) : 'Indisponível';
 
     let text = `📊 *Relatório de Leads - Orion Track*\n\n`;
@@ -443,30 +439,9 @@ export default function TrafficReportsPage() {
                 )}
               </div>
 
-              {!formData.usar_leads_manuais && (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Valor Investido (Meta)</label>
-                <div className="relative">
-                  <span className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R$</span>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    readOnly
-                    value={formData.valor_investido}
-                    onChange={e => setFormData({...formData, valor_investido: e.target.value})}
-                    placeholder="0,00"
-                    className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-14 pr-12 focus:ring-2 focus:ring-blue-500 transition-all font-bold"
-                  />
-                  {fetchingMetaSpend && <Loader2 className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-blue-600" size={18} />}
-                </div>
-                {metaSpendError && <p className="mt-2 text-xs font-bold text-amber-600">{metaSpendError}</p>}
-                {!metaSpendError && formData.valor_investido && <p className="mt-2 text-xs font-bold text-emerald-600">Investimento puxado automaticamente da conta Meta vinculada.</p>}
-              </div>
-              )}
-
               <button 
                 type="submit"
-                disabled={generating}
+                disabled={generating || fetchingMetaSpend}
                 className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50"
               >
                 {generating ? <Loader2 className="animate-spin" size={24} /> : 'Gerar Prévia'}
@@ -499,7 +474,7 @@ export default function TrafficReportsPage() {
                       <DollarSign size={12} /> Investimento
                     </p>
                     <p className="text-3xl font-black text-gray-900">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(formData.valor_investido))}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.valorInvestido)}
                     </p>
                   </div>
                   <div className="p-6 bg-blue-600 text-white rounded-[2rem] shadow-xl shadow-blue-600/20">
@@ -516,8 +491,8 @@ export default function TrafficReportsPage() {
                   <p className="text-sm text-gray-600 leading-relaxed font-medium italic">
                     Durante o período de {format(new Date(formData.data_inicio), 'dd/MM/yyyy')} até {format(new Date(formData.data_fim), 'dd/MM/yyyy')}, 
                     {preview.leads > 0 
-                      ? ` foram ${preview.fonteLeads === 'manual' ? 'informados manualmente' : 'registrados no Orion Track'} ${preview.leads} leads para ${preview.corretor.nome}. O investimento informado no Meta Ads foi de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(formData.valor_investido))}, resultando em um CPL médio de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.cpl!)}.`
-                      : ` não foram ${preview.fonteLeads === 'manual' ? 'informados manualmente' : 'registrados no Orion Track'} leads para ${preview.corretor.nome}. O investimento informado foi de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(formData.valor_investido))}, mas o CPL não pôde ser calculado por ausência de leads no período.`
+                      ? ` foram ${preview.fonteLeads === 'manual' ? 'informados manualmente' : 'registrados no Orion Track'} ${preview.leads} leads para ${preview.corretor.nome}. O investimento informado no Meta Ads foi de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.valorInvestido)}, resultando em um CPL médio de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.cpl!)}.`
+                      : ` não foram ${preview.fonteLeads === 'manual' ? 'informados manualmente' : 'registrados no Orion Track'} leads para ${preview.corretor.nome}. O investimento informado foi de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.valorInvestido)}, mas o CPL não pôde ser calculado por ausência de leads no período.`
                     }
                   </p>
                 </div>
