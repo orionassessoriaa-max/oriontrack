@@ -37,7 +37,10 @@ export default function AdminLeadsPage() {
   const [filterDataInicio, setFilterDataInicio] = useState('');
   const [filterDataFim, setFilterDataFim] = useState('');
   const [sheetUrl, setSheetUrl] = useState('');
+  const [sheetCorretorId, setSheetCorretorId] = useState('');
   const [showImportBox, setShowImportBox] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -87,10 +90,47 @@ export default function AdminLeadsPage() {
     setFilterDataFim('');
   };
 
-  const saveSheetUrl = () => {
-    if (!sheetUrl.trim()) return;
-    alert('Link da planilha recebido. Proximo passo: ligar este link a uma rotina de importacao automatica.');
-    setShowImportBox(false);
+  const importSheet = async () => {
+    if (!sheetUrl.trim() || !sheetCorretorId) {
+      setImportMessage('Selecione o corretor e cole o link da planilha.');
+      return;
+    }
+
+    setImporting(true);
+    setImportMessage(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    if (!token) {
+      setImporting(false);
+      setImportMessage('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    const response = await fetch('/api/admin/leads/import-sheets', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        corretor_id: sheetCorretorId,
+        sheet_url: sheetUrl
+      })
+    });
+    const payload = await response.json();
+
+    setImporting(false);
+    if (!response.ok) {
+      setImportMessage(payload.error || 'Erro ao importar planilha.');
+      return;
+    }
+
+    const skippedText = payload.skipped ? ` ${payload.skipped} linha(s) ignorada(s) por falta de nome ou telefone.` : '';
+    setImportMessage(`${payload.imported} lead(s) importado(s) para ${payload.corretor}.${skippedText}`);
+    setSheetUrl('');
+    await fetchData();
   };
 
   const filteredLeads = leads.filter(lead => {
@@ -145,19 +185,31 @@ export default function AdminLeadsPage() {
       {showImportBox && (
         <div className="mb-8 rounded-[2rem] border border-emerald-100 bg-emerald-50 p-5">
           <h2 className="mb-2 text-lg font-black text-emerald-950">Importar leads por planilha</h2>
-          <p className="mb-4 text-sm font-bold text-emerald-800">Cole o link da planilha compartilhada. A importacao automatica por colunas sera a proxima etapa.</p>
-          <div className="flex flex-col gap-3 md:flex-row">
+          <p className="mb-4 text-sm font-bold text-emerald-800">Selecione o corretor, cole o link do Google Sheets e importe os leads. A planilha precisa estar compartilhada para visualizacao por link.</p>
+          {importMessage && <div className="mb-4 rounded-2xl bg-white p-4 text-sm font-black text-emerald-800">{importMessage}</div>}
+          <div className="grid gap-3 md:grid-cols-[260px_1fr_auto]">
+            <select
+              value={sheetCorretorId}
+              onChange={(event) => setSheetCorretorId(event.target.value)}
+              className="rounded-2xl border-none bg-white px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+            >
+              <option value="">Selecione o corretor</option>
+              {corretores.map((corretor) => (
+                <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>
+              ))}
+            </select>
             <input
               value={sheetUrl}
               onChange={(event) => setSheetUrl(event.target.value)}
-              placeholder="https://docs.google.com/spreadsheets/..."
+              placeholder="https://docs.google.com/spreadsheets/d/..."
               className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
             />
             <button
-              onClick={saveSheetUrl}
+              onClick={importSheet}
+              disabled={importing}
               className="rounded-2xl bg-emerald-600 px-6 py-4 text-sm font-black text-white hover:bg-emerald-700"
             >
-              Salvar link
+              {importing ? <Loader2 className="animate-spin" size={18} /> : 'Importar agora'}
             </button>
           </div>
         </div>
