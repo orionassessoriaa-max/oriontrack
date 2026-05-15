@@ -11,7 +11,8 @@ import {
   RefreshCw,
   Plug,
   X,
-  Save
+  Save,
+  Upload
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadStatus } from '@/types';
@@ -26,7 +27,7 @@ function countLives(idades?: string | null) {
 }
 
 export default function BrokerLeadsPage() {
-  const { profile } = useAuth();
+  const { profile, isViewingAsCorretor } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null);
@@ -41,7 +42,11 @@ export default function BrokerLeadsPage() {
   const [operadoraFilter, setOperadoraFilter] = useState('todas');
   const [operadorasDisponiveis, setOperadorasDisponiveis] = useState<string[]>([]);
   const [showCrmModal, setShowCrmModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [crmApiUrl, setCrmApiUrl] = useState('');
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');
@@ -138,6 +143,51 @@ export default function BrokerLeadsPage() {
     setShowCrmModal(false);
   };
 
+  const importSheet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.corretor_id || !sheetUrl.trim()) {
+      setImportMessage('Cole o link da planilha.');
+      return;
+    }
+
+    setImporting(true);
+    setImportMessage(null);
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+
+    if (!token) {
+      setImporting(false);
+      setImportMessage('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    const response = await fetch('/api/admin/leads/import-sheets', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        corretor_id: profile.corretor_id,
+        sheet_url: sheetUrl,
+      }),
+    });
+
+    const payload = await response.json();
+    setImporting(false);
+
+    if (!response.ok) {
+      setImportMessage(payload.error || 'Erro ao importar planilha.');
+      return;
+    }
+
+    const skippedText = payload.skipped ? ` ${payload.skipped} linha(s) ignorada(s).` : '';
+    setImportMessage(`${payload.imported} lead(s) importado(s).${skippedText}`);
+    setSheetUrl('');
+    await fetchLeads();
+  };
+
   const filteredLeads = leads.filter(lead => {
     const searchMatch =
       (lead.nome?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -172,6 +222,14 @@ export default function BrokerLeadsPage() {
           <button className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-5 py-3 font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50">
             <Download size={18} /> Exportar
           </button>
+          {isViewingAsCorretor && (
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-5 py-3 font-black text-emerald-700 transition-all hover:bg-emerald-100"
+            >
+              <Upload size={18} /> Importar
+            </button>
+          )}
         </div>
       </div>
 
@@ -359,6 +417,43 @@ export default function BrokerLeadsPage() {
               </div>
               <button disabled={savingCrm} className="flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 py-5 font-black text-white shadow-xl shadow-blue-600/20 hover:bg-blue-700 disabled:opacity-50">
                 {savingCrm ? <Loader2 className="animate-spin" size={20} /> : <><Save size={18} /> Salvar conexao</>}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-md">
+          <div className="w-full max-w-xl rounded-[2.5rem] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 p-8">
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">Admin</p>
+                <h2 className="text-xl font-black text-gray-900">Importar planilha</h2>
+              </div>
+              <button onClick={() => setShowImportModal(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100">
+                <X size={22} />
+              </button>
+            </div>
+            <form onSubmit={importSheet} className="space-y-5 p-8">
+              {importMessage && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-black text-emerald-700">
+                  {importMessage}
+                </div>
+              )}
+              <div className="space-y-2">
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Link do Google Sheets</label>
+                <input
+                  type="url"
+                  required
+                  value={sheetUrl}
+                  onChange={(e) => setSheetUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <button disabled={importing} className="flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-600 py-5 font-black text-white shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-50">
+                {importing ? <Loader2 className="animate-spin" size={20} /> : <><Upload size={18} /> Importar leads</>}
               </button>
             </form>
           </div>
