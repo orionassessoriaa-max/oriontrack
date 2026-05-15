@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import {
   Search,
@@ -196,7 +196,9 @@ export default function BrokerLeadsPage() {
 
     const cnpjMatch = cnpjFilter === 'todos' || lead.possui_cnpj === cnpjFilter;
     const statusMatch = statusFilter === 'todos' || lead.status === statusFilter;
-    const operadoraMatch = operadoraFilter === 'todas' || lead.operadora === operadoraFilter;
+    const operadoraMatch =
+      operadoraFilter === 'todas' ||
+      (operadoraFilter === '__sem_aba__' ? !lead.operadora : lead.operadora === operadoraFilter);
     const livesMatch = !minLives || countLives(lead.idades) >= Number(minLives);
     const leadDate = lead.data_entrada ? new Date(lead.data_entrada) : null;
     const fromMatch = !dateFrom || (leadDate && leadDate >= new Date(dateFrom));
@@ -204,6 +206,21 @@ export default function BrokerLeadsPage() {
 
     return searchMatch && cnpjMatch && statusMatch && operadoraMatch && livesMatch && fromMatch && toMatch;
   });
+
+  const sheetTabs = useMemo(() => {
+    const fromLeads = leads
+      .map((lead) => lead.operadora)
+      .filter((operadora): operadora is string => Boolean(operadora?.trim()));
+    return Array.from(new Set([...operadorasDisponiveis, ...fromLeads])).sort((a, b) => a.localeCompare(b));
+  }, [leads, operadorasDisponiveis]);
+
+  const tabCounts = useMemo(() => {
+    return leads.reduce<Record<string, number>>((acc, lead) => {
+      const key = lead.operadora || 'Sem aba';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+  }, [leads]);
 
   return (
     <InternalLayout>
@@ -233,38 +250,8 @@ export default function BrokerLeadsPage() {
         </div>
       </div>
 
-      <div className="mb-6 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm">
-        {operadorasDisponiveis.length > 0 && (
-          <div className="mb-5 rounded-[1.5rem] border border-blue-100 bg-blue-50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-xs font-black text-white">OP</span>
-              <div>
-                <p className="text-sm font-black text-blue-950">Filtro por operadora da sua campanha</p>
-                <p className="text-xs font-bold text-blue-600">Aparecem apenas as operadoras marcadas no cadastro do corretor.</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setOperadoraFilter('todas')}
-                className={`rounded-2xl px-4 py-3 text-xs font-black transition-all ${operadoraFilter === 'todas' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
-              >
-                Todas
-              </button>
-              {operadorasDisponiveis.map((operadora) => (
-                <button
-                  key={operadora}
-                  type="button"
-                  onClick={() => setOperadoraFilter(operadora)}
-                  className={`rounded-2xl px-4 py-3 text-xs font-black transition-all ${operadoraFilter === operadora ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
-                >
-                  {operadora}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-6">
+      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-6">
           <div className="relative lg:col-span-2">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -293,7 +280,7 @@ export default function BrokerLeadsPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           {error ? (
             <div className="py-24 text-center">
@@ -307,41 +294,44 @@ export default function BrokerLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full min-w-[1250px] border-collapse text-left">
-              <thead>
-                <tr className="bg-gray-50/50">
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Data</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Idades</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Possui CNPJ</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Tem plano ativo?</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Plano atual</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Custo atual</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Investimento pretendido</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Cidade</th>
-                  <th className="px-5 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
+            <table className="w-full min-w-[1360px] border-collapse text-left text-[13px]">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-slate-100">
+                  <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Data</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Telefone</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Idades</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Possui CNPJ</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Tem plano ativo?</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Plano atual</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Custo atual</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Investimento pretendido</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cidade</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Operadora</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={11} className="py-20 text-center">
+                    <td colSpan={13} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
-                ) : filteredLeads.map((lead) => {
+                ) : filteredLeads.map((lead, index) => {
                   const statusStyle = getLeadStatusStyle(lead.status);
 
                   return (
-                  <tr key={lead.id} className="transition-colors hover:bg-blue-50/30">
-                    <td className="px-5 py-5 text-[13px] font-bold text-slate-500">
+                  <tr key={lead.id} className="transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-blue-50/50">
+                    <td className="border border-slate-100 bg-slate-50 px-3 py-3 text-center text-xs font-black text-slate-400">{index + 1}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">
                       {lead.data_entrada ? format(new Date(lead.data_entrada), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '-'}
                     </td>
-                    <td className="px-5 py-5 text-sm font-bold text-gray-900">{lead.nome}</td>
-                    <td className="px-5 py-5 text-sm font-medium text-slate-600">{lead.telefone}</td>
-                    <td className="px-5 py-5 text-sm font-bold text-slate-600">{lead.idades || '-'}</td>
-                    <td className="px-5 py-5">
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-gray-900">{lead.nome}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-medium text-slate-600">{lead.telefone}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.idades || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3">
                       <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
                         lead.possui_cnpj === 'Sim' ? 'bg-emerald-50 text-emerald-700' :
                         lead.possui_cnpj === 'Não' ? 'bg-amber-50 text-amber-700' :
@@ -350,7 +340,7 @@ export default function BrokerLeadsPage() {
                         {lead.possui_cnpj || 'Nao informado'}
                       </span>
                     </td>
-                    <td className="px-5 py-5">
+                    <td className="border border-slate-100 px-3 py-3">
                       <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
                         lead.tem_plano_ativo === 'Sim' ? 'bg-blue-50 text-blue-700' :
                         lead.tem_plano_ativo === 'Não' ? 'bg-slate-100 text-slate-600' :
@@ -359,11 +349,12 @@ export default function BrokerLeadsPage() {
                         {lead.tem_plano_ativo || 'Nao informado'}
                       </span>
                     </td>
-                    <td className="px-5 py-5 text-sm font-medium text-slate-500">{lead.plano_atual || '-'}</td>
-                    <td className="px-5 py-5 text-sm font-bold text-slate-600">{lead.custo_plano_atual || '-'}</td>
-                    <td className="px-5 py-5 text-sm font-bold text-slate-600">{lead.investimento || '-'}</td>
-                    <td className="px-5 py-5 text-sm font-medium text-slate-500">{lead.cidade || '-'}</td>
-                    <td className="px-5 py-5">
+                    <td className="border border-slate-100 px-3 py-3 font-medium text-slate-500">{lead.plano_atual || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.custo_plano_atual || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.investimento || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-medium text-slate-500">{lead.cidade || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{lead.operadora || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3">
                       <div className="flex items-center gap-2">
                         <select
                           value={lead.status}
@@ -379,6 +370,35 @@ export default function BrokerLeadsPage() {
                 )})}
               </tbody>
             </table>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto border-t border-slate-200 bg-slate-100 px-4 py-2">
+          <button
+            type="button"
+            onClick={() => setOperadoraFilter('todas')}
+            className={`whitespace-nowrap rounded-t-xl border px-4 py-2 text-xs font-black transition-all ${operadoraFilter === 'todas' ? 'border-emerald-400 bg-white text-emerald-700 shadow-sm' : 'border-transparent bg-slate-200 text-slate-600 hover:bg-white'}`}
+          >
+            Todos ({leads.length})
+          </button>
+          {sheetTabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setOperadoraFilter(tab)}
+              className={`whitespace-nowrap rounded-t-xl border px-4 py-2 text-xs font-black transition-all ${operadoraFilter === tab ? 'border-emerald-400 bg-white text-emerald-700 shadow-sm' : 'border-transparent bg-slate-200 text-slate-600 hover:bg-white'}`}
+            >
+              {tab} ({tabCounts[tab] || 0})
+            </button>
+          ))}
+          {tabCounts['Sem aba'] && (
+            <button
+              type="button"
+              onClick={() => setOperadoraFilter('__sem_aba__')}
+              className="whitespace-nowrap rounded-t-xl border border-transparent bg-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-white"
+            >
+              Sem aba ({tabCounts['Sem aba']})
+            </button>
           )}
         </div>
 
