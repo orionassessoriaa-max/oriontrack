@@ -22,7 +22,17 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    overflow-x: hidden;
   }
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
 }
 
 .glass {
