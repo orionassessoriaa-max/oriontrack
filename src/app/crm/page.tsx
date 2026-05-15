@@ -100,10 +100,35 @@ export default function CrmPage() {
     setError(null);
 
     try {
+      const corretorScopeId = profile.tipo_usuario === 'corretor' ? profile.corretor_id : null;
+      let leadsQuery = supabase
+        .from('leads')
+        .select('*')
+        .order('data_entrada', { ascending: false })
+        .limit(200);
+
+      let tarefasQuery = supabase
+        .from('lead_tarefas')
+        .select('*')
+        .order('vencimento', { ascending: true })
+        .limit(100);
+
+      let conversasQuery = supabase
+        .from('whatsapp_conversas')
+        .select('*')
+        .order('ultima_mensagem_at', { ascending: false })
+        .limit(50);
+
+      if (corretorScopeId) {
+        leadsQuery = leadsQuery.eq('corretor_id', corretorScopeId);
+        tarefasQuery = tarefasQuery.eq('corretor_id', corretorScopeId);
+        conversasQuery = conversasQuery.eq('corretor_id', corretorScopeId);
+      }
+
       const [leadsRes, tarefasRes, conversasRes] = await Promise.all([
-        supabase.from('leads').select('*').order('data_entrada', { ascending: false }).limit(200),
-        supabase.from('lead_tarefas').select('*').order('vencimento', { ascending: true }).limit(100),
-        supabase.from('whatsapp_conversas').select('*').order('ultima_mensagem_at', { ascending: false }).limit(50)
+        leadsQuery,
+        tarefasQuery,
+        conversasQuery
       ]);
 
       if (leadsRes.error) throw leadsRes.error;
@@ -152,7 +177,7 @@ export default function CrmPage() {
 
   useEffect(() => {
     void fetchCrm();
-  }, [profile?.id]);
+  }, [profile?.id, profile?.tipo_usuario, profile?.corretor_id]);
 
   useEffect(() => {
     if (selectedLead?.id) {
