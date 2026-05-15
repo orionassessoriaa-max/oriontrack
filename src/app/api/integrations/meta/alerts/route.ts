@@ -90,7 +90,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   const rawBalance = accountPayload?.balance;
   const balance = rawBalance === undefined || rawBalance === null ? null : Number(rawBalance) / 100;
 
-  return {
+    return {
     corretor_id: corretor.id,
     corretor_nome: corretor.nome,
     meta_ad_account_id: corretor.meta_ad_account_id,
@@ -100,9 +100,10 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     cpl,
     ctr,
     saldo: balance,
-    currency: accountPayload?.currency || 'BRL',
-    alerta_cpl_alto: cpl !== null && cpl > 25,
-  };
+      currency: accountPayload?.currency || 'BRL',
+      alerta_cpl_alto: cpl !== null && cpl > 25,
+      alerta_saldo_baixo: balance !== null && balance < 100,
+    };
 }
 
 export async function POST(request: Request) {
@@ -162,6 +163,7 @@ export async function POST(request: Request) {
           saldo: null,
           currency: 'BRL',
           alerta_cpl_alto: false,
+          alerta_saldo_baixo: false,
           error: result.reason?.message || 'Erro ao consultar esta conta.',
         };
       })

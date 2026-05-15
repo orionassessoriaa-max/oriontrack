@@ -17,6 +17,7 @@ type MetaAlertRow = {
   saldo: number | null;
   currency: string;
   alerta_cpl_alto: boolean;
+  alerta_saldo_baixo: boolean;
   error?: string;
 };
 
@@ -96,10 +97,12 @@ export default function TrafficMetaAlertsPage() {
 
   const counters = useMemo(() => {
     const highCpl = rows.filter((row) => row.alerta_cpl_alto).length;
+    const lowBalance = rows.filter((row) => row.alerta_saldo_baixo).length;
     const totalSpend = rows.reduce((total, row) => total + Number(row.spend || 0), 0);
     const totalLeads = rows.reduce((total, row) => total + Number(row.leads || 0), 0);
     return {
       highCpl,
+      lowBalance,
       totalSpend,
       totalLeads,
       averageCpl: totalLeads > 0 ? totalSpend / totalLeads : null,
@@ -126,7 +129,7 @@ export default function TrafficMetaAlertsPage() {
 
       <div className="mb-6 grid gap-4 md:grid-cols-4">
         <Counter tone="red" label="CPL alto" value={String(counters.highCpl)} />
-        <Counter tone="blue" label="Contas monitoradas" value={String(rows.length)} />
+        <Counter tone="amber" label="Saldo baixo" value={String(counters.lowBalance)} />
         <Counter tone="emerald" label="Leads Meta" value={String(counters.totalLeads)} />
         <Counter tone="slate" label="CPL medio" value={formatCurrency(counters.averageCpl)} />
       </div>
@@ -211,12 +214,14 @@ export default function TrafficMetaAlertsPage() {
                   <td colSpan={7} className="py-16 text-center text-sm font-bold text-slate-400">Nenhuma conta vinculada encontrada para este filtro.</td>
                 </tr>
               ) : rows.map((row) => (
-                <tr key={`${row.corretor_id}-${row.meta_ad_account_id}`} className={row.alerta_cpl_alto ? 'bg-red-50/40' : 'hover:bg-slate-50/60'}>
+                <tr key={`${row.corretor_id}-${row.meta_ad_account_id}`} className={row.alerta_cpl_alto ? 'bg-red-50/40' : row.alerta_saldo_baixo ? 'bg-amber-50/40' : 'hover:bg-slate-50/60'}>
                   <td className="px-6 py-5">
                     {row.error ? (
                       <Badge tone="amber" text="Erro Meta" />
                     ) : row.alerta_cpl_alto ? (
                       <Badge tone="red" text="CPL alto" />
+                    ) : row.alerta_saldo_baixo ? (
+                      <Badge tone="amber" text="Saldo baixo" />
                     ) : (
                       <Badge tone="emerald" text="Normal" />
                     )}
@@ -234,7 +239,11 @@ export default function TrafficMetaAlertsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-5 text-sm font-black text-slate-700">{formatCurrency(row.spend, row.currency)}</td>
-                  <td className="px-6 py-5 text-sm font-black text-slate-700">{formatCurrency(row.saldo, row.currency)}</td>
+                  <td className="px-6 py-5">
+                    <span className={`rounded-full px-3 py-1 text-xs font-black ${row.alerta_saldo_baixo ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                      {formatCurrency(row.saldo, row.currency)}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -245,11 +254,12 @@ export default function TrafficMetaAlertsPage() {
   );
 }
 
-function Counter({ label, value, tone }: { label: string; value: string; tone: 'red' | 'blue' | 'emerald' | 'slate' }) {
+function Counter({ label, value, tone }: { label: string; value: string; tone: 'red' | 'blue' | 'emerald' | 'amber' | 'slate' }) {
   const tones = {
     red: 'border-red-100 bg-red-50 text-red-700',
     blue: 'border-blue-100 bg-blue-50 text-blue-700',
     emerald: 'border-emerald-100 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-100 bg-amber-50 text-amber-700',
     slate: 'border-slate-100 bg-white text-slate-700',
   };
 
