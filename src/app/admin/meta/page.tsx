@@ -220,8 +220,11 @@ export default function AdminMetaPage() {
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
         <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
           <h2 className="mb-5 flex items-center gap-2 text-lg font-black text-gray-900">
-            <Plus size={18} className="text-blue-600" /> Conta de anúncio
+            <Plus size={18} className="text-blue-600" /> Cadastro manual opcional
           </h2>
+          <p className="mb-5 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold leading-relaxed text-amber-800">
+            Use este bloco só se uma conta não aparecer na sincronização automática. O fluxo principal é o botão azul "Sincronizar contas Meta".
+          </p>
           <form onSubmit={createAccount} className="space-y-4">
             <Field label="ID da conta Meta">
               <input
