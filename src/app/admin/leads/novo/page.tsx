@@ -70,25 +70,24 @@ export default function AdminNovoLeadPage() {
     setError(null);
 
     try {
-      const { error } = await supabase
-        .from('leads')
-        .insert([{
-          corretor_id: formData.corretor_id,
-          nome: formData.nome,
-          telefone: formData.telefone,
-          idades: formData.idades,
-          possui_cnpj: formData.possui_cnpj,
-          tem_plano_ativo: formData.tem_plano_ativo,
-          plano_atual: formData.plano_atual,
-          custo_plano_atual: formData.custo_plano_atual,
-          investimento: formData.investimento,
-          cidade: formData.cidade,
-          operadora: formData.operadora || null,
-          status: formData.status,
-          data_entrada: new Date(formData.data_entrada).toISOString()
-        }]);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
 
-      if (error) throw error;
+      if (!token) {
+        throw new Error('Sessao expirada. Entre novamente.');
+      }
+
+      const response = await fetch('/api/admin/leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Erro ao salvar lead.');
 
       setSuccess(true);
       setTimeout(() => router.push('/admin/leads'), 3000);
