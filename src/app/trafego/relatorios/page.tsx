@@ -48,6 +48,7 @@ export default function TrafficReportsPage() {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [fetchingMetaSpend, setFetchingMetaSpend] = useState(false);
   const [metaSpendError, setMetaSpendError] = useState<string | null>(null);
 
@@ -286,7 +287,7 @@ export default function TrafficReportsPage() {
       if (!response.ok) {
         alert('Erro ao salvar relatório: ' + (payload.error || 'erro desconhecido'));
       } else {
-        alert('Relatório salvo com sucesso!');
+        setSaveMessage('Relatório salvo no Histórico de Relatórios abaixo.');
         fetchData();
         setPreview(null);
       }
@@ -554,6 +555,11 @@ export default function TrafficReportsPage() {
 
       {/* History Table */}
       <div className="mt-12 space-y-6">
+        {saveMessage && (
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-black text-emerald-700">
+            {saveMessage}
+          </div>
+        )}
         <h2 className="text-2xl font-bold text-gray-900">Histórico de Relatórios</h2>
         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
