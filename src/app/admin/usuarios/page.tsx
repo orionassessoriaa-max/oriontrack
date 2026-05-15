@@ -82,6 +82,15 @@ export default function AdminUsuariosPage() {
   }
 
   useEffect(() => {
+    const requestedRole = new URLSearchParams(window.location.search).get('tipo') as UserRole | null;
+    if (requestedRole && ['admin', 'corretor', 'gestor_trafego'].includes(requestedRole)) {
+      setForm((current) => ({
+        ...current,
+        tipo_usuario: requestedRole,
+        time_operacional: requestedRole === 'corretor' ? current.time_operacional : [],
+        operadoras: requestedRole === 'corretor' ? current.operadoras : []
+      }));
+    }
     void fetchUsers();
   }, []);
 
@@ -115,7 +124,7 @@ export default function AdminUsuariosPage() {
     }
 
     setCredentials(payload.credentials);
-    setForm(initialForm);
+    setForm({ ...initialForm, tipo_usuario: form.tipo_usuario });
     await fetchUsers();
     setSaving(false);
   }
