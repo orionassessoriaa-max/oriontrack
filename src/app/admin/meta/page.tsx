@@ -38,6 +38,7 @@ export default function AdminMetaPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -135,6 +136,38 @@ export default function AdminMetaPage() {
     await fetchData();
   }
 
+  async function syncMetaAccounts() {
+    setSyncing(true);
+    setError(null);
+    setSuccess(null);
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setError('Sessao expirada. Entre novamente.');
+      setSyncing(false);
+      return;
+    }
+
+    const response = await fetch('/api/integrations/meta/accounts', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json();
+
+    setSyncing(false);
+    if (!response.ok) {
+      setError(payload.error || 'Erro ao sincronizar contas Meta.');
+      return;
+    }
+
+    const warnings = Array.isArray(payload.warnings) && payload.warnings.length > 0
+      ? ` Alguns caminhos da Meta retornaram aviso, mas a sincronizacao principal funcionou.`
+      : '';
+    setSuccess(`${payload.count || 0} conta(s) Meta sincronizada(s).${warnings}`);
+    await fetchData();
+  }
+
   return (
     <InternalLayout>
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -143,12 +176,21 @@ export default function AdminMetaPage() {
           <h1 className="text-3xl font-black tracking-tight text-gray-900">Meta Ads Orion</h1>
           <p className="font-medium text-gray-500">Mapeie contas de anúncio por corretor e prepare a sincronização de métricas.</p>
         </div>
-        <button
-          onClick={fetchData}
-          className="flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm transition-all hover:bg-slate-50"
-        >
-          <RefreshCw size={16} /> Atualizar
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={syncMetaAccounts}
+            disabled={syncing}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-700 disabled:opacity-60"
+          >
+            {syncing ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} />} Sincronizar contas Meta
+          </button>
+          <button
+            onClick={fetchData}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm transition-all hover:bg-slate-50"
+          >
+            <RefreshCw size={16} /> Atualizar
+          </button>
+        </div>
       </div>
 
       {error && <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold text-red-600">{error}</div>}
