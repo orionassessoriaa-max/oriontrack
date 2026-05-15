@@ -12,7 +12,8 @@ import {
   Plug,
   X,
   Save,
-  Upload
+  Upload,
+  RotateCcw
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadStatus } from '@/types';
@@ -21,9 +22,56 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 
-function countLives(idades?: string | null) {
-  if (!idades) return 0;
-  return idades.split(/[,;/|]+/).map(item => item.trim()).filter(Boolean).length;
+function normalizeText(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function cnpjCategory(value?: string | null) {
+  const normalized = normalizeText(value);
+  if (!normalized || normalized.includes('nao informado')) return 'nao_informado';
+  if (normalized.includes('nao')) return 'sem';
+  if (normalized.includes('sim') || normalized.includes('mei') || normalized.includes('cnpj')) return 'com';
+  return 'nao_informado';
+}
+
+function cnpjLabel(value?: string | null) {
+  const category = cnpjCategory(value);
+  if (category === 'com') return 'COM CNPJ';
+  if (category === 'sem') return 'SEM CNPJ';
+  return 'NAO INFORMADO';
+}
+
+function cnpjBadgeStyle(value?: string | null) {
+  const category = cnpjCategory(value);
+  if (category === 'com') return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100';
+  if (category === 'sem') return 'bg-amber-50 text-amber-700 ring-1 ring-amber-100';
+  return 'bg-slate-50 text-slate-500 ring-1 ring-slate-100';
+}
+
+function tabLabel(value?: string | null) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.includes('{{')) return 'Sem aba';
+  const normalized = normalizeText(raw);
+  const known = [
+    ['bradesco', 'BRADESCO'],
+    ['odontoprev', 'ODONTOPREV'],
+    ['sao lucas', 'SAO LUCAS'],
+    ['sulamerica', 'SULAMERICA'],
+    ['sul america', 'SULAMERICA'],
+    ['clientes diversos', 'CLIENTES DIVERSOS'],
+    ['medsenior', 'MEDSENIOR'],
+    ['hapvida', 'HAPVIDA'],
+    ['aurora', 'AURORA'],
+    ['porto', 'PORTO'],
+    ['alice', 'ALICE'],
+    ['amil', 'AMIL'],
+  ];
+  const found = known.find(([key]) => normalized.includes(key));
+  if (found) return found[1];
+  return raw.length > 34 ? `${raw.slice(0, 31)}...` : raw;
 }
 
 export default function BrokerLeadsPage() {
@@ -38,9 +86,7 @@ export default function BrokerLeadsPage() {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [minLives, setMinLives] = useState('');
   const [operadoraFilter, setOperadoraFilter] = useState('todas');
-  const [operadorasDisponiveis, setOperadorasDisponiveis] = useState<string[]>([]);
   const [showCrmModal, setShowCrmModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [crmApiUrl, setCrmApiUrl] = useState('');
@@ -104,8 +150,6 @@ export default function BrokerLeadsPage() {
       .maybeSingle();
 
     setCrmApiUrl(data?.crm_api_url || '');
-    const operadoras = data?.operadoras_info?.selecionadas;
-    setOperadorasDisponiveis(Array.isArray(operadoras) ? operadoras : []);
   };
 
   const updateLeadStatus = async (leadId: string, status: LeadStatus) => {
@@ -189,38 +233,56 @@ export default function BrokerLeadsPage() {
   };
 
   const filteredLeads = leads.filter(lead => {
+    const leadTab = tabLabel(lead.operadora);
     const searchMatch =
       (lead.nome?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
       (lead.telefone || '').includes(searchTerm) ||
       (lead.cidade?.toLowerCase() || '').includes(searchTerm.toLowerCase());
 
-    const cnpjMatch = cnpjFilter === 'todos' || lead.possui_cnpj === cnpjFilter;
+    const cnpjMatch = cnpjFilter === 'todos' || cnpjCategory(lead.possui_cnpj) === cnpjFilter;
     const statusMatch = statusFilter === 'todos' || lead.status === statusFilter;
     const operadoraMatch =
       operadoraFilter === 'todas' ||
-      (operadoraFilter === '__sem_aba__' ? !lead.operadora : lead.operadora === operadoraFilter);
-    const livesMatch = !minLives || countLives(lead.idades) >= Number(minLives);
+      (operadoraFilter === '__sem_aba__' ? leadTab === 'Sem aba' : leadTab === operadoraFilter);
     const leadDate = lead.data_entrada ? new Date(lead.data_entrada) : null;
     const fromMatch = !dateFrom || (leadDate && leadDate >= new Date(dateFrom));
     const toMatch = !dateTo || (leadDate && leadDate <= new Date(dateTo + 'T23:59:59'));
 
-    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && livesMatch && fromMatch && toMatch;
+    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && fromMatch && toMatch;
   });
 
   const sheetTabs = useMemo(() => {
     const fromLeads = leads
-      .map((lead) => lead.operadora)
-      .filter((operadora): operadora is string => Boolean(operadora?.trim()));
-    return Array.from(new Set([...operadorasDisponiveis, ...fromLeads])).sort((a, b) => a.localeCompare(b));
-  }, [leads, operadorasDisponiveis]);
+      .map((lead) => tabLabel(lead.operadora))
+      .filter((operadora) => operadora !== 'Sem aba');
+    return Array.from(new Set(fromLeads)).sort((a, b) => a.localeCompare(b));
+  }, [leads]);
 
   const tabCounts = useMemo(() => {
     return leads.reduce<Record<string, number>>((acc, lead) => {
-      const key = lead.operadora || 'Sem aba';
+      const key = tabLabel(lead.operadora);
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
   }, [leads]);
+
+  const hasActiveFilters = Boolean(
+    searchTerm ||
+    dateFrom ||
+    dateTo ||
+    cnpjFilter !== 'todos' ||
+    statusFilter !== 'todos' ||
+    operadoraFilter !== 'todas'
+  );
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setDateFrom('');
+    setDateTo('');
+    setCnpjFilter('todos');
+    setStatusFilter('todos');
+    setOperadoraFilter('todas');
+  };
 
   return (
     <InternalLayout>
@@ -251,8 +313,8 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-6">
-          <div className="relative lg:col-span-2">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.8fr_160px_160px_170px_230px_auto]">
+          <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
@@ -266,17 +328,31 @@ export default function BrokerLeadsPage() {
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20" />
           <select value={cnpjFilter} onChange={(e) => setCnpjFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
             <option value="todos">CNPJ: todos</option>
-            <option value="Sim">Com CNPJ</option>
-            <option value="Não">Sem CNPJ</option>
-            <option value="Não informado">Nao informado</option>
+            <option value="com">Com CNPJ</option>
+            <option value="sem">Sem CNPJ</option>
+            <option value="nao_informado">Nao informado</option>
           </select>
-          <input type="number" min="0" placeholder="Min. vidas" value={minLives} onChange={(e) => setMinLives(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20" />
-        </div>
-        <div className="mt-4">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 md:w-72">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
             <option value="todos">Todos os status</option>
             {LEAD_STATUSES.map(status => <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>)}
           </select>
+          <button
+            type="button"
+            onClick={clearFilters}
+            disabled={!hasActiveFilters}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <RotateCcw size={15} /> Limpar
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-widest text-slate-500">
+          <span className="rounded-full bg-slate-100 px-3 py-2">{filteredLeads.length} de {leads.length} leads</span>
+          <span className="rounded-full bg-blue-50 px-3 py-2 text-blue-700">
+            Aba: {operadoraFilter === 'todas' ? 'todas' : operadoraFilter === '__sem_aba__' ? 'sem aba' : operadoraFilter}
+          </span>
+          <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-700">
+            CNPJ: {cnpjFilter === 'todos' ? 'todos' : cnpjFilter === 'com' ? 'com CNPJ' : cnpjFilter === 'sem' ? 'sem CNPJ' : 'nao informado'}
+          </span>
         </div>
       </div>
 
@@ -294,7 +370,7 @@ export default function BrokerLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full min-w-[1360px] border-collapse text-left text-[13px]">
+            <table className="w-full min-w-[1720px] border-collapse text-left text-[13px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100">
                   <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
@@ -303,24 +379,26 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Telefone</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Idades</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Possui CNPJ</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Tem plano ativo?</th>
+                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Tem plano ativo?</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Plano atual</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Custo atual</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Investimento pretendido</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cidade</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Operadora</th>
+                  <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Aba / Operadora</th>
+                  <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações / UTMs</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={13} className="py-20 text-center">
+                    <td colSpan={14} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
                 ) : filteredLeads.map((lead, index) => {
                   const statusStyle = getLeadStatusStyle(lead.status);
+                  const leadTab = tabLabel(lead.operadora);
 
                   return (
                   <tr key={lead.id} className="transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-blue-50/50">
@@ -332,18 +410,14 @@ export default function BrokerLeadsPage() {
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-600">{lead.telefone}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.idades || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3">
-                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
-                        lead.possui_cnpj === 'Sim' ? 'bg-emerald-50 text-emerald-700' :
-                        lead.possui_cnpj === 'Não' ? 'bg-amber-50 text-amber-700' :
-                        'bg-slate-50 text-slate-500'
-                      }`}>
-                        {lead.possui_cnpj || 'Nao informado'}
+                      <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${cnpjBadgeStyle(lead.possui_cnpj)}`}>
+                        {cnpjLabel(lead.possui_cnpj)}
                       </span>
                     </td>
                     <td className="border border-slate-100 px-3 py-3">
-                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
-                        lead.tem_plano_ativo === 'Sim' ? 'bg-blue-50 text-blue-700' :
-                        lead.tem_plano_ativo === 'Não' ? 'bg-slate-100 text-slate-600' :
+                      <span className={`inline-flex max-w-[210px] whitespace-normal rounded-lg px-3 py-2 text-[11px] font-black uppercase leading-relaxed tracking-widest ${
+                        normalizeText(lead.tem_plano_ativo).includes('sim') ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' :
+                        normalizeText(lead.tem_plano_ativo).includes('nao') ? 'bg-slate-100 text-slate-600 ring-1 ring-slate-200' :
                         'bg-slate-50 text-slate-500'
                       }`}>
                         {lead.tem_plano_ativo || 'Nao informado'}
@@ -353,7 +427,12 @@ export default function BrokerLeadsPage() {
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.custo_plano_atual || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.investimento || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-500">{lead.cidade || '-'}</td>
-                    <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{lead.operadora || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{leadTab}</td>
+                    <td className="border border-slate-100 px-3 py-3 text-xs font-medium leading-relaxed text-slate-600">
+                      <div className="max-w-[300px] whitespace-normal">
+                        {lead.observacoes || '-'}
+                      </div>
+                    </td>
                     <td className="border border-slate-100 px-3 py-3">
                       <div className="flex items-center gap-2">
                         <select
@@ -395,7 +474,7 @@ export default function BrokerLeadsPage() {
             <button
               type="button"
               onClick={() => setOperadoraFilter('__sem_aba__')}
-              className="whitespace-nowrap rounded-t-xl border border-transparent bg-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-white"
+              className={`whitespace-nowrap rounded-t-xl border px-4 py-2 text-xs font-black transition-all ${operadoraFilter === '__sem_aba__' ? 'border-emerald-400 bg-white text-emerald-700 shadow-sm' : 'border-transparent bg-slate-200 text-slate-600 hover:bg-white'}`}
             >
               Sem aba ({tabCounts['Sem aba']})
             </button>
