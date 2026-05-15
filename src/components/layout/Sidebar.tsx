@@ -45,7 +45,6 @@ export default function Sidebar() {
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
     { icon: UserCog, label: 'Gestores de Tráfego', href: '/admin/gestores' },
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
-    { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: Globe, label: 'Páginas', href: '/admin/paginas' },
     ...(isMasterAdmin ? [{ icon: Settings, label: 'Meta Ads', href: '/admin/meta' }] : []),
     { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
@@ -55,7 +54,6 @@ export default function Sidebar() {
 
   const trafficMenu = [
     { icon: FileSearch, label: 'Meus Leads', href: '/trafego/leads' },
-    { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: UserPlus, label: 'Entrada', href: '/trafego/entrada' },
     { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
     { icon: Users, label: 'Corretores', href: '/trafego/corretores' },

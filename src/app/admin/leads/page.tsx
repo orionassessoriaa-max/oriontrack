@@ -14,7 +14,8 @@ import {
   Edit2,
   Eye,
   Calendar,
-  X
+  X,
+  Upload
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead } from '@/types';
@@ -35,6 +36,8 @@ export default function AdminLeadsPage() {
   const [filterCidade, setFilterCidade] = useState('');
   const [filterDataInicio, setFilterDataInicio] = useState('');
   const [filterDataFim, setFilterDataFim] = useState('');
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [showImportBox, setShowImportBox] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -84,6 +87,12 @@ export default function AdminLeadsPage() {
     setFilterDataFim('');
   };
 
+  const saveSheetUrl = () => {
+    if (!sheetUrl.trim()) return;
+    alert('Link da planilha recebido. Proximo passo: ligar este link a uma rotina de importacao automatica.');
+    setShowImportBox(false);
+  };
+
   const filteredLeads = leads.filter(lead => {
     const matchesSearch = 
       (lead.nome?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -115,6 +124,12 @@ export default function AdminLeadsPage() {
           <p className="text-gray-500 font-medium">Audite, filtre e gerencie os leads dos corretores.</p>
         </div>
         <div className="flex gap-3">
+          <button
+            onClick={() => setShowImportBox((current) => !current)}
+            className="bg-emerald-600 text-white px-6 py-4 rounded-2xl font-black shadow-sm flex items-center gap-2 hover:bg-emerald-700 transition-all"
+          >
+            <Upload size={18} /> Importar Planilha
+          </button>
           <button className="bg-white text-gray-700 px-6 py-4 rounded-2xl font-black border border-gray-100 shadow-sm flex items-center gap-2 hover:bg-gray-50 transition-all">
             <Download size={18} /> Exportar
           </button>
@@ -126,6 +141,27 @@ export default function AdminLeadsPage() {
           </Link>
         </div>
       </div>
+
+      {showImportBox && (
+        <div className="mb-8 rounded-[2rem] border border-emerald-100 bg-emerald-50 p-5">
+          <h2 className="mb-2 text-lg font-black text-emerald-950">Importar leads por planilha</h2>
+          <p className="mb-4 text-sm font-bold text-emerald-800">Cole o link da planilha compartilhada. A importacao automatica por colunas sera a proxima etapa.</p>
+          <div className="flex flex-col gap-3 md:flex-row">
+            <input
+              value={sheetUrl}
+              onChange={(event) => setSheetUrl(event.target.value)}
+              placeholder="https://docs.google.com/spreadsheets/..."
+              className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+            />
+            <button
+              onClick={saveSheetUrl}
+              className="rounded-2xl bg-emerald-600 px-6 py-4 text-sm font-black text-white hover:bg-emerald-700"
+            >
+              Salvar link
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden mb-10">
         <div className="p-8 border-b border-gray-50 bg-slate-50/30">

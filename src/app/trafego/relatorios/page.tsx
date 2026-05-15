@@ -48,6 +48,8 @@ export default function TrafficReportsPage() {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [fetchingMetaSpend, setFetchingMetaSpend] = useState(false);
+  const [metaSpendError, setMetaSpendError] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -70,6 +72,11 @@ export default function TrafficReportsPage() {
   useEffect(() => {
     fetchData();
   }, [profile?.id, profile?.tipo_usuario]);
+
+  useEffect(() => {
+    if (!formData.corretor_id || !formData.data_inicio || !formData.data_fim) return;
+    void fetchMetaSpend();
+  }, [formData.corretor_id, formData.data_inicio, formData.data_fim]);
 
   async function fetchData() {
     if (!profile?.id) {
@@ -122,9 +129,49 @@ export default function TrafficReportsPage() {
     }
   }
 
+  async function fetchMetaSpend() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return;
+
+    setFetchingMetaSpend(true);
+    setMetaSpendError(null);
+
+    try {
+      const response = await fetch('/api/integrations/meta/spend', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          corretor_id: formData.corretor_id,
+          data_inicio: formData.data_inicio,
+          data_fim: formData.data_fim
+        })
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMetaSpendError(payload.error || 'Nao foi possivel puxar o investimento Meta.');
+        setFormData((current) => ({ ...current, valor_investido: '' }));
+        return;
+      }
+
+      setFormData((current) => ({ ...current, valor_investido: String(Number(payload.spend || 0).toFixed(2)) }));
+    } catch (err: any) {
+      setMetaSpendError(err.message || 'Erro ao buscar investimento Meta.');
+    } finally {
+      setFetchingMetaSpend(false);
+    }
+  }
+
   const generatePreview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.corretor_id || !formData.valor_investido) return;
+    if (!formData.corretor_id || !formData.valor_investido) {
+      alert('Selecione o corretor e aguarde o investimento Meta carregar.');
+      return;
+    }
     if (!corretores.some((corretor) => corretor.id === formData.corretor_id)) {
       alert('Selecione um corretor vinculado à sua gestão.');
       return;
@@ -376,12 +423,16 @@ export default function TrafficReportsPage() {
                     type="number" 
                     step="0.01"
                     required
+                    readOnly
                     value={formData.valor_investido}
                     onChange={e => setFormData({...formData, valor_investido: e.target.value})}
                     placeholder="0,00"
-                    className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-14 pr-6 focus:ring-2 focus:ring-blue-500 transition-all font-bold"
+                    className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-14 pr-12 focus:ring-2 focus:ring-blue-500 transition-all font-bold"
                   />
+                  {fetchingMetaSpend && <Loader2 className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-blue-600" size={18} />}
                 </div>
+                {metaSpendError && <p className="mt-2 text-xs font-bold text-amber-600">{metaSpendError}</p>}
+                {!metaSpendError && formData.valor_investido && <p className="mt-2 text-xs font-bold text-emerald-600">Investimento puxado automaticamente da conta Meta vinculada.</p>}
               </div>
 
               <button 
