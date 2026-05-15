@@ -168,8 +168,18 @@ export default function TrafficReportsPage() {
 
   const generatePreview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.corretor_id || !formData.valor_investido) {
-      alert('Selecione o corretor e aguarde o investimento Meta carregar.');
+    if (!formData.corretor_id) {
+      alert('Selecione o corretor.');
+      return;
+    }
+
+    if (!formData.usar_leads_manuais && metaSpendError) {
+      alert(metaSpendError);
+      return;
+    }
+
+    if (formData.usar_leads_manuais && formData.valor_investido.trim() === '') {
+      alert('Informe o valor investido manual.');
       return;
     }
     if (!corretores.some((corretor) => corretor.id === formData.corretor_id)) {
@@ -177,7 +187,7 @@ export default function TrafficReportsPage() {
       return;
     }
 
-    const investido = parseFloat(formData.valor_investido);
+    const investido = parseFloat(formData.valor_investido || '0');
     if (Number.isNaN(investido) || investido < 0) {
       alert('Informe um valor investido valido.');
       return;
@@ -440,7 +450,6 @@ export default function TrafficReportsPage() {
                   <input 
                     type="number" 
                     step="0.01"
-                    required
                     readOnly
                     value={formData.valor_investido}
                     onChange={e => setFormData({...formData, valor_investido: e.target.value})}
