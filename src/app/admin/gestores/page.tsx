@@ -68,7 +68,7 @@ export default function AdminGestoresPage() {
           <p className="text-gray-500 font-medium">Gerencie os acessos da equipe de tráfego e relatórios.</p>
         </div>
         <Link 
-          href="/admin/gestores/novo"
+          href="/admin/usuarios?tipo=gestor_trafego"
           className="bg-blue-600 text-white px-6 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
         >
           <Plus size={20} />
