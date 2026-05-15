@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { normalizeLeadStatus } from '@/lib/leadStatus';
+import { LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 
 type CsvRow = Record<string, string>;
 type LeadInsert = {
@@ -45,10 +45,10 @@ async function requireAdmin(request: Request) {
   return { user };
 }
 
-function buildCsvUrl(input: string) {
+function parseSheetLink(input: string) {
   const url = new URL(input);
   if (url.pathname.endsWith('.csv') || url.searchParams.get('output') === 'csv' || url.searchParams.get('format') === 'csv') {
-    return input;
+    return { csvUrl: input, spreadsheetId: '', gid: '', editUrl: '' };
   }
 
   const idMatch = url.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
@@ -59,7 +59,12 @@ function buildCsvUrl(input: string) {
     throw new Error('Link do Google Sheets invalido.');
   }
 
-  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`;
+  return {
+    csvUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`,
+    spreadsheetId,
+    gid,
+    editUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit?gid=${gid}`,
+  };
 }
 
 function parseCsv(text: string) {
@@ -171,13 +176,48 @@ function statusFromSheet(value: string) {
     telefone_nao_existe: 'Telefone nÃ£o existe',
   };
 
-  return normalizeLeadStatus(aliases[key] || value || 'Aguardando atendimento');
+  const exact = LEAD_STATUSES.find((status) => normalizeHeader(status) === key);
+  if (exact) return exact;
+  if (aliases[key]) return normalizeLeadStatus(aliases[key]);
+  if (key.includes('cotacao')) return normalizeLeadStatus('CotaÃ§Ã£o enviada');
+  if (key.includes('negoci')) return normalizeLeadStatus('Em negociaÃ§Ã£o');
+  if (key.includes('retorno') || key.includes('resposta')) return normalizeLeadStatus('NÃ£o tive retorno');
+  if (key.includes('venda') || key.includes('vendido')) return normalizeLeadStatus('Venda realizada');
+  if (key.includes('interesse') || key.includes('descart')) return normalizeLeadStatus('Sem interesse');
+  if (key.includes('telefone')) return normalizeLeadStatus('Telefone nÃ£o existe');
+  return 'Aguardando atendimento';
 }
 
-function inferOperadora(row: CsvRow) {
+async function resolveSheetName(editUrl: string, gid: string) {
+  if (!editUrl || !gid) return '';
+
+  try {
+    const response = await fetch(editUrl, { cache: 'no-store' });
+    const html = await response.text();
+    const tabEntry = html.match(new RegExp(String.raw`\[\d+,0,\\\"${gid}\\\",[\s\S]{0,600}?\[0,0,\\\"([^\\\"]+)\\\"`));
+    if (tabEntry?.[1]) return tabEntry[1];
+
+    const marker = `\\"${gid}\\"`;
+    const index = html.indexOf(marker);
+    if (index < 0) return '';
+
+    const slice = html.slice(index, index + 1200);
+    const candidates = [...slice.matchAll(/\\\"([^\\\"]+)\\\"/g)]
+      .map((match) => match[1])
+      .filter((candidate) => candidate && candidate !== gid && !/^\d+$/.test(candidate));
+
+    return candidates.find((candidate) => candidate.length > 1 && candidate.length < 40) || '';
+  } catch {
+    return '';
+  }
+}
+
+function inferOperadora(row: CsvRow, sheetName: string) {
+  if (sheetName) return sheetName;
+
   const raw = [
     pick(row, ['operadora', 'aba', 'sheet', 'tab']),
-    pick(row, ['utm_content', 'utm_campaign', 'campanha']),
+    pick(row, ['utm_campaign', 'campanha']),
     pick(row, ['plano atual', 'operadora atual']),
   ].filter(Boolean).join(' ');
 
@@ -198,15 +238,27 @@ function inferOperadora(row: CsvRow) {
   ];
 
   const found = operators.find(([key]) => normalized.includes(key));
-  return found?.[1] || pick(row, ['operadora', 'utm_campaign', 'campanha', 'utm_content']);
+  return found?.[1] || pick(row, ['operadora', 'campanha']);
 }
 
 function buildNotes(row: CsvRow) {
+  const utms = [
+    ['utm_source', pick(row, ['utm_source'])],
+    ['utm_medium', pick(row, ['utm_medium'])],
+    ['utm_campaign', pick(row, ['utm_campaign'])],
+    ['utm_term', pick(row, ['utm_term'])],
+    ['utm_content', pick(row, ['utm_content'])],
+  ]
+    .filter(([, value]) => Boolean(value))
+    .map(([label, value]) => `${label}: ${value}`)
+    .join(' | ');
+
   const notes = [
     pick(row, ['observacoes', 'observacao', 'obs', 'comentarios']),
     pick(row, ['hospitais']),
     pick(row, ['redes de preferencia']),
     pick(row, ['negocio etapa', 'negocio - etapa']),
+    utms,
   ].filter(Boolean);
 
   return notes.join(' | ');
@@ -235,7 +287,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
     }
 
-    const csvUrl = buildCsvUrl(sheetUrl);
+    const { csvUrl, editUrl, gid } = parseSheetLink(sheetUrl);
     const response = await fetch(csvUrl, { cache: 'no-store' });
     const csv = await response.text();
 
@@ -246,6 +298,7 @@ export async function POST(request: Request) {
     }
 
     const rows = toRows(csv);
+    const sheetName = await resolveSheetName(editUrl, gid);
     let skipped = 0;
     const leads = rows
       .map((row): LeadInsert | null => {
@@ -268,7 +321,7 @@ export async function POST(request: Request) {
           custo_plano_atual: pick(row, ['custo plano atual', 'custo atual', 'valor plano atual', 'custo do plano', 'custo do plano atual']),
           investimento: pick(row, ['investimento', 'investimento pretendido', 'pretensao investimento', 'quer investir quanto', 'quanto pretende investir', 'orcamento']),
           cidade: pick(row, ['cidade', 'regiao', 'localidade']),
-          operadora: inferOperadora(row),
+          operadora: inferOperadora(row, sheetName),
           status: statusFromSheet(pick(row, ['status']) || 'Aguardando atendimento'),
           observacoes: buildNotes(row),
         };
