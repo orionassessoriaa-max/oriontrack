@@ -6,7 +6,9 @@ import { StatCard } from '@/components/ui/Stats';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { 
   Users, 
+  BarChart3,
   Clock, 
+  DollarSign,
   Send, 
   TrendingUp, 
   LayoutDashboard, 
@@ -37,6 +39,43 @@ type CorretorDashboardData = {
   }> | null;
 };
 
+type LeadMetricRow = {
+  status: string | null;
+  data_entrada: string | null;
+};
+
+type MonthlyPerformance = {
+  key: string;
+  label: string;
+  leads: number;
+  spend: number;
+};
+
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(date: Date) {
+  return date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+}
+
+function getLastMonths(total = 6): MonthlyPerformance[] {
+  const now = new Date();
+  return Array.from({ length: total }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (total - 1 - index), 1);
+    return {
+      key: monthKey(date),
+      label: monthLabel(date),
+      leads: 0,
+      spend: 0,
+    };
+  });
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+}
+
 export default function DashboardPage() {
   const { profile, loading: authLoading } = useAuth();
   const [corretorData, setCorretorData] = useState<CorretorDashboardData | null>(null);
@@ -48,6 +87,7 @@ export default function DashboardPage() {
     sold: 0,
     stale: 0
   });
+  const [monthlyPerformance, setMonthlyPerformance] = useState<MonthlyPerformance[]>(getLastMonths());
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -80,14 +120,27 @@ export default function DashboardPage() {
         setCorretorData(data);
 
         // 2. Buscar Estatísticas de Leads
-        const { data: statsRes, error: statsError } = await supabase
-          .from('leads')
-          .select('status, data_entrada')
-          .eq('corretor_id', profile.corretor_id);
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+        sixMonthsAgo.setDate(1);
+        sixMonthsAgo.setHours(0, 0, 0, 0);
 
-        if (statsError) throw statsError;
+        const [statsQuery, metaQuery] = await Promise.all([
+          supabase
+            .from('leads')
+            .select('status, data_entrada')
+            .eq('corretor_id', profile.corretor_id),
+          supabase
+            .from('meta_metricas_diarias')
+            .select('data, spend')
+            .eq('corretor_id', profile.corretor_id)
+            .gte('data', sixMonthsAgo.toISOString().slice(0, 10))
+        ]);
 
-        if (statsRes) {
+        if (statsQuery.error) throw statsQuery.error;
+
+        if (statsQuery.data) {
+          const statsRes = statsQuery.data as LeadMetricRow[];
           setStats({
             total: statsRes.length,
             waiting: statsRes.filter(l => l.status === 'Aguardando atendimento').length,
@@ -99,6 +152,25 @@ export default function DashboardPage() {
               return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
             }).length
           });
+
+          const months = getLastMonths();
+          const monthMap = new Map(months.map((month) => [month.key, { ...month }]));
+
+          statsRes.forEach((lead) => {
+            if (!lead.data_entrada) return;
+            const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
+            if (current) current.leads += 1;
+          });
+
+          if (!metaQuery.error) {
+            (metaQuery.data || []).forEach((row: any) => {
+              if (!row.data) return;
+              const current = monthMap.get(monthKey(new Date(`${row.data}T12:00:00`)));
+              if (current) current.spend += Number(row.spend || 0);
+            });
+          }
+
+          setMonthlyPerformance(Array.from(monthMap.values()));
         }
       } catch (err: unknown) {
         console.error("Dashboard general error:", err);
@@ -125,6 +197,9 @@ export default function DashboardPage() {
     { label: 'Cotações', value: stats.quoted, color: 'bg-indigo-500' },
     { label: 'Vendas', value: stats.sold, color: 'bg-emerald-500' },
   ];
+  const maxMonthlyLeads = Math.max(...monthlyPerformance.map((month) => month.leads), 1);
+  const maxMonthlySpend = Math.max(...monthlyPerformance.map((month) => month.spend), 1);
+  const currentMonth = monthlyPerformance[monthlyPerformance.length - 1] || { leads: 0, spend: 0 };
 
   const quickActions = [
     { icon: Users, label: 'Meus Leads', desc: 'Veja todos os contatos recebidos.', href: '/leads', color: 'blue' },
@@ -194,6 +269,70 @@ export default function DashboardPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-12 grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_1.8fr]">
+        <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Resumo deste mês</p>
+              <h2 className="text-2xl font-black text-gray-950">Perfil comercial</h2>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <BarChart3 size={24} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <MiniMetric icon={Users} label="Leads no mês" value={currentMonth.leads} />
+            <MiniMetric icon={DollarSign} label="Investido no mês" value={formatCurrency(currentMonth.spend)} />
+            <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
+            <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
+          </div>
+          <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Corretor</p>
+            <p className="text-sm font-black text-gray-900">{corretorData?.nome || profile?.nome || '-'}</p>
+            <p className="mt-1 text-xs font-bold text-slate-500">{corretorData?.email || profile?.email || '-'}</p>
+          </div>
+        </div>
+
+        <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex flex-col justify-between gap-2 md:flex-row md:items-end">
+            <div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Crescimento mensal</p>
+              <h2 className="text-2xl font-black text-gray-950">Investimento Meta x leads</h2>
+            </div>
+            <p className="text-xs font-bold text-slate-400">Últimos 6 meses</p>
+          </div>
+          <div className="grid min-h-72 grid-cols-6 items-end gap-3">
+            {monthlyPerformance.map((month) => (
+              <div key={month.key} className="flex h-full flex-col justify-end gap-3">
+                <div className="flex h-48 items-end gap-1.5 rounded-2xl bg-slate-50 px-2 pb-2">
+                  <div className="flex flex-1 flex-col items-center justify-end">
+                    <div
+                      className="w-full rounded-t-lg bg-blue-600"
+                      style={{ height: `${Math.max((month.spend / maxMonthlySpend) * 100, month.spend > 0 ? 8 : 0)}%` }}
+                    />
+                  </div>
+                  <div className="flex flex-1 flex-col items-center justify-end">
+                    <div
+                      className="w-full rounded-t-lg bg-emerald-500"
+                      style={{ height: `${Math.max((month.leads / maxMonthlyLeads) * 100, month.leads > 0 ? 8 : 0)}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs font-black uppercase text-slate-700">{month.label}</p>
+                  <p className="mt-1 text-[10px] font-bold text-blue-600">{formatCurrency(month.spend)}</p>
+                  <p className="text-[10px] font-bold text-emerald-600">{month.leads} leads</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-3 text-[11px] font-black uppercase tracking-widest">
+            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-2 text-blue-700"><span className="h-2 w-2 rounded-full bg-blue-600" /> Investimento</span>
+            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Leads</span>
           </div>
         </div>
       </div>
@@ -315,5 +454,17 @@ export default function DashboardPage() {
         )}
       </div>
     </InternalLayout>
+  );
+}
+
+function MiniMetric({ icon: Icon, label, value }: { icon: any; label: string; value: number | string }) {
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-blue-600">
+        <Icon size={17} />
+      </div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+      <p className="mt-1 text-xl font-black text-gray-950">{value}</p>
+    </div>
   );
 }
