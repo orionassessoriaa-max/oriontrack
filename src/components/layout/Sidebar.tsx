@@ -21,7 +21,8 @@ import {
   UserCog,
   RotateCcw,
   Bell,
-  Shield
+  Shield,
+  Inbox
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -45,7 +46,9 @@ export default function Sidebar() {
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
     { icon: UserCog, label: 'Gestores de Tráfego', href: '/admin/gestores' },
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
+    { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: Globe, label: 'Páginas', href: '/admin/paginas' },
+    { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
     { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
     { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Solicitações de suporte', href: '/admin/suporte' },
@@ -53,6 +56,7 @@ export default function Sidebar() {
 
   const trafficMenu = [
     { icon: FileSearch, label: 'Meus Leads', href: '/trafego/leads' },
+    { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: UserPlus, label: 'Entrada', href: '/trafego/entrada' },
     { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
     { icon: Users, label: 'Corretores', href: '/trafego/corretores' },
@@ -64,6 +68,7 @@ export default function Sidebar() {
     { icon: Home, label: 'Início', href: '/dashboard' },
     { icon: LayoutDashboard, label: 'Kanban', href: '/kanban' },
     { icon: Users, label: 'Meus Leads', href: '/leads' },
+    { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: Globe, label: 'Minha Página', href: '/minha-pagina' },
     { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Ajuda Orion', href: '/ajuda' },
