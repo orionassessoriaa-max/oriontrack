@@ -21,7 +21,8 @@ import {
   RotateCcw,
   Bell,
   Shield,
-  Inbox
+  Inbox,
+  AlertTriangle
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -55,6 +56,7 @@ export default function Sidebar() {
   const trafficMenu = [
     { icon: FileSearch, label: 'Meus Leads', href: '/trafego/leads' },
     { icon: UserPlus, label: 'Entrada', href: '/trafego/entrada' },
+    { icon: AlertTriangle, label: 'Avisos Meta', href: '/trafego/avisos-meta' },
     { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
     { icon: Users, label: 'Corretores', href: '/trafego/corretores' },
     { icon: Bell, label: 'Notificações', href: '/notificacoes' },

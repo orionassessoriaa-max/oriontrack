@@ -1,0 +1,181 @@
+import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+
+type CorretorMeta = {
+  id: string;
+  nome: string;
+  gestor_trafego_id: string | null;
+  meta_ad_account_id: string | null;
+  meta_ad_account_name: string | null;
+};
+
+async function requireTrafficAccess(request: Request) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { error: NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 }) };
+  }
+
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !user) {
+    return { error: NextResponse.json({ error: 'Sessao expirada.' }, { status: 401 }) };
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('id, tipo_usuario')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!profile || !['admin', 'gestor_trafego'].includes(profile.tipo_usuario)) {
+    return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
+  }
+
+  return { user, profile };
+}
+
+function normalizeAccountId(accountId: string) {
+  return accountId.replace(/^act_/, '');
+}
+
+function parseDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
+}
+
+function getLeadCount(actions: any[]) {
+  const leadActions = new Set([
+    'lead',
+    'onsite_conversion.lead_grouped',
+    'offsite_conversion.fb_pixel_lead',
+    'onsite_conversion.messaging_conversation_started_7d',
+    'onsite_conversion.lead',
+  ]);
+
+  return (actions || []).reduce((total, action) => {
+    return leadActions.has(action.action_type) ? total + Number(action.value || 0) : total;
+  }, 0);
+}
+
+async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
+  const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
+  const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
+  insightsUrl.searchParams.set('fields', 'spend,ctr,actions');
+  insightsUrl.searchParams.set('level', 'account');
+  insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
+  insightsUrl.searchParams.set('access_token', accessToken);
+
+  const accountUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}`);
+  accountUrl.searchParams.set('fields', 'balance,currency,amount_spent');
+  accountUrl.searchParams.set('access_token', accessToken);
+
+  const [insightsResponse, accountResponse] = await Promise.all([
+    fetch(insightsUrl.toString(), { next: { revalidate: 900 } }),
+    fetch(accountUrl.toString(), { next: { revalidate: 900 } }),
+  ]);
+
+  const [insightsPayload, accountPayload] = await Promise.all([
+    insightsResponse.json(),
+    accountResponse.json(),
+  ]);
+
+  if (!insightsResponse.ok || insightsPayload.error) {
+    throw new Error(insightsPayload.error?.message || 'Erro ao consultar metricas Meta.');
+  }
+
+  const row = insightsPayload.data?.[0] || {};
+  const spend = Number(row.spend || 0);
+  const leads = getLeadCount(row.actions || []);
+  const cpl = leads > 0 ? spend / leads : null;
+  const ctr = Number(row.ctr || 0);
+  const rawBalance = accountPayload?.balance;
+  const balance = rawBalance === undefined || rawBalance === null ? null : Number(rawBalance) / 100;
+
+  return {
+    corretor_id: corretor.id,
+    corretor_nome: corretor.nome,
+    meta_ad_account_id: corretor.meta_ad_account_id,
+    meta_ad_account_name: corretor.meta_ad_account_name,
+    spend,
+    leads,
+    cpl,
+    ctr,
+    saldo: balance,
+    currency: accountPayload?.currency || 'BRL',
+    alerta_cpl_alto: cpl !== null && cpl > 25,
+  };
+}
+
+export async function POST(request: Request) {
+  try {
+    const guard = await requireTrafficAccess(request);
+    if ('error' in guard) return guard.error;
+
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    if (!accessToken) {
+      return NextResponse.json({ error: 'META_ACCESS_TOKEN nao configurado no servidor.' }, { status: 500 });
+    }
+
+    const body = await request.json();
+    const today = new Date().toISOString().slice(0, 10);
+    const since = parseDate(String(body.data_inicio || '')) || today;
+    const until = parseDate(String(body.data_fim || '')) || today;
+    const search = String(body.nome || '').trim().toLowerCase();
+
+    const query = supabaseAdmin
+      .from('corretores')
+      .select('id, nome, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name')
+      .not('meta_ad_account_id', 'is', null)
+      .order('nome', { ascending: true });
+
+    if (guard.profile.tipo_usuario === 'gestor_trafego') {
+      query.eq('gestor_trafego_id', guard.user.id);
+    }
+
+    const { data: corretores, error } = await query;
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const filtered = ((corretores || []) as CorretorMeta[]).filter((corretor) => {
+      if (!search) return true;
+      return `${corretor.nome} ${corretor.meta_ad_account_name || ''}`.toLowerCase().includes(search);
+    });
+
+    const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
+    const settled = await Promise.allSettled(
+      filtered.map((corretor) => fetchAccountMetrics(corretor, since, until, accessToken, graphVersion))
+    );
+
+    const accounts = settled
+      .map((result, index) => {
+        if (result.status === 'fulfilled') return result.value;
+        const corretor = filtered[index];
+        return {
+          corretor_id: corretor.id,
+          corretor_nome: corretor.nome,
+          meta_ad_account_id: corretor.meta_ad_account_id,
+          meta_ad_account_name: corretor.meta_ad_account_name,
+          spend: 0,
+          leads: 0,
+          cpl: null,
+          ctr: 0,
+          saldo: null,
+          currency: 'BRL',
+          alerta_cpl_alto: false,
+          error: result.reason?.message || 'Erro ao consultar esta conta.',
+        };
+      })
+      .sort((a, b) => Number(b.alerta_cpl_alto) - Number(a.alerta_cpl_alto));
+
+    return NextResponse.json({
+      success: true,
+      data_inicio: since,
+      data_fim: until,
+      refreshed_at: new Date().toISOString(),
+      threshold_cpl: 25,
+      accounts,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Erro ao buscar avisos Meta.' }, { status: 500 });
+  }
+}
