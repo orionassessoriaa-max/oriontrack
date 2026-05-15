@@ -4,10 +4,10 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import Sidebar from './Sidebar';
-import { Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, LogOut, RefreshCw } from 'lucide-react';
 
 export default function InternalLayout({ children }: { children: React.ReactNode }) {
-  const { profile, loading, user } = useAuth();
+  const { profile, loading, user, signOut, refreshProfile } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -54,8 +54,38 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     );
   }
 
-  if (!user || !profile) {
+  if (!user) {
     return null;
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f8fafc] p-6">
+        <div className="max-w-md rounded-[2rem] border border-amber-100 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+            <AlertCircle size={28} />
+          </div>
+          <h1 className="text-xl font-black text-gray-900">Perfil nÃ£o carregou</h1>
+          <p className="mt-2 text-sm font-bold leading-relaxed text-gray-500">
+            A sessÃ£o existe, mas o perfil do usuÃ¡rio nÃ£o foi encontrado ou demorou para responder.
+          </p>
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={refreshProfile}
+              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white"
+            >
+              <RefreshCw size={16} /> Tentar
+            </button>
+            <button
+              onClick={signOut}
+              className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-gray-100 px-4 py-3 text-sm font-black text-gray-600"
+            >
+              <LogOut size={16} /> Sair
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

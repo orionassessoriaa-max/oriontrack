@@ -187,6 +187,73 @@ export async function POST(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const guard = await requireAdmin(request);
+    if ('error' in guard) return guard.error;
+
+    const body = await request.json();
+    const id = String(body.id || '');
+    const action = String(body.action || '');
+
+    if (!id || action !== 'reset_password') {
+      return NextResponse.json({ error: 'AÃ§Ã£o invÃ¡lida.' }, { status: 400 });
+    }
+
+    if (id === guard.user.id) {
+      return NextResponse.json({ error: 'Use a recuperaÃ§Ã£o de senha para o seu prÃ³prio acesso.' }, { status: 400 });
+    }
+
+    const { data: targetProfile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, email_real, tipo_usuario, is_admin_master')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (profileError || !targetProfile) {
+      return NextResponse.json({ error: 'UsuÃ¡rio nÃ£o encontrado.' }, { status: 404 });
+    }
+
+    if (isMasterAdmin(targetProfile)) {
+      return NextResponse.json({ error: 'A senha do admin master nÃ£o pode ser redefinida por aqui.' }, { status: 403 });
+    }
+
+    if (targetProfile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
+      return NextResponse.json({ error: 'Apenas o admin master pode redefinir senha de outro admin.' }, { status: 403 });
+    }
+
+    const senhaProvisoria = generateStrongPassword();
+    const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+      password: senhaProvisoria
+    });
+
+    if (updateAuthError) {
+      return NextResponse.json({ error: updateAuthError.message }, { status: 400 });
+    }
+
+    const { error: updateProfileError } = await supabaseAdmin
+      .from('profiles')
+      .update({ precisa_trocar_senha: true })
+      .eq('id', id);
+
+    if (updateProfileError) {
+      return NextResponse.json({ error: updateProfileError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      credentials: {
+        email: targetProfile.email,
+        email_real: targetProfile.email_real,
+        senha_provisoria: senhaProvisoria,
+        link_login: `${new URL(request.url).origin}/login`
+      }
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Erro ao redefinir senha.' }, { status: 500 });
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const guard = await requireAdmin(request);

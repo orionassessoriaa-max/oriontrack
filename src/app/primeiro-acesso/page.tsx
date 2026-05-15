@@ -43,8 +43,13 @@ export default function PrimeiroAcessoPage() {
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
-    if (profile?.email_real) setEmailReal(profile.email_real);
-  }, [loading, user, profile, router]);
+  }, [loading, user, router]);
+
+  useEffect(() => {
+    if (profile?.email_real && !emailReal) {
+      setEmailReal(profile.email_real);
+    }
+  }, [profile?.email_real, emailReal]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -119,7 +124,7 @@ export default function PrimeiroAcessoPage() {
             <CheckCircle2 className="mx-auto text-emerald-300" size={42} />
             <h2 className="text-xl font-black">Acesso atualizado</h2>
             <p className="text-sm font-medium text-emerald-100">
-              Agora entre usando seu email Orion e a nova senha criada.
+              Agora entre usando seu email real e a nova senha criada.
             </p>
           </div>
         ) : (

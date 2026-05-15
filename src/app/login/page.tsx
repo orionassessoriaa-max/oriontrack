@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,11 +15,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,21 +44,18 @@ export default function LoginPage() {
       }
 
       if (profile.precisa_trocar_senha) {
-        router.push('/primeiro-acesso');
-        router.refresh();
+        router.replace('/primeiro-acesso');
         return;
       }
 
       // Redirection logic based on tipo_usuario
       if (profile.tipo_usuario === 'admin') {
-        router.push('/admin');
+        router.replace('/admin');
       } else if (profile.tipo_usuario === 'gestor_trafego') {
-        router.push('/trafego/relatorios');
+        router.replace('/trafego/relatorios');
       } else {
-        router.push('/dashboard');
+        router.replace('/dashboard');
       }
-      
-      router.refresh();
     } catch (err: any) {
       setError(err.message);
       setLoading(false);

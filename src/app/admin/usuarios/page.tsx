@@ -149,6 +149,41 @@ export default function AdminUsuariosPage() {
     setRemovingId(null);
   }
 
+  async function handleResetPassword(profile: Profile) {
+    if (!window.confirm(`Gerar uma nova senha provisÃ³ria para ${profile.nome}?`)) return;
+
+    setRemovingId(profile.id);
+    setError(null);
+    setCredentials(null);
+
+    const token = await getToken();
+    if (!token) {
+      setError('SessÃ£o expirada. Entre novamente.');
+      setRemovingId(null);
+      return;
+    }
+
+    const response = await fetch('/api/admin/usuarios', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ id: profile.id, action: 'reset_password' })
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setError(payload.error || 'Erro ao redefinir senha.');
+      setRemovingId(null);
+      return;
+    }
+
+    setCredentials(payload.credentials);
+    await fetchUsers();
+    setRemovingId(null);
+  }
+
   const filteredProfiles = profiles.filter((profile) => {
     const target = `${profile.nome} ${profile.email} ${profile.email_real || ''} ${profile.tipo_usuario}`.toLowerCase();
     return target.includes(search.toLowerCase());
@@ -440,14 +475,24 @@ export default function AdminUsuariosPage() {
                         Admin master
                       </span>
                     ) : (
-                      <button
-                        onClick={() => handleDelete(profile)}
-                        disabled={removingId === profile.id}
-                        className="flex items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600 transition-all hover:bg-red-100 disabled:opacity-50"
-                      >
-                        {removingId === profile.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                        Remover
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleResetPassword(profile)}
+                          disabled={removingId === profile.id}
+                          className="flex items-center justify-center gap-2 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-black text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          {removingId === profile.id ? <Loader2 className="animate-spin" size={16} /> : <KeyRound size={16} />}
+                          Nova senha
+                        </button>
+                        <button
+                          onClick={() => handleDelete(profile)}
+                          disabled={removingId === profile.id}
+                          className="flex items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600 transition-all hover:bg-red-100 disabled:opacity-50"
+                        >
+                          {removingId === profile.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                          Remover
+                        </button>
+                      </div>
                     )}
                   </div>
                 );

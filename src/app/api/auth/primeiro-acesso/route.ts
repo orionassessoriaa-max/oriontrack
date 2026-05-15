@@ -26,8 +26,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A senha precisa ter pelo menos 8 caracteres.' }, { status: 400 });
     }
 
+    const { data: profile, error: profileLookupError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, corretor_id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileLookupError || !profile) {
+      return NextResponse.json({ error: 'Perfil nÃ£o encontrado para concluir o primeiro acesso.' }, { status: 404 });
+    }
+
     const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      email: emailReal,
       password: senha,
+      email_confirm: true,
       user_metadata: {
         ...user.user_metadata,
         email_real: emailReal,
@@ -43,12 +55,20 @@ export async function POST(request: Request) {
       .from('profiles')
       .update({
         email_real: emailReal,
+        email: emailReal,
         precisa_trocar_senha: false
       })
       .eq('id', user.id);
 
     if (profileError) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
+
+    if (profile.corretor_id) {
+      await supabaseAdmin
+        .from('corretores')
+        .update({ email: emailReal })
+        .eq('id', profile.corretor_id);
     }
 
     return NextResponse.json({ success: true });
