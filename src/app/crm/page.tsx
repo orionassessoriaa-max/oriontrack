@@ -15,6 +15,7 @@ import {
   Clock,
   Loader2,
   MessageSquare,
+  Paperclip,
   Phone,
   Plus,
   RefreshCw,
@@ -23,6 +24,7 @@ import {
   Save,
   Sparkles,
   Target,
+  Upload,
   X
 } from 'lucide-react';
 
@@ -91,6 +93,8 @@ export default function CrmPage() {
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function fetchCrm() {
@@ -197,6 +201,7 @@ export default function CrmPage() {
         status: normalizeLeadStatus(selectedLead.status),
       });
       setEditing(false);
+      setSelectedFile(null);
     } else {
       setAtividades([]);
     }
@@ -312,6 +317,43 @@ export default function CrmPage() {
   async function completeTask(taskId: string) {
     await supabase.from('lead_tarefas').update({ status: 'concluida', updated_at: new Date().toISOString() }).eq('id', taskId);
     await fetchCrm();
+  }
+
+  async function uploadAttachment(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedLead || !selectedFile) return;
+
+    setUploadingFile(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    if (!token) {
+      setUploadingFile(false);
+      alert('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    const response = await fetch(`/api/crm/leads/${selectedLead.id}/attachments`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const payload = await response.json();
+    setUploadingFile(false);
+
+    if (!response.ok) {
+      alert(payload.error || 'Erro ao anexar arquivo.');
+      return;
+    }
+
+    setSelectedFile(null);
+    await fetchTimeline(selectedLead.id);
   }
 
   async function saveLeadDetails(event: FormEvent) {
@@ -478,7 +520,12 @@ export default function CrmPage() {
         </div>
 
         {selectedLead && (
-          <aside className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto rounded-[2rem] border border-gray-100 bg-white p-6 shadow-xl shadow-slate-200/70">
+          <>
+          <div
+            className="fixed inset-0 z-[90] bg-slate-950/35 backdrop-blur-sm"
+            onClick={() => setSelectedLead(null)}
+          />
+          <aside className="fixed inset-y-0 right-0 z-[100] w-full max-w-[620px] overflow-y-auto border-l border-gray-100 bg-white p-5 shadow-2xl shadow-slate-950/20 sm:p-6">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Cliente selecionado</p>
@@ -585,6 +632,30 @@ export default function CrmPage() {
               </div>
             )}
 
+            <form onSubmit={uploadAttachment} className="mb-5 rounded-[1.5rem] border border-blue-100 bg-blue-50 p-4">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-blue-950">
+                <Paperclip size={16} /> Fotos e arquivos
+              </h3>
+              <label className="block cursor-pointer rounded-2xl border border-dashed border-blue-200 bg-white p-4 text-center transition-all hover:border-blue-400">
+                <Upload className="mx-auto mb-2 text-blue-500" size={22} />
+                <span className="block text-sm font-black text-slate-700">
+                  {selectedFile ? selectedFile.name : 'Selecionar foto ou arquivo'}
+                </span>
+                <span className="mt-1 block text-[11px] font-bold text-slate-400">PNG, JPG, PDF ou documento do cliente</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+                />
+              </label>
+              <button
+                disabled={!selectedFile || uploadingFile}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {uploadingFile ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />} Anexar ao lead
+              </button>
+            </form>
+
             <form onSubmit={addTask} className="mb-5 rounded-[1.5rem] border border-gray-100 p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-gray-900">
                 <Plus size={16} /> Follow-up
@@ -630,12 +701,21 @@ export default function CrmPage() {
                       <p className="font-black text-gray-900">{activity.titulo}</p>
                       <span className="text-[10px] font-bold text-slate-400">{format(new Date(activity.created_at), 'dd/MM HH:mm', { locale: ptBR })}</span>
                     </div>
-                    {activity.descricao && <p className="text-sm font-medium text-slate-500">{activity.descricao}</p>}
+                    {activity.descricao && (
+                      activity.descricao.startsWith('http') ? (
+                        <a href={activity.descricao} target="_blank" className="text-sm font-black text-blue-600 hover:underline">
+                          Abrir arquivo anexado
+                        </a>
+                      ) : (
+                        <p className="text-sm font-medium text-slate-500">{activity.descricao}</p>
+                      )
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           </aside>
+          </>
         )}
       </div>
 
