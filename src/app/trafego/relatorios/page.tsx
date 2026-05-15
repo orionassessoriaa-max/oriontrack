@@ -386,7 +386,8 @@ export default function TrafficReportsPage() {
                     onChange={e => setFormData({
                       ...formData,
                       usar_leads_manuais: e.target.checked,
-                      quantidade_leads_manual: e.target.checked ? formData.quantidade_leads_manual : ''
+                      quantidade_leads_manual: e.target.checked ? formData.quantidade_leads_manual : '',
+                      valor_investido: e.target.checked ? formData.valor_investido : ''
                     })}
                     className="mt-1 h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
@@ -399,22 +400,39 @@ export default function TrafficReportsPage() {
                 </label>
 
                 {formData.usar_leads_manuais && (
-                  <div className="mt-4 space-y-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Leads gerados</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      required={formData.usar_leads_manuais}
-                      value={formData.quantidade_leads_manual}
-                      onChange={e => setFormData({...formData, quantidade_leads_manual: e.target.value})}
-                      placeholder="0"
-                      className="w-full bg-white border-none rounded-2xl py-4 px-6 focus:ring-2 focus:ring-blue-500 transition-all font-bold"
-                    />
+                  <div className="mt-4 space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Leads gerados</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        required={formData.usar_leads_manuais}
+                        value={formData.quantidade_leads_manual}
+                        onChange={e => setFormData({...formData, quantidade_leads_manual: e.target.value})}
+                        placeholder="0"
+                        className="w-full bg-white border-none rounded-2xl py-4 px-6 focus:ring-2 focus:ring-blue-500 transition-all font-bold"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Valor investido manual</label>
+                      <div className="relative">
+                        <span className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.valor_investido}
+                          onChange={e => setFormData({...formData, valor_investido: e.target.value})}
+                          placeholder="0,00"
+                          className="w-full bg-white border-none rounded-2xl py-4 pl-14 pr-6 focus:ring-2 focus:ring-blue-500 transition-all font-bold"
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
 
+              {!formData.usar_leads_manuais && (
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Valor Investido (Meta)</label>
                 <div className="relative">
@@ -434,6 +452,7 @@ export default function TrafficReportsPage() {
                 {metaSpendError && <p className="mt-2 text-xs font-bold text-amber-600">{metaSpendError}</p>}
                 {!metaSpendError && formData.valor_investido && <p className="mt-2 text-xs font-bold text-emerald-600">Investimento puxado automaticamente da conta Meta vinculada.</p>}
               </div>
+              )}
 
               <button 
                 type="submit"
