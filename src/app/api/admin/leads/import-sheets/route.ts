@@ -146,14 +146,59 @@ function statusFromSheet(value: string) {
     oportunidade: 'Aguardando atendimento',
     aguardando: 'Aguardando atendimento',
     aguardando_atendimento: 'Aguardando atendimento',
+    aguardando_atendimento_comercial: 'Aguardando atendimento',
     contato: 'Contato feito',
     contato_feito: 'Contato feito',
+    feito_contato: 'Contato feito',
+    em_contato: 'Contato feito',
+    cotacao: 'CotaÃ§Ã£o enviada',
+    cotacao_enviada: 'CotaÃ§Ã£o enviada',
+    cotacao_enviada_: 'CotaÃ§Ã£o enviada',
+    proposta_enviada: 'CotaÃ§Ã£o enviada',
+    em_negociacao: 'Em negociaÃ§Ã£o',
+    negociacao: 'Em negociaÃ§Ã£o',
+    sem_retorno: 'NÃ£o tive retorno',
+    nao_tive_retorno: 'NÃ£o tive retorno',
+    sem_resposta: 'NÃ£o tive retorno',
     venda: 'Venda realizada',
     venda_realizada: 'Venda realizada',
+    vendido: 'Venda realizada',
     sem_interesse: 'Sem interesse',
+    descartado: 'Sem interesse',
+    regiao_sem_comercializacao: 'RegiÃ£o sem comercializaÃ§Ã£o',
+    sem_comercializacao: 'RegiÃ£o sem comercializaÃ§Ã£o',
+    chamou_duas_vezes: 'Chamou duas vezes',
+    telefone_nao_existe: 'Telefone nÃ£o existe',
   };
 
   return normalizeLeadStatus(aliases[key] || value || 'Aguardando atendimento');
+}
+
+function inferOperadora(row: CsvRow) {
+  const raw = [
+    pick(row, ['operadora', 'aba', 'sheet', 'tab']),
+    pick(row, ['utm_content', 'utm_campaign', 'campanha']),
+    pick(row, ['plano atual', 'operadora atual']),
+  ].filter(Boolean).join(' ');
+
+  const normalized = normalizeHeader(raw);
+  const operators: Array<[string, string]> = [
+    ['bradesco', 'BRADESCO'],
+    ['amil', 'AMIL'],
+    ['sulamerica', 'SULAMERICA'],
+    ['sul_america', 'SULAMERICA'],
+    ['porto', 'PORTO'],
+    ['medsenior', 'MEDSENIOR'],
+    ['hapvida', 'HAPVIDA'],
+    ['alice', 'ALICE'],
+    ['odontoprev', 'ODONTOPREV'],
+    ['aurora', 'AURORA'],
+    ['sao_lucas', 'SAO LUCAS'],
+    ['clientes_diversos', 'CLIENTES DIVERSOS'],
+  ];
+
+  const found = operators.find(([key]) => normalized.includes(key));
+  return found?.[1] || pick(row, ['operadora', 'utm_campaign', 'campanha', 'utm_content']);
 }
 
 function buildNotes(row: CsvRow) {
@@ -223,7 +268,7 @@ export async function POST(request: Request) {
           custo_plano_atual: pick(row, ['custo plano atual', 'custo atual', 'valor plano atual', 'custo do plano', 'custo do plano atual']),
           investimento: pick(row, ['investimento', 'investimento pretendido', 'pretensao investimento', 'quer investir quanto', 'quanto pretende investir', 'orcamento']),
           cidade: pick(row, ['cidade', 'regiao', 'localidade']),
-          operadora: pick(row, ['operadora', 'utm_campaign', 'campanha']),
+          operadora: inferOperadora(row),
           status: statusFromSheet(pick(row, ['status']) || 'Aguardando atendimento'),
           observacoes: buildNotes(row),
         };
