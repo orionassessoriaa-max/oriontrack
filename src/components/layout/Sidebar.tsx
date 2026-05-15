@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   Home, 
-  LayoutDashboard, 
   Users, 
   Globe, 
   HelpCircle, 
@@ -66,9 +65,8 @@ export default function Sidebar() {
 
   const corretorMenu = [
     { icon: Home, label: 'Início', href: '/dashboard' },
-    { icon: LayoutDashboard, label: 'Kanban', href: '/kanban' },
-    { icon: Users, label: 'Meus Leads', href: '/leads' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
+    { icon: Users, label: 'Meus Leads', href: '/leads' },
     { icon: Globe, label: 'Minha Página', href: '/minha-pagina' },
     { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Ajuda Orion', href: '/ajuda' },
