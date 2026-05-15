@@ -50,6 +50,20 @@ const SUPPORT_OPTIONS = [
     icon: HelpCircle,
     color: 'slate'
   },
+  {
+    id: 'treinamento_comercial',
+    title: 'Treinamento',
+    description: 'Peça apoio para melhorar abordagem, atendimento e conversao dos leads.',
+    icon: Users,
+    color: 'blue'
+  },
+  {
+    id: 'alinhamento_leads',
+    title: 'Reuniao de alinhamento',
+    description: 'Solicite uma conversa para ajustar perfil, qualidade e estrategia dos leads.',
+    icon: HelpCircle,
+    color: 'indigo'
+  },
 ] as const;
 
 type SupportOption = typeof SUPPORT_OPTIONS[number];
@@ -124,35 +138,26 @@ function AjudaContent() {
     setLoading(true);
     setError(null);
     try {
-      const payload = {
-        corretor_id: profile.corretor_id || null,
-        solicitante_profile_id: profile.id,
-        solicitante_nome: profile.nome,
-        solicitante_tipo: profile.tipo_usuario,
-        categoria: selectedOption.id,
-        tipo: selectedOption.id,
-        mensagem: message,
-        status: 'nova'
-      };
-
-      const { error: insertError } = await supabase
-        .from('solicitacoes_suporte')
-        .insert([payload]);
-
-      if (insertError) {
-        if (!profile.corretor_id) throw insertError;
-
-        const { error: fallbackError } = await supabase
-          .from('solicitacoes_suporte')
-          .insert([{
-            corretor_id: profile.corretor_id,
-            tipo: selectedOption.id,
-            mensagem: message,
-            status: 'nova'
-          }]);
-
-        if (fallbackError) throw fallbackError;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        throw new Error('SessÃ£o expirada. Entre novamente.');
       }
+
+      const response = await fetch('/api/support/requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          categoria: selectedOption.id,
+          tipo: selectedOption.id,
+          mensagem: message
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Erro ao enviar chamado.');
 
       setSuccess(`Chamado de "${selectedOption.title}" enviado com sucesso!`);
       setShowModal(false);

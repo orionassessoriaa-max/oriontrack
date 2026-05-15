@@ -202,18 +202,32 @@ export default function TrafficReportsPage() {
 
     setSaving(true);
     try {
-      const { error: supabaseError } = await supabase.from('relatorios_trafego').insert([{
-        corretor_id: formData.corretor_id,
-        gestor_id: profile.id,
-        data_inicio: formData.data_inicio,
-        data_fim: formData.data_fim,
-        quantidade_leads: preview.leads,
-        valor_investido: parseFloat(formData.valor_investido),
-        cpl: preview.cpl
-      }]);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        alert('Sessão expirada. Entre novamente.');
+        return;
+      }
 
-      if (supabaseError) {
-        alert('Erro ao salvar relatório: ' + supabaseError.message);
+      const response = await fetch('/api/trafego/relatorios', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          corretor_id: formData.corretor_id,
+          data_inicio: formData.data_inicio,
+          data_fim: formData.data_fim,
+          quantidade_leads: preview.leads,
+          valor_investido: parseFloat(formData.valor_investido),
+          cpl: preview.cpl
+        })
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        alert('Erro ao salvar relatório: ' + (payload.error || 'erro desconhecido'));
       } else {
         alert('Relatório salvo com sucesso!');
         fetchData();
@@ -252,6 +266,14 @@ export default function TrafficReportsPage() {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copySavedReport = (report: TrafficReport) => {
+    const valorFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.valor_investido);
+    const cplFmt = report.cpl ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.cpl) : 'Indisponível';
+    const text = `📊 *Relatório de Leads - Orion Track*\n\nCliente: ${report.corretores?.nome || 'N/A'}\nPeríodo: ${format(new Date(report.data_inicio), 'dd/MM/yyyy')} a ${format(new Date(report.data_fim), 'dd/MM/yyyy')}\nLeads Gerados: ${report.quantidade_leads}\nInvestimento Meta: ${valorFmt}\nCPL Médio: ${cplFmt}`;
+    navigator.clipboard.writeText(text);
+    alert('Relatório copiado!');
   };
 
   return (
@@ -513,8 +535,11 @@ export default function TrafficReportsPage() {
                         </span>
                       </td>
                       <td className="px-8 py-5 text-right">
-                        <button className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
-                          <Eye size={18} />
+                        <button
+                          onClick={() => copySavedReport(r)}
+                          className="inline-flex items-center gap-2 rounded-xl p-2 text-xs font-black text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                        >
+                          <Eye size={18} /> Copiar
                         </button>
                       </td>
                     </tr>

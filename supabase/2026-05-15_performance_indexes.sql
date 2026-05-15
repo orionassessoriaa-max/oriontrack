@@ -1,0 +1,13 @@
+create index if not exists idx_corretores_gestor_trafego_id on public.corretores(gestor_trafego_id);
+create index if not exists idx_leads_corretor_id on public.leads(corretor_id);
+create index if not exists idx_leads_corretor_data on public.leads(corretor_id, data_entrada desc);
+create index if not exists idx_leads_corretor_status on public.leads(corretor_id, status);
+create index if not exists idx_profiles_corretor_id on public.profiles(corretor_id);
+create index if not exists idx_notificacoes_destinatario_profile_id on public.notificacoes(destinatario_profile_id);
+create index if not exists idx_notificacoes_remetente_profile_id on public.notificacoes(remetente_profile_id);
+create index if not exists idx_notificacoes_destinatario_tipo on public.notificacoes(destinatario_tipo);
+create index if not exists idx_relatorios_trafego_corretor_id on public.relatorios_trafego(corretor_id);
+create index if not exists idx_relatorios_trafego_gestor_id on public.relatorios_trafego(gestor_id);
+create index if not exists idx_solicitacoes_suporte_corretor_id on public.solicitacoes_suporte(corretor_id);
+create index if not exists idx_solicitacoes_suporte_solicitante_profile_id on public.solicitacoes_suporte(solicitante_profile_id);
+create index if not exists idx_paginas_corretores_corretor_id on public.paginas_corretores(corretor_id);
