@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -36,7 +36,11 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export default function Sidebar() {
+type SidebarProps = {
+  onCollapsedChange?: (collapsed: boolean) => void;
+};
+
+export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, stopViewingAsCorretor } = useAuth();
@@ -121,6 +125,10 @@ export default function Sidebar() {
         : profile?.tipo_usuario === 'account_manager'
           ? 'Account manager'
           : 'Corretor Parceiro';
+
+  useEffect(() => {
+    onCollapsedChange?.(collapsed);
+  }, [collapsed, onCollapsedChange]);
 
   return (
     <div className={cn('fixed left-0 top-0 z-50 flex h-screen flex-col bg-[#0f172a] text-white shadow-2xl transition-all duration-300', collapsed ? 'w-0 overflow-visible' : 'w-64')}>

@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import { AlertCircle, Loader2, LogOut, RefreshCw } from 'lucide-react';
 
@@ -10,6 +10,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   const { profile, loading, user, signOut, refreshProfile } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -105,9 +106,9 @@ export default function InternalLayout({ children }: { children: React.ReactNode
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc]">
-      <Sidebar />
-      <main className="ml-64 w-[calc(100%-16rem)] min-w-0 p-8 transition-all duration-300">
-        <div className="max-w-7xl mx-auto">
+      <Sidebar onCollapsedChange={setSidebarCollapsed} />
+      <main className={`${sidebarCollapsed ? 'ml-0 w-full' : 'ml-64 w-[calc(100%-16rem)]'} min-w-0 p-8 transition-all duration-300`}>
+        <div className={`${sidebarCollapsed ? 'max-w-none' : 'max-w-7xl'} mx-auto transition-all duration-300`}>
           {children}
         </div>
       </main>
