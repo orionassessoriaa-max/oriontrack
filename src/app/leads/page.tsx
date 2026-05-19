@@ -227,7 +227,8 @@ export default function BrokerLeadsPage() {
     }
 
     const skippedText = payload.skipped ? ` ${payload.skipped} linha(s) ignorada(s).` : '';
-    setImportMessage(`${payload.imported} lead(s) importado(s).${skippedText}`);
+    const paginasText = payload.paginas ? ` ${payload.paginas} pagina(s) lida(s).` : '';
+    setImportMessage(`${payload.imported} lead(s) importado(s).${paginasText}${skippedText}`);
     setSheetUrl('');
     await fetchLeads();
   };
@@ -348,7 +349,7 @@ export default function BrokerLeadsPage() {
         <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-widest text-slate-500">
           <span className="rounded-full bg-slate-100 px-3 py-2">{filteredLeads.length} de {leads.length} leads</span>
           <span className="rounded-full bg-blue-50 px-3 py-2 text-blue-700">
-            Aba: {operadoraFilter === 'todas' ? 'todas' : operadoraFilter === '__sem_aba__' ? 'sem aba' : operadoraFilter}
+            Pagina: {operadoraFilter === 'todas' ? 'todas' : operadoraFilter === '__sem_aba__' ? 'sem pagina' : operadoraFilter}
           </span>
           <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-700">
             CNPJ: {cnpjFilter === 'todos' ? 'todos' : cnpjFilter === 'com' ? 'com CNPJ' : cnpjFilter === 'sem' ? 'sem CNPJ' : 'nao informado'}
@@ -384,7 +385,7 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Custo atual</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Investimento pretendido</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cidade</th>
-                  <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Aba / Operadora</th>
+                  <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Pagina</th>
                   <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações / UTMs</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                 </tr>
@@ -476,7 +477,7 @@ export default function BrokerLeadsPage() {
               onClick={() => setOperadoraFilter('__sem_aba__')}
               className={`whitespace-nowrap rounded-t-xl border px-4 py-2 text-xs font-black transition-all ${operadoraFilter === '__sem_aba__' ? 'border-emerald-400 bg-white text-emerald-700 shadow-sm' : 'border-transparent bg-slate-200 text-slate-600 hover:bg-white'}`}
             >
-              Sem aba ({tabCounts['Sem aba']})
+              Sem pagina ({tabCounts['Sem aba']})
             </button>
           )}
         </div>
