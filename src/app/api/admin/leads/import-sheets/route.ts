@@ -48,7 +48,7 @@ async function requireAdmin(request: Request) {
 function parseSheetLink(input: string) {
   const url = new URL(input);
   if (url.pathname.endsWith('.csv') || url.searchParams.get('output') === 'csv' || url.searchParams.get('format') === 'csv') {
-    return { csvUrl: input, spreadsheetId: '', gid: '', editUrl: '' };
+    return { csvUrl: input, spreadsheetId: '', gid: '', editUrl: '', isDirectCsv: true };
   }
 
   const idMatch = url.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
@@ -64,6 +64,7 @@ function parseSheetLink(input: string) {
     spreadsheetId,
     gid,
     editUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit?gid=${gid}`,
+    isDirectCsv: false,
   };
 }
 
@@ -212,6 +213,38 @@ async function resolveSheetName(editUrl: string, gid: string) {
   }
 }
 
+async function resolveSheetTabs(spreadsheetId: string, fallbackGid: string) {
+  if (!spreadsheetId) return [];
+
+  try {
+    const response = await fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`, { cache: 'no-store' });
+    const html = await response.text();
+    const tabs = new Map<string, string>();
+    const patterns = [
+      /\[\d+,0,\\"(\d+)\\",[\s\S]{0,800}?\[0,0,\\"([^\\"]+)\\"/g,
+      /\[\d+,0,"(\d+)",[\s\S]{0,800}?\[0,0,"([^"]+)"/g,
+    ];
+
+    patterns.forEach((pattern) => {
+      for (const match of html.matchAll(pattern)) {
+        const gid = match[1];
+        const name = match[2]?.replace(/\\u([\dA-Fa-f]{4})/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+        if (gid && name && name.length < 80 && !tabs.has(gid)) {
+          tabs.set(gid, name);
+        }
+      }
+    });
+
+    if (tabs.size > 0) {
+      return Array.from(tabs.entries()).map(([gid, name]) => ({ gid, name }));
+    }
+  } catch {
+    // Fallback below keeps import working even when Google changes the edit HTML.
+  }
+
+  return [{ gid: fallbackGid || '0', name: '' }];
+}
+
 function inferOperadora(row: CsvRow, sheetName: string) {
   if (sheetName) return sheetName;
 
@@ -287,46 +320,61 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
     }
 
-    const { csvUrl, editUrl, gid } = parseSheetLink(sheetUrl);
-    const response = await fetch(csvUrl, { cache: 'no-store' });
-    const csv = await response.text();
+    const { csvUrl, editUrl, gid, spreadsheetId, isDirectCsv } = parseSheetLink(sheetUrl);
+    const sources = isDirectCsv
+      ? [{ csvUrl, gid, name: '' }]
+      : (await resolveSheetTabs(spreadsheetId, gid)).map((tab) => ({
+          csvUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${tab.gid}`,
+          gid: tab.gid,
+          name: tab.name,
+        }));
 
-    if (!response.ok || csv.toLowerCase().includes('<html')) {
-      return NextResponse.json({
-        error: 'Nao consegui ler a planilha. Compartilhe como "qualquer pessoa com o link pode visualizar" ou publique em CSV.'
-      }, { status: 400 });
-    }
-
-    const rows = toRows(csv);
-    const sheetName = await resolveSheetName(editUrl, gid);
     let skipped = 0;
-    const leads = rows
-      .map((row): LeadInsert | null => {
-        const nome = pick(row, ['nome', 'name', 'cliente', 'nome completo']);
-        const telefone = pick(row, ['telefone', 'phone', 'celular', 'whatsapp', 'fone']);
-        if (!nome || !telefone) {
-          skipped += 1;
-          return null;
-        }
+    const leads: LeadInsert[] = [];
 
-        return {
-          corretor_id: corretorId,
-          data_entrada: parseDate(pick(row, ['data', 'data entrada', 'data_entrada', 'created_time'])),
-          nome,
-          telefone,
-          idades: pick(row, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas']),
-          possui_cnpj: pick(row, ['possui cnpj', 'cnpj', 'tem cnpj']) || 'Nao informado',
-          tem_plano_ativo: pick(row, ['tem plano ativo', 'plano ativo', 'possui plano']) || 'Nao informado',
-          plano_atual: pick(row, ['plano atual', 'operadora atual', 'plano']),
-          custo_plano_atual: pick(row, ['custo plano atual', 'custo atual', 'valor plano atual', 'custo do plano', 'custo do plano atual']),
-          investimento: pick(row, ['investimento', 'investimento pretendido', 'pretensao investimento', 'quer investir quanto', 'quanto pretende investir', 'orcamento']),
-          cidade: pick(row, ['cidade', 'regiao', 'localidade']),
-          operadora: inferOperadora(row, sheetName),
-          status: statusFromSheet(pick(row, ['status']) || 'Aguardando atendimento'),
-          observacoes: buildNotes(row),
-        };
-      })
-      .filter((lead): lead is LeadInsert => Boolean(lead));
+    for (const source of sources) {
+      const response = await fetch(source.csvUrl, { cache: 'no-store' });
+      const csv = await response.text();
+
+      if (!response.ok || csv.toLowerCase().includes('<html')) {
+        if (sources.length === 1) {
+          return NextResponse.json({
+            error: 'Nao consegui ler a planilha. Compartilhe como "qualquer pessoa com o link pode visualizar" ou publique em CSV.'
+          }, { status: 400 });
+        }
+        skipped += 1;
+        continue;
+      }
+
+      const rows = toRows(csv);
+      const sheetName = source.name || await resolveSheetName(editUrl, source.gid);
+
+      rows.forEach((row) => {
+          const nome = pick(row, ['nome', 'name', 'cliente', 'nome completo']);
+          const telefone = pick(row, ['telefone', 'phone', 'celular', 'whatsapp', 'fone']);
+          if (!nome || !telefone) {
+            skipped += 1;
+            return;
+          }
+
+          leads.push({
+            corretor_id: corretorId,
+            data_entrada: parseDate(pick(row, ['data', 'data entrada', 'data_entrada', 'created_time'])),
+            nome,
+            telefone,
+            idades: pick(row, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas']),
+            possui_cnpj: pick(row, ['possui cnpj', 'cnpj', 'tem cnpj']) || 'Nao informado',
+            tem_plano_ativo: pick(row, ['tem plano ativo', 'plano ativo', 'possui plano']) || 'Nao informado',
+            plano_atual: pick(row, ['plano atual', 'operadora atual', 'plano']),
+            custo_plano_atual: pick(row, ['custo plano atual', 'custo atual', 'valor plano atual', 'custo do plano', 'custo do plano atual']),
+            investimento: pick(row, ['investimento', 'investimento pretendido', 'pretensao investimento', 'quer investir quanto', 'quanto pretende investir', 'orcamento']),
+            cidade: pick(row, ['cidade', 'regiao', 'localidade']),
+            operadora: inferOperadora(row, sheetName),
+            status: statusFromSheet(pick(row, ['status']) || 'Aguardando atendimento'),
+            observacoes: buildNotes(row),
+          });
+      });
+    }
 
     if (leads.length === 0) {
       return NextResponse.json({ error: 'Nenhum lead valido encontrado. A planilha precisa ter pelo menos Nome e Telefone.' }, { status: 400 });
@@ -345,6 +393,7 @@ export async function POST(request: Request) {
       success: true,
       imported: data?.length || leads.length,
       skipped,
+      paginas: sources.length,
       corretor: corretor.nome,
     });
   } catch (error: any) {

@@ -72,6 +72,7 @@ export default function CrmPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [tipoCampanha, setTipoCampanha] = useState<TipoCampanha | null>('ambos');
   const [search, setSearch] = useState('');
+  const [pageFilter, setPageFilter] = useState('todas');
   const [note, setNote] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDue, setTaskDue] = useState('');
@@ -209,10 +210,18 @@ export default function CrmPage() {
 
   const filteredLeads = useMemo(() => {
     const term = search.toLowerCase();
-    return leads.filter((lead) =>
-      `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.status} ${lead.operadora || ''}`.toLowerCase().includes(term)
-    );
-  }, [leads, search]);
+    return leads.filter((lead) => {
+      const leadPage = lead.operadora || '';
+      const searchMatch = `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.status} ${lead.operadora || ''} ${lead.observacoes || ''}`.toLowerCase().includes(term);
+      const pageMatch = pageFilter === 'todas' || (pageFilter === '__sem_pagina__' ? !leadPage : leadPage === pageFilter);
+      return searchMatch && pageMatch;
+    });
+  }, [leads, search, pageFilter]);
+
+  const pageOptions = useMemo(() => {
+    const pages = leads.map((lead) => lead.operadora || '').filter(Boolean);
+    return Array.from(new Set(pages)).sort((a, b) => a.localeCompare(b));
+  }, [leads]);
 
   const staleCount = leads.filter(isStale).length;
   const openTasks = tarefas.filter((task) => task.status === 'pendente').length;
@@ -422,6 +431,15 @@ export default function CrmPage() {
               className="w-full rounded-2xl border-none bg-white py-3 pl-11 pr-4 text-sm font-bold shadow-sm focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
+          <select
+            value={pageFilter}
+            onChange={(event) => setPageFilter(event.target.value)}
+            className="rounded-2xl border-none bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm focus:ring-2 focus:ring-blue-500/20"
+          >
+            <option value="todas">Todas as paginas</option>
+            {pageOptions.map((page) => <option key={page} value={page}>{page}</option>)}
+            <option value="__sem_pagina__">Sem pagina</option>
+          </select>
           <button onClick={fetchCrm} className="flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm">
             {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Atualizar
           </button>
@@ -496,6 +514,7 @@ export default function CrmPage() {
                             <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
                               <span>CNPJ: {lead.possui_cnpj || '-'}</span>
                               <span>Vidas: {lead.idades || '-'}</span>
+                              <span className="col-span-2 rounded-xl bg-blue-50 px-2 py-1 text-blue-700">Pagina: {lead.operadora || 'Sem pagina'}</span>
                               <span>{lead.cidade || 'Cidade nao informada'}</span>
                               <span>{lead.investimento || 'Sem investimento'}</span>
                             </div>
@@ -572,7 +591,7 @@ export default function CrmPage() {
                   <EditField label="Plano atual" value={editForm.plano_atual} onChange={(value) => setEditForm((prev) => ({ ...prev, plano_atual: value }))} />
                   <EditField label="Custo atual" value={editForm.custo_plano_atual} onChange={(value) => setEditForm((prev) => ({ ...prev, custo_plano_atual: value }))} />
                   <EditField label="Investimento" value={editForm.investimento} onChange={(value) => setEditForm((prev) => ({ ...prev, investimento: value }))} />
-                  <EditField label="Operadora" value={editForm.operadora} onChange={(value) => setEditForm((prev) => ({ ...prev, operadora: value }))} />
+                  <EditField label="Pagina" value={editForm.operadora} onChange={(value) => setEditForm((prev) => ({ ...prev, operadora: value }))} />
                 </div>
                 <label className="mt-3 block">
                   <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400">Observações internas</span>
@@ -591,7 +610,7 @@ export default function CrmPage() {
                 <InfoCard label="Custo atual" value={selectedLead.custo_plano_atual || '-'} />
                 <InfoCard label="Investimento" value={selectedLead.investimento || '-'} />
                 <InfoCard label="Cidade" value={selectedLead.cidade || '-'} />
-                <InfoCard label="Operadora" value={selectedLead.operadora || '-'} />
+                <InfoCard label="Pagina" value={selectedLead.operadora || '-'} />
               </div>
             )}
 
@@ -627,7 +646,7 @@ export default function CrmPage() {
 
             {selectedLead.observacoes && (
               <div className="mb-5 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Observações salvas</p>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">UTMs / observacoes da planilha</p>
                 <p className="text-sm font-bold leading-relaxed text-slate-600">{selectedLead.observacoes}</p>
               </div>
             )}
