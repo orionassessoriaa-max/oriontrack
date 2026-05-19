@@ -1,6 +1,9 @@
 export type OrionTeamMember = {
   nome: string;
   cargo: string;
+  profile_id?: string;
+  foto_url?: string | null;
+  tipo_usuario?: string;
 };
 
 export const ORION_TEAM_MEMBERS: OrionTeamMember[] = [
@@ -32,5 +35,41 @@ export function getTeamMemberPhoto(name?: string | null) {
 }
 
 export function isTrafficManagerMember(member: OrionTeamMember) {
-  return ['ewertton', 'geovana'].includes(normalizeTeamMemberName(member.nome));
+  if (member.tipo_usuario === 'gestor_trafego') return true;
+  return member.cargo.toLowerCase().includes('tráfego') || ['ewertton', 'geovana'].includes(normalizeTeamMemberName(member.nome));
+}
+
+export function getTeamMemberAvatar(member: OrionTeamMember) {
+  return member.foto_url || getTeamMemberPhoto(member.nome);
+}
+
+function roleToCargo(role?: string | null) {
+  if (role === 'gestor_trafego') return 'Gestor de Tráfego';
+  if (role === 'designer') return 'Designer';
+  if (role === 'account_manager') return 'Account Manager';
+  if (role === 'admin') return 'Admin Orion';
+  return 'Time Orion';
+}
+
+export function buildOperationalTeamMembers(
+  profiles: Array<{ id: string; nome: string; tipo_usuario: string; foto_url?: string | null; status?: string | null }>
+) {
+  const activeProfiles = profiles
+    .filter((profile) => ['active', 'ativo', 'Ativo'].includes(String(profile.status || 'active')))
+    .filter((profile) => ['gestor_trafego', 'designer', 'account_manager', 'admin'].includes(profile.tipo_usuario));
+
+  if (activeProfiles.length === 0) return ORION_TEAM_MEMBERS;
+
+  return activeProfiles
+    .sort((a, b) => {
+      const order = ['gestor_trafego', 'account_manager', 'designer', 'admin'];
+      return order.indexOf(a.tipo_usuario) - order.indexOf(b.tipo_usuario) || a.nome.localeCompare(b.nome);
+    })
+    .map((profile) => ({
+      nome: profile.nome,
+      cargo: roleToCargo(profile.tipo_usuario),
+      profile_id: profile.id,
+      foto_url: profile.foto_url || null,
+      tipo_usuario: profile.tipo_usuario,
+    }));
 }

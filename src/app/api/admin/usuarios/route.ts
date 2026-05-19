@@ -92,6 +92,9 @@ export async function POST(request: Request) {
     const tipoCampanha = body.tipo_campanha || 'ambos';
     const emailReal = String(body.email_real || '').trim().toLowerCase() || null;
     const senhaProvisoria = String(body.senha_provisoria || generateStrongPassword());
+    const fotoUrl = typeof body.foto_url === 'string' && body.foto_url.startsWith('data:image/')
+      ? body.foto_url
+      : null;
 
     const allowedRoles: UserRole[] = ['admin', 'gestor_trafego', 'corretor', 'designer', 'account_manager'];
 
@@ -116,7 +119,8 @@ export async function POST(request: Request) {
       user_metadata: {
         nome,
         tipo_usuario: role,
-        email_real: emailReal
+        email_real: emailReal,
+        foto_url: fotoUrl
       }
     });
 
@@ -131,6 +135,9 @@ export async function POST(request: Request) {
         const timeOperacional = Array.isArray(body.time_operacional)
           ? body.time_operacional.filter((member: any) => member?.nome && member?.cargo)
           : [];
+        const gestorTrafegoId = String(body.gestor_trafego_id || timeOperacional.find((member: any) =>
+          member?.tipo_usuario === 'gestor_trafego' || String(member?.cargo || '').toLowerCase().includes('tráfego')
+        )?.profile_id || '') || null;
 
         const { data: corretor, error: corretorError } = await supabaseAdmin
           .from('corretores')
@@ -142,6 +149,7 @@ export async function POST(request: Request) {
             tipo_campanha: tipoCampanha,
             operadoras_info: { selecionadas: Array.isArray(body.operadoras) ? body.operadoras : [] },
             time_operacional: timeOperacional,
+            gestor_trafego_id: gestorTrafegoId,
             observacoes: body.observacoes || null,
           }])
           .select()
@@ -161,6 +169,7 @@ export async function POST(request: Request) {
           corretor_id: corretorId,
           status: status === 'inativo' ? 'inactive' : 'active',
           email_real: emailReal,
+          foto_url: fotoUrl,
           precisa_trocar_senha: true
         }]);
 
