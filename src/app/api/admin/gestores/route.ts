@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { PUBLIC_LOGIN_URL } from '@/lib/publicUrl';
 
 export async function POST(request: Request) {
   try {
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
       credentials: {
         email,
         senha_provisoria,
-        link_login: `${new URL(request.url).origin}/login`
+        link_login: PUBLIC_LOGIN_URL
       }
     });
 
