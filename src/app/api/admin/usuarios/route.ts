@@ -92,7 +92,9 @@ export async function POST(request: Request) {
     const emailReal = String(body.email_real || '').trim().toLowerCase() || null;
     const senhaProvisoria = String(body.senha_provisoria || generateStrongPassword());
 
-    if (!nome || !role || !['admin', 'gestor_trafego', 'corretor'].includes(role)) {
+    const allowedRoles: UserRole[] = ['admin', 'gestor_trafego', 'corretor', 'designer', 'account_manager'];
+
+    if (!nome || !role || !allowedRoles.includes(role)) {
       return NextResponse.json({ error: 'Nome e tipo de usuário são obrigatórios.' }, { status: 400 });
     }
 

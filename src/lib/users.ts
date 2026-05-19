@@ -39,5 +39,7 @@ export function generateStrongPassword(length = 14) {
 export function getRoleLabel(role: UserRole) {
   if (role === 'admin') return 'Admin';
   if (role === 'gestor_trafego') return 'Gestor de tráfego';
+  if (role === 'designer') return 'Designer';
+  if (role === 'account_manager') return 'Account manager';
   return 'Corretor';
 }
