@@ -19,13 +19,18 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isAdmin = profile.tipo_usuario === 'admin';
         const isTrafficManager = profile.tipo_usuario === 'gestor_trafego';
         const isCorretor = profile.tipo_usuario === 'corretor';
+        const isDesigner = profile.tipo_usuario === 'designer';
+        const isAccountManager = profile.tipo_usuario === 'account_manager';
         
         const isAdminRoute = pathname.startsWith('/admin');
         const isTrafficRoute = pathname.startsWith('/trafego');
-        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/minha-pagina', '/perfil'].some(p => pathname.startsWith(p));
+        const isDesignerRoute = pathname.startsWith('/designer');
+        const isAccountRoute = pathname.startsWith('/account');
+        const isCreativeRoute = pathname.startsWith('/criativos');
+        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/minha-pagina', '/perfil'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
 
         // 1. Corretor Access: Only broker routes
-        if (isCorretor && (isAdminRoute || isTrafficRoute)) {
+        if (isCorretor && (isAdminRoute || isTrafficRoute || isDesignerRoute || isAccountRoute)) {
           router.push('/dashboard');
         } 
         // 2. Traffic Manager Access: Traffic routes + Broker List (to select for reports)
@@ -33,8 +38,18 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         else if (isTrafficManager) {
           if (isAdminRoute && !pathname.startsWith('/admin/corretores')) {
              router.push('/trafego/leads');
-          } else if (isBrokerRoute) {
+          } else if (isBrokerRoute || isDesignerRoute || isAccountRoute) {
              router.push('/trafego/leads');
+          }
+        }
+        else if (isDesigner) {
+          if (!isDesignerRoute && !isCreativeRoute && pathname !== '/perfil' && pathname !== '/notificacoes') {
+            router.push('/designer');
+          }
+        }
+        else if (isAccountManager) {
+          if (!isAccountRoute && !isCreativeRoute && !pathname.startsWith('/trafego/relatorios') && !pathname.startsWith('/admin/leads') && pathname !== '/perfil' && pathname !== '/notificacoes') {
+            router.push('/account');
           }
         }
         // 3. Admin Access: /admin + /trafego (optional but allowed)
@@ -91,7 +106,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   return (
     <div className="flex min-h-screen bg-[#f8fafc]">
       <Sidebar />
-      <main className="ml-64 w-[calc(100%-16rem)] min-w-0 p-8">
+      <main className="ml-64 w-[calc(100%-16rem)] min-w-0 p-8 transition-all duration-300">
         <div className="max-w-7xl mx-auto">
           {children}
         </div>

@@ -19,7 +19,7 @@ async function requireTrafficAccess(request: Request) {
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!profile || !['admin', 'gestor_trafego'].includes(profile.tipo_usuario)) {
+  if (!profile || !['admin', 'gestor_trafego', 'account_manager'].includes(profile.tipo_usuario)) {
     return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
   }
 

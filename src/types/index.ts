@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'corretor' | 'gestor_trafego';
+export type UserRole = 'admin' | 'corretor' | 'gestor_trafego' | 'designer' | 'account_manager';
 export type TipoCampanha = 'pme' | 'adesao' | 'ambos';
 
 export interface Profile {
@@ -13,6 +13,7 @@ export interface Profile {
   nome_empresa?: string | null;
   precisa_trocar_senha?: boolean | null;
   is_admin_master?: boolean | null;
+  tema_sistema?: 'claro' | 'noturno' | null;
   created_at: string;
 }
 

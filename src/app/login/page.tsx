@@ -53,6 +53,10 @@ export default function LoginPage() {
         router.replace('/admin');
       } else if (profile.tipo_usuario === 'gestor_trafego') {
         router.replace('/trafego/relatorios');
+      } else if (profile.tipo_usuario === 'designer') {
+        router.replace('/designer');
+      } else if (profile.tipo_usuario === 'account_manager') {
+        router.replace('/account');
       } else {
         router.replace('/dashboard');
       }
