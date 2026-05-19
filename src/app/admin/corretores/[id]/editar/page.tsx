@@ -21,7 +21,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { Profile, TipoCampanha } from '@/types';
-import { getTeamMemberPhoto, isTrafficManagerMember, ORION_TEAM_MEMBERS, OrionTeamMember } from '@/lib/orionTeam';
+import { buildOperationalTeamMembers, getTeamMemberAvatar, isTrafficManagerMember, ORION_TEAM_MEMBERS, OrionTeamMember } from '@/lib/orionTeam';
 
 export default function EditarCorretorPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -32,6 +32,7 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [gestoresProfiles, setGestoresProfiles] = useState<Profile[]>([]);
+  const [teamMembers, setTeamMembers] = useState<OrionTeamMember[]>(ORION_TEAM_MEMBERS);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -56,7 +57,7 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
         supabase
           .from('profiles')
           .select('*')
-          .eq('tipo_usuario', 'gestor_trafego')
+          .in('tipo_usuario', ['gestor_trafego', 'designer', 'account_manager', 'admin'])
           .in('status', ['active', 'ativo', 'Ativo'])
       ]);
 
@@ -76,7 +77,8 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
         });
       }
 
-      setGestoresProfiles(gestoresRes.data || []);
+      setGestoresProfiles((gestoresRes.data || []).filter((profile) => profile.tipo_usuario === 'gestor_trafego'));
+      setTeamMembers(buildOperationalTeamMembers(gestoresRes.data || []));
 
     } catch (err: unknown) {
       console.error('Erro ao buscar dados:', err);
@@ -96,6 +98,8 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
 
     if (!gestorSelecionado) return null;
 
+    if (gestorSelecionado.profile_id) return gestorSelecionado.profile_id;
+
     const gestorProfile = gestoresProfiles.find((profile) =>
       profile.nome.toLowerCase() === gestorSelecionado.nome.toLowerCase()
     );
@@ -111,7 +115,9 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
       newTime = newTime.filter(m => m.nome !== member.nome);
     } else {
       // Regra de exclusão mútua
-      if (member.nome === 'Ewertton') {
+      if (isTrafficManagerMember(member)) {
+        newTime = newTime.filter(m => !isTrafficManagerMember(m));
+      } else if (member.nome === 'Ewertton') {
         newTime = newTime.filter(m => m.nome !== 'Geovana');
       } else if (member.nome === 'Geovana') {
         newTime = newTime.filter(m => m.nome !== 'Ewertton');
@@ -312,14 +318,14 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {ORION_TEAM_MEMBERS.map((member) => {
+                {teamMembers.map((member) => {
                   const isSelected = formData.time_operacional.some(m => m.nome === member.nome);
                   const isGestor = isTrafficManagerMember(member);
-                  const foto = getTeamMemberPhoto(member.nome);
+                  const foto = getTeamMemberAvatar(member);
 
                   return (
                     <button
-                      key={member.nome}
+                      key={member.profile_id || member.nome}
                       type="button"
                       onClick={() => toggleTeamMember(member)}
                       className={`flex items-center gap-4 p-5 rounded-[2rem] border transition-all text-left group relative ${

@@ -6,9 +6,9 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile, TipoCampanha, UserRole } from '@/types';
 import { generateOrionEmail, getRoleLabel } from '@/lib/users';
 import { OPERADORAS_ONBOARDING } from '@/lib/onboarding';
-import { ORION_TEAM_MEMBERS } from '@/lib/orionTeam';
+import { buildOperationalTeamMembers, getTeamMemberAvatar, isTrafficManagerMember, OrionTeamMember } from '@/lib/orionTeam';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { CheckCircle2, Copy, KeyRound, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
+import { Camera, CheckCircle2, Copy, KeyRound, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
 
 type Credentials = {
   email: string;
@@ -28,7 +28,8 @@ const initialForm = {
   telefone: '',
   tipo_campanha: 'ambos' as TipoCampanha,
   operadoras: [] as string[],
-  time_operacional: [] as Array<{ nome: string; cargo: string }>,
+  time_operacional: [] as OrionTeamMember[],
+  foto_url: '',
 };
 
 const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
@@ -47,6 +48,7 @@ export default function AdminUsuariosPage() {
   const [isMasterAdmin, setIsMasterAdmin] = useState(false);
 
   const accessEmail = useMemo(() => generateOrionEmail(form.nome), [form.nome]);
+  const teamMembers = useMemo(() => buildOperationalTeamMembers(profiles), [profiles]);
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
@@ -107,13 +109,15 @@ export default function AdminUsuariosPage() {
       return;
     }
 
+    const gestorTrafegoId = form.time_operacional.find(isTrafficManagerMember)?.profile_id || null;
+
     const response = await fetch('/api/admin/usuarios', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ ...form, email: accessEmail })
+      body: JSON.stringify({ ...form, email: accessEmail, gestor_trafego_id: gestorTrafegoId })
     });
     const payload = await response.json();
 
@@ -127,6 +131,21 @@ export default function AdminUsuariosPage() {
     setForm({ ...initialForm, tipo_usuario: form.tipo_usuario });
     await fetchUsers();
     setSaving(false);
+  }
+
+  function handlePhotoChange(file?: File | null) {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Envie uma imagem valida para a foto.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm((current) => ({ ...current, foto_url: String(reader.result || '') }));
+    };
+    reader.readAsDataURL(file);
   }
 
   async function handleDelete(profile: Profile) {
@@ -323,29 +342,65 @@ export default function AdminUsuariosPage() {
               />
             </div>
 
+            <div>
+              <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Foto</label>
+              <label className="mt-2 flex cursor-pointer items-center gap-4 rounded-2xl bg-slate-50 px-5 py-4 text-sm font-bold text-slate-500 transition-all hover:bg-slate-100">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-blue-600 shadow-sm">
+                  {form.foto_url ? (
+                    <img src={form.foto_url} alt="Foto" className="h-full w-full object-cover" />
+                  ) : (
+                    <Camera size={18} />
+                  )}
+                </div>
+                <div>
+                  <p className="font-black text-slate-700">Inserir foto</p>
+                  <p className="text-[10px] font-bold text-slate-400">Aparece no seletor do time e no perfil.</p>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => handlePhotoChange(event.target.files?.[0])}
+                />
+              </label>
+            </div>
+
             {form.tipo_usuario === 'corretor' && (
               <>
                 <div>
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Time Orion</label>
                   <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {ORION_TEAM_MEMBERS.map((member) => {
+                    {teamMembers.map((member) => {
                       const selected = form.time_operacional.some((item) => item.nome === member.nome);
+                      const avatar = getTeamMemberAvatar(member);
                       return (
                         <button
-                          key={member.nome}
+                          key={member.profile_id || member.nome}
                           type="button"
                           onClick={() => setForm((current) => ({
                             ...current,
                             time_operacional: selected
                               ? current.time_operacional.filter((item) => item.nome !== member.nome)
-                              : [...current.time_operacional, member]
+                              : [
+                                  ...current.time_operacional.filter((item) =>
+                                    isTrafficManagerMember(member) ? !isTrafficManagerMember(item) : true
+                                  ),
+                                  member
+                                ]
                           }))}
                           className={`rounded-2xl border px-4 py-3 text-left transition-all ${
                             selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-100 bg-slate-50 text-slate-600 hover:bg-slate-100'
                           }`}
                         >
-                          <p className="text-xs font-black">{member.nome}</p>
-                          <p className={`mt-1 text-[10px] font-bold ${selected ? 'text-blue-100' : 'text-slate-400'}`}>{member.cargo}</p>
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl ${selected ? 'bg-white/20 text-white' : 'bg-white text-blue-600'}`}>
+                              {avatar ? <img src={avatar} alt={member.nome} className="h-full w-full object-cover" /> : member.nome[0]}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-black">{member.nome}</p>
+                              <p className={`mt-1 text-[10px] font-bold ${selected ? 'text-blue-100' : 'text-slate-400'}`}>{member.cargo}</p>
+                            </div>
+                          </div>
                         </button>
                       );
                     })}
