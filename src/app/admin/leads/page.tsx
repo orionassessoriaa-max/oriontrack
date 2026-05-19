@@ -303,7 +303,7 @@ export default function AdminLeadsPage() {
           </div>
         </div>
 
-        <div className="scrollbar-hidden overflow-x-auto">
+        <div className="scrollbar-visible overflow-x-scroll">
           {error ? (
             <div className="py-24 text-center">
               <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
@@ -319,7 +319,7 @@ export default function AdminLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[1600px]">
+            <table className="w-full text-left border-collapse min-w-[1900px]">
               <thead>
                 <tr className="bg-gray-50/50">
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Data</th>
@@ -331,6 +331,8 @@ export default function AdminLeadsPage() {
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Plano Atual</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cidade</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Aba da planilha</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">UTMs / Observacoes</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Corretor</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
@@ -339,7 +341,7 @@ export default function AdminLeadsPage() {
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan={12} className="py-20 text-center">
+                    <td colSpan={14} className="py-20 text-center">
                       <Loader2 className="animate-spin text-blue-600 mx-auto" size={40} />
                     </td>
                   </tr>
@@ -362,6 +364,10 @@ export default function AdminLeadsPage() {
                     <td className="px-6 py-5 text-sm text-slate-500 font-medium">{lead.plano_atual || '-'}</td>
                     <td className="px-6 py-5 text-sm text-slate-600 font-bold">{lead.investimento || '-'}</td>
                     <td className="px-6 py-5 text-sm text-slate-500 font-medium">{lead.cidade || '-'}</td>
+                    <td className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-500">{lead.operadora || '-'}</td>
+                    <td className="px-6 py-5 text-xs font-bold leading-relaxed text-slate-500">
+                      <div className="max-w-[360px] whitespace-normal">{lead.observacoes || '-'}</div>
+                    </td>
                     <td className="px-6 py-5 text-center">
                       <span className="inline-block px-3 py-1.5 bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest rounded-full">
                         {lead.status}

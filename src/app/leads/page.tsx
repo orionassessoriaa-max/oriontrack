@@ -288,8 +288,8 @@ export default function BrokerLeadsPage() {
     <InternalLayout>
       <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Meus Leads</h1>
-          <p className="font-medium text-gray-500">Lista detalhada com filtros e status comercial.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Planilha</h1>
+          <p className="font-medium text-gray-500">Lista detalhada com filtros, status comercial, aba de origem e UTMs.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button
@@ -357,7 +357,7 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="scrollbar-visible overflow-x-scroll">
           {error ? (
             <div className="py-24 text-center">
               <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">

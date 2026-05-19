@@ -35,6 +35,26 @@
   display: none;
 }
 
+.scrollbar-visible {
+  scrollbar-width: auto;
+  scrollbar-color: #94a3b8 #e2e8f0;
+}
+
+.scrollbar-visible::-webkit-scrollbar {
+  height: 14px;
+  width: 14px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-track {
+  background: #e2e8f0;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border: 3px solid #e2e8f0;
+  border-radius: 999px;
+}
+
 .glass {
   @apply bg-white/80 backdrop-blur-md border border-white/20;
 }
