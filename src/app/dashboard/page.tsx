@@ -72,6 +72,17 @@ function getLastMonths(total = 6): MonthlyPerformance[] {
   });
 }
 
+function monthRange(key: string) {
+  const [year, month] = key.split('-').map(Number);
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDay = new Date(year, month, 0);
+
+  return {
+    since: firstDay.toISOString().slice(0, 10),
+    until: lastDay.toISOString().slice(0, 10),
+  };
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 }
@@ -120,22 +131,13 @@ export default function DashboardPage() {
         setCorretorData(data);
 
         // 2. Buscar Estatísticas de Leads
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-        sixMonthsAgo.setDate(1);
-        sixMonthsAgo.setHours(0, 0, 0, 0);
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
 
-        const [statsQuery, metaQuery] = await Promise.all([
-          supabase
-            .from('leads')
-            .select('status, data_entrada')
-            .eq('corretor_id', profile.corretor_id),
-          supabase
-            .from('meta_metricas_diarias')
-            .select('data, spend')
-            .eq('corretor_id', profile.corretor_id)
-            .gte('data', sixMonthsAgo.toISOString().slice(0, 10))
-        ]);
+        const statsQuery = await supabase
+          .from('leads')
+          .select('status, data_entrada')
+          .eq('corretor_id', profile.corretor_id);
 
         if (statsQuery.error) throw statsQuery.error;
 
@@ -162,11 +164,40 @@ export default function DashboardPage() {
             if (current) current.leads += 1;
           });
 
-          if (!metaQuery.error) {
-            (metaQuery.data || []).forEach((row: any) => {
-              if (!row.data) return;
-              const current = monthMap.get(monthKey(new Date(`${row.data}T12:00:00`)));
-              if (current) current.spend += Number(row.spend || 0);
+          if (accessToken) {
+            const spendResults = await Promise.all(
+              months.map(async (month) => {
+                const range = monthRange(month.key);
+
+                try {
+                  const response = await fetch('/api/integrations/meta/spend', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${accessToken}`,
+                    },
+                    body: JSON.stringify({
+                      corretor_id: profile.corretor_id,
+                      data_inicio: range.since,
+                      data_fim: range.until,
+                    }),
+                  });
+
+                  const payload = await response.json();
+                  return {
+                    key: month.key,
+                    spend: response.ok ? Number(payload.spend || 0) : 0,
+                  };
+                } catch (error) {
+                  console.error('Erro ao buscar investimento Meta do mes:', month.key, error);
+                  return { key: month.key, spend: 0 };
+                }
+              })
+            );
+
+            spendResults.forEach((result) => {
+              const current = monthMap.get(result.key);
+              if (current) current.spend = result.spend;
             });
           }
 

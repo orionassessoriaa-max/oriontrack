@@ -19,7 +19,7 @@ async function requireTrafficAccess(request: Request) {
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!profile || !['admin', 'gestor_trafego', 'account_manager'].includes(profile.tipo_usuario)) {
+  if (!profile || !['admin', 'gestor_trafego', 'account_manager', 'corretor'].includes(profile.tipo_usuario)) {
     return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
   }
 
@@ -57,6 +57,18 @@ export async function POST(request: Request) {
 
     if (guard.profile.tipo_usuario === 'gestor_trafego' && corretor.gestor_trafego_id !== guard.user.id) {
       return NextResponse.json({ error: 'Este corretor nao esta vinculado ao seu gestor.' }, { status: 403 });
+    }
+
+    if (guard.profile.tipo_usuario === 'corretor') {
+      const { data: requester } = await supabaseAdmin
+        .from('profiles')
+        .select('corretor_id')
+        .eq('id', guard.user.id)
+        .maybeSingle();
+
+      if (requester?.corretor_id !== corretor.id) {
+        return NextResponse.json({ error: 'Voce so pode consultar a sua propria conta Meta.' }, { status: 403 });
+      }
     }
 
     if (!corretor.meta_ad_account_id) {
