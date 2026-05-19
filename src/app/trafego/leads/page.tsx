@@ -2,14 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
-import {
-  AlertCircle,
-  Download,
-  Loader2,
-  RefreshCw,
-  Search,
-  ShieldAlert,
-} from 'lucide-react';
+import { AlertCircle, Download, Loader2, RefreshCw, Search, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead } from '@/types';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -23,13 +16,48 @@ type TrafficLead = Lead & {
   } | null;
 };
 
+type CorretorOption = {
+  id: string;
+  nome: string;
+};
+
+function normalizeText(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function sheetTabLabel(value?: string | null) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.includes('{{')) return 'Sem aba';
+  const normalized = normalizeText(raw);
+  const known: Array<[string, string]> = [
+    ['bradesco', 'BRADESCO'],
+    ['amil', 'AMIL'],
+    ['sulamerica', 'SULAMERICA'],
+    ['sul america', 'SULAMERICA'],
+    ['porto', 'PORTO'],
+    ['medsenior', 'MEDSENIOR'],
+    ['hapvida', 'HAPVIDA'],
+    ['alice', 'ALICE'],
+    ['odontoprev', 'ODONTOPREV'],
+    ['aurora', 'AURORA'],
+    ['sao lucas', 'SAO LUCAS'],
+  ];
+  const found = known.find(([key]) => normalized.includes(key));
+  return found?.[1] || raw;
+}
+
 export default function TrafficLeadsPage() {
   const { profile } = useAuth();
   const router = useRouter();
   const [leads, setLeads] = useState<TrafficLead[]>([]);
+  const [corretores, setCorretores] = useState<CorretorOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCorretorId, setSelectedCorretorId] = useState('todos');
 
   async function fetchLeads() {
     if (!profile?.id) return;
@@ -38,14 +66,17 @@ export default function TrafficLeadsPage() {
     setError(null);
 
     try {
-      const { data: corretores, error: corretoresError } = await supabase
+      const { data: corretoresData, error: corretoresError } = await supabase
         .from('corretores')
-        .select('id')
-        .eq('gestor_trafego_id', profile.id);
+        .select('id, nome')
+        .eq('gestor_trafego_id', profile.id)
+        .order('nome', { ascending: true });
 
       if (corretoresError) throw corretoresError;
 
-      const corretorIds = (corretores || []).map((corretor) => corretor.id);
+      const corretorList = (corretoresData || []) as CorretorOption[];
+      const corretorIds = corretorList.map((corretor) => corretor.id);
+      setCorretores(corretorList);
 
       if (corretorIds.length === 0) {
         setLeads([]);
@@ -67,9 +98,9 @@ export default function TrafficLeadsPage() {
       const errorCode = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
 
       if (errorCode === '42501' || errorMessage.toLowerCase().includes('row-level security')) {
-        setError('Acesso negado: você não tem permissão para visualizar estes leads.');
+        setError('Acesso negado: voce nao tem permissao para visualizar estes leads.');
       } else {
-        setError('Erro ao carregar leads vinculados à sua gestão.');
+        setError('Erro ao carregar leads vinculados a sua gestao.');
       }
     } finally {
       setLoading(false);
@@ -94,96 +125,116 @@ export default function TrafficLeadsPage() {
 
   const filteredLeads = leads.filter((lead) => {
     const term = searchTerm.toLowerCase();
-
-    return (
+    const matchesSearch = (
       (lead.nome?.toLowerCase() || '').includes(term) ||
       (lead.telefone || '').includes(searchTerm) ||
       (lead.cidade?.toLowerCase() || '').includes(term) ||
-      (lead.corretores?.nome?.toLowerCase() || '').includes(term)
+      (lead.corretores?.nome?.toLowerCase() || '').includes(term) ||
+      (lead.operadora?.toLowerCase() || '').includes(term) ||
+      (lead.observacoes?.toLowerCase() || '').includes(term)
     );
+    const matchesCorretor = selectedCorretorId === 'todos' || lead.corretor_id === selectedCorretorId;
+    return matchesSearch && matchesCorretor;
   });
 
   return (
     <InternalLayout>
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
+      <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Leads dos Corretores</h1>
-          <p className="text-gray-500 font-medium">Acompanhe os leads dos parceiros vinculados à sua gestão.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Planilhas dos Corretores</h1>
+          <p className="font-medium text-gray-500">Selecione o corretor e veja a planilha com origem da aba, status e UTMs.</p>
         </div>
-        <button className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-gray-100 shadow-sm flex items-center gap-2 hover:bg-gray-50 transition-all">
+        <button className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-6 py-3 font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50">
           <Download size={18} /> Exportar
         </button>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-8 border-b border-gray-50 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
+      <div className="overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
+        <div className="grid gap-4 border-b border-gray-50 p-8 xl:grid-cols-[280px_1fr_auto]">
+          <select
+            value={selectedCorretorId}
+            onChange={(event) => setSelectedCorretorId(event.target.value)}
+            className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-black transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          >
+            <option value="todos">Todos os corretores</option>
+            {corretores.map((corretor) => (
+              <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>
+            ))}
+          </select>
+          <div className="group relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-blue-500" size={18} />
             <input
               type="text"
-              placeholder="Buscar por lead, telefone, cidade ou corretor..."
+              placeholder="Buscar por lead, telefone, cidade, corretor, aba ou UTM..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-50 border-none pl-12 pr-4 py-4 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-medium"
+              className="w-full rounded-2xl border-none bg-slate-50 py-4 pl-12 pr-4 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
           <button
             onClick={fetchLeads}
-            className="bg-slate-50 text-slate-500 px-5 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-slate-100 transition-all"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-slate-50 px-5 py-4 font-black text-slate-500 transition-all hover:bg-slate-100"
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} /> Atualizar
           </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="scrollbar-visible overflow-x-scroll">
           {error ? (
             <div className="py-24 text-center">
-              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">
                 <ShieldAlert size={32} />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Acesso restrito</h3>
-              <p className="text-red-500 font-medium max-w-md mx-auto mb-6">{error}</p>
-              <button
-                onClick={fetchLeads}
-                className="inline-flex items-center gap-2 text-blue-600 font-black uppercase tracking-widest text-xs hover:underline"
-              >
+              <h3 className="mb-2 text-xl font-bold text-gray-900">Acesso restrito</h3>
+              <p className="mx-auto mb-6 max-w-md font-medium text-red-500">{error}</p>
+              <button onClick={fetchLeads} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-600 hover:underline">
                 <RefreshCw size={14} /> Tentar novamente
               </button>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[1100px]">
+            <table className="w-full min-w-[1850px] border-collapse text-left">
               <thead>
                 <tr className="bg-gray-50/50">
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Data</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Corretor</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Telefone</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cidade</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Data</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Corretor</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Lead</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Idades</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">CNPJ</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Plano ativo</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Cidade</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Investimento</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Aba da planilha</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">UTMs / Observacoes</th>
+                  <th className="px-6 py-5 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-20 text-center">
-                      <Loader2 className="animate-spin text-blue-600 mx-auto" size={40} />
+                    <td colSpan={12} className="py-20 text-center">
+                      <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
                 ) : filteredLeads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-blue-50/30 transition-colors">
+                  <tr key={lead.id} className="transition-colors hover:bg-blue-50/30">
                     <td className="px-6 py-5 text-[13px] font-bold text-slate-500">
                       {lead.data_entrada ? format(new Date(lead.data_entrada), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
                     </td>
-                    <td className="px-6 py-5 text-sm text-slate-600 font-bold">{lead.corretores?.nome || '-'}</td>
-                    <td className="px-6 py-5">
-                      <p className="font-bold text-gray-900 text-sm">{lead.nome}</p>
+                    <td className="px-6 py-5 text-sm font-bold text-slate-600">{lead.corretores?.nome || '-'}</td>
+                    <td className="px-6 py-5"><p className="text-sm font-bold text-gray-900">{lead.nome}</p></td>
+                    <td className="px-6 py-5 text-sm font-medium text-slate-600">{lead.telefone}</td>
+                    <td className="px-6 py-5 text-sm font-bold text-slate-500">{lead.idades || '-'}</td>
+                    <td className="px-6 py-5 text-[11px] font-black uppercase tracking-widest text-slate-500">{lead.possui_cnpj || '-'}</td>
+                    <td className="px-6 py-5 text-[11px] font-black uppercase tracking-widest text-slate-500">{lead.tem_plano_ativo || '-'}</td>
+                    <td className="px-6 py-5 text-sm font-medium text-slate-500">{lead.cidade || '-'}</td>
+                    <td className="px-6 py-5 text-sm font-bold text-slate-600">{lead.investimento || '-'}</td>
+                    <td className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-600">{sheetTabLabel(lead.operadora)}</td>
+                    <td className="px-6 py-5 text-xs font-bold leading-relaxed text-slate-500">
+                      <div className="max-w-[380px] whitespace-normal">{lead.observacoes || '-'}</div>
                     </td>
-                    <td className="px-6 py-5 text-sm text-slate-600 font-medium">{lead.telefone}</td>
-                    <td className="px-6 py-5 text-sm text-slate-500 font-medium">{lead.cidade || '-'}</td>
-                    <td className="px-6 py-5 text-sm text-slate-600 font-bold">{lead.investimento || '-'}</td>
                     <td className="px-6 py-5 text-center">
-                      <span className="inline-block px-3 py-1.5 bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest rounded-full">
+                      <span className="inline-block rounded-full bg-blue-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-blue-600">
                         {lead.status}
                       </span>
                     </td>
@@ -196,10 +247,10 @@ export default function TrafficLeadsPage() {
 
         {!loading && !error && filteredLeads.length === 0 && (
           <div className="py-24 text-center">
-            <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-50 text-slate-300">
               <AlertCircle size={32} />
             </div>
-            <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Nenhum lead encontrado</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Nenhum lead encontrado</p>
           </div>
         )}
       </div>

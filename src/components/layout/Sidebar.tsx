@@ -61,7 +61,7 @@ export default function Sidebar() {
   ];
 
   const trafficMenu = [
-    { icon: FileSearch, label: 'Meus Leads', href: '/trafego/leads' },
+    { icon: FileSearch, label: 'Planilhas dos corretores', href: '/trafego/leads' },
     { icon: UserPlus, label: 'Entrada', href: '/trafego/entrada' },
     { icon: AlertTriangle, label: 'Avisos Meta', href: '/trafego/avisos-meta' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
@@ -92,7 +92,7 @@ export default function Sidebar() {
   const corretorMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
-    { icon: Users, label: 'Meus Leads', href: '/leads' },
+    { icon: Users, label: 'Planilha', href: '/leads' },
     { icon: Palette, label: 'Criativos', href: '/criativos' },
     { icon: Globe, label: 'Minha Pagina', href: '/minha-pagina' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },

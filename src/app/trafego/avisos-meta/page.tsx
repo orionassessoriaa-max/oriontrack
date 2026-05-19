@@ -16,6 +16,7 @@ type MetaAlertRow = {
   ctr: number;
   saldo: number | null;
   currency: string;
+  forma_pagamento?: string;
   alerta_cpl_alto: boolean;
   alerta_saldo_baixo: boolean;
   error?: string;
@@ -189,8 +190,8 @@ export default function TrafficMetaAlertsPage() {
       )}
 
       <div className="overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left">
+        <div className="scrollbar-visible overflow-x-scroll">
+          <table className="w-full min-w-[1160px] text-left">
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
@@ -199,19 +200,20 @@ export default function TrafficMetaAlertsPage() {
                 <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Leads</th>
                 <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">CPL</th>
                 <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Investido</th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Pagamento</th>
                 <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-20 text-center">
+                  <td colSpan={8} className="py-20 text-center">
                     <Loader2 className="mx-auto animate-spin text-blue-600" size={32} />
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-sm font-bold text-slate-400">Nenhuma conta vinculada encontrada para este filtro.</td>
+                  <td colSpan={8} className="py-16 text-center text-sm font-bold text-slate-400">Nenhuma conta vinculada encontrada para este filtro.</td>
                 </tr>
               ) : rows.map((row) => (
                 <tr key={`${row.corretor_id}-${row.meta_ad_account_id}`} className={row.alerta_cpl_alto ? 'bg-red-50/40' : row.alerta_saldo_baixo ? 'bg-amber-50/40' : 'hover:bg-slate-50/60'}>
@@ -239,6 +241,11 @@ export default function TrafficMetaAlertsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-5 text-sm font-black text-slate-700">{formatCurrency(row.spend, row.currency)}</td>
+                  <td className="px-6 py-5">
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                      {row.forma_pagamento || 'Nao informado'}
+                    </span>
+                  </td>
                   <td className="px-6 py-5">
                     <span className={`rounded-full px-3 py-1 text-xs font-black ${row.alerta_saldo_baixo ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
                       {formatCurrency(row.saldo, row.currency)}
