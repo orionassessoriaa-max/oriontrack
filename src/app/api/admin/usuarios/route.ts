@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateOrionEmail, generateStrongPassword } from '@/lib/users';
+import { PUBLIC_LOGIN_URL } from '@/lib/publicUrl';
 import { UserRole } from '@/types';
 
 function isMasterAdmin(profile: { email?: string | null; email_real?: string | null; is_admin_master?: boolean | null }) {
@@ -177,7 +178,7 @@ export async function POST(request: Request) {
           email,
           email_real: emailReal,
           senha_provisoria: senhaProvisoria,
-          link_login: `${new URL(request.url).origin}/login`
+          link_login: PUBLIC_LOGIN_URL
         }
       });
     } catch (dbError: any) {
@@ -248,7 +249,7 @@ export async function PATCH(request: Request) {
         email: targetProfile.email,
         email_real: targetProfile.email_real,
         senha_provisoria: senhaProvisoria,
-        link_login: `${new URL(request.url).origin}/login`
+        link_login: PUBLIC_LOGIN_URL
       }
     });
   } catch (error: any) {
