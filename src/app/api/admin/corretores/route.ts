@@ -2,6 +2,38 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { PUBLIC_LOGIN_URL } from '@/lib/publicUrl';
 
+function normalizeText(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+async function resolveGestorTrafegoId(explicitId: unknown, timeOperacional: any[]) {
+  const directId = String(explicitId || '').trim();
+  if (directId) return directId;
+
+  const member = timeOperacional.find((item: any) => {
+    const role = normalizeText(item?.tipo_usuario);
+    const cargo = normalizeText(item?.cargo);
+    return role === 'gestor_trafego' || cargo.includes('trafego');
+  });
+
+  if (!member) return null;
+  if (member.profile_id) return String(member.profile_id);
+
+  const memberName = normalizeText(member.nome);
+  if (!memberName) return null;
+
+  const { data: profiles } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome')
+    .eq('tipo_usuario', 'gestor_trafego');
+
+  return (profiles || []).find((profile) => normalizeText(profile.nome) === memberName)?.id || null;
+}
+
 export async function POST(request: Request) {
   try {
     // 1. Validar Variáveis de Ambiente
@@ -92,6 +124,9 @@ export async function POST(request: Request) {
     const newUserId = authUserCreated.user.id;
 
     try {
+      const teamMembers = Array.isArray(time_operacional) ? time_operacional : [];
+      const resolvedGestorTrafegoId = await resolveGestorTrafegoId(gestor_trafego_id, teamMembers);
+
       // 8. Inserir em public.corretores
       const { data: corretor, error: corretorError } = await supabaseAdmin
         .from('corretores')
@@ -103,8 +138,8 @@ export async function POST(request: Request) {
           status: (status || 'ativo').toLowerCase(),
           tipo_campanha: tipo_campanha || 'ambos',
           observacoes: observacoes || null,
-          time_operacional: Array.isArray(time_operacional) ? time_operacional : [],
-          gestor_trafego_id: gestor_trafego_id || null
+          time_operacional: teamMembers,
+          gestor_trafego_id: resolvedGestorTrafegoId
         }])
         .select()
         .single();
