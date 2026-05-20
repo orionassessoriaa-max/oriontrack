@@ -96,6 +96,7 @@ export default function DashboardPage() {
     inProgress: 0,
     quoted: 0,
     sold: 0,
+    soldThisMonth: 0,
     stale: 0
   });
   const [monthlyPerformance, setMonthlyPerformance] = useState<MonthlyPerformance[]>(getLastMonths());
@@ -144,12 +145,14 @@ export default function DashboardPage() {
 
         if (statsQuery.data) {
           const statsRes = statsQuery.data as LeadMetricRow[];
+          const thisMonthKey = monthKey(new Date());
           setStats({
             total: statsRes.length,
             waiting: statsRes.filter(l => l.status === 'Aguardando atendimento').length,
             inProgress: statsRes.filter(l => l.status === 'Em negociação').length,
             quoted: statsRes.filter(l => l.status === 'Cotação enviada').length,
             sold: statsRes.filter(l => l.status === 'Venda realizada').length,
+            soldThisMonth: statsRes.filter(l => l.status === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
             stale: statsRes.filter(l => {
               if (l.status !== 'Aguardando atendimento' || !l.data_entrada) return false;
               return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
@@ -232,6 +235,8 @@ export default function DashboardPage() {
   const maxMonthlyLeads = Math.max(...monthlyPerformance.map((month) => month.leads), 1);
   const maxMonthlySpend = Math.max(...monthlyPerformance.map((month) => month.spend), 1);
   const currentMonth = monthlyPerformance[monthlyPerformance.length - 1] || { leads: 0, spend: 0 };
+  const currentMonthCpl = currentMonth.leads > 0 ? currentMonth.spend / currentMonth.leads : 0;
+  const currentMonthConversion = currentMonth.leads > 0 ? (stats.soldThisMonth / currentMonth.leads) * 100 : 0;
   const chartHeight = 176;
 
   const quickActions = [
@@ -320,6 +325,8 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-3">
             <MiniMetric icon={Users} label="Leads no mês" value={currentMonth.leads} />
             <MiniMetric icon={DollarSign} label="Investido no mês" value={formatCurrency(currentMonth.spend)} />
+            <MiniMetric icon={Target} label="CPL do mês" value={formatCurrency(currentMonthCpl)} />
+            <MiniMetric icon={TrendingUp} label="Conversão mês" value={`${currentMonthConversion.toFixed(1).replace('.', ',')}%`} />
             <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
             <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
           </div>
