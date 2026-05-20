@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { Plus, Search, Eye, Loader2, ShieldAlert, RefreshCw, Palette, MessageSquare } from 'lucide-react';
+import { Plus, Search, Eye, Loader2, ShieldAlert, RefreshCw, Palette, MessageSquare, Copy } from 'lucide-react';
 import { Profile, UserRole } from '@/types';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
@@ -64,6 +64,11 @@ export default function TeamRoleListPage({
     return target.includes(search.toLowerCase());
   });
 
+  async function copyId(id: string) {
+    await navigator.clipboard.writeText(id);
+    alert('ID copiado.');
+  }
+
   return (
     <InternalLayout>
       <div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-center">
@@ -124,6 +129,7 @@ export default function TeamRoleListPage({
                 <tr className="bg-gray-50/50">
                   <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">{title}</th>
                   <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Email</th>
+                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">ID</th>
                   <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Cadastro</th>
                   <th className="px-8 py-5 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Acoes</th>
                 </tr>
@@ -142,6 +148,17 @@ export default function TeamRoleListPage({
                     <td className="px-8 py-6">
                       <span className="text-sm font-medium text-slate-500">{person.email}</span>
                       {person.email_real && <p className="mt-1 text-xs font-medium text-slate-400">Real: {person.email_real}</p>}
+                    </td>
+                    <td className="px-8 py-6">
+                      <button
+                        type="button"
+                        onClick={() => copyId(person.id)}
+                        className="inline-flex max-w-[220px] items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-500 transition-all hover:bg-blue-50 hover:text-blue-700"
+                        title={person.id}
+                      >
+                        <Copy size={13} />
+                        <span className="truncate">{person.id}</span>
+                      </button>
                     </td>
                     <td className="px-8 py-6">
                       <span className="text-xs font-bold text-gray-400">

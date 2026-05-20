@@ -226,6 +226,17 @@ export default function AdminUsuariosPage() {
     );
   }
 
+  async function copyUserId(value: string) {
+    await navigator.clipboard.writeText(value);
+    alert('ID copiado para usar no n8n.');
+  }
+
+  function getUserIntegrationId(profile: Profile, corretor?: Corretor) {
+    return profile.tipo_usuario === 'corretor'
+      ? profile.corretor_id || corretor?.id || profile.id
+      : profile.id;
+  }
+
   async function openUserPanel(profile: Profile) {
     if (profile.tipo_usuario === 'corretor') {
       if (profile.corretor_id) await startViewingAsCorretor(profile.corretor_id);
@@ -564,15 +575,26 @@ export default function AdminUsuariosPage() {
                             {operadoras.join(', ')}
                           </p>
                         )}
+                        <p className="mt-2 max-w-[520px] truncate rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                          ID para n8n: <span className="normal-case tracking-normal text-slate-700">{getUserIntegrationId(profile, corretor)}</span>
+                        </p>
                       </div>
                     </button>
 
-                    {isOwnAccess || isMasterAccess ? (
-                      <span className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">
-                        Admin master
-                      </span>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => copyUserId(getUserIntegrationId(profile, corretor))}
+                        className="flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition-all hover:bg-blue-100"
+                      >
+                        <Copy size={16} />
+                        Copiar ID
+                      </button>
+                      {isOwnAccess || isMasterAccess ? (
+                        <span className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">
+                          Admin master
+                        </span>
+                      ) : (
+                        <>
                         <button
                           onClick={() => handleResetPassword(profile)}
                           disabled={removingId === profile.id}
@@ -589,8 +611,9 @@ export default function AdminUsuariosPage() {
                           {removingId === profile.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
                           Remover
                         </button>
-                      </div>
-                    )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}
