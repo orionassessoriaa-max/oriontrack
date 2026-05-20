@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useCorretoresOptions } from '@/hooks/useCorretoresOptions';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Copy, Loader2, MessageSquare, Phone, RefreshCw } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Copy, DollarSign, Loader2, MessageSquare, Phone, RefreshCw, TrendingUp, Users } from 'lucide-react';
 
 type Interaction = {
   id: string;
@@ -214,26 +214,63 @@ export default function AccountInboxPage() {
         </section>
 
         <aside className="space-y-4">
-          <div className="border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-black text-slate-950">Gerar relatorio rapido</h2>
-            <div className="mt-4 space-y-3">
-              <select value={reportCorretorId} onChange={(event) => setReportCorretorId(event.target.value)} className="w-full border border-slate-200 bg-slate-50 p-3 text-sm font-bold outline-none focus:border-blue-500">
-                {corretores.map((corretor) => <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>)}
-              </select>
-              <input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} className="w-full border border-slate-200 bg-slate-50 p-3 text-sm font-bold outline-none focus:border-blue-500" />
-              <button onClick={generateReport} disabled={loadingReport} className="flex w-full items-center justify-center gap-2 bg-blue-600 p-4 text-xs font-black uppercase tracking-widest text-white disabled:opacity-50">
+          <div className="rounded-[2.5rem] border border-gray-100 bg-white p-6 shadow-sm">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Meta Ads</p>
+                <h2 className="text-xl font-black text-slate-950">Gerar relatorio rapido</h2>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                <TrendingUp size={22} />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Corretor / Cliente</span>
+                <select
+                  value={reportCorretorId}
+                  onChange={(event) => setReportCorretorId(event.target.value)}
+                  className="mt-2 w-full appearance-none rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black text-slate-800 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
+                >
+                  {corretores.map((corretor) => <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>)}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Data do relatorio</span>
+                <div className="relative mt-2">
+                  <CalendarDays className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="date"
+                    value={reportDate}
+                    onChange={(event) => setReportDate(event.target.value)}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 pr-12 text-sm font-black text-slate-800 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              </label>
+
+              <button
+                onClick={generateReport}
+                disabled={loadingReport || loadingCorretores || !reportCorretorId}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-5 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition-all hover:bg-blue-700 disabled:opacity-50"
+              >
                 {loadingReport ? <Loader2 className="animate-spin" size={16} /> : null} Gerar relatorio
               </button>
             </div>
+
             {report && (
-              <div className="mt-5 border border-blue-100 bg-blue-50 p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-blue-700">{report.corretorNome}</p>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                  <Metric label="Leads" value={String(report.leads)} />
-                  <Metric label="Invest." value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.spend)} />
-                  <Metric label="CPL" value={report.cpl === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.cpl)} />
+              <div className="mt-6 rounded-[2rem] border border-blue-100 bg-blue-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">{report.corretorNome}</p>
+                <p className="mt-1 text-xs font-bold text-blue-700/70">{new Date(`${report.date}T12:00:00`).toLocaleDateString('pt-BR')}</p>
+
+                <div className="mt-4 grid grid-cols-1 gap-3">
+                  <Metric icon={Users} label="Leads" value={String(report.leads)} />
+                  <Metric icon={DollarSign} label="Investimento" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.spend)} />
+                  <Metric icon={TrendingUp} label="CPL medio" value={report.cpl === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.cpl)} highlight />
                 </div>
-                <button onClick={copyReport} className="mt-4 flex w-full items-center justify-center gap-2 bg-slate-950 p-3 text-xs font-black uppercase tracking-widest text-white">
+
+                <button onClick={copyReport} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 py-4 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-black">
                   <Copy size={14} /> Copiar pronto
                 </button>
               </div>
@@ -269,11 +306,13 @@ export default function AccountInboxPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, icon: Icon, highlight = false }: { label: string; value: string; icon: React.ElementType; highlight?: boolean }) {
   return (
-    <div className="bg-white p-2">
-      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-1 text-sm font-black text-slate-950">{value}</p>
+    <div className={`rounded-2xl p-4 ${highlight ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-slate-950'}`}>
+      <p className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-widest ${highlight ? 'text-blue-100' : 'text-slate-400'}`}>
+        <Icon size={12} /> {label}
+      </p>
+      <p className="mt-2 text-lg font-black">{value}</p>
     </div>
   );
 }
