@@ -7,6 +7,7 @@ import {
   Search, 
   Edit2,
   Eye,
+  Copy,
   Loader2,
   UserCog,
   ShieldAlert,
@@ -59,6 +60,11 @@ export default function AdminGestoresPage() {
     (g.nome?.toLowerCase() || '').includes(search.toLowerCase()) || 
     (g.email?.toLowerCase() || '').includes(search.toLowerCase())
   );
+
+  async function copyId(id: string) {
+    await navigator.clipboard.writeText(id);
+    alert('ID copiado.');
+  }
 
   return (
     <InternalLayout>
@@ -120,6 +126,7 @@ export default function AdminGestoresPage() {
                 <tr className="bg-gray-50/50">
                   <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Gestor</th>
                   <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
+                  <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">ID</th>
                   <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cadastro</th>
                   <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
                 </tr>
@@ -137,6 +144,17 @@ export default function AdminGestoresPage() {
                     </td>
                     <td className="px-8 py-6">
                       <span className="text-sm font-medium text-slate-500">{g.email}</span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <button
+                        type="button"
+                        onClick={() => copyId(g.id)}
+                        className="inline-flex max-w-[220px] items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-500 transition-all hover:bg-blue-50 hover:text-blue-700"
+                        title={g.id}
+                      >
+                        <Copy size={13} />
+                        <span className="truncate">{g.id}</span>
+                      </button>
                     </td>
                     <td className="px-8 py-6">
                       <span className="text-xs text-gray-400 font-bold">

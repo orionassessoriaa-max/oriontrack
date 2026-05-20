@@ -255,6 +255,9 @@ function CorretoresContent() {
                         <div>
                           <p className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{c.nome}</p>
                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">{c.email}</p>
+                          <p className="mt-1 max-w-[260px] truncate rounded-lg bg-slate-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                            ID n8n: <span className="normal-case tracking-normal text-slate-700">{c.id}</span>
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -317,6 +320,17 @@ function CorretoresContent() {
                           title="Entrar como corretor"
                         >
                           <Eye size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(c.id);
+                            alert('ID do corretor copiado para usar no n8n.');
+                          }}
+                          className="p-3 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all"
+                          title="Copiar ID para n8n"
+                        >
+                          <Copy size={18} />
                         </button>
                         {c.link_pagina && (
                           <button 
