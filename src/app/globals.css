@@ -73,3 +73,60 @@
 .status-em-negociacao { @apply bg-orange-100 text-orange-700; }
 .status-venda-realizada { @apply bg-green-100 text-green-700; }
 .status-sem-interesse { @apply bg-gray-100 text-gray-700; }
+
+.theme-noturno main {
+  background: #020617;
+}
+
+.theme-noturno .bg-white {
+  background-color: #0f172a !important;
+}
+
+.theme-noturno .bg-slate-50,
+.theme-noturno .bg-gray-50 {
+  background-color: #111827 !important;
+}
+
+.theme-noturno .bg-slate-100,
+.theme-noturno .bg-gray-100 {
+  background-color: #1e293b !important;
+}
+
+.theme-noturno .text-gray-900,
+.theme-noturno .text-gray-950,
+.theme-noturno .text-slate-900,
+.theme-noturno .text-emerald-950,
+.theme-noturno .text-blue-950 {
+  color: #f8fafc !important;
+}
+
+.theme-noturno .text-gray-700,
+.theme-noturno .text-slate-700,
+.theme-noturno .text-gray-600,
+.theme-noturno .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+.theme-noturno .text-gray-500,
+.theme-noturno .text-slate-500,
+.theme-noturno .text-gray-400,
+.theme-noturno .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.theme-noturno input,
+.theme-noturno select,
+.theme-noturno textarea {
+  background-color: #111827 !important;
+  color: #f8fafc !important;
+}
+
+.theme-noturno table tr,
+.theme-noturno thead tr {
+  background-color: #0f172a !important;
+}
+
+.theme-noturno table td,
+.theme-noturno table th {
+  border-color: #1e293b !important;
+}

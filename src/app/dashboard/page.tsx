@@ -240,7 +240,7 @@ export default function DashboardPage() {
   const chartHeight = 176;
 
   const quickActions = [
-    { icon: Users, label: 'Planilha', desc: 'Veja todos os contatos recebidos.', href: '/leads', color: 'blue' },
+    { icon: Users, label: 'Leads', desc: 'Veja todos os contatos recebidos.', href: '/leads', color: 'blue' },
     { icon: LayoutDashboard, label: 'Kanban Comercial', desc: 'Organize seus leads por etapa.', href: '/kanban', color: 'indigo' },
     { icon: Globe, label: 'Minha Página', desc: 'Acesse seu link de captação.', href: '/minha-pagina', color: 'purple' },
     { icon: HelpCircle, label: 'Ajuda Orion', desc: 'Solicite suporte ou alinhamento.', href: '/ajuda', color: 'slate' },
@@ -294,7 +294,7 @@ export default function DashboardPage() {
             </div>
             <ul className="space-y-4">
               {[
-                'Veja seus novos leads em Planilha',
+                'Veja seus novos leads',
                 'Atualize a etapa no Kanban Comercial',
                 'Solicite apoios na área Ajuda Orion',
                 'Acesse sua LP em Minha Página'

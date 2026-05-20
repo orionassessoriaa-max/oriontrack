@@ -16,6 +16,11 @@ type LeadInsert = {
   investimento: string;
   cidade: string;
   operadora: string;
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+  utm_term: string;
+  utm_content: string;
   status: string;
   observacoes: string;
 };
@@ -403,6 +408,11 @@ export async function POST(request: Request) {
             investimento: pick(row, ['investimento', 'investimento pretendido', 'pretensao investimento', 'quer investir quanto', 'quanto pretende investir', 'orcamento']),
             cidade: pick(row, ['cidade', 'regiao', 'localidade']),
             operadora: inferOperadora(row, sheetName),
+            utm_source: pick(row, ['utm_source']),
+            utm_medium: pick(row, ['utm_medium']),
+            utm_campaign: pick(row, ['utm_campaign', 'campanha']),
+            utm_term: pick(row, ['utm_term', 'conjunto', 'conjunto de anuncio', 'adset']),
+            utm_content: pick(row, ['utm_content', 'anuncio', 'ad', 'criativo']),
             status: statusFromSheet(pick(row, ['status']) || 'Aguardando atendimento'),
             observacoes: buildNotes(row),
           });

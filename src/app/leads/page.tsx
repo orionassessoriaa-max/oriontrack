@@ -82,6 +82,8 @@ const COMMERCIAL_REQUIRED_STATUSES: LeadStatus[] = [
   'Sem interesse',
 ];
 
+const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
+
 function parseCurrencyInput(value?: string | number | null) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   const cleaned = String(value || '')
@@ -103,17 +105,11 @@ function requiresCommercialData(status: LeadStatus) {
 function collectCommercialPayload(lead: Lead, status: LeadStatus) {
   if (!requiresCommercialData(status)) return null;
 
-  const valorNegociacao = window.prompt('Valor da negociação/contrato. Ex: 1200', String(lead.valor_negociacao || lead.valor_venda || ''));
+  const valorNegociacao = window.prompt('Valor da negociação. Ex: 1200', String(lead.valor_negociacao || ''));
   if (!valorNegociacao) return null;
 
   const operadoraNegociacao = window.prompt('Operadora da negociação. Ex: Amil, Bradesco, Porto', lead.operadora_negociacao || lead.operadora || '');
   if (!operadoraNegociacao) return null;
-
-  const tipoPlano = window.prompt('Tipo do plano. Ex: PME, Individual, Adesão, Empresarial', lead.tipo_plano || '');
-  if (!tipoPlano) return null;
-
-  const valorVenda = window.prompt('Valor da venda. Ex: 1200', String(lead.valor_venda || valorNegociacao));
-  if (!valorVenda) return null;
 
   const valorComissao = window.prompt('Valor da comissão. Ex: 240', String(lead.valor_comissao || ''));
   if (!valorComissao) return null;
@@ -121,17 +117,33 @@ function collectCommercialPayload(lead: Lead, status: LeadStatus) {
   const payload = {
     valor_negociacao: parseCurrencyInput(valorNegociacao),
     operadora_negociacao: operadoraNegociacao.trim(),
-    tipo_plano: tipoPlano.trim(),
-    valor_venda: parseCurrencyInput(valorVenda),
     valor_comissao: parseCurrencyInput(valorComissao),
   };
 
-  if (!payload.valor_negociacao || !payload.operadora_negociacao || !payload.tipo_plano || !payload.valor_venda || !payload.valor_comissao) {
-    alert('Para avançar para negociação em diante, preencha valor da negociação, operadora, tipo do plano, valor da venda e comissão.');
+  if (!payload.valor_negociacao || !payload.operadora_negociacao || !payload.valor_comissao) {
+    alert('Para avançar para negociação em diante, preencha valor da negociação, operadora e comissão.');
     return null;
   }
 
   return payload;
+}
+
+function noteValue(lead: Lead, key: string) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = String(lead.observacoes || '').match(new RegExp(`${escaped}:\\s*([^|]+)`, 'i'));
+  return match?.[1]?.trim() || '';
+}
+
+function leadCampaign(lead: Lead) {
+  return lead.utm_campaign || noteValue(lead, 'utm_campaign') || '-';
+}
+
+function leadAdset(lead: Lead) {
+  return lead.utm_term || noteValue(lead, 'utm_term') || '-';
+}
+
+function leadAd(lead: Lead) {
+  return lead.utm_content || noteValue(lead, 'utm_content') || '-';
 }
 
 export default function BrokerLeadsPage() {
@@ -147,6 +159,9 @@ export default function BrokerLeadsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [operadoraFilter, setOperadoraFilter] = useState('todas');
+  const [campaignFilter, setCampaignFilter] = useState('todos');
+  const [adsetFilter, setAdsetFilter] = useState('todos');
+  const [adFilter, setAdFilter] = useState('todos');
   const [showCrmModal, setShowCrmModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [crmApiUrl, setCrmApiUrl] = useState('');
@@ -312,12 +327,17 @@ export default function BrokerLeadsPage() {
     const operadoraMatch =
       operadoraFilter === 'todas' ||
       (operadoraFilter === '__sem_aba__' ? leadTab === 'Sem aba' : leadTab === operadoraFilter);
+    const campaignMatch = campaignFilter === 'todos' || leadCampaign(lead) === campaignFilter;
+    const adsetMatch = adsetFilter === 'todos' || leadAdset(lead) === adsetFilter;
+    const adMatch = adFilter === 'todos' || leadAd(lead) === adFilter;
     const leadDate = lead.data_entrada ? new Date(lead.data_entrada) : null;
     const fromMatch = !dateFrom || (leadDate && leadDate >= new Date(dateFrom));
     const toMatch = !dateTo || (leadDate && leadDate <= new Date(dateTo + 'T23:59:59'));
 
-    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && fromMatch && toMatch;
+    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && campaignMatch && adsetMatch && adMatch && fromMatch && toMatch;
   });
+
+  const filterOptions = (values: string[]) => Array.from(new Set(values.filter((value) => value && value !== '-'))).sort((a, b) => a.localeCompare(b));
 
   const sheetTabs = useMemo(() => {
     const fromLeads = leads
@@ -325,6 +345,10 @@ export default function BrokerLeadsPage() {
       .filter((operadora) => operadora !== 'Sem aba');
     return Array.from(new Set(fromLeads)).sort((a, b) => a.localeCompare(b));
   }, [leads]);
+
+  const campaignOptions = useMemo(() => filterOptions(leads.map(leadCampaign)), [leads]);
+  const adsetOptions = useMemo(() => filterOptions(leads.map(leadAdset)), [leads]);
+  const adOptions = useMemo(() => filterOptions(leads.map(leadAd)), [leads]);
 
   const tabCounts = useMemo(() => {
     return leads.reduce<Record<string, number>>((acc, lead) => {
@@ -340,7 +364,10 @@ export default function BrokerLeadsPage() {
     dateTo ||
     cnpjFilter !== 'todos' ||
     statusFilter !== 'todos' ||
-    operadoraFilter !== 'todas'
+    operadoraFilter !== 'todas' ||
+    campaignFilter !== 'todos' ||
+    adsetFilter !== 'todos' ||
+    adFilter !== 'todos'
   );
 
   const clearFilters = () => {
@@ -350,14 +377,17 @@ export default function BrokerLeadsPage() {
     setCnpjFilter('todos');
     setStatusFilter('todos');
     setOperadoraFilter('todas');
+    setCampaignFilter('todos');
+    setAdsetFilter('todos');
+    setAdFilter('todos');
   };
 
   return (
     <InternalLayout>
       <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Planilha</h1>
-          <p className="font-medium text-gray-500">Lista detalhada com filtros, status comercial, aba de origem e UTMs.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Leads</h1>
+          <p className="font-medium text-gray-500">Lista detalhada com filtros, status comercial, página de origem e UTMs.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button
@@ -381,7 +411,7 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.7fr_160px_160px_170px_230px_220px_auto]">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.7fr_160px_160px_170px_220px_200px_200px_200px_auto]">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -408,6 +438,18 @@ export default function BrokerLeadsPage() {
             <option value="todas">Página: todas</option>
             {sheetTabs.map((tab) => <option key={tab} value={tab}>{tab}</option>)}
             <option value="__sem_aba__">Sem página</option>
+          </select>
+          <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+            <option value="todos">Campanha: todas</option>
+            {campaignOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+          <select value={adsetFilter} onChange={(e) => setAdsetFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+            <option value="todos">Conjunto: todos</option>
+            {adsetOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+          <select value={adFilter} onChange={(e) => setAdFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+            <option value="todos">Anúncio: todos</option>
+            {adOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
           <button
             type="button"
@@ -443,7 +485,7 @@ export default function BrokerLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full min-w-[2240px] border-collapse text-left text-[13px]">
+            <table className="w-full min-w-[2380px] border-collapse text-left text-[13px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100">
                   <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
@@ -454,23 +496,24 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Possui CNPJ</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Tem plano ativo?</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Plano atual</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Custo atual</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Investimento pretendido</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cidade</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Valor negociação</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Etiqueta</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Operadora venda</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Tipo plano</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Valor venda</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Comissão</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
-                  <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações / UTMs</th>
+                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Campanha</th>
+                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Conjunto de anúncio</th>
+                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Anúncio</th>
+                  <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={19} className="py-20 text-center">
+                    <td colSpan={20} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -504,13 +547,28 @@ export default function BrokerLeadsPage() {
                       </span>
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-500">{lead.plano_atual || '-'}</td>
-                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.custo_plano_atual || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.investimento || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-500">{lead.cidade || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.valor_negociacao ? formatCurrencyValue(lead.valor_negociacao) : '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3">
+                      <select
+                        value={lead.etiqueta || ''}
+                        onChange={async (event) => {
+                          let etiqueta = event.target.value;
+                          if (etiqueta === 'Outra etiqueta') {
+                            etiqueta = window.prompt('Nome da nova etiqueta', lead.etiqueta || '') || '';
+                          }
+                          setLeads(prev => prev.map(item => item.id === lead.id ? { ...item, etiqueta } : item));
+                          await supabase.from('leads').update({ etiqueta: etiqueta || null, updated_at: new Date().toISOString() }).eq('id', lead.id);
+                        }}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700"
+                      >
+                        <option value="">Sem etiqueta</option>
+                        {READY_LABELS.map((label) => <option key={label} value={label}>{label}</option>)}
+                        {lead.etiqueta && !READY_LABELS.includes(lead.etiqueta) && <option value={lead.etiqueta}>{lead.etiqueta}</option>}
+                      </select>
+                    </td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.operadora_negociacao || '-'}</td>
-                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.tipo_plano || '-'}</td>
-                    <td className="border border-slate-100 px-3 py-3 font-bold text-emerald-700">{lead.valor_venda ? formatCurrencyValue(lead.valor_venda) : '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-blue-700">{lead.valor_comissao ? formatCurrencyValue(lead.valor_comissao) : '-'}</td>
                     <td className="border border-slate-100 px-3 py-3">
                       <div className="flex items-center gap-2">
@@ -525,6 +583,9 @@ export default function BrokerLeadsPage() {
                       </div>
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{leadTab}</td>
+                    <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadCampaign(lead)}</td>
+                    <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadAdset(lead)}</td>
+                    <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadAd(lead)}</td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-medium leading-relaxed text-slate-600">
                       <div className="max-w-[300px] whitespace-normal">
                         {lead.observacoes || '-'}
@@ -537,7 +598,7 @@ export default function BrokerLeadsPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto border-t border-slate-200 bg-slate-100 px-4 py-2">
+        <div className="hidden">
           <button
             type="button"
             onClick={() => setOperadoraFilter('todas')}

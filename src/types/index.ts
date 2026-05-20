@@ -70,6 +70,11 @@ export interface Lead {
   investimento: string;
   cidade: string;
   operadora?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_term?: string | null;
+  utm_content?: string | null;
   valor_negociacao?: number | string | null;
   operadora_negociacao?: string | null;
   tipo_plano?: string | null;
