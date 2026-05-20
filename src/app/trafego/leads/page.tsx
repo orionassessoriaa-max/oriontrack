@@ -9,6 +9,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import PhoneAction from '@/components/ui/PhoneAction';
 
 type TrafficLead = Lead & {
   corretores?: {
@@ -223,7 +224,9 @@ export default function TrafficLeadsPage() {
                     </td>
                     <td className="px-6 py-5 text-sm font-bold text-slate-600">{lead.corretores?.nome || '-'}</td>
                     <td className="px-6 py-5"><p className="text-sm font-bold text-gray-900">{lead.nome}</p></td>
-                    <td className="px-6 py-5 text-sm font-medium text-slate-600">{lead.telefone}</td>
+                    <td className="px-6 py-5 text-sm font-medium text-slate-600">
+                      <PhoneAction phone={lead.telefone} />
+                    </td>
                     <td className="px-6 py-5 text-sm font-bold text-slate-500">{lead.idades || '-'}</td>
                     <td className="px-6 py-5 text-[11px] font-black uppercase tracking-widest text-slate-500">{lead.possui_cnpj || '-'}</td>
                     <td className="px-6 py-5 text-[11px] font-black uppercase tracking-widest text-slate-500">{lead.tem_plano_ativo || '-'}</td>
