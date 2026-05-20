@@ -231,6 +231,7 @@ export default function DashboardPage() {
   const maxMonthlyLeads = Math.max(...monthlyPerformance.map((month) => month.leads), 1);
   const maxMonthlySpend = Math.max(...monthlyPerformance.map((month) => month.spend), 1);
   const currentMonth = monthlyPerformance[monthlyPerformance.length - 1] || { leads: 0, spend: 0 };
+  const chartHeight = 176;
 
   const quickActions = [
     { icon: Users, label: 'Planilha', desc: 'Veja todos os contatos recebidos.', href: '/leads', color: 'blue' },
@@ -342,14 +343,14 @@ export default function DashboardPage() {
                 <div className="flex h-48 items-end gap-1.5 rounded-2xl bg-slate-50 px-2 pb-2">
                   <div className="flex flex-1 flex-col items-center justify-end">
                     <div
-                      className="w-full rounded-t-lg bg-blue-600"
-                      style={{ height: `${Math.max((month.spend / maxMonthlySpend) * 100, month.spend > 0 ? 8 : 0)}%` }}
+                      className="w-full rounded-t-lg bg-gradient-to-t from-blue-700 to-blue-400 shadow-sm shadow-blue-500/20"
+                      style={{ height: `${Math.max((month.spend / maxMonthlySpend) * chartHeight, month.spend > 0 ? 14 : 0)}px` }}
                     />
                   </div>
                   <div className="flex flex-1 flex-col items-center justify-end">
                     <div
-                      className="w-full rounded-t-lg bg-emerald-500"
-                      style={{ height: `${Math.max((month.leads / maxMonthlyLeads) * 100, month.leads > 0 ? 8 : 0)}%` }}
+                      className="w-full rounded-t-lg bg-gradient-to-t from-emerald-600 to-emerald-300 shadow-sm shadow-emerald-500/20"
+                      style={{ height: `${Math.max((month.leads / maxMonthlyLeads) * chartHeight, month.leads > 0 ? 14 : 0)}px` }}
                     />
                   </div>
                 </div>
