@@ -42,6 +42,7 @@ type CorretorDashboardData = {
 type LeadMetricRow = {
   status: string | null;
   data_entrada: string | null;
+  cidade?: string | null;
 };
 
 type MonthlyPerformance = {
@@ -87,6 +88,22 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 }
 
+function dayKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getLastDays(total = 7) {
+  const now = new Date();
+  return Array.from({ length: total }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (total - 1 - index));
+    return {
+      key: dayKey(date),
+      label: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      leads: 0,
+    };
+  });
+}
+
 export default function DashboardPage() {
   const { profile, loading: authLoading } = useAuth();
   const [corretorData, setCorretorData] = useState<CorretorDashboardData | null>(null);
@@ -100,6 +117,8 @@ export default function DashboardPage() {
     stale: 0
   });
   const [monthlyPerformance, setMonthlyPerformance] = useState<MonthlyPerformance[]>(getLastMonths());
+  const [weeklyLeads, setWeeklyLeads] = useState(getLastDays());
+  const [topCities, setTopCities] = useState<Array<{ city: string; leads: number }>>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [chartHovering, setChartHovering] = useState(false);
 
@@ -138,7 +157,7 @@ export default function DashboardPage() {
 
         const statsQuery = await supabase
           .from('leads')
-          .select('status, data_entrada')
+          .select('status, data_entrada, cidade')
           .eq('corretor_id', profile.corretor_id);
 
         if (statsQuery.error) throw statsQuery.error;
@@ -167,6 +186,28 @@ export default function DashboardPage() {
             const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
             if (current) current.leads += 1;
           });
+
+          const days = getLastDays();
+          const dayMap = new Map(days.map((day) => [day.key, { ...day }]));
+          statsRes.forEach((lead) => {
+            if (!lead.data_entrada) return;
+            const current = dayMap.get(dayKey(new Date(lead.data_entrada)));
+            if (current) current.leads += 1;
+          });
+          setWeeklyLeads(Array.from(dayMap.values()));
+
+          const cityMap = new Map<string, number>();
+          statsRes.forEach((lead) => {
+            const city = String(lead.cidade || '').trim();
+            if (!city || city === '-') return;
+            cityMap.set(city, (cityMap.get(city) || 0) + 1);
+          });
+          setTopCities(
+            Array.from(cityMap.entries())
+              .map(([city, leads]) => ({ city, leads }))
+              .sort((a, b) => b.leads - a.leads || a.city.localeCompare(b.city))
+              .slice(0, 5)
+          );
 
           if (accessToken) {
             const spendResults = await Promise.all(
@@ -238,6 +279,14 @@ export default function DashboardPage() {
   const currentMonthCpl = currentMonth.leads > 0 ? currentMonth.spend / currentMonth.leads : 0;
   const currentMonthConversion = currentMonth.leads > 0 ? (stats.soldThisMonth / currentMonth.leads) * 100 : 0;
   const chartHeight = 176;
+  const maxWeeklyLeads = Math.max(...weeklyLeads.map((day) => day.leads), 1);
+  const weeklyPoints = weeklyLeads.map((day, index) => {
+    const x = weeklyLeads.length === 1 ? 0 : (index / (weeklyLeads.length - 1)) * 100;
+    const y = 100 - (day.leads / maxWeeklyLeads) * 86 - 7;
+    return { ...day, x, y };
+  });
+  const weeklyPolyline = weeklyPoints.map((point) => `${point.x},${point.y}`).join(' ');
+  const maxCityLeads = Math.max(...topCities.map((city) => city.leads), 1);
 
   const quickActions = [
     { icon: Users, label: 'Leads', desc: 'Veja todos os contatos recebidos.', href: '/leads', color: 'blue' },
@@ -385,6 +434,72 @@ export default function DashboardPage() {
           <div className="mt-5 flex flex-wrap gap-3 text-[11px] font-black uppercase tracking-widest">
             <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-2 text-blue-700"><span className="h-2 w-2 rounded-full bg-blue-600" /> Investimento</span>
             <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Leads</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-12 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Últimos 7 dias</p>
+              <h2 className="text-2xl font-black text-gray-950">Leads nos Últimos 7 Dias</h2>
+            </div>
+            <p className="text-xs font-bold text-slate-400">{weeklyLeads.reduce((sum, day) => sum + day.leads, 0)} leads</p>
+          </div>
+          <div className="relative h-72 rounded-2xl border border-slate-100 bg-white px-4 pb-8 pt-4">
+            <div className="absolute inset-x-4 bottom-8 top-4 grid grid-rows-4">
+              {[0, 1, 2, 3].map((line) => (
+                <div key={line} className="border-t border-dashed border-slate-200" />
+              ))}
+            </div>
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="relative z-10 h-full w-full overflow-visible">
+              <polyline points={weeklyPolyline} fill="none" stroke="#2563eb" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+              {weeklyPoints.map((point) => (
+                <g key={point.key} className="group">
+                  <circle cx={point.x} cy={point.y} r="1.4" fill="#2563eb" vectorEffect="non-scaling-stroke" />
+                  <foreignObject x={Math.min(Math.max(point.x - 10, 0), 78)} y={Math.max(point.y - 27, 0)} width="22" height="18" className="pointer-events-none opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="rounded border border-slate-200 bg-white p-1 text-[3px] font-bold text-slate-600 shadow-sm">
+                      <p>{point.label}</p>
+                      <p className="text-blue-600">leads: {point.leads}</p>
+                    </div>
+                  </foreignObject>
+                </g>
+              ))}
+            </svg>
+            <div className="absolute inset-x-4 bottom-2 grid grid-cols-7 text-center text-xs font-bold text-slate-500">
+              {weeklyLeads.map((day) => <span key={day.key}>{day.label}</span>)}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Ranking</p>
+              <h2 className="text-2xl font-black text-gray-950">Top 5 Cidades</h2>
+            </div>
+            <p className="text-xs font-bold text-slate-400">Por volume de leads</p>
+          </div>
+          <div className="space-y-5">
+            {topCities.length > 0 ? topCities.map((city, index) => (
+              <div key={`${city.city}-${index}`}>
+                <div className="mb-2 flex items-center justify-between gap-4 text-sm">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="w-7 shrink-0 text-xs font-bold text-slate-400">#{index + 1}</span>
+                    <span className="truncate font-black text-gray-900">{city.city}</span>
+                  </div>
+                  <span className="shrink-0 text-xs font-bold text-slate-500">{city.leads} leads</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.max((city.leads / maxCityLeads) * 100, 8)}%` }} />
+                </div>
+              </div>
+            )) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 py-14 text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sem cidades registradas</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
