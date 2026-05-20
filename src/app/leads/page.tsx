@@ -21,6 +21,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
+import PhoneAction from '@/components/ui/PhoneAction';
 
 function normalizeText(value?: string | null) {
   return String(value || '')
@@ -413,7 +414,9 @@ export default function BrokerLeadsPage() {
                       {lead.data_entrada ? format(new Date(lead.data_entrada), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '-'}
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-gray-900">{lead.nome}</td>
-                    <td className="border border-slate-100 px-3 py-3 font-medium text-slate-600">{lead.telefone}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-medium text-slate-600">
+                      <PhoneAction phone={lead.telefone} />
+                    </td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.idades || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3">
                       <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${cnpjBadgeStyle(lead.possui_cnpj)}`}>

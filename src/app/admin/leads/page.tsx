@@ -22,6 +22,7 @@ import { Lead } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Link from 'next/link';
+import PhoneAction from '@/components/ui/PhoneAction';
 
 export default function AdminLeadsPage() {
   const [leads, setLeads] = useState<(Lead & { corretores: { nome: string } })[]>([]);
@@ -353,7 +354,9 @@ export default function AdminLeadsPage() {
                     <td className="px-6 py-5">
                       <p className="font-bold text-gray-900 text-sm group-hover:text-blue-600 transition-colors">{lead.nome}</p>
                     </td>
-                    <td className="px-6 py-5 text-sm text-slate-600 font-medium">{lead.telefone}</td>
+                    <td className="px-6 py-5 text-sm text-slate-600 font-medium">
+                      <PhoneAction phone={lead.telefone} />
+                    </td>
                     <td className="px-6 py-5 text-sm text-slate-500 font-medium">{lead.idades || '-'}</td>
                     <td className="px-6 py-5 text-[11px] font-black uppercase tracking-widest text-slate-400">
                       {lead.possui_cnpj}
