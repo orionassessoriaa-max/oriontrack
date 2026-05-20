@@ -22,11 +22,11 @@ import {
   Search,
   Send,
   Save,
-  Sparkles,
   Target,
   Upload,
   X
 } from 'lucide-react';
+import OrionMark from '@/components/ui/OrionMark';
 
 type WhatsAppConversa = {
   id: string;
@@ -485,7 +485,7 @@ export default function CrmPage() {
         <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} active={metricFilter === 'sem_resposta'} onClick={() => setMetricFilter('sem_resposta')} className="border-amber-100 bg-amber-50 text-amber-700" />
         <Stat label="Tarefas" value={openTasks} icon={Clock} active={metricFilter === 'tarefas'} onClick={() => setMetricFilter('tarefas')} className="border-blue-100 bg-blue-50 text-blue-700" />
         <Stat label="Hoje" value={todayTasks} icon={CheckCircle2} active={metricFilter === 'hoje'} onClick={() => setMetricFilter('hoje')} className="border-emerald-100 bg-emerald-50 text-emerald-700" />
-        <Stat label="Fit ICP" value={`${fitStats.good}/${fitStats.warning}`} icon={Sparkles} active={metricFilter === 'fit_icp'} onClick={() => setMetricFilter('fit_icp')} className="border-violet-100 bg-violet-50 text-violet-700" />
+        <Stat label="Fit ICP" value={`${fitStats.good}/${fitStats.warning}`} icon={OrionMark} active={metricFilter === 'fit_icp'} onClick={() => setMetricFilter('fit_icp')} className="border-violet-100 bg-violet-50 text-violet-700" />
       </div>
 
       {metricFilter !== 'todos' && (
@@ -573,7 +573,7 @@ export default function CrmPage() {
                       })}
                       {columnLeads.length === 0 && (
                         <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-white/60 py-12 text-center">
-                          <Sparkles size={20} className="mx-auto mb-2 text-slate-300" />
+                          <OrionMark size={18} className="mx-auto mb-2 opacity-25" />
                           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Sem leads aqui</p>
                         </div>
                       )}
@@ -850,7 +850,7 @@ function Stat({
 }: {
   label: string;
   value: number | string;
-  icon: typeof Target;
+  icon: typeof Target | typeof OrionMark;
   className: string;
   active?: boolean;
   onClick?: () => void;

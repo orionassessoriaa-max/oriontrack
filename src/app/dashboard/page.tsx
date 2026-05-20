@@ -18,13 +18,13 @@ import {
   GraduationCap,
   CalendarDays,
   Target,
-  Sparkles,
   Info,
   AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { getTeamMemberPhoto } from '@/lib/orionTeam';
+import OrionMark from '@/components/ui/OrionMark';
 
 type CorretorDashboardData = {
   id: string;
@@ -262,7 +262,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
         <div className="lg:col-span-2 bg-gradient-to-br from-blue-600 to-indigo-700 p-10 rounded-[2.5rem] text-white shadow-xl shadow-blue-600/20 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
-            <Sparkles size={120} />
+            <OrionMark size={70} variant="light" />
           </div>
           <div className="relative z-10">
             <h2 className="text-2xl font-black mb-4">Seu painel comercial</h2>
