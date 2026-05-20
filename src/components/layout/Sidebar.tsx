@@ -43,8 +43,8 @@ type SidebarProps = {
 export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, stopViewingAsCorretor } = useAuth();
-  const isViewingAsUser = isViewingAsCorretor || isViewingAsGestor;
+  const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, isViewingAsDesigner, isViewingAsAccount, stopViewingAsCorretor } = useAuth();
+  const isViewingAsUser = isViewingAsCorretor || isViewingAsGestor || isViewingAsDesigner || isViewingAsAccount;
   const isMasterAdmin = Boolean(actualProfile?.is_admin_master) || [actualProfile?.email, actualProfile?.email_real]
     .filter(Boolean)
     .map((email) => String(email).toLowerCase())
@@ -151,7 +151,9 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
           {isViewingAsUser && (
             <div className="mt-4 border border-amber-400/20 bg-amber-400/10 p-3">
               <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">Modo admin</p>
-              <p className="mt-1 text-xs font-bold text-white">Voce esta acessando como {isViewingAsGestor ? 'gestor' : 'corretor'}.</p>
+              <p className="mt-1 text-xs font-bold text-white">
+                Voce esta acessando como {isViewingAsGestor ? 'gestor' : isViewingAsDesigner ? 'designer' : isViewingAsAccount ? 'account' : 'corretor'}.
+              </p>
               <button
                 onClick={stopViewingAsCorretor}
                 className="mt-3 flex w-full items-center justify-center gap-2 bg-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/15"

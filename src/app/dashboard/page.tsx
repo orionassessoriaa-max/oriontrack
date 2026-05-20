@@ -100,6 +100,7 @@ export default function DashboardPage() {
   });
   const [monthlyPerformance, setMonthlyPerformance] = useState<MonthlyPerformance[]>(getLastMonths());
   const [loadingData, setLoadingData] = useState(true);
+  const [chartHovering, setChartHovering] = useState(false);
 
   useEffect(() => {
     async function fetchCorretorData() {
@@ -337,20 +338,32 @@ export default function DashboardPage() {
             </div>
             <p className="text-xs font-bold text-slate-400">Últimos 6 meses</p>
           </div>
-          <div className="grid min-h-72 grid-cols-6 items-end gap-3">
-            {monthlyPerformance.map((month) => (
+          <div
+            className="grid min-h-72 grid-cols-6 items-end gap-3"
+            onMouseEnter={() => setChartHovering(true)}
+            onMouseLeave={() => setChartHovering(false)}
+          >
+            {monthlyPerformance.map((month, index) => (
               <div key={month.key} className="flex h-full flex-col justify-end gap-3">
                 <div className="flex h-48 items-end gap-1.5 rounded-2xl bg-slate-50 px-2 pb-2">
                   <div className="flex flex-1 flex-col items-center justify-end">
                     <div
-                      className="w-full rounded-t-lg bg-gradient-to-t from-blue-700 to-blue-400 shadow-sm shadow-blue-500/20"
-                      style={{ height: `${Math.max((month.spend / maxMonthlySpend) * chartHeight, month.spend > 0 ? 14 : 0)}px` }}
+                      className="w-full origin-bottom rounded-t-lg bg-gradient-to-t from-blue-700 to-blue-400 shadow-sm shadow-blue-500/20 transition-all duration-700 ease-out"
+                      style={{
+                        height: `${Math.max((month.spend / maxMonthlySpend) * chartHeight, month.spend > 0 ? 14 : 0)}px`,
+                        transform: chartHovering ? 'scaleY(1.08)' : 'scaleY(1)',
+                        transitionDelay: chartHovering ? `${index * 90}ms` : '0ms',
+                      }}
                     />
                   </div>
                   <div className="flex flex-1 flex-col items-center justify-end">
                     <div
-                      className="w-full rounded-t-lg bg-gradient-to-t from-emerald-600 to-emerald-300 shadow-sm shadow-emerald-500/20"
-                      style={{ height: `${Math.max((month.leads / maxMonthlyLeads) * chartHeight, month.leads > 0 ? 14 : 0)}px` }}
+                      className="w-full origin-bottom rounded-t-lg bg-gradient-to-t from-emerald-600 to-emerald-300 shadow-sm shadow-emerald-500/20 transition-all duration-700 ease-out"
+                      style={{
+                        height: `${Math.max((month.leads / maxMonthlyLeads) * chartHeight, month.leads > 0 ? 14 : 0)}px`,
+                        transform: chartHovering ? 'scaleY(1.08)' : 'scaleY(1)',
+                        transitionDelay: chartHovering ? `${index * 90 + 45}ms` : '0ms',
+                      }}
                     />
                   </div>
                 </div>

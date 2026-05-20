@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useCorretoresOptions } from '@/hooks/useCorretoresOptions';
 import { supabase } from '@/lib/supabase/client';
-import { CalendarDays, ClipboardList, Loader2, Plus, Upload } from 'lucide-react';
+import { CalendarDays, ClipboardList, Loader2, Plus, Trash2, Upload } from 'lucide-react';
 
 type Demand = {
   id: string;
@@ -49,6 +49,7 @@ export default function CreativeDemandsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState(initialForm);
   const canUpload = ['admin', 'designer', 'account_manager'].includes(profile?.tipo_usuario || '');
 
@@ -139,6 +140,28 @@ export default function CreativeDemandsPage() {
     await fetchDemands();
   };
 
+  const deleteDemand = async (demand: Demand) => {
+    if (!window.confirm(`Remover a demanda "${demand.titulo}" e os criativos enviados para o corretor?`)) return;
+
+    setDeletingId(demand.id);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    const response = await fetch(`/api/criativos/demandas?id=${demand.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json();
+    setDeletingId(null);
+
+    if (!response.ok) {
+      alert(payload.error || 'Erro ao remover demanda.');
+      return;
+    }
+
+    await fetchDemands();
+  };
+
   return (
     <InternalLayout>
       <div className="mb-8">
@@ -187,6 +210,7 @@ export default function CreativeDemandsPage() {
             </div>
           ) : demands.map((demand) => {
             const status = visibleStatus(demand);
+            const canDelete = canUpload && ['entregue', 'feito', 'aprovado', 'revisao'].includes(status);
             return (
               <div key={demand.id} className="border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-col justify-between gap-4 lg:flex-row">
@@ -212,6 +236,16 @@ export default function CreativeDemandsPage() {
                       <button disabled={uploadingId === demand.id} className="flex w-full items-center justify-center gap-2 bg-slate-950 p-3 text-xs font-black uppercase tracking-widest text-white disabled:opacity-50">
                         {uploadingId === demand.id ? <Loader2 className="animate-spin" size={15} /> : <Upload size={15} />} Entregar criativo
                       </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => deleteDemand(demand)}
+                          disabled={deletingId === demand.id}
+                          className="flex w-full items-center justify-center gap-2 border border-red-100 bg-red-50 p-3 text-xs font-black uppercase tracking-widest text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
+                        >
+                          {deletingId === demand.id ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />} Remover entrega
+                        </button>
+                      )}
                     </form>
                   )}
                 </div>

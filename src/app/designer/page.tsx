@@ -1,53 +1,175 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import InternalLayout from '@/components/layout/InternalLayout';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Clock, ClipboardList, Palette, Upload } from 'lucide-react';
+import { CheckCircle2, Clock, ClipboardList, Loader2, MessageSquare, Palette, Trash2, Upload } from 'lucide-react';
+
+type DemandStatus = 'pendente' | 'atrasado' | 'feito' | 'entregue' | 'aprovado' | 'revisao';
+type AssetStatus = 'em_aprovacao' | 'aprovado' | 'revisao' | 'rodando';
+type FilterKey = 'pendentes' | 'atrasadas' | 'entregues' | 'aprovados' | 'revisao' | 'arquivos';
+
+type Demand = {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  tipo_criativo: 'novo_criativo' | 'otimizacao';
+  corretor_id: string | null;
+  meta_account_id: string | null;
+  data_entrega: string | null;
+  status: DemandStatus;
+  created_at: string;
+  corretores?: { nome: string | null; time_operacional?: unknown } | null;
+};
+
+type CreativeAsset = {
+  id: string;
+  demanda_id: string | null;
+  corretor_id: string | null;
+  titulo: string;
+  descricao: string | null;
+  arquivo_url: string | null;
+  status: AssetStatus;
+  comentario_corretor: string | null;
+  created_at: string;
+  corretores?: { nome: string | null; time_operacional?: unknown } | null;
+};
+
+function visibleStatus(demand: Demand) {
+  if (demand.status !== 'pendente') return demand.status;
+  if (demand.data_entrega && new Date(`${demand.data_entrega}T23:59:59`) < new Date()) return 'atrasado';
+  return 'pendente';
+}
+
+function statusClass(status: string) {
+  if (status === 'aprovado' || status === 'entregue' || status === 'feito') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (status === 'revisao') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (status === 'atrasado') return 'bg-red-50 text-red-700 border-red-200';
+  return 'bg-blue-50 text-blue-700 border-blue-200';
+}
+
+function isResponsibleForDesigner(item: Demand | CreativeAsset, profileId?: string | null) {
+  if (!profileId) return true;
+  const team = item.corretores?.time_operacional;
+  if (!Array.isArray(team)) return true;
+  return team.some((member) => {
+    if (!member || typeof member !== 'object') return false;
+    const data = member as { profile_id?: string; id?: string };
+    return data.profile_id === profileId || data.id === profileId;
+  });
+}
 
 export default function DesignerHomePage() {
-  const [stats, setStats] = useState({ pendentes: 0, atrasadas: 0, entregues: 0, assets: 0 });
+  const { profile } = useAuth();
+  const [filter, setFilter] = useState<FilterKey>('pendentes');
+  const [demands, setDemands] = useState<Demand[]>([]);
+  const [assets, setAssets] = useState<CreativeAsset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    const [{ data: demandRows }, { data: assetRows }] = await Promise.all([
+      supabase
+        .from('criativo_demandas')
+        .select('*, corretores:corretor_id(nome, time_operacional)')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('criativo_assets')
+        .select('*, corretores:corretor_id(nome, time_operacional)')
+        .order('created_at', { ascending: false }),
+    ]);
+
+    const shouldFilterByDesigner = profile?.tipo_usuario === 'designer';
+    const visibleDemands = ((demandRows || []) as Demand[]).filter((item) =>
+      shouldFilterByDesigner ? isResponsibleForDesigner(item, profile?.id) : true
+    );
+    const visibleAssets = ((assetRows || []) as CreativeAsset[]).filter((item) =>
+      shouldFilterByDesigner ? isResponsibleForDesigner(item, profile?.id) : true
+    );
+
+    setDemands(visibleDemands);
+    setAssets(visibleAssets);
+    setLoading(false);
+  }
 
   useEffect(() => {
-    const load = async () => {
-      const [{ data: demands }, { data: assets }] = await Promise.all([
-        supabase.from('criativo_demandas').select('id, status, data_entrega'),
-        supabase.from('criativo_assets').select('id'),
-      ]);
+    void load();
+  }, [profile?.id, profile?.tipo_usuario]);
 
-      const today = new Date();
-      setStats({
-        pendentes: (demands || []).filter((item) => item.status === 'pendente').length,
-        atrasadas: (demands || []).filter((item) => item.status === 'pendente' && item.data_entrega && new Date(`${item.data_entrega}T23:59:59`) < today).length,
-        entregues: (demands || []).filter((item) => ['entregue', 'aprovado', 'feito'].includes(item.status)).length,
-        assets: (assets || []).length,
-      });
+  const stats = useMemo(() => {
+    return {
+      pendentes: demands.filter((item) => visibleStatus(item) === 'pendente').length,
+      atrasadas: demands.filter((item) => visibleStatus(item) === 'atrasado').length,
+      entregues: demands.filter((item) => ['entregue', 'feito'].includes(item.status)).length,
+      aprovados: assets.filter((item) => item.status === 'aprovado').length,
+      revisao: assets.filter((item) => item.status === 'revisao').length,
+      arquivos: assets.length,
     };
+  }, [demands, assets]);
 
-    load();
-  }, []);
+  const filteredDemands = demands.filter((item) => {
+    const status = visibleStatus(item);
+    if (filter === 'pendentes') return status === 'pendente';
+    if (filter === 'atrasadas') return status === 'atrasado';
+    if (filter === 'entregues') return ['entregue', 'feito'].includes(status);
+    return false;
+  });
+
+  const filteredAssets = assets.filter((item) => {
+    if (filter === 'aprovados') return item.status === 'aprovado';
+    if (filter === 'revisao') return item.status === 'revisao';
+    if (filter === 'arquivos') return true;
+    return false;
+  });
+
+  const deleteDemand = async (demand: Demand) => {
+    if (!window.confirm(`Remover a demanda "${demand.titulo}" e esconder a entrega do corretor?`)) return;
+
+    setDeletingId(demand.id);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    const response = await fetch(`/api/criativos/demandas?id=${demand.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json();
+    setDeletingId(null);
+
+    if (!response.ok) {
+      alert(payload.error || 'Erro ao remover demanda.');
+      return;
+    }
+
+    await load();
+  };
+
+  const showingAssets = ['aprovados', 'revisao', 'arquivos'].includes(filter);
 
   return (
     <InternalLayout>
       <div className="mb-8">
         <p className="text-xs font-black uppercase tracking-widest text-blue-600">Designer</p>
         <h1 className="text-3xl font-black text-slate-950">Painel de criativos</h1>
-        <p className="mt-2 text-sm font-bold text-slate-500">Gerencie demandas, entregue ofertas e acompanhe o que ja subiu para os corretores.</p>
+        <p className="mt-2 text-sm font-bold text-slate-500">Gerencie demandas, entregue ofertas e acompanhe aprovacoes e revisoes dos corretores.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Counter icon={Clock} label="Pendentes" value={stats.pendentes} tone="blue" />
-        <Counter icon={Clock} label="Atrasadas" value={stats.atrasadas} tone="red" />
-        <Counter icon={CheckCircle2} label="Entregues" value={stats.entregues} tone="emerald" />
-        <Counter icon={Palette} label="Arquivos" value={stats.assets} tone="slate" />
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <Counter active={filter === 'pendentes'} onClick={() => setFilter('pendentes')} icon={Clock} label="Pendentes" value={stats.pendentes} tone="blue" />
+        <Counter active={filter === 'atrasadas'} onClick={() => setFilter('atrasadas')} icon={Clock} label="Atrasadas" value={stats.atrasadas} tone="red" />
+        <Counter active={filter === 'entregues'} onClick={() => setFilter('entregues')} icon={CheckCircle2} label="Entregues" value={stats.entregues} tone="emerald" />
+        <Counter active={filter === 'aprovados'} onClick={() => setFilter('aprovados')} icon={CheckCircle2} label="Aprovados" value={stats.aprovados} tone="emerald" />
+        <Counter active={filter === 'revisao'} onClick={() => setFilter('revisao')} icon={MessageSquare} label="Para revisar" value={stats.revisao} tone="amber" />
+        <Counter active={filter === 'arquivos'} onClick={() => setFilter('arquivos')} icon={Palette} label="Arquivos" value={stats.arquivos} tone="slate" />
       </div>
 
-      <div className="mt-8 grid gap-5 md:grid-cols-2">
+      <div className="mt-6 grid gap-5 md:grid-cols-2">
         <Link href="/criativos/demandas" className="group border border-slate-200 bg-white p-6 shadow-sm transition hover:border-blue-300">
           <ClipboardList className="text-blue-600" size={28} />
           <h2 className="mt-5 text-xl font-black text-slate-950">Demandas</h2>
-          <p className="mt-2 text-sm font-bold text-slate-500">Ver solicitacoes, prazos e subir o criativo dentro da demanda.</p>
+          <p className="mt-2 text-sm font-bold text-slate-500">Ver solicitacoes, prazos, excluir entregas e subir o criativo dentro da demanda.</p>
         </Link>
         <Link href="/designer/ofertas" className="group border border-slate-200 bg-white p-6 shadow-sm transition hover:border-blue-300">
           <Upload className="text-blue-600" size={28} />
@@ -55,23 +177,119 @@ export default function DesignerHomePage() {
           <p className="mt-2 text-sm font-bold text-slate-500">Selecionar corretor, subir criativos avulsos e consultar historico de entregas.</p>
         </Link>
       </div>
+
+      <section className="mt-8 border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-5">
+          <h2 className="text-lg font-black text-slate-950">
+            {showingAssets ? filter === 'revisao' ? 'Criativos para revisar' : filter === 'aprovados' ? 'Criativos aprovados' : 'Arquivos enviados' : 'Demandas'}
+          </h2>
+          <p className="mt-1 text-xs font-bold text-slate-500">Clique nos quadros acima para alternar a lista.</p>
+        </div>
+
+        {loading ? (
+          <div className="flex h-56 items-center justify-center">
+            <Loader2 className="animate-spin text-blue-600" size={34} />
+          </div>
+        ) : showingAssets ? (
+          filteredAssets.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {filteredAssets.map((asset) => (
+                <div key={asset.id} className="grid gap-4 p-5 md:grid-cols-[96px_1fr_auto] md:items-center">
+                  <div className="h-24 w-24 overflow-hidden border border-slate-200 bg-slate-50">
+                    {asset.arquivo_url ? <img src={asset.arquivo_url} alt={asset.titulo} className="h-full w-full object-cover" /> : <Palette className="m-8 text-slate-300" />}
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${statusClass(asset.status)}`}>{asset.status}</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{asset.corretores?.nome || 'Sem corretor'}</span>
+                    </div>
+                    <h3 className="mt-2 text-lg font-black text-slate-950">{asset.titulo}</h3>
+                    <p className="mt-1 text-sm font-bold text-slate-500">{asset.descricao || 'Sem descricao'}</p>
+                    {asset.comentario_corretor && (
+                      <p className="mt-3 border-l-4 border-amber-400 bg-amber-50 p-3 text-xs font-bold text-amber-900">{asset.comentario_corretor}</p>
+                    )}
+                  </div>
+                  {asset.arquivo_url && (
+                    <a href={asset.arquivo_url} target="_blank" className="bg-slate-950 px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white">
+                      Abrir
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        ) : filteredDemands.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {filteredDemands.map((demand) => {
+              const status = visibleStatus(demand);
+              const canDelete = ['entregue', 'feito', 'aprovado', 'revisao'].includes(status);
+              return (
+                <div key={demand.id} className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${statusClass(status)}`}>{status}</span>
+                      <span className="bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600">{demand.tipo_criativo === 'otimizacao' ? 'Otimizacao' : 'Novo criativo'}</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{demand.corretores?.nome || 'Sem corretor'}</span>
+                    </div>
+                    <h3 className="mt-2 text-lg font-black text-slate-950">{demand.titulo}</h3>
+                    <p className="mt-1 text-sm font-bold text-slate-500">{demand.descricao || 'Sem briefing detalhado'}</p>
+                    <p className="mt-2 text-xs font-black uppercase tracking-widest text-slate-400">Prazo: {demand.data_entrega || 'sem prazo'} | Conta: {demand.meta_account_id || 'sem conta'}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href="/criativos/demandas" className="bg-blue-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+                      Abrir demanda
+                    </Link>
+                    {canDelete && (
+                      <button
+                        onClick={() => deleteDemand(demand)}
+                        disabled={deletingId === demand.id}
+                        className="flex items-center gap-2 border border-red-100 bg-red-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-600"
+                      >
+                        {deletingId === demand.id ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />} Remover
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </InternalLayout>
   );
 }
 
-function Counter({ icon: Icon, label, value, tone }: { icon: any; label: string; value: number; tone: string }) {
+function Counter({ icon: Icon, label, value, tone, active, onClick }: { icon: any; label: string; value: number; tone: string; active: boolean; onClick: () => void }) {
   const tones: Record<string, string> = {
     blue: 'bg-blue-50 text-blue-700 border-blue-100',
     red: 'bg-red-50 text-red-700 border-red-100',
     emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    amber: 'bg-amber-50 text-amber-700 border-amber-100',
     slate: 'bg-slate-50 text-slate-700 border-slate-100',
   };
 
   return (
-    <div className={`border p-5 ${tones[tone]}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`border p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${tones[tone]} ${active ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+    >
       <Icon size={20} />
       <p className="mt-4 text-[10px] font-black uppercase tracking-widest">{label}</p>
       <p className="mt-2 text-3xl font-black">{value}</p>
+    </button>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="p-12 text-center">
+      <Palette className="mx-auto text-slate-300" size={38} />
+      <p className="mt-4 text-xs font-black uppercase tracking-widest text-slate-400">Nada encontrado nesta etapa</p>
     </div>
   );
 }
