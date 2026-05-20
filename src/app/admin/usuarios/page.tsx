@@ -9,6 +9,7 @@ import { OPERADORAS_ONBOARDING } from '@/lib/onboarding';
 import { buildOperationalTeamMembers, getTeamMemberAvatar, isTrafficManagerMember, OrionTeamMember } from '@/lib/orionTeam';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Camera, CheckCircle2, Copy, KeyRound, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 type Credentials = {
   email: string;
@@ -35,7 +36,8 @@ const initialForm = {
 const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
 
 export default function AdminUsuariosPage() {
-  const { user } = useAuth();
+  const { user, startViewingAsCorretor, startViewingAsGestor } = useAuth();
+  const router = useRouter();
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [form, setForm] = useState(initialForm);
@@ -222,6 +224,30 @@ export default function AdminUsuariosPage() {
     navigator.clipboard.writeText(
       `ORION TRACK\nLogin: ${credentials.email}\nSenha provisória: ${credentials.senha_provisoria}\nAcesse: ${credentials.link_login}`
     );
+  }
+
+  async function openUserPanel(profile: Profile) {
+    if (profile.tipo_usuario === 'corretor') {
+      if (profile.corretor_id) await startViewingAsCorretor(profile.corretor_id);
+      return;
+    }
+
+    if (profile.tipo_usuario === 'gestor_trafego') {
+      await startViewingAsGestor(profile.id);
+      return;
+    }
+
+    if (profile.tipo_usuario === 'designer') {
+      router.push('/designer');
+      return;
+    }
+
+    if (profile.tipo_usuario === 'account_manager') {
+      router.push('/account');
+      return;
+    }
+
+    router.push('/admin');
   }
 
   return (
@@ -508,7 +534,12 @@ export default function AdminUsuariosPage() {
 
                 return (
                   <div key={profile.id} className="flex flex-col gap-4 p-5 transition-colors hover:bg-blue-50/30 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => void openUserPanel(profile)}
+                      className="flex flex-1 items-center gap-4 text-left"
+                      title={`Abrir painel de ${profile.nome}`}
+                    >
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-white">
                         {profile.tipo_usuario === 'admin' ? <Shield size={20} /> : profile.nome.slice(0, 2).toUpperCase()}
                       </div>
@@ -534,7 +565,7 @@ export default function AdminUsuariosPage() {
                           </p>
                         )}
                       </div>
-                    </div>
+                    </button>
 
                     {isOwnAccess || isMasterAccess ? (
                       <span className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">

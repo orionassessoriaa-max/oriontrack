@@ -179,34 +179,42 @@ export default function AdminCentralPage() {
 
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-        <StatCard 
-          title="Corretores Ativos" 
-          value={stats.totalCorretores} 
-          icon={Users} 
-          color="blue" 
-          loading={loading}
-        />
-        <StatCard 
-          title="Leads Totais" 
-          value={stats.totalLeads} 
-          icon={FileSearch} 
-          color="purple" 
-          loading={loading}
-        />
-        <StatCard 
-          title="Entradas Hoje" 
-          value={stats.leadsHoje} 
-          icon={TrendingUp} 
-          color="green" 
-          loading={loading}
-        />
-        <StatCard 
-          title="Suporte Pendente" 
-          value={stats.suportePendente} 
-          icon={Clock} 
-          color="orange" 
-          loading={loading}
-        />
+        <Link href="/admin/corretores">
+          <StatCard
+            title="Corretores Ativos"
+            value={stats.totalCorretores}
+            icon={Users}
+            color="blue"
+            loading={loading}
+          />
+        </Link>
+        <Link href="/admin/leads">
+          <StatCard
+            title="Leads Totais"
+            value={stats.totalLeads}
+            icon={FileSearch}
+            color="purple"
+            loading={loading}
+          />
+        </Link>
+        <Link href="/admin/leads">
+          <StatCard
+            title="Entradas Hoje"
+            value={stats.leadsHoje}
+            icon={TrendingUp}
+            color="green"
+            loading={loading}
+          />
+        </Link>
+        <Link href="/admin/suporte">
+          <StatCard
+            title="Suporte Pendente"
+            value={stats.suportePendente}
+            icon={Clock}
+            color="orange"
+            loading={loading}
+          />
+        </Link>
       </div>
 
       {/* Corretores por Gestor Section */}

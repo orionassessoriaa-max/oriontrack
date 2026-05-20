@@ -55,9 +55,9 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Shield, label: 'Usuarios', href: '/admin/usuarios' },
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
     { icon: UserCog, label: 'Gestores de Trafego', href: '/admin/gestores' },
+    { icon: Palette, label: 'Designer', href: '/admin/designers' },
+    { icon: MessageSquare, label: 'Account', href: '/admin/accounts' },
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
-    { icon: Palette, label: 'Painel Designer', href: '/designer' },
-    { icon: MessageSquare, label: 'Painel Account', href: '/account' },
     { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
     { icon: Globe, label: 'Paginas', href: '/admin/paginas' },
     ...(isMasterAdmin ? [{ icon: Settings, label: 'Meta Ads', href: '/admin/meta' }] : []),
@@ -78,7 +78,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   ];
 
   const designerMenu = [
-    { icon: Palette, label: 'Painel Designer', href: '/designer' },
+    { icon: Palette, label: 'Designer', href: '/designer' },
     { icon: ClipboardList, label: 'Demandas', href: '/designer/demandas' },
     { icon: FileText, label: 'Ofertas', href: '/designer/ofertas' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
@@ -86,7 +86,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   ];
 
   const accountMenu = [
-    { icon: Home, label: 'Visao Geral', href: '/account' },
+    { icon: Home, label: 'Account', href: '/account' },
     { icon: MessageSquare, label: 'Inbox', href: '/account/inbox' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
     { icon: FileSearch, label: 'Leads', href: '/admin/leads' },
