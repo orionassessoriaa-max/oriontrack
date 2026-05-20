@@ -204,9 +204,9 @@ export default function TrafficLeadsPage() {
                   <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Plano ativo</th>
                   <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Cidade</th>
                   <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Investimento</th>
+                  <th className="px-6 py-5 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
                   <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Página / Operadora</th>
                   <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">UTMs / Observacoes</th>
-                  <th className="px-6 py-5 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -229,14 +229,14 @@ export default function TrafficLeadsPage() {
                     <td className="px-6 py-5 text-[11px] font-black uppercase tracking-widest text-slate-500">{lead.tem_plano_ativo || '-'}</td>
                     <td className="px-6 py-5 text-sm font-medium text-slate-500">{lead.cidade || '-'}</td>
                     <td className="px-6 py-5 text-sm font-bold text-slate-600">{lead.investimento || '-'}</td>
-                    <td className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-600">{sheetTabLabel(lead.operadora)}</td>
-                    <td className="px-6 py-5 text-xs font-bold leading-relaxed text-slate-500">
-                      <div className="max-w-[380px] whitespace-normal">{lead.observacoes || '-'}</div>
-                    </td>
                     <td className="px-6 py-5 text-center">
                       <span className="inline-block rounded-full bg-blue-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-blue-600">
                         {lead.status}
                       </span>
+                    </td>
+                    <td className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-600">{sheetTabLabel(lead.operadora)}</td>
+                    <td className="px-6 py-5 text-xs font-bold leading-relaxed text-slate-500">
+                      <div className="max-w-[380px] whitespace-normal">{lead.observacoes || '-'}</div>
                     </td>
                   </tr>
                 ))}
