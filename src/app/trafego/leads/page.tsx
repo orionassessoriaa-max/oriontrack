@@ -204,7 +204,7 @@ export default function TrafficLeadsPage() {
                   <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Plano ativo</th>
                   <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Cidade</th>
                   <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Investimento</th>
-                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Aba da planilha</th>
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Página / Operadora</th>
                   <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">UTMs / Observacoes</th>
                   <th className="px-6 py-5 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
                 </tr>
