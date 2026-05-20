@@ -354,11 +354,6 @@ export default function AdminUsuariosPage() {
                 <option value="account_manager">Account manager</option>
                 {isMasterAdmin && <option value="admin">Admin / Diretor</option>}
               </select>
-              {!isMasterAdmin && (
-                <p className="mt-2 text-[11px] font-bold text-amber-600">
-                  Somente o admin master Ewertton pode criar outros admins.
-                </p>
-              )}
             </div>
 
             <div>

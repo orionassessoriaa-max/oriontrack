@@ -65,6 +65,39 @@ function qualificationClass(tone: 'good' | 'warning' | 'neutral') {
   return 'border-slate-200 bg-slate-50 text-slate-600';
 }
 
+const COMMERCIAL_REQUIRED_STATUSES: LeadStatus[] = [
+  'Em negociação',
+  'Não tive retorno',
+  'Venda realizada',
+  'Sem interesse',
+];
+
+function parseCurrencyInput(value?: string | number | null) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const cleaned = String(value || '')
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\.(?=\d{3}(,|$))/g, '')
+    .replace(',', '.');
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCurrencyValue(value?: string | number | null) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseCurrencyInput(value));
+}
+
+function requiresCommercialData(status: LeadStatus) {
+  return COMMERCIAL_REQUIRED_STATUSES.includes(status);
+}
+
+type CommercialPayload = {
+  valor_negociacao: number;
+  operadora_negociacao: string;
+  tipo_plano: string;
+  valor_venda: number;
+  valor_comissao: number;
+};
+
 export default function CrmPage() {
   const { profile } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -91,6 +124,11 @@ export default function CrmPage() {
     investimento: '',
     cidade: '',
     operadora: '',
+    valor_negociacao: '',
+    operadora_negociacao: '',
+    tipo_plano: '',
+    valor_venda: '',
+    valor_comissao: '',
     observacoes: '',
     status: 'Aguardando atendimento' as LeadStatus,
   });
@@ -201,6 +239,11 @@ export default function CrmPage() {
         investimento: selectedLead.investimento || '',
         cidade: selectedLead.cidade || '',
         operadora: selectedLead.operadora || '',
+        valor_negociacao: selectedLead.valor_negociacao ? String(selectedLead.valor_negociacao) : '',
+        operadora_negociacao: selectedLead.operadora_negociacao || '',
+        tipo_plano: selectedLead.tipo_plano || '',
+        valor_venda: selectedLead.valor_venda ? String(selectedLead.valor_venda) : '',
+        valor_comissao: selectedLead.valor_comissao ? String(selectedLead.valor_comissao) : '',
         observacoes: selectedLead.observacoes || '',
         status: normalizeLeadStatus(selectedLead.status),
       });
@@ -266,14 +309,61 @@ export default function CrmPage() {
     return filteredLeads.filter((lead) => normalizeLeadStatus(lead.status) === status);
   }
 
+  function getCommercialTotal(status: LeadStatus) {
+    return getLeadsByStatus(status).reduce((total, lead) => {
+      return total + parseCurrencyInput(lead.valor_venda || lead.valor_negociacao);
+    }, 0);
+  }
+
+  function collectCommercialPayload(lead: Lead, status: LeadStatus): CommercialPayload | null {
+    if (!requiresCommercialData(status)) return null;
+
+    const valorNegociacao = window.prompt('Valor da negociação/contrato. Ex: 1200', String(lead.valor_negociacao || lead.valor_venda || ''));
+    if (!valorNegociacao) return null;
+
+    const operadoraNegociacao = window.prompt('Operadora da negociação. Ex: Amil, Bradesco, Porto', lead.operadora_negociacao || lead.operadora || '');
+    if (!operadoraNegociacao) return null;
+
+    const tipoPlano = window.prompt('Tipo do plano. Ex: PME, Individual, Adesão, Empresarial', lead.tipo_plano || '');
+    if (!tipoPlano) return null;
+
+    const valorVenda = window.prompt('Valor da venda. Ex: 1200', String(lead.valor_venda || valorNegociacao));
+    if (!valorVenda) return null;
+
+    const valorComissao = window.prompt('Valor da comissão. Ex: 240', String(lead.valor_comissao || ''));
+    if (!valorComissao) return null;
+
+    const payload = {
+      valor_negociacao: parseCurrencyInput(valorNegociacao),
+      operadora_negociacao: operadoraNegociacao.trim(),
+      tipo_plano: tipoPlano.trim(),
+      valor_venda: parseCurrencyInput(valorVenda),
+      valor_comissao: parseCurrencyInput(valorComissao),
+    };
+
+    if (!payload.valor_negociacao || !payload.operadora_negociacao || !payload.tipo_plano || !payload.valor_venda || !payload.valor_comissao) {
+      alert('Para avançar para negociação em diante, preencha valor da negociação, operadora, tipo do plano, valor da venda e comissão.');
+      return null;
+    }
+
+    return payload;
+  }
+
   async function updateLeadStatus(leadId: string, status: LeadStatus) {
+    const currentLead = leads.find((lead) => lead.id === leadId);
+    if (!currentLead) return;
+
+    const commercialPayload = collectCommercialPayload(currentLead, status);
+    if (requiresCommercialData(status) && !commercialPayload) return;
+
     const previousLeads = leads;
-    setLeads((prev) => prev.map((lead) => lead.id === leadId ? { ...lead, status } : lead));
-    setSelectedLead((current) => current?.id === leadId ? { ...current, status } : current);
+    const optimisticPayload = { ...(commercialPayload || {}), status };
+    setLeads((prev) => prev.map((lead) => lead.id === leadId ? { ...lead, ...optimisticPayload } : lead));
+    setSelectedLead((current) => current?.id === leadId ? { ...current, ...optimisticPayload } : current);
 
     const { error: updateError } = await supabase
       .from('leads')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({ ...optimisticPayload, updated_at: new Date().toISOString() })
       .eq('id', leadId);
 
     if (updateError) {
@@ -403,6 +493,14 @@ export default function CrmPage() {
     event.preventDefault();
     if (!selectedLead) return;
 
+    if (requiresCommercialData(editForm.status)) {
+      const hasCommercialData = editForm.valor_negociacao && editForm.operadora_negociacao && editForm.tipo_plano && editForm.valor_venda && editForm.valor_comissao;
+      if (!hasCommercialData) {
+        alert('Para salvar lead em negociação em diante, preencha valor da negociação, operadora, tipo do plano, valor da venda e comissão.');
+        return;
+      }
+    }
+
     setSaving(true);
     const { error: updateError } = await supabase
       .from('leads')
@@ -417,6 +515,11 @@ export default function CrmPage() {
         investimento: editForm.investimento,
         cidade: editForm.cidade,
         operadora: editForm.operadora || null,
+        valor_negociacao: editForm.valor_negociacao ? parseCurrencyInput(editForm.valor_negociacao) : null,
+        operadora_negociacao: editForm.operadora_negociacao || null,
+        tipo_plano: editForm.tipo_plano || null,
+        valor_venda: editForm.valor_venda ? parseCurrencyInput(editForm.valor_venda) : null,
+        valor_comissao: editForm.valor_comissao ? parseCurrencyInput(editForm.valor_comissao) : null,
         observacoes: editForm.observacoes || null,
         status: editForm.status,
         updated_at: new Date().toISOString(),
@@ -514,6 +617,7 @@ export default function CrmPage() {
               {columns.map((column) => {
                 const columnLeads = getLeadsByStatus(column.id);
                 const statusStyle = getLeadStatusStyle(column.id);
+                const commercialTotal = getCommercialTotal(column.id);
 
                 return (
                   <div key={column.id} className="min-w-[310px] flex-1 snap-start">
@@ -530,6 +634,12 @@ export default function CrmPage() {
                           {columnLeads.length}
                         </span>
                       </div>
+                      {requiresCommercialData(column.id) && (
+                        <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Total na etapa</p>
+                          <p className="text-sm font-black text-emerald-800">{formatCurrencyValue(commercialTotal)}</p>
+                        </div>
+                      )}
                     </div>
 
                     <div
@@ -564,6 +674,12 @@ export default function CrmPage() {
                               <span className="col-span-2 rounded-xl bg-blue-50 px-2 py-1 text-blue-700">Pagina: {lead.operadora || 'Sem pagina'}</span>
                               <span>{lead.cidade || 'Cidade nao informada'}</span>
                               <span>{lead.investimento || 'Sem investimento'}</span>
+                              {requiresCommercialData(normalizeLeadStatus(lead.status)) && (
+                                <>
+                                  <span>Contrato: {formatCurrencyValue(lead.valor_venda || lead.valor_negociacao)}</span>
+                                  <span>Comissão: {formatCurrencyValue(lead.valor_comissao)}</span>
+                                </>
+                              )}
                             </div>
                             <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-widest ${qualificationClass(qualification.tone)}`}>
                               {qualification.label}
@@ -639,6 +755,11 @@ export default function CrmPage() {
                   <EditField label="Custo atual" value={editForm.custo_plano_atual} onChange={(value) => setEditForm((prev) => ({ ...prev, custo_plano_atual: value }))} />
                   <EditField label="Investimento" value={editForm.investimento} onChange={(value) => setEditForm((prev) => ({ ...prev, investimento: value }))} />
                   <EditField label="Pagina" value={editForm.operadora} onChange={(value) => setEditForm((prev) => ({ ...prev, operadora: value }))} />
+                  <EditField label="Valor negociação" value={editForm.valor_negociacao} onChange={(value) => setEditForm((prev) => ({ ...prev, valor_negociacao: value }))} />
+                  <EditField label="Operadora venda" value={editForm.operadora_negociacao} onChange={(value) => setEditForm((prev) => ({ ...prev, operadora_negociacao: value }))} />
+                  <EditField label="Tipo do plano" value={editForm.tipo_plano} onChange={(value) => setEditForm((prev) => ({ ...prev, tipo_plano: value }))} />
+                  <EditField label="Valor da venda" value={editForm.valor_venda} onChange={(value) => setEditForm((prev) => ({ ...prev, valor_venda: value }))} />
+                  <EditField label="Comissão" value={editForm.valor_comissao} onChange={(value) => setEditForm((prev) => ({ ...prev, valor_comissao: value }))} />
                 </div>
                 <label className="mt-3 block">
                   <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400">Observações internas</span>
@@ -658,6 +779,11 @@ export default function CrmPage() {
                 <InfoCard label="Investimento" value={selectedLead.investimento || '-'} />
                 <InfoCard label="Cidade" value={selectedLead.cidade || '-'} />
                 <InfoCard label="Pagina" value={selectedLead.operadora || '-'} />
+                <InfoCard label="Valor negociação" value={selectedLead.valor_negociacao ? formatCurrencyValue(selectedLead.valor_negociacao) : '-'} />
+                <InfoCard label="Operadora venda" value={selectedLead.operadora_negociacao || '-'} />
+                <InfoCard label="Tipo do plano" value={selectedLead.tipo_plano || '-'} />
+                <InfoCard label="Valor contrato" value={selectedLead.valor_venda ? formatCurrencyValue(selectedLead.valor_venda) : '-'} />
+                <InfoCard label="Comissão" value={selectedLead.valor_comissao ? formatCurrencyValue(selectedLead.valor_comissao) : '-'} />
               </div>
             )}
 

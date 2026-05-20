@@ -60,7 +60,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
     { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
     { icon: Globe, label: 'Paginas', href: '/admin/paginas' },
-    ...(isMasterAdmin ? [{ icon: Settings, label: 'Meta Ads', href: '/admin/meta' }] : []),
+    { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Solicitacoes de suporte', href: '/admin/suporte' },

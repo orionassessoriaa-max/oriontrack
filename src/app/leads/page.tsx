@@ -75,6 +75,65 @@ function tabLabel(value?: string | null) {
   return raw.length > 34 ? `${raw.slice(0, 31)}...` : raw;
 }
 
+const COMMERCIAL_REQUIRED_STATUSES: LeadStatus[] = [
+  'Em negociação',
+  'Não tive retorno',
+  'Venda realizada',
+  'Sem interesse',
+];
+
+function parseCurrencyInput(value?: string | number | null) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const cleaned = String(value || '')
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\.(?=\d{3}(,|$))/g, '')
+    .replace(',', '.');
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCurrencyValue(value?: string | number | null) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseCurrencyInput(value));
+}
+
+function requiresCommercialData(status: LeadStatus) {
+  return COMMERCIAL_REQUIRED_STATUSES.includes(status);
+}
+
+function collectCommercialPayload(lead: Lead, status: LeadStatus) {
+  if (!requiresCommercialData(status)) return null;
+
+  const valorNegociacao = window.prompt('Valor da negociação/contrato. Ex: 1200', String(lead.valor_negociacao || lead.valor_venda || ''));
+  if (!valorNegociacao) return null;
+
+  const operadoraNegociacao = window.prompt('Operadora da negociação. Ex: Amil, Bradesco, Porto', lead.operadora_negociacao || lead.operadora || '');
+  if (!operadoraNegociacao) return null;
+
+  const tipoPlano = window.prompt('Tipo do plano. Ex: PME, Individual, Adesão, Empresarial', lead.tipo_plano || '');
+  if (!tipoPlano) return null;
+
+  const valorVenda = window.prompt('Valor da venda. Ex: 1200', String(lead.valor_venda || valorNegociacao));
+  if (!valorVenda) return null;
+
+  const valorComissao = window.prompt('Valor da comissão. Ex: 240', String(lead.valor_comissao || ''));
+  if (!valorComissao) return null;
+
+  const payload = {
+    valor_negociacao: parseCurrencyInput(valorNegociacao),
+    operadora_negociacao: operadoraNegociacao.trim(),
+    tipo_plano: tipoPlano.trim(),
+    valor_venda: parseCurrencyInput(valorVenda),
+    valor_comissao: parseCurrencyInput(valorComissao),
+  };
+
+  if (!payload.valor_negociacao || !payload.operadora_negociacao || !payload.tipo_plano || !payload.valor_venda || !payload.valor_comissao) {
+    alert('Para avançar para negociação em diante, preencha valor da negociação, operadora, tipo do plano, valor da venda e comissão.');
+    return null;
+  }
+
+  return payload;
+}
+
 export default function BrokerLeadsPage() {
   const { profile, isViewingAsCorretor } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -154,12 +213,19 @@ export default function BrokerLeadsPage() {
   };
 
   const updateLeadStatus = async (leadId: string, status: LeadStatus) => {
+    const currentLead = leads.find((lead) => lead.id === leadId);
+    if (!currentLead) return;
+
+    const commercialPayload = collectCommercialPayload(currentLead, status);
+    if (requiresCommercialData(status) && !commercialPayload) return;
+
     setSavingStatusId(leadId);
-    setLeads(prev => prev.map(lead => lead.id === leadId ? { ...lead, status } : lead));
+    const optimisticPayload = { ...(commercialPayload || {}), status };
+    setLeads(prev => prev.map(lead => lead.id === leadId ? { ...lead, ...optimisticPayload } : lead));
 
     const { error: updateError } = await supabase
       .from('leads')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({ ...optimisticPayload, updated_at: new Date().toISOString() })
       .eq('id', leadId);
 
     if (updateError) {
@@ -377,7 +443,7 @@ export default function BrokerLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full min-w-[1720px] border-collapse text-left text-[13px]">
+            <table className="w-full min-w-[2240px] border-collapse text-left text-[13px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100">
                   <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
@@ -391,6 +457,11 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Custo atual</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Investimento pretendido</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cidade</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Valor negociação</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Operadora venda</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Tipo plano</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Valor venda</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Comissão</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
                   <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações / UTMs</th>
@@ -399,7 +470,7 @@ export default function BrokerLeadsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={14} className="py-20 text-center">
+                    <td colSpan={19} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -436,6 +507,11 @@ export default function BrokerLeadsPage() {
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.custo_plano_atual || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.investimento || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-500">{lead.cidade || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.valor_negociacao ? formatCurrencyValue(lead.valor_negociacao) : '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.operadora_negociacao || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.tipo_plano || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-emerald-700">{lead.valor_venda ? formatCurrencyValue(lead.valor_venda) : '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-blue-700">{lead.valor_comissao ? formatCurrencyValue(lead.valor_comissao) : '-'}</td>
                     <td className="border border-slate-100 px-3 py-3">
                       <div className="flex items-center gap-2">
                         <select
