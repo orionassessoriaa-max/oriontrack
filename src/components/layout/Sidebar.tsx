@@ -56,6 +56,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
     { icon: UserCog, label: 'Gestores de Trafego', href: '/admin/gestores' },
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
+    { icon: Palette, label: 'Painel Designer', href: '/designer' },
+    { icon: MessageSquare, label: 'Painel Account', href: '/account' },
     { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
     { icon: Globe, label: 'Paginas', href: '/admin/paginas' },
     ...(isMasterAdmin ? [{ icon: Settings, label: 'Meta Ads', href: '/admin/meta' }] : []),
