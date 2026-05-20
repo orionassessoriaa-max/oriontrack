@@ -314,7 +314,7 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.8fr_160px_160px_170px_230px_auto]">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.7fr_160px_160px_170px_230px_220px_auto]">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -337,6 +337,11 @@ export default function BrokerLeadsPage() {
             <option value="todos">Todos os status</option>
             {LEAD_STATUSES.map(status => <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>)}
           </select>
+          <select value={operadoraFilter} onChange={(e) => setOperadoraFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+            <option value="todas">Página: todas</option>
+            {sheetTabs.map((tab) => <option key={tab} value={tab}>{tab}</option>)}
+            <option value="__sem_aba__">Sem página</option>
+          </select>
           <button
             type="button"
             onClick={clearFilters}
@@ -349,7 +354,7 @@ export default function BrokerLeadsPage() {
         <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-widest text-slate-500">
           <span className="rounded-full bg-slate-100 px-3 py-2">{filteredLeads.length} de {leads.length} leads</span>
           <span className="rounded-full bg-blue-50 px-3 py-2 text-blue-700">
-            Pagina: {operadoraFilter === 'todas' ? 'todas' : operadoraFilter === '__sem_aba__' ? 'sem pagina' : operadoraFilter}
+            Página: {operadoraFilter === 'todas' ? 'todas' : operadoraFilter === '__sem_aba__' ? 'sem página' : operadoraFilter}
           </span>
           <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-700">
             CNPJ: {cnpjFilter === 'todos' ? 'todos' : cnpjFilter === 'com' ? 'com CNPJ' : cnpjFilter === 'sem' ? 'sem CNPJ' : 'nao informado'}
@@ -385,7 +390,7 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Custo atual</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Investimento pretendido</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cidade</th>
-                  <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Pagina</th>
+                  <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
                   <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações / UTMs</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                 </tr>
@@ -459,7 +464,7 @@ export default function BrokerLeadsPage() {
             onClick={() => setOperadoraFilter('todas')}
             className={`whitespace-nowrap rounded-t-xl border px-4 py-2 text-xs font-black transition-all ${operadoraFilter === 'todas' ? 'border-emerald-400 bg-white text-emerald-700 shadow-sm' : 'border-transparent bg-slate-200 text-slate-600 hover:bg-white'}`}
           >
-            Todos ({leads.length})
+            Todas as páginas ({leads.length})
           </button>
           {sheetTabs.map((tab) => (
             <button
@@ -477,7 +482,7 @@ export default function BrokerLeadsPage() {
               onClick={() => setOperadoraFilter('__sem_aba__')}
               className={`whitespace-nowrap rounded-t-xl border px-4 py-2 text-xs font-black transition-all ${operadoraFilter === '__sem_aba__' ? 'border-emerald-400 bg-white text-emerald-700 shadow-sm' : 'border-transparent bg-slate-200 text-slate-600 hover:bg-white'}`}
             >
-              Sem pagina ({tabCounts['Sem aba']})
+              Sem página ({tabCounts['Sem aba']})
             </button>
           )}
         </div>

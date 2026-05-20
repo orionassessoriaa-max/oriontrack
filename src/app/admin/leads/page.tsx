@@ -331,7 +331,7 @@ export default function AdminLeadsPage() {
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Plano Atual</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cidade</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Aba da planilha</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Página / Operadora</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">UTMs / Observacoes</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Corretor</th>
