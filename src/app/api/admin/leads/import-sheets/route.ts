@@ -134,16 +134,49 @@ function pick(row: CsvRow, names: string[]) {
 }
 
 function parseDate(value: string) {
-  if (!value) return new Date().toISOString();
+  const fallback = new Date().toISOString();
+  if (!value) return fallback;
   const trimmed = value.trim();
-  const br = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  const br = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (br) {
-    const year = br[3].length === 2 ? `20${br[3]}` : br[3];
-    return new Date(`${year}-${br[2].padStart(2, '0')}-${br[1].padStart(2, '0')}T12:00:00`).toISOString();
+    const year = Number(br[3].length === 2 ? `20${br[3]}` : br[3]);
+    const month = Number(br[2]);
+    const day = Number(br[1]);
+    const hour = Number(br[4] || 12);
+    const minute = Number(br[5] || 0);
+    const second = Number(br[6] || 0);
+
+    if (year >= 1900 && year <= 2200 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+      return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+    }
+
+    return fallback;
+  }
+
+  const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    const hour = Number(iso[4] || 12);
+    const minute = Number(iso[5] || 0);
+    const second = Number(iso[6] || 0);
+
+    if (year >= 1900 && year <= 2200 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+      return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+    }
+
+    return fallback;
   }
 
   const parsed = new Date(trimmed);
-  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+  try {
+    return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString();
+  } catch {
+    return fallback;
+  }
 }
 
 function statusFromSheet(value: string) {
