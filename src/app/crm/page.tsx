@@ -38,6 +38,8 @@ type WhatsAppConversa = {
   ultima_mensagem_at: string | null;
 };
 
+type MetricFilter = 'todos' | 'sem_resposta' | 'tarefas' | 'hoje' | 'fit_icp';
+
 const columns: { id: LeadStatus; label: string; desc: string }[] = [
   { id: 'Aguardando atendimento', label: 'Oportunidade', desc: 'Entrou e precisa de primeiro contato' },
   { id: 'Contato feito', label: 'Contato feito', desc: 'Primeira abordagem realizada' },
@@ -73,6 +75,7 @@ export default function CrmPage() {
   const [tipoCampanha, setTipoCampanha] = useState<TipoCampanha | null>('ambos');
   const [search, setSearch] = useState('');
   const [pageFilter, setPageFilter] = useState('todas');
+  const [metricFilter, setMetricFilter] = useState<MetricFilter>('todos');
   const [note, setNote] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDue, setTaskDue] = useState('');
@@ -208,22 +211,45 @@ export default function CrmPage() {
     }
   }, [selectedLead?.id]);
 
+  const staleLeadIds = useMemo(() => new Set(leads.filter(isStale).map((lead) => lead.id)), [leads]);
+  const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente').map((task) => task.lead_id)), [tarefas]);
+  const todayTaskLeadIds = useMemo(() => {
+    const today = new Date().toDateString();
+    return new Set(
+      tarefas
+        .filter((task) => task.status === 'pendente' && task.vencimento && new Date(task.vencimento).toDateString() === today)
+        .map((task) => task.lead_id)
+    );
+  }, [tarefas]);
+  const fitLeadIds = useMemo(() => new Set(
+    leads
+      .filter((lead) => getLeadQualification(lead, tipoCampanha).tone === 'good')
+      .map((lead) => lead.id)
+  ), [leads, tipoCampanha]);
+
   const filteredLeads = useMemo(() => {
     const term = search.toLowerCase();
     return leads.filter((lead) => {
       const leadPage = lead.operadora || '';
       const searchMatch = `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.status} ${lead.operadora || ''} ${lead.observacoes || ''}`.toLowerCase().includes(term);
       const pageMatch = pageFilter === 'todas' || (pageFilter === '__sem_pagina__' ? !leadPage : leadPage === pageFilter);
-      return searchMatch && pageMatch;
+      const metricMatch =
+        metricFilter === 'todos' ||
+        (metricFilter === 'sem_resposta' && staleLeadIds.has(lead.id)) ||
+        (metricFilter === 'tarefas' && openTaskLeadIds.has(lead.id)) ||
+        (metricFilter === 'hoje' && todayTaskLeadIds.has(lead.id)) ||
+        (metricFilter === 'fit_icp' && fitLeadIds.has(lead.id));
+
+      return searchMatch && pageMatch && metricMatch;
     });
-  }, [leads, search, pageFilter]);
+  }, [leads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
 
   const pageOptions = useMemo(() => {
     const pages = leads.map((lead) => lead.operadora || '').filter(Boolean);
     return Array.from(new Set(pages)).sort((a, b) => a.localeCompare(b));
   }, [leads]);
 
-  const staleCount = leads.filter(isStale).length;
+  const staleCount = staleLeadIds.size;
   const openTasks = tarefas.filter((task) => task.status === 'pendente').length;
   const todayTasks = tarefas.filter((task) => task.status === 'pendente' && task.vencimento && new Date(task.vencimento).toDateString() === new Date().toDateString()).length;
   const fitStats = leads.reduce(
@@ -274,6 +300,14 @@ export default function CrmPage() {
     if (!lead || normalizeLeadStatus(lead.status) === status) return;
     void updateLeadStatus(lead.id, status);
   }
+
+  const metricLabels: Record<MetricFilter, string> = {
+    todos: 'Todos os leads',
+    sem_resposta: 'Sem resposta',
+    tarefas: 'Tarefas abertas',
+    hoje: 'Tarefas de hoje',
+    fit_icp: 'Dentro do perfil',
+  };
 
   async function addNote(event: FormEvent) {
     event.preventDefault();
@@ -447,12 +481,25 @@ export default function CrmPage() {
       </div>
 
       <div className="mb-8 grid gap-4 md:grid-cols-5">
-        <Stat label="Leads" value={leads.length} icon={Target} className="border-gray-100 bg-white text-slate-600" />
-        <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} className="border-amber-100 bg-amber-50 text-amber-700" />
-        <Stat label="Tarefas" value={openTasks} icon={Clock} className="border-blue-100 bg-blue-50 text-blue-700" />
-        <Stat label="Hoje" value={todayTasks} icon={CheckCircle2} className="border-emerald-100 bg-emerald-50 text-emerald-700" />
-        <Stat label="Fit ICP" value={`${fitStats.good}/${fitStats.warning}`} icon={Sparkles} className="border-violet-100 bg-violet-50 text-violet-700" />
+        <Stat label="Leads" value={leads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="border-gray-100 bg-white text-slate-600" />
+        <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} active={metricFilter === 'sem_resposta'} onClick={() => setMetricFilter('sem_resposta')} className="border-amber-100 bg-amber-50 text-amber-700" />
+        <Stat label="Tarefas" value={openTasks} icon={Clock} active={metricFilter === 'tarefas'} onClick={() => setMetricFilter('tarefas')} className="border-blue-100 bg-blue-50 text-blue-700" />
+        <Stat label="Hoje" value={todayTasks} icon={CheckCircle2} active={metricFilter === 'hoje'} onClick={() => setMetricFilter('hoje')} className="border-emerald-100 bg-emerald-50 text-emerald-700" />
+        <Stat label="Fit ICP" value={`${fitStats.good}/${fitStats.warning}`} icon={Sparkles} active={metricFilter === 'fit_icp'} onClick={() => setMetricFilter('fit_icp')} className="border-violet-100 bg-violet-50 text-violet-700" />
       </div>
+
+      {metricFilter !== 'todos' && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm font-bold text-blue-700">
+          <span>Filtro ativo: {metricLabels[metricFilter]} ({filteredLeads.length})</span>
+          <button
+            type="button"
+            onClick={() => setMetricFilter('todos')}
+            className="rounded-xl bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-blue-700 shadow-sm"
+          >
+            Limpar
+          </button>
+        </div>
+      )}
 
       {error && <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold text-red-600">{error}</div>}
 
@@ -793,13 +840,31 @@ function EditSelect({ label, value, options, onChange }: { label: string; value:
   );
 }
 
-function Stat({ label, value, icon: Icon, className }: { label: string; value: number | string; icon: typeof Target; className: string }) {
+function Stat({
+  label,
+  value,
+  icon: Icon,
+  className,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number | string;
+  icon: typeof Target;
+  className: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <div className={`rounded-[2rem] border p-5 shadow-sm ${className}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[2rem] border p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500/15 ${active ? 'ring-2 ring-blue-500' : ''} ${className}`}
+    >
       <p className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
         <Icon size={14} /> {label}
       </p>
       <p className="text-3xl font-black text-gray-950">{value}</p>
-    </div>
+    </button>
   );
 }
