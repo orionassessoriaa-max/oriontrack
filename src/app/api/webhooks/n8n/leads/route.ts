@@ -91,6 +91,11 @@ export async function POST(request: Request) {
       investimento: normalizeText(body.investimento || body.investimento_pretendido || body.valor_pretendido || body.budget),
       cidade: normalizeText(body.cidade || body.city),
       operadora: normalizeText(body.operadora || body.operator) || null,
+      utm_source: normalizeText(body.utm_source) || null,
+      utm_medium: normalizeText(body.utm_medium) || null,
+      utm_campaign: normalizeText(body.utm_campaign || body.campanha) || null,
+      utm_term: normalizeText(body.utm_term || body.conjunto || body.conjunto_anuncio) || null,
+      utm_content: normalizeText(body.utm_content || body.anuncio || body.criativo) || null,
       status: normalizeLeadStatus(body.status || 'Aguardando atendimento'),
       observacoes: normalizeText(body.observacoes || body.obs) || null,
       updated_at: new Date().toISOString()

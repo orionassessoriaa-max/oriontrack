@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { User, Mail, Shield, Smartphone, MapPin, Loader2, Save, Moon, Sun } from 'lucide-react';
@@ -18,6 +18,10 @@ export default function ProfilePage() {
   const { profile, loading, refreshProfile } = useAuth();
   const [theme, setTheme] = useState<'claro' | 'noturno'>((profile?.tema_sistema as 'claro' | 'noturno') || 'claro');
   const [savingTheme, setSavingTheme] = useState(false);
+
+  useEffect(() => {
+    setTheme((profile?.tema_sistema as 'claro' | 'noturno') || 'claro');
+  }, [profile?.tema_sistema]);
 
   const saveTheme = async () => {
     if (!profile?.id) return;

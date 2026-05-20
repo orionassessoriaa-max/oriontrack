@@ -104,8 +104,10 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     );
   }
 
+  const isDarkTheme = profile?.tema_sistema === 'noturno';
+
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className={`flex min-h-screen ${isDarkTheme ? 'theme-noturno bg-slate-950 text-slate-100' : 'bg-[#f8fafc]'}`}>
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
       <main className={`${sidebarCollapsed ? 'ml-0 w-full' : 'ml-64 w-[calc(100%-16rem)]'} min-w-0 p-8 transition-all duration-300`}>
         <div className={`${sidebarCollapsed ? 'max-w-none' : 'max-w-7xl'} mx-auto transition-all duration-300`}>
