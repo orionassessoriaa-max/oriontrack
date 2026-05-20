@@ -8,6 +8,7 @@ import { CheckCircle2, Loader2, MessageSquare, Palette, XCircle } from 'lucide-r
 
 type CreativeAsset = {
   id: string;
+  demanda_id: string | null;
   titulo: string;
   descricao: string | null;
   arquivo_url: string | null;
@@ -51,7 +52,7 @@ export default function BrokerCreativesPage() {
     fetchAssets();
   }, [profile?.corretor_id]);
 
-  const updateCreative = async (assetId: string, status: CreativeAsset['status'], comentario?: string) => {
+  const updateCreative = async (asset: CreativeAsset, status: CreativeAsset['status'], comentario?: string) => {
     const { error } = await supabase
       .from('criativo_assets')
       .update({
@@ -59,11 +60,21 @@ export default function BrokerCreativesPage() {
         comentario_corretor: comentario || null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', assetId);
+      .eq('id', asset.id);
 
     if (error) {
       alert('Erro ao atualizar criativo: ' + error.message);
       return;
+    }
+
+    if (asset.demanda_id && (status === 'aprovado' || status === 'revisao')) {
+      await supabase
+        .from('criativo_demandas')
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', asset.demanda_id);
     }
 
     setReviewId(null);
@@ -128,7 +139,7 @@ export default function BrokerCreativesPage() {
                         className="min-h-24 w-full border border-slate-200 bg-slate-50 p-3 text-sm font-bold outline-none focus:border-blue-500"
                       />
                       <div className="flex gap-2">
-                        <button onClick={() => updateCreative(asset.id, 'revisao', comment)} className="flex items-center gap-2 bg-amber-500 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+                        <button onClick={() => updateCreative(asset, 'revisao', comment)} className="flex items-center gap-2 bg-amber-500 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
                           <MessageSquare size={15} /> Enviar revisao
                         </button>
                         <button onClick={() => setReviewId(null)} className="px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Cancelar</button>
@@ -136,7 +147,7 @@ export default function BrokerCreativesPage() {
                     </div>
                   ) : (
                     <div className="mt-5 flex flex-wrap gap-2">
-                      <button onClick={() => updateCreative(asset.id, 'aprovado')} className="flex items-center gap-2 bg-emerald-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+                      <button onClick={() => updateCreative(asset, 'aprovado')} className="flex items-center gap-2 bg-emerald-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
                         <CheckCircle2 size={15} /> Aprovar
                       </button>
                       <button onClick={() => { setReviewId(asset.id); setComment(asset.comentario_corretor || ''); }} className="flex items-center gap-2 border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700">

@@ -36,7 +36,7 @@ const initialForm = {
 const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
 
 export default function AdminUsuariosPage() {
-  const { user, startViewingAsCorretor, startViewingAsGestor } = useAuth();
+  const { user, startViewingAsCorretor, startViewingAsGestor, startViewingAsDesigner, startViewingAsAccount } = useAuth();
   const router = useRouter();
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [corretores, setCorretores] = useState<Corretor[]>([]);
@@ -249,12 +249,12 @@ export default function AdminUsuariosPage() {
     }
 
     if (profile.tipo_usuario === 'designer') {
-      router.push('/designer');
+      await startViewingAsDesigner(profile.id);
       return;
     }
 
     if (profile.tipo_usuario === 'account_manager') {
-      router.push('/account');
+      await startViewingAsAccount(profile.id);
       return;
     }
 

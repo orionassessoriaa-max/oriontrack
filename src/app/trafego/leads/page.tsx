@@ -180,7 +180,7 @@ export default function TrafficLeadsPage() {
           </button>
         </div>
 
-        <div className="scrollbar-visible overflow-x-scroll">
+        <div className="scrollbar-visible max-h-[calc(100vh-330px)] overflow-auto">
           {error ? (
             <div className="py-24 text-center">
               <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">

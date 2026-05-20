@@ -364,7 +364,7 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="scrollbar-visible overflow-x-scroll">
+        <div className="scrollbar-visible max-h-[calc(100vh-330px)] overflow-auto">
           {error ? (
             <div className="py-24 text-center">
               <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">

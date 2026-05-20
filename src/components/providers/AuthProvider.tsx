@@ -13,8 +13,12 @@ interface AuthContextType {
   loading: boolean;
   isViewingAsCorretor: boolean;
   isViewingAsGestor: boolean;
+  isViewingAsDesigner: boolean;
+  isViewingAsAccount: boolean;
   startViewingAsCorretor: (corretorId: string) => Promise<void>;
   startViewingAsGestor: (gestorId: string) => Promise<void>;
+  startViewingAsDesigner: (designerId: string) => Promise<void>;
+  startViewingAsAccount: (accountId: string) => Promise<void>;
   stopViewingAsCorretor: () => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -27,8 +31,12 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isViewingAsCorretor: false,
   isViewingAsGestor: false,
+  isViewingAsDesigner: false,
+  isViewingAsAccount: false,
   startViewingAsCorretor: async () => {},
   startViewingAsGestor: async () => {},
+  startViewingAsDesigner: async () => {},
+  startViewingAsAccount: async () => {},
   stopViewingAsCorretor: () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -125,13 +133,35 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     return data as Profile;
   };
 
+  const fetchProfileViewProfile = async (profileId: string, role: Profile['tipo_usuario'], message: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, created_at')
+      .eq('id', profileId)
+      .eq('tipo_usuario', role)
+      .maybeSingle();
+
+    if (error || !data) {
+      throw error || new Error(message);
+    }
+
+    return data as Profile;
+  };
+
+  const clearViewingStorage = () => {
+    window.sessionStorage.removeItem('orion:viewing_corretor_id');
+    window.sessionStorage.removeItem('orion:viewing_gestor_id');
+    window.sessionStorage.removeItem('orion:viewing_designer_id');
+    window.sessionStorage.removeItem('orion:viewing_account_id');
+  };
+
   const startViewingAsCorretor = async (corretorId: string) => {
     if (!user || actualProfile?.tipo_usuario !== 'admin') return;
 
     const brokerProfile = await fetchCorretorViewProfile(corretorId, user.id);
     setViewingProfile(brokerProfile);
+    clearViewingStorage();
     window.sessionStorage.setItem('orion:viewing_corretor_id', corretorId);
-    window.sessionStorage.removeItem('orion:viewing_gestor_id');
     router.push('/dashboard');
   };
 
@@ -140,15 +170,34 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
     const gestorProfile = await fetchGestorViewProfile(gestorId);
     setViewingProfile(gestorProfile);
+    clearViewingStorage();
     window.sessionStorage.setItem('orion:viewing_gestor_id', gestorId);
-    window.sessionStorage.removeItem('orion:viewing_corretor_id');
     router.push('/trafego/leads');
+  };
+
+  const startViewingAsDesigner = async (designerId: string) => {
+    if (!user || actualProfile?.tipo_usuario !== 'admin') return;
+
+    const designerProfile = await fetchProfileViewProfile(designerId, 'designer', 'Designer nao encontrado.');
+    setViewingProfile(designerProfile);
+    clearViewingStorage();
+    window.sessionStorage.setItem('orion:viewing_designer_id', designerId);
+    router.push('/designer');
+  };
+
+  const startViewingAsAccount = async (accountId: string) => {
+    if (!user || actualProfile?.tipo_usuario !== 'admin') return;
+
+    const accountProfile = await fetchProfileViewProfile(accountId, 'account_manager', 'Account manager nao encontrado.');
+    setViewingProfile(accountProfile);
+    clearViewingStorage();
+    window.sessionStorage.setItem('orion:viewing_account_id', accountId);
+    router.push('/account');
   };
 
   const stopViewingAsCorretor = () => {
     setViewingProfile(null);
-    window.sessionStorage.removeItem('orion:viewing_corretor_id');
-    window.sessionStorage.removeItem('orion:viewing_gestor_id');
+    clearViewingStorage();
     router.push('/admin');
   };
 
@@ -169,8 +218,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           setUser(null);
           setActualProfile(null);
           setViewingProfile(null);
-          window.sessionStorage.removeItem('orion:viewing_corretor_id');
-          window.sessionStorage.removeItem('orion:viewing_gestor_id');
+          clearViewingStorage();
 
           const currentPath = window.location.pathname;
           const publicPaths = ['/login', '/primeiro-acesso', '/resetar-senha'];
@@ -206,7 +254,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
       const savedCorretorId = window.sessionStorage.getItem('orion:viewing_corretor_id');
       const savedGestorId = window.sessionStorage.getItem('orion:viewing_gestor_id');
-      if (!savedCorretorId && !savedGestorId) return;
+      const savedDesignerId = window.sessionStorage.getItem('orion:viewing_designer_id');
+      const savedAccountId = window.sessionStorage.getItem('orion:viewing_account_id');
+      if (!savedCorretorId && !savedGestorId && !savedDesignerId && !savedAccountId) return;
 
       try {
         if (savedCorretorId) {
@@ -215,11 +265,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         } else if (savedGestorId) {
           const gestorProfile = await fetchGestorViewProfile(savedGestorId);
           setViewingProfile(gestorProfile);
+        } else if (savedDesignerId) {
+          const designerProfile = await fetchProfileViewProfile(savedDesignerId, 'designer', 'Designer nao encontrado.');
+          setViewingProfile(designerProfile);
+        } else if (savedAccountId) {
+          const accountProfile = await fetchProfileViewProfile(savedAccountId, 'account_manager', 'Account manager nao encontrado.');
+          setViewingProfile(accountProfile);
         }
       } catch (error) {
         console.error('Erro ao restaurar visualização admin:', error);
-        window.sessionStorage.removeItem('orion:viewing_corretor_id');
-        window.sessionStorage.removeItem('orion:viewing_gestor_id');
+        clearViewingStorage();
       }
     }
 
@@ -235,8 +290,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setUser(null);
     setActualProfile(null);
     setViewingProfile(null);
-    window.sessionStorage.removeItem('orion:viewing_corretor_id');
-    window.sessionStorage.removeItem('orion:viewing_gestor_id');
+    clearViewingStorage();
     router.replace('/login');
   };
 
@@ -246,6 +300,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const isViewingAsCorretor = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'corretor');
   const isViewingAsGestor = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'gestor_trafego');
+  const isViewingAsDesigner = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'designer');
+  const isViewingAsAccount = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'account_manager');
 
   return (
     <AuthContext.Provider value={{
@@ -255,8 +311,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       loading,
       isViewingAsCorretor,
       isViewingAsGestor,
+      isViewingAsDesigner,
+      isViewingAsAccount,
       startViewingAsCorretor,
       startViewingAsGestor,
+      startViewingAsDesigner,
+      startViewingAsAccount,
       stopViewingAsCorretor,
       signOut,
       refreshProfile,

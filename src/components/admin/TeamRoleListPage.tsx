@@ -6,6 +6,7 @@ import { Plus, Search, Eye, Loader2, ShieldAlert, RefreshCw, Palette, MessageSqu
 import { Profile, UserRole } from '@/types';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 type TeamRoleListPageProps = {
   role: Extract<UserRole, 'designer' | 'account_manager'>;
@@ -26,6 +27,7 @@ export default function TeamRoleListPage({
   emptyDescription,
   panelHref,
 }: TeamRoleListPageProps) {
+  const { startViewingAsDesigner, startViewingAsAccount } = useAuth();
   const [people, setPeople] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +69,15 @@ export default function TeamRoleListPage({
   async function copyId(id: string) {
     await navigator.clipboard.writeText(id);
     alert('ID copiado.');
+  }
+
+  async function openPanel(person: Profile) {
+    if (role === 'designer') {
+      await startViewingAsDesigner(person.id);
+      return;
+    }
+
+    await startViewingAsAccount(person.id);
   }
 
   return (
@@ -166,13 +177,14 @@ export default function TeamRoleListPage({
                       </span>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      <Link
-                        href={panelHref}
+                      <button
+                        type="button"
+                        onClick={() => void openPanel(person)}
                         className="inline-flex rounded-xl p-2.5 text-slate-400 transition-all hover:bg-emerald-50 hover:text-emerald-600"
                         title={`Abrir painel de ${person.nome}`}
                       >
                         <Eye size={18} />
-                      </Link>
+                      </button>
                     </td>
                   </tr>
                 ))}
