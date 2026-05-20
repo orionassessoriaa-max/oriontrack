@@ -27,6 +27,34 @@ type CorretorWithGestorJoin = Corretor & {
   profiles?: Profile | null;
 };
 
+function normalizeText(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function inferGestorFromTeam(corretor: CorretorWithGestorJoin, gestores: Profile[]) {
+  if (corretor.profiles) return corretor.profiles;
+
+  const team = Array.isArray(corretor.time_operacional) ? corretor.time_operacional : [];
+  const managerMember = team.find((member: any) => {
+    const role = normalizeText(member?.tipo_usuario);
+    const cargo = normalizeText(member?.cargo);
+    const nome = normalizeText(member?.nome);
+    return role === 'gestor_trafego' || cargo.includes('trafego') || gestores.some((gestor) => normalizeText(gestor.nome) === nome);
+  }) as any;
+
+  if (!managerMember) return null;
+
+  if (managerMember.profile_id) {
+    return gestores.find((gestor) => gestor.id === managerMember.profile_id) || null;
+  }
+
+  return gestores.find((gestor) => normalizeText(gestor.nome) === normalizeText(managerMember.nome)) || null;
+}
+
 function CorretoresContent() {
   const { profile, startViewingAsCorretor } = useAuth();
   const searchParams = useSearchParams();
@@ -61,13 +89,18 @@ function CorretoresContent() {
 
       if (corretoresRes.error) throw corretoresRes.error;
       
-      const formattedCorretores = ((corretoresRes.data || []) as CorretorWithGestorJoin[]).map((c) => ({
-        ...c,
-        gestor: c.profiles || undefined
-      }));
+      const gestoresList = gestoresRes.data || [];
+      const formattedCorretores = ((corretoresRes.data || []) as CorretorWithGestorJoin[]).map((c) => {
+        const inferredGestor = inferGestorFromTeam(c, gestoresList);
+        return {
+          ...c,
+          gestor_trafego_id: c.gestor_trafego_id || inferredGestor?.id || null,
+          gestor: inferredGestor || undefined
+        };
+      });
 
       setCorretores(formattedCorretores);
-      setGestores(gestoresRes.data || []);
+      setGestores(gestoresList);
     } catch (err: unknown) {
       console.error('Error fetching corretores data:', err);
       const errorMessage = err instanceof Error ? err.message : '';

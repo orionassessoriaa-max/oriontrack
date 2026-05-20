@@ -10,6 +10,38 @@ function isMasterAdmin(profile: { email?: string | null; email_real?: string | n
   return email === 'ewerttonherculano@gmail.com';
 }
 
+function normalizeText(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+async function resolveGestorTrafegoId(explicitId: unknown, timeOperacional: any[]) {
+  const directId = String(explicitId || '').trim();
+  if (directId) return directId;
+
+  const member = timeOperacional.find((item: any) => {
+    const role = normalizeText(item?.tipo_usuario);
+    const cargo = normalizeText(item?.cargo);
+    return role === 'gestor_trafego' || cargo.includes('trafego');
+  });
+
+  if (!member) return null;
+  if (member.profile_id) return String(member.profile_id);
+
+  const memberName = normalizeText(member.nome);
+  if (!memberName) return null;
+
+  const { data: profiles } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome')
+    .eq('tipo_usuario', 'gestor_trafego');
+
+  return (profiles || []).find((profile) => normalizeText(profile.nome) === memberName)?.id || null;
+}
+
 async function requireAdmin(request: Request) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -135,9 +167,7 @@ export async function POST(request: Request) {
         const timeOperacional = Array.isArray(body.time_operacional)
           ? body.time_operacional.filter((member: any) => member?.nome && member?.cargo)
           : [];
-        const gestorTrafegoId = String(body.gestor_trafego_id || timeOperacional.find((member: any) =>
-          member?.tipo_usuario === 'gestor_trafego' || String(member?.cargo || '').toLowerCase().includes('tráfego')
-        )?.profile_id || '') || null;
+        const gestorTrafegoId = await resolveGestorTrafegoId(body.gestor_trafego_id, timeOperacional);
 
         const { data: corretor, error: corretorError } = await supabaseAdmin
           .from('corretores')
