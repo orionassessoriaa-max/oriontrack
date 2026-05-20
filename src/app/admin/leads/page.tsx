@@ -331,10 +331,10 @@ export default function AdminLeadsPage() {
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Plano Atual</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cidade</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Página / Operadora</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">UTMs / Observacoes</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Página / Operadora</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Corretor</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">UTMs / Observacoes</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
@@ -364,17 +364,17 @@ export default function AdminLeadsPage() {
                     <td className="px-6 py-5 text-sm text-slate-500 font-medium">{lead.plano_atual || '-'}</td>
                     <td className="px-6 py-5 text-sm text-slate-600 font-bold">{lead.investimento || '-'}</td>
                     <td className="px-6 py-5 text-sm text-slate-500 font-medium">{lead.cidade || '-'}</td>
-                    <td className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-500">{lead.operadora || '-'}</td>
-                    <td className="px-6 py-5 text-xs font-bold leading-relaxed text-slate-500">
-                      <div className="max-w-[360px] whitespace-normal">{lead.observacoes || '-'}</div>
-                    </td>
                     <td className="px-6 py-5 text-center">
                       <span className="inline-block px-3 py-1.5 bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest rounded-full">
                         {lead.status}
                       </span>
                     </td>
+                    <td className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-500">{lead.operadora || '-'}</td>
                     <td className="px-6 py-5">
                       <span className="text-xs font-bold text-slate-400">{lead.corretores?.nome}</span>
+                    </td>
+                    <td className="px-6 py-5 text-xs font-bold leading-relaxed text-slate-500">
+                      <div className="max-w-[360px] whitespace-normal">{lead.observacoes || '-'}</div>
                     </td>
                     <td className="px-6 py-5 text-right">
                       <div className="flex items-center justify-end gap-2">

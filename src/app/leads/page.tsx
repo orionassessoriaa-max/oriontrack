@@ -390,9 +390,9 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Custo atual</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Investimento pretendido</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cidade</th>
+                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
                   <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações / UTMs</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -433,12 +433,6 @@ export default function BrokerLeadsPage() {
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.custo_plano_atual || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.investimento || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-500">{lead.cidade || '-'}</td>
-                    <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{leadTab}</td>
-                    <td className="border border-slate-100 px-3 py-3 text-xs font-medium leading-relaxed text-slate-600">
-                      <div className="max-w-[300px] whitespace-normal">
-                        {lead.observacoes || '-'}
-                      </div>
-                    </td>
                     <td className="border border-slate-100 px-3 py-3">
                       <div className="flex items-center gap-2">
                         <select
@@ -449,6 +443,12 @@ export default function BrokerLeadsPage() {
                           {LEAD_STATUSES.map(status => <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>)}
                         </select>
                         {savingStatusId === lead.id && <Loader2 className="animate-spin text-blue-600" size={16} />}
+                      </div>
+                    </td>
+                    <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{leadTab}</td>
+                    <td className="border border-slate-100 px-3 py-3 text-xs font-medium leading-relaxed text-slate-600">
+                      <div className="max-w-[300px] whitespace-normal">
+                        {lead.observacoes || '-'}
                       </div>
                     </td>
                   </tr>
