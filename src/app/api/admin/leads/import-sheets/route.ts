@@ -142,6 +142,7 @@ function parseDate(value: string) {
   const fallback = new Date().toISOString();
   if (!value) return fallback;
   const trimmed = value.trim();
+  if (/^[+-]\d{5,}/.test(trimmed) || /^\d{5,}-/.test(trimmed)) return fallback;
   const br = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (br) {
     const year = Number(br[3].length === 2 ? `20${br[3]}` : br[3]);

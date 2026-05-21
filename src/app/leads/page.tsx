@@ -13,7 +13,8 @@ import {
   X,
   Save,
   Upload,
-  RotateCcw
+  RotateCcw,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadStatus } from '@/types';
@@ -246,6 +247,26 @@ export default function BrokerLeadsPage() {
     if (updateError) {
       alert('Erro ao atualizar status: ' + updateError.message);
       fetchLeads();
+    }
+    setSavingStatusId(null);
+  };
+
+  const deleteLead = async (lead: Lead) => {
+    if (!isViewingAsCorretor) return;
+    if (!window.confirm(`Remover o lead ${lead.nome}? Essa ação só deve ser usada por admin.`)) return;
+
+    setSavingStatusId(lead.id);
+    const previous = leads;
+    setLeads((current) => current.filter((item) => item.id !== lead.id));
+
+    const { error: deleteError } = await supabase
+      .from('leads')
+      .delete()
+      .eq('id', lead.id);
+
+    if (deleteError) {
+      setLeads(previous);
+      alert('Erro ao remover lead: ' + deleteError.message);
     }
     setSavingStatusId(null);
   };
@@ -508,12 +529,13 @@ export default function BrokerLeadsPage() {
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Conjunto de anúncio</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Anúncio</th>
                   <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações</th>
+                  {isViewingAsCorretor && <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Admin</th>}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={20} className="py-20 text-center">
+                    <td colSpan={isViewingAsCorretor ? 21 : 20} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -591,6 +613,17 @@ export default function BrokerLeadsPage() {
                         {lead.observacoes || '-'}
                       </div>
                     </td>
+                    {isViewingAsCorretor && (
+                      <td className="border border-slate-100 px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => deleteLead(lead)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100"
+                        >
+                          <Trash2 size={13} /> Remover
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 )})}
               </tbody>
