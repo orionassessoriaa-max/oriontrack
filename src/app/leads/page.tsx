@@ -259,14 +259,28 @@ export default function BrokerLeadsPage() {
     const previous = leads;
     setLeads((current) => current.filter((item) => item.id !== lead.id));
 
-    const { error: deleteError } = await supabase
-      .from('leads')
-      .delete()
-      .eq('id', lead.id);
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
 
-    if (deleteError) {
+    if (!token) {
       setLeads(previous);
-      alert('Erro ao remover lead: ' + deleteError.message);
+      setSavingStatusId(null);
+      alert('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    const response = await fetch(`/api/admin/leads/${lead.id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setLeads(previous);
+      alert('Erro ao remover lead: ' + (payload.error || 'tente novamente.'));
     }
     setSavingStatusId(null);
   };
