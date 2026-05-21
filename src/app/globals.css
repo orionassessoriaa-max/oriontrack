@@ -90,6 +90,57 @@
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
 }
 
+.dashboard-month-bar,
+.dashboard-week-bar {
+  height: var(--bar-height);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  animation: dashboard-bar-rise 850ms cubic-bezier(.2,.8,.2,1) forwards;
+  animation-delay: var(--bar-delay, 0ms);
+  transition:
+    transform 420ms cubic-bezier(.2,.8,.2,1),
+    filter 320ms ease,
+    box-shadow 320ms ease;
+}
+
+.group\/month:hover .dashboard-month-bar,
+.group\/day:hover .dashboard-week-bar {
+  transform: scaleY(1.12) !important;
+  filter: saturate(1.12) brightness(1.04);
+}
+
+.dashboard-progress-bar {
+  width: var(--bar-width);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: dashboard-progress-fill 900ms cubic-bezier(.2,.8,.2,1) forwards;
+  animation-delay: var(--bar-delay, 0ms);
+}
+
+.group\/city:hover .dashboard-progress-bar,
+.group\/stage:hover .dashboard-progress-bar {
+  transform: scaleX(1.015) !important;
+  filter: saturate(1.15) brightness(1.04);
+}
+
+@keyframes dashboard-bar-rise {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes dashboard-progress-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 .status-badge {
   @apply px-2.5 py-0.5 rounded-full text-xs font-medium inline-flex items-center;
 }
