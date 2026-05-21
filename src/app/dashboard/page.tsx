@@ -312,10 +312,10 @@ export default function DashboardPage() {
   const activePipeline = stats.waiting + stats.inProgress + stats.quoted + stats.sold;
   const funnelMax = Math.max(stats.total, activePipeline, stats.quoted + stats.sold, stats.sold, 1);
   const funnelSteps = [
-    { label: 'Leads', value: stats.total, detail: 'entradas captadas', color: 'from-sky-400 to-blue-600', width: 100 },
-    { label: 'Atendimento', value: activePipeline, detail: 'em funil comercial', color: 'from-cyan-400 to-blue-500', width: Math.max((activePipeline / funnelMax) * 100, 38) },
-    { label: 'Cotação', value: stats.quoted + stats.sold, detail: 'propostas e vendas', color: 'from-blue-400 to-indigo-500', width: Math.max(((stats.quoted + stats.sold) / funnelMax) * 100, 28) },
-    { label: 'Vendas', value: stats.sold, detail: 'conversões fechadas', color: 'from-emerald-400 to-teal-500', width: Math.max((stats.sold / funnelMax) * 100, stats.sold > 0 ? 22 : 16) },
+    { label: 'Topo', name: 'Leads', value: stats.total, detail: 'entradas captadas', color: '#1597ff', glow: 'rgba(14, 165, 233, 0.42)', width: 100 },
+    { label: 'Meio', name: 'Atendimento', value: activePipeline, detail: 'em funil comercial', color: '#0fb7e9', glow: 'rgba(6, 182, 212, 0.34)', width: Math.max((activePipeline / funnelMax) * 100, 62) },
+    { label: 'Proposta', name: 'Cotação', value: stats.quoted + stats.sold, detail: 'propostas e vendas', color: '#5868ff', glow: 'rgba(99, 102, 241, 0.34)', width: Math.max(((stats.quoted + stats.sold) / funnelMax) * 100, 46) },
+    { label: 'Fundo', name: 'Vendas', value: stats.sold, detail: 'conversões fechadas', color: '#10c7b0', glow: 'rgba(20, 184, 166, 0.36)', width: Math.max((stats.sold / funnelMax) * 100, stats.sold > 0 ? 30 : 24) },
   ];
   const quoteRate = stats.total > 0 ? ((stats.quoted + stats.sold) / stats.total) * 100 : 0;
   const salesRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
@@ -435,22 +435,24 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="mx-auto flex max-w-xl flex-col items-center gap-2">
+            <div className="orion-funnel-3d mx-auto flex max-w-xl flex-col items-center py-4">
               {funnelSteps.map((step, index) => (
                 <Link
-                  key={step.label}
+                  key={step.name}
                   href={index === 0 ? '/leads' : `/leads?status=${encodeURIComponent(index === 1 ? 'Aguardando atendimento' : index === 2 ? 'Cotação enviada' : 'Venda realizada')}`}
-                  className="group relative flex min-h-20 items-center justify-center overflow-hidden rounded-xl text-white shadow-lg shadow-blue-900/10 transition-all duration-500 hover:scale-[1.025] hover:shadow-blue-600/25"
+                  className="orion-funnel-slice group"
                   style={{
                     width: `${step.width}%`,
-                    clipPath: 'polygon(7% 0, 93% 0, 82% 100%, 18% 100%)',
+                    ['--slice-color' as string]: step.color,
+                    ['--slice-glow' as string]: step.glow,
                   }}
                 >
-                  <div className={`absolute inset-0 bg-gradient-to-r ${step.color} transition-transform duration-700 group-hover:scale-110`} />
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_10%,rgba(255,255,255,0.28),transparent_35%)] opacity-80" />
-                  <div className="relative z-10 text-center">
-                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/80">{step.label}</p>
-                    <p className="text-3xl font-black leading-none">{step.value}</p>
+                  <span className="orion-funnel-rim" />
+                  <span className="orion-funnel-shine" />
+                  <div className="orion-funnel-content">
+                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/75">{step.label}</p>
+                    <p className="text-sm font-black uppercase tracking-[0.22em] text-white">{step.name}</p>
+                    <p className="text-4xl font-black leading-none text-white drop-shadow">{step.value}</p>
                     <p className="mt-1 text-[11px] font-bold text-white/80">{step.detail}</p>
                   </div>
                 </Link>
