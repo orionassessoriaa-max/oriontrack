@@ -15,7 +15,7 @@ function roleLabel(role?: string) {
 }
 
 export default function ProfilePage() {
-  const { profile, loading, refreshProfile } = useAuth();
+  const { profile, actualProfile, loading, refreshProfile } = useAuth();
   const [theme, setTheme] = useState<'claro' | 'noturno'>((profile?.tema_sistema as 'claro' | 'noturno') || 'claro');
   const [savingTheme, setSavingTheme] = useState(false);
 
@@ -24,9 +24,12 @@ export default function ProfilePage() {
   }, [profile?.tema_sistema]);
 
   const saveTheme = async () => {
-    if (!profile?.id) return;
+    const targetProfileId = actualProfile?.id || profile?.id;
+    if (!targetProfileId) return;
     setSavingTheme(true);
-    const { error } = await supabase.from('profiles').update({ tema_sistema: theme }).eq('id', profile.id);
+    window.localStorage.setItem('orion:tema_sistema', theme);
+    window.dispatchEvent(new CustomEvent('orion-theme-change', { detail: theme }));
+    const { error } = await supabase.from('profiles').update({ tema_sistema: theme }).eq('id', targetProfileId);
     setSavingTheme(false);
     if (error) {
       alert('Erro ao salvar tema: ' + error.message);
