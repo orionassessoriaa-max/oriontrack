@@ -38,7 +38,7 @@ function visibleStatus(demand: Demand) {
 function statusClass(status: string) {
   if (status === 'entregue' || status === 'aprovado' || status === 'feito') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
   if (status === 'atrasado') return 'bg-red-50 text-red-700 border-red-200';
-  if (status === 'revisao') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (status === 'revisao') return 'bg-blue-50 text-blue-700 border-blue-200';
   return 'bg-blue-50 text-blue-700 border-blue-200';
 }
 
@@ -173,7 +173,7 @@ export default function CreativeDemandsPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
-        <form onSubmit={createDemand} className="border border-slate-200 bg-white p-5 shadow-sm">
+        <form onSubmit={createDemand} className="border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md">
           <div className="mb-5 flex items-center gap-2">
             <Plus className="text-blue-600" size={18} />
             <h2 className="text-lg font-black text-slate-950">Nova demanda</h2>
@@ -212,7 +212,7 @@ export default function CreativeDemandsPage() {
             const status = visibleStatus(demand);
             const canDelete = canUpload && ['entregue', 'feito', 'aprovado', 'revisao'].includes(status);
             return (
-              <div key={demand.id} className="border border-slate-200 bg-white p-5 shadow-sm">
+              <div key={demand.id} className="border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-blue-200 hover:shadow-md">
                 <div className="flex flex-col justify-between gap-4 lg:flex-row">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">

@@ -106,7 +106,7 @@ export default function BrokerCreativesPage() {
           {assets.map((asset) => (
             <div key={asset.id} className="border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex gap-4">
-                <div className="h-32 w-32 shrink-0 overflow-hidden border border-slate-200 bg-slate-50">
+                <div className="force-white h-32 w-32 shrink-0 overflow-hidden border border-slate-200">
                   {asset.arquivo_url ? (
                     <img src={asset.arquivo_url} alt={asset.titulo} className="h-full w-full object-cover" />
                   ) : (
@@ -125,7 +125,7 @@ export default function BrokerCreativesPage() {
                   </div>
 
                   {asset.comentario_corretor && (
-                    <p className="mt-3 border-l-4 border-amber-400 bg-amber-50 p-3 text-xs font-bold text-amber-900">
+                    <p className="mt-3 border-l-4 border-blue-400 bg-blue-50 p-3 text-xs font-bold text-blue-900">
                       {asset.comentario_corretor}
                     </p>
                   )}
@@ -139,7 +139,7 @@ export default function BrokerCreativesPage() {
                         className="min-h-24 w-full border border-slate-200 bg-slate-50 p-3 text-sm font-bold outline-none focus:border-blue-500"
                       />
                       <div className="flex gap-2">
-                        <button onClick={() => updateCreative(asset, 'revisao', comment)} className="flex items-center gap-2 bg-amber-500 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+                        <button onClick={() => updateCreative(asset, 'revisao', comment)} className="flex items-center gap-2 bg-blue-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-blue-700">
                           <MessageSquare size={15} /> Enviar revisao
                         </button>
                         <button onClick={() => setReviewId(null)} className="px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500">Cancelar</button>
@@ -150,7 +150,7 @@ export default function BrokerCreativesPage() {
                       <button onClick={() => updateCreative(asset, 'aprovado')} className="flex items-center gap-2 bg-emerald-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
                         <CheckCircle2 size={15} /> Aprovar
                       </button>
-                      <button onClick={() => { setReviewId(asset.id); setComment(asset.comentario_corretor || ''); }} className="flex items-center gap-2 border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700">
+                      <button onClick={() => { setReviewId(asset.id); setComment(asset.comentario_corretor || ''); }} className="flex items-center gap-2 border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
                         <XCircle size={15} /> Revisar
                       </button>
                     </div>
