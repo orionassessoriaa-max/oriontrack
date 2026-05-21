@@ -65,7 +65,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error || 'Erro ao carregar time.');
+      setError(payload.error || 'Erro ao carregar time. Se voce esta logado como corretor, seu cadastro precisa estar vinculado ao registro de corretor.');
       setLoading(false);
       return;
     }
