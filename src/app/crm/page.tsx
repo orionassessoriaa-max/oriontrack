@@ -552,8 +552,8 @@ export default function CrmPage() {
           <h1 className="text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">Pipeline Comercial</h1>
           <p className="font-medium text-gray-500">Arraste leads entre etapas, clique no cliente e registre observacoes, ligacoes e WhatsApp.</p>
         </div>
-        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3 md:w-auto">
-          <div className="relative w-full sm:min-w-72">
+        <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
+          <div className="relative w-full lg:w-[320px]">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               value={search}
@@ -565,13 +565,13 @@ export default function CrmPage() {
           <select
             value={pageFilter}
             onChange={(event) => setPageFilter(event.target.value)}
-            className="w-full rounded-2xl border-none bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-2xl border-none bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500/20 lg:w-[240px] lg:min-w-[240px]"
           >
             <option value="todas">Todas as paginas</option>
             {pageOptions.map((page) => <option key={page} value={page}>{page}</option>)}
             <option value="__sem_pagina__">Sem pagina</option>
           </select>
-          <button onClick={fetchCrm} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm">
+          <button onClick={fetchCrm} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md lg:w-[170px]">
             {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Atualizar
           </button>
         </div>
