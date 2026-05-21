@@ -341,8 +341,8 @@ body.theme-noturno {
 }
 
 .orion-traffic-funnel {
-  width: min(100%, 760px);
-  filter: drop-shadow(0 24px 38px rgba(2, 42, 83, 0.22));
+  width: min(100%, 840px);
+  filter: drop-shadow(0 26px 42px rgba(2, 42, 83, 0.24));
 }
 
 .orion-traffic-funnel svg {
@@ -393,7 +393,7 @@ body.theme-noturno {
 }
 
 .orion-traffic-value {
-  font-size: 42px;
+  font-size: 46px;
   font-weight: 950;
 }
 
@@ -402,29 +402,37 @@ body.theme-noturno {
 }
 
 .orion-traffic-connector {
-  stroke: rgba(14, 165, 233, 0.55);
-  stroke-width: 2;
-  stroke-dasharray: 6 7;
+  stroke: rgba(14, 165, 233, 0.68);
+  stroke-width: 3;
+  stroke-linecap: round;
 }
 
 .orion-traffic-node {
-  fill: #e0f2fe;
+  fill: #ffffff;
   stroke: #0284c7;
-  stroke-width: 2;
+  stroke-width: 3;
+  filter: drop-shadow(0 6px 10px rgba(14, 165, 233, 0.24));
+}
+
+.orion-traffic-label-card {
+  fill: rgba(255, 255, 255, 0.82);
+  stroke: rgba(191, 219, 254, 0.9);
+  stroke-width: 1;
+  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.08));
 }
 
 .orion-traffic-side-label {
   fill: #0f172a;
-  font-size: 16px;
+  font-size: 21px;
   font-weight: 950;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
 }
 
 .orion-traffic-side-detail {
-  fill: #64748b;
-  font-size: 13px;
-  font-weight: 800;
+  fill: #475569;
+  font-size: 15px;
+  font-weight: 850;
 }
 
 @keyframes funnel-breathe {
@@ -491,20 +499,20 @@ body.theme-noturno {
   }
 
   .orion-traffic-funnel {
-    width: min(100%, 560px);
+    width: min(100%, 640px);
     padding-inline: 0;
   }
 
   .orion-traffic-value {
-    font-size: 34px;
+    font-size: 36px;
   }
 
   .orion-traffic-side-label {
-    font-size: 13px;
+    font-size: 16px;
   }
 
   .orion-traffic-side-detail {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   table {
