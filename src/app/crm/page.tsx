@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
@@ -96,6 +96,14 @@ type CommercialPayload = {
   valor_comissao: number;
 };
 
+type CommercialModalState = {
+  lead: Lead;
+  status: LeadStatus;
+  valor_negociacao: string;
+  operadora_negociacao: string;
+  valor_comissao: string;
+} | null;
+
 const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
 
 export default function CrmPage() {
@@ -137,6 +145,9 @@ export default function CrmPage() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [commercialModal, setCommercialModal] = useState<CommercialModalState>(null);
+  const [commercialModalError, setCommercialModalError] = useState<string | null>(null);
+  const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
 
   async function fetchCrm() {
     if (!profile?.id) return;
@@ -318,38 +329,57 @@ export default function CrmPage() {
     }, 0);
   }
 
-  function collectCommercialPayload(lead: Lead, status: LeadStatus): CommercialPayload | null {
-    if (!requiresCommercialData(status)) return null;
+  function requestCommercialPayload(lead: Lead, status: LeadStatus): Promise<CommercialPayload | null> {
+    if (!requiresCommercialData(status)) return Promise.resolve(null);
 
-    const valorNegociacao = window.prompt('Valor da negociação. Ex: 1200', String(lead.valor_negociacao || ''));
-    if (!valorNegociacao) return null;
+    setCommercialModalError(null);
+    setCommercialModal({
+      lead,
+      status,
+      valor_negociacao: lead.valor_negociacao ? String(lead.valor_negociacao) : '',
+      operadora_negociacao: lead.operadora_negociacao || lead.operadora || '',
+      valor_comissao: lead.valor_comissao ? String(lead.valor_comissao) : '',
+    });
 
-    const operadoraNegociacao = window.prompt('Operadora da negociação. Ex: Amil, Bradesco, Porto', lead.operadora_negociacao || lead.operadora || '');
-    if (!operadoraNegociacao) return null;
+    return new Promise((resolve) => {
+      commercialResolverRef.current = resolve;
+    });
+  }
 
-    const valorComissao = window.prompt('Valor da comissão. Ex: 240', String(lead.valor_comissao || ''));
-    if (!valorComissao) return null;
+  function closeCommercialModal(payload: CommercialPayload | null) {
+    commercialResolverRef.current?.(payload);
+    commercialResolverRef.current = null;
+    setCommercialModal(null);
+    setCommercialModalError(null);
+  }
+
+  function submitCommercialModal(event: FormEvent) {
+    event.preventDefault();
+    if (!commercialModal) return;
 
     const payload = {
-      valor_negociacao: parseCurrencyInput(valorNegociacao),
-      operadora_negociacao: operadoraNegociacao.trim(),
-      valor_comissao: parseCurrencyInput(valorComissao),
+      valor_negociacao: parseCurrencyInput(commercialModal.valor_negociacao),
+      operadora_negociacao: commercialModal.operadora_negociacao.trim(),
+      valor_comissao: parseCurrencyInput(commercialModal.valor_comissao),
     };
 
     if (!payload.valor_negociacao || !payload.operadora_negociacao || !payload.valor_comissao) {
-      alert('Para avançar para negociação em diante, preencha valor da negociação, operadora e comissão.');
-      return null;
+      setCommercialModalError('Preencha valor da negociacao, operadora e comissao para avancar.');
+      return;
     }
 
-    return payload;
+    closeCommercialModal(payload);
   }
 
   async function updateLeadStatus(leadId: string, status: LeadStatus) {
     const currentLead = leads.find((lead) => lead.id === leadId);
     if (!currentLead) return;
 
-    const commercialPayload = collectCommercialPayload(currentLead, status);
-    if (requiresCommercialData(status) && !commercialPayload) return;
+    let commercialPayload: CommercialPayload | null = null;
+    if (requiresCommercialData(status)) {
+      commercialPayload = await requestCommercialPayload(currentLead, status);
+      if (!commercialPayload) return;
+    }
 
     const previousLeads = leads;
     const optimisticPayload = { ...(commercialPayload || {}), status };
@@ -918,6 +948,86 @@ export default function CrmPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {commercialModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
+          <form
+            onSubmit={submitCommercialModal}
+            className="w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/25"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Dados comerciais</p>
+                <h2 className="mt-1 text-2xl font-black text-slate-950">Avancar para {getLeadStatusStyle(commercialModal.status).label}</h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">{commercialModal.lead.nome}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => closeCommercialModal(null)}
+                className="rounded-2xl bg-slate-100 p-2 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {commercialModalError && (
+              <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-black text-red-600">
+                {commercialModalError}
+              </div>
+            )}
+
+            <div className="grid gap-4">
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da negociacao</span>
+                <input
+                  autoFocus
+                  value={commercialModal.valor_negociacao}
+                  onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_negociacao: event.target.value } : current)}
+                  placeholder="Ex: 1200"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Operadora</span>
+                <input
+                  value={commercialModal.operadora_negociacao}
+                  onChange={(event) => setCommercialModal((current) => current ? { ...current, operadora_negociacao: event.target.value } : current)}
+                  placeholder="Ex: Amil, Bradesco, Porto"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da comissao</span>
+                <input
+                  value={commercialModal.valor_comissao}
+                  onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_comissao: event.target.value } : current)}
+                  placeholder="Ex: 240"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => closeCommercialModal(null)}
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700"
+              >
+                Salvar e mover lead
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </InternalLayout>
