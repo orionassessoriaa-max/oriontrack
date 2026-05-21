@@ -542,13 +542,13 @@ export default function CrmPage() {
   return (
     <InternalLayout>
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
-        <div>
+        <div className="min-w-0">
           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">CRM Orion</p>
-          <h1 className="text-3xl font-black tracking-tight text-gray-900">Pipeline Comercial</h1>
+          <h1 className="text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">Pipeline Comercial</h1>
           <p className="font-medium text-gray-500">Arraste leads entre etapas, clique no cliente e registre observacoes, ligacoes e WhatsApp.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <div className="relative min-w-72">
+        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3 md:w-auto">
+          <div className="relative w-full sm:min-w-72">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               value={search}
@@ -560,19 +560,19 @@ export default function CrmPage() {
           <select
             value={pageFilter}
             onChange={(event) => setPageFilter(event.target.value)}
-            className="rounded-2xl border-none bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-2xl border-none bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm focus:ring-2 focus:ring-blue-500/20"
           >
             <option value="todas">Todas as paginas</option>
             {pageOptions.map((page) => <option key={page} value={page}>{page}</option>)}
             <option value="__sem_pagina__">Sem pagina</option>
           </select>
-          <button onClick={fetchCrm} className="flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm">
+          <button onClick={fetchCrm} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm">
             {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Atualizar
           </button>
         </div>
       </div>
 
-      <div className="mb-8 grid gap-4 md:grid-cols-5">
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-5">
         <Stat label="Leads" value={leads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="border-gray-100 bg-white text-slate-600" />
         <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} active={metricFilter === 'sem_resposta'} onClick={() => setMetricFilter('sem_resposta')} className="border-amber-100 bg-amber-50 text-amber-700" />
         <Stat label="Tarefas" value={openTasks} icon={Clock} active={metricFilter === 'tarefas'} onClick={() => setMetricFilter('tarefas')} className="border-blue-100 bg-blue-50 text-blue-700" />
@@ -602,14 +602,14 @@ export default function CrmPage() {
               <Loader2 className="animate-spin text-blue-600" size={42} />
             </div>
           ) : (
-            <div className="scrollbar-visible flex min-h-[calc(100vh-330px)] snap-x gap-5 overflow-x-scroll pb-8">
+            <div className="scrollbar-visible flex min-h-[calc(100dvh-330px)] snap-x gap-4 overflow-x-scroll pb-8 sm:gap-5">
               {columns.map((column) => {
                 const columnLeads = getLeadsByStatus(column.id);
                 const statusStyle = getLeadStatusStyle(column.id);
                 const commercialTotal = getCommercialTotal(column.id);
 
                 return (
-                  <div key={column.id} className="min-w-[310px] flex-1 snap-start">
+                  <div key={column.id} className="min-w-[285px] flex-1 snap-start sm:min-w-[310px]">
                     <div className="sticky top-0 z-20 mb-3 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div>

@@ -333,28 +333,28 @@ export default function DashboardPage() {
     <InternalLayout>
       {/* Header Section */}
       <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
-        <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-2">
+        <h1 className="mb-2 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
           {isDataLoading ? (
             <span className="inline-block w-48 h-10 bg-gray-100 animate-pulse rounded-lg" />
           ) : (
             `Olá, ${firstName}`
           )}
         </h1>
-        <p className="text-xl font-bold text-blue-600 mb-2">Seu centro de vendas Orion está pronto para acelerar seus resultados</p>
-        <p className="text-gray-500 font-medium max-w-2xl">
+        <p className="mb-2 text-lg font-bold text-blue-600 sm:text-xl">Seu centro de vendas Orion está pronto para acelerar seus resultados</p>
+        <p className="max-w-2xl text-sm font-medium leading-relaxed text-gray-500 sm:text-base">
           Acompanhe seus leads, avance cada negociação e transforme oportunidades em comissão com mais controle, velocidade e clareza.
         </p>
       </div>
 
       {/* Intro Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-        <div className="lg:col-span-2 bg-gradient-to-br from-blue-600 to-indigo-700 p-10 rounded-[2.5rem] text-white shadow-xl shadow-blue-600/20 relative overflow-hidden group">
+      <div className="mb-12 grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">
+        <div className="group relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white shadow-xl shadow-blue-600/20 sm:rounded-[2.5rem] sm:p-10 lg:col-span-2">
           <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
             <OrionMark size={70} variant="light" />
           </div>
           <div className="relative z-10">
-            <h2 className="text-2xl font-black mb-4">Seu painel comercial</h2>
-            <p className="text-blue-100 font-medium text-lg mb-8 max-w-md">
+            <h2 className="mb-4 text-2xl font-black">Seu painel comercial</h2>
+            <p className="mb-8 max-w-md text-base font-medium text-blue-100 sm:text-lg">
               Veja seus leads, atualize a etapa de cada atendimento e acompanhe sua evolução comercial em tempo real.
             </p>
             <div className="flex flex-wrap gap-4">
@@ -368,7 +368,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col justify-between">
+        <div className="flex flex-col justify-between rounded-[1.75rem] border border-gray-100 bg-white p-6 shadow-sm sm:rounded-[2.5rem] sm:p-8">
           <div>
             <div className="flex items-center gap-2 text-blue-600 mb-4 font-black text-xs uppercase tracking-widest">
               <Info size={14} /> Como usar seu painel
@@ -392,12 +392,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="mb-12 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-600/10 dark-dashboard-panel">
-        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 p-7 text-white">
+      <div className="mb-12 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-600/10 dark-dashboard-panel sm:rounded-[2rem]">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 p-5 text-white sm:p-7">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
               <p className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">Overview comercial</p>
-              <h2 className="text-3xl font-black tracking-tight">Funil Orion Track</h2>
+              <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Funil Orion Track</h2>
               <p className="mt-2 max-w-2xl text-sm font-bold leading-relaxed text-blue-100">
                 Uma visão executiva do caminho do lead: entrada, atendimento, cotação e venda.
               </p>
@@ -423,8 +423,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid gap-6 p-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-6 dark-dashboard-inner">
+        <div className="grid gap-5 p-4 sm:p-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 dark-dashboard-inner sm:p-6">
             <div className="mb-6 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
                 <Target size={22} />
@@ -484,7 +484,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-12 grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_1.8fr]">
-        <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Resumo deste mês</p>
@@ -509,7 +509,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
           <div className="mb-6 flex flex-col justify-between gap-2 md:flex-row md:items-end">
             <div>
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Crescimento mensal</p>
@@ -518,7 +518,7 @@ export default function DashboardPage() {
             <p className="text-xs font-bold text-slate-400">Últimos 6 meses</p>
           </div>
           <div
-            className="grid min-h-72 grid-cols-6 items-end gap-3"
+            className="scrollbar-visible grid min-h-72 grid-cols-6 items-end gap-3 overflow-x-auto pb-2 [grid-template-columns:repeat(6,minmax(86px,1fr))]"
             onMouseEnter={() => setChartHovering(true)}
             onMouseLeave={() => setChartHovering(false)}
           >
@@ -594,7 +594,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-12 grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
           <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
             <div>
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Últimos 7 dias</p>
@@ -608,8 +608,8 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-[1fr_170px]">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <div className="flex h-56 items-end gap-3">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:p-4">
+              <div className="flex h-56 items-end gap-2 sm:gap-3">
                 {weeklyLeads.map((day) => {
                   const height = Math.max((day.leads / maxWeeklyLeads) * 100, day.leads > 0 ? 14 : 5);
                   const isBest = day.key === bestWeeklyDay.key && day.leads > 0;
@@ -629,7 +629,7 @@ export default function DashboardPage() {
                           {day.leads} leads
                         </div>
                       </div>
-                      <span className="text-xs font-black text-slate-500">{day.label}</span>
+                      <span className="text-[10px] font-black text-slate-500 sm:text-xs">{day.label}</span>
                     </div>
                   );
                 })}
@@ -655,7 +655,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
           <div className="mb-6 flex items-end justify-between gap-4">
             <div>
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Ranking</p>
@@ -741,7 +741,7 @@ export default function DashboardPage() {
             <Link 
               key={idx} 
               href={action.href}
-              className="group bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-500 flex flex-col justify-between h-64"
+              className="group flex min-h-48 flex-col justify-between rounded-[1.75rem] border border-gray-100 bg-white p-6 shadow-sm transition-all duration-500 hover:border-blue-200 hover:shadow-xl sm:h-64 sm:rounded-[2.5rem] sm:p-8"
             >
               <div className="flex justify-between items-start">
                 <div className="p-4 bg-slate-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 transform group-hover:scale-110 shadow-inner">
@@ -759,7 +759,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Your Orion Team */}
-      <div className="bg-slate-50 p-10 rounded-[3rem] border border-gray-100 mb-10">
+      <div className="mb-10 rounded-[2rem] border border-gray-100 bg-slate-50 p-5 sm:rounded-[3rem] sm:p-10">
         <div className="mb-8">
           <h2 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Seu time Orion</h2>
           <p className="text-gray-500 font-medium">Essas são as pessoas da Orion responsáveis por acompanhar sua operação.</p>
