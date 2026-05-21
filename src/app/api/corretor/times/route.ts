@@ -7,6 +7,9 @@ type GuardProfile = {
   id: string;
   tipo_usuario: string;
   corretor_id: string | null;
+  email: string | null;
+  email_real: string | null;
+  nome: string | null;
 };
 
 async function requireUser(request: Request) {
@@ -23,7 +26,7 @@ async function requireUser(request: Request) {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('id, tipo_usuario, corretor_id')
+    .select('id, tipo_usuario, corretor_id, email, email_real, nome')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -34,12 +37,37 @@ async function requireUser(request: Request) {
   return { user, profile: profile as GuardProfile };
 }
 
-function getRequestedCorretorId(request: Request, profile: GuardProfile, body?: any) {
+async function resolveProfileCorretorId(profile: GuardProfile) {
+  if (profile.corretor_id) return profile.corretor_id;
+
+  const emails = [profile.email, profile.email_real]
+    .filter(Boolean)
+    .map((email) => String(email).trim().toLowerCase());
+
+  if (emails.length === 0) return null;
+
+  const { data: corretor } = await supabaseAdmin
+    .from('corretores')
+    .select('id')
+    .or(emails.map((email) => `email.eq.${email},email_real.eq.${email}`).join(','))
+    .maybeSingle();
+
+  if (!corretor?.id) return null;
+
+  await supabaseAdmin
+    .from('profiles')
+    .update({ corretor_id: corretor.id })
+    .eq('id', profile.id);
+
+  return corretor.id;
+}
+
+async function getRequestedCorretorId(request: Request, profile: GuardProfile, body?: any) {
   const url = new URL(request.url);
   const requested = String(body?.corretor_id || url.searchParams.get('corretor_id') || '').trim();
 
   if (profile.tipo_usuario === 'admin') return requested || null;
-  return profile.corretor_id;
+  return resolveProfileCorretorId(profile);
 }
 
 async function ensureTeam(corretorId: string, nome = 'Time comercial') {
@@ -68,7 +96,7 @@ export async function GET(request: Request) {
     const guard = await requireUser(request);
     if ('error' in guard) return guard.error;
 
-    const corretorId = getRequestedCorretorId(request, guard.profile);
+    const corretorId = await getRequestedCorretorId(request, guard.profile);
     if (!corretorId) {
       return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
     }
@@ -96,7 +124,7 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const action = String(body.action || 'create_member');
-    const corretorId = getRequestedCorretorId(request, guard.profile, body);
+    const corretorId = await getRequestedCorretorId(request, guard.profile, body);
     if (!corretorId) {
       return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
     }
