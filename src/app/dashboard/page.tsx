@@ -678,12 +678,14 @@ export default function DashboardPage() {
             onMouseLeave={() => setChartHovering(false)}
           >
             {monthlyPerformance.map((month, index) => (
-              <div key={month.key} className="flex h-full flex-col justify-end gap-3">
-                <div className="flex h-48 items-end gap-1.5 rounded-2xl bg-slate-50 px-2 pb-2">
+              <div key={month.key} className="group/month flex h-full flex-col justify-end gap-3">
+                <div className="flex h-48 items-end gap-1.5 rounded-2xl bg-slate-50 px-2 pb-2 transition-all duration-300 group-hover/month:-translate-y-1 group-hover/month:bg-blue-50/60 group-hover/month:shadow-lg group-hover/month:shadow-blue-500/10">
                   <div className="flex flex-1 flex-col items-center justify-end">
                     <div
-                      className="w-full origin-bottom rounded-t-lg bg-gradient-to-t from-blue-700 to-blue-400 shadow-sm shadow-blue-500/20 transition-all duration-700 ease-out"
+                      className="dashboard-month-bar w-full rounded-t-lg bg-gradient-to-t from-blue-700 to-blue-400 shadow-sm shadow-blue-500/20 group-hover/month:shadow-lg group-hover/month:shadow-blue-500/30"
                       style={{
+                        ['--bar-height' as string]: `${Math.max((month.spend / maxMonthlySpend) * chartHeight, month.spend > 0 ? 14 : 0)}px`,
+                        ['--bar-delay' as string]: `${index * 90}ms`,
                         height: `${Math.max((month.spend / maxMonthlySpend) * chartHeight, month.spend > 0 ? 14 : 0)}px`,
                         transform: chartHovering ? 'scaleY(1.08)' : 'scaleY(1)',
                         transitionDelay: chartHovering ? `${index * 90}ms` : '0ms',
@@ -692,8 +694,10 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex flex-1 flex-col items-center justify-end">
                     <div
-                      className="w-full origin-bottom rounded-t-lg bg-gradient-to-t from-emerald-600 to-emerald-300 shadow-sm shadow-emerald-500/20 transition-all duration-700 ease-out"
+                      className="dashboard-month-bar w-full rounded-t-lg bg-gradient-to-t from-emerald-600 to-emerald-300 shadow-sm shadow-emerald-500/20 group-hover/month:shadow-lg group-hover/month:shadow-emerald-500/30"
                       style={{
+                        ['--bar-height' as string]: `${Math.max((month.leads / maxMonthlyLeads) * chartHeight, month.leads > 0 ? 14 : 0)}px`,
+                        ['--bar-delay' as string]: `${index * 90 + 45}ms`,
                         height: `${Math.max((month.leads / maxMonthlyLeads) * chartHeight, month.leads > 0 ? 14 : 0)}px`,
                         transform: chartHovering ? 'scaleY(1.08)' : 'scaleY(1)',
                         transitionDelay: chartHovering ? `${index * 90 + 45}ms` : '0ms',
@@ -770,17 +774,21 @@ export default function DashboardPage() {
                   const isBest = day.key === bestWeeklyDay.key && day.leads > 0;
 
                   return (
-                    <div key={day.key} className="group flex min-w-0 flex-1 flex-col items-center gap-3">
+                    <div key={day.key} className="group/day flex min-w-0 flex-1 flex-col items-center gap-3">
                       <div className="relative flex h-44 w-full items-end justify-center rounded-2xl bg-white px-2 py-2">
                         <div
-                          className={`w-full max-w-10 origin-bottom rounded-xl transition-all duration-500 group-hover:scale-y-105 ${
+                          className={`dashboard-week-bar w-full max-w-10 rounded-xl group-hover/day:shadow-lg ${
                             isBest
                               ? 'bg-gradient-to-t from-blue-700 to-cyan-400 shadow-lg shadow-blue-500/25'
                               : 'bg-gradient-to-t from-blue-500 to-blue-300'
                           }`}
-                          style={{ height: `${height}%` }}
+                          style={{
+                            ['--bar-height' as string]: `${height}%`,
+                            ['--bar-delay' as string]: `${weeklyLeads.indexOf(day) * 70}ms`,
+                            height: `${height}%`
+                          }}
                         />
-                        <div className="pointer-events-none absolute -top-3 rounded-xl border border-slate-100 bg-white px-2 py-1 text-[10px] font-black text-slate-700 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                        <div className="pointer-events-none absolute -top-3 rounded-xl border border-slate-100 bg-white px-2 py-1 text-[10px] font-black text-slate-700 opacity-0 shadow-sm transition-opacity group-hover/day:opacity-100">
                           {day.leads} leads
                         </div>
                       </div>
@@ -820,7 +828,7 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-5">
             {topCities.length > 0 ? topCities.map((city, index) => (
-              <div key={`${city.city}-${index}`}>
+              <div key={`${city.city}-${index}`} className="group/city">
                 <div className="mb-2 flex items-center justify-between gap-4 text-sm">
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="w-7 shrink-0 text-xs font-bold text-slate-400">#{index + 1}</span>
@@ -828,8 +836,15 @@ export default function DashboardPage() {
                   </div>
                   <span className="shrink-0 text-xs font-bold text-slate-500">{city.leads} leads</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.max((city.leads / maxCityLeads) * 100, 8)}%` }} />
+                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="dashboard-progress-bar h-full rounded-full bg-blue-600 transition-all duration-500 group-hover/city:bg-gradient-to-r group-hover/city:from-blue-500 group-hover/city:to-cyan-400 group-hover/city:shadow-lg group-hover/city:shadow-blue-500/25"
+                    style={{
+                      ['--bar-width' as string]: `${Math.max((city.leads / maxCityLeads) * 100, 8)}%`,
+                      ['--bar-delay' as string]: `${index * 80}ms`,
+                      width: `${Math.max((city.leads / maxCityLeads) * 100, 8)}%`
+                    }}
+                  />
                 </div>
               </div>
             )) : (
@@ -860,14 +875,21 @@ export default function DashboardPage() {
         <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">
           <h3 className="mb-6 text-sm font-black uppercase tracking-widest text-gray-900">Distribuição por etapa</h3>
           <div className="space-y-4">
-            {performanceBars.map((bar) => (
-              <div key={bar.label}>
+            {performanceBars.map((bar, index) => (
+              <div key={bar.label} className="group/stage">
                 <div className="mb-2 flex justify-between text-xs font-bold text-gray-500">
                   <span>{bar.label}</span>
                   <span>{bar.value}</span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                  <div className={`h-full rounded-full ${bar.color}`} style={{ width: `${(bar.value / maxMetric) * 100}%` }} />
+                  <div
+                    className={`dashboard-progress-bar h-full rounded-full ${bar.color} transition-all duration-500 group-hover/stage:brightness-110 group-hover/stage:shadow-lg`}
+                    style={{
+                      ['--bar-width' as string]: `${(bar.value / maxMetric) * 100}%`,
+                      ['--bar-delay' as string]: `${index * 90}ms`,
+                      width: `${(bar.value / maxMetric) * 100}%`
+                    }}
+                  />
                 </div>
               </div>
             ))}
