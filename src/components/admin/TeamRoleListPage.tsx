@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { Plus, Search, Eye, Loader2, ShieldAlert, RefreshCw, Palette, MessageSquare, Copy } from 'lucide-react';
+import { Plus, Search, Eye, Loader2, ShieldAlert, RefreshCw, Palette, MessageSquare, Copy, Edit2 } from 'lucide-react';
 import { Profile, UserRole } from '@/types';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { getTeamMemberPhoto } from '@/lib/orionTeam';
 
 type TeamRoleListPageProps = {
   role: Extract<UserRole, 'designer' | 'account_manager'>;
@@ -151,7 +152,9 @@ export default function TeamRoleListPage({
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
                         <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-lg font-black text-slate-600">
-                          {person.foto_url ? <img src={person.foto_url} alt={person.nome} className="h-full w-full object-cover" /> : person.nome?.[0].toUpperCase()}
+                          {person.foto_url || getTeamMemberPhoto(person.nome) ? (
+                            <img src={person.foto_url || getTeamMemberPhoto(person.nome) || ''} alt={person.nome} className="h-full w-full object-cover" />
+                          ) : person.nome?.[0].toUpperCase()}
                         </div>
                         <p className="font-bold text-gray-900 transition-colors group-hover:text-blue-600">{person.nome}</p>
                       </div>
@@ -177,6 +180,13 @@ export default function TeamRoleListPage({
                       </span>
                     </td>
                     <td className="px-8 py-6 text-right">
+                      <Link
+                        href={`/admin/usuarios?tipo=${role}`}
+                        className="mr-2 inline-flex rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600"
+                        title={`Editar ${person.nome}`}
+                      >
+                        <Edit2 size={18} />
+                      </Link>
                       <button
                         type="button"
                         onClick={() => void openPanel(person)}

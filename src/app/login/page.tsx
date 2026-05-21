@@ -57,6 +57,8 @@ export default function LoginPage() {
         router.replace('/designer');
       } else if (profile.tipo_usuario === 'account_manager') {
         router.replace('/account');
+      } else if (profile.tipo_usuario === 'corretor_membro') {
+        router.replace('/crm');
       } else {
         router.replace('/dashboard');
       }

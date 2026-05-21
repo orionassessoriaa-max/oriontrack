@@ -191,11 +191,17 @@ export default function BrokerLeadsPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: supabaseError } = await supabase
+      let leadsQuery = supabase
         .from('leads')
-        .select('*')
+        .select('*, responsavel_membro:responsavel_membro_id(nome,email)')
         .eq('corretor_id', profile.corretor_id)
         .order('data_entrada', { ascending: false });
+
+      if (profile.tipo_usuario === 'corretor_membro') {
+        leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
+      }
+
+      const { data, error: supabaseError } = await leadsQuery;
 
       if (supabaseError) {
         console.error('RLS/DB Error:', supabaseError);
@@ -520,7 +526,7 @@ export default function BrokerLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full min-w-[2380px] border-collapse text-left text-[13px]">
+            <table className="w-full min-w-[2540px] border-collapse text-left text-[13px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100">
                   <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
@@ -539,6 +545,7 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Comissão</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
+                  <th className="min-w-[180px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">ResponsÃ¡vel</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Campanha</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Conjunto de anúncio</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Anúncio</th>
@@ -549,7 +556,7 @@ export default function BrokerLeadsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={isViewingAsCorretor ? 21 : 20} className="py-20 text-center">
+                    <td colSpan={isViewingAsCorretor ? 22 : 21} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -619,6 +626,16 @@ export default function BrokerLeadsPage() {
                       </div>
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{leadTab}</td>
+                    <td className="border border-slate-100 px-3 py-3">
+                      <div className="max-w-[170px] truncate text-xs font-black text-slate-700">
+                        {lead.responsavel_membro?.nome || '-'}
+                      </div>
+                      {lead.responsavel_membro?.email && (
+                        <div className="max-w-[170px] truncate text-[10px] font-bold text-slate-400">
+                          {lead.responsavel_membro.email}
+                        </div>
+                      )}
+                    </td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadCampaign(lead)}</td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadAdset(lead)}</td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadAd(lead)}</td>

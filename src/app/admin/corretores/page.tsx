@@ -16,7 +16,8 @@ import {
   ShieldAlert,
   RefreshCw,
   X,
-  UserCog
+  UserCog,
+  UserPlus
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile } from '@/types';
@@ -274,7 +275,7 @@ function CorretoresContent() {
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Gestor de Tráfego</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Página de Captação</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
+                  <th className="min-w-[280px] px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -316,6 +317,12 @@ function CorretoresContent() {
                               className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-2 text-[9px] font-black uppercase tracking-widest text-blue-700"
                             >
                               <Edit2 size={13} /> Editar
+                            </Link>
+                            <Link
+                              href={`/admin/corretores/${c.id}/time`}
+                              className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-2 text-[9px] font-black uppercase tracking-widest text-indigo-700"
+                            >
+                              <UserPlus size={13} /> Criar time
                             </Link>
                             <button
                               type="button"
@@ -376,6 +383,14 @@ function CorretoresContent() {
                     </td>
                     <td className="px-8 py-6 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/admin/corretores/${c.id}/time`}
+                          className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-indigo-700 transition-all hover:bg-indigo-100"
+                          title="Criar e gerenciar time comercial"
+                        >
+                          <UserPlus size={16} />
+                          Time
+                        </Link>
                         <Link 
                           href={`/admin/corretores/${c.id}/editar`}
                           className="p-3 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all"

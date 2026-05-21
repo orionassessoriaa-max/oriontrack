@@ -145,10 +145,10 @@ export default function CrmPage() {
     setError(null);
 
     try {
-      const corretorScopeId = profile.tipo_usuario === 'corretor' ? profile.corretor_id : null;
+      const corretorScopeId = ['corretor', 'corretor_membro'].includes(profile.tipo_usuario) ? profile.corretor_id : null;
       let leadsQuery = supabase
         .from('leads')
-        .select('*')
+        .select('*, responsavel_membro:responsavel_membro_id(nome,email)')
         .order('data_entrada', { ascending: false })
         .limit(200);
 
@@ -168,6 +168,11 @@ export default function CrmPage() {
         leadsQuery = leadsQuery.eq('corretor_id', corretorScopeId);
         tarefasQuery = tarefasQuery.eq('corretor_id', corretorScopeId);
         conversasQuery = conversasQuery.eq('corretor_id', corretorScopeId);
+      }
+
+      if (profile.tipo_usuario === 'corretor_membro') {
+        leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
+        tarefasQuery = tarefasQuery.eq('responsavel_profile_id', profile.id);
       }
 
       const [leadsRes, tarefasRes, conversasRes] = await Promise.all([
@@ -193,7 +198,7 @@ export default function CrmPage() {
         return normalizedLeads.find((lead) => lead.id === current.id) || null;
       });
 
-      if (profile.tipo_usuario === 'corretor' && profile.corretor_id) {
+      if (['corretor', 'corretor_membro'].includes(profile.tipo_usuario) && profile.corretor_id) {
         const { data: corretor } = await supabase
           .from('corretores')
           .select('tipo_campanha')
@@ -661,6 +666,9 @@ export default function CrmPage() {
                               <span>CNPJ: {lead.possui_cnpj || '-'}</span>
                               <span>Vidas: {lead.idades || '-'}</span>
                               <span className="col-span-2 rounded-xl bg-blue-50 px-2 py-1 text-blue-700">Pagina: {lead.operadora || 'Sem pagina'}</span>
+                              {lead.responsavel_membro?.nome && (
+                                <span className="col-span-2 rounded-xl bg-emerald-50 px-2 py-1 text-emerald-700">Responsavel: {lead.responsavel_membro.nome}</span>
+                              )}
                               <span>{lead.cidade || 'Cidade nao informada'}</span>
                               <span>{lead.investimento || 'Sem investimento'}</span>
                               {requiresCommercialData(normalizeLeadStatus(lead.status)) && (

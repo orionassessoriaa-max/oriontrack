@@ -21,6 +21,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isAdmin = profile.tipo_usuario === 'admin';
         const isTrafficManager = profile.tipo_usuario === 'gestor_trafego';
         const isCorretor = profile.tipo_usuario === 'corretor';
+        const isCorretorMember = profile.tipo_usuario === 'corretor_membro';
         const isDesigner = profile.tipo_usuario === 'designer';
         const isAccountManager = profile.tipo_usuario === 'account_manager';
         
@@ -30,14 +31,18 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isAccountRoute = pathname.startsWith('/account');
         const isCreativeRoute = pathname.startsWith('/criativos');
         const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes';
-        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/minha-pagina'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
+        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
 
         if (isSharedRoute) return;
 
         // 1. Corretor Access: Only broker routes
         if (isCorretor && (isAdminRoute || isTrafficRoute || isDesignerRoute || isAccountRoute)) {
           router.push('/dashboard');
-        } 
+        }
+        else if (isCorretorMember) {
+          const isMemberRoute = ['/crm', '/leads', '/dashboard', '/inbox', '/perfil', '/notificacoes'].some(p => pathname.startsWith(p));
+          if (!isMemberRoute) router.push('/crm');
+        }
         // 2. Traffic Manager Access: Traffic routes + Broker List (to select for reports)
         // But NO /admin dashboard or system settings
         else if (isTrafficManager) {

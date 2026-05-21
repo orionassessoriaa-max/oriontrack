@@ -102,10 +102,20 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Users, label: 'Leads', href: '/leads' },
+    { icon: UserPlus, label: 'Meu time', href: '/time' },
     { icon: Palette, label: 'Criativos', href: '/criativos' },
     { icon: Globe, label: 'Minha Pagina', href: '/minha-pagina' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Ajuda Orion', href: '/ajuda' },
+    { icon: User, label: 'Perfil', href: '/perfil' },
+  ];
+
+  const corretorMemberMenu = [
+    { icon: Home, label: 'Inicio', href: '/dashboard' },
+    { icon: Inbox, label: 'CRM', href: '/crm' },
+    { icon: Users, label: 'Leads', href: '/leads' },
+    { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
+    { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
@@ -114,6 +124,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     if (profile?.tipo_usuario === 'gestor_trafego') return trafficMenu;
     if (profile?.tipo_usuario === 'designer') return designerMenu;
     if (profile?.tipo_usuario === 'account_manager') return accountMenu;
+    if (profile?.tipo_usuario === 'corretor_membro') return corretorMemberMenu;
     return corretorMenu;
   };
 
@@ -129,6 +140,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
         ? 'Designer'
         : profile?.tipo_usuario === 'account_manager'
           ? 'Account manager'
+          : profile?.tipo_usuario === 'corretor_membro'
+            ? 'Equipe comercial'
           : 'Corretor Parceiro';
 
   useEffect(() => {
@@ -171,7 +184,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
       <div className={cn('flex h-full flex-col transition-opacity duration-200', collapsed ? 'pointer-events-none opacity-0' : 'opacity-100')}>
         <div className="mb-2 p-6">
-          <Link href={profile?.tipo_usuario === 'admin' ? '/admin' : profile?.tipo_usuario === 'gestor_trafego' ? '/trafego/relatorios' : profile?.tipo_usuario === 'designer' ? '/designer' : profile?.tipo_usuario === 'account_manager' ? '/account' : '/dashboard'} onClick={closeOnMobile} className="block">
+          <Link href={profile?.tipo_usuario === 'admin' ? '/admin' : profile?.tipo_usuario === 'gestor_trafego' ? '/trafego/relatorios' : profile?.tipo_usuario === 'designer' ? '/designer' : profile?.tipo_usuario === 'account_manager' ? '/account' : profile?.tipo_usuario === 'corretor_membro' ? '/crm' : '/dashboard'} onClick={closeOnMobile} className="block">
             <img src="/brand-logo.png" alt="ORION TRACK" className="h-24 w-auto" />
           </Link>
           {isViewingAsUser && (
