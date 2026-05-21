@@ -101,6 +101,15 @@ function parseCurrencyValue(value?: string | number | null) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function formatCompactMetric(value: number) {
+  if (value >= 1000) {
+    const compact = value / 1000;
+    return `${Number.isInteger(compact) ? compact.toFixed(0) : compact.toFixed(1).replace('.', ',')}K`;
+  }
+
+  return String(value || 0);
+}
+
 function dayKey(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -312,10 +321,76 @@ export default function DashboardPage() {
   const activePipeline = stats.waiting + stats.inProgress + stats.quoted + stats.sold;
   const funnelMax = Math.max(stats.total, activePipeline, stats.quoted + stats.sold, stats.sold, 1);
   const funnelSteps = [
-    { label: 'Topo', name: 'Leads', value: stats.total, detail: 'entradas captadas', color: '#1597ff', glow: 'rgba(14, 165, 233, 0.42)', width: 100 },
-    { label: 'Meio', name: 'Atendimento', value: activePipeline, detail: 'em funil comercial', color: '#0fb7e9', glow: 'rgba(6, 182, 212, 0.34)', width: Math.max((activePipeline / funnelMax) * 100, 62) },
+    {
+      name: 'Leads',
+      value: stats.total,
+      detail: 'entradas captadas',
+      href: '/leads',
+      path: 'M54 96 C92 50 424 50 466 96 C452 146 431 191 411 224 C348 248 172 248 109 224 C88 190 67 146 54 96Z',
+      labelY: 132,
+      valueY: 169,
+      detailY: 199,
+      fill: 'url(#funnelTopGradient)',
+    },
+    {
+      name: 'Atendimento',
+      value: activePipeline,
+      detail: 'em funil comercial',
+      href: '/leads?status=Aguardando%20atendimento',
+      path: 'M112 232 C176 254 344 254 408 232 C392 285 371 337 341 386 C291 403 229 403 179 386 C149 337 128 285 112 232Z',
+      labelY: 284,
+      valueY: 322,
+      detailY: 352,
+      fill: 'url(#funnelMiddleGradient)',
+    },
     { label: 'Proposta', name: 'Cotação', value: stats.quoted + stats.sold, detail: 'propostas e vendas', color: '#5868ff', glow: 'rgba(99, 102, 241, 0.34)', width: Math.max(((stats.quoted + stats.sold) / funnelMax) * 100, 46) },
     { label: 'Fundo', name: 'Vendas', value: stats.sold, detail: 'conversões fechadas', color: '#10c7b0', glow: 'rgba(20, 184, 166, 0.36)', width: Math.max((stats.sold / funnelMax) * 100, stats.sold > 0 ? 30 : 24) },
+  ];
+  const visualFunnelSteps = [
+    {
+      name: 'Leads',
+      value: stats.total,
+      detail: 'entradas captadas',
+      href: '/leads',
+      path: 'M54 96 C92 50 424 50 466 96 C452 146 431 191 411 224 C348 248 172 248 109 224 C88 190 67 146 54 96Z',
+      labelY: 132,
+      valueY: 169,
+      detailY: 199,
+      fill: 'url(#funnelTopGradient)',
+    },
+    {
+      name: 'Atendimento',
+      value: activePipeline,
+      detail: 'em funil comercial',
+      href: '/leads?status=Aguardando%20atendimento',
+      path: 'M112 232 C176 254 344 254 408 232 C392 285 371 337 341 386 C291 403 229 403 179 386 C149 337 128 285 112 232Z',
+      labelY: 284,
+      valueY: 322,
+      detailY: 352,
+      fill: 'url(#funnelMiddleGradient)',
+    },
+    {
+      name: 'Cotação',
+      value: stats.quoted + stats.sold,
+      detail: 'propostas e vendas',
+      href: '/leads?status=Cota%C3%A7%C3%A3o%20enviada',
+      path: 'M182 398 C231 415 289 415 338 398 C323 447 307 490 289 524 C270 531 250 531 231 524 C213 490 197 447 182 398Z',
+      labelY: 442,
+      valueY: 477,
+      detailY: 505,
+      fill: 'url(#funnelQuoteGradient)',
+    },
+    {
+      name: 'Vendas',
+      value: stats.sold,
+      detail: 'conversões fechadas',
+      href: '/leads?status=Venda%20realizada',
+      path: 'M232 535 C250 542 270 542 288 535 C281 572 273 598 260 611 C247 598 239 572 232 535Z',
+      labelY: 560,
+      valueY: 586,
+      detailY: 606,
+      fill: 'url(#funnelSalesGradient)',
+    },
   ];
   const quoteRate = stats.total > 0 ? ((stats.quoted + stats.sold) / stats.total) * 100 : 0;
   const salesRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
@@ -435,8 +510,71 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="orion-funnel-3d mx-auto flex max-w-xl flex-col items-center py-4">
-              {funnelSteps.map((step, index) => (
+            <div className="orion-traffic-funnel mx-auto py-2">
+              <svg viewBox="0 0 520 640" role="img" aria-label="Funil comercial Orion Track">
+                <defs>
+                  <linearGradient id="funnelTopGradient" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#33d4ff" />
+                    <stop offset="48%" stopColor="#0789f6" />
+                    <stop offset="100%" stopColor="#0754c7" />
+                  </linearGradient>
+                  <linearGradient id="funnelMiddleGradient" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#21d7f7" />
+                    <stop offset="58%" stopColor="#0799c8" />
+                    <stop offset="100%" stopColor="#047093" />
+                  </linearGradient>
+                  <linearGradient id="funnelQuoteGradient" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#7da8ff" />
+                    <stop offset="52%" stopColor="#5167ff" />
+                    <stop offset="100%" stopColor="#3145c9" />
+                  </linearGradient>
+                  <linearGradient id="funnelSalesGradient" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#38ffe0" />
+                    <stop offset="55%" stopColor="#0ac3b0" />
+                    <stop offset="100%" stopColor="#078479" />
+                  </linearGradient>
+                  <radialGradient id="funnelMouthGradient" cx="50%" cy="45%" r="60%">
+                    <stop offset="0%" stopColor="#06243c" stopOpacity="0.72" />
+                    <stop offset="58%" stopColor="#0b8fe8" stopOpacity="0.42" />
+                    <stop offset="100%" stopColor="#77dcff" stopOpacity="0.92" />
+                  </radialGradient>
+                  <linearGradient id="funnelSideShine" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+                    <stop offset="42%" stopColor="#ffffff" stopOpacity="0.24" />
+                    <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                  </linearGradient>
+                  <filter id="orionFunnelShadow" x="-20%" y="-15%" width="140%" height="130%">
+                    <feDropShadow dx="0" dy="18" stdDeviation="18" floodColor="#00284d" floodOpacity="0.34" />
+                  </filter>
+                  <filter id="orionFunnelLift" x="-25%" y="-25%" width="150%" height="150%">
+                    <feDropShadow dx="0" dy="24" stdDeviation="18" floodColor="#0ea5e9" floodOpacity="0.42" />
+                  </filter>
+                </defs>
+
+                <g filter="url(#orionFunnelShadow)">
+                  <ellipse className="orion-funnel-mouth" cx="260" cy="96" rx="206" ry="42" fill="url(#funnelMouthGradient)" />
+                  <ellipse cx="260" cy="98" rx="132" ry="20" fill="#05233a" opacity="0.48" />
+                  {visualFunnelSteps.map((step) => (
+                    <a key={step.name} href={step.href} aria-label={`Abrir leads em ${step.name}`}>
+                      <path className="orion-traffic-band" d={step.path} fill={step.fill} />
+                    </a>
+                  ))}
+                  <path className="orion-funnel-side-highlight" d="M392 93 C368 181 336 302 300 415 C286 457 279 503 265 589 C315 526 363 326 425 126 C417 112 405 101 392 93Z" fill="url(#funnelSideShine)" opacity="0.78" />
+                  <path className="orion-funnel-left-depth" d="M86 122 C111 229 166 377 242 608 C207 525 161 378 108 224 C96 202 76 150 86 122Z" fill="#003c75" opacity="0.20" />
+                </g>
+
+                {visualFunnelSteps.map((step) => (
+                  <g key={`${step.name}-text`} className="orion-traffic-text">
+                    <text x="260" y={step.labelY} className="orion-traffic-label">{step.name}</text>
+                    <text x="260" y={step.valueY} className="orion-traffic-value">{formatCompactMetric(step.value)}</text>
+                    <text x="260" y={step.detailY} className="orion-traffic-detail">{step.detail}</text>
+                  </g>
+                ))}
+              </svg>
+            </div>
+
+            <div className="hidden">
+              {(funnelSteps as any[]).map((step, index) => (
                 <Link
                   key={step.name}
                   href={index === 0 ? '/leads' : `/leads?status=${encodeURIComponent(index === 1 ? 'Aguardando atendimento' : index === 2 ? 'Cotação enviada' : 'Venda realizada')}`}
