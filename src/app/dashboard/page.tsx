@@ -305,12 +305,8 @@ export default function DashboardPage() {
   const salesConversionRate = salesConversionBase > 0 ? (stats.sold / salesConversionBase) * 100 : 0;
   const chartHeight = 176;
   const maxWeeklyLeads = Math.max(...weeklyLeads.map((day) => day.leads), 1);
-  const weeklyPoints = weeklyLeads.map((day, index) => {
-    const x = weeklyLeads.length === 1 ? 0 : (index / (weeklyLeads.length - 1)) * 100;
-    const y = 100 - (day.leads / maxWeeklyLeads) * 86 - 7;
-    return { ...day, x, y };
-  });
-  const weeklyPolyline = weeklyPoints.map((point) => `${point.x},${point.y}`).join(' ');
+  const weeklyTotal = weeklyLeads.reduce((sum, day) => sum + day.leads, 0);
+  const bestWeeklyDay = weeklyLeads.reduce((best, day) => day.leads > best.leads ? day : best, weeklyLeads[0] || { label: '-', leads: 0 });
   const maxCityLeads = Math.max(...topCities.map((city) => city.leads), 1);
 
   const quickActions = [
@@ -497,35 +493,62 @@ export default function DashboardPage() {
 
       <div className="mb-12 grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="mb-6 flex items-end justify-between gap-4">
+          <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
             <div>
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Últimos 7 dias</p>
-              <h2 className="text-2xl font-black text-gray-950">Leads nos Últimos 7 Dias</h2>
+              <h2 className="text-2xl font-black text-gray-950">Ritmo de entrada</h2>
+              <p className="mt-1 text-sm font-bold text-slate-500">Volume diário de leads recebidos.</p>
             </div>
-            <p className="text-xs font-bold text-slate-400">{weeklyLeads.reduce((sum, day) => sum + day.leads, 0)} leads</p>
+            <div className="rounded-2xl bg-blue-50 px-5 py-3 text-right">
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Total</p>
+              <p className="text-3xl font-black text-blue-700">{weeklyTotal}</p>
+              <p className="text-[11px] font-bold text-blue-500">leads na semana</p>
+            </div>
           </div>
-          <div className="relative h-72 rounded-2xl border border-slate-100 bg-white px-4 pb-8 pt-4">
-            <div className="absolute inset-x-4 bottom-8 top-4 grid grid-rows-4">
-              {[0, 1, 2, 3].map((line) => (
-                <div key={line} className="border-t border-dashed border-slate-200" />
-              ))}
-            </div>
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="relative z-10 h-full w-full overflow-visible">
-              <polyline points={weeklyPolyline} fill="none" stroke="#2563eb" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-              {weeklyPoints.map((point) => (
-                <g key={point.key} className="group">
-                  <circle cx={point.x} cy={point.y} r="1.4" fill="#2563eb" vectorEffect="non-scaling-stroke" />
-                  <foreignObject x={Math.min(Math.max(point.x - 10, 0), 78)} y={Math.max(point.y - 27, 0)} width="22" height="18" className="pointer-events-none opacity-0 transition-opacity group-hover:opacity-100">
-                    <div className="rounded border border-slate-200 bg-white p-1 text-[3px] font-bold text-slate-600 shadow-sm">
-                      <p>{point.label}</p>
-                      <p className="text-blue-600">leads: {point.leads}</p>
+          <div className="grid gap-4 lg:grid-cols-[1fr_170px]">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <div className="flex h-56 items-end gap-3">
+                {weeklyLeads.map((day) => {
+                  const height = Math.max((day.leads / maxWeeklyLeads) * 100, day.leads > 0 ? 14 : 5);
+                  const isBest = day.key === bestWeeklyDay.key && day.leads > 0;
+
+                  return (
+                    <div key={day.key} className="group flex min-w-0 flex-1 flex-col items-center gap-3">
+                      <div className="relative flex h-44 w-full items-end justify-center rounded-2xl bg-white px-2 py-2">
+                        <div
+                          className={`w-full max-w-10 origin-bottom rounded-xl transition-all duration-500 group-hover:scale-y-105 ${
+                            isBest
+                              ? 'bg-gradient-to-t from-blue-700 to-cyan-400 shadow-lg shadow-blue-500/25'
+                              : 'bg-gradient-to-t from-blue-500 to-blue-300'
+                          }`}
+                          style={{ height: `${height}%` }}
+                        />
+                        <div className="pointer-events-none absolute -top-3 rounded-xl border border-slate-100 bg-white px-2 py-1 text-[10px] font-black text-slate-700 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                          {day.leads} leads
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-slate-500">{day.label}</span>
                     </div>
-                  </foreignObject>
-                </g>
-              ))}
-            </svg>
-            <div className="absolute inset-x-4 bottom-2 grid grid-cols-7 text-center text-xs font-bold text-slate-500">
-              {weeklyLeads.map((day) => <span key={day.key}>{day.label}</span>)}
+                  );
+                })}
+              </div>
+            </div>
+            <div className="grid gap-3">
+              <div className="rounded-2xl bg-slate-950 p-4 text-white">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Melhor dia</p>
+                <p className="text-2xl font-black">{bestWeeklyDay.label}</p>
+                <p className="mt-1 text-sm font-bold text-blue-200">{bestWeeklyDay.leads} leads</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Média/dia</p>
+                <p className="text-2xl font-black text-gray-950">
+                  {(weeklyTotal / Math.max(weeklyLeads.length, 1)).toFixed(1).replace('.', ',')}
+                </p>
+                <p className="mt-1 text-xs font-bold text-slate-500">leads por dia</p>
+              </div>
+              <Link href="/leads" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-700">
+                Ver leads <ArrowRight size={14} />
+              </Link>
             </div>
           </div>
         </div>
