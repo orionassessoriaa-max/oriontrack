@@ -155,8 +155,18 @@ function parseDate(value: string) {
     }
 
     try {
-      const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-      return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+      const date = new Date(Date.UTC(year, month - 1, day, hour + 3, minute, second));
+      const localCheck = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+      if (
+        Number.isNaN(date.getTime()) ||
+        localCheck.getUTCFullYear() !== year ||
+        localCheck.getUTCMonth() !== month - 1 ||
+        localCheck.getUTCDate() !== day
+      ) {
+        return fallback;
+      }
+
+      return date.toISOString();
     } catch {
       return fallback;
     }
@@ -171,7 +181,12 @@ function parseDate(value: string) {
     }
   }
 
-  const br = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  const dateText = trimmed
+    .replace(/\s+as\s+/i, ' ')
+    .replace(/\s+às\s+/i, ' ')
+    .replace(/(\d{1,2})h(\d{2})/i, '$1:$2');
+
+  const br = dateText.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (br) {
     const year = Number(br[3].length === 2 ? `20${br[3]}` : br[3]);
     const month = Number(br[2]);
@@ -183,7 +198,7 @@ function parseDate(value: string) {
     return safeIso(year, month, day, hour, minute, second);
   }
 
-  const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})?$/);
+  const iso = dateText.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})?$/);
   if (iso) {
     const year = Number(iso[1]);
     const month = Number(iso[2]);
@@ -411,7 +426,7 @@ export async function POST(request: Request) {
 
           leads.push({
             corretor_id: corretorId,
-            data_entrada: parseDate(pick(row, ['data', 'data entrada', 'data_entrada', 'created_time'])),
+            data_entrada: parseDate(pick(row, ['data', 'data entrada', 'data_entrada', 'created_time', 'timestamp', 'data cadastro', 'data do lead', 'date'])),
             nome,
             telefone,
             idades: pick(row, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas']),
