@@ -450,7 +450,6 @@ export default function DashboardPage() {
                   <span className="orion-funnel-rim" />
                   <span className="orion-funnel-shine" />
                   <div className="orion-funnel-content">
-                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/75">{step.label}</p>
                     <p className="text-sm font-black uppercase tracking-[0.22em] text-white">{step.name}</p>
                     <p className="text-4xl font-black leading-none text-white drop-shadow">{step.value}</p>
                     <p className="mt-1 text-[11px] font-bold text-white/80">{step.detail}</p>

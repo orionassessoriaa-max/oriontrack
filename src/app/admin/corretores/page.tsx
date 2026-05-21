@@ -282,15 +282,52 @@ function CorretoresContent() {
                   <tr key={c.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-lg shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => startViewingAsCorretor(c.id)}
+                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-lg font-black text-white shadow-sm transition-all hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+                          title="Entrar como corretor"
+                        >
                           {c.nome?.[0].toUpperCase() || '?'}
-                        </div>
-                        <div>
-                          <p className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{c.nome}</p>
+                        </button>
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => startViewingAsCorretor(c.id)}
+                            className="block max-w-[260px] truncate text-left font-bold text-gray-900 transition-colors hover:text-blue-600"
+                            title="Entrar como corretor"
+                          >
+                            {c.nome}
+                          </button>
                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">{c.email}</p>
                           <p className="mt-1 max-w-[260px] truncate rounded-lg bg-slate-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
                             ID n8n: <span className="normal-case tracking-normal text-slate-700">{c.id}</span>
                           </p>
+                          <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
+                            <button
+                              type="button"
+                              onClick={() => startViewingAsCorretor(c.id)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-2 text-[9px] font-black uppercase tracking-widest text-emerald-700"
+                            >
+                              <Eye size={13} /> Painel
+                            </button>
+                            <Link
+                              href={`/admin/corretores/${c.id}/editar`}
+                              className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-2 text-[9px] font-black uppercase tracking-widest text-blue-700"
+                            >
+                              <Edit2 size={13} /> Editar
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(c.id);
+                                alert('ID do corretor copiado para usar no n8n.');
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-2 text-[9px] font-black uppercase tracking-widest text-slate-700"
+                            >
+                              <Copy size={13} /> ID
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </td>
