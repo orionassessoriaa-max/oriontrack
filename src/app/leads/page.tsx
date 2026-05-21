@@ -419,25 +419,25 @@ export default function BrokerLeadsPage() {
 
   return (
     <InternalLayout>
-      <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Leads</h1>
+      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Leads</h1>
           <p className="font-medium text-gray-500">Lista detalhada com filtros, status comercial, página de origem e UTMs.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3 md:w-auto">
           <button
             onClick={() => setShowCrmModal(true)}
-            className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-5 py-3 font-black text-blue-600 transition-all hover:bg-blue-100"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-5 py-3 font-black text-blue-600 transition-all hover:bg-blue-100"
           >
             <Plug size={18} /> Conectar CRM
           </button>
-          <button className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-5 py-3 font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50">
+          <button className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-100 bg-white px-5 py-3 font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50">
             <Download size={18} /> Exportar
           </button>
           {isViewingAsCorretor && (
             <button
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-5 py-3 font-black text-emerald-700 transition-all hover:bg-emerald-100"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-5 py-3 font-black text-emerald-700 transition-all hover:bg-emerald-100"
             >
               <Upload size={18} /> Importar
             </button>
@@ -446,7 +446,7 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.7fr_160px_160px_170px_220px_200px_200px_200px_auto]">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1.7fr_160px_160px_170px_220px_200px_200px_200px_auto]">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -507,7 +507,7 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="scrollbar-visible max-h-[calc(100vh-330px)] overflow-auto">
+        <div className="scrollbar-visible max-h-[calc(100dvh-300px)] overflow-auto sm:max-h-[calc(100vh-330px)]">
           {error ? (
             <div className="py-24 text-center">
               <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">
@@ -685,9 +685,9 @@ export default function BrokerLeadsPage() {
       </div>
 
       {showCrmModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-md">
-          <div className="w-full max-w-xl rounded-[2.5rem] bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 p-8">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md sm:p-6">
+          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl sm:rounded-[2.5rem]">
+            <div className="flex items-center justify-between border-b border-gray-100 p-5 sm:p-8">
               <div>
                 <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-blue-600">Integracao</p>
                 <h2 className="text-xl font-black text-gray-900">Conectar CRM</h2>
@@ -696,7 +696,7 @@ export default function BrokerLeadsPage() {
                 <X size={22} />
               </button>
             </div>
-            <form onSubmit={saveCrmConfig} className="space-y-5 p-8">
+            <form onSubmit={saveCrmConfig} className="space-y-5 p-5 sm:p-8">
               <div className="space-y-2">
                 <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Link da API / Webhook do CRM</label>
                 <input
@@ -716,9 +716,9 @@ export default function BrokerLeadsPage() {
       )}
 
       {showImportModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-md">
-          <div className="w-full max-w-xl rounded-[2.5rem] bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 p-8">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md sm:p-6">
+          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl sm:rounded-[2.5rem]">
+            <div className="flex items-center justify-between border-b border-gray-100 p-5 sm:p-8">
               <div>
                 <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">Admin</p>
                 <h2 className="text-xl font-black text-gray-900">Importar planilha</h2>
@@ -727,7 +727,7 @@ export default function BrokerLeadsPage() {
                 <X size={22} />
               </button>
             </div>
-            <form onSubmit={importSheet} className="space-y-5 p-8">
+            <form onSubmit={importSheet} className="space-y-5 p-5 sm:p-8">
               {importMessage && (
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-black text-emerald-700">
                   {importMessage}

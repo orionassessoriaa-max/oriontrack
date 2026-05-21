@@ -19,10 +19,18 @@
 @layer base {
   * {
     @apply border-[#e2e8f0];
+    min-width: 0;
   }
   body {
     @apply bg-background text-foreground antialiased;
     overflow-x: hidden;
+  }
+
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
   }
 }
 
@@ -325,11 +333,46 @@ body.theme-noturno {
 }
 
 @media (max-width: 640px) {
+  .orion-funnel-3d {
+    width: 100%;
+    overflow: hidden;
+  }
+
   .orion-funnel-slice {
-    min-height: 86px;
+    min-height: 78px;
+    margin-top: -2px;
   }
 
   .orion-funnel-content {
     padding-inline: 12px;
+  }
+
+  .orion-funnel-content p:nth-child(2) {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+  }
+
+  .orion-funnel-content p:nth-child(3) {
+    font-size: 1.9rem;
+  }
+
+  .orion-funnel-content p:nth-child(4) {
+    font-size: 0.65rem;
+  }
+
+  .orion-funnel-rim {
+    left: 12%;
+    right: 12%;
+    top: -9px;
+    height: 24px;
+  }
+
+  table {
+    font-size: 12px;
+  }
+
+  .scrollbar-visible::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
   }
 }

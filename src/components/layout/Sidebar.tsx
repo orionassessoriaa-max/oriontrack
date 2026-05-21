@@ -135,12 +135,35 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     onCollapsedChange?.(collapsed);
   }, [collapsed, onCollapsedChange]);
 
+  useEffect(() => {
+    const syncMobileState = () => {
+      if (window.innerWidth < 1024) setCollapsed(true);
+    };
+
+    syncMobileState();
+    window.addEventListener('resize', syncMobileState);
+    return () => window.removeEventListener('resize', syncMobileState);
+  }, []);
+
+  const closeOnMobile = () => {
+    if (window.innerWidth < 1024) setCollapsed(true);
+  };
+
   return (
-    <div className={cn('fixed left-0 top-0 z-50 flex h-screen flex-col bg-[#0f172a] text-white shadow-2xl transition-all duration-300', collapsed ? 'w-0 overflow-visible' : 'w-64')}>
+    <>
+      {!collapsed && (
+        <button
+          type="button"
+          aria-label="Fechar menu"
+          onClick={() => setCollapsed(true)}
+          className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm lg:hidden"
+        />
+      )}
+      <div className={cn('fixed left-0 top-0 z-50 flex h-screen max-w-[86vw] flex-col bg-[#0f172a] text-white shadow-2xl transition-all duration-300', collapsed ? 'w-0 overflow-visible' : 'w-72 lg:w-64')}>
       <button
         type="button"
         onClick={() => setCollapsed((current) => !current)}
-        className={cn('absolute top-4 z-[60] flex h-9 w-9 items-center justify-center border border-white/10 bg-[#0f172a] text-white shadow-lg transition-all', collapsed ? 'left-2 rounded-r-lg' : 'right-[-18px] rounded-lg')}
+        className={cn('absolute top-4 z-[60] flex h-10 w-10 items-center justify-center border border-white/10 bg-[#0f172a] text-white shadow-lg transition-all', collapsed ? 'left-2 rounded-r-lg' : 'right-[-18px] rounded-lg')}
         title={collapsed ? 'Expandir menu' : 'Recolher menu'}
       >
         {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
@@ -148,7 +171,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
       <div className={cn('flex h-full flex-col transition-opacity duration-200', collapsed ? 'pointer-events-none opacity-0' : 'opacity-100')}>
         <div className="mb-2 p-6">
-          <Link href={profile?.tipo_usuario === 'admin' ? '/admin' : profile?.tipo_usuario === 'gestor_trafego' ? '/trafego/relatorios' : profile?.tipo_usuario === 'designer' ? '/designer' : profile?.tipo_usuario === 'account_manager' ? '/account' : '/dashboard'} className="block">
+          <Link href={profile?.tipo_usuario === 'admin' ? '/admin' : profile?.tipo_usuario === 'gestor_trafego' ? '/trafego/relatorios' : profile?.tipo_usuario === 'designer' ? '/designer' : profile?.tipo_usuario === 'account_manager' ? '/account' : '/dashboard'} onClick={closeOnMobile} className="block">
             <img src="/brand-logo.png" alt="ORION TRACK" className="h-24 w-auto" />
           </Link>
           {isViewingAsUser && (
@@ -178,6 +201,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={closeOnMobile}
                 className={cn(
                   'group flex items-center gap-3 px-4 py-3 transition-all duration-200',
                   isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
@@ -195,7 +219,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
             <div className="flex h-10 w-10 items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black shadow-inner">
               {initials}
             </div>
-            <div className="flex-1 overflow-hidden">
+            <div className="min-w-0 flex-1 overflow-hidden">
               <p className="truncate text-xs font-bold text-white">{profile?.nome || 'Usuario'}</p>
               <p className="text-[10px] font-bold uppercase tracking-tighter text-gray-500">
                 {isViewingAsUser ? `Admin: ${actualProfile?.nome || 'Orion'}` : roleLabel}
@@ -208,5 +232,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
         </div>
       </div>
     </div>
+    </>
   );
 }
