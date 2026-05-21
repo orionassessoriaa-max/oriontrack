@@ -141,8 +141,36 @@ function pick(row: CsvRow, names: string[]) {
 function parseDate(value: string) {
   const fallback = new Date().toISOString();
   if (!value) return fallback;
-  const trimmed = value.trim();
-  if (/^[+-]\d{5,}/.test(trimmed) || /^\d{5,}-/.test(trimmed)) return fallback;
+  const trimmed = String(value)
+    .trim()
+    .replace(/^[="'\s]+|[="'\s]+$/g, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+  if (!trimmed) return fallback;
+  if (/[+-]\d{5,}-/.test(trimmed) || /^\d{5,}-/.test(trimmed)) return fallback;
+
+  const safeIso = (year: number, month: number, day: number, hour: number, minute: number, second: number) => {
+    if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+      return fallback;
+    }
+
+    try {
+      const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+      return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+    } catch {
+      return fallback;
+    }
+  };
+
+  const googleSerial = trimmed.match(/^\d{5}(?:[.,]\d+)?$/);
+  if (googleSerial) {
+    const serial = Number(trimmed.replace(',', '.'));
+    if (Number.isFinite(serial) && serial > 20000 && serial < 80000) {
+      const date = new Date(Date.UTC(1899, 11, 30) + serial * 24 * 60 * 60 * 1000);
+      return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+    }
+  }
+
   const br = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (br) {
     const year = Number(br[3].length === 2 ? `20${br[3]}` : br[3]);
@@ -152,15 +180,10 @@ function parseDate(value: string) {
     const minute = Number(br[5] || 0);
     const second = Number(br[6] || 0);
 
-    if (year >= 1900 && year <= 2200 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-      return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
-    }
-
-    return fallback;
+    return safeIso(year, month, day, hour, minute, second);
   }
 
-  const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})?$/);
   if (iso) {
     const year = Number(iso[1]);
     const month = Number(iso[2]);
@@ -169,20 +192,10 @@ function parseDate(value: string) {
     const minute = Number(iso[5] || 0);
     const second = Number(iso[6] || 0);
 
-    if (year >= 1900 && year <= 2200 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-      return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
-    }
-
-    return fallback;
+    return safeIso(year, month, day, hour, minute, second);
   }
 
-  const parsed = new Date(trimmed);
-  try {
-    return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString();
-  } catch {
-    return fallback;
-  }
+  return fallback;
 }
 
 function statusFromSheet(value: string) {
