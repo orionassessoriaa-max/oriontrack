@@ -45,7 +45,7 @@ function visibleStatus(demand: Demand) {
 
 function statusClass(status: string) {
   if (status === 'aprovado' || status === 'entregue' || status === 'feito') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (status === 'revisao') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (status === 'revisao') return 'bg-blue-50 text-blue-700 border-blue-200';
   if (status === 'atrasado') return 'bg-red-50 text-red-700 border-red-200';
   return 'bg-blue-50 text-blue-700 border-blue-200';
 }
@@ -161,7 +161,7 @@ export default function DesignerHomePage() {
         <Counter active={filter === 'atrasadas'} onClick={() => setFilter('atrasadas')} icon={Clock} label="Atrasadas" value={stats.atrasadas} tone="red" />
         <Counter active={filter === 'entregues'} onClick={() => setFilter('entregues')} icon={CheckCircle2} label="Entregues" value={stats.entregues} tone="emerald" />
         <Counter active={filter === 'aprovados'} onClick={() => setFilter('aprovados')} icon={CheckCircle2} label="Aprovados" value={stats.aprovados} tone="emerald" />
-        <Counter active={filter === 'revisao'} onClick={() => setFilter('revisao')} icon={MessageSquare} label="Para revisar" value={stats.revisao} tone="amber" />
+        <Counter active={filter === 'revisao'} onClick={() => setFilter('revisao')} icon={MessageSquare} label="Para revisar" value={stats.revisao} tone="blue" />
         <Counter active={filter === 'arquivos'} onClick={() => setFilter('arquivos')} icon={Palette} label="Arquivos" value={stats.arquivos} tone="slate" />
       </div>
 
@@ -197,7 +197,7 @@ export default function DesignerHomePage() {
             <div className="divide-y divide-slate-100">
               {filteredAssets.map((asset) => (
                 <div key={asset.id} className="grid gap-4 p-5 md:grid-cols-[96px_1fr_auto] md:items-center">
-                  <div className="h-24 w-24 overflow-hidden border border-slate-200 bg-slate-50">
+                  <div className="force-white h-24 w-24 overflow-hidden border border-slate-200">
                     {asset.arquivo_url ? <img src={asset.arquivo_url} alt={asset.titulo} className="h-full w-full object-cover" /> : <Palette className="m-8 text-slate-300" />}
                   </div>
                   <div>
@@ -208,7 +208,7 @@ export default function DesignerHomePage() {
                     <h3 className="mt-2 text-lg font-black text-slate-950">{asset.titulo}</h3>
                     <p className="mt-1 text-sm font-bold text-slate-500">{asset.descricao || 'Sem descricao'}</p>
                     {asset.comentario_corretor && (
-                      <p className="mt-3 border-l-4 border-amber-400 bg-amber-50 p-3 text-xs font-bold text-amber-900">{asset.comentario_corretor}</p>
+                      <p className="mt-3 border-l-4 border-blue-400 bg-blue-50 p-3 text-xs font-bold text-blue-900">{asset.comentario_corretor}</p>
                     )}
                   </div>
                   {asset.arquivo_url && (
@@ -268,7 +268,7 @@ function Counter({ icon: Icon, label, value, tone, active, onClick }: { icon: an
     blue: 'bg-blue-50 text-blue-700 border-blue-100',
     red: 'bg-red-50 text-red-700 border-red-100',
     emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    amber: 'bg-amber-50 text-amber-700 border-amber-100',
+    amber: 'bg-blue-50 text-blue-700 border-blue-100',
     slate: 'bg-slate-50 text-slate-700 border-slate-100',
   };
 

@@ -32,6 +32,25 @@
   svg {
     max-width: 100%;
   }
+
+  button,
+  a,
+  select,
+  summary,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  input:disabled,
+  textarea:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 .scrollbar-hidden {
@@ -196,6 +215,12 @@ body.theme-noturno {
 
 .theme-noturno .bg-amber-50 {
   background-color: rgba(245, 158, 11, 0.14) !important;
+}
+
+.theme-noturno .force-white,
+.force-white {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
 }
 
 @keyframes orion-rise {

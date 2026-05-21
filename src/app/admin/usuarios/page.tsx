@@ -539,47 +539,47 @@ export default function AdminUsuariosPage() {
                   .includes(MASTER_ADMIN_EMAIL);
 
                 return (
-                  <div key={profile.id} className="flex flex-col gap-4 p-5 transition-colors hover:bg-blue-50/30 md:flex-row md:items-center md:justify-between">
+                  <div key={profile.id} className="grid gap-4 p-4 transition-colors hover:bg-blue-50/30 sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                     <button
                       type="button"
                       onClick={() => void openUserPanel(profile)}
-                      className="flex flex-1 items-center gap-4 text-left"
+                      className="grid min-w-0 grid-cols-[48px_minmax(0,1fr)] items-center gap-4 text-left"
                       title={`Abrir painel de ${profile.nome}`}
                     >
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-white">
+                      <div className="force-white flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 text-sm font-black shadow-sm">
                         {profile.tipo_usuario === 'admin' ? <Shield size={20} /> : profile.nome.slice(0, 2).toUpperCase()}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-black text-gray-900">{profile.nome}</p>
+                          <p className="max-w-full truncate font-black text-gray-900">{profile.nome}</p>
                           <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
                             isMasterAccess ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'
                           }`}>
                             {isMasterAccess ? 'Admin master' : getRoleLabel(profile.tipo_usuario)}
                           </span>
                           {profile.precisa_trocar_senha && (
-                            <span className="rounded-full bg-amber-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-amber-700">
+                            <span className="rounded-full bg-sky-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-sky-700">
                               primeiro acesso
                             </span>
                           )}
                         </div>
-                        <p className="mt-1 text-xs font-bold text-slate-400">{profile.email}</p>
+                        <p className="mt-1 break-all text-xs font-bold text-slate-400">{profile.email}</p>
                         {profile.email_real && <p className="text-xs font-medium text-slate-400">Real: {profile.email_real}</p>}
                         {Array.isArray(operadoras) && operadoras.length > 0 && (
                           <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-500">
                             {operadoras.join(', ')}
                           </p>
                         )}
-                        <p className="mt-2 max-w-[520px] truncate rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        <p className="mt-2 max-w-full truncate rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 sm:max-w-[520px]">
                           ID para n8n: <span className="normal-case tracking-normal text-slate-700">{getUserIntegrationId(profile, corretor)}</span>
                         </p>
                       </div>
                     </button>
 
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end">
                       <button
                         onClick={() => copyUserId(getUserIntegrationId(profile, corretor))}
-                        className="flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition-all hover:bg-blue-100"
+                        className="flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md"
                       >
                         <Copy size={16} />
                         Copiar ID
@@ -593,7 +593,7 @@ export default function AdminUsuariosPage() {
                         <button
                           onClick={() => handleResetPassword(profile)}
                           disabled={removingId === profile.id}
-                          className="flex items-center justify-center gap-2 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-black text-amber-700 transition-all hover:bg-amber-100 disabled:opacity-50"
+                          className="flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md disabled:opacity-50"
                         >
                           {removingId === profile.id ? <Loader2 className="animate-spin" size={16} /> : <KeyRound size={16} />}
                           Nova senha
