@@ -64,6 +64,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Solicitacoes de suporte', href: '/admin/suporte' },
+    { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
   const trafficMenu = [
@@ -75,6 +76,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Ajuda Orion', href: '/ajuda' },
+    { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
   const designerMenu = [

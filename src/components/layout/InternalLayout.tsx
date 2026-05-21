@@ -29,7 +29,10 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isDesignerRoute = pathname.startsWith('/designer');
         const isAccountRoute = pathname.startsWith('/account');
         const isCreativeRoute = pathname.startsWith('/criativos');
-        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/minha-pagina', '/perfil'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
+        const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes';
+        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/minha-pagina'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
+
+        if (isSharedRoute) return;
 
         // 1. Corretor Access: Only broker routes
         if (isCorretor && (isAdminRoute || isTrafficRoute || isDesignerRoute || isAccountRoute)) {
@@ -65,7 +68,9 @@ export default function InternalLayout({ children }: { children: React.ReactNode
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem('orion:tema_sistema') as 'claro' | 'noturno' | null;
-    setThemeMode((profile?.tema_sistema as 'claro' | 'noturno' | null) || storedTheme || 'claro');
+    queueMicrotask(() => {
+      setThemeMode((profile?.tema_sistema as 'claro' | 'noturno' | null) || storedTheme || 'claro');
+    });
   }, [profile?.tema_sistema]);
 
   useEffect(() => {
