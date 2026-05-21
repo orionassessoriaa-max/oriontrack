@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'corretor' | 'gestor_trafego' | 'designer' | 'account_manager';
+export type UserRole = 'admin' | 'corretor' | 'corretor_membro' | 'gestor_trafego' | 'designer' | 'account_manager';
 export type TipoCampanha = 'pme' | 'adesao' | 'ambos';
 
 export interface Profile {
@@ -80,6 +80,12 @@ export interface Lead {
   tipo_plano?: string | null;
   valor_venda?: number | string | null;
   valor_comissao?: number | string | null;
+  responsavel_membro_id?: string | null;
+  responsavel_profile_id?: string | null;
+  responsavel_membro?: {
+    nome: string;
+    email: string;
+  } | null;
   status: LeadStatus;
   etiqueta?: string;
   observacoes?: string;

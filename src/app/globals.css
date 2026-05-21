@@ -341,7 +341,7 @@ body.theme-noturno {
 }
 
 .orion-traffic-funnel {
-  width: min(100%, 560px);
+  width: min(100%, 760px);
   filter: drop-shadow(0 24px 38px rgba(2, 42, 83, 0.22));
 }
 
@@ -392,22 +392,39 @@ body.theme-noturno {
   text-shadow: 0 3px 14px rgba(2, 6, 23, 0.36);
 }
 
-.orion-traffic-label {
-  font-size: 17px;
-  font-weight: 950;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
 .orion-traffic-value {
   font-size: 42px;
   font-weight: 950;
 }
 
-.orion-traffic-detail {
+.orion-traffic-side {
+  pointer-events: none;
+}
+
+.orion-traffic-connector {
+  stroke: rgba(14, 165, 233, 0.55);
+  stroke-width: 2;
+  stroke-dasharray: 6 7;
+}
+
+.orion-traffic-node {
+  fill: #e0f2fe;
+  stroke: #0284c7;
+  stroke-width: 2;
+}
+
+.orion-traffic-side-label {
+  fill: #0f172a;
+  font-size: 16px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.orion-traffic-side-detail {
+  fill: #64748b;
   font-size: 13px;
   font-weight: 800;
-  opacity: 0.88;
 }
 
 @keyframes funnel-breathe {
@@ -474,20 +491,19 @@ body.theme-noturno {
   }
 
   .orion-traffic-funnel {
-    width: min(100%, 430px);
+    width: min(100%, 560px);
     padding-inline: 0;
-  }
-
-  .orion-traffic-label {
-    font-size: 14px;
-    letter-spacing: 0.15em;
   }
 
   .orion-traffic-value {
     font-size: 34px;
   }
 
-  .orion-traffic-detail {
+  .orion-traffic-side-label {
+    font-size: 13px;
+  }
+
+  .orion-traffic-side-detail {
     font-size: 11px;
   }
 

@@ -149,7 +149,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function fetchCorretorData() {
-      if (!profile || profile.tipo_usuario !== "corretor") {
+      if (!profile || !['corretor', 'corretor_membro'].includes(profile.tipo_usuario)) {
         setLoadingData(false);
         return;
       }
@@ -180,10 +180,16 @@ export default function DashboardPage() {
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
 
-        const statsQuery = await supabase
+        let statsRequest = supabase
           .from('leads')
           .select('status, data_entrada, cidade, valor_negociacao, valor_comissao')
           .eq('corretor_id', profile.corretor_id);
+
+        if (profile.tipo_usuario === 'corretor_membro') {
+          statsRequest = statsRequest.eq('responsavel_profile_id', profile.id);
+        }
+
+        const statsQuery = await statsRequest;
 
         if (statsQuery.error) throw statsQuery.error;
 
@@ -511,7 +517,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="orion-traffic-funnel mx-auto py-2">
-              <svg viewBox="0 0 520 640" role="img" aria-label="Funil comercial Orion Track">
+              <svg viewBox="0 0 760 640" role="img" aria-label="Funil comercial Orion Track">
                 <defs>
                   <linearGradient id="funnelTopGradient" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="#33d4ff" />
@@ -564,12 +570,23 @@ export default function DashboardPage() {
                 </g>
 
                 {visualFunnelSteps.map((step) => (
-                  <g key={`${step.name}-text`} className="orion-traffic-text">
-                    <text x="260" y={step.labelY} className="orion-traffic-label">{step.name}</text>
+                  <g key={`${step.name}-value`} className="orion-traffic-text">
                     <text x="260" y={step.valueY} className="orion-traffic-value">{formatCompactMetric(step.value)}</text>
-                    <text x="260" y={step.detailY} className="orion-traffic-detail">{step.detail}</text>
                   </g>
                 ))}
+
+                {visualFunnelSteps.map((step, index) => {
+                  const connectorY = [150, 312, 468, 578][index];
+                  const startX = [438, 390, 326, 286][index];
+                  return (
+                    <g key={`${step.name}-side`} className="orion-traffic-side">
+                      <line x1={startX} y1={connectorY} x2="536" y2={connectorY} className="orion-traffic-connector" />
+                      <circle cx={startX} cy={connectorY} r="5" className="orion-traffic-node" />
+                      <text x="552" y={connectorY - 8} className="orion-traffic-side-label">{step.name}</text>
+                      <text x="552" y={connectorY + 18} className="orion-traffic-side-detail">{step.detail}</text>
+                    </g>
+                  );
+                })}
               </svg>
             </div>
 

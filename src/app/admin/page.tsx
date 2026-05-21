@@ -31,8 +31,9 @@ import { ptBR } from 'date-fns/locale';
 export default function AdminCentralPage() {
   const [stats, setStats] = useState({
     totalCorretores: 0,
-    totalLeads: 0,
-    leadsHoje: 0,
+    totalGestores: 0,
+    totalAccounts: 0,
+    totalDesigners: 0,
     suportePendente: 0
   });
   const [gestoresStats, setGestoresStats] = useState<any[]>([]);
@@ -52,18 +53,23 @@ export default function AdminCentralPage() {
         .select('*', { count: 'exact', head: true })
         .in('status', ['active', 'ativo', 'Ativo']);
 
-      // 2. Total Leads
-      const { count: countLeads } = await supabase
-        .from('leads')
-        .select('*', { count: 'exact', head: true });
-
-      // 3. Leads Hoje
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      const { count: countLeadsHoje } = await supabase
-        .from('leads')
+      const { count: countGestores } = await supabase
+        .from('profiles')
         .select('*', { count: 'exact', head: true })
-        .gte('data_entrada', today.toISOString());
+        .eq('tipo_usuario', 'gestor_trafego')
+        .in('status', ['active', 'ativo', 'Ativo']);
+
+      const { count: countAccounts } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('tipo_usuario', 'account_manager')
+        .in('status', ['active', 'ativo', 'Ativo']);
+
+      const { count: countDesigners } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('tipo_usuario', 'designer')
+        .in('status', ['active', 'ativo', 'Ativo']);
 
       // 4. Suporte Pendente
       const { count: countSuporte } = await supabase
@@ -95,8 +101,9 @@ export default function AdminCentralPage() {
 
       setStats({
         totalCorretores: countCorretores || 0,
-        totalLeads: countLeads || 0,
-        leadsHoje: countLeadsHoje || 0,
+        totalGestores: countGestores || 0,
+        totalAccounts: countAccounts || 0,
+        totalDesigners: countDesigners || 0,
         suportePendente: countSuporte || 0
       });
       setGestoresStats(statsPorGestor);
@@ -188,30 +195,30 @@ export default function AdminCentralPage() {
             loading={loading}
           />
         </Link>
-        <Link href="/admin/leads">
+        <Link href="/admin/gestores">
           <StatCard
-            title="Leads Totais"
-            value={stats.totalLeads}
-            icon={FileSearch}
-            color="purple"
-            loading={loading}
-          />
-        </Link>
-        <Link href="/admin/leads">
-          <StatCard
-            title="Entradas Hoje"
-            value={stats.leadsHoje}
-            icon={TrendingUp}
+            title="Gestores ativos"
+            value={stats.totalGestores}
+            icon={UserCog}
             color="green"
             loading={loading}
           />
         </Link>
-        <Link href="/admin/suporte">
+        <Link href="/admin/accounts">
           <StatCard
-            title="Suporte Pendente"
-            value={stats.suportePendente}
-            icon={Clock}
-            color="orange"
+            title="Accounts ativos"
+            value={stats.totalAccounts}
+            icon={Users}
+            color="purple"
+            loading={loading}
+          />
+        </Link>
+        <Link href="/admin/designers">
+          <StatCard
+            title="Designers ativos"
+            value={stats.totalDesigners}
+            icon={LayoutDashboard}
+            color="blue"
             loading={loading}
           />
         </Link>

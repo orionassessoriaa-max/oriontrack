@@ -6,9 +6,9 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile, TipoCampanha, UserRole } from '@/types';
 import { generateOrionEmail, getRoleLabel } from '@/lib/users';
 import { OPERADORAS_ONBOARDING } from '@/lib/onboarding';
-import { buildOperationalTeamMembers, getTeamMemberAvatar, isTrafficManagerMember, OrionTeamMember } from '@/lib/orionTeam';
+import { buildOperationalTeamMembers, getTeamMemberAvatar, getTeamMemberPhoto, isTrafficManagerMember, OrionTeamMember } from '@/lib/orionTeam';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { Camera, CheckCircle2, Copy, KeyRound, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
+import { Camera, CheckCircle2, Copy, Edit2, KeyRound, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 type Credentials = {
@@ -210,6 +210,46 @@ export default function AdminUsuariosPage() {
     }
 
     setCredentials(payload.credentials);
+    await fetchUsers();
+    setRemovingId(null);
+  }
+
+  async function handleEditUser(profile: Profile) {
+    const nome = window.prompt('Nome do usuario', profile.nome || '');
+    if (!nome) return;
+    const emailReal = window.prompt('Email real do usuario', profile.email_real || '') ?? profile.email_real ?? '';
+
+    setRemovingId(profile.id);
+    setError(null);
+
+    const token = await getToken();
+    if (!token) {
+      setError('Sessao expirada. Entre novamente.');
+      setRemovingId(null);
+      return;
+    }
+
+    const response = await fetch('/api/admin/usuarios', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        id: profile.id,
+        action: 'update_profile',
+        nome: nome.trim(),
+        email_real: emailReal.trim()
+      })
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setError(payload.error || 'Erro ao editar usuario.');
+      setRemovingId(null);
+      return;
+    }
+
     await fetchUsers();
     setRemovingId(null);
   }
@@ -539,16 +579,24 @@ export default function AdminUsuariosPage() {
                   .includes(MASTER_ADMIN_EMAIL);
 
                 return (
-                  <div key={profile.id} className="grid gap-4 p-4 transition-colors hover:bg-blue-50/30 sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                  <div key={profile.id} className="grid gap-5 p-5 transition-colors hover:bg-blue-50/30 sm:p-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,auto)] xl:items-center">
                     <button
                       type="button"
                       onClick={() => void openUserPanel(profile)}
-                      className="grid min-w-0 grid-cols-[48px_minmax(0,1fr)] items-center gap-4 text-left"
+                      className="grid min-w-0 grid-cols-[56px_minmax(0,1fr)] items-center gap-5 text-left"
                       title={`Abrir painel de ${profile.nome}`}
                     >
-                      <div className="force-white flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 text-sm font-black shadow-sm">
-                        {profile.tipo_usuario === 'admin' ? <Shield size={20} /> : profile.nome.slice(0, 2).toUpperCase()}
-                      </div>
+                      {profile.foto_url || getTeamMemberPhoto(profile.nome) ? (
+                        <img
+                          src={profile.foto_url || getTeamMemberPhoto(profile.nome) || ''}
+                          alt={profile.nome}
+                          className="h-14 w-14 rounded-2xl object-cover shadow-sm ring-1 ring-slate-200"
+                        />
+                      ) : (
+                        <div className="force-white flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 text-sm font-black shadow-sm">
+                          {profile.tipo_usuario === 'admin' ? <Shield size={20} /> : profile.nome.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="max-w-full truncate font-black text-gray-900">{profile.nome}</p>
@@ -576,13 +624,21 @@ export default function AdminUsuariosPage() {
                       </div>
                     </button>
 
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:flex xl:flex-wrap xl:justify-end">
                       <button
                         onClick={() => copyUserId(getUserIntegrationId(profile, corretor))}
                         className="flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md"
                       >
                         <Copy size={16} />
                         Copiar ID
+                      </button>
+                      <button
+                        onClick={() => handleEditUser(profile)}
+                        disabled={removingId === profile.id}
+                        className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition-all hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md disabled:opacity-50"
+                      >
+                        <Edit2 size={16} />
+                        Editar
                       </button>
                       {isOwnAccess || isMasterAccess ? (
                         <span className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">

@@ -238,11 +238,11 @@ export async function PATCH(request: Request) {
     const id = String(body.id || '');
     const action = String(body.action || '');
 
-    if (!id || action !== 'reset_password') {
+    if (!id || !['reset_password', 'update_profile'].includes(action)) {
       return NextResponse.json({ error: 'AÃ§Ã£o invÃ¡lida.' }, { status: 400 });
     }
 
-    if (id === guard.user.id) {
+    if (id === guard.user.id && action === 'reset_password') {
       return NextResponse.json({ error: 'Use a recuperaÃ§Ã£o de senha para o seu prÃ³prio acesso.' }, { status: 400 });
     }
 
@@ -254,6 +254,49 @@ export async function PATCH(request: Request) {
 
     if (profileError || !targetProfile) {
       return NextResponse.json({ error: 'UsuÃ¡rio nÃ£o encontrado.' }, { status: 404 });
+    }
+
+    if (action === 'update_profile') {
+      const nome = String(body.nome || '').trim();
+      const emailReal = String(body.email_real || '').trim() || null;
+
+      if (!nome) {
+        return NextResponse.json({ error: 'Nome obrigatorio.' }, { status: 400 });
+      }
+
+      if (targetProfile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
+        return NextResponse.json({ error: 'Apenas o admin master pode editar outro admin.' }, { status: 403 });
+      }
+
+      const { error: updateProfileError } = await supabaseAdmin
+        .from('profiles')
+        .update({ nome, email_real: emailReal })
+        .eq('id', id);
+
+      if (updateProfileError) {
+        return NextResponse.json({ error: updateProfileError.message }, { status: 500 });
+      }
+
+      await supabaseAdmin.auth.admin.updateUserById(id, {
+        user_metadata: { name: nome, nome, email_real: emailReal }
+      });
+
+      if (targetProfile.tipo_usuario === 'corretor') {
+        const { data: profileWithCorretor } = await supabaseAdmin
+          .from('profiles')
+          .select('corretor_id')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (profileWithCorretor?.corretor_id) {
+          await supabaseAdmin
+            .from('corretores')
+            .update({ nome, email_real: emailReal })
+            .eq('id', profileWithCorretor.corretor_id);
+        }
+      }
+
+      return NextResponse.json({ success: true });
     }
 
     if (isMasterAdmin(targetProfile)) {

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
     const { data: profile, error: profileLookupError } = await supabaseAdmin
       .from('profiles')
-      .select('id, corretor_id')
+      .select('id, corretor_id, tipo_usuario')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
 
-    if (profile.corretor_id) {
+    if (profile.corretor_id && profile.tipo_usuario === 'corretor') {
       await supabaseAdmin
         .from('corretores')
         .update({ email: emailReal })

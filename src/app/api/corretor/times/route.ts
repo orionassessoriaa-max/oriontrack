@@ -1,0 +1,293 @@
+import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { generateStrongPassword } from '@/lib/users';
+import { PUBLIC_LOGIN_URL } from '@/lib/publicUrl';
+
+type GuardProfile = {
+  id: string;
+  tipo_usuario: string;
+  corretor_id: string | null;
+};
+
+async function requireUser(request: Request) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { error: NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 }) };
+  }
+
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !user) {
+    return { error: NextResponse.json({ error: 'Sessao expirada.' }, { status: 401 }) };
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('id, tipo_usuario, corretor_id')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!profile || !['admin', 'corretor'].includes(profile.tipo_usuario)) {
+    return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
+  }
+
+  return { user, profile: profile as GuardProfile };
+}
+
+function getRequestedCorretorId(request: Request, profile: GuardProfile, body?: any) {
+  const url = new URL(request.url);
+  const requested = String(body?.corretor_id || url.searchParams.get('corretor_id') || '').trim();
+
+  if (profile.tipo_usuario === 'admin') return requested || null;
+  return profile.corretor_id;
+}
+
+async function ensureTeam(corretorId: string, nome = 'Time comercial') {
+  const { data: existing, error: findError } = await supabaseAdmin
+    .from('corretor_times')
+    .select('*')
+    .eq('corretor_id', corretorId)
+    .eq('ativo', true)
+    .maybeSingle();
+
+  if (findError) throw findError;
+  if (existing) return existing;
+
+  const { data, error } = await supabaseAdmin
+    .from('corretor_times')
+    .insert([{ corretor_id: corretorId, nome }])
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function GET(request: Request) {
+  try {
+    const guard = await requireUser(request);
+    if ('error' in guard) return guard.error;
+
+    const corretorId = getRequestedCorretorId(request, guard.profile);
+    if (!corretorId) {
+      return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
+    }
+
+    const team = await ensureTeam(corretorId);
+    const { data: membros, error: membersError } = await supabaseAdmin
+      .from('corretor_time_membros')
+      .select('id, time_id, corretor_id, profile_id, nome, email, status, ordem, ultimo_lead_at, created_at')
+      .eq('time_id', team.id)
+      .order('ordem', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (membersError) throw membersError;
+
+    return NextResponse.json({ team, membros: membros || [] });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Erro ao carregar time.' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const guard = await requireUser(request);
+    if ('error' in guard) return guard.error;
+
+    const body = await request.json();
+    const action = String(body.action || 'create_member');
+    const corretorId = getRequestedCorretorId(request, guard.profile, body);
+    if (!corretorId) {
+      return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
+    }
+
+    const { data: corretor } = await supabaseAdmin
+      .from('corretores')
+      .select('id, nome')
+      .eq('id', corretorId)
+      .maybeSingle();
+
+    if (!corretor) {
+      return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
+    }
+
+    const team = await ensureTeam(corretorId, String(body.nome_time || 'Time comercial'));
+
+    if (action === 'update_team_name') {
+      const nome = String(body.nome || '').trim();
+      if (!nome) return NextResponse.json({ error: 'Informe o nome do time.' }, { status: 400 });
+
+      const { data, error } = await supabaseAdmin
+        .from('corretor_times')
+        .update({ nome })
+        .eq('id', team.id)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      return NextResponse.json({ success: true, team: data });
+    }
+
+    if (action === 'delete_member') {
+      const memberId = String(body.member_id || '').trim();
+      if (!memberId) return NextResponse.json({ error: 'Membro nao informado.' }, { status: 400 });
+
+      const { data: member } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .select('id, profile_id')
+        .eq('id', memberId)
+        .eq('corretor_id', corretorId)
+        .maybeSingle();
+
+      if (!member) return NextResponse.json({ error: 'Membro nao encontrado.' }, { status: 404 });
+
+      await supabaseAdmin
+        .from('corretor_time_membros')
+        .delete()
+        .eq('id', memberId);
+
+      if (member.profile_id) {
+        await supabaseAdmin
+          .from('profiles')
+          .update({ status: 'inactive' })
+          .eq('id', member.profile_id);
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === 'update_member') {
+      const memberId = String(body.member_id || '').trim();
+      const nome = String(body.nome || '').trim();
+      const email = String(body.email || '').trim().toLowerCase();
+
+      if (!memberId || !nome || !email.includes('@')) {
+        return NextResponse.json({ error: 'Informe nome e email validos.' }, { status: 400 });
+      }
+
+      const { data: member } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .select('id, profile_id')
+        .eq('id', memberId)
+        .eq('corretor_id', corretorId)
+        .maybeSingle();
+
+      if (!member) return NextResponse.json({ error: 'Membro nao encontrado.' }, { status: 404 });
+
+      const { data, error } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .update({ nome, email })
+        .eq('id', memberId)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      if (member.profile_id) {
+        await supabaseAdmin
+          .from('profiles')
+          .update({ nome, email, email_real: email })
+          .eq('id', member.profile_id);
+
+        await supabaseAdmin.auth.admin.updateUserById(member.profile_id, {
+          email,
+          email_confirm: true,
+          user_metadata: { nome, email_real: email, tipo_usuario: 'corretor_membro' }
+        });
+      }
+
+      return NextResponse.json({ success: true, membro: data });
+    }
+
+    const nome = String(body.nome || '').trim();
+    const email = String(body.email || '').trim().toLowerCase();
+    if (!nome || !email.includes('@')) {
+      return NextResponse.json({ error: 'Informe nome e email real do membro.' }, { status: 400 });
+    }
+
+    const { data: duplicated } = await supabaseAdmin
+      .from('corretor_time_membros')
+      .select('id')
+      .eq('corretor_id', corretorId)
+      .eq('email', email)
+      .maybeSingle();
+
+    if (duplicated) {
+      return NextResponse.json({ error: 'Este email ja esta no time desse corretor.' }, { status: 400 });
+    }
+
+    const senhaProvisoria = generateStrongPassword();
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: senhaProvisoria,
+      email_confirm: true,
+      user_metadata: {
+        nome,
+        tipo_usuario: 'corretor_membro',
+        corretor_id: corretorId,
+        email_real: email,
+      }
+    });
+
+    if (authError || !authUser.user) {
+      return NextResponse.json({ error: authError?.message || 'Erro ao criar acesso.' }, { status: 400 });
+    }
+
+    try {
+      const { data: lastMember } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .select('ordem')
+        .eq('time_id', team.id)
+        .order('ordem', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const ordem = Number(lastMember?.ordem || 0) + 1;
+
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .insert([{
+          id: authUser.user.id,
+          email,
+          email_real: email,
+          nome,
+          tipo_usuario: 'corretor_membro',
+          corretor_id: corretorId,
+          status: 'active',
+          precisa_trocar_senha: true,
+        }]);
+
+      if (profileError) throw profileError;
+
+      const { data: membro, error: memberError } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .insert([{
+          time_id: team.id,
+          corretor_id: corretorId,
+          profile_id: authUser.user.id,
+          nome,
+          email,
+          ordem,
+        }])
+        .select('*')
+        .single();
+
+      if (memberError) throw memberError;
+
+      return NextResponse.json({
+        success: true,
+        membro,
+        credentials: {
+          email,
+          senha_provisoria: senhaProvisoria,
+          link_login: PUBLIC_LOGIN_URL,
+        },
+      });
+    } catch (error: any) {
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      return NextResponse.json({ error: error.message || 'Erro ao criar membro.' }, { status: 500 });
+    }
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Erro ao atualizar time.' }, { status: 500 });
+  }
+}
