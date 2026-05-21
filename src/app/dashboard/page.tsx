@@ -505,19 +505,19 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-5 p-4 sm:p-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 dark-dashboard-inner sm:p-6">
-            <div className="mb-6 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
-                <Target size={22} />
+          <div className="rounded-[1.5rem] border border-slate-100 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm dark-dashboard-inner sm:p-6">
+            <div className="mb-5 flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                <Target size={24} />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Funil comercial</p>
-                <h3 className="text-xl font-black text-gray-950">Performance por etapa</h3>
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-600">Funil comercial</p>
+                <h3 className="text-2xl font-black tracking-tight text-gray-950">Performance por etapa</h3>
               </div>
             </div>
 
             <div className="orion-traffic-funnel mx-auto py-2">
-              <svg viewBox="0 0 760 640" role="img" aria-label="Funil comercial Orion Track">
+              <svg viewBox="0 0 840 640" role="img" aria-label="Funil comercial Orion Track">
                 <defs>
                   <linearGradient id="funnelTopGradient" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="#33d4ff" />
@@ -580,10 +580,11 @@ export default function DashboardPage() {
                   const startX = [438, 390, 326, 286][index];
                   return (
                     <g key={`${step.name}-side`} className="orion-traffic-side">
-                      <line x1={startX} y1={connectorY} x2="536" y2={connectorY} className="orion-traffic-connector" />
-                      <circle cx={startX} cy={connectorY} r="5" className="orion-traffic-node" />
-                      <text x="552" y={connectorY - 8} className="orion-traffic-side-label">{step.name}</text>
-                      <text x="552" y={connectorY + 18} className="orion-traffic-side-detail">{step.detail}</text>
+                      <line x1={startX} y1={connectorY} x2="548" y2={connectorY} className="orion-traffic-connector" />
+                      <circle cx={startX} cy={connectorY} r="6" className="orion-traffic-node" />
+                      <rect x="562" y={connectorY - 38} width="238" height="70" rx="18" className="orion-traffic-label-card" />
+                      <text x="586" y={connectorY - 9} className="orion-traffic-side-label">{step.name}</text>
+                      <text x="586" y={connectorY + 18} className="orion-traffic-side-detail">{step.detail}</text>
                     </g>
                   );
                 })}
