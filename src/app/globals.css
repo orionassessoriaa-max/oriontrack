@@ -74,22 +74,40 @@
 .status-venda-realizada { @apply bg-green-100 text-green-700; }
 .status-sem-interesse { @apply bg-gray-100 text-gray-700; }
 
+html.theme-noturno,
+body.theme-noturno {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(14, 116, 236, 0.28), transparent 34%),
+    radial-gradient(circle at 82% 12%, rgba(34, 211, 238, 0.12), transparent 30%),
+    linear-gradient(135deg, #061827 0%, #07111f 45%, #020617 100%) !important;
+  color: #eaf2ff;
+}
+
 .theme-noturno main {
-  background: #020617;
+  background:
+    radial-gradient(circle at 22% 0%, rgba(14, 116, 236, 0.20), transparent 34%),
+    linear-gradient(135deg, #082036 0%, #071827 42%, #020617 100%) !important;
 }
 
 .theme-noturno .bg-white {
-  background-color: #0f172a !important;
+  background-color: rgba(15, 35, 56, 0.94) !important;
 }
 
 .theme-noturno .bg-slate-50,
 .theme-noturno .bg-gray-50 {
-  background-color: #111827 !important;
+  background-color: rgba(12, 30, 49, 0.96) !important;
 }
 
 .theme-noturno .bg-slate-100,
 .theme-noturno .bg-gray-100 {
-  background-color: #1e293b !important;
+  background-color: rgba(30, 64, 100, 0.76) !important;
+}
+
+.theme-noturno .border,
+.theme-noturno .border-gray-100,
+.theme-noturno .border-slate-100,
+.theme-noturno .border-slate-200 {
+  border-color: rgba(125, 211, 252, 0.16) !important;
 }
 
 .theme-noturno .text-gray-900,
@@ -97,36 +115,93 @@
 .theme-noturno .text-slate-900,
 .theme-noturno .text-emerald-950,
 .theme-noturno .text-blue-950 {
-  color: #f8fafc !important;
+  color: #f8fbff !important;
 }
 
 .theme-noturno .text-gray-700,
 .theme-noturno .text-slate-700,
 .theme-noturno .text-gray-600,
 .theme-noturno .text-slate-600 {
-  color: #cbd5e1 !important;
+  color: #d7e8ff !important;
 }
 
 .theme-noturno .text-gray-500,
 .theme-noturno .text-slate-500,
 .theme-noturno .text-gray-400,
 .theme-noturno .text-slate-400 {
-  color: #94a3b8 !important;
+  color: #9fc2e8 !important;
+}
+
+.theme-noturno .text-blue-600,
+.theme-noturno .text-blue-700 {
+  color: #60a5fa !important;
+}
+
+.theme-noturno .text-emerald-600,
+.theme-noturno .text-emerald-700 {
+  color: #34d399 !important;
 }
 
 .theme-noturno input,
 .theme-noturno select,
 .theme-noturno textarea {
-  background-color: #111827 !important;
-  color: #f8fafc !important;
+  background-color: rgba(8, 24, 40, 0.96) !important;
+  color: #f8fbff !important;
+  border-color: rgba(125, 211, 252, 0.18) !important;
 }
 
 .theme-noturno table tr,
 .theme-noturno thead tr {
-  background-color: #0f172a !important;
+  background-color: rgba(15, 35, 56, 0.94) !important;
 }
 
 .theme-noturno table td,
 .theme-noturno table th {
-  border-color: #1e293b !important;
+  border-color: rgba(125, 211, 252, 0.12) !important;
+}
+
+.theme-noturno .shadow-sm,
+.theme-noturno .shadow-xl,
+.theme-noturno .shadow-2xl {
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28) !important;
+}
+
+.theme-noturno .dark-dashboard-panel {
+  background:
+    linear-gradient(135deg, rgba(12, 31, 52, 0.96), rgba(8, 22, 38, 0.96)) !important;
+  border-color: rgba(56, 189, 248, 0.20) !important;
+}
+
+.theme-noturno .dark-dashboard-inner {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(14, 165, 233, 0.18), transparent 40%),
+    rgba(8, 22, 38, 0.86) !important;
+}
+
+.theme-noturno .bg-blue-50 {
+  background-color: rgba(37, 99, 235, 0.16) !important;
+}
+
+.theme-noturno .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+.theme-noturno .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.14) !important;
+}
+
+@keyframes orion-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dark-dashboard-panel,
+.dark-dashboard-inner {
+  animation: orion-rise 520ms ease both;
 }

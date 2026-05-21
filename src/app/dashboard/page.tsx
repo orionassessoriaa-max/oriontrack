@@ -19,7 +19,8 @@ import {
   CalendarDays,
   Target,
   Info,
-  AlertTriangle
+  AlertTriangle,
+  type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
@@ -308,6 +309,16 @@ export default function DashboardPage() {
   const weeklyTotal = weeklyLeads.reduce((sum, day) => sum + day.leads, 0);
   const bestWeeklyDay = weeklyLeads.reduce((best, day) => day.leads > best.leads ? day : best, weeklyLeads[0] || { label: '-', leads: 0 });
   const maxCityLeads = Math.max(...topCities.map((city) => city.leads), 1);
+  const activePipeline = stats.waiting + stats.inProgress + stats.quoted + stats.sold;
+  const funnelMax = Math.max(stats.total, activePipeline, stats.quoted + stats.sold, stats.sold, 1);
+  const funnelSteps = [
+    { label: 'Leads', value: stats.total, detail: 'entradas captadas', color: 'from-sky-400 to-blue-600', width: 100 },
+    { label: 'Atendimento', value: activePipeline, detail: 'em funil comercial', color: 'from-cyan-400 to-blue-500', width: Math.max((activePipeline / funnelMax) * 100, 38) },
+    { label: 'Cotação', value: stats.quoted + stats.sold, detail: 'propostas e vendas', color: 'from-blue-400 to-indigo-500', width: Math.max(((stats.quoted + stats.sold) / funnelMax) * 100, 28) },
+    { label: 'Vendas', value: stats.sold, detail: 'conversões fechadas', color: 'from-emerald-400 to-teal-500', width: Math.max((stats.sold / funnelMax) * 100, stats.sold > 0 ? 22 : 16) },
+  ];
+  const quoteRate = stats.total > 0 ? ((stats.quoted + stats.sold) / stats.total) * 100 : 0;
+  const salesRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
 
   const quickActions = [
     { icon: Users, label: 'Leads', desc: 'Veja todos os contatos recebidos.', href: '/leads', color: 'blue' },
@@ -377,6 +388,95 @@ export default function DashboardPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-12 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-600/10 dark-dashboard-panel">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 p-7 text-white">
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+            <div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">Overview comercial</p>
+              <h2 className="text-3xl font-black tracking-tight">Funil Orion Track</h2>
+              <p className="mt-2 max-w-2xl text-sm font-bold leading-relaxed text-blue-100">
+                Uma visão executiva do caminho do lead: entrada, atendimento, cotação e venda.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">CPL mês</p>
+                <p className="mt-1 text-lg font-black">{formatCurrency(currentMonthCpl)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Cotação</p>
+                <p className="mt-1 text-lg font-black">{quoteRate.toFixed(1).replace('.', ',')}%</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Venda</p>
+                <p className="mt-1 text-lg font-black">{salesRate.toFixed(1).replace('.', ',')}%</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Comissão</p>
+                <p className="mt-1 text-lg font-black">{formatCurrency(stats.revenueRealized)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-6 p-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-6 dark-dashboard-inner">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                <Target size={22} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Funil comercial</p>
+                <h3 className="text-xl font-black text-gray-950">Performance por etapa</h3>
+              </div>
+            </div>
+
+            <div className="mx-auto flex max-w-xl flex-col items-center gap-2">
+              {funnelSteps.map((step, index) => (
+                <Link
+                  key={step.label}
+                  href={index === 0 ? '/leads' : `/leads?status=${encodeURIComponent(index === 1 ? 'Aguardando atendimento' : index === 2 ? 'Cotação enviada' : 'Venda realizada')}`}
+                  className="group relative flex min-h-20 items-center justify-center overflow-hidden rounded-xl text-white shadow-lg shadow-blue-900/10 transition-all duration-500 hover:scale-[1.025] hover:shadow-blue-600/25"
+                  style={{
+                    width: `${step.width}%`,
+                    clipPath: 'polygon(7% 0, 93% 0, 82% 100%, 18% 100%)',
+                  }}
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-r ${step.color} transition-transform duration-700 group-hover:scale-110`} />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_10%,rgba(255,255,255,0.28),transparent_35%)] opacity-80" />
+                  <div className="relative z-10 text-center">
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/80">{step.label}</p>
+                    <p className="text-3xl font-black leading-none">{step.value}</p>
+                    <p className="mt-1 text-[11px] font-bold text-white/80">{step.detail}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            {[
+              { label: 'Sem resposta', value: staleOpportunityCount, hint: 'precisam de atenção rápida', color: 'bg-amber-50 text-amber-700 border-amber-100', icon: AlertTriangle },
+              { label: 'Em negociação', value: stats.inProgress, hint: 'leads em conversa ativa', color: 'bg-blue-50 text-blue-700 border-blue-100', icon: Clock },
+              { label: 'Comissão prevista', value: formatCurrency(stats.revenuePotential), hint: 'estimativa dos leads ativos', color: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: TrendingUp },
+            ].map((item) => (
+              <div key={item.label} className={`group rounded-[1.5rem] border p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${item.color}`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-80">{item.label}</p>
+                    <p className="mt-2 text-3xl font-black">{item.value}</p>
+                    <p className="mt-1 text-xs font-bold opacity-80">{item.hint}</p>
+                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/75 transition-transform duration-300 group-hover:scale-110">
+                    <item.icon size={22} />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -704,7 +804,7 @@ export default function DashboardPage() {
   );
 }
 
-function MiniMetric({ icon: Icon, label, value }: { icon: any; label: string; value: number | string }) {
+function MiniMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number | string }) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
       <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-blue-600">
