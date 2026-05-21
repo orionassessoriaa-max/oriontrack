@@ -195,10 +195,10 @@ export default function DashboardPage() {
               return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
             }).length,
             lost: lostLeads.length,
-            revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
+            revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
             revenuePotential: statsRes
               .filter((lead) => activeRevenueStatuses.includes(String(lead.status || '')))
-              .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
+              .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0)
           });
 
           const months = getLastMonths();
@@ -326,12 +326,12 @@ export default function DashboardPage() {
           {isDataLoading ? (
             <span className="inline-block w-48 h-10 bg-gray-100 animate-pulse rounded-lg" />
           ) : (
-            `Olá, ${firstName} 👋`
+            `Olá, ${firstName}`
           )}
         </h1>
-        <p className="text-xl font-bold text-blue-600 mb-2">Bem-vindo ao ORION TRACK</p>
+        <p className="text-xl font-bold text-blue-600 mb-2">Seu centro de vendas Orion está pronto para acelerar seus resultados</p>
         <p className="text-gray-500 font-medium max-w-2xl">
-          Por aqui você acompanha seus leads, organiza seu funil comercial e aciona a equipe da Orion sempre que precisar.
+          Acompanhe seus leads, avance cada negociação e transforme oportunidades em comissão com mais controle, velocidade e clareza.
         </p>
       </div>
 
@@ -474,20 +474,20 @@ export default function DashboardPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-4">
-            <p className="text-sm font-black text-gray-900">Receita Realizada</p>
+            <p className="text-sm font-black text-gray-900">Comissão vendida</p>
             <DollarSign size={18} className="text-slate-500" />
           </div>
           <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.revenueRealized)}</p>
-          <p className="mt-2 text-xs font-bold text-emerald-600">↗ de vendas realizadas</p>
+          <p className="mt-2 text-xs font-bold text-emerald-600">comissão das vendas realizadas</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-4">
-            <p className="text-sm font-black text-gray-900">Receita Potencial</p>
+            <p className="text-sm font-black text-gray-900">Comissão prevista</p>
             <TrendingUp size={18} className="text-slate-500" />
           </div>
           <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.revenuePotential)}</p>
-          <p className="mt-2 text-xs font-bold text-slate-500">em leads ativos</p>
+          <p className="mt-2 text-xs font-bold text-slate-500">estimativa dos leads ativos</p>
         </div>
       </div>
 
