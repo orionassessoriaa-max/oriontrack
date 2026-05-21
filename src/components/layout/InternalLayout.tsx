@@ -11,6 +11,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [themeMode, setThemeMode] = useState<'claro' | 'noturno'>('claro');
 
   useEffect(() => {
     if (!loading) {
@@ -62,6 +63,29 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     }
   }, [loading, user, profile, pathname, router]);
 
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem('orion:tema_sistema') as 'claro' | 'noturno' | null;
+    setThemeMode((profile?.tema_sistema as 'claro' | 'noturno' | null) || storedTheme || 'claro');
+  }, [profile?.tema_sistema]);
+
+  useEffect(() => {
+    const handleThemeChange = (event: Event) => {
+      const nextTheme = (event as CustomEvent<'claro' | 'noturno'>).detail;
+      if (nextTheme === 'claro' || nextTheme === 'noturno') {
+        setThemeMode(nextTheme);
+      }
+    };
+
+    window.addEventListener('orion-theme-change', handleThemeChange);
+    return () => window.removeEventListener('orion-theme-change', handleThemeChange);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('theme-noturno', themeMode === 'noturno');
+    document.body.classList.toggle('theme-noturno', themeMode === 'noturno');
+    document.documentElement.style.colorScheme = themeMode === 'noturno' ? 'dark' : 'light';
+  }, [themeMode]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
@@ -104,7 +128,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     );
   }
 
-  const isDarkTheme = profile?.tema_sistema === 'noturno';
+  const isDarkTheme = themeMode === 'noturno';
 
   return (
     <div className={`flex min-h-screen ${isDarkTheme ? 'theme-noturno bg-slate-950 text-slate-100' : 'bg-[#f8fafc]'}`}>
