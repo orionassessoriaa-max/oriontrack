@@ -2,8 +2,12 @@
 
 import InternalLayout from '@/components/layout/InternalLayout';
 import CorretorTeamManager from '@/components/corretor/CorretorTeamManager';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 export default function CorretorTimePage() {
+  const { profile } = useAuth();
+  const corretorId = profile?.tipo_usuario === 'corretor' ? profile.corretor_id || undefined : undefined;
+
   return (
     <InternalLayout>
       <div className="mb-8">
@@ -13,7 +17,7 @@ export default function CorretorTimePage() {
           Crie integrantes, gere acesso e deixe o Orion distribuir os leads automaticamente.
         </p>
       </div>
-      <CorretorTeamManager />
+      <CorretorTeamManager corretorId={corretorId} />
     </InternalLayout>
   );
 }
