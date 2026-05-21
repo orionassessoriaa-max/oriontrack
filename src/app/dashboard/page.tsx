@@ -43,6 +43,8 @@ type LeadMetricRow = {
   status: string | null;
   data_entrada: string | null;
   cidade?: string | null;
+  valor_negociacao?: string | number | null;
+  valor_comissao?: string | number | null;
 };
 
 type MonthlyPerformance = {
@@ -88,6 +90,16 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 }
 
+function parseCurrencyValue(value?: string | number | null) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const cleaned = String(value || '')
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\.(?=\d{3}(,|$))/g, '')
+    .replace(',', '.');
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function dayKey(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -114,7 +126,10 @@ export default function DashboardPage() {
     quoted: 0,
     sold: 0,
     soldThisMonth: 0,
-    stale: 0
+    stale: 0,
+    lost: 0,
+    revenueRealized: 0,
+    revenuePotential: 0
   });
   const [monthlyPerformance, setMonthlyPerformance] = useState<MonthlyPerformance[]>(getLastMonths());
   const [weeklyLeads, setWeeklyLeads] = useState(getLastDays());
@@ -157,7 +172,7 @@ export default function DashboardPage() {
 
         const statsQuery = await supabase
           .from('leads')
-          .select('status, data_entrada, cidade')
+          .select('status, data_entrada, cidade, valor_negociacao, valor_comissao')
           .eq('corretor_id', profile.corretor_id);
 
         if (statsQuery.error) throw statsQuery.error;
@@ -165,17 +180,25 @@ export default function DashboardPage() {
         if (statsQuery.data) {
           const statsRes = statsQuery.data as LeadMetricRow[];
           const thisMonthKey = monthKey(new Date());
+          const soldLeads = statsRes.filter(l => l.status === 'Venda realizada');
+          const lostLeads = statsRes.filter(l => l.status === 'Sem interesse');
+          const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
           setStats({
             total: statsRes.length,
             waiting: statsRes.filter(l => l.status === 'Aguardando atendimento').length,
             inProgress: statsRes.filter(l => l.status === 'Em negociação').length,
             quoted: statsRes.filter(l => l.status === 'Cotação enviada').length,
-            sold: statsRes.filter(l => l.status === 'Venda realizada').length,
+            sold: soldLeads.length,
             soldThisMonth: statsRes.filter(l => l.status === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
             stale: statsRes.filter(l => {
               if (l.status !== 'Aguardando atendimento' || !l.data_entrada) return false;
               return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
-            }).length
+            }).length,
+            lost: lostLeads.length,
+            revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
+            revenuePotential: statsRes
+              .filter((lead) => activeRevenueStatuses.includes(String(lead.status || '')))
+              .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
           });
 
           const months = getLastMonths();
@@ -278,6 +301,8 @@ export default function DashboardPage() {
   const currentMonth = monthlyPerformance[monthlyPerformance.length - 1] || { leads: 0, spend: 0 };
   const currentMonthCpl = currentMonth.leads > 0 ? currentMonth.spend / currentMonth.leads : 0;
   const currentMonthConversion = currentMonth.leads > 0 ? (stats.soldThisMonth / currentMonth.leads) * 100 : 0;
+  const salesConversionBase = stats.sold + stats.lost;
+  const salesConversionRate = salesConversionBase > 0 ? (stats.sold / salesConversionBase) * 100 : 0;
   const chartHeight = 176;
   const maxWeeklyLeads = Math.max(...weeklyLeads.map((day) => day.leads), 1);
   const weeklyPoints = weeklyLeads.map((day, index) => {
@@ -435,6 +460,38 @@ export default function DashboardPage() {
             <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-2 text-blue-700"><span className="h-2 w-2 rounded-full bg-blue-600" /> Investimento</span>
             <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Leads</span>
           </div>
+        </div>
+      </div>
+
+      <div className="mb-12 grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <p className="text-sm font-black text-gray-900">Taxa de Conversão</p>
+            <Target size={18} className="text-slate-500" />
+          </div>
+          <p className="text-3xl font-black text-gray-950">{salesConversionRate.toFixed(1).replace('.', ',')}%</p>
+          <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">
+            <span className="text-emerald-600">✓ {stats.sold} vendas</span>
+            <span className="text-red-500">⊗ {stats.lost} perdidos</span>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <p className="text-sm font-black text-gray-900">Receita Realizada</p>
+            <DollarSign size={18} className="text-slate-500" />
+          </div>
+          <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.revenueRealized)}</p>
+          <p className="mt-2 text-xs font-bold text-emerald-600">↗ de vendas realizadas</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <p className="text-sm font-black text-gray-900">Receita Potencial</p>
+            <TrendingUp size={18} className="text-slate-500" />
+          </div>
+          <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.revenuePotential)}</p>
+          <p className="mt-2 text-xs font-bold text-slate-500">em leads ativos</p>
         </div>
       </div>
 

@@ -28,7 +28,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isDesignerRoute = pathname.startsWith('/designer');
         const isAccountRoute = pathname.startsWith('/account');
         const isCreativeRoute = pathname.startsWith('/criativos');
-        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/minha-pagina', '/perfil'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
+        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/minha-pagina', '/perfil'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
 
         // 1. Corretor Access: Only broker routes
         if (isCorretor && (isAdminRoute || isTrafficRoute || isDesignerRoute || isAccountRoute)) {

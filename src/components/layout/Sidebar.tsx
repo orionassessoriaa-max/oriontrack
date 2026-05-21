@@ -98,6 +98,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const corretorMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
+    { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Palette, label: 'Criativos', href: '/criativos' },
     { icon: Globe, label: 'Minha Pagina', href: '/minha-pagina' },
