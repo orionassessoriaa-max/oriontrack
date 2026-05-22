@@ -111,7 +111,20 @@ export async function GET(request: Request) {
 
     if (membersError) throw membersError;
 
-    return NextResponse.json({ team, membros: membros || [] });
+    let leads: any[] = [];
+    if (guard.profile.tipo_usuario === 'corretor') {
+      const { data: leadsData, error: leadsError } = await supabaseAdmin
+        .from('leads')
+        .select('id, nome, telefone, status, responsavel_membro_id, data_entrada')
+        .eq('corretor_id', corretorId)
+        .order('data_entrada', { ascending: false })
+        .limit(200);
+
+      if (leadsError) throw leadsError;
+      leads = leadsData || [];
+    }
+
+    return NextResponse.json({ team, membros: membros || [], leads });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao carregar time.' }, { status: 500 });
   }
@@ -225,6 +238,56 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json({ success: true, membro: data });
+    }
+
+    if (action === 'assign_lead') {
+      if (guard.profile.tipo_usuario !== 'corretor') {
+        return NextResponse.json({ error: 'Apenas o corretor dono do time pode enviar leads.' }, { status: 403 });
+      }
+
+      const leadId = String(body.lead_id || '').trim();
+      const memberId = String(body.member_id || '').trim();
+      if (!leadId || !memberId) {
+        return NextResponse.json({ error: 'Selecione o lead e o integrante.' }, { status: 400 });
+      }
+
+      const { data: member } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .select('id, profile_id')
+        .eq('id', memberId)
+        .eq('corretor_id', corretorId)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (!member) return NextResponse.json({ error: 'Integrante nao encontrado.' }, { status: 404 });
+
+      const { data: lead } = await supabaseAdmin
+        .from('leads')
+        .select('id')
+        .eq('id', leadId)
+        .eq('corretor_id', corretorId)
+        .maybeSingle();
+
+      if (!lead) return NextResponse.json({ error: 'Lead nao encontrado para este corretor.' }, { status: 404 });
+
+      const { error: updateError } = await supabaseAdmin
+        .from('leads')
+        .update({
+          responsavel_membro_id: member.id,
+          responsavel_profile_id: member.profile_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', leadId)
+        .eq('corretor_id', corretorId);
+
+      if (updateError) throw updateError;
+
+      await supabaseAdmin
+        .from('corretor_time_membros')
+        .update({ ultimo_lead_at: new Date().toISOString() })
+        .eq('id', member.id);
+
+      return NextResponse.json({ success: true });
     }
 
     const nome = String(body.nome || '').trim();
