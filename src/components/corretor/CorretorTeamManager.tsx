@@ -1,8 +1,9 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { CheckCircle2, Copy, Loader2, Plus, Save, Trash2, Users } from 'lucide-react';
+import { CheckCircle2, Copy, Loader2, Plus, Send, Save, Trash2, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 type CorretorTeamManagerProps = {
   corretorId?: string;
@@ -31,16 +32,31 @@ type Credentials = {
   link_login: string;
 };
 
+type AssignableLead = {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  status: string | null;
+  responsavel_membro_id: string | null;
+};
+
 export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerProps) {
+  const { profile } = useAuth();
   const [team, setTeam] = useState<Team | null>(null);
   const [membros, setMembros] = useState<Membro[]>([]);
+  const [leads, setLeads] = useState<AssignableLead[]>([]);
   const [nomeTime, setNomeTime] = useState('Time comercial');
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
+  const [selectedLeadId, setSelectedLeadId] = useState('');
+  const [selectedMemberId, setSelectedMemberId] = useState('');
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assignMessage, setAssignMessage] = useState<string | null>(null);
+  const canAssignLeads = profile?.tipo_usuario === 'corretor' && !corretorId;
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
@@ -73,6 +89,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     setTeam(payload.team);
     setNomeTime(payload.team?.nome || 'Time comercial');
     setMembros(payload.membros || []);
+    setLeads(payload.leads || []);
     setLoading(false);
   }
 
@@ -141,6 +158,25 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function assignLead(event: FormEvent) {
+    event.preventDefault();
+    setAssigning(true);
+    setError(null);
+    setAssignMessage(null);
+
+    try {
+      await postTeam({ action: 'assign_lead', lead_id: selectedLeadId, member_id: selectedMemberId });
+      setAssignMessage('Lead enviado para o integrante selecionado.');
+      setSelectedLeadId('');
+      setSelectedMemberId('');
+      await fetchTeam();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAssigning(false);
     }
   }
 
@@ -235,6 +271,59 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               Criar integrante
             </button>
           </form>
+
+          {canAssignLeads && (
+            <form onSubmit={assignLead} className="mt-8 space-y-4 border-t border-slate-100 pt-6">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Enviar lead</p>
+                <h3 className="mt-1 text-lg font-black text-slate-950">Atribuir manualmente</h3>
+                <p className="text-sm font-bold text-slate-500">Use quando quiser mandar um lead especifico para alguem do time.</p>
+              </div>
+              {assignMessage && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-sm font-black text-emerald-700">
+                  {assignMessage}
+                </div>
+              )}
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Lead</span>
+                <select
+                  required
+                  value={selectedLeadId}
+                  onChange={(event) => setSelectedLeadId(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="">Selecione o lead</option>
+                  {leads.map((lead) => {
+                    const currentMember = membros.find((member) => member.id === lead.responsavel_membro_id);
+                    return (
+                      <option key={lead.id} value={lead.id}>
+                        {lead.nome} {lead.telefone ? `- ${lead.telefone}` : ''} {currentMember ? `(atual: ${currentMember.nome})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Integrante</span>
+                <select
+                  required
+                  value={selectedMemberId}
+                  onChange={(event) => setSelectedMemberId(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="">Selecione quem vai receber</option>
+                  {membros.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
+                </select>
+              </label>
+              <button
+                disabled={assigning || membros.length === 0 || leads.length === 0}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-sm font-black text-white transition-all hover:bg-slate-800 disabled:opacity-50"
+              >
+                {assigning ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+                Enviar lead
+              </button>
+            </form>
+          )}
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
