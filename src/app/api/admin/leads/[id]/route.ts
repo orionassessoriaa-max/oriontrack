@@ -1,29 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { requireApiUser, writeAuditLog } from '@/lib/api/security';
 
 async function requireAdmin(request: Request) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 }) };
-  }
-
-  const token = authHeader.split(' ')[1];
-  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError || !user) {
-    return { error: NextResponse.json({ error: 'Sessao expirada.' }, { status: 401 }) };
-  }
-
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('tipo_usuario')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (profile?.tipo_usuario !== 'admin') {
-    return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
-  }
-
-  return { user };
+  return requireApiUser(request, ['admin']);
 }
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -51,6 +31,12 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   if (!data) {
     return NextResponse.json({ error: 'Lead nao encontrado ou ja removido.' }, { status: 404 });
   }
+
+  await writeAuditLog(request, guard.profile, {
+    action: 'lead.delete',
+    entity_type: 'lead',
+    entity_id: data.id,
+  });
 
   return NextResponse.json({ ok: true, lead_id: data.id });
 }

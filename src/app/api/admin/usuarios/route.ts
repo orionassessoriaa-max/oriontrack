@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateOrionEmail, generateStrongPassword } from '@/lib/users';
 import { PUBLIC_LOGIN_URL } from '@/lib/publicUrl';
 import { UserRole } from '@/types';
+import { writeAuditLog } from '@/lib/api/security';
 
 function isMasterAdmin(profile: { email?: string | null; email_real?: string | null; is_admin_master?: boolean | null }) {
   if (profile.is_admin_master) return true;
@@ -205,6 +206,13 @@ export async function POST(request: Request) {
 
       if (profileError) throw profileError;
 
+      await writeAuditLog(request, guard.profile as any, {
+        action: 'user.create',
+        entity_type: 'profile',
+        entity_id: authUser.user.id,
+        metadata: { role, corretor_id: corretorId, email },
+      });
+
       return NextResponse.json({
         success: true,
         user: {
@@ -296,6 +304,13 @@ export async function PATCH(request: Request) {
         }
       }
 
+      await writeAuditLog(request, guard.profile as any, {
+        action: 'user.update',
+        entity_type: 'profile',
+        entity_id: id,
+        metadata: { nome, email_real: emailReal },
+      });
+
       return NextResponse.json({ success: true });
     }
 
@@ -324,6 +339,12 @@ export async function PATCH(request: Request) {
     if (updateProfileError) {
       return NextResponse.json({ error: updateProfileError.message }, { status: 500 });
     }
+
+    await writeAuditLog(request, guard.profile as any, {
+      action: 'user.password.reset',
+      entity_type: 'profile',
+      entity_id: id,
+    });
 
     return NextResponse.json({
       success: true,
@@ -382,6 +403,13 @@ export async function DELETE(request: Request) {
     if (authDeleteError && authDeleteError.message !== 'User not found') {
       return NextResponse.json({ error: authDeleteError.message }, { status: 500 });
     }
+
+    await writeAuditLog(request, guard.profile as any, {
+      action: 'user.delete',
+      entity_type: 'profile',
+      entity_id: id,
+      metadata: { removed_role: profile.tipo_usuario, corretor_id: profile.corretor_id },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

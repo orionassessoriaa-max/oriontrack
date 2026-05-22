@@ -22,6 +22,9 @@ export default function BrokerInboxPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [leadPhone, setLeadPhone] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
 
   async function fetchInbox() {
     if (!profile?.corretor_id) {
@@ -50,6 +53,37 @@ export default function BrokerInboxPage() {
     void fetchInbox();
   }, [profile?.corretor_id]);
 
+  async function connectWhatsApp() {
+    setConnecting(true);
+    setConnectError(null);
+    setQrCode(null);
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setConnectError('Sessao expirada. Entre novamente.');
+      setConnecting(false);
+      return;
+    }
+
+    const response = await fetch('/api/inbox/evolution/connect', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    setConnecting(false);
+
+    if (!response.ok) {
+      setConnectError(payload.error || 'Erro ao conectar WhatsApp.');
+      return;
+    }
+
+    setQrCode(payload.qrcode || null);
+    if (!payload.qrcode) {
+      setConnectError('A Evolution respondeu, mas nao retornou QR Code. Verifique a instancia no painel da Evolution.');
+    }
+  }
+
   return (
     <InternalLayout>
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -72,12 +106,25 @@ export default function BrokerInboxPage() {
           <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
             Aqui entra a conexão via Evolution API. O corretor vai clicar em conectar, escanear o QR Code e as conversas passam a aparecer nesta tela.
           </p>
-          <button className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white opacity-80">
-            <Smartphone size={18} /> Conectar meu WhatsApp
+          <button
+            onClick={connectWhatsApp}
+            disabled={connecting}
+            className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {connecting ? <Loader2 className="animate-spin" size={18} /> : <Smartphone size={18} />}
+            {connecting ? 'Gerando QR Code...' : 'Conectar meu WhatsApp'}
           </button>
-          <p className="mt-3 text-xs font-bold text-blue-700">
-            Status atual: aguardando integração Evolution API.
-          </p>
+          {qrCode ? (
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-center">
+              <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="mx-auto h-52 w-52 rounded-xl object-contain" />
+              <p className="mt-3 text-xs font-black uppercase tracking-widest text-blue-700">Escaneie com o WhatsApp</p>
+            </div>
+          ) : null}
+          {connectError ? (
+            <p className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700">{connectError}</p>
+          ) : (
+            <p className="mt-3 text-xs font-bold text-blue-700">Status atual: pronto para conectar via Evolution API.</p>
+          )}
         </div>
 
         <div className="rounded-[2rem] border border-emerald-100 bg-emerald-50 p-6">

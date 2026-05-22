@@ -46,7 +46,7 @@ async function fetchMetaAccounts(path: string, accessToken: string) {
   url.searchParams.set('limit', '100');
   url.searchParams.set('access_token', accessToken);
 
-  const response = await fetch(url.toString(), { cache: 'no-store' });
+  const response = await fetch(url.toString(), { next: { revalidate: 300 } });
   const payload = await response.json();
 
   if (!response.ok || payload.error) {
