@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/components/providers/AuthProvider";
 import DatePickerEnhancer from "@/components/ui/DatePickerEnhancer";
+import DialogProvider from "@/components/providers/DialogProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,9 +33,11 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <DatePickerEnhancer />
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <DialogProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </DialogProvider>
       </body>
     </html>
   );

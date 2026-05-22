@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { CheckCircle2, Copy, Loader2, Plus, Send, Save, Trash2, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useDialog } from '@/components/providers/DialogProvider';
 
 type CorretorTeamManagerProps = {
   corretorId?: string;
@@ -42,6 +43,7 @@ type AssignableLead = {
 
 export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerProps) {
   const { profile } = useAuth();
+  const { confirmDialog } = useDialog();
   const [team, setTeam] = useState<Team | null>(null);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [leads, setLeads] = useState<AssignableLead[]>([]);
@@ -147,7 +149,12 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   }
 
   async function removeMember(member: Membro) {
-    if (!window.confirm(`Remover ${member.nome} do time?`)) return;
+    const confirmed = await confirmDialog(`Remover ${member.nome} do time?`, {
+      title: 'Remover integrante',
+      confirmLabel: 'Remover',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     setSaving(true);
     setError(null);
