@@ -24,6 +24,7 @@ import {
   Save,
   Target,
   Upload,
+  Users,
   X
 } from 'lucide-react';
 import OrionMark from '@/components/ui/OrionMark';
@@ -104,6 +105,12 @@ type CommercialModalState = {
   valor_comissao: string;
 } | null;
 
+type TeamMember = {
+  id: string;
+  nome: string;
+  email: string;
+};
+
 const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
 
 export default function CrmPage() {
@@ -148,6 +155,9 @@ export default function CrmPage() {
   const [commercialModal, setCommercialModal] = useState<CommercialModalState>(null);
   const [commercialModalError, setCommercialModalError] = useState<string | null>(null);
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
+  const canAssignTeamLeads = profile?.tipo_usuario === 'corretor';
 
   async function fetchCrm() {
     if (!profile?.id) return;
@@ -218,11 +228,69 @@ export default function CrmPage() {
 
         setTipoCampanha((corretor?.tipo_campanha as TipoCampanha | null) || 'ambos');
       }
+
+      if (profile.tipo_usuario === 'corretor') {
+        await fetchTeamMembers();
+      }
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar CRM.');
     } finally {
       setLoading(false);
     }
+  }
+
+  async function getToken() {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token;
+  }
+
+  async function fetchTeamMembers() {
+    if (!profile?.corretor_id || !canAssignTeamLeads) return;
+    const token = await getToken();
+    if (!token) return;
+
+    const response = await fetch('/api/corretor/times', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) {
+      setTeamMembers(payload.membros || []);
+    }
+  }
+
+  async function assignLeadToMember(leadId: string, memberId: string) {
+    if (!memberId) return;
+    const token = await getToken();
+    if (!token) {
+      alert('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    setAssigningLeadId(leadId);
+    const response = await fetch('/api/corretor/times', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      alert(payload.error || 'Erro ao enviar lead.');
+      setAssigningLeadId(null);
+      return;
+    }
+
+    const member = teamMembers.find((item) => item.id === memberId);
+    const assignedPayload = {
+      responsavel_membro_id: memberId,
+      responsavel_membro: member ? { nome: member.nome, email: member.email } : undefined,
+    };
+    setLeads((current) => current.map((lead) => lead.id === leadId ? { ...lead, ...assignedPayload } : lead));
+    setSelectedLead((current) => current?.id === leadId ? { ...current, ...assignedPayload } : current);
+    setAssigningLeadId(null);
   }
 
   async function fetchTimeline(leadId: string) {
@@ -767,6 +835,33 @@ export default function CrmPage() {
                 {columns.map((column) => <option key={column.id} value={column.id}>{column.label}</option>)}
               </select>
             </div>
+
+            {canAssignTeamLeads && teamMembers.length > 0 && (
+              <div className="mb-5 rounded-[1.5rem] border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white">
+                    <Users size={18} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Enviar lead</p>
+                    <h3 className="text-sm font-black text-slate-950">Atribuir para integrante do time</h3>
+                  </div>
+                </div>
+                <select
+                  value={selectedLead.responsavel_membro_id || ''}
+                  onChange={(event) => assignLeadToMember(selectedLead.id, event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="">Selecione quem vai receber</option>
+                  {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
+                </select>
+                {assigningLeadId === selectedLead.id && (
+                  <p className="mt-2 flex items-center gap-2 text-xs font-black text-blue-600">
+                    <Loader2 className="animate-spin" size={14} /> Enviando lead...
+                  </p>
+                )}
+              </div>
+            )}
 
             {editing ? (
               <form onSubmit={saveLeadDetails} className="mb-5 rounded-[1.5rem] border border-gray-100 p-4">

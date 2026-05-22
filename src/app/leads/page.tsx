@@ -14,7 +14,9 @@ import {
   Save,
   Upload,
   RotateCcw,
-  Trash2
+  Trash2,
+  Trophy,
+  Users
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadStatus } from '@/types';
@@ -117,6 +119,12 @@ type CommercialModalState = {
   valor_comissao: string;
 } | null;
 
+type TeamMember = {
+  id: string;
+  nome: string;
+  email: string;
+};
+
 function noteValue(lead: Lead, key: string) {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = String(lead.observacoes || '').match(new RegExp(`${escaped}:\\s*([^|]+)`, 'i'));
@@ -160,6 +168,9 @@ export default function BrokerLeadsPage() {
   const [commercialModal, setCommercialModal] = useState<CommercialModalState>(null);
   const [commercialModalError, setCommercialModalError] = useState<string | null>(null);
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [rankingEnabled, setRankingEnabled] = useState(false);
+  const canAssignTeamLeads = profile?.tipo_usuario === 'corretor';
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');
@@ -170,6 +181,7 @@ export default function BrokerLeadsPage() {
     if (profile?.corretor_id) {
       fetchLeads();
       fetchCrmConfig();
+      fetchTeamMembers();
     }
   }, [profile?.corretor_id]);
 
@@ -223,6 +235,57 @@ export default function BrokerLeadsPage() {
       .maybeSingle();
 
     setCrmApiUrl(data?.crm_api_url || '');
+  };
+
+  const fetchTeamMembers = async () => {
+    if (!profile?.corretor_id || !canAssignTeamLeads) return;
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    const response = await fetch('/api/corretor/times', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) {
+      setTeamMembers(payload.membros || []);
+    }
+  };
+
+  const assignLeadToMember = async (leadId: string, memberId: string) => {
+    if (!memberId) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      alert('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    setSavingStatusId(leadId);
+    const response = await fetch('/api/corretor/times', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      alert(payload.error || 'Erro ao enviar lead.');
+      setSavingStatusId(null);
+      return;
+    }
+
+    const member = teamMembers.find((item) => item.id === memberId);
+    setLeads((current) => current.map((lead) => lead.id === leadId ? {
+      ...lead,
+      responsavel_membro_id: memberId,
+      responsavel_membro: member ? { nome: member.nome, email: member.email } : lead.responsavel_membro,
+    } : lead));
+    setSavingStatusId(null);
   };
 
   const requestCommercialPayload = (lead: Lead, status: LeadStatus): Promise<CommercialPayload | null> => {
@@ -459,6 +522,31 @@ export default function BrokerLeadsPage() {
     setAdFilter('todos');
   };
 
+  const teamStats = useMemo(() => {
+    return teamMembers.map((member) => {
+      const memberLeads = leads.filter((lead) => lead.responsavel_membro_id === member.id);
+      const semResposta = memberLeads.filter((lead) => {
+        const status = normalizeLeadStatus(lead.status);
+        if (normalizeText(status).includes('retorno')) return true;
+        if (status !== 'Aguardando atendimento' || !lead.data_entrada) return false;
+        return Date.now() - new Date(lead.data_entrada).getTime() > 20 * 60 * 1000;
+      }).length;
+      const vendas = memberLeads.filter((lead) => normalizeLeadStatus(lead.status) === 'Venda realizada').length;
+      const negociacao = memberLeads.filter((lead) => normalizeText(normalizeLeadStatus(lead.status)).includes('negocia')).length;
+      return {
+        ...member,
+        total: memberLeads.length,
+        semResposta,
+        vendas,
+        negociacao,
+      };
+    });
+  }, [teamMembers, leads]);
+
+  const ranking = useMemo(() => {
+    return [...teamStats].sort((a, b) => b.vendas - a.vendas || b.total - a.total);
+  }, [teamStats]);
+
   return (
     <InternalLayout>
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -486,6 +574,63 @@ export default function BrokerLeadsPage() {
           )}
         </div>
       </div>
+
+      {canAssignTeamLeads && teamMembers.length > 0 && (
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Time comercial</p>
+              <h2 className="text-xl font-black text-slate-950">Resumo dos vendedores</h2>
+              <p className="text-sm font-bold text-slate-500">Acompanhe quem esta com leads, sem resposta e vendas realizadas.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRankingEnabled((current) => !current)}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all ${
+                rankingEnabled ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'border border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100'
+              }`}
+            >
+              <Trophy size={15} /> {rankingEnabled ? 'Ranking ativo' : 'Ativar ranking'}
+            </button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {teamStats.map((member) => (
+              <div key={member.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-xs font-black text-white">
+                    {member.nome.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-black text-slate-950">{member.nome}</p>
+                    <p className="truncate text-[11px] font-bold text-slate-400">{member.email}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs font-black">
+                  <div className="rounded-xl bg-white p-3 text-slate-700"><span className="block text-[9px] uppercase tracking-widest text-slate-400">Leads</span>{member.total}</div>
+                  <div className="rounded-xl bg-amber-50 p-3 text-amber-700"><span className="block text-[9px] uppercase tracking-widest text-amber-500">Sem resposta</span>{member.semResposta}</div>
+                  <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><span className="block text-[9px] uppercase tracking-widest text-blue-500">Negociacao</span>{member.negociacao}</div>
+                  <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><span className="block text-[9px] uppercase tracking-widest text-emerald-500">Vendas</span>{member.vendas}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {rankingEnabled && (
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-blue-700">Ranking de vendas</p>
+              <div className="space-y-2">
+                {ranking.map((member, index) => (
+                  <div key={member.id} className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-800">
+                    <span>#{index + 1} {member.nome}</span>
+                    <span className="text-blue-700">{member.vendas} venda(s)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1.7fr_160px_160px_170px_220px_200px_200px_200px_auto]">
@@ -665,13 +810,26 @@ export default function BrokerLeadsPage() {
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{leadTab}</td>
                     <td className="border border-slate-100 px-3 py-3">
-                      <div className="max-w-[170px] truncate text-xs font-black text-slate-700">
-                        {lead.responsavel_membro?.nome || '-'}
-                      </div>
-                      {lead.responsavel_membro?.email && (
-                        <div className="max-w-[170px] truncate text-[10px] font-bold text-slate-400">
-                          {lead.responsavel_membro.email}
-                        </div>
+                      {canAssignTeamLeads && teamMembers.length > 0 ? (
+                        <select
+                          value={lead.responsavel_membro_id || ''}
+                          onChange={(event) => assignLeadToMember(lead.id, event.target.value)}
+                          className="w-full min-w-[170px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="">Enviar para...</option>
+                          {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
+                        </select>
+                      ) : (
+                        <>
+                          <div className="max-w-[170px] truncate text-xs font-black text-slate-700">
+                            {lead.responsavel_membro?.nome || '-'}
+                          </div>
+                          {lead.responsavel_membro?.email && (
+                            <div className="max-w-[170px] truncate text-[10px] font-bold text-slate-400">
+                              {lead.responsavel_membro.email}
+                            </div>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadCampaign(lead)}</td>
