@@ -454,24 +454,28 @@ export default function CrmPage() {
     setLeads((prev) => prev.map((lead) => lead.id === leadId ? { ...lead, ...optimisticPayload } : lead));
     setSelectedLead((current) => current?.id === leadId ? { ...current, ...optimisticPayload } : current);
 
-    const { error: updateError } = await supabase
-      .from('leads')
-      .update({ ...optimisticPayload, updated_at: new Date().toISOString() })
-      .eq('id', leadId);
-
-    if (updateError) {
+    const token = await getToken();
+    if (!token) {
       setLeads(previousLeads);
-      alert('Erro ao mover lead: ' + updateError.message);
+      alert('Sessao expirada. Entre novamente.');
       return;
     }
 
-    await supabase.from('lead_atividades').insert([{
-      lead_id: leadId,
-      profile_id: profile?.id,
-      tipo: 'status',
-      titulo: 'Status atualizado',
-      descricao: `Lead movido para ${getLeadStatusStyle(status).label}`
-    }]);
+    const response = await fetch(`/api/crm/leads/${leadId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(optimisticPayload),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setLeads(previousLeads);
+      alert('Erro ao mover lead: ' + (payload.error || 'tente novamente.'));
+      return;
+    }
 
     if (selectedLead?.id === leadId) await fetchTimeline(leadId);
   }

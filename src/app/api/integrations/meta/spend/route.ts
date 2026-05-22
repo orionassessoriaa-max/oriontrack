@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     url.searchParams.set('time_range', JSON.stringify({ since, until }));
     url.searchParams.set('access_token', accessToken);
 
-    const response = await fetch(url.toString(), { cache: 'no-store' });
+    const response = await fetch(url.toString(), { next: { revalidate: 300 } });
     const payload = await response.json();
 
     if (!response.ok || payload.error) {

@@ -86,6 +86,7 @@ const COMMERCIAL_REQUIRED_STATUSES: LeadStatus[] = [
 ];
 
 const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
+const PAGE_SIZE = 200;
 
 function parseCurrencyInput(value?: string | number | null) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -147,6 +148,9 @@ export default function BrokerLeadsPage() {
   const { profile, isViewingAsCorretor } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [leadPage, setLeadPage] = useState(0);
+  const [hasMoreLeads, setHasMoreLeads] = useState(false);
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null);
   const [savingCrm, setSavingCrm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,26 +183,33 @@ export default function BrokerLeadsPage() {
 
   useEffect(() => {
     if (profile?.corretor_id) {
-      fetchLeads();
+      fetchLeads(0, false);
       fetchCrmConfig();
       fetchTeamMembers();
     }
   }, [profile?.corretor_id]);
 
-  const fetchLeads = async () => {
+  const fetchLeads = async (page = 0, append = false) => {
     if (!profile?.corretor_id) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
       let leadsQuery = supabase
         .from('leads')
         .select('*, responsavel_membro:responsavel_membro_id(nome,email)')
         .eq('corretor_id', profile.corretor_id)
-        .order('data_entrada', { ascending: false });
+        .order('data_entrada', { ascending: false })
+        .range(from, to);
 
       if (profile.tipo_usuario === 'corretor_membro') {
         leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
@@ -216,12 +227,16 @@ export default function BrokerLeadsPage() {
         return;
       }
 
-      setLeads((data || []).map((lead) => ({ ...lead, status: normalizeLeadStatus(lead.status) })));
+      const normalized = (data || []).map((lead) => ({ ...lead, status: normalizeLeadStatus(lead.status) }));
+      setLeads((current) => append ? [...current, ...normalized] : normalized);
+      setLeadPage(page);
+      setHasMoreLeads(normalized.length === PAGE_SIZE);
     } catch (err) {
       console.error('Catch Error:', err);
       setError('Erro inesperado ao carregar leads.');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -344,14 +359,29 @@ export default function BrokerLeadsPage() {
     const optimisticPayload = { ...(commercialPayload || {}), status };
     setLeads(prev => prev.map(lead => lead.id === leadId ? { ...lead, ...optimisticPayload } : lead));
 
-    const { error: updateError } = await supabase
-      .from('leads')
-      .update({ ...optimisticPayload, updated_at: new Date().toISOString() })
-      .eq('id', leadId);
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
 
-    if (updateError) {
-      alert('Erro ao atualizar status: ' + updateError.message);
-      fetchLeads();
+    if (!token) {
+      alert('Sessao expirada. Entre novamente.');
+      fetchLeads(0, false);
+      setSavingStatusId(null);
+      return;
+    }
+
+    const response = await fetch(`/api/crm/leads/${leadId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(optimisticPayload),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      alert('Erro ao atualizar status: ' + (payload.error || 'tente novamente.'));
+      fetchLeads(0, false);
     }
     setSavingStatusId(null);
   };
@@ -452,7 +482,7 @@ export default function BrokerLeadsPage() {
     const paginasText = payload.paginas ? ` ${payload.paginas} pagina(s) lida(s).` : '';
     setImportMessage(`${payload.imported} lead(s) importado(s).${paginasText}${skippedText}`);
     setSheetUrl('');
-    await fetchLeads();
+    await fetchLeads(0, false);
   };
 
   const filteredLeads = leads.filter(lead => {
@@ -702,7 +732,7 @@ export default function BrokerLeadsPage() {
               </div>
               <h3 className="mb-2 text-xl font-bold text-gray-900">Ops! Algo deu errado.</h3>
               <p className="mx-auto mb-6 max-w-md font-medium text-red-500">{error}</p>
-              <button onClick={fetchLeads} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-600 hover:underline">
+              <button onClick={() => fetchLeads(0, false)} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-600 hover:underline">
                 <RefreshCw size={14} /> Tentar novamente
               </button>
             </div>
@@ -896,6 +926,20 @@ export default function BrokerLeadsPage() {
           </div>
         )}
       </div>
+
+      {hasMoreLeads && !error && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => fetchLeads(leadPage + 1, true)}
+            disabled={loadingMore}
+            className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-6 py-4 text-sm font-black text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:opacity-50"
+          >
+            {loadingMore ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+            Carregar mais leads
+          </button>
+        </div>
+      )}
 
       {showCrmModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md sm:p-6">

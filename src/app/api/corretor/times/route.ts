@@ -2,14 +2,17 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateStrongPassword } from '@/lib/users';
 import { PUBLIC_LOGIN_URL } from '@/lib/publicUrl';
+import { writeAuditLog } from '@/lib/api/security';
+import type { UserRole } from '@/types';
 
 type GuardProfile = {
   id: string;
-  tipo_usuario: string;
+  tipo_usuario: UserRole;
   corretor_id: string | null;
   email: string | null;
   email_real: string | null;
   nome: string | null;
+  status: string | null;
 };
 
 async function requireUser(request: Request) {
@@ -26,7 +29,7 @@ async function requireUser(request: Request) {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('id, tipo_usuario, corretor_id, email, email_real, nome')
+    .select('id, tipo_usuario, corretor_id, email, email_real, nome, status')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -287,6 +290,13 @@ export async function POST(request: Request) {
         .update({ ultimo_lead_at: new Date().toISOString() })
         .eq('id', member.id);
 
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.lead.assign',
+        entity_type: 'lead',
+        entity_id: leadId,
+        metadata: { member_id: member.id, corretor_id: corretorId },
+      });
+
       return NextResponse.json({ success: true });
     }
 
@@ -364,6 +374,13 @@ export async function POST(request: Request) {
         .single();
 
       if (memberError) throw memberError;
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.member.create',
+        entity_type: 'corretor_time_membro',
+        entity_id: membro.id,
+        metadata: { corretor_id: corretorId, email },
+      });
 
       return NextResponse.json({
         success: true,
