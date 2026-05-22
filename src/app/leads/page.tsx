@@ -567,7 +567,7 @@ export default function BrokerLeadsPage() {
                 <tr className="bg-slate-100">
                   <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Data</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome</th>
+                  <th className="min-w-[240px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Telefone</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Idades</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Possui CNPJ</th>
@@ -606,7 +606,9 @@ export default function BrokerLeadsPage() {
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">
                       {lead.data_entrada ? format(new Date(lead.data_entrada), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '-'}
                     </td>
-                    <td className="border border-slate-100 px-3 py-3 font-bold text-gray-900">{lead.nome}</td>
+                    <td className="max-w-[280px] whitespace-nowrap border border-slate-100 px-3 py-3 font-bold text-gray-900" title={lead.nome || ''}>
+                      <span className="block overflow-hidden text-ellipsis">{lead.nome}</span>
+                    </td>
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-600">
                       <PhoneAction phone={lead.telefone} />
                     </td>
