@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useDialog } from '@/components/providers/DialogProvider';
 import { useCorretoresOptions } from '@/hooks/useCorretoresOptions';
 import { supabase } from '@/lib/supabase/client';
 import { CalendarDays, ClipboardList, Loader2, Plus, Trash2, Upload } from 'lucide-react';
@@ -44,6 +45,7 @@ function statusClass(status: string) {
 
 export default function CreativeDemandsPage() {
   const { profile } = useAuth();
+  const { confirmDialog } = useDialog();
   const { corretores } = useCorretoresOptions();
   const [demands, setDemands] = useState<Demand[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,7 +143,12 @@ export default function CreativeDemandsPage() {
   };
 
   const deleteDemand = async (demand: Demand) => {
-    if (!window.confirm(`Remover a demanda "${demand.titulo}" e os criativos enviados para o corretor?`)) return;
+    const confirmed = await confirmDialog(`Remover a demanda "${demand.titulo}" e ocultar criativos vinculados?`, {
+      title: 'Remover demanda',
+      confirmLabel: 'Remover',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     setDeletingId(demand.id);
     const { data: sessionData } = await supabase.auth.getSession();

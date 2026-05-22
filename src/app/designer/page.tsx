@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useDialog } from '@/components/providers/DialogProvider';
 import { supabase } from '@/lib/supabase/client';
 import { CheckCircle2, Clock, ClipboardList, Loader2, MessageSquare, Palette, Trash2, Upload } from 'lucide-react';
 
@@ -63,6 +64,7 @@ function isResponsibleForDesigner(item: Demand | CreativeAsset, profileId?: stri
 
 export default function DesignerHomePage() {
   const { profile } = useAuth();
+  const { confirmDialog } = useDialog();
   const [filter, setFilter] = useState<FilterKey>('pendentes');
   const [demands, setDemands] = useState<Demand[]>([]);
   const [assets, setAssets] = useState<CreativeAsset[]>([]);
@@ -126,7 +128,12 @@ export default function DesignerHomePage() {
   });
 
   const deleteDemand = async (demand: Demand) => {
-    if (!window.confirm(`Remover a demanda "${demand.titulo}" e esconder a entrega do corretor?`)) return;
+    const confirmed = await confirmDialog(`Remover a demanda "${demand.titulo}" e ocultar criativos vinculados?`, {
+      title: 'Remover demanda',
+      confirmLabel: 'Remover',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     setDeletingId(demand.id);
     const { data: sessionData } = await supabase.auth.getSession();

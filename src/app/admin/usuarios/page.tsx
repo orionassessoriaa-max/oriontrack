@@ -8,6 +8,7 @@ import { generateOrionEmail, getRoleLabel } from '@/lib/users';
 import { OPERADORAS_ONBOARDING } from '@/lib/onboarding';
 import { buildOperationalTeamMembers, getTeamMemberAvatar, getTeamMemberPhoto, isTrafficManagerMember, OrionTeamMember } from '@/lib/orionTeam';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useDialog } from '@/components/providers/DialogProvider';
 import { Camera, CheckCircle2, Copy, Edit2, KeyRound, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -37,6 +38,7 @@ const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
 
 export default function AdminUsuariosPage() {
   const { user, startViewingAsCorretor, startViewingAsGestor, startViewingAsDesigner, startViewingAsAccount } = useAuth();
+  const { confirmDialog } = useDialog();
   const router = useRouter();
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [corretores, setCorretores] = useState<Corretor[]>([]);
@@ -151,7 +153,12 @@ export default function AdminUsuariosPage() {
   }
 
   async function handleDelete(profile: Profile) {
-    if (!window.confirm(`Remover ${profile.nome}? Se for corretor, os leads dele também serão removidos.`)) return;
+    const confirmed = await confirmDialog(`Remover ${profile.nome}? Se for corretor, os leads dele tambem serao removidos.`, {
+      title: 'Remover usuario',
+      confirmLabel: 'Remover',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     setRemovingId(profile.id);
     setError(null);
@@ -180,7 +187,12 @@ export default function AdminUsuariosPage() {
   }
 
   async function handleResetPassword(profile: Profile) {
-    if (!window.confirm(`Gerar uma nova senha provisÃ³ria para ${profile.nome}?`)) return;
+    const confirmed = await confirmDialog(`Gerar uma nova senha provisoria para ${profile.nome}?`, {
+      title: 'Nova senha provisoria',
+      confirmLabel: 'Gerar senha',
+      variant: 'info',
+    });
+    if (!confirmed) return;
 
     setRemovingId(profile.id);
     setError(null);

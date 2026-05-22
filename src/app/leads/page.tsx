@@ -21,6 +21,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadStatus } from '@/types';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useDialog } from '@/components/providers/DialogProvider';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
@@ -146,6 +147,7 @@ function leadAd(lead: Lead) {
 
 export default function BrokerLeadsPage() {
   const { profile, isViewingAsCorretor } = useAuth();
+  const { confirmDialog } = useDialog();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -388,7 +390,12 @@ export default function BrokerLeadsPage() {
 
   const deleteLead = async (lead: Lead) => {
     if (!isViewingAsCorretor) return;
-    if (!window.confirm(`Remover o lead ${lead.nome}? Essa ação só deve ser usada por admin.`)) return;
+    const confirmed = await confirmDialog(`Remover o lead ${lead.nome}? Essa acao so deve ser usada por admin.`, {
+      title: 'Remover lead',
+      confirmLabel: 'Remover lead',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     setSavingStatusId(lead.id);
     const previous = leads;
