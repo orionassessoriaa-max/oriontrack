@@ -62,6 +62,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Globe, label: 'Paginas', href: '/admin/paginas' },
     { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
+    { icon: ClipboardList, label: 'Historico', href: '/admin/historico' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Solicitacoes de suporte', href: '/admin/suporte' },
     { icon: User, label: 'Perfil', href: '/perfil' },

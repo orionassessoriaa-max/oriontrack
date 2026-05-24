@@ -102,8 +102,13 @@ export async function GET(request: Request) {
     if (profilesError) throw profilesError;
     if (corretoresError) throw corretoresError;
 
+    const visibleProfiles = (profiles || []).filter((profile: any) => {
+      const status = String(profile.status || '').toLowerCase();
+      return !['inactive', 'inativo', 'deleted', 'removed'].includes(status);
+    });
+
     return NextResponse.json({
-      profiles: profiles || [],
+      profiles: visibleProfiles,
       corretores: corretores || [],
       isMasterAdmin: isMasterAdmin(guard.profile)
     });
