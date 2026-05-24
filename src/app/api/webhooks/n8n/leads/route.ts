@@ -47,6 +47,55 @@ async function resolveCorretorId(body: any) {
   return null;
 }
 
+async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
+  const { data: team } = await supabaseAdmin
+    .from('corretor_times')
+    .select('id, proximo_indice')
+    .eq('corretor_id', corretorId)
+    .eq('ativo', true)
+    .maybeSingle();
+
+  if (!team?.id) return null;
+
+  const { data: members } = await supabaseAdmin
+    .from('corretor_time_membros')
+    .select('id, profile_id, ordem, created_at')
+    .eq('time_id', team.id)
+    .in('status', ['active', 'ativo'])
+    .not('profile_id', 'is', null)
+    .order('ordem', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (!members || members.length === 0) return null;
+
+  const nextIndex = Math.max(Number(team.proximo_indice || 0), 0) % members.length;
+  const member = members[nextIndex];
+  const nextPointer = (nextIndex + 1) % members.length;
+  const now = new Date().toISOString();
+
+  await supabaseAdmin
+    .from('leads')
+    .update({
+      responsavel_membro_id: member.id,
+      responsavel_profile_id: member.profile_id,
+      updated_at: now,
+    })
+    .eq('id', leadId)
+    .eq('corretor_id', corretorId);
+
+  await supabaseAdmin
+    .from('corretor_time_membros')
+    .update({ ultimo_lead_at: now })
+    .eq('id', member.id);
+
+  await supabaseAdmin
+    .from('corretor_times')
+    .update({ proximo_indice: nextPointer })
+    .eq('id', team.id);
+
+  return member.id;
+}
+
 export async function POST(request: Request) {
   try {
     const secret = process.env.ORION_N8N_WEBHOOK_SECRET;
@@ -111,7 +160,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, lead: data });
+    const assignedMemberId = await assignLeadToNextTeamMember(corretorId, data.id);
+
+    return NextResponse.json({ success: true, lead: data, responsavel_membro_id: assignedMemberId });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao receber lead do n8n.' }, { status: 500 });
   }

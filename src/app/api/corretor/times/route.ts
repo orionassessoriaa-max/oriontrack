@@ -106,68 +106,6 @@ async function getOwnerProfile(corretorId: string) {
   return data;
 }
 
-async function syncUnassignedLeads(corretorId: string, teamId: string) {
-  const { data: members, error: membersError } = await supabaseAdmin
-    .from('corretor_time_membros')
-    .select('id, profile_id, ordem, created_at')
-    .eq('time_id', teamId)
-    .eq('status', 'ativo')
-    .not('profile_id', 'is', null)
-    .order('ordem', { ascending: true })
-    .order('created_at', { ascending: true });
-
-  if (membersError) throw membersError;
-  if (!members || members.length === 0) return 0;
-
-  const { data: leads, error: leadsError } = await supabaseAdmin
-    .from('leads')
-    .select('id')
-    .eq('corretor_id', corretorId)
-    .is('responsavel_membro_id', null)
-    .order('data_entrada', { ascending: true })
-    .limit(1000);
-
-  if (leadsError) throw leadsError;
-  if (!leads || leads.length === 0) return 0;
-
-  const { data: teamRecord } = await supabaseAdmin
-    .from('corretor_times')
-    .select('proximo_indice')
-    .eq('id', teamId)
-    .maybeSingle();
-
-  let nextIndex = Math.max(Number(teamRecord?.proximo_indice || 0), 0) % members.length;
-  const now = new Date().toISOString();
-
-  for (const lead of leads) {
-    const member = members[nextIndex];
-    await supabaseAdmin
-      .from('leads')
-      .update({
-        responsavel_membro_id: member.id,
-        responsavel_profile_id: member.profile_id,
-        updated_at: now,
-      })
-      .eq('id', lead.id)
-      .eq('corretor_id', corretorId)
-      .is('responsavel_membro_id', null);
-
-    await supabaseAdmin
-      .from('corretor_time_membros')
-      .update({ ultimo_lead_at: now })
-      .eq('id', member.id);
-
-    nextIndex = (nextIndex + 1) % members.length;
-  }
-
-  await supabaseAdmin
-    .from('corretor_times')
-    .update({ proximo_indice: nextIndex })
-    .eq('id', teamId);
-
-  return leads.length;
-}
-
 export async function GET(request: Request) {
   try {
     const guard = await requireUser(request);
@@ -179,7 +117,6 @@ export async function GET(request: Request) {
     }
 
     const team = await ensureTeam(corretorId);
-    await syncUnassignedLeads(corretorId, team.id);
 
     const { data: membros, error: membersError } = await supabaseAdmin
       .from('corretor_time_membros')
@@ -315,8 +252,6 @@ export async function POST(request: Request) {
         if (deleteError) throw deleteError;
       }
 
-      await syncUnassignedLeads(corretorId, team.id);
-
       await writeAuditLog(request, guard.profile, {
         action: 'team.owner.toggle',
         entity_type: 'corretor_times',
@@ -353,8 +288,6 @@ export async function POST(request: Request) {
           .update({ status: 'inactive' })
           .eq('id', member.profile_id);
       }
-
-      await syncUnassignedLeads(corretorId, team.id);
 
       return NextResponse.json({ success: true });
     }
@@ -533,7 +466,6 @@ export async function POST(request: Request) {
         .single();
 
       if (memberError) throw memberError;
-      await syncUnassignedLeads(corretorId, team.id);
 
       await writeAuditLog(request, guard.profile, {
         action: 'team.member.create',
