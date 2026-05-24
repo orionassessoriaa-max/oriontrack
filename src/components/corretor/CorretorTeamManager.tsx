@@ -1,7 +1,7 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
-import { CheckCircle2, Copy, Loader2, Plus, Send, Save, Trash2, Users } from 'lucide-react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Save, Target, Trash2, TrendingUp, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
@@ -38,8 +38,41 @@ type AssignableLead = {
   nome: string;
   telefone: string | null;
   status: string | null;
+  cidade?: string | null;
+  investimento?: string | null;
+  valor_negociacao?: number | string | null;
+  valor_venda?: number | string | null;
+  valor_comissao?: number | string | null;
   responsavel_membro_id: string | null;
+  data_entrada?: string | null;
+  updated_at?: string | null;
 };
+
+type MemberStats = Membro & {
+  totalLeads: number;
+  semResposta: number;
+  negociacao: number;
+  vendas: number;
+  cotacoes: number;
+  receita: number;
+  comissao: number;
+  ultimoLead?: string | null;
+};
+
+function currency(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+}
+
+function toNumber(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const text = String(value || '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeStatus(value?: string | null) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
 
 export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerProps) {
   const { profile } = useAuth();
@@ -58,7 +91,57 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
-  const canAssignLeads = profile?.tipo_usuario === 'corretor' && !corretorId;
+  const canAssignLeads = profile?.tipo_usuario === 'corretor';
+
+  const memberStats = useMemo<MemberStats[]>(() => {
+    return membros.map((member) => {
+      const memberLeads = leads.filter((lead) => lead.responsavel_membro_id === member.id);
+      const stats = memberLeads.reduce((acc, lead) => {
+        const status = normalizeStatus(lead.status);
+        const isSale = status.includes('venda');
+        const isNegotiation = status.includes('negoci');
+        const isQuote = status.includes('cotacao') || status.includes('cota');
+        const noReply = status.includes('retorno') || status.includes('resposta') || status.includes('aguardando') || status.includes('contato feito');
+
+        acc.semResposta += noReply ? 1 : 0;
+        acc.negociacao += isNegotiation ? 1 : 0;
+        acc.cotacoes += isQuote ? 1 : 0;
+        acc.vendas += isSale ? 1 : 0;
+        acc.receita += toNumber(lead.valor_venda) || (isSale ? toNumber(lead.valor_negociacao) : 0);
+        acc.comissao += toNumber(lead.valor_comissao);
+        return acc;
+      }, { semResposta: 0, negociacao: 0, cotacoes: 0, vendas: 0, receita: 0, comissao: 0 });
+
+      return {
+        ...member,
+        totalLeads: memberLeads.length,
+        ultimoLead: memberLeads[0]?.data_entrada || member.ultimo_lead_at,
+        ...stats,
+      };
+    });
+  }, [membros, leads]);
+
+  const teamSummary = useMemo(() => {
+    const assigned = leads.filter((lead) => lead.responsavel_membro_id).length;
+    const sales = memberStats.reduce((sum, member) => sum + member.vendas, 0);
+    const semResposta = memberStats.reduce((sum, member) => sum + member.semResposta, 0);
+    const comissao = memberStats.reduce((sum, member) => sum + member.comissao, 0);
+    const receita = memberStats.reduce((sum, member) => sum + member.receita, 0);
+    return {
+      total: leads.length,
+      assigned,
+      unassigned: Math.max(leads.length - assigned, 0),
+      sales,
+      semResposta,
+      comissao,
+      receita,
+      conversion: leads.length ? Math.round((sales / leads.length) * 100) : 0,
+    };
+  }, [leads, memberStats]);
+
+  const ranking = useMemo(() => {
+    return [...memberStats].sort((a, b) => b.vendas - a.vendas || b.comissao - a.comissao || b.totalLeads - a.totalLeads);
+  }, [memberStats]);
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
@@ -218,6 +301,97 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
         </div>
       )}
 
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Leads do time', value: teamSummary.total, detail: `${teamSummary.assigned} atribuídos`, icon: Users, tone: 'blue' },
+          { label: 'Sem resposta', value: teamSummary.semResposta, detail: 'precisam de atenção', icon: Target, tone: 'amber' },
+          { label: 'Vendas', value: teamSummary.sales, detail: `${teamSummary.conversion}% conversão`, icon: TrendingUp, tone: 'emerald' },
+          { label: 'Comissão', value: currency(teamSummary.comissao), detail: `${currency(teamSummary.receita)} em vendas`, icon: BarChart3, tone: 'slate' },
+        ].map((card) => {
+          const Icon = card.icon;
+          const tone = {
+            blue: 'border-blue-100 bg-blue-50 text-blue-700',
+            amber: 'border-amber-100 bg-amber-50 text-amber-700',
+            emerald: 'border-emerald-100 bg-emerald-50 text-emerald-700',
+            slate: 'border-slate-200 bg-slate-50 text-slate-800',
+          }[card.tone];
+          return (
+            <div key={card.label} className={`rounded-2xl border p-5 shadow-sm ${tone}`}>
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-widest">{card.label}</p>
+                <Icon size={20} />
+              </div>
+              <p className="text-3xl font-black text-slate-950">{card.value}</p>
+              <p className="mt-2 text-xs font-black uppercase tracking-widest opacity-70">{card.detail}</p>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Performance</p>
+              <h2 className="mt-1 text-xl font-black text-slate-950">Distribuição por integrante</h2>
+            </div>
+            <span className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-600">
+              {teamSummary.unassigned} sem responsável
+            </span>
+          </div>
+          <div className="space-y-4">
+            {memberStats.length === 0 ? (
+              <p className="rounded-2xl bg-slate-50 p-6 text-center text-sm font-bold text-slate-400">Crie integrantes para ver a distribuição automática.</p>
+            ) : memberStats.map((member) => {
+              const width = teamSummary.total ? Math.max(8, Math.round((member.totalLeads / teamSummary.total) * 100)) : 0;
+              return (
+                <div key={member.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-slate-950">{member.nome}</p>
+                      <p className="text-xs font-bold text-slate-500">{member.totalLeads} leads | {member.vendas} vendas | {currency(member.comissao)}</p>
+                    </div>
+                    <span className="text-lg font-black text-blue-600">{width}%</span>
+                  </div>
+                  <div className="h-3 overflow-hidden rounded-full bg-white">
+                    <div className="h-full rounded-full bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400 transition-all duration-700" style={{ width: `${width}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-400 text-slate-950">
+              <Crown size={22} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Ranking</p>
+              <h2 className="text-xl font-black">Vendas do time</h2>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {ranking.length === 0 ? (
+              <p className="rounded-2xl bg-white/5 p-5 text-sm font-bold text-slate-300">O ranking aparece quando houver integrantes.</p>
+            ) : ranking.map((member, index) => (
+              <div key={member.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-white/6 p-4">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-sm font-black">#{index + 1}</span>
+                <div className="min-w-0">
+                  <p className="truncate font-black">{member.nome}</p>
+                  <p className="text-xs font-bold text-slate-300">{member.totalLeads} leads | {member.semResposta} sem resposta</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-black text-emerald-300">{member.vendas}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">vendas</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <div className="grid gap-6 xl:grid-cols-[1fr_1.2fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
@@ -349,8 +523,8 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {membros.map((member, index) => (
-                <div key={member.id} className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
+              {memberStats.map((member, index) => (
+                <div key={member.id} className="grid gap-4 p-5 xl:grid-cols-[1fr_1.4fr_auto] xl:items-center">
                   <div className="flex min-w-0 items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-black text-white">
                       {member.nome.slice(0, 2).toUpperCase()}
@@ -361,6 +535,24 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-600">
                         Fila #{index + 1} {member.ultimo_lead_at ? `| ultimo lead ${new Date(member.ultimo_lead_at).toLocaleDateString('pt-BR')}` : ''}
                       </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="rounded-xl bg-blue-50 p-3">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Leads</p>
+                      <p className="text-lg font-black text-slate-950">{member.totalLeads}</p>
+                    </div>
+                    <div className="rounded-xl bg-amber-50 p-3">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">Sem resposta</p>
+                      <p className="text-lg font-black text-slate-950">{member.semResposta}</p>
+                    </div>
+                    <div className="rounded-xl bg-emerald-50 p-3">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Vendas</p>
+                      <p className="text-lg font-black text-slate-950">{member.vendas}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Comissão</p>
+                      <p className="text-sm font-black text-slate-950">{currency(member.comissao)}</p>
                     </div>
                   </div>
                   <button

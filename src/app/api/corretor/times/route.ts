@@ -118,10 +118,10 @@ export async function GET(request: Request) {
     if (guard.profile.tipo_usuario === 'corretor') {
       const { data: leadsData, error: leadsError } = await supabaseAdmin
         .from('leads')
-        .select('id, nome, telefone, status, responsavel_membro_id, data_entrada')
+        .select('id, nome, telefone, status, cidade, investimento, valor_negociacao, valor_venda, valor_comissao, responsavel_membro_id, data_entrada, updated_at')
         .eq('corretor_id', corretorId)
         .order('data_entrada', { ascending: false })
-        .limit(200);
+        .limit(1000);
 
       if (leadsError) throw leadsError;
       leads = leadsData || [];
