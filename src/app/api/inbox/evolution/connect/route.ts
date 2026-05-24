@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       raw: qrcode ? undefined : payload,
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao conectar WhatsApp.' }, { status: 500 });
+    const message = error.message || 'Nao consegui gerar o QR Code agora. A equipe Orion pode revisar a conexao do WhatsApp.';
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }
