@@ -120,9 +120,50 @@ function normalizeHeader(value: string) {
 
 function toRows(csv: string): CsvRow[] {
   const parsed = parseCsv(csv);
-  const headers = (parsed.shift() || []).map(normalizeHeader);
+  const knownHeaders = new Set([
+    'data',
+    'data_entrada',
+    'data_cadastro',
+    'data_do_lead',
+    'created_time',
+    'timestamp',
+    'nome',
+    'name',
+    'cliente',
+    'nome_completo',
+    'telefone',
+    'phone',
+    'celular',
+    'whatsapp',
+    'fone',
+    'idades',
+    'idade',
+    'vidas',
+    'possui_cnpj',
+    'cnpj',
+    'tem_cnpj',
+    'tem_plano_ativo',
+    'plano_ativo',
+    'plano_atual',
+    'cidade',
+    'status',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_term',
+    'utm_content',
+  ]);
 
-  return parsed.map((cells) => {
+  const headerIndex = parsed.slice(0, 15).reduce((best, row, index) => {
+    const normalized = row.map(normalizeHeader);
+    const score = normalized.filter((header) => knownHeaders.has(header)).length;
+    return score > best.score ? { index, score } : best;
+  }, { index: 0, score: 0 });
+
+  const headers = (parsed[headerIndex.index] || []).map(normalizeHeader);
+  const dataRows = parsed.slice(headerIndex.index + 1);
+
+  return dataRows.map((cells) => {
     return headers.reduce<CsvRow>((acc, header, index) => {
       if (header) acc[header] = String(cells[index] || '').trim();
       return acc;
@@ -177,7 +218,15 @@ function parseDate(value: string) {
     const serial = Number(trimmed.replace(',', '.'));
     if (Number.isFinite(serial) && serial > 20000 && serial < 80000) {
       const date = new Date(Date.UTC(1899, 11, 30) + serial * 24 * 60 * 60 * 1000);
-      return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+      if (Number.isNaN(date.getTime())) return fallback;
+      return safeIso(
+        date.getUTCFullYear(),
+        date.getUTCMonth() + 1,
+        date.getUTCDate(),
+        date.getUTCHours(),
+        date.getUTCMinutes(),
+        date.getUTCSeconds()
+      );
     }
   }
 
@@ -426,7 +475,7 @@ export async function POST(request: Request) {
 
           leads.push({
             corretor_id: corretorId,
-            data_entrada: parseDate(pick(row, ['data', 'data entrada', 'data_entrada', 'created_time', 'timestamp', 'data cadastro', 'data do lead', 'date'])),
+            data_entrada: parseDate(pick(row, ['data', 'data entrada', 'data_entrada', 'created_time', 'timestamp', 'data cadastro', 'data do lead', 'data de criacao', 'data criação', 'date'])),
             nome,
             telefone,
             idades: pick(row, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas']),
