@@ -196,7 +196,7 @@ function CorretoresContent() {
         </div>
       )}
 
-      <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-8 space-y-6">
+      <div className="orion-panel mb-8 space-y-6 p-6 lg:p-8">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
           <div className="md:col-span-6 relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
@@ -205,7 +205,7 @@ function CorretoresContent() {
               placeholder="Buscar por nome, email ou telefone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500/20 transition-all font-medium"
+              className="orion-control w-full py-4 pl-12 pr-4 font-medium"
             />
           </div>
           <div className="md:col-span-3 relative">
@@ -213,7 +213,7 @@ function CorretoresContent() {
             <select 
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-bold appearance-none"
+              className="orion-control w-full appearance-none py-4 pl-12 pr-4 font-bold"
             >
               <option value="all">Todos Status</option>
               <option value="active">Ativos</option>
@@ -225,7 +225,7 @@ function CorretoresContent() {
             <select 
               value={gestorFilter}
               onChange={(e) => setGestorFilter(e.target.value)}
-              className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-bold appearance-none"
+              className="orion-control w-full appearance-none py-4 pl-12 pr-4 font-bold"
             >
               <option value="all">Todos Gestores</option>
               <option value="sem-gestor">Sem gestor definido</option>
@@ -237,7 +237,7 @@ function CorretoresContent() {
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden mb-12">
+      <div className="orion-table-shell mb-12">
         {loading ? (
           <div className="p-24 flex justify-center">
             <Loader2 className="animate-spin text-blue-600" size={40} />
@@ -268,14 +268,14 @@ function CorretoresContent() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
+            <table className="w-full min-w-[1280px] border-collapse text-left">
               <thead>
                 <tr className="bg-gray-50/50">
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Corretor / Parceiro</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Gestor de Tráfego</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Página de Captação</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
-                  <th className="min-w-[280px] px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
+                  <th className="min-w-[340px] px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -300,7 +300,7 @@ function CorretoresContent() {
                           >
                             {c.nome}
                           </button>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">{c.email}</p>
+                          <p className="max-w-[260px] truncate text-[10px] font-bold uppercase tracking-tighter text-gray-400">{c.email}</p>
                           <p className="mt-1 max-w-[260px] truncate rounded-lg bg-slate-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
                             ID n8n: <span className="normal-case tracking-normal text-slate-700">{c.id}</span>
                           </p>
@@ -385,7 +385,7 @@ function CorretoresContent() {
                       <div className="flex items-center justify-end gap-2">
                         <Link
                           href={`/admin/corretores/${c.id}/time`}
-                          className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-indigo-700 transition-all hover:bg-indigo-100"
+                          className="inline-flex min-w-[84px] cursor-pointer items-center justify-center gap-2 bg-indigo-50 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-indigo-700 transition-all hover:-translate-y-0.5 hover:bg-indigo-100"
                           title="Criar e gerenciar time comercial"
                         >
                           <UserPlus size={16} />
@@ -393,7 +393,7 @@ function CorretoresContent() {
                         </Link>
                         <Link 
                           href={`/admin/corretores/${c.id}/editar`}
-                          className="p-3 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all"
+                          className="cursor-pointer p-3 text-slate-400 transition-all hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-600"
                           title="Editar Corretor"
                         >
                           <Edit2 size={18} />
@@ -401,7 +401,7 @@ function CorretoresContent() {
                         <button
                           type="button"
                           onClick={() => startViewingAsCorretor(c.id)}
-                          className="p-3 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-xl transition-all"
+                          className="cursor-pointer p-3 text-slate-400 transition-all hover:-translate-y-0.5 hover:bg-emerald-50 hover:text-emerald-600"
                           title="Entrar como corretor"
                         >
                           <Eye size={18} />
@@ -412,7 +412,7 @@ function CorretoresContent() {
                             navigator.clipboard.writeText(c.id);
                             alert('ID do corretor copiado para usar no n8n.');
                           }}
-                          className="p-3 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all"
+                          className="cursor-pointer p-3 text-slate-400 transition-all hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-600"
                           title="Copiar ID para n8n"
                         >
                           <Copy size={18} />
@@ -423,7 +423,7 @@ function CorretoresContent() {
                               navigator.clipboard.writeText(c.link_pagina!);
                               alert('Link copiado!');
                             }}
-                            className="p-3 text-slate-400 hover:bg-slate-100 rounded-xl transition-all"
+                            className="cursor-pointer p-3 text-slate-400 transition-all hover:-translate-y-0.5 hover:bg-slate-100"
                             title="Copiar Link"
                           >
                             <Copy size={18} />

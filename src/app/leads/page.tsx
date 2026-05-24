@@ -669,44 +669,44 @@ export default function BrokerLeadsPage() {
         </section>
       )}
 
-      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1.7fr_160px_160px_170px_220px_200px_200px_200px_auto]">
-          <div className="relative">
+      <div className="orion-panel mb-6 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[260px] flex-[1_1_320px]">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               placeholder="Buscar por nome, telefone ou cidade..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-2xl border-none bg-slate-50 py-4 pl-12 pr-4 text-sm font-medium transition-all focus:ring-2 focus:ring-blue-500/20"
+              className="orion-control w-full py-3.5 pl-12 pr-4 text-sm transition-all"
             />
           </div>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20" />
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20" />
-          <select value={cnpjFilter} onChange={(e) => setCnpjFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="orion-control min-w-[165px] flex-[0_0_165px] px-4 py-3.5 text-sm" />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="orion-control min-w-[165px] flex-[0_0_165px] px-4 py-3.5 text-sm" />
+          <select value={cnpjFilter} onChange={(e) => setCnpjFilter(e.target.value)} className="orion-control min-w-[170px] flex-[1_1_170px] px-4 py-3.5 text-sm">
             <option value="todos">CNPJ: todos</option>
             <option value="com">Com CNPJ</option>
             <option value="sem">Sem CNPJ</option>
             <option value="nao_informado">Nao informado</option>
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="orion-control min-w-[220px] flex-[1_1_220px] px-4 py-3.5 text-sm">
             <option value="todos">Todos os status</option>
             {LEAD_STATUSES.map(status => <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>)}
           </select>
-          <select value={operadoraFilter} onChange={(e) => setOperadoraFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+          <select value={operadoraFilter} onChange={(e) => setOperadoraFilter(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
             <option value="todas">Página: todas</option>
             {sheetTabs.map((tab) => <option key={tab} value={tab}>{tab}</option>)}
             <option value="__sem_aba__">Sem página</option>
           </select>
-          <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+          <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
             <option value="todos">Campanha: todas</option>
             {campaignOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
-          <select value={adsetFilter} onChange={(e) => setAdsetFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+          <select value={adsetFilter} onChange={(e) => setAdsetFilter(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
             <option value="todos">Conjunto: todos</option>
             {adsetOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
-          <select value={adFilter} onChange={(e) => setAdFilter(e.target.value)} className="rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20">
+          <select value={adFilter} onChange={(e) => setAdFilter(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
             <option value="todos">Anúncio: todos</option>
             {adOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
@@ -714,23 +714,23 @@ export default function BrokerLeadsPage() {
             type="button"
             onClick={clearFilters}
             disabled={!hasActiveFilters}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex min-h-[50px] min-w-[132px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RotateCcw size={15} /> Limpar
           </button>
         </div>
         <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-widest text-slate-500">
-          <span className="rounded-full bg-slate-100 px-3 py-2">{filteredLeads.length} de {leads.length} leads</span>
-          <span className="rounded-full bg-blue-50 px-3 py-2 text-blue-700">
+          <span className="orion-chip bg-slate-100 text-slate-600">{filteredLeads.length} de {leads.length} leads</span>
+          <span className="orion-chip bg-blue-50 text-blue-700">
             Página: {operadoraFilter === 'todas' ? 'todas' : operadoraFilter === '__sem_aba__' ? 'sem página' : operadoraFilter}
           </span>
-          <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-700">
+          <span className="orion-chip bg-amber-50 text-amber-700">
             CNPJ: {cnpjFilter === 'todos' ? 'todos' : cnpjFilter === 'com' ? 'com CNPJ' : cnpjFilter === 'sem' ? 'sem CNPJ' : 'nao informado'}
           </span>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="orion-table-shell overflow-hidden">
         <div className="scrollbar-visible max-h-[calc(100dvh-300px)] overflow-auto sm:max-h-[calc(100vh-330px)]">
           {error ? (
             <div className="py-24 text-center">
@@ -744,7 +744,7 @@ export default function BrokerLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full min-w-[2540px] border-collapse text-left text-[13px]">
+            <table className="w-full min-w-[2700px] border-collapse text-left text-[13px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100">
                   <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
@@ -801,7 +801,7 @@ export default function BrokerLeadsPage() {
                       </span>
                     </td>
                     <td className="border border-slate-100 px-3 py-3">
-                      <span className={`inline-flex max-w-[210px] whitespace-normal rounded-lg px-3 py-2 text-[11px] font-black uppercase leading-relaxed tracking-widest ${
+                      <span className={`inline-flex min-w-[190px] max-w-[240px] whitespace-normal rounded-lg px-3 py-2 text-[11px] font-black uppercase leading-relaxed tracking-widest ${
                         normalizeText(lead.tem_plano_ativo).includes('sim') ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' :
                         normalizeText(lead.tem_plano_ativo).includes('nao') ? 'bg-slate-100 text-slate-600 ring-1 ring-slate-200' :
                         'bg-slate-50 text-slate-500'
@@ -838,7 +838,7 @@ export default function BrokerLeadsPage() {
                         <select
                           value={lead.status}
                           onChange={(e) => updateLeadStatus(lead.id, e.target.value as LeadStatus)}
-                          className={`rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-blue-500/20 ${statusStyle.chip}`}
+                          className={`orion-status-select border px-3 py-2 text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-blue-500/20 ${statusStyle.chip}`}
                         >
                           {LEAD_STATUSES.map(status => <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>)}
                         </select>

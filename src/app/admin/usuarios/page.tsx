@@ -553,7 +553,7 @@ export default function AdminUsuariosPage() {
           </button>
         </form>
 
-        <div className="rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
+        <div className="orion-panel">
           <div className="border-b border-gray-50 p-6">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-500">
@@ -580,7 +580,7 @@ export default function AdminUsuariosPage() {
               <Loader2 className="animate-spin text-blue-600" size={40} />
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-100">
               {filteredProfiles.map((profile) => {
                 const corretor = corretores.find((item) => item.id === profile.corretor_id);
                 const operadoras = corretor?.operadoras_info?.selecionadas;
@@ -591,18 +591,18 @@ export default function AdminUsuariosPage() {
                   .includes(MASTER_ADMIN_EMAIL);
 
                 return (
-                  <div key={profile.id} className="grid gap-5 p-5 transition-colors hover:bg-blue-50/30 sm:p-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,auto)] xl:items-center">
+                  <div key={profile.id} className="grid gap-5 p-5 transition-colors hover:bg-blue-50/40 sm:p-6 2xl:grid-cols-[minmax(460px,1fr)_minmax(420px,auto)] 2xl:items-center">
                     <button
                       type="button"
                       onClick={() => void openUserPanel(profile)}
-                      className="grid min-w-0 grid-cols-[56px_minmax(0,1fr)] items-center gap-5 text-left"
+                      className="grid min-w-[280px] grid-cols-[64px_minmax(220px,1fr)] items-center gap-5 text-left"
                       title={`Abrir painel de ${profile.nome}`}
                     >
                       {profile.foto_url || getTeamMemberPhoto(profile.nome) ? (
                         <img
                           src={profile.foto_url || getTeamMemberPhoto(profile.nome) || ''}
                           alt={profile.nome}
-                          className="h-14 w-14 rounded-2xl object-cover shadow-sm ring-1 ring-slate-200"
+                          className="h-14 w-14 rounded-xl object-cover shadow-sm ring-1 ring-slate-200"
                         />
                       ) : (
                         <div className="force-white flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 text-sm font-black shadow-sm">
@@ -611,7 +611,7 @@ export default function AdminUsuariosPage() {
                       )}
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="max-w-full truncate font-black text-gray-900">{profile.nome}</p>
+                          <p className="max-w-full truncate text-lg font-black text-gray-900">{profile.nome}</p>
                           <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
                             isMasterAccess ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'
                           }`}>
@@ -623,20 +623,20 @@ export default function AdminUsuariosPage() {
                             </span>
                           )}
                         </div>
-                        <p className="mt-1 break-all text-xs font-bold text-slate-400">{profile.email}</p>
-                        {profile.email_real && <p className="text-xs font-medium text-slate-400">Real: {profile.email_real}</p>}
+                        <p className="mt-1 break-all text-sm font-bold text-slate-500">{profile.email}</p>
+                        {profile.email_real && <p className="break-all text-xs font-medium text-slate-400">Real: {profile.email_real}</p>}
                         {Array.isArray(operadoras) && operadoras.length > 0 && (
                           <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-500">
                             {operadoras.join(', ')}
                           </p>
                         )}
-                        <p className="mt-2 max-w-full truncate rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 sm:max-w-[520px]">
+                        <p className="mt-2 max-w-full truncate rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 sm:max-w-[640px]">
                           ID para n8n: <span className="normal-case tracking-normal text-slate-700">{getUserIntegrationId(profile, corretor)}</span>
                         </p>
                       </div>
                     </button>
 
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:flex xl:flex-wrap xl:justify-end">
+                    <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 2xl:flex 2xl:flex-wrap 2xl:justify-end">
                       <button
                         onClick={() => copyUserId(getUserIntegrationId(profile, corretor))}
                         className="flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md"

@@ -180,7 +180,7 @@ export default function BrokerInboxPage() {
       </div>
 
       <div className="mb-8 grid gap-5 lg:grid-cols-[1fr_1.4fr]">
-        <div className="rounded-[2rem] border border-blue-100 bg-blue-50 p-6">
+        <div className="orion-panel border-blue-100 bg-blue-50 p-6">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
             <QrCode size={24} />
           </div>
@@ -188,14 +188,14 @@ export default function BrokerInboxPage() {
           <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
             Escaneie o QR Code e atenda seus leads direto por aqui. Suas conversas ficam organizadas para voce responder rapido, acompanhar retornos e nao perder oportunidades.
           </p>
-          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-blue-100 bg-white/80 p-4 text-left transition-all hover:border-blue-200 hover:bg-white">
+          <label className="mt-5 flex cursor-pointer items-start gap-4 rounded-xl border border-blue-100 bg-white p-4 text-left leading-relaxed shadow-sm transition-all hover:border-blue-300 hover:shadow-md">
             <input
               type="checkbox"
               checked={acceptedTerms}
               onChange={(event) => setAcceptedTerms(event.target.checked)}
               className="mt-1 h-4 w-4 rounded border-blue-200 text-blue-600 focus:ring-blue-500"
             />
-            <span className="text-xs font-bold leading-relaxed text-slate-600">
+            <span className="text-sm font-bold leading-relaxed text-slate-700">
               Li e aceito conectar meu WhatsApp ao Orion Track. Entendo que as conversas dos leads poderao aparecer aqui para facilitar meu atendimento, historico e acompanhamento comercial.
             </span>
           </label>
@@ -220,7 +220,7 @@ export default function BrokerInboxPage() {
           )}
         </div>
 
-        <div className="rounded-[2rem] border border-emerald-100 bg-emerald-50 p-6">
+        <div className="orion-panel border-emerald-100 bg-emerald-50 p-6">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
             <CheckCircle2 size={24} />
           </div>
@@ -238,7 +238,7 @@ export default function BrokerInboxPage() {
         </div>
       </div>
 
-      <div className="grid min-h-[520px] overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm lg:grid-cols-[360px_1fr]">
+      <div className="orion-table-shell grid min-h-[520px] overflow-hidden lg:grid-cols-[360px_1fr]">
         <aside className="border-r border-gray-100">
           <div className="border-b border-gray-100 p-5">
             <h2 className="font-black text-gray-900">Conversas</h2>
