@@ -439,7 +439,7 @@ export default function BrokerLeadsPage() {
 
     setSavingCrm(false);
     if (updateError) {
-      alert('Erro ao salvar CRM. Aplique a migration crm_api_url no Supabase.');
+      alert('Nao consegui salvar a conexao agora. Tente novamente em instantes ou avise a equipe Orion.');
       return;
     }
 
@@ -953,7 +953,7 @@ export default function BrokerLeadsPage() {
           <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl sm:rounded-[2.5rem]">
             <div className="flex items-center justify-between border-b border-gray-100 p-5 sm:p-8">
               <div>
-                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-blue-600">Integracao</p>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-blue-600">Atendimento</p>
                 <h2 className="text-xl font-black text-gray-900">Conectar CRM</h2>
               </div>
               <button onClick={() => setShowCrmModal(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100">
@@ -962,14 +962,17 @@ export default function BrokerLeadsPage() {
             </div>
             <form onSubmit={saveCrmConfig} className="space-y-5 p-5 sm:p-8">
               <div className="space-y-2">
-                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Link da API / Webhook do CRM</label>
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Link de conexao do seu CRM</label>
                 <input
                   type="url"
                   value={crmApiUrl}
                   onChange={(e) => setCrmApiUrl(e.target.value)}
-                  placeholder="https://seu-crm.com/webhook/orion"
+                  placeholder="Cole aqui o link enviado pelo seu CRM"
                   className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500"
                 />
+                <p className="px-1 text-xs font-bold leading-relaxed text-slate-500">
+                  Use esse campo apenas se voce atende seus leads em outro sistema e quer manter tudo conectado.
+                </p>
               </div>
               <button disabled={savingCrm} className="flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 py-5 font-black text-white shadow-xl shadow-blue-600/20 hover:bg-blue-700 disabled:opacity-50">
                 {savingCrm ? <Loader2 className="animate-spin" size={20} /> : <><Save size={18} /> Salvar conexao</>}

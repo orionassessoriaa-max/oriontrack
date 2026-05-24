@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Loader2, MessageSquare, QrCode, RefreshCw, Smartphone } from 'lucide-react';
+import { CheckCircle2, Loader2, MessageSquare, QrCode, RefreshCw, Send, Smartphone } from 'lucide-react';
 
 type Conversation = {
   id: string;
@@ -14,6 +14,15 @@ type Conversation = {
   nome_contato: string | null;
   status: string;
   ultima_mensagem_at: string | null;
+};
+
+type InboxMessage = {
+  id: string;
+  conversa_id: string;
+  direction: 'inbound' | 'outbound';
+  remetente: string | null;
+  mensagem: string;
+  created_at: string;
 };
 
 export default function BrokerInboxPage() {
@@ -26,6 +35,10 @@ export default function BrokerInboxPage() {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [messages, setMessages] = useState<InboxMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   async function fetchInbox() {
     if (!profile?.corretor_id) {
@@ -54,13 +67,38 @@ export default function BrokerInboxPage() {
     void fetchInbox();
   }, [profile?.corretor_id]);
 
+  async function getToken() {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || '';
+  }
+
+  async function fetchMessages(conversationId: string) {
+    const token = await getToken();
+    if (!token) return;
+
+    setLoadingMessages(true);
+    const response = await fetch(`/api/inbox/messages?conversation_id=${conversationId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    setMessages(response.ok ? (payload.messages || []) : []);
+    setLoadingMessages(false);
+  }
+
+  useEffect(() => {
+    if (selectedConversation?.id) {
+      void fetchMessages(selectedConversation.id);
+    } else {
+      setMessages([]);
+    }
+  }, [selectedConversation?.id]);
+
   async function connectWhatsApp() {
     setConnecting(true);
     setConnectError(null);
     setQrCode(null);
 
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
+    const token = await getToken();
     if (!token) {
       setConnectError('Sessao expirada. Entre novamente.');
       setConnecting(false);
@@ -85,6 +123,49 @@ export default function BrokerInboxPage() {
     }
   }
 
+  async function sendMessage() {
+    if (!selectedConversation || !messageText.trim()) return;
+
+    const token = await getToken();
+    if (!token) {
+      setConnectError('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    setSendingMessage(true);
+    const response = await fetch('/api/inbox/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        conversation_id: selectedConversation.id,
+        mensagem: messageText.trim(),
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    setSendingMessage(false);
+
+    if (!response.ok) {
+      setConnectError(payload.error || 'Nao consegui enviar agora. Tente novamente em instantes.');
+      return;
+    }
+
+    setMessageText('');
+    setConnectError(null);
+    if (payload.message) setMessages((current) => [...current, payload.message]);
+    void fetchInbox();
+  }
+
+  const formatHour = (value: string) => {
+    try {
+      return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
   return (
     <InternalLayout>
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -105,7 +186,7 @@ export default function BrokerInboxPage() {
           </div>
           <h2 className="text-xl font-black text-gray-950">Conectar WhatsApp</h2>
           <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
-            Escaneie o QR Code para usar seu WhatsApp dentro do Orion Track. Assim voce acompanha conversas, respostas e historico dos leads sem se perder entre abas.
+            Escaneie o QR Code e atenda seus leads direto por aqui. Suas conversas ficam organizadas para voce responder rapido, acompanhar retornos e nao perder oportunidades.
           </p>
           <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-blue-100 bg-white/80 p-4 text-left transition-all hover:border-blue-200 hover:bg-white">
             <input
@@ -115,7 +196,7 @@ export default function BrokerInboxPage() {
               className="mt-1 h-4 w-4 rounded border-blue-200 text-blue-600 focus:ring-blue-500"
             />
             <span className="text-xs font-bold leading-relaxed text-slate-600">
-              Li e aceito conectar meu WhatsApp ao atendimento da Orion. Entendo que as mensagens relacionadas aos leads poderao aparecer no sistema para organizacao comercial, acompanhamento e suporte da operacao.
+              Li e aceito conectar meu WhatsApp ao Orion Track. Entendo que as conversas dos leads poderao aparecer aqui para facilitar meu atendimento, historico e acompanhamento comercial.
             </span>
           </label>
           <button
@@ -145,7 +226,7 @@ export default function BrokerInboxPage() {
           </div>
           <h2 className="text-xl font-black text-gray-950">Como vai funcionar</h2>
           <div className="mt-4 grid gap-3 text-sm font-bold text-slate-600 md:grid-cols-3">
-            <span className="rounded-2xl bg-white/80 p-4">1. Voce conecta seu WhatsApp com seguranca pelo QR Code.</span>
+            <span className="rounded-2xl bg-white/80 p-4">1. Voce conecta seu WhatsApp pelo QR Code.</span>
             <span className="rounded-2xl bg-white/80 p-4">2. As conversas dos leads ficam organizadas por atendimento.</span>
             <span className="rounded-2xl bg-white/80 p-4">3. No CRM, o botao de conversar leva direto para esse lead.</span>
           </div>
@@ -190,17 +271,73 @@ export default function BrokerInboxPage() {
         <section className="flex min-h-[520px] flex-col">
           <div className="border-b border-gray-100 p-5">
             <h2 className="font-black text-gray-900">{selectedConversation?.nome_contato || selectedConversation?.telefone || 'Selecione uma conversa'}</h2>
-            <p className="text-xs font-bold text-slate-400">Depois de conectado, seu historico de atendimento fica centralizado aqui.</p>
+            <p className="text-xs font-bold text-slate-400">{selectedConversation ? selectedConversation.telefone : 'Escolha um atendimento para responder.'}</p>
           </div>
-          <div className="flex flex-1 items-center justify-center bg-slate-50 p-8 text-center">
-            <div>
-              <MessageSquare className="mx-auto mb-4 text-blue-500" size={42} />
-              <h3 className="text-xl font-black text-gray-900">Conecte para iniciar os atendimentos</h3>
-              <p className="mx-auto mt-2 max-w-md text-sm font-bold leading-relaxed text-slate-500">
-                Conecte seu WhatsApp para acompanhar as conversas dos leads com mais clareza e rapidez.
-              </p>
+          {selectedConversation ? (
+            <>
+              <div className="flex flex-1 flex-col gap-3 overflow-y-auto bg-slate-50 p-5">
+                {loadingMessages ? (
+                  <div className="flex flex-1 items-center justify-center">
+                    <Loader2 className="animate-spin text-blue-600" size={30} />
+                  </div>
+                ) : messages.length > 0 ? messages.map((message) => {
+                  const mine = message.direction === 'outbound';
+                  return (
+                    <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[78%] rounded-3xl px-4 py-3 shadow-sm ${mine ? 'bg-blue-600 text-white' : 'bg-white text-slate-800'}`}>
+                        <p className="whitespace-pre-wrap text-sm font-bold leading-relaxed">{message.mensagem}</p>
+                        <p className={`mt-2 text-[10px] font-black uppercase tracking-widest ${mine ? 'text-blue-100' : 'text-slate-400'}`}>{formatHour(message.created_at)}</p>
+                      </div>
+                    </div>
+                  );
+                }) : (
+                  <div className="flex flex-1 items-center justify-center text-center">
+                    <div>
+                      <MessageSquare className="mx-auto mb-4 text-blue-500" size={42} />
+                      <h3 className="text-xl font-black text-gray-900">Conversa pronta para atender</h3>
+                      <p className="mx-auto mt-2 max-w-md text-sm font-bold leading-relaxed text-slate-500">
+                        Quando o cliente responder, as mensagens aparecem aqui. Voce tambem pode iniciar o contato pelo campo abaixo.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="border-t border-gray-100 bg-white p-4">
+                <div className="flex gap-3">
+                  <textarea
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendMessage();
+                      }
+                    }}
+                    rows={2}
+                    placeholder="Escreva sua resposta..."
+                    className="min-h-[52px] flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white"
+                  />
+                  <button
+                    onClick={sendMessage}
+                    disabled={sendingMessage || !messageText.trim()}
+                    className="flex min-w-[112px] cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {sendingMessage ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} Enviar
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-1 items-center justify-center bg-slate-50 p-8 text-center">
+              <div>
+                <MessageSquare className="mx-auto mb-4 text-blue-500" size={42} />
+                <h3 className="text-xl font-black text-gray-900">Conecte para iniciar os atendimentos</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm font-bold leading-relaxed text-slate-500">
+                  Conecte seu WhatsApp para acompanhar as conversas dos leads com mais clareza e rapidez.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </section>
       </div>
     </InternalLayout>

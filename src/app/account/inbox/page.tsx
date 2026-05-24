@@ -198,9 +198,9 @@ export default function AccountInboxPage() {
           </div>
           <div className="flex h-[580px] flex-col items-center justify-center bg-slate-50 text-center">
             <MessageSquare className="text-slate-300" size={54} />
-            <h3 className="mt-4 text-xl font-black text-slate-900">Inbox em preparacao</h3>
+            <h3 className="mt-4 text-xl font-black text-slate-900">Central de atendimento</h3>
             <p className="mt-2 max-w-md text-sm font-bold text-slate-500">
-              Aqui voce acompanha a conversa do cliente sem precisar sair do Orion Track. Cada corretor fica separado para evitar mistura de atendimentos.
+              Aqui voce acompanha cada cliente em uma fila separada, gera o resumo do dia e mantem a comunicacao organizada sem sair do Orion Track.
             </p>
             <div className="mt-6 flex gap-3">
               <button className="flex items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700">
