@@ -430,8 +430,8 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               <Users size={23} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-950">Criar time</h2>
-              <p className="text-sm font-bold text-slate-500">Distribuicao automatica de leads, um por vez.</p>
+              <h2 className="text-xl font-black text-slate-950">Meu time comercial</h2>
+              <p className="text-sm font-bold text-slate-500">Organize quem vai atender os leads novos das campanhas.</p>
             </div>
           </div>
 
@@ -450,7 +450,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white transition-all hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-            Salvar time
+            Salvar nome do time
           </button>
 
           <button
@@ -471,7 +471,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                 <div className="min-w-0 flex-1">
                   <p className="font-black text-slate-950">Participar da distribuição</p>
                   <p className="mt-1 text-xs font-bold leading-relaxed text-slate-600">
-                    Quando ativado, o dono do time também recebe leads no rodízio e aparece nos relatórios e ranking.
+                    Quando ativado, o dono do time tambem pode receber leads novos das campanhas e aparece nos relatorios e ranking.
                   </p>
                   {settings.owner_profile && (
                     <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-blue-700">
@@ -584,7 +584,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">{team?.nome || 'Time comercial'}</p>
             <h2 className="mt-1 text-xl font-black text-slate-950">Integrantes cadastrados</h2>
             <p className="mt-2 text-sm font-bold text-slate-500">
-              Cada lead novo entra para o próximo integrante da fila. Com apenas 1 integrante, todos os leads ficam com ele.
+              Acompanhe quem atende cada oportunidade e veja a evolucao do time.
             </p>
           </div>
 
