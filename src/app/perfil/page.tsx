@@ -137,7 +137,7 @@ function Field({ icon: Icon, label, value, disabled, placeholder }: { icon: any;
           defaultValue={value}
           disabled={disabled}
           placeholder={placeholder}
-          className={`w-full border-none py-4 pl-12 pr-4 font-medium transition-all focus:ring-2 focus:ring-blue-500 ${disabled ? 'cursor-not-allowed bg-gray-100 text-gray-500' : 'bg-gray-50'}`}
+          className={`orion-profile-field w-full border-none py-4 pl-12 pr-4 font-medium transition-all focus:ring-2 focus:ring-blue-500 ${disabled ? 'cursor-not-allowed bg-gray-100 text-gray-500' : 'bg-gray-50 text-gray-900'}`}
         />
       </div>
     </div>
