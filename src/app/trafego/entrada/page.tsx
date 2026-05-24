@@ -14,6 +14,7 @@ type EntradaForm = {
   regioes_campanha: string;
   campanhas_ativas: boolean;
   operadoras: string[];
+  operadora_outros: string;
 };
 
 const emptyForm: EntradaForm = {
@@ -21,7 +22,8 @@ const emptyForm: EntradaForm = {
   facebook_senha: '',
   regioes_campanha: '',
   campanhas_ativas: false,
-  operadoras: []
+  operadoras: [],
+  operadora_outros: ''
 };
 
 export default function EntradaGestorPage() {
@@ -77,16 +79,22 @@ export default function EntradaGestorPage() {
   const selectCorretor = (corretor: Corretor) => {
     setSelectedId(corretor.id);
     setSaved(false);
+    const selectedOperadoras = Array.isArray(corretor.operadoras_info?.selecionadas)
+      ? corretor.operadoras_info.selecionadas
+      : Object.entries(corretor.operadoras_info || {})
+          .filter(([, value]) => Boolean(value))
+          .map(([key]) => key);
+    const customOperadora = selectedOperadoras.find((item) => !OPERADORAS_ONBOARDING.includes(item));
+
     setFormData({
       facebook_login: corretor.facebook_login || '',
       facebook_senha: corretor.facebook_senha || '',
       regioes_campanha: corretor.regioes_campanha || '',
       campanhas_ativas: Boolean(corretor.campanhas_ativas),
-      operadoras: Array.isArray(corretor.operadoras_info?.selecionadas)
-        ? corretor.operadoras_info.selecionadas
-        : Object.entries(corretor.operadoras_info || {})
-            .filter(([, value]) => Boolean(value))
-            .map(([key]) => key)
+      operadoras: customOperadora
+        ? [...selectedOperadoras.filter((item) => item !== customOperadora), 'Outros']
+        : selectedOperadoras,
+      operadora_outros: customOperadora || ''
     });
   };
 
@@ -109,13 +117,20 @@ export default function EntradaGestorPage() {
         ? 'dados_completos'
         : 'pendente';
 
+    const operadoras = formData.operadoras.includes('Outros')
+      ? [
+          ...formData.operadoras.filter((item) => item !== 'Outros'),
+          formData.operadora_outros.trim() || 'Outros'
+        ]
+      : formData.operadoras;
+
     const { error: updateError } = await supabase
       .from('corretores')
       .update({
         facebook_login: formData.facebook_login || null,
         facebook_senha: formData.facebook_senha || null,
         regioes_campanha: formData.regioes_campanha || null,
-        operadoras_info: { selecionadas: formData.operadoras },
+        operadoras_info: { selecionadas: operadoras },
         campanhas_ativas: formData.campanhas_ativas,
         onboarding_status,
       })
@@ -134,7 +149,7 @@ export default function EntradaGestorPage() {
       facebook_senha: formData.facebook_senha,
       regioes_campanha: formData.regioes_campanha,
       campanhas_ativas: formData.campanhas_ativas,
-      operadoras_info: { selecionadas: formData.operadoras },
+      operadoras_info: { selecionadas: operadoras },
       onboarding_status,
     } : c));
   };
@@ -290,6 +305,14 @@ export default function EntradaGestorPage() {
                     </label>
                   ))}
                 </div>
+                {formData.operadoras.includes('Outros') && (
+                  <input
+                    value={formData.operadora_outros}
+                    onChange={(e) => setFormData({ ...formData, operadora_outros: e.target.value })}
+                    placeholder="Digite o nome da operadora"
+                    className="mt-3 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500"
+                  />
+                )}
               </div>
 
               <label className="mt-8 flex cursor-pointer items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-5">

@@ -32,6 +32,7 @@ const initialForm = {
   operadoras: [] as string[],
   time_operacional: [] as OrionTeamMember[],
   foto_url: '',
+  operadora_outros: '',
 };
 
 const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
@@ -115,13 +116,20 @@ export default function AdminUsuariosPage() {
 
     const gestorTrafegoId = form.time_operacional.find(isTrafficManagerMember)?.profile_id || null;
 
+    const operadoras = form.operadoras.includes('Outros')
+      ? [
+          ...form.operadoras.filter((item) => item !== 'Outros'),
+          form.operadora_outros.trim() || 'Outros'
+        ]
+      : form.operadoras;
+
     const response = await fetch('/api/admin/usuarios', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ ...form, email: accessEmail, gestor_trafego_id: gestorTrafegoId })
+      body: JSON.stringify({ ...form, operadoras, email: accessEmail, gestor_trafego_id: gestorTrafegoId })
     });
     const payload = await response.json();
 
@@ -515,6 +523,14 @@ export default function AdminUsuariosPage() {
                       );
                     })}
                   </div>
+                  {form.operadoras.includes('Outros') && (
+                    <input
+                      value={form.operadora_outros}
+                      onChange={(event) => setForm((current) => ({ ...current, operadora_outros: event.target.value }))}
+                      placeholder="Digite o nome da operadora"
+                      className="mt-3 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  )}
                 </div>
 
                 <div>

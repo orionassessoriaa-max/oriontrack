@@ -104,7 +104,9 @@ export async function GET(request: Request) {
 
     const visibleProfiles = (profiles || []).filter((profile: any) => {
       const status = String(profile.status || '').toLowerCase();
-      return !['inactive', 'inativo', 'deleted', 'removed'].includes(status);
+      const isRemovedTeamMember = profile.tipo_usuario === 'corretor_membro'
+        && ['inactive', 'inativo', 'deleted', 'removed'].includes(status);
+      return !isRemovedTeamMember;
     });
 
     return NextResponse.json({

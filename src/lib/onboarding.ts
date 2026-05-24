@@ -7,7 +7,8 @@ export const OPERADORAS_ONBOARDING = [
   'MedSenior',
   'Hapvida',
   'Alice',
-  'Bradesco'
+  'Bradesco',
+  'Outros'
 ];
 
 export function getOnboardingStatus(corretor: Pick<Corretor, 'onboarding_status' | 'campanhas_ativas'>) {
