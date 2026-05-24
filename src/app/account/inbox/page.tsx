@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useCorretoresOptions } from '@/hooks/useCorretoresOptions';
 import { supabase } from '@/lib/supabase/client';
-import { CalendarDays, CheckCircle2, Copy, DollarSign, Loader2, MessageSquare, Phone, RefreshCw, TrendingUp, Users } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Copy, DollarSign, Loader2, MessageSquare, Phone, QrCode, RefreshCw, Smartphone, TrendingUp, Users } from 'lucide-react';
 
 type Interaction = {
   id: string;
@@ -35,6 +35,9 @@ export default function AccountInboxPage() {
   const [report, setReport] = useState<QuickReport | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
   const [weeklyOnlyDone, setWeeklyOnlyDone] = useState(false);
+  const [connectingWhatsApp, setConnectingWhatsApp] = useState(false);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   const selectedCorretor = useMemo(() => {
     return corretores.find((corretor) => corretor.id === selectedCorretorId) || corretores[0];
@@ -144,19 +147,68 @@ export default function AccountInboxPage() {
     alert('Relatorio copiado.');
   };
 
+  const connectWhatsApp = async () => {
+    setConnectingWhatsApp(true);
+    setQrCode(null);
+    setConnectError(null);
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+
+    if (!token) {
+      setConnectingWhatsApp(false);
+      setConnectError('Sua sessao expirou. Entre novamente para conectar o WhatsApp.');
+      return;
+    }
+
+    const response = await fetch('/api/inbox/evolution/connect', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    setConnectingWhatsApp(false);
+
+    if (!response.ok) {
+      setConnectError(payload.error || 'Nao consegui gerar o QR Code agora. Tente novamente em instantes.');
+      return;
+    }
+
+    if (!payload.qrcode) {
+      setConnectError('A conexao respondeu, mas ainda nao trouxe o QR Code. Tente novamente em alguns segundos.');
+      return;
+    }
+
+    setQrCode(payload.qrcode);
+  };
+
   const weeklyRows = interactions.filter((interaction) => !weeklyOnlyDone || interaction.status === 'feito');
 
   return (
     <InternalLayout>
-      <div className="mb-6">
-        <p className="text-xs font-black uppercase tracking-widest text-blue-600">Account manager</p>
-        <h1 className="text-3xl font-black text-slate-950">Inbox e relacionamento</h1>
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-blue-600">Account manager</p>
+          <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 dark:text-white">Central de relacionamento</h1>
+          <p className="mt-2 max-w-3xl text-sm font-bold leading-6 text-slate-500 dark:text-slate-300">
+            Converse com clientes, marque interacoes do dia e gere resumos sem sair da tela.
+          </p>
+        </div>
+        <button
+          onClick={connectWhatsApp}
+          disabled={connectingWhatsApp}
+          className="flex min-h-[52px] cursor-pointer items-center justify-center gap-2 bg-blue-600 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {connectingWhatsApp ? <Loader2 className="animate-spin" size={17} /> : <Smartphone size={17} />}
+          {connectingWhatsApp ? 'Gerando QR Code' : 'Conectar WhatsApp'}
+        </button>
       </div>
 
       <div className="grid min-h-[680px] gap-5 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(420px,1fr)_380px]">
         <aside className="orion-panel overflow-hidden p-0">
-          <div className="border-b border-slate-200 p-4">
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-700">Interacoes de hoje</h2>
+          <div className="border-b border-slate-200 bg-slate-950 p-5 text-white dark:border-white/10">
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Fila do dia</p>
+            <h2 className="mt-1 text-lg font-black">Interacoes de hoje</h2>
           </div>
           <div className="max-h-[620px] overflow-y-auto">
             {loadingCorretores ? (
@@ -168,12 +220,12 @@ export default function AccountInboxPage() {
                 <button
                   key={corretor.id}
                   onClick={() => setSelectedCorretorId(corretor.id)}
-                  className={`flex w-full cursor-pointer items-center gap-3 border-b border-slate-100 p-4 text-left transition ${active ? 'bg-blue-50 text-blue-950' : 'hover:bg-slate-50'}`}
+                  className={`flex w-full cursor-pointer items-center gap-3 border-b border-slate-100 p-4 text-left transition dark:border-white/10 ${active ? 'bg-blue-50 text-blue-950 dark:bg-blue-500/15 dark:text-white' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
                 >
                   <span className={`h-3 w-3 shrink-0 ${status === 'feito' ? 'bg-emerald-500' : 'bg-orange-400'}`} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-black text-slate-900">{corretor.nome}</span>
-                    <span className="block truncate text-[11px] font-bold text-slate-500">{status === 'feito' ? 'Interacao feita' : 'Pendente hoje'}</span>
+                    <span className="block truncate text-sm font-black text-slate-900 dark:text-white">{corretor.nome}</span>
+                    <span className="block truncate text-[11px] font-bold text-slate-500 dark:text-slate-300">{status === 'feito' ? 'Interacao feita' : 'Pendente hoje'}</span>
                   </span>
                   <button
                     type="button"
@@ -189,26 +241,67 @@ export default function AccountInboxPage() {
         </aside>
 
         <section className="orion-panel overflow-hidden p-0">
-          <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 border-b border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-black text-slate-950">{selectedCorretor?.nome || 'Selecione um corretor'}</h2>
-              <p className="text-xs font-bold text-slate-500">Atendimento separado por cliente, com historico e relatorio ao lado.</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Cliente selecionado</p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{selectedCorretor?.nome || 'Selecione um corretor'}</h2>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-300">Atendimento separado por cliente, com historico e relatorio ao lado.</p>
             </div>
-            <button className="min-h-[48px] whitespace-nowrap bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-slate-950/10 hover:-translate-y-0.5 hover:bg-blue-600">Conectar WhatsApp</button>
+            <button
+              onClick={connectWhatsApp}
+              disabled={connectingWhatsApp}
+              className="min-h-[48px] whitespace-nowrap bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-slate-950/10 transition-all hover:-translate-y-0.5 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {connectingWhatsApp ? 'Gerando QR Code...' : 'Conectar WhatsApp'}
+            </button>
           </div>
-          <div className="flex h-[580px] flex-col items-center justify-center bg-slate-50 text-center">
-            <MessageSquare className="text-slate-300" size={54} />
-            <h3 className="mt-4 text-xl font-black text-slate-900">Central de atendimento</h3>
-            <p className="mt-2 max-w-md text-sm font-bold text-slate-500">
-              Aqui voce acompanha cada cliente em uma fila separada, gera o resumo do dia e mantem a comunicacao organizada sem sair do Orion Track.
-            </p>
-            <div className="mt-6 flex gap-3">
-              <button className="flex cursor-pointer items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700">
-                <Phone size={14} /> Ligar
-              </button>
-              <button className="flex cursor-pointer items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700">
-                <RefreshCw size={14} /> Sincronizar
-              </button>
+          <div className="flex min-h-[580px] flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 p-6 text-center dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/40">
+            {qrCode ? (
+              <div className="w-full max-w-md border border-blue-100 bg-white p-6 shadow-xl dark:border-blue-400/20 dark:bg-slate-900">
+                <QrCode className="mx-auto text-blue-600" size={34} />
+                <h3 className="mt-3 text-2xl font-black text-slate-950 dark:text-white">Escaneie para conectar</h3>
+                <p className="mt-2 text-sm font-bold leading-6 text-slate-500 dark:text-slate-300">
+                  Abra o WhatsApp no celular, toque em aparelhos conectados e leia o QR Code.
+                </p>
+                <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="mx-auto mt-5 h-64 w-64 bg-white object-contain p-3" />
+              </div>
+            ) : (
+              <>
+                <div className="flex h-20 w-20 items-center justify-center bg-blue-600 text-white shadow-2xl shadow-blue-600/25">
+                  <MessageSquare size={38} />
+                </div>
+                <h3 className="mt-5 text-3xl font-black text-slate-900 dark:text-white">Inbox do account</h3>
+                <p className="mt-3 max-w-lg text-base font-bold leading-7 text-slate-500 dark:text-slate-300">
+                  Use esta central para acompanhar clientes, enviar retornos e gerar o resumo do dia com velocidade.
+                </p>
+                <div className="mt-7 flex flex-wrap justify-center gap-3">
+                  <button className="flex cursor-pointer items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700 dark:border-white/10 dark:bg-white/10 dark:text-white">
+                    <Phone size={14} /> Ligar
+                  </button>
+                  <button className="flex cursor-pointer items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700 dark:border-white/10 dark:bg-white/10 dark:text-white">
+                    <RefreshCw size={14} /> Sincronizar
+                  </button>
+                </div>
+              </>
+            )}
+            {connectError && (
+              <div className="mt-5 max-w-xl border border-red-100 bg-red-50 px-5 py-4 text-left text-sm font-bold leading-6 text-red-700 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-200">
+                {connectError}
+              </div>
+            )}
+            <div className="mt-6 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
+              <div className="border border-blue-100 bg-white p-4 text-left dark:border-white/10 dark:bg-white/10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Status</p>
+                <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{qrCode ? 'Aguardando leitura' : 'Pronto para conectar'}</p>
+              </div>
+              <div className="border border-blue-100 bg-white p-4 text-left dark:border-white/10 dark:bg-white/10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Hoje</p>
+                <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{interactions.filter((item) => item.data === today && item.status === 'feito').length} interacoes feitas</p>
+              </div>
+              <div className="border border-blue-100 bg-white p-4 text-left dark:border-white/10 dark:bg-white/10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Clientes</p>
+                <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{corretores.length} na carteira</p>
+              </div>
             </div>
           </div>
         </section>
