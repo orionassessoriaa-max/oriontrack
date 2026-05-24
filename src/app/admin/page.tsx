@@ -28,6 +28,32 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+function normalizeText(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function inferGestorIdFromTeam(corretor: any, gestores: Array<{ id: string; nome: string }>) {
+  if (corretor.gestor_trafego_id) return corretor.gestor_trafego_id;
+
+  const team = Array.isArray(corretor.time_operacional) ? corretor.time_operacional : [];
+  const managerMember = team.find((member: any) => {
+    const role = normalizeText(member?.tipo_usuario);
+    const cargo = normalizeText(member?.cargo);
+    const nome = normalizeText(member?.nome);
+    return role === 'gestor_trafego' || cargo.includes('trafego') || gestores.some((gestor) => normalizeText(gestor.nome) === nome);
+  });
+
+  if (!managerMember) return null;
+  if (managerMember.profile_id) return String(managerMember.profile_id);
+
+  const memberName = normalizeText(managerMember.nome);
+  return gestores.find((gestor) => normalizeText(gestor.nome) === memberName)?.id || null;
+}
+
 export default function AdminCentralPage() {
   const [stats, setStats] = useState({
     totalCorretores: 0,
@@ -86,18 +112,21 @@ export default function AdminCentralPage() {
           .in('status', ['active', 'ativo', 'Ativo']),
         supabase
           .from('corretores')
-          .select('id, gestor_trafego_id')
+          .select('id, gestor_trafego_id, time_operacional')
       ]);
 
       const gestores = profilesRes.data || [];
-      const corretores = corretoresRes.data || [];
+      const corretores = (corretoresRes.data || []).map((corretor) => ({
+        ...corretor,
+        gestor_resolvido_id: inferGestorIdFromTeam(corretor, gestores),
+      }));
 
       const statsPorGestor = gestores.map(g => {
-        const count = corretores.filter(c => c.gestor_trafego_id === g.id).length;
+        const count = corretores.filter(c => c.gestor_resolvido_id === g.id).length;
         return { ...g, count };
       });
 
-      const semGestor = corretores.filter(c => !c.gestor_trafego_id).length;
+      const semGestor = corretores.filter(c => !c.gestor_resolvido_id).length;
 
       setStats({
         totalCorretores: countCorretores || 0,
