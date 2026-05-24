@@ -25,6 +25,7 @@ export default function BrokerInboxPage() {
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   async function fetchInbox() {
     if (!profile?.corretor_id) {
@@ -74,13 +75,13 @@ export default function BrokerInboxPage() {
     setConnecting(false);
 
     if (!response.ok) {
-      setConnectError(payload.error || 'Erro ao conectar WhatsApp.');
+      setConnectError(payload.error || 'Nao consegui gerar o QR Code agora. Tente novamente em alguns instantes.');
       return;
     }
 
     setQrCode(payload.qrcode || null);
     if (!payload.qrcode) {
-      setConnectError('A Evolution respondeu, mas nao retornou QR Code. Verifique a instancia no painel da Evolution.');
+      setConnectError('Nao recebi o QR Code. Tente novamente ou avise a equipe da Orion.');
     }
   }
 
@@ -90,9 +91,9 @@ export default function BrokerInboxPage() {
         <div>
           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">WhatsApp</p>
           <h1 className="text-3xl font-black tracking-tight text-gray-900">Inbox</h1>
-          <p className="font-medium text-gray-500">Conecte seu WhatsApp e centralize as conversas dos leads dentro do Orion Track.</p>
+          <p className="font-medium text-gray-500">Atenda seus leads com mais controle, historico e velocidade em um so lugar.</p>
         </div>
-        <button onClick={fetchInbox} className="flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm">
+        <button onClick={fetchInbox} className="flex cursor-pointer items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
           {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Atualizar
         </button>
       </div>
@@ -104,11 +105,22 @@ export default function BrokerInboxPage() {
           </div>
           <h2 className="text-xl font-black text-gray-950">Conectar WhatsApp</h2>
           <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
-            Aqui entra a conexão via Evolution API. O corretor vai clicar em conectar, escanear o QR Code e as conversas passam a aparecer nesta tela.
+            Escaneie o QR Code para usar seu WhatsApp dentro do Orion Track. Assim voce acompanha conversas, respostas e historico dos leads sem se perder entre abas.
           </p>
+          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-blue-100 bg-white/80 p-4 text-left transition-all hover:border-blue-200 hover:bg-white">
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(event) => setAcceptedTerms(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-blue-200 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-xs font-bold leading-relaxed text-slate-600">
+              Li e aceito conectar meu WhatsApp ao atendimento da Orion. Entendo que as mensagens relacionadas aos leads poderao aparecer no sistema para organizacao comercial, acompanhamento e suporte da operacao.
+            </span>
+          </label>
           <button
             onClick={connectWhatsApp}
-            disabled={connecting}
+            disabled={connecting || !acceptedTerms}
             className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {connecting ? <Loader2 className="animate-spin" size={18} /> : <Smartphone size={18} />}
@@ -123,7 +135,7 @@ export default function BrokerInboxPage() {
           {connectError ? (
             <p className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700">{connectError}</p>
           ) : (
-            <p className="mt-3 text-xs font-bold text-blue-700">Status atual: pronto para conectar via Evolution API.</p>
+            <p className="mt-3 text-xs font-bold text-blue-700">Quando o QR Code aparecer, abra o WhatsApp no celular, toque em aparelhos conectados e faca a leitura.</p>
           )}
         </div>
 
@@ -133,9 +145,9 @@ export default function BrokerInboxPage() {
           </div>
           <h2 className="text-xl font-black text-gray-950">Como vai funcionar</h2>
           <div className="mt-4 grid gap-3 text-sm font-bold text-slate-600 md:grid-cols-3">
-            <span className="rounded-2xl bg-white/80 p-4">1. Corretor conecta o WhatsApp pelo QR Code.</span>
-            <span className="rounded-2xl bg-white/80 p-4">2. Evolution envia conversas para o Orion Track.</span>
-            <span className="rounded-2xl bg-white/80 p-4">3. Botão “Chamar inbox” abre este atendimento.</span>
+            <span className="rounded-2xl bg-white/80 p-4">1. Voce conecta seu WhatsApp com seguranca pelo QR Code.</span>
+            <span className="rounded-2xl bg-white/80 p-4">2. As conversas dos leads ficam organizadas por atendimento.</span>
+            <span className="rounded-2xl bg-white/80 p-4">3. No CRM, o botao de conversar leva direto para esse lead.</span>
           </div>
           {leadPhone && (
             <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-black text-emerald-700">
@@ -160,7 +172,7 @@ export default function BrokerInboxPage() {
               <button
                 key={conversation.id}
                 onClick={() => setSelectedConversation(conversation)}
-                className={`w-full border-b border-gray-100 p-4 text-left transition-all hover:bg-blue-50 ${selectedConversation?.id === conversation.id ? 'bg-blue-50' : 'bg-white'}`}
+                className={`w-full cursor-pointer border-b border-gray-100 p-4 text-left transition-all hover:bg-blue-50 ${selectedConversation?.id === conversation.id ? 'bg-blue-50' : 'bg-white'}`}
               >
                 <p className="font-black text-gray-900">{conversation.nome_contato || conversation.telefone}</p>
                 <p className="mt-1 text-xs font-bold text-slate-500">{conversation.telefone}</p>
@@ -178,14 +190,14 @@ export default function BrokerInboxPage() {
         <section className="flex min-h-[520px] flex-col">
           <div className="border-b border-gray-100 p-5">
             <h2 className="font-black text-gray-900">{selectedConversation?.nome_contato || selectedConversation?.telefone || 'Selecione uma conversa'}</h2>
-            <p className="text-xs font-bold text-slate-400">Mensagens em tempo real entram na próxima etapa da integração Evolution.</p>
+            <p className="text-xs font-bold text-slate-400">Depois de conectado, seu historico de atendimento fica centralizado aqui.</p>
           </div>
           <div className="flex flex-1 items-center justify-center bg-slate-50 p-8 text-center">
             <div>
               <MessageSquare className="mx-auto mb-4 text-blue-500" size={42} />
-              <h3 className="text-xl font-black text-gray-900">Inbox pronto para integração</h3>
+              <h3 className="text-xl font-black text-gray-900">Conecte para iniciar os atendimentos</h3>
               <p className="mx-auto mt-2 max-w-md text-sm font-bold leading-relaxed text-slate-500">
-                A tela já está criada. Para ficar funcional de verdade, vamos ligar a Evolution API para gerar QR Code, listar mensagens e enviar respostas.
+                Conecte seu WhatsApp para acompanhar as conversas dos leads com mais clareza e rapidez.
               </p>
             </div>
           </div>

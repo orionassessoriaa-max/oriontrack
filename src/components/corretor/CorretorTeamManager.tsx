@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Save, Target, Trash2, TrendingUp, Users } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Save, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
@@ -31,6 +31,16 @@ type Credentials = {
   email: string;
   senha_provisoria: string;
   link_login: string;
+};
+
+type TeamSettings = {
+  owner_in_distribution: boolean;
+  owner_profile: {
+    id: string;
+    nome: string;
+    email: string;
+    email_real?: string | null;
+  } | null;
 };
 
 type AssignableLead = {
@@ -89,6 +99,12 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<TeamSettings>({
+    owner_in_distribution: false,
+    owner_profile: null,
+  });
   const [error, setError] = useState<string | null>(null);
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
   const canAssignLeads = profile?.tipo_usuario === 'corretor';
@@ -175,6 +191,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     setNomeTime(payload.team?.nome || 'Time comercial');
     setMembros(payload.membros || []);
     setLeads(payload.leads || []);
+    setSettings(payload.settings || { owner_in_distribution: false, owner_profile: null });
     setLoading(false);
   }
 
@@ -267,6 +284,20 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       setError(err.message);
     } finally {
       setAssigning(false);
+    }
+  }
+
+  async function toggleOwnerDistribution(includeOwner: boolean) {
+    setSettingsSaving(true);
+    setError(null);
+
+    try {
+      await postTeam({ action: 'toggle_owner_member', include_owner: includeOwner });
+      await fetchTeam();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSettingsSaving(false);
     }
   }
 
@@ -393,7 +424,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_1.2fr]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
               <Users size={23} />
@@ -421,6 +452,47 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
             Salvar time
           </button>
+
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((current) => !current)}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-black text-slate-700 transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <Settings size={18} />
+            Configurações do time
+          </button>
+
+          {settingsOpen && (
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-start gap-3">
+                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600">
+                  <ShieldCheck size={19} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-slate-950">Participar da distribuição</p>
+                  <p className="mt-1 text-xs font-bold leading-relaxed text-slate-600">
+                    Quando ativado, o dono do time também recebe leads no rodízio e aparece nos relatórios e ranking.
+                  </p>
+                  {settings.owner_profile && (
+                    <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-blue-700">
+                      Dono do time: {settings.owner_profile.nome}
+                    </p>
+                  )}
+                </div>
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input
+                    type="checkbox"
+                    className="peer sr-only"
+                    checked={settings.owner_in_distribution}
+                    disabled={settingsSaving}
+                    onChange={(event) => toggleOwnerDistribution(event.target.checked)}
+                  />
+                  <span className="h-7 w-12 rounded-full bg-slate-300 transition peer-checked:bg-blue-600 peer-disabled:opacity-50" />
+                  <span className="absolute left-1 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+                </label>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={createMember} className="mt-8 space-y-4 border-t border-slate-100 pt-6">
             <label className="block">
@@ -507,10 +579,13 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           )}
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:shadow-xl">
           <div className="border-b border-slate-100 p-6">
             <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">{team?.nome || 'Time comercial'}</p>
             <h2 className="mt-1 text-xl font-black text-slate-950">Integrantes cadastrados</h2>
+            <p className="mt-2 text-sm font-bold text-slate-500">
+              Cada lead novo entra para o próximo integrante da fila. Com apenas 1 integrante, todos os leads ficam com ele.
+            </p>
           </div>
 
           {loading ? (
@@ -522,9 +597,10 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               Nenhum integrante criado ainda.
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="grid gap-4 p-5">
               {memberStats.map((member, index) => (
-                <div key={member.id} className="grid gap-4 p-5 xl:grid-cols-[1fr_1.4fr_auto] xl:items-center">
+                <div key={member.id} className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-white hover:shadow-lg">
+                  <div className="grid gap-4 xl:grid-cols-[1fr_1.4fr_auto] xl:items-center">
                   <div className="flex min-w-0 items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-black text-white">
                       {member.nome.slice(0, 2).toUpperCase()}
@@ -535,6 +611,11 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-600">
                         Fila #{index + 1} {member.ultimo_lead_at ? `| ultimo lead ${new Date(member.ultimo_lead_at).toLocaleDateString('pt-BR')}` : ''}
                       </p>
+                      {member.profile_id === settings.owner_profile?.id && (
+                        <span className="mt-2 inline-flex rounded-full bg-blue-100 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-blue-700">
+                          Dono do time
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -558,10 +639,13 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                   <button
                     type="button"
                     onClick={() => removeMember(member)}
+                    disabled={member.profile_id === settings.owner_profile?.id}
                     className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600 transition-all hover:bg-red-100"
+                    title={member.profile_id === settings.owner_profile?.id ? 'Desative em Configurações do time.' : 'Remover integrante'}
                   >
                     <Trash2 size={15} /> Remover
                   </button>
+                  </div>
                 </div>
               ))}
             </div>
