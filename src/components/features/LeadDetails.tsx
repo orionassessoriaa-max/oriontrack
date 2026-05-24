@@ -9,6 +9,10 @@ import { getLeadQualification } from '@/lib/leadQualification';
 import { TipoCampanha } from '@/types';
 import { getLeadStatusStyle } from '@/lib/leadStatus';
 
+function cleanPhone(value?: string | null) {
+  return String(value || '').replace(/\D/g, '');
+}
+
 interface LeadCardProps {
   lead: Lead;
   onClick: (lead: Lead) => void;
@@ -211,10 +215,13 @@ export function LeadModal({ lead, onClose, tipoCampanha }: LeadModalProps) {
           </div>
 
           <div className="p-8 bg-slate-50 border-t border-gray-100 flex gap-4">
-            <button className="flex-1 bg-green-600 hover:bg-green-700 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-green-600/20 text-lg group">
+            <a
+              href={`/inbox?lead=${lead.id}&telefone=${cleanPhone(lead.telefone)}`}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-green-600/20 text-lg group"
+            >
               <MessageSquare size={24} className="group-hover:scale-110 transition-transform" />
               WhatsApp
-            </button>
+            </a>
             <button className="flex-1 bg-white border border-gray-200 text-slate-700 font-black py-5 rounded-2xl hover:bg-gray-50 transition-all text-lg">
               Editar
             </button>
