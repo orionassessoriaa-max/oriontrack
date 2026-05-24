@@ -29,6 +29,7 @@ export async function evolutionFetch(path: string, init: RequestInit = {}) {
     headers: {
       'Content-Type': 'application/json',
       apikey: apiKey,
+      Authorization: `Bearer ${apiKey}`,
       ...(init.headers || {}),
     },
     cache: 'no-store',
@@ -36,7 +37,14 @@ export async function evolutionFetch(path: string, init: RequestInit = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload?.message || payload?.error || 'Nao consegui falar com o WhatsApp agora.');
+    const rawMessage = String(payload?.message || payload?.error || payload?.response?.message || '');
+    const normalizedMessage = rawMessage.toLowerCase();
+
+    if (response.status === 401 || response.status === 403 || normalizedMessage.includes('forbidden')) {
+      throw new Error('A conexao com o WhatsApp foi recusada. Confirme a chave da Evolution API no servidor e tente novamente.');
+    }
+
+    throw new Error(rawMessage || 'Nao consegui falar com o WhatsApp agora.');
   }
   return payload;
 }
