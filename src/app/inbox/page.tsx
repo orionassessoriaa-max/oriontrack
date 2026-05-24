@@ -188,15 +188,23 @@ export default function BrokerInboxPage() {
           <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
             Escaneie o QR Code e atenda seus leads direto por aqui. Suas conversas ficam organizadas para voce responder rapido, acompanhar retornos e nao perder oportunidades.
           </p>
-          <label className="mt-5 flex cursor-pointer items-start gap-4 rounded-xl border border-blue-100 bg-white p-4 text-left leading-relaxed shadow-sm transition-all hover:border-blue-300 hover:shadow-md">
+          <label className="mt-5 flex cursor-pointer items-start gap-4 rounded-2xl border border-blue-200 bg-white p-5 text-left leading-relaxed shadow-sm transition-all hover:border-blue-400 hover:shadow-md dark:border-blue-400/30 dark:bg-slate-900/80 dark:hover:border-blue-300">
             <input
               type="checkbox"
               checked={acceptedTerms}
               onChange={(event) => setAcceptedTerms(event.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-blue-200 text-blue-600 focus:ring-blue-500"
+              className="peer sr-only"
             />
-            <span className="text-sm font-bold leading-relaxed text-slate-700">
-              Li e aceito conectar meu WhatsApp ao Orion Track. Entendo que as conversas dos leads poderao aparecer aqui para facilitar meu atendimento, historico e acompanhamento comercial.
+            <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-blue-300 bg-blue-50 text-transparent transition-all peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white dark:border-blue-300/60 dark:bg-blue-950">
+              <CheckCircle2 size={18} />
+            </span>
+            <span className="flex-1">
+              <span className="block text-base font-black leading-snug text-slate-950 dark:text-white">
+                Aceito conectar meu WhatsApp ao Orion Track
+              </span>
+              <span className="mt-2 block text-sm font-semibold leading-7 text-slate-600 dark:text-slate-200">
+                Entendo que as conversas dos meus leads poderao aparecer nesta tela para facilitar meu atendimento, manter o historico organizado e acompanhar cada oportunidade com mais seguranca.
+              </span>
             </span>
           </label>
           <button
