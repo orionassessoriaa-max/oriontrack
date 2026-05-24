@@ -192,7 +192,7 @@ export default function AccountInboxPage() {
           <div className="flex items-center justify-between border-b border-slate-200 p-4">
             <div>
               <h2 className="text-lg font-black text-slate-950">{selectedCorretor?.nome || 'Selecione um corretor'}</h2>
-              <p className="text-xs font-bold text-slate-500">WhatsApp Evolution sera conectado aqui sem misturar contas.</p>
+              <p className="text-xs font-bold text-slate-500">Atendimento separado por cliente, com historico e relatorio ao lado.</p>
             </div>
             <button className="bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">Conectar WhatsApp</button>
           </div>
@@ -200,7 +200,7 @@ export default function AccountInboxPage() {
             <MessageSquare className="text-slate-300" size={54} />
             <h3 className="mt-4 text-xl font-black text-slate-900">Inbox em preparacao</h3>
             <p className="mt-2 max-w-md text-sm font-bold text-slate-500">
-              A estrutura ja separa atendimento por corretor. No proximo passo entra a API Evolution para QR Code, conversas e envio.
+              Aqui voce acompanha a conversa do cliente sem precisar sair do Orion Track. Cada corretor fica separado para evitar mistura de atendimentos.
             </p>
             <div className="mt-6 flex gap-3">
               <button className="flex items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700">

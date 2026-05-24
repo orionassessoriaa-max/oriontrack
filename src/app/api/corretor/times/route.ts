@@ -94,6 +94,80 @@ async function ensureTeam(corretorId: string, nome = 'Time comercial') {
   return data;
 }
 
+async function getOwnerProfile(corretorId: string) {
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome, email, email_real')
+    .eq('tipo_usuario', 'corretor')
+    .eq('corretor_id', corretorId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  return data;
+}
+
+async function syncUnassignedLeads(corretorId: string, teamId: string) {
+  const { data: members, error: membersError } = await supabaseAdmin
+    .from('corretor_time_membros')
+    .select('id, profile_id, ordem, created_at')
+    .eq('time_id', teamId)
+    .eq('status', 'ativo')
+    .not('profile_id', 'is', null)
+    .order('ordem', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (membersError) throw membersError;
+  if (!members || members.length === 0) return 0;
+
+  const { data: leads, error: leadsError } = await supabaseAdmin
+    .from('leads')
+    .select('id')
+    .eq('corretor_id', corretorId)
+    .is('responsavel_membro_id', null)
+    .order('data_entrada', { ascending: true })
+    .limit(1000);
+
+  if (leadsError) throw leadsError;
+  if (!leads || leads.length === 0) return 0;
+
+  const { data: teamRecord } = await supabaseAdmin
+    .from('corretor_times')
+    .select('proximo_indice')
+    .eq('id', teamId)
+    .maybeSingle();
+
+  let nextIndex = Math.max(Number(teamRecord?.proximo_indice || 0), 0) % members.length;
+  const now = new Date().toISOString();
+
+  for (const lead of leads) {
+    const member = members[nextIndex];
+    await supabaseAdmin
+      .from('leads')
+      .update({
+        responsavel_membro_id: member.id,
+        responsavel_profile_id: member.profile_id,
+        updated_at: now,
+      })
+      .eq('id', lead.id)
+      .eq('corretor_id', corretorId)
+      .is('responsavel_membro_id', null);
+
+    await supabaseAdmin
+      .from('corretor_time_membros')
+      .update({ ultimo_lead_at: now })
+      .eq('id', member.id);
+
+    nextIndex = (nextIndex + 1) % members.length;
+  }
+
+  await supabaseAdmin
+    .from('corretor_times')
+    .update({ proximo_indice: nextIndex })
+    .eq('id', teamId);
+
+  return leads.length;
+}
+
 export async function GET(request: Request) {
   try {
     const guard = await requireUser(request);
@@ -105,6 +179,8 @@ export async function GET(request: Request) {
     }
 
     const team = await ensureTeam(corretorId);
+    await syncUnassignedLeads(corretorId, team.id);
+
     const { data: membros, error: membersError } = await supabaseAdmin
       .from('corretor_time_membros')
       .select('id, time_id, corretor_id, profile_id, nome, email, status, ordem, ultimo_lead_at, created_at')
@@ -127,7 +203,18 @@ export async function GET(request: Request) {
       leads = leadsData || [];
     }
 
-    return NextResponse.json({ team, membros: membros || [], leads });
+    const ownerProfile = await getOwnerProfile(corretorId);
+    const ownerMember = (membros || []).find((member: any) => member.profile_id === ownerProfile?.id);
+
+    return NextResponse.json({
+      team,
+      membros: membros || [],
+      leads,
+      settings: {
+        owner_in_distribution: Boolean(ownerMember),
+        owner_profile: ownerProfile || null,
+      },
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao carregar time.' }, { status: 500 });
   }
@@ -172,13 +259,81 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, team: data });
     }
 
+    if (action === 'toggle_owner_member') {
+      if (!['admin', 'corretor'].includes(guard.profile.tipo_usuario)) {
+        return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+      }
+
+      const includeOwner = Boolean(body.include_owner);
+      const ownerProfile = await getOwnerProfile(corretorId);
+      if (!ownerProfile?.id) {
+        return NextResponse.json({ error: 'Nao encontrei o acesso principal desse corretor.' }, { status: 404 });
+      }
+
+      const { data: existingOwnerMember } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .select('id')
+        .eq('time_id', team.id)
+        .eq('profile_id', ownerProfile.id)
+        .maybeSingle();
+
+      if (includeOwner && !existingOwnerMember) {
+        const { data: lastMember } = await supabaseAdmin
+          .from('corretor_time_membros')
+          .select('ordem')
+          .eq('time_id', team.id)
+          .order('ordem', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const { error: insertError } = await supabaseAdmin
+          .from('corretor_time_membros')
+          .insert([{
+            time_id: team.id,
+            corretor_id: corretorId,
+            profile_id: ownerProfile.id,
+            nome: ownerProfile.nome || corretor.nome,
+            email: ownerProfile.email_real || ownerProfile.email,
+            ordem: Number(lastMember?.ordem || 0) + 1,
+          }]);
+
+        if (insertError) throw insertError;
+      }
+
+      if (!includeOwner && existingOwnerMember?.id) {
+        await supabaseAdmin
+          .from('leads')
+          .update({ responsavel_membro_id: null, responsavel_profile_id: null })
+          .eq('corretor_id', corretorId)
+          .eq('responsavel_membro_id', existingOwnerMember.id);
+
+        const { error: deleteError } = await supabaseAdmin
+          .from('corretor_time_membros')
+          .delete()
+          .eq('id', existingOwnerMember.id);
+
+        if (deleteError) throw deleteError;
+      }
+
+      await syncUnassignedLeads(corretorId, team.id);
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.owner.toggle',
+        entity_type: 'corretor_times',
+        entity_id: team.id,
+        metadata: { corretor_id: corretorId, include_owner: includeOwner },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
     if (action === 'delete_member') {
       const memberId = String(body.member_id || '').trim();
       if (!memberId) return NextResponse.json({ error: 'Membro nao informado.' }, { status: 400 });
 
       const { data: member } = await supabaseAdmin
         .from('corretor_time_membros')
-        .select('id, profile_id')
+        .select('id, profile_id, profiles:profile_id(tipo_usuario)')
         .eq('id', memberId)
         .eq('corretor_id', corretorId)
         .maybeSingle();
@@ -190,12 +345,16 @@ export async function POST(request: Request) {
         .delete()
         .eq('id', memberId);
 
-      if (member.profile_id) {
+      const memberRole = Array.isArray((member as any).profiles) ? (member as any).profiles[0]?.tipo_usuario : (member as any).profiles?.tipo_usuario;
+
+      if (member.profile_id && memberRole !== 'corretor') {
         await supabaseAdmin
           .from('profiles')
           .update({ status: 'inactive' })
           .eq('id', member.profile_id);
       }
+
+      await syncUnassignedLeads(corretorId, team.id);
 
       return NextResponse.json({ success: true });
     }
@@ -259,7 +418,7 @@ export async function POST(request: Request) {
         .select('id, profile_id')
         .eq('id', memberId)
         .eq('corretor_id', corretorId)
-        .eq('status', 'active')
+        .in('status', ['active', 'ativo'])
         .maybeSingle();
 
       if (!member) return NextResponse.json({ error: 'Integrante nao encontrado.' }, { status: 404 });
@@ -374,6 +533,7 @@ export async function POST(request: Request) {
         .single();
 
       if (memberError) throw memberError;
+      await syncUnassignedLeads(corretorId, team.id);
 
       await writeAuditLog(request, guard.profile, {
         action: 'team.member.create',
