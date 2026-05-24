@@ -143,8 +143,8 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   return (
     <div className={`flex min-h-screen ${isDarkTheme ? 'theme-noturno bg-slate-950 text-slate-100' : 'bg-[#f8fafc]'}`}>
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
-      <main className={`${sidebarCollapsed ? 'lg:ml-0 lg:w-full' : 'lg:ml-64 lg:w-[calc(100%-16rem)]'} w-full min-w-0 px-4 py-5 transition-all duration-300 sm:px-6 sm:py-7 lg:p-8`}>
-        <div className={`${sidebarCollapsed ? 'max-w-none' : 'max-w-7xl'} mx-auto transition-all duration-300`}>
+      <main className={`${sidebarCollapsed ? 'lg:ml-0 lg:w-full' : 'lg:ml-64 lg:w-[calc(100%-16rem)]'} w-full min-w-0 px-3 py-5 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7`}>
+        <div className="mx-auto max-w-none transition-all duration-300">
           {children}
         </div>
       </main>

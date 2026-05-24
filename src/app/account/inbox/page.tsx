@@ -153,8 +153,8 @@ export default function AccountInboxPage() {
         <h1 className="text-3xl font-black text-slate-950">Inbox e relacionamento</h1>
       </div>
 
-      <div className="grid min-h-[680px] gap-4 xl:grid-cols-[280px_1fr_360px]">
-        <aside className="border border-slate-200 bg-white shadow-sm">
+      <div className="grid min-h-[680px] gap-5 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(420px,1fr)_380px]">
+        <aside className="orion-panel overflow-hidden p-0">
           <div className="border-b border-slate-200 p-4">
             <h2 className="text-sm font-black uppercase tracking-widest text-slate-700">Interacoes de hoje</h2>
           </div>
@@ -168,7 +168,7 @@ export default function AccountInboxPage() {
                 <button
                   key={corretor.id}
                   onClick={() => setSelectedCorretorId(corretor.id)}
-                  className={`flex w-full items-center gap-3 border-b border-slate-100 p-3 text-left transition ${active ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                  className={`flex w-full cursor-pointer items-center gap-3 border-b border-slate-100 p-4 text-left transition ${active ? 'bg-blue-50 text-blue-950' : 'hover:bg-slate-50'}`}
                 >
                   <span className={`h-3 w-3 shrink-0 ${status === 'feito' ? 'bg-emerald-500' : 'bg-orange-400'}`} />
                   <span className="min-w-0 flex-1">
@@ -178,7 +178,7 @@ export default function AccountInboxPage() {
                   <button
                     type="button"
                     onClick={(event) => { event.stopPropagation(); toggleInteraction(corretor.id); }}
-                    className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest ${status === 'feito' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}
+                    className={`min-w-[72px] rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest ${status === 'feito' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}
                   >
                     {status === 'feito' ? 'feito' : 'marcar'}
                   </button>
@@ -188,13 +188,13 @@ export default function AccountInboxPage() {
           </div>
         </aside>
 
-        <section className="border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 p-4">
+        <section className="orion-panel overflow-hidden p-0">
+          <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-black text-slate-950">{selectedCorretor?.nome || 'Selecione um corretor'}</h2>
               <p className="text-xs font-bold text-slate-500">Atendimento separado por cliente, com historico e relatorio ao lado.</p>
             </div>
-            <button className="bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">Conectar WhatsApp</button>
+            <button className="min-h-[48px] whitespace-nowrap bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-slate-950/10 hover:-translate-y-0.5 hover:bg-blue-600">Conectar WhatsApp</button>
           </div>
           <div className="flex h-[580px] flex-col items-center justify-center bg-slate-50 text-center">
             <MessageSquare className="text-slate-300" size={54} />
@@ -203,18 +203,18 @@ export default function AccountInboxPage() {
               Aqui voce acompanha cada cliente em uma fila separada, gera o resumo do dia e mantem a comunicacao organizada sem sair do Orion Track.
             </p>
             <div className="mt-6 flex gap-3">
-              <button className="flex items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700">
+              <button className="flex cursor-pointer items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700">
                 <Phone size={14} /> Ligar
               </button>
-              <button className="flex items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700">
+              <button className="flex cursor-pointer items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700">
                 <RefreshCw size={14} /> Sincronizar
               </button>
             </div>
           </div>
         </section>
 
-        <aside className="space-y-4">
-          <div className="rounded-[2.5rem] border border-gray-100 bg-white p-6 shadow-sm">
+        <aside className="space-y-4 xl:col-span-2 2xl:col-span-1">
+          <div className="orion-panel p-6">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Meta Ads</p>
@@ -231,7 +231,7 @@ export default function AccountInboxPage() {
                 <select
                   value={reportCorretorId}
                   onChange={(event) => setReportCorretorId(event.target.value)}
-                  className="mt-2 w-full appearance-none rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black text-slate-800 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
+                  className="orion-control mt-2 w-full appearance-none px-5 py-4 text-sm font-black text-slate-800 outline-none"
                 >
                   {corretores.map((corretor) => <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>)}
                 </select>
@@ -245,7 +245,7 @@ export default function AccountInboxPage() {
                     type="date"
                     value={reportDate}
                     onChange={(event) => setReportDate(event.target.value)}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 pr-12 text-sm font-black text-slate-800 outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
+                    className="orion-control w-full px-5 py-4 pr-12 text-sm font-black text-slate-800 outline-none"
                   />
                 </div>
               </label>
@@ -253,14 +253,14 @@ export default function AccountInboxPage() {
               <button
                 onClick={generateReport}
                 disabled={loadingReport || loadingCorretores || !reportCorretorId}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-5 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition-all hover:bg-blue-700 disabled:opacity-50"
+                className="flex w-full cursor-pointer items-center justify-center gap-2 bg-blue-600 py-5 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 disabled:opacity-50"
               >
                 {loadingReport ? <Loader2 className="animate-spin" size={16} /> : null} Gerar relatorio
               </button>
             </div>
 
             {report && (
-              <div className="mt-6 rounded-[2rem] border border-blue-100 bg-blue-50 p-4">
+              <div className="mt-6 border border-blue-100 bg-blue-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">{report.corretorNome}</p>
                 <p className="mt-1 text-xs font-bold text-blue-700/70">{new Date(`${report.date}T12:00:00`).toLocaleDateString('pt-BR')}</p>
 
@@ -270,14 +270,14 @@ export default function AccountInboxPage() {
                   <Metric icon={TrendingUp} label="CPL medio" value={report.cpl === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.cpl)} highlight />
                 </div>
 
-                <button onClick={copyReport} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 py-4 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-black">
+                <button onClick={copyReport} className="mt-4 flex w-full cursor-pointer items-center justify-center gap-2 bg-slate-950 py-4 text-xs font-black uppercase tracking-widest text-white transition-all hover:-translate-y-0.5 hover:bg-black">
                   <Copy size={14} /> Copiar pronto
                 </button>
               </div>
             )}
           </div>
 
-          <div className="border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="orion-panel p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-black text-slate-950">Semana</h2>
               <label className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-slate-500">
@@ -291,7 +291,7 @@ export default function AccountInboxPage() {
               ) : weeklyRows.map((interaction) => {
                 const corretor = corretores.find((item) => item.id === interaction.corretor_id);
                 return (
-                  <div key={interaction.id} className="flex items-center gap-2 bg-slate-50 p-2 text-xs font-bold text-slate-600">
+                  <div key={interaction.id} className="flex items-center gap-2 border border-slate-100 bg-slate-50 p-3 text-xs font-bold text-slate-600">
                     <CheckCircle2 size={14} className={interaction.status === 'feito' ? 'text-emerald-500' : 'text-orange-400'} />
                     <span className="flex-1 truncate">{corretor?.nome || 'Corretor'}</span>
                     <span>{interaction.data}</span>
@@ -308,7 +308,7 @@ export default function AccountInboxPage() {
 
 function Metric({ label, value, icon: Icon, highlight = false }: { label: string; value: string; icon: React.ElementType; highlight?: boolean }) {
   return (
-    <div className={`rounded-2xl p-4 ${highlight ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-slate-950'}`}>
+    <div className={`p-4 ${highlight ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-slate-950'}`}>
       <p className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-widest ${highlight ? 'text-blue-100' : 'text-slate-400'}`}>
         <Icon size={12} /> {label}
       </p>

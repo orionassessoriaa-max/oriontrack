@@ -27,10 +27,12 @@ export default function AccountHomePage() {
 
 function Shortcut({ href, icon: Icon, title, text }: { href: string; icon: any; title: string; text: string }) {
   return (
-    <Link href={href} className="border border-slate-200 bg-white p-6 shadow-sm transition hover:border-blue-300">
-      <Icon className="text-blue-600" size={26} />
-      <h2 className="mt-5 text-xl font-black text-slate-950">{title}</h2>
-      <p className="mt-2 text-sm font-bold text-slate-500">{text}</p>
+    <Link href={href} className="orion-panel group min-h-[190px] p-6 transition hover:border-blue-300 hover:shadow-xl">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/20 transition group-hover:scale-105">
+        <Icon size={25} />
+      </div>
+      <h2 className="mt-5 text-2xl font-black text-slate-950">{title}</h2>
+      <p className="mt-2 text-sm font-bold leading-relaxed text-slate-500">{text}</p>
     </Link>
   );
 }
