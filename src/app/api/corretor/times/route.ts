@@ -193,6 +193,14 @@ export async function POST(request: Request) {
         .single();
 
       if (error) throw error;
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.name.update',
+        entity_type: 'corretor_times',
+        entity_id: team.id,
+        metadata: { corretor_id: corretorId, nome },
+      });
+
       return NextResponse.json({ success: true, team: data });
     }
 
@@ -268,7 +276,7 @@ export async function POST(request: Request) {
 
       const { data: member } = await supabaseAdmin
         .from('corretor_time_membros')
-        .select('id, profile_id, profiles:profile_id(tipo_usuario)')
+        .select('id, profile_id, nome, email, profiles:profile_id(id, tipo_usuario, email, email_real, nome)')
         .eq('id', memberId)
         .eq('corretor_id', corretorId)
         .maybeSingle();
@@ -276,18 +284,54 @@ export async function POST(request: Request) {
       if (!member) return NextResponse.json({ error: 'Membro nao encontrado.' }, { status: 404 });
 
       await supabaseAdmin
+        .from('leads')
+        .update({
+          responsavel_membro_id: null,
+          responsavel_profile_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('corretor_id', corretorId)
+        .eq('responsavel_membro_id', memberId);
+
+      await supabaseAdmin
         .from('corretor_time_membros')
         .delete()
         .eq('id', memberId);
 
-      const memberRole = Array.isArray((member as any).profiles) ? (member as any).profiles[0]?.tipo_usuario : (member as any).profiles?.tipo_usuario;
+      const joinedProfile = Array.isArray((member as any).profiles) ? (member as any).profiles[0] : (member as any).profiles;
+      const memberRole = joinedProfile?.tipo_usuario;
+      const shouldRemoveAccess = member.profile_id && memberRole === 'corretor_membro';
 
-      if (member.profile_id && memberRole !== 'corretor') {
+      if (shouldRemoveAccess) {
+        await supabaseAdmin
+          .from('profiles')
+          .delete()
+          .eq('id', member.profile_id)
+          .eq('tipo_usuario', 'corretor_membro');
+
+        const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(member.profile_id);
+        if (authDeleteError && authDeleteError.message !== 'User not found') {
+          console.error('team_member_auth_delete_failed', authDeleteError.message);
+        }
+      } else if (member.profile_id && memberRole !== 'corretor') {
         await supabaseAdmin
           .from('profiles')
           .update({ status: 'inactive' })
           .eq('id', member.profile_id);
       }
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.member.delete',
+        entity_type: 'corretor_time_membro',
+        entity_id: memberId,
+        metadata: {
+          corretor_id: corretorId,
+          profile_id: member.profile_id,
+          member_name: member.nome || joinedProfile?.nome,
+          member_email: member.email || joinedProfile?.email_real || joinedProfile?.email,
+          removed_access: Boolean(shouldRemoveAccess),
+        },
+      });
 
       return NextResponse.json({ success: true });
     }
@@ -331,6 +375,13 @@ export async function POST(request: Request) {
           user_metadata: { nome, email_real: email, tipo_usuario: 'corretor_membro' }
         });
       }
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.member.update',
+        entity_type: 'corretor_time_membro',
+        entity_id: memberId,
+        metadata: { corretor_id: corretorId, profile_id: member.profile_id, nome, email },
+      });
 
       return NextResponse.json({ success: true, membro: data });
     }
