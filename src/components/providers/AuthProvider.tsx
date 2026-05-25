@@ -64,12 +64,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       if (error) {
         console.error('Error fetching profile details:', JSON.stringify(error, null, 2));
         
-        // Tentativa de fallback sem o campo status se o erro for de coluna inexistente
-        if (error.message?.includes('status') || error.code === 'PGRST202') {
-          console.warn('Tentando carregar profile sem o campo status...');
+        // Fallback para ambientes onde migrations novas ainda nao foram aplicadas.
+        if (error.message?.includes('status') || error.message?.includes('equipe_orion') || error.code === 'PGRST202') {
+          console.warn('Tentando carregar profile sem campos opcionais...');
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('profiles')
-            .select('id, email, email_real, nome, tipo_usuario, corretor_id, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+            .select('id, email, email_real, nome, tipo_usuario, corretor_id, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, created_at')
             .eq('id', userId)
             .maybeSingle();
           
