@@ -89,6 +89,10 @@ async function resolveUniqueAccessEmail(nome: string, requestedEmail?: string) {
   throw new Error('Não foi possível gerar um email de acesso único.');
 }
 
+function isMissingTeamColumn(error?: { message?: string | null } | null) {
+  return String(error?.message || '').includes('equipe_orion');
+}
+
 export async function GET(request: Request) {
   try {
     const guard = await requireAdmin(request);
@@ -200,9 +204,7 @@ export async function POST(request: Request) {
         corretorId = corretor.id;
       }
 
-      const { error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .insert([{
+      const profilePayload = {
           id: authUser.user.id,
           email,
           nome,
@@ -213,7 +215,19 @@ export async function POST(request: Request) {
           foto_url: fotoUrl,
           precisa_trocar_senha: true,
           equipe_orion: role === 'corretor' ? null : equipeOrion,
-        }]);
+        };
+
+      let { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .insert([profilePayload]);
+
+      if (isMissingTeamColumn(profileError)) {
+        const { equipe_orion, ...profilePayloadWithoutTeam } = profilePayload;
+        const retry = await supabaseAdmin
+          .from('profiles')
+          .insert([profilePayloadWithoutTeam]);
+        profileError = retry.error;
+      }
 
       if (profileError) throw profileError;
 
@@ -301,16 +315,26 @@ export async function PATCH(request: Request) {
       }
 
       const roleToSave = nextRole || targetProfile.tipo_usuario;
-      const { error: updateProfileError } = await supabaseAdmin
+      const profileUpdatePayload = {
+        nome,
+        email_real: emailReal,
+        foto_url: fotoUrl,
+        tipo_usuario: roleToSave,
+        equipe_orion: roleToSave === 'corretor' ? null : nextEquipe,
+      };
+      let { error: updateProfileError } = await supabaseAdmin
         .from('profiles')
-        .update({
-          nome,
-          email_real: emailReal,
-          foto_url: fotoUrl,
-          tipo_usuario: roleToSave,
-          equipe_orion: roleToSave === 'corretor' ? null : nextEquipe,
-        })
+        .update(profileUpdatePayload)
         .eq('id', id);
+
+      if (isMissingTeamColumn(updateProfileError)) {
+        const { equipe_orion, ...profileUpdateWithoutTeam } = profileUpdatePayload;
+        const retry = await supabaseAdmin
+          .from('profiles')
+          .update(profileUpdateWithoutTeam)
+          .eq('id', id);
+        updateProfileError = retry.error;
+      }
 
       if (updateProfileError) {
         return NextResponse.json({ error: updateProfileError.message }, { status: 500 });
