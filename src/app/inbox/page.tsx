@@ -107,7 +107,10 @@ export default function BrokerInboxPage() {
 
     const response = await fetch('/api/inbox/evolution/connect', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+      },
     });
     const payload = await response.json().catch(() => ({}));
     setConnecting(false);

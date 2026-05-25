@@ -52,6 +52,20 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
   }
 
   if (!profile) {
+    const email = String(user.email || '').toLowerCase();
+    if (email) {
+      const byAccessEmail = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, is_admin_master')
+        .or(`email.eq.${email},email_real.eq.${email}`)
+        .maybeSingle();
+      if (byAccessEmail.data) {
+        profile = { ...byAccessEmail.data, equipe_orion: null };
+      }
+    }
+  }
+
+  if (!profile) {
     return { error: NextResponse.json({ error: 'Perfil nao encontrado.' }, { status: 404 }) };
   }
 
