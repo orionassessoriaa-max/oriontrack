@@ -14,6 +14,7 @@ type TeamMember = {
   tipo_usuario: string;
   foto_url: string | null;
   pontos: number;
+  pontos_detalhes?: Array<{ pontos: number; motivo: string; created_at: string }>;
   is_admin_master?: boolean | null;
 };
 
@@ -264,6 +265,18 @@ export default function ApolloTeamPage() {
                       <h3 className="truncate text-xl font-black text-slate-950 dark:text-white">{member.nome || 'Integrante Apollo'}</h3>
                       <p className="text-xs font-black uppercase tracking-widest text-blue-600">{displayRole(member)}</p>
                       <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-300">{messages.get(member.id)}</p>
+                      {Array.isArray(member.pontos_detalhes) && member.pontos_detalhes.length > 0 && (
+                        <div className="mt-3 grid gap-2">
+                          {member.pontos_detalhes.map((detail, detailIndex) => (
+                            <div key={`${member.id}-${detail.created_at}-${detailIndex}`} className="border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900 dark:border-blue-400/20 dark:bg-blue-950/30 dark:text-blue-100">
+                              <span className="mr-2 inline-flex bg-blue-600 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                                +{detail.pontos} XP
+                              </span>
+                              {detail.motivo}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="bg-blue-50 px-5 py-4 text-center dark:bg-blue-950/50">
                       <p className="text-4xl font-black text-blue-600">{member.pontos}</p>

@@ -189,9 +189,24 @@ export async function GET(request: Request) {
   });
 
   const pointsByProfile = new Map<string, number>();
+  const pointDescriptionsByProfile = new Map<string, Array<{ pontos: number; motivo: string; created_at: string }>>();
+
+  function addPointDescription(profileId: string, pontos: number, motivo: string, createdAt: string) {
+    if (!profileId || !motivo) return;
+    const current = pointDescriptionsByProfile.get(profileId) || [];
+    current.push({ pontos, motivo, created_at: createdAt });
+    pointDescriptionsByProfile.set(profileId, current.slice(0, 4));
+  }
+
   if (hasTeamTables) {
     (pointsRes.data || []).forEach((point: any) => {
       pointsByProfile.set(point.profile_id, (pointsByProfile.get(point.profile_id) || 0) + Number(point.pontos || 0));
+      addPointDescription(
+        String(point.profile_id || ''),
+        Number(point.pontos || 0),
+        String(point.motivo || ''),
+        String(point.created_at || '')
+      );
     });
   } else {
     auditEntries
@@ -200,12 +215,19 @@ export async function GET(request: Request) {
         const profileId = String(entry.entity_id || entry.metadata?.profile_id || '');
         if (!profileId) return;
         pointsByProfile.set(profileId, (pointsByProfile.get(profileId) || 0) + Number(entry.metadata?.pontos || 0));
+        addPointDescription(
+          profileId,
+          Number(entry.metadata?.pontos || 0),
+          String(entry.metadata?.motivo || ''),
+          String(entry.created_at || '')
+        );
       });
   }
 
   const members = rawMembers.map((member: any) => ({
     ...member,
     pontos: pointsByProfile.get(member.id) || 0,
+    pontos_detalhes: pointDescriptionsByProfile.get(member.id) || [],
   })).sort((a: any, b: any) => b.pontos - a.pontos || a.nome.localeCompare(b.nome));
 
   const totalObjetivos = objectives.reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
