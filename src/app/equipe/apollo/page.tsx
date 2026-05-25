@@ -200,12 +200,6 @@ export default function ApolloTeamPage() {
         <div className="border border-red-100 bg-red-50 p-6 text-sm font-black text-red-700">Nao foi possivel abrir o painel Apollo.</div>
       ) : (
         <>
-          {data.needsMigration && (
-            <div className="mb-5 border border-amber-200 bg-amber-50 p-4 text-sm font-black text-amber-800 dark:border-amber-400/30 dark:bg-amber-950/30 dark:text-amber-100">
-              O painel esta em modo compatibilidade porque a migration do time ainda nao esta aplicada no Supabase. Ele mostra os usuarios internos, mas o vinculo Apollo so fica 100% gravado depois da migration.
-            </div>
-          )}
-
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Metric icon={Target} label="Meta do mes" value={brl(metaValue)} tone="blue" />
             <Metric icon={CheckCircle2} label="Concluido" value={brl(data.summary.realizadoObjetivos)} tone="emerald" />
