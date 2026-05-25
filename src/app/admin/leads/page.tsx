@@ -175,7 +175,7 @@ export default function AdminLeadsPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ confirm: 'DELETE_ALL_LEADS' }),
+      body: JSON.stringify({ confirm: 'DELETE_ALL_LEADS', corretor_id: filterCorretor || null }),
     });
     const payload = await response.json().catch(() => ({}));
 
@@ -185,7 +185,7 @@ export default function AdminLeadsPage() {
       return;
     }
 
-    setDeleteMessage(`${payload.deleted || 0} lead(s) removidos com sucesso.`);
+    setDeleteMessage(`${payload.deleted || 0} lead(s) removidos com sucesso${payload.corretor ? ` de ${payload.corretor}` : ''}.`);
     setShowDeleteAll(false);
     await fetchData();
   };
@@ -213,6 +213,12 @@ export default function AdminLeadsPage() {
     return matchesSearch && matchesCorretor && matchesStatus && matchesCidade && matchesDate;
   });
 
+  const selectedCorretor = corretores.find((corretor) => corretor.id === filterCorretor) || null;
+  const deleteScopeLeadsCount = selectedCorretor
+    ? leads.filter((lead) => lead.corretor_id === selectedCorretor.id).length
+    : leads.length;
+  const deleteButtonLabel = selectedCorretor ? `Remover leads de ${selectedCorretor.nome}` : 'Remover todos';
+
   return (
     <InternalLayout>
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
@@ -228,7 +234,7 @@ export default function AdminLeadsPage() {
             }}
             className="bg-red-50 text-red-700 px-6 py-4 rounded-2xl font-black border border-red-100 shadow-sm flex items-center gap-2 hover:bg-red-100 transition-all"
           >
-            <Trash2 size={18} /> Remover todos
+            <Trash2 size={18} /> {deleteButtonLabel}
           </button>
           <button
             onClick={() => setShowImportBox((current) => !current)}
@@ -259,15 +265,21 @@ export default function AdminLeadsPage() {
           <div className="w-full max-w-xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
             <div className="border-b border-red-100 bg-red-50 p-6">
               <p className="text-[10px] font-black uppercase tracking-widest text-red-600">Acao irreversivel</p>
-              <h2 className="mt-2 text-2xl font-black text-slate-950">Remover todos os leads?</h2>
+              <h2 className="mt-2 text-2xl font-black text-slate-950">
+                {selectedCorretor ? `Remover leads de ${selectedCorretor.nome}?` : 'Remover todos os leads?'}
+              </h2>
               <p className="mt-2 text-sm font-bold leading-6 text-red-700">
-                Isso apaga todos os leads de todos os corretores. Use apenas antes de uma nova importacao geral.
+                {selectedCorretor
+                  ? `Isso apaga apenas os leads vinculados ao corretor ${selectedCorretor.nome}.`
+                  : 'Isso apaga todos os leads de todos os corretores. Use apenas antes de uma nova importacao geral.'}
               </p>
             </div>
             <div className="p-6">
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Leads carregados agora</p>
-                <p className="mt-1 text-3xl font-black text-slate-950">{leads.length}</p>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  {selectedCorretor ? 'Leads deste corretor' : 'Leads carregados agora'}
+                </p>
+                <p className="mt-1 text-3xl font-black text-slate-950">{deleteScopeLeadsCount}</p>
               </div>
               {deleteCountdown > 0 ? (
                 <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-black text-amber-800">
@@ -280,7 +292,7 @@ export default function AdminLeadsPage() {
                   className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-6 py-4 text-sm font-black uppercase tracking-widest text-white shadow-xl shadow-red-600/20 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {deletingAll ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
-                  Confirmar e apagar todos os leads
+                  {selectedCorretor ? `Confirmar e apagar leads de ${selectedCorretor.nome}` : 'Confirmar e apagar todos os leads'}
                 </button>
               )}
               <button
