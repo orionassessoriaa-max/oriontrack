@@ -194,9 +194,11 @@ export default function ApolloTeamPage() {
               </p>
             </div>
             <div className="border border-white/10 bg-white/10 p-5 backdrop-blur">
-              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-200">Boss final de maio</p>
-              <p className="mt-1 text-4xl font-black">{brl(metaValue)}</p>
-              <p className="mt-2 text-xs font-bold text-blue-100">Faltam {data?.summary.daysRemaining ?? 0} dias para virar o jogo.</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-200">Realizado ate agora</p>
+              <p className="mt-1 text-4xl font-black">{brl(data?.summary.realizadoTotal || 0)}</p>
+              <p className="mt-2 text-xs font-bold text-blue-100">
+                Meta: {brl(metaValue)}. Faltam {data?.summary.daysRemaining ?? 0} dias para virar o jogo.
+              </p>
             </div>
           </div>
         </div>
