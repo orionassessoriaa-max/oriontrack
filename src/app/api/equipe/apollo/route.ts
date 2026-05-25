@@ -14,6 +14,7 @@ const DEFAULT_OBJECTIVES = [
 ];
 
 const KRIPTO_HUNTERS_FALLBACK_NAMES = ['pedro ghisolfi'];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function canReadTeam(role: string) {
   return ['admin', 'gestor_trafego', 'designer', 'account_manager'].includes(role);
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
   if (membersError) return NextResponse.json({ error: membersError.message }, { status: 500 });
   const hasTeamTables = !metaRes.error && !objectivesRes.error && !pointsRes.error;
 
-  const objectives = hasTeamTables && objectivesRes.data?.length
+  let objectives = hasTeamTables && objectivesRes.data?.length
     ? objectivesRes.data
     : DEFAULT_OBJECTIVES.map(([titulo, valor]) => ({
         id: String(titulo),
@@ -85,6 +86,32 @@ export async function GET(request: Request) {
         valor_estimado: valor,
         status: 'aberto',
       }));
+
+  if (!hasTeamTables) {
+    const auditObjectiveRes = await supabaseAdmin
+      .from('audit_logs')
+      .select('entity_id, metadata, created_at')
+      .eq('action', 'team.objective.update')
+      .eq('entity_type', 'equipe_objetivo')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (!auditObjectiveRes.error && auditObjectiveRes.data?.length) {
+      const latestStatus = new Map<string, string>();
+      auditObjectiveRes.data.forEach((entry: any) => {
+        const objectiveId = String(entry.entity_id || entry.metadata?.objective_id || '');
+        const status = String(entry.metadata?.status || '');
+        if (objectiveId && !latestStatus.has(objectiveId) && ['aberto', 'em_andamento', 'feito'].includes(status)) {
+          latestStatus.set(objectiveId, status);
+        }
+      });
+
+      objectives = objectives.map((objective: any) => ({
+        ...objective,
+        status: latestStatus.get(String(objective.id)) || objective.status,
+      }));
+    }
+  }
 
   const rawMembers = membersData.filter((member: any) => {
     const email = String(member.email || '').toLowerCase();
@@ -228,13 +255,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Objetivo invalido.' }, { status: 400 });
     }
 
+    if (!UUID_RE.test(id)) {
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.objective.update',
+        entity_type: 'equipe_objetivo',
+        entity_id: id,
+        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, objective_id: id, status },
+      });
+      return NextResponse.json({ success: true });
+    }
+
     const { error } = await supabaseAdmin
       .from('equipe_objetivos')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id)
       .eq('equipe', 'apollo');
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      const canFallback = ['42P01', '42703', 'PGRST205', 'PGRST202'].includes(String(error.code || ''))
+        || String(error.message || '').includes('equipe_objetivos');
+      if (!canFallback) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.objective.update',
+        entity_type: 'equipe_objetivo',
+        entity_id: id,
+        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, objective_id: id, status },
+      });
+      return NextResponse.json({ success: true });
+    }
     await writeAuditLog(request, guard.profile, {
       action: 'team.objective.update',
       entity_type: 'equipe_objetivo',
