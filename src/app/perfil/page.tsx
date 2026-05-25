@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { User, Mail, Shield, Smartphone, MapPin, Loader2, Save, Moon, Sun } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
+import { User, Mail, Shield, Smartphone, MapPin, Loader2, Save } from 'lucide-react';
 
 function roleLabel(role?: string) {
   if (role === 'admin') return 'Administrador';
@@ -15,28 +13,7 @@ function roleLabel(role?: string) {
 }
 
 export default function ProfilePage() {
-  const { profile, actualProfile, loading, refreshProfile } = useAuth();
-  const [theme, setTheme] = useState<'claro' | 'noturno'>((profile?.tema_sistema as 'claro' | 'noturno') || 'claro');
-  const [savingTheme, setSavingTheme] = useState(false);
-
-  useEffect(() => {
-    setTheme((profile?.tema_sistema as 'claro' | 'noturno') || 'claro');
-  }, [profile?.tema_sistema]);
-
-  const saveTheme = async () => {
-    const targetProfileId = actualProfile?.id || profile?.id;
-    if (!targetProfileId) return;
-    setSavingTheme(true);
-    window.localStorage.setItem('orion:tema_sistema', theme);
-    window.dispatchEvent(new CustomEvent('orion-theme-change', { detail: theme }));
-    const { error } = await supabase.from('profiles').update({ tema_sistema: theme }).eq('id', targetProfileId);
-    setSavingTheme(false);
-    if (error) {
-      alert('Erro ao salvar tema: ' + error.message);
-      return;
-    }
-    await refreshProfile();
-  };
+  const { profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -52,7 +29,7 @@ export default function ProfilePage() {
     <InternalLayout>
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900">Meu Perfil</h1>
-        <p className="font-medium text-gray-500">Gerencie suas informacoes pessoais, acesso e tema visual.</p>
+        <p className="font-medium text-gray-500">Gerencie suas informacoes pessoais e dados de acesso.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
@@ -72,29 +49,6 @@ export default function ProfilePage() {
                 Salvar alteracoes
               </button>
             </div>
-          </div>
-
-          <div className="border border-gray-100 bg-white p-8 shadow-sm">
-            <h3 className="mb-6 text-lg font-bold text-gray-900">Tema do sistema</h3>
-            <div className="grid gap-3 md:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setTheme('claro')}
-                className={`flex items-center gap-3 border p-4 text-left font-black ${theme === 'claro' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600'}`}
-              >
-                <Sun size={20} /> Claro atual
-              </button>
-              <button
-                type="button"
-                onClick={() => setTheme('noturno')}
-                className={`flex items-center gap-3 border p-4 text-left font-black ${theme === 'noturno' ? 'border-blue-500 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
-              >
-                <Moon size={20} /> Noturno
-              </button>
-            </div>
-            <button onClick={saveTheme} disabled={savingTheme} className="mt-5 flex items-center gap-2 bg-slate-950 px-5 py-3 text-sm font-black uppercase tracking-widest text-white disabled:opacity-50">
-              {savingTheme ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Salvar tema
-            </button>
           </div>
         </div>
 
