@@ -47,6 +47,8 @@ export default function AdminLeadsPage() {
   const [deleteCountdown, setDeleteCountdown] = useState(5);
   const [deletingAll, setDeletingAll] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+  const [deleteScopeCount, setDeleteScopeCount] = useState<number | null>(null);
+  const [loadingDeleteScopeCount, setLoadingDeleteScopeCount] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -68,6 +70,11 @@ export default function AdminLeadsPage() {
 
     return () => window.clearInterval(interval);
   }, [showDeleteAll]);
+
+  useEffect(() => {
+    if (!showDeleteAll) return;
+    void fetchDeleteScopeCount();
+  }, [showDeleteAll, filterCorretor]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -111,6 +118,27 @@ export default function AdminLeadsPage() {
     setFilterCidade('');
     setFilterDataInicio('');
     setFilterDataFim('');
+  };
+
+  const fetchDeleteScopeCount = async () => {
+    setLoadingDeleteScopeCount(true);
+    setDeleteScopeCount(null);
+
+    let query = supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true });
+
+    if (filterCorretor) query = query.eq('corretor_id', filterCorretor);
+
+    const { count, error: countError } = await query;
+
+    if (countError) {
+      setDeleteMessage(`Nao consegui conferir o total real de leads: ${countError.message}`);
+    } else {
+      setDeleteScopeCount(count || 0);
+    }
+
+    setLoadingDeleteScopeCount(false);
   };
 
   const importSheet = async () => {
@@ -214,9 +242,10 @@ export default function AdminLeadsPage() {
   });
 
   const selectedCorretor = corretores.find((corretor) => corretor.id === filterCorretor) || null;
-  const deleteScopeLeadsCount = selectedCorretor
+  const loadedDeleteScopeLeadsCount = selectedCorretor
     ? leads.filter((lead) => lead.corretor_id === selectedCorretor.id).length
     : leads.length;
+  const deleteScopeLeadsCount = deleteScopeCount ?? loadedDeleteScopeLeadsCount;
   const deleteButtonLabel = selectedCorretor ? `Remover leads de ${selectedCorretor.nome}` : 'Remover todos';
 
   return (
@@ -230,6 +259,7 @@ export default function AdminLeadsPage() {
           <button
             onClick={() => {
               setDeleteMessage(null);
+              setDeleteScopeCount(null);
               setShowDeleteAll(true);
             }}
             className="bg-red-50 text-red-700 px-6 py-4 rounded-2xl font-black border border-red-100 shadow-sm flex items-center gap-2 hover:bg-red-100 transition-all"
@@ -277,9 +307,14 @@ export default function AdminLeadsPage() {
             <div className="p-6">
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  {selectedCorretor ? 'Leads deste corretor' : 'Leads carregados agora'}
+                  {selectedCorretor ? 'Leads deste corretor' : 'Leads no banco'}
                 </p>
-                <p className="mt-1 text-3xl font-black text-slate-950">{deleteScopeLeadsCount}</p>
+                <p className="mt-1 text-3xl font-black text-slate-950">
+                  {loadingDeleteScopeCount ? <Loader2 className="animate-spin text-red-600" size={30} /> : deleteScopeLeadsCount}
+                </p>
+                <p className="mt-2 text-[11px] font-bold text-slate-400">
+                  Contagem real consultada direto no banco antes de apagar.
+                </p>
               </div>
               {deleteCountdown > 0 ? (
                 <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-black text-amber-800">
