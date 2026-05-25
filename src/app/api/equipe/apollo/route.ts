@@ -20,6 +20,25 @@ function canReadTeam(role: string) {
   return ['admin', 'gestor_trafego', 'designer', 'account_manager'].includes(role);
 }
 
+function parseMoney(value: unknown) {
+  if (typeof value === 'number') return value;
+  const normalized = String(value || '')
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+    .replace(',', '.');
+  return Number(normalized || 0);
+}
+
+function isTeamStorageError(error: any) {
+  const message = String(error?.message || '');
+  const code = String(error?.code || '');
+  return ['42P01', '42703', 'PGRST205', 'PGRST202'].includes(code)
+    || message.includes('equipe_metas')
+    || message.includes('equipe_objetivos')
+    || message.includes('equipe_pontos')
+    || message.includes('Could not find');
+}
+
 export async function GET(request: Request) {
   const guard = await requireApiUser(request);
   if ('error' in guard) return guard.error;
@@ -75,6 +94,32 @@ export async function GET(request: Request) {
 
   if (membersError) return NextResponse.json({ error: membersError.message }, { status: 500 });
   const hasTeamTables = !metaRes.error && !objectivesRes.error && !pointsRes.error;
+  let auditEntries: any[] = [];
+
+  if (!hasTeamTables) {
+    const auditRes = await supabaseAdmin
+      .from('audit_logs')
+      .select('action, entity_id, metadata, created_at')
+      .in('action', ['team.objective.create', 'team.objective.update', 'team.points.add', 'team.meta.update'])
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (!auditRes.error) {
+      auditEntries = (auditRes.data || []).filter((entry: any) =>
+        entry.metadata?.equipe === 'apollo' && entry.metadata?.mes === APOLLO_MONTH
+      );
+    }
+  }
+
+  const latestMetaAudit = auditEntries.find((entry: any) => entry.action === 'team.meta.update');
+  const meta = hasTeamTables && metaRes.data
+    ? metaRes.data
+    : {
+        equipe: 'apollo',
+        mes: APOLLO_MONTH,
+        meta_valor: latestMetaAudit?.metadata?.meta_valor || 50000,
+        prazo: latestMetaAudit?.metadata?.prazo || '2026-05-31',
+      };
 
   let objectives = hasTeamTables && objectivesRes.data?.length
     ? objectivesRes.data
@@ -88,17 +133,32 @@ export async function GET(request: Request) {
       }));
 
   if (!hasTeamTables) {
-    const auditObjectiveRes = await supabaseAdmin
-      .from('audit_logs')
-      .select('entity_id, metadata, created_at')
-      .eq('action', 'team.objective.update')
-      .eq('entity_type', 'equipe_objetivo')
-      .order('created_at', { ascending: false })
-      .limit(100);
+    const createdObjectives = auditEntries
+      .filter((entry: any) => entry.action === 'team.objective.create')
+      .slice()
+      .reverse()
+      .map((entry: any) => ({
+        id: String(entry.entity_id || entry.metadata?.objective_id || `custom:${entry.metadata?.titulo}`),
+        equipe: 'apollo',
+        mes: APOLLO_MONTH,
+        titulo: String(entry.metadata?.titulo || 'Objetivo'),
+        valor_estimado: Number(entry.metadata?.valor_estimado || 0),
+        status: String(entry.metadata?.status || 'aberto'),
+        created_at: entry.created_at,
+      }));
 
-    if (!auditObjectiveRes.error && auditObjectiveRes.data?.length) {
-      const latestStatus = new Map<string, string>();
-      auditObjectiveRes.data.forEach((entry: any) => {
+    const objectiveIds = new Set(objectives.map((objective: any) => String(objective.id)));
+    createdObjectives.forEach((objective: any) => {
+      if (!objectiveIds.has(String(objective.id))) {
+        objectiveIds.add(String(objective.id));
+        objectives.push(objective);
+      }
+    });
+
+    const latestStatus = new Map<string, string>();
+    auditEntries
+      .filter((entry: any) => entry.action === 'team.objective.update')
+      .forEach((entry: any) => {
         const objectiveId = String(entry.entity_id || entry.metadata?.objective_id || '');
         const status = String(entry.metadata?.status || '');
         if (objectiveId && !latestStatus.has(objectiveId) && ['aberto', 'em_andamento', 'feito'].includes(status)) {
@@ -106,11 +166,10 @@ export async function GET(request: Request) {
         }
       });
 
-      objectives = objectives.map((objective: any) => ({
-        ...objective,
-        status: latestStatus.get(String(objective.id)) || objective.status,
-      }));
-    }
+    objectives = objectives.map((objective: any) => ({
+      ...objective,
+      status: latestStatus.get(String(objective.id)) || objective.status,
+    }));
   }
 
   const rawMembers = membersData.filter((member: any) => {
@@ -130,9 +189,19 @@ export async function GET(request: Request) {
   });
 
   const pointsByProfile = new Map<string, number>();
-  (hasTeamTables ? pointsRes.data || [] : []).forEach((point: any) => {
-    pointsByProfile.set(point.profile_id, (pointsByProfile.get(point.profile_id) || 0) + Number(point.pontos || 0));
-  });
+  if (hasTeamTables) {
+    (pointsRes.data || []).forEach((point: any) => {
+      pointsByProfile.set(point.profile_id, (pointsByProfile.get(point.profile_id) || 0) + Number(point.pontos || 0));
+    });
+  } else {
+    auditEntries
+      .filter((entry: any) => entry.action === 'team.points.add')
+      .forEach((entry: any) => {
+        const profileId = String(entry.entity_id || entry.metadata?.profile_id || '');
+        if (!profileId) return;
+        pointsByProfile.set(profileId, (pointsByProfile.get(profileId) || 0) + Number(entry.metadata?.pontos || 0));
+      });
+  }
 
   const members = rawMembers.map((member: any) => ({
     ...member,
@@ -164,7 +233,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     month: APOLLO_MONTH,
-    meta: hasTeamTables && metaRes.data ? metaRes.data : { equipe: 'apollo', mes: APOLLO_MONTH, meta_valor: 50000, prazo: '2026-05-31' },
+    meta,
     objectives,
     points: hasTeamTables ? pointsRes.data || [] : [],
     members,
@@ -174,11 +243,11 @@ export async function GET(request: Request) {
       emAndamentoObjetivos,
       previsaoObjetivos,
       previsaoAberta,
-      faltanteMeta: Math.max(0, Number((hasTeamTables && metaRes.data?.meta_valor) || 50000) - realizadoObjetivos),
+      faltanteMeta: Math.max(0, Number(meta.meta_valor || 50000) - realizadoObjetivos),
       totalPontos,
       daysRemaining,
-      progress: Math.min(100, Math.round((realizadoObjetivos / Number((hasTeamTables && metaRes.data?.meta_valor) || 50000)) * 100)),
-      forecastProgress: Math.min(100, Math.round((previsaoObjetivos / Number((hasTeamTables && metaRes.data?.meta_valor) || 50000)) * 100)),
+      progress: Math.min(100, Math.round((realizadoObjetivos / Number(meta.meta_valor || 50000)) * 100)),
+      forecastProgress: Math.min(100, Math.round((previsaoObjetivos / Number(meta.meta_valor || 50000)) * 100)),
       dailyMessages,
     },
     isAdmin: guard.profile.tipo_usuario === 'admin',
@@ -195,7 +264,7 @@ export async function POST(request: Request) {
 
   if (action === 'add_points') {
     const profileId = String(body.profile_id || '');
-    const pontos = Number(body.pontos || 0);
+    const pontos = parseMoney(body.pontos);
     const motivo = String(body.motivo || '').trim();
 
     if (!profileId || !Number.isFinite(pontos) || pontos === 0) {
@@ -211,7 +280,17 @@ export async function POST(request: Request) {
       created_by: guard.profile.id,
     }]);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      if (!isTeamStorageError(error)) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.points.add',
+        entity_type: 'profile',
+        entity_id: profileId,
+        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, profile_id: profileId, pontos, motivo },
+      });
+      return NextResponse.json({ success: true });
+    }
 
     await writeAuditLog(request, guard.profile, {
       action: 'team.points.add',
@@ -225,11 +304,13 @@ export async function POST(request: Request) {
 
   if (action === 'create_objective') {
     const titulo = String(body.titulo || '').trim();
-    const valor = Number(body.valor_estimado || 0);
+    const valor = parseMoney(body.valor_estimado);
 
     if (!titulo || !Number.isFinite(valor) || valor <= 0) {
       return NextResponse.json({ error: 'Informe o objetivo e o valor estimado.' }, { status: 400 });
     }
+
+    const fallbackId = `custom:${Date.now()}:${titulo.toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`;
 
     const { error } = await supabaseAdmin.from('equipe_objetivos').insert([{
       equipe: 'apollo',
@@ -239,7 +320,24 @@ export async function POST(request: Request) {
       created_by: guard.profile.id,
     }]);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      if (!isTeamStorageError(error)) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.objective.create',
+        entity_type: 'equipe_objetivo',
+        entity_id: fallbackId,
+        metadata: {
+          equipe: 'apollo',
+          mes: APOLLO_MONTH,
+          objective_id: fallbackId,
+          titulo,
+          valor_estimado: valor,
+          status: 'aberto',
+        },
+      });
+      return NextResponse.json({ success: true });
+    }
     await writeAuditLog(request, guard.profile, {
       action: 'team.objective.create',
       entity_type: 'equipe_objetivo',
@@ -294,7 +392,7 @@ export async function POST(request: Request) {
   }
 
   if (action === 'update_meta') {
-    const metaValor = Number(body.meta_valor || 0);
+    const metaValor = parseMoney(body.meta_valor);
     const prazo = String(body.prazo || '').trim();
     if (!Number.isFinite(metaValor) || metaValor <= 0 || !prazo) {
       return NextResponse.json({ error: 'Informe a meta e o prazo.' }, { status: 400 });
@@ -311,7 +409,16 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'equipe,mes' });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      if (!isTeamStorageError(error)) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.meta.update',
+        entity_type: 'equipe_meta',
+        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, meta_valor: metaValor, prazo },
+      });
+      return NextResponse.json({ success: true });
+    }
     await writeAuditLog(request, guard.profile, {
       action: 'team.meta.update',
       entity_type: 'equipe_meta',
