@@ -672,7 +672,7 @@ export default function AdminUsuariosPage() {
                           <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
                             isMasterAccess ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'
                           }`}>
-                            {isMasterAccess ? 'Admin master' : getRoleLabel(profile.tipo_usuario)}
+                            {isMasterAccess ? 'DevOps Manager' : getRoleLabel(profile.tipo_usuario)}
                           </span>
                           {profile.precisa_trocar_senha && (
                             <span className="rounded-full bg-sky-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-sky-700">
@@ -716,7 +716,7 @@ export default function AdminUsuariosPage() {
                       </button>
                       {isOwnAccess || isMasterAccess ? (
                         <span className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">
-                          Admin master
+                          DevOps Manager
                         </span>
                       ) : (
                         <>
