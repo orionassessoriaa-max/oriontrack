@@ -138,7 +138,7 @@ function leadCampaign(lead: Lead) {
 }
 
 function leadAdset(lead: Lead) {
-  return lead.utm_term || noteValue(lead, 'utm_term') || '-';
+  return lead.utm_medium || noteValue(lead, 'utm_medium') || '-';
 }
 
 function leadAd(lead: Lead) {
@@ -699,15 +699,15 @@ export default function BrokerLeadsPage() {
             <option value="__sem_aba__">Sem página</option>
           </select>
           <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
-            <option value="todos">Campanha: todas</option>
+            <option value="todos">utm_campaign: todas</option>
             {campaignOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
           <select value={adsetFilter} onChange={(e) => setAdsetFilter(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
-            <option value="todos">Conjunto: todos</option>
+            <option value="todos">utm_medium: todos</option>
             {adsetOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
           <select value={adFilter} onChange={(e) => setAdFilter(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
-            <option value="todos">Anúncio: todos</option>
+            <option value="todos">utm_content: todos</option>
             {adOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
           <button
@@ -764,9 +764,9 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
                   <th className="min-w-[180px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">ResponsÃ¡vel</th>
-                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Campanha</th>
-                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Conjunto de anúncio</th>
-                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Anúncio</th>
+                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">utm_campaign</th>
+                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">utm_medium</th>
+                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">utm_content</th>
                   <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações</th>
                   {isViewingAsCorretor && <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Admin</th>}
                 </tr>
