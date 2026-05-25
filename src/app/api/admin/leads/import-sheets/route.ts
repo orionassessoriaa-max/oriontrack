@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 import { buildLeadImportWarningNote } from '@/lib/leadWarnings';
+import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 
 type CsvRow = Record<string, string>;
 type LeadInsert = {
@@ -27,28 +28,7 @@ type LeadInsert = {
 };
 
 async function requireAdmin(request: Request) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 }) };
-  }
-
-  const token = authHeader.split(' ')[1];
-  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError || !user) {
-    return { error: NextResponse.json({ error: 'Sessao expirada.' }, { status: 401 }) };
-  }
-
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('tipo_usuario')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (profile?.tipo_usuario !== 'admin') {
-    return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
-  }
-
-  return { user };
+  return requireApiUser(request, ['admin']);
 }
 
 function parseSheetLink(input: string) {
@@ -500,6 +480,9 @@ function mergeNotes(...parts: string[]) {
 
 export async function POST(request: Request) {
   try {
+    const limited = rateLimit(request, 'admin:leads:import-sheets', { limit: 6, windowMs: 10 * 60_000 });
+    if (limited) return limited;
+
     const guard = await requireAdmin(request);
     if ('error' in guard) return guard.error;
 
@@ -597,6 +580,19 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await writeAuditLog(request, guard.profile, {
+      action: 'lead.import_sheet',
+      entity_type: 'corretor',
+      entity_id: corretorId,
+      metadata: {
+        corretor_nome: corretor.nome,
+        imported: data?.length || leads.length,
+        incomplete,
+        skipped,
+        paginas: sources.length,
+      },
+    });
 
     return NextResponse.json({
       success: true,

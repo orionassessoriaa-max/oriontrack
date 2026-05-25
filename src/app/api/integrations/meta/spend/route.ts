@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { rateLimit } from '@/lib/api/security';
 
 async function requireTrafficAccess(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -28,6 +29,9 @@ async function requireTrafficAccess(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const limited = rateLimit(request, 'meta:spend', { limit: 60, windowMs: 5 * 60_000 });
+    if (limited) return limited;
+
     const guard = await requireTrafficAccess(request);
     if ('error' in guard) return guard.error;
 

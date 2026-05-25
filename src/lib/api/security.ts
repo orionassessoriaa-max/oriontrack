@@ -91,6 +91,62 @@ export function getClientIp(request: Request) {
     || null;
 }
 
+type RateLimitBucket = {
+  count: number;
+  resetAt: number;
+};
+
+type RateLimitOptions = {
+  limit: number;
+  windowMs: number;
+  key?: string;
+};
+
+const rateLimitBuckets = new Map<string, RateLimitBucket>();
+let lastRateLimitCleanup = 0;
+
+function cleanupRateLimitBuckets(now: number) {
+  if (now - lastRateLimitCleanup < 60_000) return;
+  lastRateLimitCleanup = now;
+
+  for (const [key, bucket] of rateLimitBuckets.entries()) {
+    if (bucket.resetAt <= now) rateLimitBuckets.delete(key);
+  }
+}
+
+export function rateLimit(request: Request, scope: string, options: RateLimitOptions) {
+  const now = Date.now();
+  cleanupRateLimitBuckets(now);
+
+  const ip = getClientIp(request) || 'unknown-ip';
+  const userAgent = request.headers.get('user-agent') || 'unknown-agent';
+  const identity = options.key || `${ip}:${userAgent.slice(0, 120)}`;
+  const key = `${scope}:${identity}`;
+  const current = rateLimitBuckets.get(key);
+
+  if (!current || current.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + options.windowMs });
+    return null;
+  }
+
+  if (current.count >= options.limit) {
+    const retryAfter = Math.max(1, Math.ceil((current.resetAt - now) / 1000));
+    return NextResponse.json(
+      { error: 'Muitas tentativas em pouco tempo. Aguarde um pouco e tente novamente.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(retryAfter),
+        },
+      }
+    );
+  }
+
+  current.count += 1;
+  rateLimitBuckets.set(key, current);
+  return null;
+}
+
 export async function writeAuditLog(
   request: Request,
   actor: ApiProfile | null,

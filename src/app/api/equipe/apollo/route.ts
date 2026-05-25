@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 
 const APOLLO_MONTH = '2026-05';
 const DEFAULT_OBJECTIVES = [
@@ -327,6 +327,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimit(request, 'equipe:apollo:write', { limit: 60, windowMs: 10 * 60_000 });
+  if (limited) return limited;
+
   const guard = await requireApiUser(request, ['admin']);
   if ('error' in guard) return guard.error;
 
