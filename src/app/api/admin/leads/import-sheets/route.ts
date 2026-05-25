@@ -165,6 +165,7 @@ function toRows(csv: string): CsvRow[] {
 
   return dataRows.map((cells) => {
     return headers.reduce<CsvRow>((acc, header, index) => {
+      acc[`__cell_${index}`] = String(cells[index] || '').trim();
       if (header) acc[header] = String(cells[index] || '').trim();
       return acc;
     }, {});
@@ -180,7 +181,7 @@ function pick(row: CsvRow, names: string[]) {
 }
 
 function parseDate(value: string) {
-  const fallback = new Date().toISOString();
+  const fallback = '';
   if (!value) return fallback;
   const trimmed = String(value)
     .trim()
@@ -260,6 +261,35 @@ function parseDate(value: string) {
   }
 
   return fallback;
+}
+
+function resolveLeadDate(row: CsvRow) {
+  const explicitDate = parseDate(pick(row, [
+    'data',
+    'data entrada',
+    'data_entrada',
+    'created_time',
+    'timestamp',
+    'data cadastro',
+    'data do lead',
+    'data de criacao',
+    'data criação',
+    'date',
+  ]));
+
+  if (explicitDate) return explicitDate;
+
+  const rawCells = Object.entries(row)
+    .filter(([key]) => key.startsWith('__cell_'))
+    .sort(([a], [b]) => Number(a.replace('__cell_', '')) - Number(b.replace('__cell_', '')))
+    .map(([, value]) => String(value || ''));
+
+  for (const cell of rawCells) {
+    const parsed = parseDate(cell);
+    if (parsed) return parsed;
+  }
+
+  return new Date().toISOString();
 }
 
 function statusFromSheet(value: string) {
@@ -475,7 +505,7 @@ export async function POST(request: Request) {
 
           leads.push({
             corretor_id: corretorId,
-            data_entrada: parseDate(pick(row, ['data', 'data entrada', 'data_entrada', 'created_time', 'timestamp', 'data cadastro', 'data do lead', 'data de criacao', 'data criação', 'date'])),
+            data_entrada: resolveLeadDate(row),
             nome,
             telefone,
             idades: pick(row, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas']),
