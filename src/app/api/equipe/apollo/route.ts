@@ -107,7 +107,7 @@ export async function GET(request: Request) {
     const auditRes = await supabaseAdmin
       .from('audit_logs')
       .select('action, entity_id, metadata, created_at')
-      .in('action', ['team.objective.create', 'team.objective.update', 'team.points.add', 'team.meta.update', 'team.sale.create'])
+      .in('action', ['team.objective.create', 'team.objective.update', 'team.points.add', 'team.points.delete', 'team.meta.update', 'team.sale.create', 'team.sale.delete'])
       .order('created_at', { ascending: false })
       .limit(500);
 
@@ -196,19 +196,28 @@ export async function GET(request: Request) {
   });
 
   const pointsByProfile = new Map<string, number>();
-  const pointDescriptionsByProfile = new Map<string, Array<{ pontos: number; motivo: string; created_at: string }>>();
+  const pointDescriptionsByProfile = new Map<string, Array<{ id: string; pontos: number; motivo: string; created_at: string }>>();
+  const deletedPointIds = new Set(
+    auditEntries
+      .filter((entry: any) => entry.action === 'team.points.delete')
+      .map((entry: any) => String(entry.entity_id || entry.metadata?.point_id || ''))
+      .filter(Boolean)
+  );
 
-  function addPointDescription(profileId: string, pontos: number, motivo: string, createdAt: string) {
+  function addPointDescription(pointId: string, profileId: string, pontos: number, motivo: string, createdAt: string) {
     if (!profileId || !motivo) return;
+    if (pointId && deletedPointIds.has(pointId)) return;
     const current = pointDescriptionsByProfile.get(profileId) || [];
-    current.push({ pontos, motivo, created_at: createdAt });
+    current.push({ id: pointId, pontos, motivo, created_at: createdAt });
     pointDescriptionsByProfile.set(profileId, current.slice(0, 4));
   }
 
   if (hasTeamTables) {
     (pointsRes.data || []).forEach((point: any) => {
+      if (deletedPointIds.has(String(point.id || ''))) return;
       pointsByProfile.set(point.profile_id, (pointsByProfile.get(point.profile_id) || 0) + Number(point.pontos || 0));
       addPointDescription(
+        String(point.id || ''),
         String(point.profile_id || ''),
         Number(point.pontos || 0),
         String(point.motivo || ''),
@@ -219,10 +228,13 @@ export async function GET(request: Request) {
     auditEntries
       .filter((entry: any) => entry.action === 'team.points.add')
       .forEach((entry: any) => {
-        const profileId = String(entry.entity_id || entry.metadata?.profile_id || '');
+        const pointId = String(entry.metadata?.point_id || entry.entity_id || '');
+        if (deletedPointIds.has(pointId)) return;
+        const profileId = String(entry.metadata?.profile_id || entry.entity_id || '');
         if (!profileId) return;
         pointsByProfile.set(profileId, (pointsByProfile.get(profileId) || 0) + Number(entry.metadata?.pontos || 0));
         addPointDescription(
+          pointId,
           profileId,
           Number(entry.metadata?.pontos || 0),
           String(entry.metadata?.motivo || ''),
@@ -237,8 +249,16 @@ export async function GET(request: Request) {
     pontos_detalhes: pointDescriptionsByProfile.get(member.id) || [],
   })).sort((a: any, b: any) => b.pontos - a.pontos || a.nome.localeCompare(b.nome));
 
+  const deletedSaleIds = new Set(
+    auditEntries
+      .filter((entry: any) => entry.action === 'team.sale.delete')
+      .map((entry: any) => String(entry.entity_id || entry.metadata?.sale_id || ''))
+      .filter(Boolean)
+  );
+
   const sales = !salesRes.error
     ? (salesRes.data || [])
+        .filter((sale: any) => !deletedSaleIds.has(String(sale.id || '')))
     : auditEntries
         .filter((entry: any) => entry.action === 'team.sale.create')
         .slice()
@@ -251,7 +271,8 @@ export async function GET(request: Request) {
           vendido: String(entry.metadata?.vendido || ''),
           valor: Number(entry.metadata?.valor || 0),
           created_at: entry.created_at,
-        }));
+        }))
+        .filter((sale: any) => !deletedSaleIds.has(String(sale.id || '')));
 
   const totalVendas = sales.reduce((sum: number, sale: any) => sum + Number(sale.valor || 0), 0);
   const totalObjetivos = objectives.reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
@@ -432,6 +453,58 @@ export async function POST(request: Request) {
       entity_type: 'equipe_venda',
       metadata: { equipe: 'apollo', mes: APOLLO_MONTH, nome, vendido, valor },
     });
+    return NextResponse.json({ success: true });
+  }
+
+  if (action === 'delete_point') {
+    const id = String(body.id || '');
+    if (!id) return NextResponse.json({ error: 'Pontuacao invalida.' }, { status: 400 });
+
+    if (UUID_RE.test(id)) {
+      const { error } = await supabaseAdmin
+        .from('equipe_pontos')
+        .delete()
+        .eq('id', id)
+        .eq('equipe', 'apollo');
+
+      if (error && !isTeamStorageError(error)) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+    }
+
+    await writeAuditLog(request, guard.profile, {
+      action: 'team.points.delete',
+      entity_type: 'equipe_ponto',
+      entity_id: id,
+      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, point_id: id },
+    });
+
+    return NextResponse.json({ success: true });
+  }
+
+  if (action === 'delete_sale') {
+    const id = String(body.id || '');
+    if (!id) return NextResponse.json({ error: 'Venda invalida.' }, { status: 400 });
+
+    if (UUID_RE.test(id)) {
+      const { error } = await supabaseAdmin
+        .from('equipe_vendas')
+        .delete()
+        .eq('id', id)
+        .eq('equipe', 'apollo');
+
+      if (error && !isTeamStorageError(error)) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+    }
+
+    await writeAuditLog(request, guard.profile, {
+      action: 'team.sale.delete',
+      entity_type: 'equipe_venda',
+      entity_id: id,
+      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, sale_id: id },
+    });
+
     return NextResponse.json({ success: true });
   }
 
