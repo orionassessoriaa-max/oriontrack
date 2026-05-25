@@ -180,10 +180,31 @@ function pick(row: CsvRow, names: string[]) {
   return '';
 }
 
+function extractDateCandidate(value: string) {
+  const text = String(value || '')
+    .trim()
+    .replace(/^[="'\s]+|[="'\s]+$/g, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+  if (!text) return '';
+
+  const brDate = text.match(/^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}(?:\s+(?:\d{1,2}:\d{2}(?::\d{2})?|\d{1,2}h\d{2}))?/);
+  if (brDate?.[0]) return brDate[0];
+
+  const isoDate = text.match(/^\d{4}-\d{1,2}-\d{1,2}(?:[T\s]\d{1,2}:\d{2}(?::\d{2})?)?(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})?/);
+  if (isoDate?.[0]) return isoDate[0];
+
+  const serialDate = text.match(/^\d{5}(?:[.,]\d+)?$/);
+  if (serialDate?.[0]) return serialDate[0];
+
+  return '';
+}
+
 function parseDate(value: string) {
   const fallback = '';
   if (!value) return fallback;
-  const trimmed = String(value)
+  const candidate = extractDateCandidate(value);
+  const trimmed = String(candidate || value)
     .trim()
     .replace(/^[="'\s]+|[="'\s]+$/g, '')
     .replace(/[\u200B-\u200D\uFEFF]/g, '');
@@ -264,18 +285,21 @@ function parseDate(value: string) {
 }
 
 function resolveLeadDate(row: CsvRow) {
-  const explicitDate = parseDate(pick(row, [
-    'data',
-    'data entrada',
-    'data_entrada',
-    'created_time',
-    'timestamp',
-    'data cadastro',
-    'data do lead',
-    'data de criacao',
-    'data criação',
-    'date',
-  ]));
+  const explicitDate = parseDate([
+    pick(row, [
+      'data',
+      'data entrada',
+      'data_entrada',
+      'created_time',
+      'timestamp',
+      'data cadastro',
+      'data do lead',
+      'data de criacao',
+      'data criação',
+      'date',
+    ]),
+    row.__cell_0,
+  ].find((value) => extractDateCandidate(value || '')) || '');
 
   if (explicitDate) return explicitDate;
 
@@ -284,7 +308,7 @@ function resolveLeadDate(row: CsvRow) {
     .sort(([a], [b]) => Number(a.replace('__cell_', '')) - Number(b.replace('__cell_', '')))
     .map(([, value]) => String(value || ''));
 
-  for (const cell of rawCells) {
+  for (const cell of rawCells.slice(0, 6)) {
     const parsed = parseDate(cell);
     if (parsed) return parsed;
   }
