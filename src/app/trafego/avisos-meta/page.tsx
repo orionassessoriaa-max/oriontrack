@@ -32,6 +32,13 @@ function formatPercent(value: number | null | undefined) {
   return `${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 }
 
+function cleanPaymentLabel(value?: string | null) {
+  const text = String(value || '').trim();
+  if (!text) return 'Nao informado';
+  if (/saldo dispon/i.test(text)) return 'Saldo pre-pago';
+  return text;
+}
+
 function dateDaysAgo(days: number) {
   const date = new Date();
   date.setDate(date.getDate() - days);
@@ -243,7 +250,7 @@ export default function TrafficMetaAlertsPage() {
                   <td className="px-6 py-5 text-sm font-black text-slate-700">{formatCurrency(row.spend, row.currency)}</td>
                   <td className="px-6 py-5">
                     <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                      {row.forma_pagamento || 'Nao informado'}
+                      {cleanPaymentLabel(row.forma_pagamento)}
                     </span>
                   </td>
                   <td className="px-6 py-5">
