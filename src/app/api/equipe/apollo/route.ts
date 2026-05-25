@@ -13,6 +13,8 @@ const DEFAULT_OBJECTIVES = [
   ['Ligamar', 10000],
 ];
 
+const KRIPTO_HUNTERS_FALLBACK_NAMES = ['pedro ghisolfi'];
+
 function canReadTeam(role: string) {
   return ['admin', 'gestor_trafego', 'designer', 'account_manager'].includes(role);
 }
@@ -87,7 +89,11 @@ export async function GET(request: Request) {
   const rawMembers = membersData.filter((member: any) => {
     const email = String(member.email || '').toLowerCase();
     const realEmail = String(member.email_real || '').toLowerCase();
+    const name = String(member.nome || '').toLowerCase();
     const isMaster = member.is_admin_master || email === 'ewerttonherculano@gmail.com' || realEmail === 'ewerttonherculano@gmail.com';
+    const belongsToKripto = KRIPTO_HUNTERS_FALLBACK_NAMES.some((blockedName) => name.includes(blockedName));
+
+    if (belongsToKripto) return false;
 
     if (missingTeamColumn) {
       return isMaster || ['admin', 'gestor_trafego', 'designer', 'account_manager'].includes(member.tipo_usuario);
