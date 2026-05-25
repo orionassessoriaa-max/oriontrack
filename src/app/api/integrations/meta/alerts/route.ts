@@ -56,6 +56,19 @@ function getLeadCount(actions: any[]) {
   }, 0);
 }
 
+function parseMoneyFromMetaText(value?: string | null) {
+  const text = String(value || '');
+  const match = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})|\d+(?:\.\d{2})?)/);
+  if (!match?.[1]) return null;
+
+  const normalized = match[1].includes(',')
+    ? match[1].replace(/\./g, '').replace(',', '.')
+    : match[1];
+
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+}
+
 async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
   const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
   const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
@@ -92,6 +105,8 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   const fundingDetails = accountPayload?.funding_source_details;
   const fundingText = JSON.stringify(fundingDetails || {}).toLowerCase();
   const isCard = fundingText.includes('card') || fundingText.includes('cart') || fundingText.includes('visa') || fundingText.includes('mastercard') || fundingText.includes('amex');
+  const displayBalance = parseMoneyFromMetaText(fundingDetails?.display_string);
+  const effectiveBalance = displayBalance ?? balance;
   const formaPagamento = isCard
     ? 'Cartao'
     : fundingDetails?.display_string || fundingDetails?.type || (balance !== null ? 'Saldo pre-pago' : 'Nao informado');
@@ -105,11 +120,11 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     leads,
     cpl,
     ctr,
-    saldo: balance,
+    saldo: effectiveBalance,
       currency: accountPayload?.currency || 'BRL',
       forma_pagamento: formaPagamento,
       alerta_cpl_alto: cpl !== null && cpl > 25,
-      alerta_saldo_baixo: !isCard && balance !== null && balance < 100,
+      alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < 100,
     };
 }
 
