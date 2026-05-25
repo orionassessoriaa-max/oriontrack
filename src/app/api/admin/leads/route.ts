@@ -96,31 +96,60 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Confirmacao invalida para remover todos os leads.' }, { status: 400 });
     }
 
-    const { count, error: countError } = await supabaseAdmin
+    const corretorId = String(body.corretor_id || '').trim();
+    let corretorNome = '';
+
+    if (corretorId) {
+      const { data: corretor, error: corretorError } = await supabaseAdmin
+        .from('corretores')
+        .select('id, nome')
+        .eq('id', corretorId)
+        .maybeSingle();
+
+      if (corretorError) {
+        return NextResponse.json({ error: corretorError.message }, { status: 500 });
+      }
+
+      if (!corretor) {
+        return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
+      }
+
+      corretorNome = corretor.nome || '';
+    }
+
+    let countQuery = supabaseAdmin
       .from('leads')
       .select('id', { count: 'exact', head: true });
+
+    if (corretorId) countQuery = countQuery.eq('corretor_id', corretorId);
+
+    const { count, error: countError } = await countQuery;
 
     if (countError) {
       return NextResponse.json({ error: countError.message }, { status: 500 });
     }
 
-    const { error } = await supabaseAdmin
+    let deleteQuery = supabaseAdmin
       .from('leads')
       .delete()
       .not('id', 'is', null);
+
+    if (corretorId) deleteQuery = deleteQuery.eq('corretor_id', corretorId);
+
+    const { error } = await deleteQuery;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     await writeAuditLog(request, guard.profile as any, {
-      action: 'lead.bulk_delete_all',
+      action: corretorId ? 'lead.bulk_delete_by_corretor' : 'lead.bulk_delete_all',
       entity_type: 'leads',
-      entity_id: 'all',
-      metadata: { deleted_count: count || 0 },
+      entity_id: corretorId || 'all',
+      metadata: { deleted_count: count || 0, corretor_id: corretorId || null, corretor_nome: corretorNome || null },
     });
 
-    return NextResponse.json({ success: true, deleted: count || 0 });
+    return NextResponse.json({ success: true, deleted: count || 0, corretor: corretorNome || null });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Erro ao remover todos os leads.' }, { status: 500 });
   }
