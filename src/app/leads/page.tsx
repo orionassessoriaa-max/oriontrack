@@ -7,6 +7,7 @@ import {
   Download,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   ShieldAlert,
   RefreshCw,
   Plug,
@@ -25,6 +26,7 @@ import { useDialog } from '@/components/providers/DialogProvider';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
+import { cleanLeadObservationText, getLeadImportWarnings } from '@/lib/leadWarnings';
 import PhoneAction from '@/components/ui/PhoneAction';
 
 function normalizeText(value?: string | null) {
@@ -485,9 +487,10 @@ export default function BrokerLeadsPage() {
       return;
     }
 
-    const skippedText = payload.skipped ? ` ${payload.skipped} linha(s) ignorada(s).` : '';
+    const skippedText = payload.skipped ? ` ${payload.skipped} pagina(s) nao puderam ser lidas.` : '';
     const paginasText = payload.paginas ? ` ${payload.paginas} pagina(s) lida(s).` : '';
-    setImportMessage(`${payload.imported} lead(s) importado(s).${paginasText}${skippedText}`);
+    const incompleteText = payload.incomplete ? ` ${payload.incomplete} lead(s) vieram com dados incompletos e foram marcados com aviso.` : '';
+    setImportMessage(`${payload.imported} lead(s) importado(s).${paginasText}${incompleteText}${skippedText}`);
     setSheetUrl('');
     await fetchLeads(0, false);
   };
@@ -781,6 +784,8 @@ export default function BrokerLeadsPage() {
                 ) : filteredLeads.map((lead, index) => {
                   const statusStyle = getLeadStatusStyle(lead.status);
                   const leadTab = tabLabel(lead.operadora);
+                  const importWarnings = getLeadImportWarnings(lead);
+                  const cleanObservacoes = cleanLeadObservationText(lead.observacoes);
 
                   return (
                   <tr key={lead.id} className="transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-blue-50/50">
@@ -789,7 +794,17 @@ export default function BrokerLeadsPage() {
                       {lead.data_entrada ? format(new Date(lead.data_entrada), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '-'}
                     </td>
                     <td className="max-w-[280px] whitespace-nowrap border border-slate-100 px-3 py-3 font-bold text-gray-900" title={lead.nome || ''}>
-                      <span className="block overflow-hidden text-ellipsis">{lead.nome}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="block overflow-hidden text-ellipsis">{lead.nome}</span>
+                        {importWarnings.length > 0 && (
+                          <span
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-amber-700"
+                            title={importWarnings.join('\n')}
+                          >
+                            <AlertTriangle size={12} /> Aviso
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-600">
                       <PhoneAction phone={lead.telefone} />
@@ -874,7 +889,7 @@ export default function BrokerLeadsPage() {
                     <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadAd(lead)}</td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-medium leading-relaxed text-slate-600">
                       <div className="max-w-[300px] whitespace-normal">
-                        {lead.observacoes || '-'}
+                        {cleanObservacoes || '-'}
                       </div>
                     </td>
                     {isViewingAsCorretor && (

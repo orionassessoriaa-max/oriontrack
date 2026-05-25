@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
+import { buildLeadImportWarningNote } from '@/lib/leadWarnings';
 
 type CsvRow = Record<string, string>;
 type LeadInsert = {
@@ -467,6 +468,13 @@ function buildNotes(row: CsvRow) {
   return notes.join(' | ');
 }
 
+function mergeNotes(...parts: string[]) {
+  return parts
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(' | ');
+}
+
 export async function POST(request: Request) {
   try {
     const guard = await requireAdmin(request);
@@ -500,6 +508,7 @@ export async function POST(request: Request) {
         }));
 
     let skipped = 0;
+    let incomplete = 0;
     const leads: LeadInsert[] = [];
 
     for (const source of sources) {
@@ -520,18 +529,20 @@ export async function POST(request: Request) {
       const sheetName = source.name || await resolveSheetName(editUrl, source.gid);
 
       rows.forEach((row) => {
-          const nome = pick(row, ['nome', 'name', 'cliente', 'nome completo']);
-          const telefone = pick(row, ['telefone', 'phone', 'celular', 'whatsapp', 'fone']);
-          if (!nome || !telefone) {
-            skipped += 1;
-            return;
-          }
+          const rawNome = pick(row, ['nome', 'name', 'cliente', 'nome completo']);
+          const rawTelefone = pick(row, ['telefone', 'phone', 'celular', 'whatsapp', 'fone']);
+          const warnings = [
+            !rawNome ? 'Nome ausente na planilha' : '',
+            !rawTelefone ? 'Telefone ausente na planilha' : '',
+          ].filter(Boolean);
+
+          if (warnings.length > 0) incomplete += 1;
 
           leads.push({
             corretor_id: corretorId,
             data_entrada: resolveLeadDate(row),
-            nome,
-            telefone,
+            nome: rawNome || 'Lead sem nome',
+            telefone: rawTelefone || 'Telefone nao informado',
             idades: pick(row, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas']),
             possui_cnpj: pick(row, ['possui cnpj', 'cnpj', 'tem cnpj']) || 'Nao informado',
             tem_plano_ativo: pick(row, ['tem plano ativo', 'plano ativo', 'possui plano']) || 'Nao informado',
@@ -546,13 +557,13 @@ export async function POST(request: Request) {
             utm_term: pick(row, ['utm_term', 'conjunto', 'conjunto de anuncio', 'adset']),
             utm_content: pick(row, ['utm_content', 'anuncio', 'ad', 'criativo']),
             status: statusFromSheet(pick(row, ['status']) || 'Aguardando atendimento'),
-            observacoes: buildNotes(row),
+            observacoes: mergeNotes(buildLeadImportWarningNote(warnings), buildNotes(row)),
           });
       });
     }
 
     if (leads.length === 0) {
-      return NextResponse.json({ error: 'Nenhum lead valido encontrado. A planilha precisa ter pelo menos Nome e Telefone.' }, { status: 400 });
+      return NextResponse.json({ error: 'Nenhuma linha encontrada para importar. Verifique se a planilha esta compartilhada corretamente.' }, { status: 400 });
     }
 
     const { data, error } = await supabaseAdmin
@@ -568,6 +579,7 @@ export async function POST(request: Request) {
       success: true,
       imported: data?.length || leads.length,
       skipped,
+      incomplete,
       paginas: sources.length,
       corretor: corretor.nome,
     });
