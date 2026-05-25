@@ -246,11 +246,17 @@ export default function AdminUsuariosPage() {
   }
 
   async function handleResetPassword(profile: Profile) {
-    const confirmed = await confirmDialog(`Gerar uma nova senha provisoria para ${profile.nome}?`, {
-      title: 'Nova senha provisoria',
-      confirmLabel: 'Gerar senha',
+    const isFirstAccess = Boolean(profile.precisa_trocar_senha);
+    const confirmed = await confirmDialog(
+      isFirstAccess
+        ? `Gerar os dados de acesso para ${profile.nome}?`
+        : `Gerar uma nova senha provisoria para ${profile.nome}?`,
+      {
+      title: isFirstAccess ? 'Gerar acesso provisório' : 'Nova senha provisoria',
+      confirmLabel: isFirstAccess ? 'Gerar acesso' : 'Gerar senha',
       variant: 'info',
-    });
+      }
+    );
     if (!confirmed) return;
 
     setRemovingId(profile.id);
@@ -726,7 +732,7 @@ export default function AdminUsuariosPage() {
                           className="flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md disabled:opacity-50"
                         >
                           {removingId === profile.id ? <Loader2 className="animate-spin" size={16} /> : <KeyRound size={16} />}
-                          Nova senha
+                          {profile.precisa_trocar_senha ? 'Gerar acesso' : 'Nova senha'}
                         </button>
                         <button
                           onClick={() => handleDelete(profile)}
