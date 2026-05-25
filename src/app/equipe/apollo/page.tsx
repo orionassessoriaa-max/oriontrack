@@ -403,9 +403,9 @@ export default function ApolloTeamPage() {
               <section className="border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
                 <div className="border-b border-slate-100 p-5 dark:border-slate-800">
                   <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">Vendas</p>
-                  <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">Vendas que contam na meta</h2>
+                  <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">Vendas registradas na meta</h2>
                   <p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-300">
-                    Cada venda registrada aqui entra no valor realizado do mes.
+                    Registre cliente, produto e valor para alimentar o placar comercial do Apollo.
                   </p>
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -423,23 +423,23 @@ export default function ApolloTeamPage() {
                 </div>
                 {data.isAdmin && (
                   <div className="border-t border-slate-100 p-5 dark:border-slate-800">
-                    <h3 className="text-sm font-black text-slate-950 dark:text-white">Adicionar venda</h3>
+                    <h3 className="text-sm font-black text-slate-950 dark:text-white">Nova venda</h3>
                     <input
                       value={saleForm.nome}
                       onChange={(event) => setSaleForm((current) => ({ ...current, nome: event.target.value }))}
-                      placeholder="Nome de quem vendeu"
+                      placeholder="Cliente ou conta. Ex: Beth"
                       className="mt-3 w-full border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                     />
                     <input
                       value={saleForm.vendido}
                       onChange={(event) => setSaleForm((current) => ({ ...current, vendido: event.target.value }))}
-                      placeholder="O que vendeu"
+                      placeholder="Produto. Ex: Social Media"
                       className="mt-3 w-full border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                     />
                     <input
                       value={saleForm.valor}
                       onChange={(event) => setSaleForm((current) => ({ ...current, valor: event.target.value }))}
-                      placeholder="Valor da venda"
+                      placeholder="Valor. Ex: 6000"
                       className="mt-3 w-full border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                     />
                     <button
