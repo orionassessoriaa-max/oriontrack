@@ -181,6 +181,32 @@ function pick(row: CsvRow, names: string[]) {
   return '';
 }
 
+function orderedCells(row: CsvRow) {
+  return Object.entries(row)
+    .filter(([key]) => key.startsWith('__cell_'))
+    .sort(([a], [b]) => Number(a.replace('__cell_', '')) - Number(b.replace('__cell_', '')))
+    .map(([, value]) => String(value || '').trim());
+}
+
+function findPhoneFallback(row: CsvRow) {
+  return orderedCells(row).find((cell) => {
+    const digits = cell.replace(/\D/g, '');
+    return digits.length >= 8 && digits.length <= 14;
+  }) || '';
+}
+
+function findNameFallback(row: CsvRow) {
+  return orderedCells(row).find((cell) => {
+    const text = cell.trim();
+    if (!text) return false;
+    if (text.includes('@')) return false;
+    if (extractDateCandidate(text)) return false;
+    if (text.replace(/\D/g, '').length >= 8) return false;
+    if (/^r?\$?\s*[\d.,]+$/i.test(text)) return false;
+    return /[a-zA-ZÀ-ÿ]/.test(text);
+  }) || '';
+}
+
 function extractDateCandidate(value: string) {
   const text = String(value || '')
     .trim()
@@ -304,10 +330,7 @@ function resolveLeadDate(row: CsvRow) {
 
   if (explicitDate) return explicitDate;
 
-  const rawCells = Object.entries(row)
-    .filter(([key]) => key.startsWith('__cell_'))
-    .sort(([a], [b]) => Number(a.replace('__cell_', '')) - Number(b.replace('__cell_', '')))
-    .map(([, value]) => String(value || ''));
+  const rawCells = orderedCells(row);
 
   for (const cell of rawCells.slice(0, 6)) {
     const parsed = parseDate(cell);
@@ -529,8 +552,8 @@ export async function POST(request: Request) {
       const sheetName = source.name || await resolveSheetName(editUrl, source.gid);
 
       rows.forEach((row) => {
-          const rawNome = pick(row, ['nome', 'name', 'cliente', 'nome completo']);
-          const rawTelefone = pick(row, ['telefone', 'phone', 'celular', 'whatsapp', 'fone']);
+          const rawNome = pick(row, ['nome', 'name', 'cliente', 'nome completo']) || findNameFallback(row);
+          const rawTelefone = pick(row, ['telefone', 'phone', 'celular', 'whatsapp', 'fone']) || findPhoneFallback(row);
           const warnings = [
             !rawNome ? 'Nome ausente na planilha' : '',
             !rawTelefone ? 'Telefone ausente na planilha' : '',
