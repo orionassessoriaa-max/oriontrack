@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadAtividade, LeadStatus, LeadTarefa, TipoCampanha } from '@/types';
 import { getLeadStatusStyle, normalizeLeadStatus } from '@/lib/leadStatus';
 import { getLeadQualification } from '@/lib/leadQualification';
+import { cleanLeadObservationText, getLeadImportWarnings } from '@/lib/leadWarnings';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -746,6 +747,7 @@ export default function CrmPage() {
                       {columnLeads.map((lead) => {
                         const qualification = getLeadQualification(lead, tipoCampanha);
                         const selected = selectedLead?.id === lead.id;
+                        const importWarnings = getLeadImportWarnings(lead);
                         return (
                           <button
                             key={lead.id}
@@ -762,8 +764,22 @@ export default function CrmPage() {
                                   <Phone size={13} /> {lead.telefone}
                                 </p>
                               </div>
-                              {isStale(lead) && <AlertTriangle size={17} className="text-amber-500" />}
+                              <div className="flex items-center gap-2">
+                                {importWarnings.length > 0 && (
+                                  <AlertTriangle
+                                    size={17}
+                                    className="text-orange-500"
+                                    aria-label="Lead com dados incompletos"
+                                  />
+                                )}
+                                {isStale(lead) && <AlertTriangle size={17} className="text-amber-500" />}
+                              </div>
                             </div>
+                            {importWarnings.length > 0 && (
+                              <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                                Dados incompletos: {importWarnings.join(', ')}
+                              </div>
+                            )}
                             <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
                               <span>CNPJ: {lead.possui_cnpj || '-'}</span>
                               <span>Vidas: {lead.idades || '-'}</span>
@@ -941,10 +957,10 @@ export default function CrmPage() {
               </button>
             </form>
 
-            {selectedLead.observacoes && (
+            {selectedLead.observacoes && cleanLeadObservationText(selectedLead.observacoes) && (
               <div className="mb-5 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">UTMs / observacoes da planilha</p>
-                <p className="text-sm font-bold leading-relaxed text-slate-600">{selectedLead.observacoes}</p>
+                <p className="text-sm font-bold leading-relaxed text-slate-600">{cleanLeadObservationText(selectedLead.observacoes)}</p>
               </div>
             )}
 
