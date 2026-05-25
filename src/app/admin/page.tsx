@@ -27,6 +27,8 @@ import { Lead, Corretor, Profile } from '@/types';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { getProfileRoleLabel } from '@/lib/users';
 
 function normalizeText(value?: string | null) {
   return String(value || '')
@@ -55,6 +57,7 @@ function inferGestorIdFromTeam(corretor: any, gestores: Array<{ id: string; nome
 }
 
 export default function AdminCentralPage() {
+  const { profile } = useAuth();
   const [stats, setStats] = useState({
     totalCorretores: 0,
     totalGestores: 0,
@@ -195,7 +198,7 @@ export default function AdminCentralPage() {
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-4xl font-black text-gray-900 tracking-tight">Painel Orion Track</h1>
             <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100">
-              Admin Orion
+              {getProfileRoleLabel(profile)}
             </span>
           </div>
           <p className="text-gray-500 font-medium text-lg">Gestão centralizada de corretores, leads e operação.</p>
