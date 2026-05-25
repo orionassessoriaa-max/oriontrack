@@ -15,7 +15,8 @@ import {
   Eye,
   Calendar,
   X,
-  Upload
+  Upload,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead } from '@/types';
@@ -42,10 +43,31 @@ export default function AdminLeadsPage() {
   const [showImportBox, setShowImportBox] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [deleteCountdown, setDeleteCountdown] = useState(5);
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!showDeleteAll) return;
+
+    setDeleteCountdown(5);
+    const interval = window.setInterval(() => {
+      setDeleteCountdown((current) => {
+        if (current <= 1) {
+          window.clearInterval(interval);
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [showDeleteAll]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -134,6 +156,40 @@ export default function AdminLeadsPage() {
     await fetchData();
   };
 
+  const deleteAllLeads = async () => {
+    setDeletingAll(true);
+    setDeleteMessage(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    if (!token) {
+      setDeletingAll(false);
+      setDeleteMessage('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    const response = await fetch('/api/admin/leads', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ confirm: 'DELETE_ALL_LEADS' }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    setDeletingAll(false);
+    if (!response.ok) {
+      setDeleteMessage(payload.error || 'Erro ao remover todos os leads.');
+      return;
+    }
+
+    setDeleteMessage(`${payload.deleted || 0} lead(s) removidos com sucesso.`);
+    setShowDeleteAll(false);
+    await fetchData();
+  };
+
   const filteredLeads = leads.filter(lead => {
     const matchesSearch = 
       (lead.nome?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -164,7 +220,16 @@ export default function AdminLeadsPage() {
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Todos os Leads</h1>
           <p className="text-gray-500 font-medium">Audite, filtre e gerencie os leads dos corretores.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => {
+              setDeleteMessage(null);
+              setShowDeleteAll(true);
+            }}
+            className="bg-red-50 text-red-700 px-6 py-4 rounded-2xl font-black border border-red-100 shadow-sm flex items-center gap-2 hover:bg-red-100 transition-all"
+          >
+            <Trash2 size={18} /> Remover todos
+          </button>
           <button
             onClick={() => setShowImportBox((current) => !current)}
             className="bg-emerald-600 text-white px-6 py-4 rounded-2xl font-black shadow-sm flex items-center gap-2 hover:bg-emerald-700 transition-all"
@@ -182,6 +247,53 @@ export default function AdminLeadsPage() {
           </Link>
         </div>
       </div>
+
+      {deleteMessage && (
+        <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-black text-red-700">
+          {deleteMessage}
+        </div>
+      )}
+
+      {showDeleteAll && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+            <div className="border-b border-red-100 bg-red-50 p-6">
+              <p className="text-[10px] font-black uppercase tracking-widest text-red-600">Acao irreversivel</p>
+              <h2 className="mt-2 text-2xl font-black text-slate-950">Remover todos os leads?</h2>
+              <p className="mt-2 text-sm font-bold leading-6 text-red-700">
+                Isso apaga todos os leads de todos os corretores. Use apenas antes de uma nova importacao geral.
+              </p>
+            </div>
+            <div className="p-6">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Leads carregados agora</p>
+                <p className="mt-1 text-3xl font-black text-slate-950">{leads.length}</p>
+              </div>
+              {deleteCountdown > 0 ? (
+                <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-black text-amber-800">
+                  O botao de confirmacao aparece em {deleteCountdown} segundo(s).
+                </div>
+              ) : (
+                <button
+                  onClick={deleteAllLeads}
+                  disabled={deletingAll}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-6 py-4 text-sm font-black uppercase tracking-widest text-white shadow-xl shadow-red-600/20 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {deletingAll ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                  Confirmar e apagar todos os leads
+                </button>
+              )}
+              <button
+                onClick={() => setShowDeleteAll(false)}
+                disabled={deletingAll}
+                className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-black uppercase tracking-widest text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showImportBox && (
         <div className="mb-8 rounded-[2rem] border border-emerald-100 bg-emerald-50 p-5">
