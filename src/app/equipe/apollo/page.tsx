@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { Award, CheckCircle2, Crown, Loader2, Lock, Plus, Save, Sparkles, Target, Trophy } from 'lucide-react';
+import { Award, CheckCircle2, Crown, DollarSign, Loader2, Lock, Plus, Save, Sparkles, Target, Trophy } from 'lucide-react';
 
 type TeamMember = {
   id: string;
@@ -25,14 +25,25 @@ type Objective = {
   status: 'aberto' | 'em_andamento' | 'feito';
 };
 
+type Sale = {
+  id: string;
+  nome: string;
+  vendido: string;
+  valor: number;
+  created_at?: string;
+};
+
 type TeamPayload = {
   month: string;
   meta: { meta_valor: number; prazo: string };
   objectives: Objective[];
+  sales: Sale[];
   members: TeamMember[];
   summary: {
     totalObjetivos: number;
     realizadoObjetivos: number;
+    totalVendas: number;
+    realizadoTotal: number;
     emAndamentoObjetivos: number;
     previsaoObjetivos: number;
     previsaoAberta: number;
@@ -100,6 +111,7 @@ export default function ApolloTeamPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [pointsForm, setPointsForm] = useState({ profile_id: '', pontos: '5', motivo: '' });
   const [objectiveForm, setObjectiveForm] = useState({ titulo: '', valor_estimado: '' });
+  const [saleForm, setSaleForm] = useState({ nome: '', vendido: '', valor: '' });
   const [metaForm, setMetaForm] = useState({ meta_valor: '50000', prazo: '2026-05-31' });
 
   async function requestTeam(body?: Record<string, unknown>) {
@@ -151,6 +163,9 @@ export default function ApolloTeamPage() {
     try {
       await requestTeam(body);
       setNotice(successMessage);
+      if (body.action === 'create_sale') setSaleForm({ nome: '', vendido: '', valor: '' });
+      if (body.action === 'create_objective') setObjectiveForm({ titulo: '', valor_estimado: '' });
+      if (body.action === 'add_points') setPointsForm((current) => ({ ...current, pontos: '5', motivo: '' }));
       await load();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Nao foi possivel salvar.');
@@ -203,9 +218,9 @@ export default function ApolloTeamPage() {
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Metric icon={Target} label="Meta do mes" value={brl(metaValue)} tone="blue" />
-            <Metric icon={CheckCircle2} label="Concluido" value={brl(data.summary.realizadoObjetivos)} tone="emerald" />
+            <Metric icon={CheckCircle2} label="Realizado total" value={brl(data.summary.realizadoTotal)} tone="emerald" />
             <Metric icon={Sparkles} label="Previsao aberta" value={brl(data.summary.previsaoAberta)} tone="amber" />
-            <Metric icon={Trophy} label="XP do time" value={String(data.summary.totalPontos)} tone="violet" />
+            <Metric icon={DollarSign} label="Vendas" value={brl(data.summary.totalVendas)} tone="violet" />
           </section>
 
           <section className="mt-6 overflow-hidden border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -219,12 +234,13 @@ export default function ApolloTeamPage() {
                   <span className="bg-slate-950 px-4 py-2 text-sm font-black text-white dark:bg-blue-600">{progress}% realizado</span>
                 </div>
                 <div className="mt-6 space-y-4">
-                  <Progress label="Realizado" value={progress} amount={brl(data.summary.realizadoObjetivos)} color="from-emerald-500 to-cyan-400" />
+                  <Progress label="Realizado na meta" value={progress} amount={brl(data.summary.realizadoTotal)} color="from-emerald-500 to-cyan-400" />
+                  <Progress label="Vendas registradas" value={Math.min(100, Math.round((data.summary.totalVendas / metaValue) * 100))} amount={brl(data.summary.totalVendas)} color="from-cyan-400 to-blue-600" />
                   <Progress label="Previsao total dos objetivos" value={forecastProgress} amount={brl(data.summary.previsaoObjetivos)} color="from-blue-600 to-violet-500" />
                   <Progress label="Em andamento" value={Math.min(100, Math.round((data.summary.emAndamentoObjetivos / metaValue) * 100))} amount={brl(data.summary.emAndamentoObjetivos)} color="from-amber-400 to-orange-500" />
                 </div>
                 <p className="mt-5 text-sm font-bold text-slate-500 dark:text-slate-300">
-                  Quando um objetivo sai de aberto para concluido, ele passa da previsao para o realizado e sobe a barra principal da meta.
+                  Vendas registradas entram direto no realizado. Objetivos concluidos tambem somam no placar principal da meta.
                 </p>
               </div>
 
@@ -379,6 +395,59 @@ export default function ApolloTeamPage() {
                       className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700 dark:bg-blue-600"
                     >
                       <Plus size={17} /> Criar objetivo
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              <section className="border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                <div className="border-b border-slate-100 p-5 dark:border-slate-800">
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600">Vendas</p>
+                  <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">Vendas que contam na meta</h2>
+                  <p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-300">
+                    Cada venda registrada aqui entra no valor realizado do mes.
+                  </p>
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {data.sales.length === 0 ? (
+                    <p className="p-5 text-sm font-black text-slate-400">Nenhuma venda registrada ainda.</p>
+                  ) : data.sales.map((sale) => (
+                    <div key={sale.id} className="grid gap-2 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                      <div>
+                        <h3 className="font-black text-slate-950 dark:text-white">{sale.nome}</h3>
+                        <p className="text-sm font-bold text-slate-500 dark:text-slate-300">{sale.vendido}</p>
+                      </div>
+                      <p className="text-lg font-black text-emerald-600">{brl(sale.valor)}</p>
+                    </div>
+                  ))}
+                </div>
+                {data.isAdmin && (
+                  <div className="border-t border-slate-100 p-5 dark:border-slate-800">
+                    <h3 className="text-sm font-black text-slate-950 dark:text-white">Adicionar venda</h3>
+                    <input
+                      value={saleForm.nome}
+                      onChange={(event) => setSaleForm((current) => ({ ...current, nome: event.target.value }))}
+                      placeholder="Nome de quem vendeu"
+                      className="mt-3 w-full border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                    />
+                    <input
+                      value={saleForm.vendido}
+                      onChange={(event) => setSaleForm((current) => ({ ...current, vendido: event.target.value }))}
+                      placeholder="O que vendeu"
+                      className="mt-3 w-full border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                    />
+                    <input
+                      value={saleForm.valor}
+                      onChange={(event) => setSaleForm((current) => ({ ...current, valor: event.target.value }))}
+                      placeholder="Valor da venda"
+                      className="mt-3 w-full border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                    />
+                    <button
+                      onClick={() => submitAction({ action: 'create_sale', ...saleForm }, 'Venda adicionada.')}
+                      disabled={saving}
+                      className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 bg-emerald-600 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+                    >
+                      <DollarSign size={17} /> Registrar venda
                     </button>
                   </div>
                 )}
