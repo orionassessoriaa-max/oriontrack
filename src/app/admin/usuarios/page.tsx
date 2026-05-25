@@ -33,6 +33,7 @@ const initialForm = {
   time_operacional: [] as OrionTeamMember[],
   foto_url: '',
   operadora_outros: '',
+  equipe_orion: '' as '' | 'apollo' | 'kripto_hunters',
 };
 
 const MASTER_ADMIN_EMAIL = 'ewerttonherculano@gmail.com';
@@ -403,7 +404,8 @@ export default function AdminUsuariosPage() {
                     ...current,
                     tipo_usuario,
                     time_operacional: tipo_usuario === 'corretor' ? current.time_operacional : [],
-                    operadoras: tipo_usuario === 'corretor' ? current.operadoras : []
+                    operadoras: tipo_usuario === 'corretor' ? current.operadoras : [],
+                    equipe_orion: tipo_usuario === 'corretor' ? '' : current.equipe_orion
                   }));
                 }}
                 className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
@@ -415,6 +417,21 @@ export default function AdminUsuariosPage() {
                 {isMasterAdmin && <option value="admin">Admin / Diretor</option>}
               </select>
             </div>
+
+            {form.tipo_usuario !== 'corretor' && (
+              <div>
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Time interno</label>
+                <select
+                  value={form.equipe_orion}
+                  onChange={(event) => setForm((current) => ({ ...current, equipe_orion: event.target.value as typeof current.equipe_orion }))}
+                  className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="">Sem time definido</option>
+                  <option value="apollo">Apollo - Operacional</option>
+                  <option value="kripto_hunters">Kripto Hunters - Comercial</option>
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Email de acesso</label>
@@ -644,6 +661,11 @@ export default function AdminUsuariosPage() {
                         {Array.isArray(operadoras) && operadoras.length > 0 && (
                           <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-500">
                             {operadoras.join(', ')}
+                          </p>
+                        )}
+                        {profile.equipe_orion && (
+                          <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                            Time: {profile.equipe_orion === 'apollo' ? 'Apollo' : 'Kripto Hunters'}
                           </p>
                         )}
                         <p className="mt-2 max-w-full truncate rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 sm:max-w-[640px]">

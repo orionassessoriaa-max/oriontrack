@@ -131,6 +131,9 @@ export async function POST(request: Request) {
     const status = String(body.status || 'ativo').toLowerCase();
     const tipoCampanha = body.tipo_campanha || 'ambos';
     const emailReal = String(body.email_real || '').trim().toLowerCase() || null;
+    const equipeOrion = ['apollo', 'kripto_hunters'].includes(String(body.equipe_orion || ''))
+      ? String(body.equipe_orion)
+      : null;
     const senhaProvisoria = String(body.senha_provisoria || generateStrongPassword());
     const fotoUrl = typeof body.foto_url === 'string' && body.foto_url.startsWith('data:image/')
       ? body.foto_url
@@ -208,7 +211,8 @@ export async function POST(request: Request) {
           status: status === 'inativo' ? 'inactive' : 'active',
           email_real: emailReal,
           foto_url: fotoUrl,
-          precisa_trocar_senha: true
+          precisa_trocar_senha: true,
+          equipe_orion: role === 'corretor' ? null : equipeOrion,
         }]);
 
       if (profileError) throw profileError;
