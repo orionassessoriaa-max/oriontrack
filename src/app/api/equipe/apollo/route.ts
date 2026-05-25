@@ -402,7 +402,7 @@ export async function POST(request: Request) {
     const valor = parseMoney(body.valor);
 
     if (!nome || !vendido || !Number.isFinite(valor) || valor <= 0) {
-      return NextResponse.json({ error: 'Informe quem vendeu, o que vendeu e o valor.' }, { status: 400 });
+      return NextResponse.json({ error: 'Informe o cliente, o produto e o valor da venda.' }, { status: 400 });
     }
 
     const fallbackId = `sale:${Date.now()}:${nome.toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`;
