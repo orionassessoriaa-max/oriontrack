@@ -181,7 +181,7 @@ export default function TeamRoleListPage({
                     </td>
                     <td className="px-8 py-6 text-right">
                       <Link
-                        href={`/admin/usuarios?tipo=${role}`}
+                        href={`/admin/usuarios?edit=${person.id}`}
                         className="mr-2 inline-flex rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600"
                         title={`Editar ${person.nome}`}
                       >

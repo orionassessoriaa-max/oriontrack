@@ -52,13 +52,46 @@ export default function AdminUsuariosPage() {
   const [error, setError] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [isMasterAdmin, setIsMasterAdmin] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<AdminProfile | null>(null);
 
-  const accessEmail = useMemo(() => generateOrionEmail(form.nome), [form.nome]);
+  const accessEmail = useMemo(() => editingProfile?.email || generateOrionEmail(form.nome), [editingProfile?.email, form.nome]);
   const teamMembers = useMemo(() => buildOperationalTeamMembers(profiles), [profiles]);
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token;
+  }
+
+  function fillEditForm(profile: AdminProfile, brokerList = corretores) {
+    const corretor = brokerList.find((item) => item.id === profile.corretor_id);
+    const savedOperadoras = Array.isArray(corretor?.operadoras_info?.selecionadas)
+      ? corretor.operadoras_info.selecionadas
+      : [];
+    const knownOperadoras = savedOperadoras.filter((item) => OPERADORAS_ONBOARDING.includes(item));
+    const customOperadora = savedOperadoras.find((item) => !OPERADORAS_ONBOARDING.includes(item));
+
+    setEditingProfile(profile);
+    setCredentials(null);
+    setError(null);
+    setForm({
+      nome: profile.nome || '',
+      email_real: profile.email_real || '',
+      tipo_usuario: profile.tipo_usuario,
+      telefone: corretor?.telefone || '',
+      tipo_campanha: (corretor?.tipo_campanha as TipoCampanha) || 'ambos',
+      operadoras: customOperadora ? [...knownOperadoras.filter((item) => item !== 'Outros'), 'Outros'] : knownOperadoras,
+      time_operacional: Array.isArray(corretor?.time_operacional) ? corretor.time_operacional as OrionTeamMember[] : [],
+      foto_url: profile.foto_url || '',
+      operadora_outros: customOperadora || '',
+      equipe_orion: profile.tipo_usuario === 'corretor' ? '' : (profile.equipe_orion || ''),
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    setEditingProfile(null);
+    setForm(initialForm);
+    router.replace('/admin/usuarios');
   }
 
   async function fetchUsers() {
@@ -83,9 +116,16 @@ export default function AdminUsuariosPage() {
       return;
     }
 
-    setProfiles(payload.profiles || []);
-    setCorretores(payload.corretores || []);
+    const nextProfiles = payload.profiles || [];
+    const nextCorretores = payload.corretores || [];
+    setProfiles(nextProfiles);
+    setCorretores(nextCorretores);
     setIsMasterAdmin(Boolean(payload.isMasterAdmin));
+    const editId = new URLSearchParams(window.location.search).get('edit');
+    if (editId) {
+      const profileToEdit = nextProfiles.find((profile: AdminProfile) => profile.id === editId);
+      if (profileToEdit) fillEditForm(profileToEdit, nextCorretores);
+    }
     setLoading(false);
   }
 
@@ -124,13 +164,17 @@ export default function AdminUsuariosPage() {
         ]
       : form.operadoras;
 
+    const isEditing = Boolean(editingProfile);
     const response = await fetch('/api/admin/usuarios', {
-      method: 'POST',
+      method: isEditing ? 'PATCH' : 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ ...form, operadoras, email: accessEmail, gestor_trafego_id: gestorTrafegoId })
+      body: JSON.stringify(isEditing
+        ? { ...form, id: editingProfile?.id, action: 'update_profile', operadoras, gestor_trafego_id: gestorTrafegoId }
+        : { ...form, operadoras, email: accessEmail, gestor_trafego_id: gestorTrafegoId }
+      )
     });
     const payload = await response.json();
 
@@ -140,8 +184,14 @@ export default function AdminUsuariosPage() {
       return;
     }
 
-    setCredentials(payload.credentials);
-    setForm({ ...initialForm, tipo_usuario: form.tipo_usuario });
+    if (isEditing) {
+      setEditingProfile(null);
+      setForm(initialForm);
+      router.replace('/admin/usuarios');
+    } else {
+      setCredentials(payload.credentials);
+      setForm({ ...initialForm, tipo_usuario: form.tipo_usuario });
+    }
     await fetchUsers();
     setSaving(false);
   }
@@ -235,44 +285,9 @@ export default function AdminUsuariosPage() {
     setRemovingId(null);
   }
 
-  async function handleEditUser(profile: Profile) {
-    const nome = window.prompt('Nome do usuario', profile.nome || '');
-    if (!nome) return;
-    const emailReal = window.prompt('Email real do usuario', profile.email_real || '') ?? profile.email_real ?? '';
-
-    setRemovingId(profile.id);
-    setError(null);
-
-    const token = await getToken();
-    if (!token) {
-      setError('Sessao expirada. Entre novamente.');
-      setRemovingId(null);
-      return;
-    }
-
-    const response = await fetch('/api/admin/usuarios', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        id: profile.id,
-        action: 'update_profile',
-        nome: nome.trim(),
-        email_real: emailReal.trim()
-      })
-    });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      setError(payload.error || 'Erro ao editar usuario.');
-      setRemovingId(null);
-      return;
-    }
-
-    await fetchUsers();
-    setRemovingId(null);
+  async function handleEditUser(profile: AdminProfile) {
+    fillEditForm(profile);
+    router.replace(`/admin/usuarios?edit=${profile.id}`);
   }
 
   const filteredProfiles = profiles.filter((profile) => {
@@ -377,7 +392,7 @@ export default function AdminUsuariosPage() {
               <UserPlus size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-gray-900">Adicionar pessoa</h2>
+              <h2 className="text-xl font-black text-gray-900">{editingProfile ? 'Editar acesso' : 'Adicionar pessoa'}</h2>
               <p className="text-xs font-bold text-slate-400">O email Orion é gerado pelo nome.</p>
             </div>
           </div>
@@ -582,8 +597,17 @@ export default function AdminUsuariosPage() {
             disabled={saving}
             className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 py-5 font-black text-white shadow-xl shadow-blue-600/20 transition-all hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? <Loader2 className="animate-spin" size={20} /> : <><Plus size={20} /> Criar acesso</>}
+            {saving ? <Loader2 className="animate-spin" size={20} /> : editingProfile ? <><CheckCircle2 size={20} /> Salvar alteracoes</> : <><Plus size={20} /> Criar acesso</>}
           </button>
+          {editingProfile && (
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="mt-3 flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white py-4 font-black text-slate-600 transition-all hover:bg-slate-50"
+            >
+              Cancelar edicao
+            </button>
+          )}
         </form>
 
         <div className="orion-panel">

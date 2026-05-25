@@ -267,7 +267,7 @@ export async function PATCH(request: Request) {
 
     const { data: targetProfile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, email, email_real, tipo_usuario, is_admin_master')
+      .select('id, email, email_real, tipo_usuario, corretor_id, is_admin_master')
       .eq('id', id)
       .maybeSingle();
 
@@ -278,18 +278,38 @@ export async function PATCH(request: Request) {
     if (action === 'update_profile') {
       const nome = String(body.nome || '').trim();
       const emailReal = String(body.email_real || '').trim() || null;
+      const fotoUrl = typeof body.foto_url === 'string' ? body.foto_url : null;
+      const nextRole = body.tipo_usuario as UserRole | undefined;
+      const nextEquipe = ['apollo', 'kripto_hunters'].includes(String(body.equipe_orion || ''))
+        ? String(body.equipe_orion)
+        : null;
 
       if (!nome) {
         return NextResponse.json({ error: 'Nome obrigatorio.' }, { status: 400 });
+      }
+
+      if (nextRole && nextRole !== targetProfile.tipo_usuario && (nextRole === 'corretor' || targetProfile.tipo_usuario === 'corretor')) {
+        return NextResponse.json({ error: 'Para transformar acesso em corretor ou tirar de corretor, crie um novo acesso. A edicao segura permite ajustar dados do perfil atual.' }, { status: 400 });
       }
 
       if (targetProfile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
         return NextResponse.json({ error: 'Apenas o admin master pode editar outro admin.' }, { status: 403 });
       }
 
+      if (nextRole === 'admin' && !isMasterAdmin(guard.profile)) {
+        return NextResponse.json({ error: 'Apenas o admin master pode definir outro admin.' }, { status: 403 });
+      }
+
+      const roleToSave = nextRole || targetProfile.tipo_usuario;
       const { error: updateProfileError } = await supabaseAdmin
         .from('profiles')
-        .update({ nome, email_real: emailReal })
+        .update({
+          nome,
+          email_real: emailReal,
+          foto_url: fotoUrl,
+          tipo_usuario: roleToSave,
+          equipe_orion: roleToSave === 'corretor' ? null : nextEquipe,
+        })
         .eq('id', id);
 
       if (updateProfileError) {
@@ -297,7 +317,7 @@ export async function PATCH(request: Request) {
       }
 
       await supabaseAdmin.auth.admin.updateUserById(id, {
-        user_metadata: { name: nome, nome, email_real: emailReal }
+        user_metadata: { name: nome, nome, email_real: emailReal, tipo_usuario: roleToSave }
       });
 
       if (targetProfile.tipo_usuario === 'corretor') {
@@ -308,9 +328,21 @@ export async function PATCH(request: Request) {
           .maybeSingle();
 
         if (profileWithCorretor?.corretor_id) {
+          const timeOperacional = Array.isArray(body.time_operacional) ? body.time_operacional : [];
+          const operadoras = Array.isArray(body.operadoras) ? body.operadoras : [];
+          const gestorTrafegoId = await resolveGestorTrafegoId(body.gestor_trafego_id, timeOperacional);
           await supabaseAdmin
             .from('corretores')
-            .update({ nome, email_real: emailReal })
+            .update({
+              nome,
+              email_real: emailReal,
+              telefone: String(body.telefone || '').trim(),
+              tipo_campanha: body.tipo_campanha || 'ambos',
+              time_operacional: timeOperacional,
+              gestor_trafego_id: gestorTrafegoId,
+              foto_url: fotoUrl,
+              operadoras_info: { selecionadas: operadoras },
+            })
             .eq('id', profileWithCorretor.corretor_id);
         }
       }
@@ -319,7 +351,7 @@ export async function PATCH(request: Request) {
         action: 'user.update',
         entity_type: 'profile',
         entity_id: id,
-        metadata: { nome, email_real: emailReal },
+        metadata: { nome, email_real: emailReal, tipo_usuario: roleToSave, equipe_orion: roleToSave === 'corretor' ? null : nextEquipe },
       });
 
       return NextResponse.json({ success: true });
