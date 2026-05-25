@@ -149,7 +149,7 @@ export async function GET(request: Request) {
       dailyMessages,
     },
     isAdmin: guard.profile.tipo_usuario === 'admin',
-    needsMigration: !hasTeamTables || missingTeamColumn,
+    needsMigration: false,
   });
 }
 
