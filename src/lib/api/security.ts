@@ -35,11 +35,21 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
     return { error: NextResponse.json({ error: 'Sessao expirada.' }, { status: 401 }) };
   }
 
-  const { data: profile } = await supabaseAdmin
+  let { data: profile, error: profileError } = await supabaseAdmin
     .from('profiles')
     .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, is_admin_master, equipe_orion')
     .eq('id', user.id)
     .maybeSingle();
+
+  if (profileError && String(profileError.message || '').includes('equipe_orion')) {
+    const fallback = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, is_admin_master')
+      .eq('id', user.id)
+      .maybeSingle();
+    profile = fallback.data ? { ...fallback.data, equipe_orion: null } : null;
+    profileError = fallback.error;
+  }
 
   if (!profile) {
     return { error: NextResponse.json({ error: 'Perfil nao encontrado.' }, { status: 404 }) };

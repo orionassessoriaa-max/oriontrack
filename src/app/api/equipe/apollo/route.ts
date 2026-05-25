@@ -23,17 +23,31 @@ export async function GET(request: Request) {
   if (!canReadTeam(guard.profile.tipo_usuario)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
-  if (guard.profile.tipo_usuario !== 'admin' && guard.profile.equipe_orion !== 'apollo') {
+  if (guard.profile.tipo_usuario !== 'admin' && guard.profile.equipe_orion && guard.profile.equipe_orion !== 'apollo') {
     return NextResponse.json({ error: 'Este painel pertence ao time Apollo.' }, { status: 403 });
   }
 
-  const [membersRes, metaRes, objectivesRes, pointsRes] = await Promise.all([
-    supabaseAdmin
+  const membersRes = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome, email, email_real, tipo_usuario, foto_url, equipe_orion, is_admin_master')
+    .in('tipo_usuario', ['admin', 'gestor_trafego', 'designer', 'account_manager'])
+    .in('status', ['active', 'ativo', 'Ativo'])
+    .order('nome', { ascending: true });
+
+  let membersData = membersRes.data || [];
+  let membersError = membersRes.error;
+  if (membersRes.error && String(membersRes.error.message || '').includes('equipe_orion')) {
+    const fallback = await supabaseAdmin
       .from('profiles')
-      .select('id, nome, email, email_real, tipo_usuario, foto_url, equipe_orion, is_admin_master')
+      .select('id, nome, email, email_real, tipo_usuario, foto_url, is_admin_master')
       .in('tipo_usuario', ['admin', 'gestor_trafego', 'designer', 'account_manager'])
       .in('status', ['active', 'ativo', 'Ativo'])
-      .order('nome', { ascending: true }),
+      .order('nome', { ascending: true });
+    membersData = (fallback.data || []).map((member: any) => ({ ...member, equipe_orion: null }));
+    membersError = fallback.error;
+  }
+
+  const [metaRes, objectivesRes, pointsRes] = await Promise.all([
     supabaseAdmin
       .from('equipe_metas')
       .select('*')
@@ -54,12 +68,10 @@ export async function GET(request: Request) {
       .order('created_at', { ascending: false }),
   ]);
 
-  if (membersRes.error) return NextResponse.json({ error: membersRes.error.message }, { status: 500 });
-  if (metaRes.error) return NextResponse.json({ error: metaRes.error.message }, { status: 500 });
-  if (objectivesRes.error) return NextResponse.json({ error: objectivesRes.error.message }, { status: 500 });
-  if (pointsRes.error) return NextResponse.json({ error: pointsRes.error.message }, { status: 500 });
+  if (membersError) return NextResponse.json({ error: membersError.message }, { status: 500 });
+  const hasTeamTables = !metaRes.error && !objectivesRes.error && !pointsRes.error;
 
-  const objectives = objectivesRes.data?.length
+  const objectives = hasTeamTables && objectivesRes.data?.length
     ? objectivesRes.data
     : DEFAULT_OBJECTIVES.map(([titulo, valor]) => ({
         id: String(titulo),
@@ -70,7 +82,7 @@ export async function GET(request: Request) {
         status: 'aberto',
       }));
 
-  const rawMembers = (membersRes.data || []).filter((member: any) =>
+  const rawMembers = membersData.filter((member: any) =>
     member.equipe_orion === 'apollo'
     || member.is_admin_master
     || String(member.email || '').toLowerCase() === 'ewerttonherculano@gmail.com'
@@ -78,7 +90,7 @@ export async function GET(request: Request) {
   );
 
   const pointsByProfile = new Map<string, number>();
-  (pointsRes.data || []).forEach((point: any) => {
+  (hasTeamTables ? pointsRes.data || [] : []).forEach((point: any) => {
     pointsByProfile.set(point.profile_id, (pointsByProfile.get(point.profile_id) || 0) + Number(point.pontos || 0));
   });
 
@@ -107,9 +119,9 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     month: APOLLO_MONTH,
-    meta: metaRes.data || { equipe: 'apollo', mes: APOLLO_MONTH, meta_valor: 50000, prazo: '2026-05-31' },
+    meta: hasTeamTables && metaRes.data ? metaRes.data : { equipe: 'apollo', mes: APOLLO_MONTH, meta_valor: 50000, prazo: '2026-05-31' },
     objectives,
-    points: pointsRes.data || [],
+    points: hasTeamTables ? pointsRes.data || [] : [],
     members,
     summary: {
       totalObjetivos,
@@ -120,6 +132,7 @@ export async function GET(request: Request) {
       dailyMessages,
     },
     isAdmin: guard.profile.tipo_usuario === 'admin',
+    needsMigration: !hasTeamTables,
   });
 }
 
