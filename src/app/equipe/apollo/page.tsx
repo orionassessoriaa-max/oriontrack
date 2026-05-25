@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { Award, CheckCircle2, Crown, DollarSign, Loader2, Lock, Plus, Save, Sparkles, Target, Trophy } from 'lucide-react';
+import { Award, CheckCircle2, Crown, DollarSign, Loader2, Lock, Plus, Save, Sparkles, Target, Trophy, X } from 'lucide-react';
 
 type TeamMember = {
   id: string;
@@ -14,7 +14,7 @@ type TeamMember = {
   tipo_usuario: string;
   foto_url: string | null;
   pontos: number;
-  pontos_detalhes?: Array<{ pontos: number; motivo: string; created_at: string }>;
+  pontos_detalhes?: Array<{ id: string; pontos: number; motivo: string; created_at: string }>;
   is_admin_master?: boolean | null;
 };
 
@@ -174,6 +174,12 @@ export default function ApolloTeamPage() {
     }
   }
 
+  async function removeAction(body: Record<string, unknown>, successMessage: string) {
+    const label = body.action === 'delete_sale' ? 'esta venda' : 'esta pontuacao';
+    if (!window.confirm(`Remover ${label}?`)) return;
+    await submitAction(body, successMessage);
+  }
+
   const metaValue = Number(data?.meta.meta_valor || 50000);
   const progress = data?.summary.progress || 0;
   const forecastProgress = data?.summary.forecastProgress || 0;
@@ -286,11 +292,23 @@ export default function ApolloTeamPage() {
                       {Array.isArray(member.pontos_detalhes) && member.pontos_detalhes.length > 0 && (
                         <div className="mt-3 grid gap-2">
                           {member.pontos_detalhes.map((detail, detailIndex) => (
-                            <div key={`${member.id}-${detail.created_at}-${detailIndex}`} className="border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900 dark:border-blue-400/20 dark:bg-blue-950/30 dark:text-blue-100">
-                              <span className="mr-2 inline-flex bg-blue-600 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-white">
-                                +{detail.pontos} XP
-                              </span>
-                              {detail.motivo}
+                            <div key={`${member.id}-${detail.created_at}-${detailIndex}`} className="flex items-start justify-between gap-3 border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900 dark:border-blue-400/20 dark:bg-blue-950/30 dark:text-blue-100">
+                              <div>
+                                <span className="mr-2 inline-flex bg-blue-600 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                                  +{detail.pontos} XP
+                                </span>
+                                {detail.motivo}
+                              </div>
+                              {data.isAdmin && detail.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeAction({ action: 'delete_point', id: detail.id }, 'Pontuacao removida.')}
+                                  className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center border border-blue-200 bg-white text-blue-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-blue-400/20 dark:bg-slate-950 dark:text-blue-100 dark:hover:border-red-400/40 dark:hover:bg-red-950/30"
+                                  title="Remover pontuacao"
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -414,12 +432,22 @@ export default function ApolloTeamPage() {
                   {data.sales.length === 0 ? (
                     <p className="p-5 text-sm font-black text-slate-400">Nenhuma venda registrada ainda.</p>
                   ) : data.sales.map((sale) => (
-                    <div key={sale.id} className="grid gap-2 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                    <div key={sale.id} className="grid gap-2 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                       <div>
                         <h3 className="font-black text-slate-950 dark:text-white">{sale.nome}</h3>
                         <p className="text-sm font-bold text-slate-500 dark:text-slate-300">{sale.vendido}</p>
                       </div>
                       <p className="text-lg font-black text-emerald-600">{brl(sale.valor)}</p>
+                      {data.isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => removeAction({ action: 'delete_sale', id: sale.id }, 'Venda removida.')}
+                          className="grid h-9 w-9 cursor-pointer place-items-center border border-red-100 bg-red-50 text-red-600 transition hover:bg-red-600 hover:text-white dark:border-red-400/30 dark:bg-red-950/30 dark:text-red-100 dark:hover:bg-red-600"
+                          title="Remover venda"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
