@@ -89,7 +89,7 @@ const COMMERCIAL_REQUIRED_STATUSES: LeadStatus[] = [
 ];
 
 const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 5000;
 
 function parseCurrencyInput(value?: string | number | null) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -155,6 +155,7 @@ export default function BrokerLeadsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [leadPage, setLeadPage] = useState(0);
   const [hasMoreLeads, setHasMoreLeads] = useState(false);
+  const [totalLeadsCount, setTotalLeadsCount] = useState<number | null>(null);
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null);
   const [savingCrm, setSavingCrm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,7 +211,7 @@ export default function BrokerLeadsPage() {
       const to = from + PAGE_SIZE - 1;
       let leadsQuery = supabase
         .from('leads')
-        .select('*, responsavel_membro:responsavel_membro_id(nome,email)')
+        .select('*, responsavel_membro:responsavel_membro_id(nome,email)', { count: 'exact' })
         .eq('corretor_id', profile.corretor_id)
         .order('data_entrada', { ascending: false })
         .range(from, to);
@@ -219,7 +220,7 @@ export default function BrokerLeadsPage() {
         leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
       }
 
-      const { data, error: supabaseError } = await leadsQuery;
+      const { data, count, error: supabaseError } = await leadsQuery;
 
       if (supabaseError) {
         console.error('RLS/DB Error:', supabaseError);
@@ -234,7 +235,9 @@ export default function BrokerLeadsPage() {
       const normalized = (data || []).map((lead) => ({ ...lead, status: normalizeLeadStatus(lead.status) }));
       setLeads((current) => append ? [...current, ...normalized] : normalized);
       setLeadPage(page);
-      setHasMoreLeads(normalized.length === PAGE_SIZE);
+      setTotalLeadsCount(count ?? null);
+      const loadedCount = (append ? leads.length : 0) + normalized.length;
+      setHasMoreLeads(typeof count === 'number' ? loadedCount < count : normalized.length === PAGE_SIZE);
     } catch (err) {
       console.error('Catch Error:', err);
       setError('Erro inesperado ao carregar leads.');
@@ -723,7 +726,10 @@ export default function BrokerLeadsPage() {
           </button>
         </div>
         <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-widest text-slate-500">
-          <span className="orion-chip bg-slate-100 text-slate-600">{filteredLeads.length} de {leads.length} leads</span>
+          <span className="orion-chip bg-slate-100 text-slate-600">
+            {filteredLeads.length} de {totalLeadsCount ?? leads.length} leads
+            {totalLeadsCount && leads.length < totalLeadsCount ? ` (${leads.length} carregados)` : ''}
+          </span>
           <span className="orion-chip bg-blue-50 text-blue-700">
             Página: {operadoraFilter === 'todas' ? 'todas' : operadoraFilter === '__sem_aba__' ? 'sem página' : operadoraFilter}
           </span>
