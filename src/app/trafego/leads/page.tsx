@@ -67,32 +67,21 @@ export default function TrafficLeadsPage() {
     setError(null);
 
     try {
-      const { data: corretoresData, error: corretoresError } = await supabase
-        .from('corretores')
-        .select('id, nome')
-        .eq('gestor_trafego_id', profile.id)
-        .order('nome', { ascending: true });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
 
-      if (corretoresError) throw corretoresError;
+      const response = await fetch(`/api/trafego/leads?gestor_id=${encodeURIComponent(profile.id)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json();
 
-      const corretorList = (corretoresData || []) as CorretorOption[];
-      const corretorIds = corretorList.map((corretor) => corretor.id);
-      setCorretores(corretorList);
-
-      if (corretorIds.length === 0) {
-        setLeads([]);
-        return;
+      if (!response.ok) {
+        throw new Error(payload.error || 'Erro ao carregar leads vinculados a sua gestao.');
       }
 
-      const { data, error: leadsError } = await supabase
-        .from('leads')
-        .select('*, corretores(nome)')
-        .in('corretor_id', corretorIds)
-        .order('data_entrada', { ascending: false });
-
-      if (leadsError) throw leadsError;
-
-      setLeads((data as TrafficLead[]) || []);
+      setCorretores((payload.corretores || []) as CorretorOption[]);
+      setLeads((payload.leads || []) as TrafficLead[]);
     } catch (err: unknown) {
       console.error('Error fetching traffic leads:', err);
       const errorMessage = err instanceof Error ? err.message : '';
