@@ -36,6 +36,7 @@ function isTeamStorageError(error: any) {
     || message.includes('equipe_metas')
     || message.includes('equipe_objetivos')
     || message.includes('equipe_pontos')
+    || message.includes('equipe_vendas')
     || message.includes('Could not find');
 }
 
@@ -71,7 +72,7 @@ export async function GET(request: Request) {
     membersError = fallback.error;
   }
 
-  const [metaRes, objectivesRes, pointsRes] = await Promise.all([
+  const [metaRes, objectivesRes, pointsRes, salesRes] = await Promise.all([
     supabaseAdmin
       .from('equipe_metas')
       .select('*')
@@ -90,17 +91,23 @@ export async function GET(request: Request) {
       .eq('equipe', 'apollo')
       .eq('mes', APOLLO_MONTH)
       .order('created_at', { ascending: false }),
+    supabaseAdmin
+      .from('equipe_vendas')
+      .select('*')
+      .eq('equipe', 'apollo')
+      .eq('mes', APOLLO_MONTH)
+      .order('created_at', { ascending: false }),
   ]);
 
   if (membersError) return NextResponse.json({ error: membersError.message }, { status: 500 });
   const hasTeamTables = !metaRes.error && !objectivesRes.error && !pointsRes.error;
   let auditEntries: any[] = [];
 
-  if (!hasTeamTables) {
+  if (!hasTeamTables || salesRes.error) {
     const auditRes = await supabaseAdmin
       .from('audit_logs')
       .select('action, entity_id, metadata, created_at')
-      .in('action', ['team.objective.create', 'team.objective.update', 'team.points.add', 'team.meta.update'])
+      .in('action', ['team.objective.create', 'team.objective.update', 'team.points.add', 'team.meta.update', 'team.sale.create'])
       .order('created_at', { ascending: false })
       .limit(500);
 
@@ -230,10 +237,28 @@ export async function GET(request: Request) {
     pontos_detalhes: pointDescriptionsByProfile.get(member.id) || [],
   })).sort((a: any, b: any) => b.pontos - a.pontos || a.nome.localeCompare(b.nome));
 
+  const sales = !salesRes.error
+    ? (salesRes.data || [])
+    : auditEntries
+        .filter((entry: any) => entry.action === 'team.sale.create')
+        .slice()
+        .reverse()
+        .map((entry: any) => ({
+          id: String(entry.entity_id || entry.metadata?.sale_id || `sale:${entry.created_at}`),
+          equipe: 'apollo',
+          mes: APOLLO_MONTH,
+          nome: String(entry.metadata?.nome || ''),
+          vendido: String(entry.metadata?.vendido || ''),
+          valor: Number(entry.metadata?.valor || 0),
+          created_at: entry.created_at,
+        }));
+
+  const totalVendas = sales.reduce((sum: number, sale: any) => sum + Number(sale.valor || 0), 0);
   const totalObjetivos = objectives.reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
   const realizadoObjetivos = objectives
     .filter((item: any) => item.status === 'feito')
     .reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
+  const realizadoTotal = realizadoObjetivos + totalVendas;
   const emAndamentoObjetivos = objectives
     .filter((item: any) => item.status === 'em_andamento')
     .reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
@@ -257,18 +282,21 @@ export async function GET(request: Request) {
     month: APOLLO_MONTH,
     meta,
     objectives,
+    sales,
     points: hasTeamTables ? pointsRes.data || [] : [],
     members,
     summary: {
       totalObjetivos,
       realizadoObjetivos,
+      totalVendas,
+      realizadoTotal,
       emAndamentoObjetivos,
       previsaoObjetivos,
       previsaoAberta,
-      faltanteMeta: Math.max(0, Number(meta.meta_valor || 50000) - realizadoObjetivos),
+      faltanteMeta: Math.max(0, Number(meta.meta_valor || 50000) - realizadoTotal),
       totalPontos,
       daysRemaining,
-      progress: Math.min(100, Math.round((realizadoObjetivos / Number(meta.meta_valor || 50000)) * 100)),
+      progress: Math.min(100, Math.round((realizadoTotal / Number(meta.meta_valor || 50000)) * 100)),
       forecastProgress: Math.min(100, Math.round((previsaoObjetivos / Number(meta.meta_valor || 50000)) * 100)),
       dailyMessages,
     },
@@ -364,6 +392,45 @@ export async function POST(request: Request) {
       action: 'team.objective.create',
       entity_type: 'equipe_objetivo',
       metadata: { equipe: 'apollo', mes: APOLLO_MONTH, titulo, valor_estimado: valor },
+    });
+    return NextResponse.json({ success: true });
+  }
+
+  if (action === 'create_sale') {
+    const nome = String(body.nome || '').trim();
+    const vendido = String(body.vendido || '').trim();
+    const valor = parseMoney(body.valor);
+
+    if (!nome || !vendido || !Number.isFinite(valor) || valor <= 0) {
+      return NextResponse.json({ error: 'Informe quem vendeu, o que vendeu e o valor.' }, { status: 400 });
+    }
+
+    const fallbackId = `sale:${Date.now()}:${nome.toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`;
+    const { error } = await supabaseAdmin.from('equipe_vendas').insert([{
+      equipe: 'apollo',
+      mes: APOLLO_MONTH,
+      nome,
+      vendido,
+      valor,
+      created_by: guard.profile.id,
+    }]);
+
+    if (error) {
+      if (!isTeamStorageError(error)) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.sale.create',
+        entity_type: 'equipe_venda',
+        entity_id: fallbackId,
+        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, sale_id: fallbackId, nome, vendido, valor },
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    await writeAuditLog(request, guard.profile, {
+      action: 'team.sale.create',
+      entity_type: 'equipe_venda',
+      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, nome, vendido, valor },
     });
     return NextResponse.json({ success: true });
   }
