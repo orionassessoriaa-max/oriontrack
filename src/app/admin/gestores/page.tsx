@@ -164,7 +164,7 @@ export default function AdminGestoresPage() {
                     <td className="px-8 py-6 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Link 
-                          href={`/admin/gestores/${g.id}/editar`}
+                          href={`/admin/usuarios?edit=${g.id}`}
                           className="p-2.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all"
                           title="Editar Gestor"
                         >

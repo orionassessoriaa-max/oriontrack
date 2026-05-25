@@ -30,8 +30,7 @@ export async function GET(request: Request) {
   const [membersRes, metaRes, objectivesRes, pointsRes] = await Promise.all([
     supabaseAdmin
       .from('profiles')
-      .select('id, nome, email, email_real, tipo_usuario, foto_url, equipe_orion')
-      .eq('equipe_orion', 'apollo')
+      .select('id, nome, email, email_real, tipo_usuario, foto_url, equipe_orion, is_admin_master')
       .in('tipo_usuario', ['admin', 'gestor_trafego', 'designer', 'account_manager'])
       .in('status', ['active', 'ativo', 'Ativo'])
       .order('nome', { ascending: true }),
@@ -71,12 +70,19 @@ export async function GET(request: Request) {
         status: 'aberto',
       }));
 
+  const rawMembers = (membersRes.data || []).filter((member: any) =>
+    member.equipe_orion === 'apollo'
+    || member.is_admin_master
+    || String(member.email || '').toLowerCase() === 'ewerttonherculano@gmail.com'
+    || String(member.email_real || '').toLowerCase() === 'ewerttonherculano@gmail.com'
+  );
+
   const pointsByProfile = new Map<string, number>();
   (pointsRes.data || []).forEach((point: any) => {
     pointsByProfile.set(point.profile_id, (pointsByProfile.get(point.profile_id) || 0) + Number(point.pontos || 0));
   });
 
-  const members = (membersRes.data || []).map((member: any) => ({
+  const members = rawMembers.map((member: any) => ({
     ...member,
     pontos: pointsByProfile.get(member.id) || 0,
   })).sort((a: any, b: any) => b.pontos - a.pontos || a.nome.localeCompare(b.nome));
