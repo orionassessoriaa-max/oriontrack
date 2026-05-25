@@ -1,28 +1,15 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'NÃ£o autorizado.' }, { status: 401 });
-    }
+    const limited = rateLimit(request, 'support:requests:create', { limit: 20, windowMs: 10 * 60_000 });
+    if (limited) return limited;
 
-    const token = authHeader.split(' ')[1];
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) {
-      return NextResponse.json({ error: 'SessÃ£o expirada.' }, { status: 401 });
-    }
-
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('id, nome, tipo_usuario, corretor_id')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (profileError || !profile) {
-      return NextResponse.json({ error: 'Perfil nÃ£o encontrado.' }, { status: 404 });
-    }
+    const guard = await requireApiUser(request);
+    if ('error' in guard) return guard.error;
+    const profile = guard.profile;
 
     const body = await request.json();
     const categoria = String(body.categoria || body.tipo || 'outro');
@@ -60,7 +47,7 @@ export async function POST(request: Request) {
     if (admins?.length) {
       await supabaseAdmin.from('notificacoes').insert(
         admins.map((admin) => ({
-          titulo: 'Nova solicitaÃ§Ã£o de suporte',
+          titulo: 'Nova solicitação de suporte',
           mensagem: `${profile.nome} abriu um chamado de ${categoria}: ${mensagem}`,
           remetente_profile_id: profile.id,
           destinatario_profile_id: admin.id,
@@ -69,6 +56,13 @@ export async function POST(request: Request) {
         }))
       );
     }
+
+    await writeAuditLog(request, profile, {
+      action: 'support.request.create',
+      entity_type: 'solicitacao_suporte',
+      entity_id: requestData.id,
+      metadata: { categoria },
+    });
 
     return NextResponse.json({ success: true, request: requestData });
   } catch (error: any) {

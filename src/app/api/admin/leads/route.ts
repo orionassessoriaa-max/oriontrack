@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeLeadStatus } from '@/lib/leadStatus';
-import { writeAuditLog } from '@/lib/api/security';
+import { rateLimit, writeAuditLog } from '@/lib/api/security';
 
 async function requireAdmin(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -29,6 +29,9 @@ async function requireAdmin(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimit(request, 'admin:leads:create', { limit: 30, windowMs: 60_000 });
+  if (limited) return limited;
+
   const guard = await requireAdmin(request);
   if ('error' in guard) return guard.error;
 
@@ -80,6 +83,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    await writeAuditLog(request, guard.profile as any, {
+      action: 'lead.create_admin',
+      entity_type: 'lead',
+      entity_id: data.id,
+      metadata: { corretor_id: corretorId, nome },
+    });
+
     return NextResponse.json({ ok: true, lead_id: data.id });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Erro ao salvar lead.' }, { status: 500 });
@@ -87,6 +97,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const limited = rateLimit(request, 'admin:leads:delete-bulk', { limit: 5, windowMs: 10 * 60_000 });
+  if (limited) return limited;
+
   const guard = await requireAdmin(request);
   if ('error' in guard) return guard.error;
 

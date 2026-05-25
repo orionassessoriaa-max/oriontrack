@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeLeadStatus } from '@/lib/leadStatus';
+import { rateLimit, writeAuditLog } from '@/lib/api/security';
 
 function normalizeText(value: unknown, fallback = '') {
   return String(value ?? fallback).trim();
@@ -98,6 +99,9 @@ async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
 
 export async function POST(request: Request) {
   try {
+    const limited = rateLimit(request, 'webhook:n8n:leads', { limit: 180, windowMs: 60_000 });
+    if (limited) return limited;
+
     const secret = process.env.ORION_N8N_WEBHOOK_SECRET;
     if (secret) {
       const headerSecret = request.headers.get('x-orion-secret');
@@ -161,6 +165,17 @@ export async function POST(request: Request) {
     }
 
     const assignedMemberId = await assignLeadToNextTeamMember(corretorId, data.id);
+
+    await writeAuditLog(request, null, {
+      action: 'lead.create_webhook_n8n',
+      entity_type: 'lead',
+      entity_id: data.id,
+      metadata: {
+        corretor_id: corretorId,
+        assigned_member_id: assignedMemberId,
+        source: 'n8n',
+      },
+    });
 
     return NextResponse.json({ success: true, lead: data, responsavel_membro_id: assignedMemberId });
   } catch (error: any) {

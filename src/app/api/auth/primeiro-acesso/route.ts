@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { rateLimit, writeAuditLog } from '@/lib/api/security';
 
 export async function POST(request: Request) {
   try {
+    const limited = rateLimit(request, 'auth:first-access', { limit: 8, windowMs: 10 * 60_000 });
+    if (limited) return limited;
+
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
@@ -28,7 +32,7 @@ export async function POST(request: Request) {
 
     const { data: profile, error: profileLookupError } = await supabaseAdmin
       .from('profiles')
-      .select('id, corretor_id, tipo_usuario')
+      .select('id, email, email_real, nome, corretor_id, tipo_usuario, status')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -70,6 +74,13 @@ export async function POST(request: Request) {
         .update({ email: emailReal })
         .eq('id', profile.corretor_id);
     }
+
+    await writeAuditLog(request, profile as any, {
+      action: 'auth.first_access_completed',
+      entity_type: 'profile',
+      entity_id: user.id,
+      metadata: { email_real: emailReal },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

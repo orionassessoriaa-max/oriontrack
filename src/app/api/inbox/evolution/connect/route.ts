@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { configureEvolutionWebhook, evolutionFetch, evolutionInstanceName } from '@/lib/evolution';
 
 export async function POST(request: Request) {
   try {
+    const limited = rateLimit(request, 'inbox:evolution:connect', { limit: 12, windowMs: 10 * 60_000 });
+    if (limited) return limited;
+
     const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 

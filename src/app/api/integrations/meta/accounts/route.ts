@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { rateLimit } from '@/lib/api/security';
 
 type MetaAccount = {
   id: string;
@@ -58,6 +59,9 @@ async function fetchMetaAccounts(path: string, accessToken: string) {
 
 export async function POST(request: Request) {
   try {
+    const limited = rateLimit(request, 'meta:accounts:sync', { limit: 8, windowMs: 10 * 60_000 });
+    if (limited) return limited;
+
     const guard = await requireAdmin(request);
     if ('error' in guard) return guard.error;
 

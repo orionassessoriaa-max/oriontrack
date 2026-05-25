@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { evolutionFetch, evolutionInstanceName, normalizePhone } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
@@ -24,6 +24,9 @@ function canAccessConversation(profile: any, conversation: any) {
 
 export async function GET(request: Request) {
   try {
+    const limited = rateLimit(request, 'inbox:messages:read', { limit: 120, windowMs: 60_000 });
+    if (limited) return limited;
+
     const guard = await requireApiUser(request, [...INBOX_ROLES]);
     if ('error' in guard) return guard.error;
 
@@ -54,6 +57,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const limited = rateLimit(request, 'inbox:messages:send', { limit: 30, windowMs: 60_000 });
+    if (limited) return limited;
+
     const guard = await requireApiUser(request, [...INBOX_ROLES]);
     if ('error' in guard) return guard.error;
 

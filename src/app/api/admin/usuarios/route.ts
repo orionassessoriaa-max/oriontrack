@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateOrionEmail, generateStrongPassword } from '@/lib/users';
 import { PUBLIC_LOGIN_URL } from '@/lib/publicUrl';
 import { UserRole } from '@/types';
-import { writeAuditLog } from '@/lib/api/security';
+import { rateLimit, writeAuditLog } from '@/lib/api/security';
 
 function isMasterAdmin(profile: { email?: string | null; email_real?: string | null; is_admin_master?: boolean | null }) {
   if (profile.is_admin_master) return true;
@@ -125,6 +125,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const limited = rateLimit(request, 'admin:usuarios:create', { limit: 20, windowMs: 10 * 60_000 });
+    if (limited) return limited;
+
     const guard = await requireAdmin(request);
     if ('error' in guard) return guard.error;
 
@@ -264,6 +267,9 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const limited = rateLimit(request, 'admin:usuarios:update', { limit: 40, windowMs: 10 * 60_000 });
+    if (limited) return limited;
+
     const guard = await requireAdmin(request);
     if ('error' in guard) return guard.error;
 
@@ -429,6 +435,9 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const limited = rateLimit(request, 'admin:usuarios:delete', { limit: 12, windowMs: 10 * 60_000 });
+    if (limited) return limited;
+
     const guard = await requireAdmin(request);
     if ('error' in guard) return guard.error;
 

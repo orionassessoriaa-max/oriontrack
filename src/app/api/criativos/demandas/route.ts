@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { rateLimit, writeAuditLog } from '@/lib/api/security';
 
 const BUCKET = 'criativos';
 
@@ -29,6 +30,9 @@ async function requireUser(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const limited = rateLimit(request, 'criativos:demandas:delete', { limit: 20, windowMs: 10 * 60_000 });
+  if (limited) return limited;
+
   const guard = await requireUser(request);
   if ('error' in guard) return guard.error;
 
@@ -82,6 +86,12 @@ export async function DELETE(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await writeAuditLog(request, guard.profile as any, {
+    action: 'creative.demand.delete',
+    entity_type: 'criativo_demanda',
+    entity_id: id,
+  });
 
   return NextResponse.json({ ok: true });
 }

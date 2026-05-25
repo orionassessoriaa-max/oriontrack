@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { rateLimit } from '@/lib/api/security';
 
 type CorretorMeta = {
   id: string;
@@ -130,6 +131,9 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
 
 export async function POST(request: Request) {
   try {
+    const limited = rateLimit(request, 'meta:alerts', { limit: 30, windowMs: 5 * 60_000 });
+    if (limited) return limited;
+
     const guard = await requireTrafficAccess(request);
     if ('error' in guard) return guard.error;
 

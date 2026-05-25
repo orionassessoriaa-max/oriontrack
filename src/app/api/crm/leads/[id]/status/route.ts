@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { LEAD_STATUSES } from '@/lib/leadStatus';
 import { LeadStatus } from '@/types';
@@ -14,6 +14,9 @@ function numericOrNull(value: unknown) {
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const limited = rateLimit(request, 'crm:lead-status:update', { limit: 120, windowMs: 60_000 });
+    if (limited) return limited;
+
     const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_membro']);
     if ('error' in guard) return guard.error;
 
