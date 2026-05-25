@@ -226,7 +226,7 @@ export default function ApolloTeamPage() {
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Metric icon={Target} label="Meta do mes" value={brl(metaValue)} tone="blue" />
-            <Metric icon={CheckCircle2} label="Realizado total" value={brl(data.summary.realizadoTotal)} tone="emerald" />
+            <Metric icon={CheckCircle2} label="Restante para meta" value={brl(data.summary.faltanteMeta)} tone="emerald" />
             <Metric icon={Sparkles} label="Previsao aberta" value={brl(data.summary.previsaoAberta)} tone="amber" />
             <Metric icon={DollarSign} label="Vendas" value={brl(data.summary.totalVendas)} tone="violet" />
           </section>

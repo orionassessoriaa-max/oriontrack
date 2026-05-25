@@ -11,7 +11,6 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [themeMode, setThemeMode] = useState<'claro' | 'noturno'>('claro');
 
   useEffect(() => {
     if (!loading) {
@@ -73,29 +72,11 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   }, [loading, user, profile, pathname, router]);
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem('orion:tema_sistema') as 'claro' | 'noturno' | null;
-    queueMicrotask(() => {
-      setThemeMode((profile?.tema_sistema as 'claro' | 'noturno' | null) || storedTheme || 'claro');
-    });
-  }, [profile?.tema_sistema]);
-
-  useEffect(() => {
-    const handleThemeChange = (event: Event) => {
-      const nextTheme = (event as CustomEvent<'claro' | 'noturno'>).detail;
-      if (nextTheme === 'claro' || nextTheme === 'noturno') {
-        setThemeMode(nextTheme);
-      }
-    };
-
-    window.addEventListener('orion-theme-change', handleThemeChange);
-    return () => window.removeEventListener('orion-theme-change', handleThemeChange);
+    window.localStorage.setItem('orion:tema_sistema', 'claro');
+    document.documentElement.classList.remove('theme-noturno');
+    document.body.classList.remove('theme-noturno');
+    document.documentElement.style.colorScheme = 'light';
   }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('theme-noturno', themeMode === 'noturno');
-    document.body.classList.toggle('theme-noturno', themeMode === 'noturno');
-    document.documentElement.style.colorScheme = themeMode === 'noturno' ? 'dark' : 'light';
-  }, [themeMode]);
 
   if (loading) {
     return (
@@ -139,10 +120,8 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     );
   }
 
-  const isDarkTheme = themeMode === 'noturno';
-
   return (
-    <div className={`flex min-h-screen ${isDarkTheme ? 'theme-noturno bg-slate-950 text-slate-100' : 'bg-[#f8fafc]'}`}>
+    <div className="flex min-h-screen bg-[#f8fafc]">
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
       <main className={`${sidebarCollapsed ? 'lg:ml-0 lg:w-full' : 'lg:ml-64 lg:w-[calc(100%-16rem)]'} w-full min-w-0 px-3 py-5 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7`}>
         <div className="mx-auto max-w-none transition-all duration-300">
