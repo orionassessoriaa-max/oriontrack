@@ -1,5 +1,7 @@
 import { UserRole } from '@/types';
 
+export const DEVOPS_MANAGER_EMAIL = 'ewerttonherculano@gmail.com';
+
 export function slugifyNameForEmail(name: string) {
   return name
     .normalize('NFD')
@@ -43,4 +45,25 @@ export function getRoleLabel(role: UserRole) {
   if (role === 'account_manager') return 'Account manager';
   if (role === 'corretor_membro') return 'Equipe do corretor';
   return 'Corretor';
+}
+
+export function isDevOpsManagerProfile(profile?: {
+  email?: string | null;
+  email_real?: string | null;
+  is_admin_master?: boolean | null;
+} | null) {
+  const emails = [profile?.email, profile?.email_real]
+    .filter(Boolean)
+    .map((email) => String(email).toLowerCase().trim());
+  return Boolean(profile?.is_admin_master) || emails.includes(DEVOPS_MANAGER_EMAIL);
+}
+
+export function getProfileRoleLabel(profile?: {
+  tipo_usuario?: UserRole | string | null;
+  email?: string | null;
+  email_real?: string | null;
+  is_admin_master?: boolean | null;
+} | null) {
+  if (isDevOpsManagerProfile(profile)) return 'DevOps Manager';
+  return getRoleLabel((profile?.tipo_usuario || 'corretor') as UserRole);
 }

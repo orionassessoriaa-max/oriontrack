@@ -241,7 +241,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
             <div className="min-w-0 flex-1 overflow-hidden">
               <p className="truncate text-xs font-bold text-white">{profile?.nome || 'Usuario'}</p>
               <p className="text-[10px] font-bold uppercase tracking-tighter text-gray-500">
-                {isViewingAsUser ? `Admin: ${actualProfile?.nome || 'Orion'}` : roleLabel}
+                {isViewingAsUser ? roleLabel : roleLabel}
               </p>
             </div>
             <button onClick={signOut} className="p-2 text-gray-500 transition-colors hover:text-red-400" title="Sair">

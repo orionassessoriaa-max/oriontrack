@@ -1,9 +1,14 @@
+import { getProfileRoleLabel } from './users';
+
 export type OrionTeamMember = {
   nome: string;
   cargo: string;
   profile_id?: string;
   foto_url?: string | null;
   tipo_usuario?: string;
+  email?: string | null;
+  email_real?: string | null;
+  is_admin_master?: boolean | null;
 };
 
 export const ORION_TEAM_MEMBERS: OrionTeamMember[] = [
@@ -52,7 +57,7 @@ function roleToCargo(role?: string | null) {
 }
 
 export function buildOperationalTeamMembers(
-  profiles: Array<{ id: string; nome: string; tipo_usuario: string; foto_url?: string | null; status?: string | null }>
+  profiles: Array<{ id: string; nome: string; tipo_usuario: string; foto_url?: string | null; status?: string | null; email?: string | null; email_real?: string | null; is_admin_master?: boolean | null }>
 ) {
   const activeProfiles = profiles
     .filter((profile) => ['active', 'ativo', 'Ativo'].includes(String(profile.status || 'active')))
@@ -67,9 +72,12 @@ export function buildOperationalTeamMembers(
     })
     .map((profile) => ({
       nome: profile.nome,
-      cargo: roleToCargo(profile.tipo_usuario),
+      cargo: getProfileRoleLabel(profile),
       profile_id: profile.id,
       foto_url: profile.foto_url || null,
       tipo_usuario: profile.tipo_usuario,
+      email: profile.email || null,
+      email_real: profile.email_real || null,
+      is_admin_master: profile.is_admin_master || null,
     }));
 }

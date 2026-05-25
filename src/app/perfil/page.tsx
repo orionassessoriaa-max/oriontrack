@@ -3,14 +3,7 @@
 import { useAuth } from '@/components/providers/AuthProvider';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { User, Mail, Shield, Smartphone, MapPin, Loader2, Save } from 'lucide-react';
-
-function roleLabel(role?: string) {
-  if (role === 'admin') return 'Administrador';
-  if (role === 'gestor_trafego') return 'Gestor de trafego';
-  if (role === 'designer') return 'Designer';
-  if (role === 'account_manager') return 'Account manager';
-  return 'Corretor parceiro';
-}
+import { getProfileRoleLabel } from '@/lib/users';
 
 export default function ProfilePage() {
   const { profile, loading } = useAuth();
@@ -40,7 +33,7 @@ export default function ProfilePage() {
               <Field icon={User} label="Nome completo" value={profile?.nome || ''} />
               <Field icon={Mail} label="Email de acesso" value={profile?.email || ''} disabled />
               <Field icon={Smartphone} label="Telefone / WhatsApp" value="" placeholder="(00) 00000-0000" />
-              <Field icon={Shield} label="Cargo / tipo" value={roleLabel(profile?.tipo_usuario)} disabled />
+              <Field icon={Shield} label="Cargo / tipo" value={getProfileRoleLabel(profile)} disabled />
             </div>
 
             <div className="mt-8 flex justify-end">
@@ -60,7 +53,7 @@ export default function ProfilePage() {
                 {profile?.nome ? profile.nome[0].toUpperCase() : '?'}
               </div>
               <h3 className="mb-1 text-xl font-bold">{profile?.nome || 'Usuario'}</h3>
-              <p className="mb-6 text-xs font-bold uppercase tracking-widest text-blue-400">{roleLabel(profile?.tipo_usuario)}</p>
+              <p className="mb-6 text-xs font-bold uppercase tracking-widest text-blue-400">{getProfileRoleLabel(profile)}</p>
 
               <div className="space-y-4">
                 <div className="flex items-center gap-3 text-sm text-gray-400">
