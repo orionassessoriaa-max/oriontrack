@@ -125,8 +125,8 @@ export default function AdminMetaPage() {
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-amber-600">
             <ShieldCheck size={26} />
           </div>
-          <h1 className="text-2xl font-black text-amber-950">Acesso do admin master</h1>
-          <p className="mt-2 text-sm font-bold text-amber-800">A tela de contas Meta fica disponivel apenas para o admin master.</p>
+          <h1 className="text-2xl font-black text-amber-950">Acesso restrito</h1>
+          <p className="mt-2 text-sm font-bold text-amber-800">A tela de contas Meta fica disponivel apenas para o DevOps Manager.</p>
         </div>
       </InternalLayout>
     );
@@ -136,7 +136,7 @@ export default function AdminMetaPage() {
     <InternalLayout>
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Admin master</p>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">DevOps Manager</p>
           <h1 className="text-3xl font-black tracking-tight text-gray-900">Contas Meta</h1>
           <p className="font-medium text-gray-500">Controle quais contas de anuncio estao vinculadas aos corretores.</p>
         </div>

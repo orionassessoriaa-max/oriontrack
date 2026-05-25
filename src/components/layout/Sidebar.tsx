@@ -139,7 +139,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     : '??';
 
   const roleLabel = profile?.tipo_usuario === 'admin'
-    ? isMasterAdmin ? 'Admin master' : 'Admin Orion'
+    ? isMasterAdmin ? 'DevOps Manager' : 'Admin Orion'
     : profile?.tipo_usuario === 'gestor_trafego'
       ? 'Gestor de Trafego'
       : profile?.tipo_usuario === 'designer'

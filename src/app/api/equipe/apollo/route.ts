@@ -36,7 +36,9 @@ export async function GET(request: Request) {
 
   let membersData = membersRes.data || [];
   let membersError = membersRes.error;
+  let missingTeamColumn = false;
   if (membersRes.error && String(membersRes.error.message || '').includes('equipe_orion')) {
+    missingTeamColumn = true;
     const fallback = await supabaseAdmin
       .from('profiles')
       .select('id, nome, email, email_real, tipo_usuario, foto_url, is_admin_master')
@@ -82,12 +84,17 @@ export async function GET(request: Request) {
         status: 'aberto',
       }));
 
-  const rawMembers = membersData.filter((member: any) =>
-    member.equipe_orion === 'apollo'
-    || member.is_admin_master
-    || String(member.email || '').toLowerCase() === 'ewerttonherculano@gmail.com'
-    || String(member.email_real || '').toLowerCase() === 'ewerttonherculano@gmail.com'
-  );
+  const rawMembers = membersData.filter((member: any) => {
+    const email = String(member.email || '').toLowerCase();
+    const realEmail = String(member.email_real || '').toLowerCase();
+    const isMaster = member.is_admin_master || email === 'ewerttonherculano@gmail.com' || realEmail === 'ewerttonherculano@gmail.com';
+
+    if (missingTeamColumn) {
+      return isMaster || ['admin', 'gestor_trafego', 'designer', 'account_manager'].includes(member.tipo_usuario);
+    }
+
+    return member.equipe_orion === 'apollo' || isMaster;
+  });
 
   const pointsByProfile = new Map<string, number>();
   (hasTeamTables ? pointsRes.data || [] : []).forEach((point: any) => {
@@ -103,6 +110,11 @@ export async function GET(request: Request) {
   const realizadoObjetivos = objectives
     .filter((item: any) => item.status === 'feito')
     .reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
+  const emAndamentoObjetivos = objectives
+    .filter((item: any) => item.status === 'em_andamento')
+    .reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
+  const previsaoObjetivos = totalObjetivos;
+  const previsaoAberta = Math.max(0, totalObjetivos - realizadoObjetivos);
   const totalPontos = Array.from(pointsByProfile.values()).reduce((sum, value) => sum + value, 0);
   const deadline = new Date('2026-05-31T23:59:59-03:00');
   const daysRemaining = Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / 86400000));
@@ -126,13 +138,18 @@ export async function GET(request: Request) {
     summary: {
       totalObjetivos,
       realizadoObjetivos,
+      emAndamentoObjetivos,
+      previsaoObjetivos,
+      previsaoAberta,
+      faltanteMeta: Math.max(0, Number((hasTeamTables && metaRes.data?.meta_valor) || 50000) - realizadoObjetivos),
       totalPontos,
       daysRemaining,
-      progress: Math.min(100, Math.round((realizadoObjetivos / 50000) * 100)),
+      progress: Math.min(100, Math.round((realizadoObjetivos / Number((hasTeamTables && metaRes.data?.meta_valor) || 50000)) * 100)),
+      forecastProgress: Math.min(100, Math.round((previsaoObjetivos / Number((hasTeamTables && metaRes.data?.meta_valor) || 50000)) * 100)),
       dailyMessages,
     },
     isAdmin: guard.profile.tipo_usuario === 'admin',
-    needsMigration: !hasTeamTables,
+    needsMigration: !hasTeamTables || missingTeamColumn,
   });
 }
 

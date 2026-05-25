@@ -150,7 +150,7 @@ export async function POST(request: Request) {
     }
 
     if (role === 'admin' && !isMasterAdmin(guard.profile)) {
-      return NextResponse.json({ error: 'Apenas o admin master Ewertton pode criar outros admins.' }, { status: 403 });
+      return NextResponse.json({ error: 'Apenas o DevOps Manager pode criar outros admins.' }, { status: 403 });
     }
 
     if (role === 'corretor' && !telefone) {
@@ -307,11 +307,11 @@ export async function PATCH(request: Request) {
       }
 
       if (targetProfile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
-        return NextResponse.json({ error: 'Apenas o admin master pode editar outro admin.' }, { status: 403 });
+        return NextResponse.json({ error: 'Apenas o DevOps Manager pode editar outro admin.' }, { status: 403 });
       }
 
       if (nextRole === 'admin' && !isMasterAdmin(guard.profile)) {
-        return NextResponse.json({ error: 'Apenas o admin master pode definir outro admin.' }, { status: 403 });
+        return NextResponse.json({ error: 'Apenas o DevOps Manager pode definir outro admin.' }, { status: 403 });
       }
 
       const roleToSave = nextRole || targetProfile.tipo_usuario;
@@ -382,11 +382,11 @@ export async function PATCH(request: Request) {
     }
 
     if (isMasterAdmin(targetProfile)) {
-      return NextResponse.json({ error: 'A senha do admin master nÃ£o pode ser redefinida por aqui.' }, { status: 403 });
+      return NextResponse.json({ error: 'A senha do DevOps Manager nao pode ser redefinida por aqui.' }, { status: 403 });
     }
 
     if (targetProfile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
-      return NextResponse.json({ error: 'Apenas o admin master pode redefinir senha de outro admin.' }, { status: 403 });
+      return NextResponse.json({ error: 'Apenas o DevOps Manager pode redefinir senha de outro admin.' }, { status: 403 });
     }
 
     const senhaProvisoria = generateStrongPassword();
@@ -451,7 +451,7 @@ export async function DELETE(request: Request) {
     }
 
     if (isMasterAdmin(profile)) {
-      return NextResponse.json({ error: 'O admin master não pode ser removido.' }, { status: 403 });
+      return NextResponse.json({ error: 'O DevOps Manager não pode ser removido.' }, { status: 403 });
     }
 
     if (profile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
