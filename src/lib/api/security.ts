@@ -11,6 +11,7 @@ export type ApiProfile = {
   corretor_id: string | null;
   status: string | null;
   is_admin_master?: boolean | null;
+  equipe_orion?: 'apollo' | 'kripto_hunters' | null;
 };
 
 export type ApiGuard = {
@@ -36,7 +37,7 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, is_admin_master')
+    .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, is_admin_master, equipe_orion')
     .eq('id', user.id)
     .maybeSingle();
 

@@ -14,6 +14,7 @@ export interface Profile {
   precisa_trocar_senha?: boolean | null;
   is_admin_master?: boolean | null;
   tema_sistema?: 'claro' | 'noturno' | null;
+  equipe_orion?: 'apollo' | 'kripto_hunters' | null;
   created_at: string;
 }
 

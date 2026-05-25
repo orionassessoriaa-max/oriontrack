@@ -30,13 +30,14 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isDesignerRoute = pathname.startsWith('/designer');
         const isAccountRoute = pathname.startsWith('/account');
         const isCreativeRoute = pathname.startsWith('/criativos');
+        const isTeamRoute = pathname.startsWith('/equipe');
         const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes';
         const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
 
         if (isSharedRoute) return;
 
         // 1. Corretor Access: Only broker routes
-        if (isCorretor && (isAdminRoute || isTrafficRoute || isDesignerRoute || isAccountRoute)) {
+        if (isCorretor && (isAdminRoute || isTrafficRoute || isDesignerRoute || isAccountRoute || isTeamRoute)) {
           router.push('/dashboard');
         }
         else if (isCorretorMember) {
@@ -53,12 +54,12 @@ export default function InternalLayout({ children }: { children: React.ReactNode
           }
         }
         else if (isDesigner) {
-          if (!isDesignerRoute && !isCreativeRoute && pathname !== '/perfil' && pathname !== '/notificacoes') {
+          if (!isDesignerRoute && !isCreativeRoute && !isTeamRoute && pathname !== '/perfil' && pathname !== '/notificacoes') {
             router.push('/designer');
           }
         }
         else if (isAccountManager) {
-          if (!isAccountRoute && !isCreativeRoute && !pathname.startsWith('/trafego/relatorios') && !pathname.startsWith('/admin/leads') && pathname !== '/perfil' && pathname !== '/notificacoes') {
+          if (!isAccountRoute && !isCreativeRoute && !isTeamRoute && !pathname.startsWith('/trafego/relatorios') && !pathname.startsWith('/admin/leads') && pathname !== '/perfil' && pathname !== '/notificacoes') {
             router.push('/account');
           }
         }
