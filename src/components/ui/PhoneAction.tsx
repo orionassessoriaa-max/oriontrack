@@ -5,23 +5,23 @@ import { MessageCircle, Phone } from 'lucide-react';
 
 type PhoneActionProps = {
   phone?: string | null;
+  leadId?: string | null;
+  whatsappHref?: string;
 };
 
 function phoneDigits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
 }
 
-function whatsappDigits(value?: string | null) {
-  const digits = phoneDigits(value);
-  if (!digits) return '';
-  return digits.startsWith('55') ? digits : `55${digits}`;
-}
-
-export default function PhoneAction({ phone }: PhoneActionProps) {
+export default function PhoneAction({ phone, leadId, whatsappHref }: PhoneActionProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const digits = phoneDigits(phone);
   const display = digits || '-';
+  const inboxHref = whatsappHref || `/inbox?${new URLSearchParams({
+    ...(leadId ? { lead: leadId } : {}),
+    telefone: digits,
+  }).toString()}`;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -59,9 +59,7 @@ export default function PhoneAction({ phone }: PhoneActionProps) {
             Ligar
           </a>
           <a
-            href={`https://wa.me/${whatsappDigits(phone)}`}
-            target="_blank"
-            rel="noreferrer"
+            href={inboxHref}
             className="flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-[11px] font-black uppercase tracking-widest text-white transition-colors hover:bg-emerald-500"
             onClick={() => setOpen(false)}
           >
