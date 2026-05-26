@@ -18,6 +18,11 @@ function boolOrNull(value: unknown) {
   return ['true', 'sim', '1', 'yes'].includes(String(value).toLowerCase());
 }
 
+function calculateCommission(value: unknown) {
+  const numeric = numericOrNull(value);
+  return numeric === null ? null : numeric * 2.5;
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const limited = rateLimit(request, 'crm:lead-status:update', { limit: 120, windowMs: 60_000 });
@@ -63,6 +68,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if ('valor_comissao' in body) updatePayload.valor_comissao = numericOrNull(body.valor_comissao);
     if ('sem_interesse_motivo' in body) updatePayload.sem_interesse_motivo = body.sem_interesse_motivo ? String(body.sem_interesse_motivo).trim() : null;
     if ('sem_interesse_fez_cotacao' in body) updatePayload.sem_interesse_fez_cotacao = boolOrNull(body.sem_interesse_fez_cotacao);
+
+    if (status !== 'Sem interesse' && 'valor_negociacao' in body) {
+      updatePayload.valor_comissao = calculateCommission(body.valor_negociacao);
+    }
 
     const { data: updated, error: updateError } = await supabaseAdmin
       .from('leads')
