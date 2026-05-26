@@ -12,6 +12,12 @@ function numericOrNull(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function boolOrNull(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'boolean') return value;
+  return ['true', 'sim', '1', 'yes'].includes(String(value).toLowerCase());
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const limited = rateLimit(request, 'crm:lead-status:update', { limit: 120, windowMs: 60_000 });
@@ -55,24 +61,34 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if ('valor_negociacao' in body) updatePayload.valor_negociacao = numericOrNull(body.valor_negociacao);
     if ('operadora_negociacao' in body) updatePayload.operadora_negociacao = body.operadora_negociacao ? String(body.operadora_negociacao).trim() : null;
     if ('valor_comissao' in body) updatePayload.valor_comissao = numericOrNull(body.valor_comissao);
+    if ('sem_interesse_motivo' in body) updatePayload.sem_interesse_motivo = body.sem_interesse_motivo ? String(body.sem_interesse_motivo).trim() : null;
+    if ('sem_interesse_fez_cotacao' in body) updatePayload.sem_interesse_fez_cotacao = boolOrNull(body.sem_interesse_fez_cotacao);
 
     const { data: updated, error: updateError } = await supabaseAdmin
       .from('leads')
       .update(updatePayload)
       .eq('id', leadId)
-      .select('id, status, valor_negociacao, operadora_negociacao, valor_comissao')
+      .select('id, status, valor_negociacao, operadora_negociacao, valor_comissao, sem_interesse_motivo, sem_interesse_fez_cotacao')
       .single();
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
+    const activityDescription = status === 'Sem interesse'
+      ? [
+          'Lead movido para Sem interesse.',
+          updatePayload.sem_interesse_motivo ? `Motivo: ${updatePayload.sem_interesse_motivo}.` : null,
+          updatePayload.sem_interesse_fez_cotacao ? `Teve cotacao de ${updatePayload.valor_negociacao ?? 'valor nao informado'}.` : 'Nao chegou a fazer cotacao.',
+        ].filter(Boolean).join(' ')
+      : `Lead movido para ${status}`;
+
     await supabaseAdmin.from('lead_atividades').insert([{
       lead_id: leadId,
       profile_id: guard.profile.id,
       tipo: 'status',
       titulo: 'Status atualizado',
-      descricao: `Lead movido para ${status}`,
+      descricao: activityDescription,
     }]);
 
     await writeAuditLog(request, guard.profile, {
