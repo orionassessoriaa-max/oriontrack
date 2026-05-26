@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { configureEvolutionWebhook, evolutionFetch, evolutionInstanceName } from '@/lib/evolution';
+import { configureEvolutionWebhook, evolutionFetch, evolutionInstanceName, getEvolutionInstanceApiKey } from '@/lib/evolution';
 
 export async function POST(request: Request) {
   try {
@@ -43,8 +43,9 @@ export async function POST(request: Request) {
       },
     });
 
+    let createPayload: any = null;
     try {
-      await evolutionFetch('/instance/create', {
+      createPayload = await evolutionFetch('/instance/create', {
         method: 'POST',
         body: JSON.stringify({
           instanceName: instance,
@@ -59,9 +60,11 @@ export async function POST(request: Request) {
       }
     }
 
-    await configureEvolutionWebhook(instance);
+    const instanceApiKey = await getEvolutionInstanceApiKey(instance, createPayload);
 
-    const payload = await evolutionFetch(`/instance/connect/${instance}`, { method: 'GET' });
+    await configureEvolutionWebhook(instance, instanceApiKey);
+
+    const payload = await evolutionFetch(`/instance/connect/${instance}`, { method: 'GET' }, instanceApiKey);
     const qrcode = payload?.base64 || payload?.qrcode?.base64 || payload?.qrcode || payload?.code || null;
 
     await writeAuditLog(request, guard.profile, {

@@ -17,9 +17,26 @@ export function profileIdFromEvolutionInstance(instance?: string | null) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export async function evolutionFetch(path: string, init: RequestInit = {}) {
+function readInstanceToken(payload: any, instanceName: string): string | null {
+  const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [payload];
+  const match = rows.find((row: any) => {
+    const name = row?.instance?.instanceName || row?.instanceName || row?.name;
+    return !name || name === instanceName;
+  }) || payload;
+
+  return String(
+    match?.hash?.apikey ||
+    match?.instance?.apikey ||
+    match?.instance?.token ||
+    match?.apikey ||
+    match?.token ||
+    ''
+  ).trim() || null;
+}
+
+export async function evolutionFetch(path: string, init: RequestInit = {}, apiKeyOverride?: string | null) {
   const baseUrl = cleanBaseUrl(process.env.EVOLUTION_API_URL);
-  const apiKey = process.env.EVOLUTION_API_KEY;
+  const apiKey = apiKeyOverride || process.env.EVOLUTION_API_KEY;
   if (!baseUrl || !apiKey) {
     throw new Error('Conexao do WhatsApp ainda nao foi ativada no servidor.');
   }
@@ -48,7 +65,19 @@ export async function evolutionFetch(path: string, init: RequestInit = {}) {
   return payload;
 }
 
-export async function configureEvolutionWebhook(instance: string) {
+export async function getEvolutionInstanceApiKey(instance: string, createPayload?: any) {
+  const createdToken = readInstanceToken(createPayload, instance);
+  if (createdToken) return createdToken;
+
+  try {
+    const fetched = await evolutionFetch(`/instance/fetchInstances?instanceName=${encodeURIComponent(instance)}`);
+    return readInstanceToken(fetched, instance) || process.env.EVOLUTION_API_KEY || null;
+  } catch {
+    return process.env.EVOLUTION_API_KEY || null;
+  }
+}
+
+export async function configureEvolutionWebhook(instance: string, instanceApiKey?: string | null) {
   try {
     await evolutionFetch(`/webhook/set/${instance}`, {
       method: 'POST',
@@ -61,7 +90,7 @@ export async function configureEvolutionWebhook(instance: string) {
           events: ['MESSAGES_UPSERT', 'SEND_MESSAGE', 'CONNECTION_UPDATE'],
         },
       }),
-    });
+    }, instanceApiKey);
   } catch {
     // Some Evolution installations use global webhook settings only.
     // The inbox still works for outbound messages and stored conversations.
