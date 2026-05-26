@@ -85,7 +85,6 @@ const COMMERCIAL_REQUIRED_STATUSES: LeadStatus[] = [
   'Em negociação',
   'Não tive retorno',
   'Venda realizada',
-  'Sem interesse',
 ];
 
 const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
@@ -109,10 +108,16 @@ function requiresCommercialData(status: LeadStatus) {
   return COMMERCIAL_REQUIRED_STATUSES.includes(status);
 }
 
+function requiresStatusMoveModal(status: LeadStatus) {
+  return requiresCommercialData(status) || status === 'Sem interesse';
+}
+
 type CommercialPayload = {
-  valor_negociacao: number;
-  operadora_negociacao: string;
-  valor_comissao: number;
+  valor_negociacao?: number | null;
+  operadora_negociacao?: string | null;
+  valor_comissao?: number | null;
+  sem_interesse_motivo?: string | null;
+  sem_interesse_fez_cotacao?: boolean;
 };
 
 type CommercialModalState = {
@@ -121,6 +126,8 @@ type CommercialModalState = {
   valor_negociacao: string;
   operadora_negociacao: string;
   valor_comissao: string;
+  sem_interesse_motivo: string;
+  sem_interesse_fez_cotacao: boolean;
 } | null;
 
 type TeamMember = {
@@ -311,7 +318,8 @@ export default function BrokerLeadsPage() {
   };
 
   const requestCommercialPayload = (lead: Lead, status: LeadStatus): Promise<CommercialPayload | null> => {
-    if (!requiresCommercialData(status)) return Promise.resolve(null);
+    if (!requiresStatusMoveModal(status)) return Promise.resolve(null);
+    if (requiresCommercialData(status) && parseCurrencyInput(lead.valor_negociacao) > 0) return Promise.resolve(null);
 
     setCommercialModalError(null);
     setCommercialModal({
@@ -320,6 +328,8 @@ export default function BrokerLeadsPage() {
       valor_negociacao: lead.valor_negociacao ? String(lead.valor_negociacao) : '',
       operadora_negociacao: lead.operadora_negociacao || lead.operadora || '',
       valor_comissao: lead.valor_comissao ? String(lead.valor_comissao) : '',
+      sem_interesse_motivo: lead.sem_interesse_motivo || '',
+      sem_interesse_fez_cotacao: Boolean(lead.sem_interesse_fez_cotacao || parseCurrencyInput(lead.valor_negociacao) > 0),
     });
 
     return new Promise((resolve) => {
@@ -337,6 +347,25 @@ export default function BrokerLeadsPage() {
   const submitCommercialModal = (event: React.FormEvent) => {
     event.preventDefault();
     if (!commercialModal) return;
+
+    if (commercialModal.status === 'Sem interesse') {
+      const motivo = commercialModal.sem_interesse_motivo.trim();
+      const valor = parseCurrencyInput(commercialModal.valor_negociacao);
+      if (!motivo) {
+        setCommercialModalError('Informe o motivo para marcar o lead como sem interesse.');
+        return;
+      }
+      if (commercialModal.sem_interesse_fez_cotacao && !valor) {
+        setCommercialModalError('Informe o valor da cotacao feita antes de encerrar.');
+        return;
+      }
+      closeCommercialModal({
+        sem_interesse_motivo: motivo,
+        sem_interesse_fez_cotacao: commercialModal.sem_interesse_fez_cotacao,
+        valor_negociacao: commercialModal.sem_interesse_fez_cotacao ? valor : null,
+      });
+      return;
+    }
 
     const payload = {
       valor_negociacao: parseCurrencyInput(commercialModal.valor_negociacao),
@@ -357,9 +386,9 @@ export default function BrokerLeadsPage() {
     if (!currentLead) return;
 
     let commercialPayload: CommercialPayload | null = null;
-    if (requiresCommercialData(status)) {
+    if (requiresStatusMoveModal(status)) {
       commercialPayload = await requestCommercialPayload(currentLead, status);
-      if (!commercialPayload) return;
+      if (commercialPayload === null && requiresStatusMoveModal(status) && !(requiresCommercialData(status) && parseCurrencyInput(currentLead.valor_negociacao) > 0)) return;
     }
 
     setSavingStatusId(leadId);
@@ -1068,36 +1097,78 @@ export default function BrokerLeadsPage() {
               </div>
             )}
 
-            <div className="grid gap-4">
-              <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da negociacao</span>
-                <input
-                  autoFocus
-                  value={commercialModal.valor_negociacao}
-                  onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_negociacao: event.target.value } : current)}
-                  placeholder="Ex: 1200"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Operadora</span>
-                <input
-                  value={commercialModal.operadora_negociacao}
-                  onChange={(event) => setCommercialModal((current) => current ? { ...current, operadora_negociacao: event.target.value } : current)}
-                  placeholder="Ex: Amil, Bradesco, Porto"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da comissao</span>
-                <input
-                  value={commercialModal.valor_comissao}
-                  onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_comissao: event.target.value } : current)}
-                  placeholder="Ex: 240"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-                />
-              </label>
-            </div>
+            {commercialModal.status === 'Sem interesse' ? (
+              <div className="grid gap-4">
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Motivo</span>
+                  <select
+                    autoFocus
+                    value={commercialModal.sem_interesse_motivo}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, sem_interesse_motivo: event.target.value } : current)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  >
+                    <option value="">Selecione o motivo</option>
+                    <option value="Preco acima do esperado">Preco acima do esperado</option>
+                    <option value="Ja fechou com outro corretor">Ja fechou com outro corretor</option>
+                    <option value="Nao quer contratar agora">Nao quer contratar agora</option>
+                    <option value="Fora do perfil de atendimento">Fora do perfil de atendimento</option>
+                    <option value="Nao respondeu apos tentativas">Nao respondeu apos tentativas</option>
+                    <option value="Outro motivo">Outro motivo</option>
+                  </select>
+                </label>
+                <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <span className="text-sm font-black text-slate-800">Chegou a fazer cotacao?</span>
+                  <input
+                    type="checkbox"
+                    checked={commercialModal.sem_interesse_fez_cotacao}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, sem_interesse_fez_cotacao: event.target.checked } : current)}
+                    className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </label>
+                {commercialModal.sem_interesse_fez_cotacao && (
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da cotacao</span>
+                    <input
+                      value={commercialModal.valor_negociacao}
+                      onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_negociacao: event.target.value } : current)}
+                      placeholder="Ex: 1200"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                    />
+                  </label>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da negociacao</span>
+                  <input
+                    autoFocus
+                    value={commercialModal.valor_negociacao}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_negociacao: event.target.value } : current)}
+                    placeholder="Ex: 1200"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Operadora</span>
+                  <input
+                    value={commercialModal.operadora_negociacao}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, operadora_negociacao: event.target.value } : current)}
+                    placeholder="Ex: Amil, Bradesco, Porto"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da comissao</span>
+                  <input
+                    value={commercialModal.valor_comissao}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_comissao: event.target.value } : current)}
+                    placeholder="Ex: 240"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  />
+                </label>
+              </div>
+            )}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button

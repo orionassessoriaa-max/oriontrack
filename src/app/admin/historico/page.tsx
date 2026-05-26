@@ -35,6 +35,9 @@ const ACTION_LABELS: Record<string, string> = {
   'team.member.update': 'Integrante editado',
   'team.member.delete': 'Integrante removido',
   'team.lead.assign': 'Lead enviado ao time',
+  'lead.cadence.start': 'Cadencia iniciada',
+  'lead.cadence.stop': 'Cadencia encerrada',
+  'whatsapp.terms.accept': 'Aceite WhatsApp registrado',
   'whatsapp.connect.request': 'Conexao WhatsApp iniciada',
   'whatsapp.message.send': 'Mensagem enviada',
 };

@@ -71,7 +71,6 @@ const COMMERCIAL_REQUIRED_STATUSES: LeadStatus[] = [
   'Em negociação',
   'Não tive retorno',
   'Venda realizada',
-  'Sem interesse',
 ];
 
 function parseCurrencyInput(value?: string | number | null) {
@@ -92,10 +91,24 @@ function requiresCommercialData(status: LeadStatus) {
   return COMMERCIAL_REQUIRED_STATUSES.includes(status);
 }
 
+function requiresStatusMoveModal(status: LeadStatus) {
+  return requiresCommercialData(status) || status === 'Sem interesse';
+}
+
+function getCadenceDays(lead: Pick<Lead, 'cadencia_inicio' | 'cadencia_fim' | 'cadencia_ativa'>) {
+  if (!lead.cadencia_inicio) return 0;
+  const start = new Date(lead.cadencia_inicio).getTime();
+  const end = lead.cadencia_ativa ? Date.now() : new Date(lead.cadencia_fim || new Date()).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 1;
+  return Math.max(1, Math.ceil((end - start) / 86_400_000));
+}
+
 type CommercialPayload = {
-  valor_negociacao: number;
-  operadora_negociacao: string;
-  valor_comissao: number;
+  valor_negociacao?: number | null;
+  operadora_negociacao?: string | null;
+  valor_comissao?: number | null;
+  sem_interesse_motivo?: string | null;
+  sem_interesse_fez_cotacao?: boolean;
 };
 
 type CommercialModalState = {
@@ -104,6 +117,8 @@ type CommercialModalState = {
   valor_negociacao: string;
   operadora_negociacao: string;
   valor_comissao: string;
+  sem_interesse_motivo: string;
+  sem_interesse_fez_cotacao: boolean;
 } | null;
 
 type TeamMember = {
@@ -156,6 +171,11 @@ export default function CrmPage() {
   const [commercialModal, setCommercialModal] = useState<CommercialModalState>(null);
   const [commercialModalError, setCommercialModalError] = useState<string | null>(null);
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
+  const boardScrollRef = useRef<HTMLDivElement | null>(null);
+  const boardScrollbarRef = useRef<HTMLDivElement | null>(null);
+  const boardScrollSyncRef = useRef(false);
+  const [boardScrollWidth, setBoardScrollWidth] = useState(0);
+  const [boardClientWidth, setBoardClientWidth] = useState(0);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor';
@@ -337,6 +357,22 @@ export default function CrmPage() {
     }
   }, [selectedLead?.id]);
 
+  function syncBoardScroll(source: 'board' | 'bar') {
+    const board = boardScrollRef.current;
+    const bar = boardScrollbarRef.current;
+    if (!board || !bar || boardScrollSyncRef.current) return;
+
+    boardScrollSyncRef.current = true;
+    if (source === 'board') {
+      bar.scrollLeft = board.scrollLeft;
+    } else {
+      board.scrollLeft = bar.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      boardScrollSyncRef.current = false;
+    });
+  }
+
   const staleLeadIds = useMemo(() => new Set(leads.filter(isStale).map((lead) => lead.id)), [leads]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente').map((task) => task.lead_id)), [tarefas]);
   const todayTaskLeadIds = useMemo(() => {
@@ -370,6 +406,27 @@ export default function CrmPage() {
     });
   }, [leads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
 
+  useEffect(() => {
+    const board = boardScrollRef.current;
+    if (!board) return;
+
+    const syncSize = () => {
+      setBoardScrollWidth(board.scrollWidth);
+      setBoardClientWidth(board.clientWidth);
+    };
+
+    syncSize();
+    const observer = new ResizeObserver(syncSize);
+    observer.observe(board);
+    Array.from(board.children).forEach((child) => observer.observe(child));
+    window.addEventListener('resize', syncSize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncSize);
+    };
+  }, [filteredLeads.length, selectedLead?.id, loading]);
+
   const pageOptions = useMemo(() => {
     const pages = leads.map((lead) => lead.operadora || '').filter(Boolean);
     return Array.from(new Set(pages)).sort((a, b) => a.localeCompare(b));
@@ -399,7 +456,8 @@ export default function CrmPage() {
   }
 
   function requestCommercialPayload(lead: Lead, status: LeadStatus): Promise<CommercialPayload | null> {
-    if (!requiresCommercialData(status)) return Promise.resolve(null);
+    if (!requiresStatusMoveModal(status)) return Promise.resolve(null);
+    if (requiresCommercialData(status) && parseCurrencyInput(lead.valor_negociacao) > 0) return Promise.resolve(null);
 
     setCommercialModalError(null);
     setCommercialModal({
@@ -408,6 +466,8 @@ export default function CrmPage() {
       valor_negociacao: lead.valor_negociacao ? String(lead.valor_negociacao) : '',
       operadora_negociacao: lead.operadora_negociacao || lead.operadora || '',
       valor_comissao: lead.valor_comissao ? String(lead.valor_comissao) : '',
+      sem_interesse_motivo: lead.sem_interesse_motivo || '',
+      sem_interesse_fez_cotacao: Boolean(lead.sem_interesse_fez_cotacao || parseCurrencyInput(lead.valor_negociacao) > 0),
     });
 
     return new Promise((resolve) => {
@@ -425,6 +485,25 @@ export default function CrmPage() {
   function submitCommercialModal(event: FormEvent) {
     event.preventDefault();
     if (!commercialModal) return;
+
+    if (commercialModal.status === 'Sem interesse') {
+      const motivo = commercialModal.sem_interesse_motivo.trim();
+      const valor = parseCurrencyInput(commercialModal.valor_negociacao);
+      if (!motivo) {
+        setCommercialModalError('Informe o motivo para marcar o lead como sem interesse.');
+        return;
+      }
+      if (commercialModal.sem_interesse_fez_cotacao && !valor) {
+        setCommercialModalError('Informe o valor da cotacao feita antes de encerrar.');
+        return;
+      }
+      closeCommercialModal({
+        sem_interesse_motivo: motivo,
+        sem_interesse_fez_cotacao: commercialModal.sem_interesse_fez_cotacao,
+        valor_negociacao: commercialModal.sem_interesse_fez_cotacao ? valor : null,
+      });
+      return;
+    }
 
     const payload = {
       valor_negociacao: parseCurrencyInput(commercialModal.valor_negociacao),
@@ -445,9 +524,9 @@ export default function CrmPage() {
     if (!currentLead) return;
 
     let commercialPayload: CommercialPayload | null = null;
-    if (requiresCommercialData(status)) {
+    if (requiresStatusMoveModal(status)) {
       commercialPayload = await requestCommercialPayload(currentLead, status);
-      if (!commercialPayload) return;
+      if (commercialPayload === null && requiresStatusMoveModal(status) && !(requiresCommercialData(status) && parseCurrencyInput(currentLead.valor_negociacao) > 0)) return;
     }
 
     const previousLeads = leads;
@@ -479,6 +558,37 @@ export default function CrmPage() {
     }
 
     if (selectedLead?.id === leadId) await fetchTimeline(leadId);
+  }
+
+  async function toggleCadence(lead: Lead, action: 'start' | 'stop') {
+    const token = await getToken();
+    if (!token) {
+      alert('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    setSaving(true);
+    const response = await fetch(`/api/crm/leads/${lead.id}/cadencia`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    setSaving(false);
+
+    if (!response.ok) {
+      alert(payload.error || 'Nao foi possivel atualizar a cadencia.');
+      return;
+    }
+
+    if (payload.lead) {
+      setLeads((prev) => prev.map((item) => item.id === lead.id ? { ...item, ...payload.lead } : item));
+      setSelectedLead((current) => current?.id === lead.id ? { ...current, ...payload.lead } : current);
+    }
+    await fetchTimeline(lead.id);
   }
 
   function handleDrop(status: LeadStatus) {
@@ -710,7 +820,12 @@ export default function CrmPage() {
               <Loader2 className="animate-spin text-blue-600" size={42} />
             </div>
           ) : (
-            <div className="scrollbar-visible flex min-h-[calc(100dvh-330px)] snap-x gap-4 overflow-x-scroll pb-8 sm:gap-5">
+            <>
+            <div
+              ref={boardScrollRef}
+              onScroll={() => syncBoardScroll('board')}
+              className="scrollbar-visible flex min-h-[calc(100dvh-330px)] snap-x gap-4 overflow-x-scroll pb-8 sm:gap-5"
+            >
               {columns.map((column) => {
                 const columnLeads = getLeadsByStatus(column.id);
                 const statusStyle = getLeadStatusStyle(column.id);
@@ -787,6 +902,11 @@ export default function CrmPage() {
                               {lead.responsavel_membro?.nome && (
                                 <span className="col-span-2 rounded-xl bg-emerald-50 px-2 py-1 text-emerald-700">Responsavel: {lead.responsavel_membro.nome}</span>
                               )}
+                              {lead.cadencia_inicio && (
+                                <span className={`col-span-2 rounded-xl px-2 py-1 ${lead.cadencia_ativa ? 'bg-violet-50 text-violet-700' : 'bg-slate-50 text-slate-500'}`}>
+                                  Cadencia: {lead.cadencia_ativa ? `dia ${getCadenceDays(lead)}` : `${getCadenceDays(lead)} dia(s) encerrada`}
+                                </span>
+                              )}
                               <span>{lead.cidade || 'Cidade nao informada'}</span>
                               <span>{lead.investimento || 'Sem investimento'}</span>
                               {requiresCommercialData(normalizeLeadStatus(lead.status)) && (
@@ -813,6 +933,18 @@ export default function CrmPage() {
                 );
               })}
             </div>
+            {boardScrollWidth > boardClientWidth && (
+              <div className="sticky bottom-0 z-40 -mt-5 border-t border-slate-200 bg-white/95 px-2 py-2 backdrop-blur">
+                <div
+                  ref={boardScrollbarRef}
+                  onScroll={() => syncBoardScroll('bar')}
+                  className="scrollbar-visible overflow-x-scroll"
+                >
+                  <div style={{ width: boardScrollWidth, height: 1 }} />
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
 
@@ -854,6 +986,34 @@ export default function CrmPage() {
               >
                 {columns.map((column) => <option key={column.id} value={column.id}>{column.label}</option>)}
               </select>
+            </div>
+
+            <div className="mb-5 rounded-[1.5rem] border border-violet-100 bg-violet-50 p-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-violet-600">Cadencia de atendimento</p>
+                  <p className="mt-1 text-sm font-bold text-violet-950">
+                    {selectedLead.cadencia_ativa
+                      ? `Ativa no dia ${getCadenceDays(selectedLead)}`
+                      : selectedLead.cadencia_inicio
+                        ? `Encerrada apos ${getCadenceDays(selectedLead)} dia(s)`
+                        : 'Ainda nao iniciada'}
+                  </p>
+                </div>
+                <Clock className="text-violet-500" size={22} />
+              </div>
+              <p className="mb-3 text-xs font-semibold leading-relaxed text-violet-900/70">
+                Use quando o lead nao responder. O Orion conta os dias em cadencia e registra o inicio e a parada na timeline do cliente.
+              </p>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => toggleCadence(selectedLead, selectedLead.cadencia_ativa ? 'stop' : 'start')}
+                className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white transition disabled:opacity-50 ${selectedLead.cadencia_ativa ? 'bg-slate-950 hover:bg-slate-800' : 'bg-violet-600 hover:bg-violet-700'}`}
+              >
+                {saving ? <Loader2 className="animate-spin" size={16} /> : <Clock size={16} />}
+                {selectedLead.cadencia_ativa ? 'Parar cadencia' : 'Iniciar cadencia'}
+              </button>
             </div>
 
             {canAssignTeamLeads && teamMembers.length > 0 && (
@@ -925,6 +1085,12 @@ export default function CrmPage() {
                 <InfoCard label="Valor negociação" value={selectedLead.valor_negociacao ? formatCurrencyValue(selectedLead.valor_negociacao) : '-'} />
                 <InfoCard label="Operadora venda" value={selectedLead.operadora_negociacao || '-'} />
                 <InfoCard label="Comissão" value={selectedLead.valor_comissao ? formatCurrencyValue(selectedLead.valor_comissao) : '-'} />
+                {selectedLead.sem_interesse_motivo && (
+                  <InfoCard label="Motivo sem interesse" value={selectedLead.sem_interesse_motivo} />
+                )}
+                {selectedLead.sem_interesse_motivo && (
+                  <InfoCard label="Teve cotacao?" value={selectedLead.sem_interesse_fez_cotacao ? 'Sim' : 'Nao'} />
+                )}
               </div>
             )}
 
@@ -1094,38 +1260,80 @@ export default function CrmPage() {
               </div>
             )}
 
-            <div className="grid gap-4">
-              <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da negociacao</span>
-                <input
-                  autoFocus
-                  value={commercialModal.valor_negociacao}
-                  onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_negociacao: event.target.value } : current)}
-                  placeholder="Ex: 1200"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-                />
-              </label>
+            {commercialModal.status === 'Sem interesse' ? (
+              <div className="grid gap-4">
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Motivo</span>
+                  <select
+                    autoFocus
+                    value={commercialModal.sem_interesse_motivo}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, sem_interesse_motivo: event.target.value } : current)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  >
+                    <option value="">Selecione o motivo</option>
+                    <option value="Preco acima do esperado">Preco acima do esperado</option>
+                    <option value="Ja fechou com outro corretor">Ja fechou com outro corretor</option>
+                    <option value="Nao quer contratar agora">Nao quer contratar agora</option>
+                    <option value="Fora do perfil de atendimento">Fora do perfil de atendimento</option>
+                    <option value="Nao respondeu apos tentativas">Nao respondeu apos tentativas</option>
+                    <option value="Outro motivo">Outro motivo</option>
+                  </select>
+                </label>
+                <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <span className="text-sm font-black text-slate-800">Chegou a fazer cotacao?</span>
+                  <input
+                    type="checkbox"
+                    checked={commercialModal.sem_interesse_fez_cotacao}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, sem_interesse_fez_cotacao: event.target.checked } : current)}
+                    className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </label>
+                {commercialModal.sem_interesse_fez_cotacao && (
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da cotacao</span>
+                    <input
+                      value={commercialModal.valor_negociacao}
+                      onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_negociacao: event.target.value } : current)}
+                      placeholder="Ex: 1200"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                    />
+                  </label>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da negociacao</span>
+                  <input
+                    autoFocus
+                    value={commercialModal.valor_negociacao}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_negociacao: event.target.value } : current)}
+                    placeholder="Ex: 1200"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  />
+                </label>
 
-              <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Operadora</span>
-                <input
-                  value={commercialModal.operadora_negociacao}
-                  onChange={(event) => setCommercialModal((current) => current ? { ...current, operadora_negociacao: event.target.value } : current)}
-                  placeholder="Ex: Amil, Bradesco, Porto"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-                />
-              </label>
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Operadora</span>
+                  <input
+                    value={commercialModal.operadora_negociacao}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, operadora_negociacao: event.target.value } : current)}
+                    placeholder="Ex: Amil, Bradesco, Porto"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  />
+                </label>
 
-              <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da comissao</span>
-                <input
-                  value={commercialModal.valor_comissao}
-                  onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_comissao: event.target.value } : current)}
-                  placeholder="Ex: 240"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-                />
-              </label>
-            </div>
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da comissao</span>
+                  <input
+                    value={commercialModal.valor_comissao}
+                    onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_comissao: event.target.value } : current)}
+                    placeholder="Ex: 240"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  />
+                </label>
+              </div>
+            )}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button

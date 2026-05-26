@@ -108,9 +108,14 @@ export default function BrokerInboxPage() {
     const response = await fetch('/api/inbox/evolution/connect', {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
         ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
       },
+      body: JSON.stringify({
+        accepted_terms: acceptedTerms,
+        terms_version: 'whatsapp-inbox-v1',
+      }),
     });
     const payload = await response.json().catch(() => ({}));
     setConnecting(false);

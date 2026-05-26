@@ -81,6 +81,11 @@ export interface Lead {
   tipo_plano?: string | null;
   valor_venda?: number | string | null;
   valor_comissao?: number | string | null;
+  sem_interesse_motivo?: string | null;
+  sem_interesse_fez_cotacao?: boolean | null;
+  cadencia_ativa?: boolean | null;
+  cadencia_inicio?: string | null;
+  cadencia_fim?: string | null;
   responsavel_membro_id?: string | null;
   responsavel_profile_id?: string | null;
   responsavel_membro?: {

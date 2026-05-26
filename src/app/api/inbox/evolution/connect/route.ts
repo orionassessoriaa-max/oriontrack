@@ -11,6 +11,11 @@ export async function POST(request: Request) {
     const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 
+    const body = await request.json().catch(() => ({}));
+    if (!body.accepted_terms) {
+      return NextResponse.json({ error: 'Confirme o aceite para conectar o WhatsApp.' }, { status: 400 });
+    }
+
     let targetProfile = guard.profile;
     const viewingProfileId = request.headers.get('x-orion-view-profile-id');
     if (guard.profile.tipo_usuario === 'admin' && viewingProfileId) {
@@ -24,6 +29,19 @@ export async function POST(request: Request) {
     }
 
     const instance = evolutionInstanceName(targetProfile.id);
+
+    await writeAuditLog(request, guard.profile, {
+      action: 'whatsapp.terms.accept',
+      entity_type: 'profile',
+      entity_id: targetProfile.id,
+      metadata: {
+        target_profile_id: targetProfile.id,
+        target_email: targetProfile.email_real || targetProfile.email,
+        target_role: targetProfile.tipo_usuario,
+        terms_version: body.terms_version || 'whatsapp-inbox-v1',
+        acceptance_text: 'Usuario aceitou conectar o WhatsApp ao Orion Track e permitir exibicao das conversas dos leads para atendimento comercial.',
+      },
+    });
 
     try {
       await evolutionFetch('/instance/create', {
@@ -60,7 +78,10 @@ export async function POST(request: Request) {
       raw: qrcode ? undefined : payload,
     });
   } catch (error: any) {
-    const message = error.message || 'Nao consegui gerar o QR Code agora. A equipe Orion pode revisar a conexao do WhatsApp.';
+    const rawMessage = String(error.message || '');
+    const message = rawMessage.toLowerCase().includes('forbidden') || rawMessage.includes('403')
+      ? 'A conexao com o WhatsApp foi recusada. Confirme a chave da Evolution API no servidor e tente novamente.'
+      : rawMessage || 'Nao consegui gerar o QR Code agora. A equipe Orion pode revisar a conexao do WhatsApp.';
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
