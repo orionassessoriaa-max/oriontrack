@@ -842,7 +842,7 @@ export default function BrokerLeadsPage() {
                       </span>
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-600">
-                      <PhoneAction phone={lead.telefone} />
+                      <PhoneAction phone={lead.telefone} leadId={lead.id} />
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.idades || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3">
