@@ -139,7 +139,8 @@ export default function DashboardPage() {
     stale: 0,
     lost: 0,
     revenueRealized: 0,
-    revenuePotential: 0
+    salesRealized: 0,
+    salesPotential: 0
   });
   const [monthlyPerformance, setMonthlyPerformance] = useState<MonthlyPerformance[]>(getLastMonths());
   const [weeklyLeads, setWeeklyLeads] = useState(getLastDays());
@@ -212,9 +213,10 @@ export default function DashboardPage() {
             }).length,
             lost: lostLeads.length,
             revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
-            revenuePotential: statsRes
+            salesRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
+            salesPotential: statsRes
               .filter((lead) => activeRevenueStatuses.includes(String(lead.status || '')))
-              .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0)
+              .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
           });
 
           const months = getLastMonths();
@@ -317,8 +319,7 @@ export default function DashboardPage() {
   const currentMonth = monthlyPerformance[monthlyPerformance.length - 1] || { leads: 0, spend: 0 };
   const currentMonthCpl = currentMonth.leads > 0 ? currentMonth.spend / currentMonth.leads : 0;
   const currentMonthConversion = currentMonth.leads > 0 ? (stats.soldThisMonth / currentMonth.leads) * 100 : 0;
-  const salesConversionBase = stats.sold + stats.lost;
-  const salesConversionRate = salesConversionBase > 0 ? (stats.sold / salesConversionBase) * 100 : 0;
+  const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
   const chartHeight = 176;
   const maxWeeklyLeads = Math.max(...weeklyLeads.map((day) => day.leads), 1);
   const weeklyTotal = weeklyLeads.reduce((sum, day) => sum + day.leads, 0);
@@ -619,7 +620,7 @@ export default function DashboardPage() {
             {[
               { label: 'Sem resposta', value: staleOpportunityCount, hint: 'precisam de atenção rápida', color: 'bg-amber-50 text-amber-700 border-amber-100', icon: AlertTriangle },
               { label: 'Em negociação', value: stats.inProgress, hint: 'leads em conversa ativa', color: 'bg-blue-50 text-blue-700 border-blue-100', icon: Clock },
-              { label: 'Comissão prevista', value: formatCurrency(stats.revenuePotential), hint: 'estimativa dos leads ativos', color: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: TrendingUp },
+              { label: 'Venda prevista', value: formatCurrency(stats.salesPotential), hint: 'valor previsto dos leads ativos', color: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: TrendingUp },
             ].map((item) => (
               <div key={item.label} className={`group rounded-[1.5rem] border p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${item.color}`}>
                 <div className="flex items-center justify-between gap-4">
@@ -720,7 +721,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="mb-12 grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div className="mb-12 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-4">
             <p className="text-sm font-black text-gray-900">Taxa de Conversão</p>
@@ -729,7 +730,7 @@ export default function DashboardPage() {
           <p className="text-3xl font-black text-gray-950">{salesConversionRate.toFixed(1).replace('.', ',')}%</p>
           <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">
             <span className="text-emerald-600">✓ {stats.sold} vendas</span>
-            <span className="text-red-500">⊗ {stats.lost} perdidos</span>
+            <span className="text-slate-500">{stats.total} leads</span>
           </div>
         </div>
 
@@ -744,11 +745,20 @@ export default function DashboardPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-4">
-            <p className="text-sm font-black text-gray-900">Comissão prevista</p>
+            <p className="text-sm font-black text-gray-900">Venda prevista</p>
             <TrendingUp size={18} className="text-slate-500" />
           </div>
-          <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.revenuePotential)}</p>
-          <p className="mt-2 text-xs font-bold text-slate-500">estimativa dos leads ativos</p>
+          <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.salesPotential)}</p>
+          <p className="mt-2 text-xs font-bold text-slate-500">valor previsto dos leads ativos</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <p className="text-sm font-black text-gray-900">Valor total de vendas</p>
+            <BarChart3 size={18} className="text-slate-500" />
+          </div>
+          <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.salesRealized)}</p>
+          <p className="mt-2 text-xs font-bold text-blue-600">soma das vendas realizadas</p>
         </div>
       </div>
 
