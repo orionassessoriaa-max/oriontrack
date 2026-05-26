@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { evolutionFetch, evolutionInstanceName, normalizePhone } from '@/lib/evolution';
+import { evolutionFetch, evolutionInstanceName, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_membro', 'account_manager'] as const;
@@ -81,13 +81,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Telefone do contato invalido.' }, { status: 400 });
     }
 
-    const payload = await evolutionFetch(`/message/sendText/${evolutionInstanceName(guard.profile.id)}`, {
+    const instance = evolutionInstanceName(guard.profile.id);
+    const instanceApiKey = await getEvolutionInstanceApiKey(instance);
+    const payload = await evolutionFetch(`/message/sendText/${instance}`, {
       method: 'POST',
       body: JSON.stringify({
         number: phone,
         text,
       }),
-    });
+    }, instanceApiKey);
 
     const providerId =
       payload?.key?.id ||
