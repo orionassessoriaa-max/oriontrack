@@ -65,6 +65,13 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         // 3. Admin Access: /admin + /trafego (optional but allowed)
         // But NO /dashboard (broker dashboard)
         else if (isAdmin && isBrokerRoute) {
+          const hasViewingSession = Boolean(
+            window.sessionStorage.getItem('orion:viewing_corretor_id') ||
+            window.sessionStorage.getItem('orion:viewing_gestor_id') ||
+            window.sessionStorage.getItem('orion:viewing_designer_id') ||
+            window.sessionStorage.getItem('orion:viewing_account_id')
+          );
+          if (hasViewingSession) return;
           router.push('/admin');
         }
       }
