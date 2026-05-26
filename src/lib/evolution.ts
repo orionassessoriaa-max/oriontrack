@@ -29,7 +29,6 @@ export async function evolutionFetch(path: string, init: RequestInit = {}) {
     headers: {
       'Content-Type': 'application/json',
       apikey: apiKey,
-      Authorization: `Bearer ${apiKey}`,
       ...(init.headers || {}),
     },
     cache: 'no-store',
