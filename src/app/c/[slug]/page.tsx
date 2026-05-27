@@ -321,7 +321,3 @@ export default function CapturePage() {
   );
 }
 
-// Minimal Framer Motion replacement if not available
-const motion = {
-  div: ({ children, className, initial, animate }: any) => <div className={className}>{children}</div>
-};

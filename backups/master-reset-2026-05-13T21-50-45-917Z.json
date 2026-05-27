@@ -1,0 +1,89 @@
+{
+  "created_at": "2026-05-13T21:50:42.943Z",
+  "tables": {
+    "profiles": {
+      "data": [
+        {
+          "id": "7091766b-bc44-4ad7-b6c4-caa2461bf26b",
+          "email": "ewerttonherculano@gmail.com",
+          "nome": "Ewertton Herculano",
+          "tipo_usuario": "admin",
+          "corretor_id": null,
+          "created_at": "2026-05-11T00:55:05+00:00",
+          "status": "ativo",
+          "foto_url": null,
+          "nome_empresa": null,
+          "precisa_trocar_senha": false,
+          "email_real": null
+        },
+        {
+          "id": "4addd0bf-4142-4166-9bb4-b0b9de059b3a",
+          "email": "viadinhodouruguai@gmail.com",
+          "nome": "João Neto viadinho",
+          "tipo_usuario": "corretor",
+          "corretor_id": "e7224136-d87d-4701-9671-f132c6ba98e4",
+          "created_at": "2026-05-13T18:25:29.835018+00:00",
+          "status": "active",
+          "foto_url": null,
+          "nome_empresa": null,
+          "precisa_trocar_senha": false,
+          "email_real": null
+        }
+      ]
+    },
+    "corretores": {
+      "data": [
+        {
+          "id": "e7224136-d87d-4701-9671-f132c6ba98e4",
+          "nome": "João Neto ",
+          "email": "ouruguai@gmail.com",
+          "telefone": "61992935611",
+          "slug_pagina": null,
+          "status": "ativo",
+          "created_at": "2026-05-13T18:25:29.651537+00:00",
+          "link_pagina": "",
+          "observacoes": "gaishfoiasnfoas",
+          "gestor_trafego_id": null,
+          "time_operacional": [
+            {
+              "nome": "Lucas",
+              "cargo": "Gestor de Projetos"
+            },
+            {
+              "nome": "Patrick",
+              "cargo": "Diretor Operacional"
+            },
+            {
+              "nome": "Nataline",
+              "cargo": "Designer"
+            },
+            {
+              "nome": "Ewertton",
+              "cargo": "Gestor de Tráfego"
+            }
+          ],
+          "crm_api_url": null,
+          "tipo_campanha": "pme",
+          "facebook_login": null,
+          "facebook_senha": null,
+          "operadoras_info": {},
+          "regioes_campanha": null,
+          "onboarding_status": "pendente",
+          "campanhas_ativas": false
+        }
+      ]
+    },
+    "leads": {
+      "data": []
+    },
+    "solicitacoes_suporte": {
+      "data": []
+    },
+    "relatorios_trafego": {
+      "data": []
+    },
+    "notificacoes": {
+      "data": []
+    }
+  }
+}
