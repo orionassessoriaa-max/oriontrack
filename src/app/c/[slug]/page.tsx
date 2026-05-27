@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor } from '@/types';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
 export default function CapturePage() {
   const params = useParams();
