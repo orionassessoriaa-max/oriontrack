@@ -224,7 +224,7 @@ export default function LoginPage() {
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="corretor@orion.com.br"
-                          className="w-full bg-white/[0.02] border border-white/10 text-white rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:bg-white/[0.05] focus:border-blue-500/35 transition-all placeholder:text-slate-700 font-semibold"
+                          className="w-full bg-slate-900/80 border border-slate-700/60 text-white rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 focus:bg-slate-900 transition-all placeholder:text-slate-600 font-semibold"
                         />
                       </div>
                     </div>
@@ -248,7 +248,7 @@ export default function LoginPage() {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="••••••••"
-                          className="w-full bg-white/[0.02] border border-white/10 text-white rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:bg-white/[0.05] focus:border-blue-500/35 transition-all placeholder:text-slate-700 font-semibold"
+                          className="w-full bg-slate-900/80 border border-slate-700/60 text-white rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 focus:bg-slate-900 transition-all placeholder:text-slate-600 font-semibold"
                         />
                       </div>
                     </div>
@@ -305,7 +305,7 @@ export default function LoginPage() {
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="corretor@orion.com.br"
-                          className="w-full bg-white/[0.02] border border-white/10 text-white rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:bg-white/[0.05] focus:border-blue-500/35 transition-all placeholder:text-slate-700 font-semibold"
+                          className="w-full bg-slate-900/80 border border-slate-700/60 text-white rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 focus:bg-slate-900 transition-all placeholder:text-slate-600 font-semibold"
                         />
                       </div>
                     </div>
