@@ -81,6 +81,7 @@ export async function POST(request: Request) {
       raw: qrcode ? undefined : payload,
     });
   } catch (error: any) {
+    console.error('[POST /api/inbox/evolution/connect] ERROR:', error);
     const rawMessage = String(error.message || '');
     const message = rawMessage.toLowerCase().includes('forbidden') || rawMessage.includes('403')
       ? 'A conexao com o WhatsApp foi recusada. Confirme a chave da Evolution API no servidor e tente novamente.'

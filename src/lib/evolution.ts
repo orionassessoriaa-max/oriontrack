@@ -41,11 +41,13 @@ export async function evolutionFetch(path: string, init: RequestInit = {}, apiKe
     throw new Error('Conexao do WhatsApp ainda nao foi ativada no servidor.');
   }
 
+  console.log(`[evolutionFetch] Requesting: ${baseUrl}${path}`);
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       apikey: apiKey,
+      Authorization: `Bearer ${apiKey}`,
       ...(init.headers || {}),
     },
     cache: 'no-store',
@@ -53,6 +55,10 @@ export async function evolutionFetch(path: string, init: RequestInit = {}, apiKe
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    console.error(`[evolutionFetch ERROR] Path: ${path} | Status: ${response.status}`, {
+      payload,
+      headers: response.headers
+    });
     const rawMessage = String(payload?.message || payload?.error || payload?.response?.message || '');
     const normalizedMessage = rawMessage.toLowerCase();
 
