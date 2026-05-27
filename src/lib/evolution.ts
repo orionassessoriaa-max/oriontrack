@@ -56,7 +56,7 @@ export async function evolutionFetch(path: string, init: RequestInit = {}, apiKe
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     console.error(`[evolutionFetch ERROR] Path: ${path} | Status: ${response.status}`, {
-      payload,
+      payload: JSON.stringify(payload, null, 2),
       headers: response.headers
     });
     const rawMessage = String(payload?.message || payload?.error || payload?.response?.message || '');
