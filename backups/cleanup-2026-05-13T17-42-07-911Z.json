@@ -1,0 +1,521 @@
+{
+  "leads": [
+    {
+      "id": "799b338d-300d-4543-b520-62344e7c6446",
+      "corretor_id": "adf354a5-474e-4941-8c16-bcf28c3355b6",
+      "data_entrada": "2026-05-10T03:17:10+00:00",
+      "nome": "Maria Oliveira\n",
+      "telefone": "11988887777",
+      "idades": " 32, 35, 8",
+      "possui_cnpj": "Sim",
+      "tem_plano_ativo": "Sim",
+      "plano_atual": "amil",
+      "investimento": "R$ 1.200",
+      "cidade": "sousa",
+      "status": "Aguardando atendimento",
+      "etiqueta": "chamou duas vezes",
+      "observacoes": "Lead de teste",
+      "created_at": "2026-05-10T03:18:11+00:00",
+      "updated_at": "2026-05-13T15:23:54.303+00:00"
+    },
+    {
+      "id": "3d71bf3c-3404-416c-b33e-9693c53d842f",
+      "corretor_id": "90af5806-15ab-416d-9685-f7f32a96d171",
+      "data_entrada": "2026-05-13T05:03:02.169+00:00",
+      "nome": "Lead Teste ICP - Empresa Silva",
+      "telefone": "(11) 98888-1234",
+      "idades": "34, 31, 6",
+      "possui_cnpj": "Sim",
+      "tem_plano_ativo": "N?o",
+      "plano_atual": "Sem plano atual",
+      "investimento": "R$ 1.500",
+      "cidade": "S?o Paulo",
+      "status": "Em negociação",
+      "etiqueta": null,
+      "observacoes": "Lead de teste criado pelo admin para validar o Pipeline Comercial e o Fit do lead.",
+      "created_at": "2026-05-13T05:03:02.967799+00:00",
+      "updated_at": "2026-05-13T15:33:09.332+00:00"
+    }
+  ],
+  "corretores": [
+    {
+      "id": "adf354a5-474e-4941-8c16-bcf28c3355b6",
+      "nome": "Ewertton Herculano",
+      "email": "ewerttonherculano@gmail.com",
+      "telefone": "61984409328",
+      "slug_pagina": "Ewertton-Herculano",
+      "status": "Ativo",
+      "created_at": "2026-05-10T03:15:57+00:00",
+      "link_pagina": null,
+      "observacoes": null,
+      "gestor_trafego_id": "396e20aa-8e57-4852-8be4-caf7db774d17",
+      "time_operacional": [
+        {
+          "nome": "Ewertton",
+          "cargo": "Gestor de Tráfego"
+        },
+        {
+          "nome": "Geovana",
+          "cargo": "Gestora de Tráfego"
+        },
+        {
+          "nome": "Lucas",
+          "cargo": "Gestor de Projetos"
+        },
+        {
+          "nome": "Patrick",
+          "cargo": "Diretor Operacional"
+        },
+        {
+          "nome": "Nataline",
+          "cargo": "Designer"
+        }
+      ],
+      "crm_api_url": null,
+      "tipo_campanha": "ambos",
+      "facebook_login": null,
+      "facebook_senha": null,
+      "operadoras_info": {},
+      "regioes_campanha": null,
+      "onboarding_status": "pendente",
+      "campanhas_ativas": false
+    },
+    {
+      "id": "9eab1b92-ddda-4d04-a5db-2f1c505f7298",
+      "nome": "Viviane Corretora",
+      "email": "viviane@orion.com",
+      "telefone": "61984409328",
+      "slug_pagina": null,
+      "status": "active",
+      "created_at": "2026-05-11T05:51:40.007819+00:00",
+      "link_pagina": "",
+      "observacoes": "",
+      "gestor_trafego_id": "396e20aa-8e57-4852-8be4-caf7db774d17",
+      "time_operacional": [
+        {
+          "nome": "Ewertton",
+          "cargo": "Gestor de Tráfego"
+        },
+        {
+          "nome": "Geovana",
+          "cargo": "Gestora de Tráfego"
+        },
+        {
+          "nome": "Lucas",
+          "cargo": "Gestor de Projetos"
+        },
+        {
+          "nome": "Patrick",
+          "cargo": "Diretor Operacional"
+        },
+        {
+          "nome": "Nataline",
+          "cargo": "Designer"
+        }
+      ],
+      "crm_api_url": null,
+      "tipo_campanha": "ambos",
+      "facebook_login": null,
+      "facebook_senha": null,
+      "operadoras_info": {},
+      "regioes_campanha": null,
+      "onboarding_status": "pendente",
+      "campanhas_ativas": false
+    },
+    {
+      "id": "80c4bccd-2f45-4c0e-90c5-99daa77c8faf",
+      "nome": "lucas",
+      "email": "lucasteste@gmail.com",
+      "telefone": "6192101212",
+      "slug_pagina": null,
+      "status": "ativo",
+      "created_at": "2026-05-11T06:58:36.48418+00:00",
+      "link_pagina": null,
+      "observacoes": null,
+      "gestor_trafego_id": "ed7f5244-7aae-44ca-a788-29a6c075fe84",
+      "time_operacional": [
+        {
+          "nome": "Ewertton",
+          "cargo": "Gestor de Tráfego"
+        },
+        {
+          "nome": "Lucas",
+          "cargo": "Gestor de Projetos"
+        },
+        {
+          "nome": "Patrick",
+          "cargo": "Diretor Operacional"
+        },
+        {
+          "nome": "Nataline",
+          "cargo": "Designer"
+        }
+      ],
+      "crm_api_url": null,
+      "tipo_campanha": "ambos",
+      "facebook_login": null,
+      "facebook_senha": null,
+      "operadoras_info": {},
+      "regioes_campanha": null,
+      "onboarding_status": "pendente",
+      "campanhas_ativas": false
+    },
+    {
+      "id": "a881e86a-f308-4b04-98d2-e847ccd2b1a2",
+      "nome": "bessa ",
+      "email": "bessa@orion.com",
+      "telefone": "6111111111",
+      "slug_pagina": null,
+      "status": "ativo",
+      "created_at": "2026-05-11T07:11:40.762658+00:00",
+      "link_pagina": "",
+      "observacoes": "",
+      "gestor_trafego_id": "396e20aa-8e57-4852-8be4-caf7db774d17",
+      "time_operacional": [
+        {
+          "nome": "Lucas",
+          "cargo": "Gestor de Projetos"
+        },
+        {
+          "nome": "Geovana",
+          "cargo": "Gestora de Tráfego"
+        },
+        {
+          "nome": "Patrick",
+          "cargo": "Diretor Operacional"
+        },
+        {
+          "nome": "Nataline",
+          "cargo": "Designer"
+        }
+      ],
+      "crm_api_url": null,
+      "tipo_campanha": "ambos",
+      "facebook_login": null,
+      "facebook_senha": null,
+      "operadoras_info": {},
+      "regioes_campanha": null,
+      "onboarding_status": "pendente",
+      "campanhas_ativas": false
+    },
+    {
+      "id": "3d342d29-3535-432d-b9ea-557a04e79a60",
+      "nome": "leandro",
+      "email": "leandro@teste.com",
+      "telefone": "777777777777",
+      "slug_pagina": null,
+      "status": "ativo",
+      "created_at": "2026-05-11T07:18:31.300888+00:00",
+      "link_pagina": null,
+      "observacoes": null,
+      "gestor_trafego_id": "ed7f5244-7aae-44ca-a788-29a6c075fe84",
+      "time_operacional": [
+        {
+          "nome": "Ewertton",
+          "cargo": "Gestor de Tráfego"
+        },
+        {
+          "nome": "Patrick",
+          "cargo": "Diretor Operacional"
+        },
+        {
+          "nome": "Nataline",
+          "cargo": "Designer"
+        },
+        {
+          "nome": "Lucas",
+          "cargo": "Gestor de Projetos"
+        }
+      ],
+      "crm_api_url": null,
+      "tipo_campanha": "ambos",
+      "facebook_login": null,
+      "facebook_senha": null,
+      "operadoras_info": {},
+      "regioes_campanha": null,
+      "onboarding_status": "pendente",
+      "campanhas_ativas": false
+    },
+    {
+      "id": "a389ee14-e374-45c5-bf4f-f76fe1405f92",
+      "nome": "Fernando",
+      "email": "fernando@orion.com",
+      "telefone": "6198888888",
+      "slug_pagina": null,
+      "status": "ativo",
+      "created_at": "2026-05-11T12:44:30.478577+00:00",
+      "link_pagina": null,
+      "observacoes": null,
+      "gestor_trafego_id": "396e20aa-8e57-4852-8be4-caf7db774d17",
+      "time_operacional": [
+        {
+          "nome": "Patrick",
+          "cargo": "Diretor Operacional"
+        },
+        {
+          "nome": "Lucas",
+          "cargo": "Gestor de Projetos"
+        },
+        {
+          "nome": "Nataline",
+          "cargo": "Designer"
+        },
+        {
+          "nome": "Geovana",
+          "cargo": "Gestora de Tráfego"
+        }
+      ],
+      "crm_api_url": null,
+      "tipo_campanha": "ambos",
+      "facebook_login": null,
+      "facebook_senha": null,
+      "operadoras_info": {},
+      "regioes_campanha": null,
+      "onboarding_status": "pendente",
+      "campanhas_ativas": false
+    },
+    {
+      "id": "90af5806-15ab-416d-9685-f7f32a96d171",
+      "nome": "João",
+      "email": "joao@orion.com",
+      "telefone": "0000000000",
+      "slug_pagina": null,
+      "status": "ativo",
+      "created_at": "2026-05-11T13:16:38.275247+00:00",
+      "link_pagina": "",
+      "observacoes": "",
+      "gestor_trafego_id": "ed7f5244-7aae-44ca-a788-29a6c075fe84",
+      "time_operacional": [
+        {
+          "nome": "Lucas",
+          "cargo": "Gestor de Projetos"
+        },
+        {
+          "nome": "Nataline",
+          "cargo": "Designer"
+        },
+        {
+          "nome": "Patrick",
+          "cargo": "Diretor Operacional"
+        },
+        {
+          "nome": "Ewertton",
+          "cargo": "Gestor de Tráfego"
+        }
+      ],
+      "crm_api_url": null,
+      "tipo_campanha": "pme",
+      "facebook_login": null,
+      "facebook_senha": null,
+      "operadoras_info": {
+        "Amil": "S"
+      },
+      "regioes_campanha": null,
+      "onboarding_status": "campanhas_ativas",
+      "campanhas_ativas": true
+    }
+  ],
+  "profiles": [
+    {
+      "id": "012b5e48-f383-4191-aa6f-cd594f9bcc83",
+      "email": "ewertton@teste.com",
+      "nome": "Ewertton Herculano ",
+      "tipo_usuario": "corretor",
+      "corretor_id": "adf354a5-474e-4941-8c16-bcf28c3355b6",
+      "created_at": "2026-05-10T03:22:57+00:00",
+      "status": "ativo",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    },
+    {
+      "id": "7091766b-bc44-4ad7-b6c4-caa2461bf26b",
+      "email": "ewerttonherculano@gmail.com",
+      "nome": "Ewertton Herculano",
+      "tipo_usuario": "admin",
+      "corretor_id": null,
+      "created_at": "2026-05-11T00:55:05+00:00",
+      "status": "ativo",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    },
+    {
+      "id": "a3f559aa-c2c6-4cd1-8bcc-1c5c8dc8b356",
+      "email": "ewerttonbuckup@gmail.com",
+      "nome": "e1eqweweq",
+      "tipo_usuario": "corretor",
+      "corretor_id": null,
+      "created_at": "2026-05-11T05:50:29.293129+00:00",
+      "status": "ativo",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    },
+    {
+      "id": "17e2c0e6-045c-41a0-a4a5-642abe2c633d",
+      "email": "viviane@orion.com",
+      "nome": "Viviane Corretora",
+      "tipo_usuario": "corretor",
+      "corretor_id": "9eab1b92-ddda-4d04-a5db-2f1c505f7298",
+      "created_at": "2026-05-11T05:51:40.195061+00:00",
+      "status": "ativo",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    },
+    {
+      "id": "ed7f5244-7aae-44ca-a788-29a6c075fe84",
+      "email": "ewertton.gestor@orion.com",
+      "nome": "Ewertton",
+      "tipo_usuario": "gestor_trafego",
+      "corretor_id": null,
+      "created_at": "2026-05-11T06:30:34.830485+00:00",
+      "status": "ativo",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    },
+    {
+      "id": "396e20aa-8e57-4852-8be4-caf7db774d17",
+      "email": "geovana@orion.com",
+      "nome": "Geovana",
+      "tipo_usuario": "gestor_trafego",
+      "corretor_id": null,
+      "created_at": "2026-05-11T06:30:34.830485+00:00",
+      "status": "ativo",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    },
+    {
+      "id": "7f3168bc-9786-4393-a898-8487293a3129",
+      "email": "bessa@orion.com",
+      "nome": "bessa ",
+      "tipo_usuario": "corretor",
+      "corretor_id": "a881e86a-f308-4b04-98d2-e847ccd2b1a2",
+      "created_at": "2026-05-11T07:11:40.946057+00:00",
+      "status": "active",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    },
+    {
+      "id": "c163630c-5b6d-4431-93a0-71f037d4062a",
+      "email": "leandro@teste.com",
+      "nome": "leandro",
+      "tipo_usuario": "corretor",
+      "corretor_id": "3d342d29-3535-432d-b9ea-557a04e79a60",
+      "created_at": "2026-05-11T07:18:31.470625+00:00",
+      "status": "active",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    },
+    {
+      "id": "56d4a6d7-0ec8-4293-96a2-07b58b9eb971",
+      "email": "fernando@orion.com",
+      "nome": "Fernando",
+      "tipo_usuario": "corretor",
+      "corretor_id": "a389ee14-e374-45c5-bf4f-f76fe1405f92",
+      "created_at": "2026-05-11T12:44:30.680774+00:00",
+      "status": "active",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    },
+    {
+      "id": "87eef2f6-64e4-420a-9348-2ab6d94d28ac",
+      "email": "joao@orion.com",
+      "nome": "João",
+      "tipo_usuario": "corretor",
+      "corretor_id": "90af5806-15ab-416d-9685-f7f32a96d171",
+      "created_at": "2026-05-11T13:16:38.479725+00:00",
+      "status": "active",
+      "foto_url": null,
+      "nome_empresa": null,
+      "precisa_trocar_senha": false
+    }
+  ],
+  "solicitacoes_suporte": [],
+  "relatorios_trafego": [],
+  "notificacoes": [],
+  "auth_users": [
+    {
+      "id": "87eef2f6-64e4-420a-9348-2ab6d94d28ac",
+      "email": "joao@orion.com",
+      "created_at": "2026-05-11T13:16:38.045422Z",
+      "user_metadata": {
+        "email_verified": true,
+        "nome": "João",
+        "tipo_usuario": "corretor"
+      }
+    },
+    {
+      "id": "56d4a6d7-0ec8-4293-96a2-07b58b9eb971",
+      "email": "fernando@orion.com",
+      "created_at": "2026-05-11T12:44:30.262034Z",
+      "user_metadata": {
+        "email_verified": true,
+        "nome": "Fernando",
+        "tipo_usuario": "corretor"
+      }
+    },
+    {
+      "id": "c163630c-5b6d-4431-93a0-71f037d4062a",
+      "email": "leandro@teste.com",
+      "created_at": "2026-05-11T07:18:31.109971Z",
+      "user_metadata": {
+        "email_verified": true,
+        "nome": "leandro",
+        "tipo_usuario": "corretor"
+      }
+    },
+    {
+      "id": "7f3168bc-9786-4393-a898-8487293a3129",
+      "email": "bessa@orion.com",
+      "created_at": "2026-05-11T07:11:40.55409Z",
+      "user_metadata": {
+        "email_verified": true,
+        "nome": "bessa ",
+        "tipo_usuario": "corretor"
+      }
+    },
+    {
+      "id": "17e2c0e6-045c-41a0-a4a5-642abe2c633d",
+      "email": "viviane@orion.com",
+      "created_at": "2026-05-11T05:51:39.801601Z",
+      "user_metadata": {
+        "email_verified": true,
+        "nome": "Viviane Corretora",
+        "tipo_usuario": "corretor"
+      }
+    },
+    {
+      "id": "a3f559aa-c2c6-4cd1-8bcc-1c5c8dc8b356",
+      "email": "ewerttonbuckup@gmail.com",
+      "created_at": "2026-05-11T05:50:28.875202Z",
+      "user_metadata": {
+        "email_verified": true,
+        "nome": "e1eqweweq",
+        "tipo_usuario": "corretor"
+      }
+    },
+    {
+      "id": "7091766b-bc44-4ad7-b6c4-caa2461bf26b",
+      "email": "ewerttonherculano@gmail.com",
+      "created_at": "2026-05-11T00:45:58.519068Z",
+      "user_metadata": {
+        "email_verified": true
+      }
+    },
+    {
+      "id": "012b5e48-f383-4191-aa6f-cd594f9bcc83",
+      "email": "ewertton@testegmail.com",
+      "created_at": "2026-05-10T03:19:26.210803Z",
+      "user_metadata": {
+        "email_verified": true
+      }
+    }
+  ]
+}
