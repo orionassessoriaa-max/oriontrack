@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
@@ -867,72 +868,84 @@ export default function CrmPage() {
                       onDrop={() => handleDrop(column.id)}
                       className={`min-h-[220px] space-y-3 rounded-[2rem] border p-3 transition-colors ${draggedLeadId ? 'border-blue-200 bg-blue-50/70' : statusStyle.column}`}
                     >
-                      {columnLeads.map((lead) => {
-                        const qualification = getLeadQualification(lead, tipoCampanha);
-                        const selected = selectedLead?.id === lead.id;
-                        const importWarnings = getLeadImportWarnings(lead);
-                        return (
-                          <button
-                            key={lead.id}
-                            draggable
-                            onDragStart={() => setDraggedLeadId(lead.id)}
-                            onDragEnd={() => setDraggedLeadId(null)}
-                            onClick={() => setSelectedLead(lead)}
-                            className={`w-full rounded-[1.5rem] border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-blue-300 ring-4 ring-blue-100' : 'border-white'}`}
-                          >
-                            <div className="mb-3 flex items-start justify-between gap-3">
-                              <div>
-                                <p className="font-black text-gray-900">{lead.nome}</p>
-                                <p className="mt-1 flex items-center gap-2 text-xs font-bold text-slate-500">
-                                  <Phone size={13} /> {lead.telefone}
-                                </p>
+                      <AnimatePresence mode="popLayout">
+                        {columnLeads.map((lead) => {
+                          const qualification = getLeadQualification(lead, tipoCampanha);
+                          const selected = selectedLead?.id === lead.id;
+                          const importWarnings = getLeadImportWarnings(lead);
+                          return (
+                            <motion.button
+                              key={lead.id}
+                              layout
+                              initial={{ opacity: 0, y: 12 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -12 }}
+                              whileHover={{ scale: 1.015, y: -2 }}
+                              transition={{ duration: 0.25, ease: "easeOut" }}
+                              draggable
+                              onDragStart={() => setDraggedLeadId(lead.id)}
+                              onDragEnd={() => setDraggedLeadId(null)}
+                              onClick={() => setSelectedLead(lead)}
+                              className={`w-full rounded-[1.5rem] border bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 text-left shadow-sm transition-all hover:shadow-md cursor-pointer ${
+                                selected 
+                                  ? 'border-blue-400 ring-4 ring-blue-100 dark:ring-blue-900/30' 
+                                  : 'border-white/30 dark:border-white/5'
+                              }`}
+                            >
+                              <div className="mb-3 flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-black text-gray-900 dark:text-white leading-tight">{lead.nome}</p>
+                                  <p className="mt-1.5 flex items-center gap-2 text-xs font-bold text-slate-500">
+                                    <Phone size={13} className="text-blue-500" /> {lead.telefone}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {importWarnings.length > 0 && (
+                                    <AlertTriangle
+                                      size={17}
+                                      className="text-orange-500"
+                                      aria-label="Lead com dados incompletos"
+                                    />
+                                  )}
+                                  {isStale(lead) && <AlertTriangle size={17} className="text-amber-500" />}
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                {importWarnings.length > 0 && (
-                                  <AlertTriangle
-                                    size={17}
-                                    className="text-orange-500"
-                                    aria-label="Lead com dados incompletos"
-                                  />
+                              {importWarnings.length > 0 && (
+                                <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                                  Dados incompletos: {importWarnings.join(', ')}
+                                </div>
+                              )}
+                              <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
+                                <span>CNPJ: {lead.possui_cnpj || '-'}</span>
+                                <span>Vidas: {lead.idades || '-'}</span>
+                                <span className="col-span-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 px-2.5 py-1.5 text-blue-700 dark:text-blue-300 font-extrabold">Pagina: {lead.operadora || 'Sem pagina'}</span>
+                                {lead.responsavel_membro?.nome && (
+                                  <span className="col-span-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 px-2.5 py-1.5 text-emerald-700 dark:text-emerald-300 font-extrabold">Responsavel: {lead.responsavel_membro.nome}</span>
                                 )}
-                                {isStale(lead) && <AlertTriangle size={17} className="text-amber-500" />}
+                                {lead.cadencia_inicio && (
+                                  <span className={`col-span-2 rounded-xl px-2.5 py-1.5 font-extrabold ${lead.cadencia_ativa ? 'bg-violet-50/80 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300' : 'bg-slate-50 text-slate-500'}`}>
+                                    Cadencia: {lead.cadencia_ativa ? `dia ${getCadenceDays(lead)}` : `${getCadenceDays(lead)} dia(s) encerrada`}
+                                  </span>
+                                )}
+                                <span className="truncate">{lead.cidade || 'Cidade nao informada'}</span>
+                                <span className="truncate">{lead.investimento || 'Sem investimento'}</span>
+                                {requiresCommercialData(normalizeLeadStatus(lead.status)) && (
+                                  <>
+                                    <span className="col-span-2 border-t border-dashed border-slate-100 pt-2 mt-1">Negociação: {formatCurrencyValue(lead.valor_negociacao)}</span>
+                                    <span className="col-span-2">Comissão: {formatCurrencyValue(lead.valor_comissao)}</span>
+                                  </>
+                                )}
                               </div>
-                            </div>
-                            {importWarnings.length > 0 && (
-                              <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                                Dados incompletos: {importWarnings.join(', ')}
-                              </div>
-                            )}
-                            <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
-                              <span>CNPJ: {lead.possui_cnpj || '-'}</span>
-                              <span>Vidas: {lead.idades || '-'}</span>
-                              <span className="col-span-2 rounded-xl bg-blue-50 px-2 py-1 text-blue-700">Pagina: {lead.operadora || 'Sem pagina'}</span>
-                              {lead.responsavel_membro?.nome && (
-                                <span className="col-span-2 rounded-xl bg-emerald-50 px-2 py-1 text-emerald-700">Responsavel: {lead.responsavel_membro.nome}</span>
-                              )}
-                              {lead.cadencia_inicio && (
-                                <span className={`col-span-2 rounded-xl px-2 py-1 ${lead.cadencia_ativa ? 'bg-violet-50 text-violet-700' : 'bg-slate-50 text-slate-500'}`}>
-                                  Cadencia: {lead.cadencia_ativa ? `dia ${getCadenceDays(lead)}` : `${getCadenceDays(lead)} dia(s) encerrada`}
-                                </span>
-                              )}
-                              <span>{lead.cidade || 'Cidade nao informada'}</span>
-                              <span>{lead.investimento || 'Sem investimento'}</span>
-                              {requiresCommercialData(normalizeLeadStatus(lead.status)) && (
-                                <>
-                                  <span>Negociação: {formatCurrencyValue(lead.valor_negociacao)}</span>
-                                  <span>Comissão: {formatCurrencyValue(lead.valor_comissao)}</span>
-                                </>
-                              )}
-                            </div>
-                            <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-widest ${qualificationClass(qualification.tone)}`}>
-                              {qualification.label}
-                            </span>
-                          </button>
-                        );
-                      })}
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest ${qualificationClass(qualification.tone)}`}>
+                                {qualification.label}
+                              </span>
+                            </motion.button>
+                          );
+                        })}
+                      </AnimatePresence>
                       {columnLeads.length === 0 && (
-                        <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-white/60 py-12 text-center">
-                          <OrionMark size={18} className="mx-auto mb-2 opacity-25" />
+                        <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-white/60 dark:bg-slate-900/40 py-12 text-center">
+                          <OrionMark size={18} className="mx-auto mb-2 opacity-25 animate-pulse" />
                           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Sem leads aqui</p>
                         </div>
                       )}
@@ -1407,12 +1420,16 @@ function Stat({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-[2rem] border p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500/15 ${active ? 'ring-2 ring-blue-500' : ''} ${className}`}
+      className={`glass-panel glass-card-glow rounded-[1.75rem] border p-5 text-left shadow-sm transition-all focus:outline-none focus:ring-4 focus:ring-blue-500/10 cursor-pointer ${
+        active 
+          ? 'ring-2 ring-blue-500/70 border-blue-500/60 bg-blue-500/10 shadow-[0_12px_24px_-8px_rgba(59,130,246,0.35)]' 
+          : 'border-white/20'
+      } ${className}`}
     >
-      <p className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-        <Icon size={14} /> {label}
+      <p className="mb-2.5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-85">
+        <Icon size={14} className="animate-pulse" /> {label}
       </p>
-      <p className="text-3xl font-black text-gray-950">{value}</p>
+      <p className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{value}</p>
     </button>
   );
 }

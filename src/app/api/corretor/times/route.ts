@@ -120,7 +120,7 @@ export async function GET(request: Request) {
 
     const { data: membros, error: membersError } = await supabaseAdmin
       .from('corretor_time_membros')
-      .select('id, time_id, corretor_id, profile_id, nome, email, status, ordem, ultimo_lead_at, created_at')
+      .select('id, time_id, corretor_id, profile_id, nome, email, status, ordem, ultimo_lead_at, created_at, profiles:profile_id(foto_url)')
       .eq('time_id', team.id)
       .order('ordem', { ascending: true })
       .order('created_at', { ascending: true });
@@ -143,9 +143,26 @@ export async function GET(request: Request) {
     const ownerProfile = await getOwnerProfile(corretorId);
     const ownerMember = (membros || []).find((member: any) => member.profile_id === ownerProfile?.id);
 
+    const membrosWithPhoto = (membros || []).map((m: any) => {
+      const joinedProfile = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+      return {
+        id: m.id,
+        time_id: m.time_id,
+        corretor_id: m.corretor_id,
+        profile_id: m.profile_id,
+        nome: m.nome,
+        email: m.email,
+        status: m.status,
+        ordem: m.ordem,
+        ultimo_lead_at: m.ultimo_lead_at,
+        created_at: m.created_at,
+        foto_url: joinedProfile?.foto_url || null,
+      };
+    });
+
     return NextResponse.json({
       team,
-      membros: membros || [],
+      membros: membrosWithPhoto,
       leads,
       settings: {
         owner_in_distribution: Boolean(ownerMember),

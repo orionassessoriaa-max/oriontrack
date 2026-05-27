@@ -39,6 +39,10 @@ export default function BrokerInboxPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  
+  const [whatsAppConnected, setWhatsAppConnected] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   async function fetchInbox() {
     if (!profile?.corretor_id) {
@@ -71,6 +75,92 @@ export default function BrokerInboxPage() {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token || '';
   }
+
+  async function checkWhatsAppStatus() {
+    setCheckingStatus(true);
+    const token = await getToken();
+    if (!token) {
+      setCheckingStatus(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/inbox/evolution/connect', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
+      });
+      const payload = await response.json();
+      if (response.ok && payload.connected) {
+        setWhatsAppConnected(true);
+        setAcceptedTerms(true);
+      } else {
+        setWhatsAppConnected(false);
+      }
+    } catch {
+      setWhatsAppConnected(false);
+    } finally {
+      setCheckingStatus(false);
+    }
+  }
+
+  async function disconnectWhatsApp() {
+    if (!confirm('Deseja realmente desconectar seu WhatsApp do Orion Track? Isso encerrará a sessão ativa e removerá as configurações no servidor.')) {
+      return;
+    }
+
+    setDisconnecting(true);
+    setConnectError(null);
+
+    const token = await getToken();
+    if (!token) {
+      setConnectError('Sessao expirada. Entre novamente.');
+      setDisconnecting(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/inbox/evolution/connect', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        setWhatsAppConnected(false);
+        setQrCode(null);
+        setAcceptedTerms(false);
+      } else {
+        setConnectError(payload.error || 'Nao consegui desconectar o WhatsApp agora.');
+      }
+    } catch (err: any) {
+      setConnectError(err.message || 'Erro ao desconectar.');
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  useEffect(() => {
+    if (profile?.id) {
+      void checkWhatsAppStatus();
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (qrCode && !whatsAppConnected) {
+      interval = setInterval(() => {
+        void checkWhatsAppStatus();
+      }, 5000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [qrCode, whatsAppConnected]);
+
 
   async function fetchMessages(conversationId: string) {
     const token = await getToken();
@@ -188,53 +278,85 @@ export default function BrokerInboxPage() {
       </div>
 
       <div className="mb-8 grid gap-5 lg:grid-cols-[1fr_1.4fr]">
-        <div className="orion-panel border-blue-100 bg-blue-50 p-6">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
-            <QrCode size={24} />
-          </div>
-          <h2 className="text-xl font-black text-gray-950">Conectar WhatsApp</h2>
-          <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
-            Escaneie o QR Code e atenda seus leads direto por aqui. Suas conversas ficam organizadas para voce responder rapido, acompanhar retornos e nao perder oportunidades.
-          </p>
-          <label className="mt-5 flex cursor-pointer items-start gap-4 rounded-2xl border border-blue-200 bg-white p-5 text-left leading-relaxed shadow-sm transition-all hover:border-blue-400 hover:shadow-md dark:border-blue-400/30 dark:bg-slate-900/80 dark:hover:border-blue-300">
-            <input
-              type="checkbox"
-              checked={acceptedTerms}
-              onChange={(event) => setAcceptedTerms(event.target.checked)}
-              className="peer sr-only"
-            />
-            <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-blue-300 bg-blue-50 text-transparent transition-all peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white dark:border-blue-300/60 dark:bg-blue-950">
-              <CheckCircle2 size={18} />
-            </span>
-            <span className="flex-1">
-              <span className="block text-base font-black leading-snug text-slate-950 dark:text-white">
-                Aceito conectar meu WhatsApp ao Orion Track
-              </span>
-              <span className="mt-2 block text-sm font-semibold leading-7 text-slate-600 dark:text-slate-200">
-                Entendo que as conversas dos meus leads poderao aparecer nesta tela para facilitar meu atendimento, manter o historico organizado e acompanhar cada oportunidade com mais seguranca.
-              </span>
-            </span>
-          </label>
-          <button
-            onClick={connectWhatsApp}
-            disabled={connecting || !acceptedTerms}
-            className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {connecting ? <Loader2 className="animate-spin" size={18} /> : <Smartphone size={18} />}
-            {connecting ? 'Gerando QR Code...' : 'Conectar meu WhatsApp'}
-          </button>
-          {qrCode ? (
-            <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-center">
-              <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="mx-auto h-52 w-52 rounded-xl object-contain" />
-              <p className="mt-3 text-xs font-black uppercase tracking-widest text-blue-700">Escaneie com o WhatsApp</p>
+        {whatsAppConnected ? (
+          <div className="orion-panel border-emerald-100 bg-emerald-50 p-6">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
+              <CheckCircle2 size={24} />
             </div>
-          ) : null}
-          {connectError ? (
-            <p className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700">{connectError}</p>
-          ) : (
-            <p className="mt-3 text-xs font-bold text-blue-700">Quando o QR Code aparecer, abra o WhatsApp no celular, toque em aparelhos conectados e faca a leitura.</p>
-          )}
-        </div>
+            <h2 className="text-xl font-black text-gray-950">WhatsApp Conectado</h2>
+            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
+              Sua conta está integrada e as conversas estão ativas! Você já pode gerenciar os atendimentos e interagir com seus leads diretamente pelo painel.
+            </p>
+            <div className="mt-5 rounded-2xl border border-emerald-200 bg-white p-5 leading-relaxed shadow-sm">
+              <span className="block text-base font-black leading-snug text-emerald-950">
+                Integração ativa e segura
+              </span>
+              <span className="mt-2 block text-sm font-semibold leading-7 text-slate-600">
+                Todas as interações realizadas serão registradas no Orion Track para fins de histórico comercial e acompanhamento de oportunidades.
+              </span>
+            </div>
+            <button
+              onClick={disconnectWhatsApp}
+              disabled={disconnecting}
+              className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-red-600/20 transition hover:-translate-y-0.5 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {disconnecting ? <Loader2 className="animate-spin" size={18} /> : <Smartphone size={18} />}
+              {disconnecting ? 'Desconectando...' : 'Desconectar WhatsApp'}
+            </button>
+            {connectError && (
+              <p className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700">{connectError}</p>
+            )}
+          </div>
+        ) : (
+          <div className="orion-panel border-blue-100 bg-blue-50 p-6">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
+              <QrCode size={24} />
+            </div>
+            <h2 className="text-xl font-black text-gray-950">Conectar WhatsApp</h2>
+            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
+              Escaneie o QR Code e atenda seus leads direto por aqui. Suas conversas ficam organizadas para voce responder rapido, acompanhar retornos e nao perder oportunidades.
+            </p>
+            <label className="mt-5 flex cursor-pointer items-start gap-4 rounded-2xl border border-blue-200 bg-white p-5 text-left leading-relaxed shadow-sm transition-all hover:border-blue-400 hover:shadow-md dark:border-blue-400/30 dark:bg-slate-900/80 dark:hover:border-blue-300">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(event) => setAcceptedTerms(event.target.checked)}
+                className="peer sr-only"
+              />
+              <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-blue-300 bg-blue-50 text-transparent transition-all peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white dark:border-blue-300/60 dark:bg-blue-950">
+                <CheckCircle2 size={18} />
+              </span>
+              <span className="flex-1">
+                <span className="block text-base font-black leading-snug text-slate-950 dark:text-white">
+                  Aceito conectar meu WhatsApp ao Orion Track
+                </span>
+                <span className="mt-2 block text-sm font-semibold leading-7 text-slate-600 dark:text-slate-200">
+                  Entendo que as conversas dos meus leads poderao aparecer nesta tela para facilitar meu atendimento, manter o historico organizado e acompanhar cada oportunidade com mais seguranca.
+                </span>
+              </span>
+            </label>
+            <button
+              onClick={connectWhatsApp}
+              disabled={connecting || !acceptedTerms}
+              className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {connecting ? <Loader2 className="animate-spin" size={18} /> : <Smartphone size={18} />}
+              {connecting ? 'Gerando QR Code...' : 'Conectar meu WhatsApp'}
+            </button>
+            {qrCode ? (
+              <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-center">
+                <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="mx-auto h-52 w-52 rounded-xl object-contain" />
+                <p className="mt-3 text-xs font-black uppercase tracking-widest text-blue-700">Escaneie com o WhatsApp</p>
+              </div>
+            ) : null}
+            {connectError ? (
+              <p className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700">{connectError}</p>
+            ) : (
+              <p className="mt-3 text-xs font-bold text-blue-700">Quando o QR Code aparecer, abra o WhatsApp no celular, toque em aparelhos conectados e faca a leitura.</p>
+            )}
+          </div>
+        )}
+
 
         <div className="orion-panel border-emerald-100 bg-emerald-50 p-6">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
