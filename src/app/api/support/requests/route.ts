@@ -69,3 +69,56 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || 'Erro ao abrir chamado.' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const limited = rateLimit(request, 'support:requests:delete', { limit: 30, windowMs: 60_000 });
+    if (limited) return limited;
+
+    const guard = await requireApiUser(request, ['admin']);
+    if ('error' in guard) return guard.error;
+
+    const { searchParams } = new URL(request.url);
+    const id = String(searchParams.get('id') || '').trim();
+    if (!id) {
+      return NextResponse.json({ error: 'Chamado invalido.' }, { status: 400 });
+    }
+
+    const { data: requestData, error: findError } = await supabaseAdmin
+      .from('solicitacoes_suporte')
+      .select('id, categoria, tipo, solicitante_nome')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (findError) {
+      return NextResponse.json({ error: findError.message }, { status: 500 });
+    }
+
+    if (!requestData) {
+      return NextResponse.json({ error: 'Chamado nao encontrado.' }, { status: 404 });
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from('solicitacoes_suporte')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    }
+
+    await writeAuditLog(request, guard.profile, {
+      action: 'support.request.delete',
+      entity_type: 'solicitacao_suporte',
+      entity_id: id,
+      metadata: {
+        categoria: requestData.categoria || requestData.tipo,
+        solicitante_nome: requestData.solicitante_nome,
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Erro ao remover chamado.' }, { status: 500 });
+  }
+}

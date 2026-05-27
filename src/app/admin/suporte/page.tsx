@@ -6,12 +6,14 @@ import {
   AlertCircle,
   Loader2,
   RefreshCw,
-  ShieldAlert
+  ShieldAlert,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { SolicitacaoSuporte, Corretor } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useDialog } from '@/components/providers/DialogProvider';
 
 type AdminSupportRequest = SolicitacaoSuporte & { corretores?: Corretor | null };
 
@@ -29,10 +31,12 @@ const SUPPORT_LABELS: Record<string, string> = {
 };
 
 export default function AdminSuportePage() {
+  const { confirmDialog } = useDialog();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requests, setRequests] = useState<AdminSupportRequest[]>([]);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRequests();
@@ -73,6 +77,35 @@ export default function AdminSuportePage() {
       alert('Erro ao atualizar status.');
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const removeRequest = async (request: AdminSupportRequest) => {
+    const confirmed = await confirmDialog(`Remover o chamado de ${getSolicitante(request)}? Essa ação não pode ser desfeita.`, {
+      title: 'Remover chamado',
+      confirmLabel: 'Remover chamado',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setRemovingId(request.id);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+
+      const response = await fetch(`/api/support/requests?id=${encodeURIComponent(request.id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(payload.error || 'Erro ao remover chamado.');
+      setRequests((prev) => prev.filter((item) => item.id !== request.id));
+    } catch (err: any) {
+      alert(err.message || 'Erro ao remover chamado.');
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -181,6 +214,16 @@ export default function AdminSuportePage() {
                           <option value="resolvida">Resolvida</option>
                         </select>
                         {updatingId === req.id && <Loader2 className="animate-spin text-blue-600" size={16} />}
+                        <button
+                          type="button"
+                          onClick={() => removeRequest(req)}
+                          disabled={removingId === req.id}
+                          className="inline-flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 transition-all hover:-translate-y-0.5 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          title="Remover chamado"
+                        >
+                          {removingId === req.id ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+                          Remover
+                        </button>
                       </div>
                     </td>
                   </tr>
