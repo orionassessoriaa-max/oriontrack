@@ -59,12 +59,13 @@ export async function evolutionFetch(path: string, init: RequestInit = {}, apiKe
       payload: JSON.stringify(payload, null, 2),
       headers: response.headers
     });
-    const rawMessage = String(payload?.message || payload?.error || payload?.response?.message || '');
-    const normalizedMessage = rawMessage.toLowerCase();
-
-    if (normalizedMessage.includes('already') || normalizedMessage.includes('existe') || normalizedMessage.includes('exist')) {
-      throw new Error(`Instance already exists: ${rawMessage}`);
+    const payloadStr = JSON.stringify(payload).toLowerCase();
+    if (payloadStr.includes('already') || payloadStr.includes('existe') || payloadStr.includes('exist')) {
+      throw new Error('Instance already exists');
     }
+
+    const rawMessage = String(payload?.message || payload?.response?.message || payload?.error || '');
+    const normalizedMessage = rawMessage.toLowerCase();
 
     if (response.status === 401 || response.status === 403 || normalizedMessage.includes('forbidden')) {
       throw new Error('A conexao com o WhatsApp foi recusada. Confirme a chave da Evolution API no servidor e tente novamente.');
