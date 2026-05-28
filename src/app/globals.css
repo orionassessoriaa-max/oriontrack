@@ -122,6 +122,31 @@
     font-weight: 800;
   }
 
+  /* Premium styles for date inputs to make them rounded and highly interactive */
+  input[type="date"].orion-control {
+    border-radius: 9999px !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  input[type="date"].orion-control:hover {
+    border-color: #3b82f6 !important;
+    background: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08) !important;
+  }
+
+  input[type="date"].orion-control::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+  }
+
+  input[type="date"].orion-control:hover::-webkit-calendar-picker-indicator {
+    opacity: 1;
+  }
+
   .orion-chip {
     display: inline-flex;
     align-items: center;

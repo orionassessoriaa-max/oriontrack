@@ -136,7 +136,7 @@ export default function AdminGestoresPage() {
                   <tr key={g.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center font-black text-lg">
+                        <div className="w-12 h-12 bg-slate-100 text-slate-600 rounded-2xl flex items-center justify-center font-black text-lg">
                           {g.nome?.[0].toUpperCase()}
                         </div>
                         <p className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{g.nome}</p>
@@ -149,7 +149,7 @@ export default function AdminGestoresPage() {
                       <button
                         type="button"
                         onClick={() => copyId(g.id)}
-                        className="inline-flex max-w-[220px] items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-500 transition-all hover:bg-blue-50 hover:text-blue-700"
+                        className="inline-flex max-w-[220px] items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-500 transition-all hover:bg-blue-50 hover:text-blue-700"
                         title={g.id}
                       >
                         <Copy size={13} />
@@ -165,7 +165,7 @@ export default function AdminGestoresPage() {
                       <div className="flex items-center justify-end gap-2">
                         <Link 
                           href={`/admin/usuarios?edit=${g.id}`}
-                          className="p-2.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all"
+                          className="p-2.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-2xl transition-all"
                           title="Editar Gestor"
                         >
                           <Edit2 size={18} />
@@ -173,7 +173,7 @@ export default function AdminGestoresPage() {
                         <button
                           type="button"
                           onClick={() => startViewingAsGestor(g.id)}
-                          className="p-2.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-xl transition-all"
+                          className="p-2.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-2xl transition-all"
                           title="Entrar como gestor"
                         >
                           <Eye size={18} />

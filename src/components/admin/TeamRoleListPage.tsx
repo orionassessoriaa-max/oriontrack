@@ -151,7 +151,7 @@ export default function TeamRoleListPage({
                   <tr key={person.id} className="group transition-colors hover:bg-blue-50/30">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-lg font-black text-slate-600">
+                        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 text-lg font-black text-slate-600">
                           {person.foto_url || getTeamMemberPhoto(person.nome) ? (
                             <img src={person.foto_url || getTeamMemberPhoto(person.nome) || ''} alt={person.nome} className="h-full w-full object-cover" />
                           ) : person.nome?.[0].toUpperCase()}
@@ -167,7 +167,7 @@ export default function TeamRoleListPage({
                       <button
                         type="button"
                         onClick={() => copyId(person.id)}
-                        className="inline-flex max-w-[220px] items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-500 transition-all hover:bg-blue-50 hover:text-blue-700"
+                        className="inline-flex max-w-[220px] items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-500 transition-all hover:bg-blue-50 hover:text-blue-700"
                         title={person.id}
                       >
                         <Copy size={13} />
@@ -183,7 +183,7 @@ export default function TeamRoleListPage({
                       <div className="flex items-center justify-end gap-2">
                         <Link
                           href={`/admin/usuarios?edit=${person.id}`}
-                          className="p-2.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all"
+                          className="p-2.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-2xl transition-all"
                           title={`Editar ${person.nome}`}
                         >
                           <Edit2 size={18} />
@@ -191,7 +191,7 @@ export default function TeamRoleListPage({
                         <button
                           type="button"
                           onClick={() => void openPanel(person)}
-                          className="p-2.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-xl transition-all"
+                          className="p-2.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-2xl transition-all"
                           title={`Abrir painel de ${person.nome}`}
                         >
                           <Eye size={18} />

@@ -84,7 +84,7 @@ export default function AdminLeadsPage() {
         supabase
           .from('leads')
           .select('*, corretores(nome)')
-          .order('data_entrada', { ascending: false }),
+          .order('data_entrada', { ascending: false, nullsFirst: false }),
         supabase
           .from('corretores')
           .select('id, nome')

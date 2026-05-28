@@ -133,7 +133,7 @@ export async function GET(request: Request) {
         .from('leads')
         .select('id, nome, telefone, status, cidade, investimento, valor_negociacao, valor_venda, valor_comissao, responsavel_membro_id, data_entrada, updated_at')
         .eq('corretor_id', corretorId)
-        .order('data_entrada', { ascending: false })
+        .order('data_entrada', { ascending: false, nullsFirst: false })
         .limit(1000);
 
       if (leadsError) throw leadsError;

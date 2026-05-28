@@ -88,7 +88,7 @@ export async function GET(request: Request) {
     .from('leads')
     .select('*, corretores(nome)')
     .in('corretor_id', corretorIds)
-    .order('data_entrada', { ascending: false });
+    .order('data_entrada', { ascending: false, nullsFirst: false });
 
   if (leadsError) {
     return NextResponse.json({ error: leadsError.message }, { status: 500 });
