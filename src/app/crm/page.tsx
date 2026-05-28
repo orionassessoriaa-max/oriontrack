@@ -144,6 +144,7 @@ export default function CrmPage() {
   const [search, setSearch] = useState('');
   const [pageFilter, setPageFilter] = useState('todas');
   const [metricFilter, setMetricFilter] = useState<MetricFilter>('todos');
+  const [visibleLimits, setVisibleLimits] = useState<Record<string, number>>({});
   const [note, setNote] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDue, setTaskDue] = useState('');
@@ -192,12 +193,6 @@ export default function CrmPage() {
 
     try {
       const corretorScopeId = ['corretor', 'corretor_membro'].includes(profile.tipo_usuario) ? profile.corretor_id : null;
-      let leadsQuery = supabase
-        .from('leads')
-        .select('*, responsavel_membro:responsavel_membro_id(nome,email)')
-        .order('data_entrada', { ascending: false, nullsFirst: false })
-        .limit(200);
-
       let tarefasQuery = supabase
         .from('lead_tarefas')
         .select('*')
@@ -211,34 +206,64 @@ export default function CrmPage() {
         .limit(50);
 
       if (corretorScopeId) {
-        leadsQuery = leadsQuery.eq('corretor_id', corretorScopeId);
         tarefasQuery = tarefasQuery.eq('corretor_id', corretorScopeId);
         conversasQuery = conversasQuery.eq('corretor_id', corretorScopeId);
       }
 
       if (profile.tipo_usuario === 'corretor_membro') {
-        leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
         tarefasQuery = tarefasQuery.eq('responsavel_profile_id', profile.id);
       }
 
-      const [leadsRes, tarefasRes, conversasRes] = await Promise.all([
-        leadsQuery,
+      const [tarefasRes, conversasRes] = await Promise.all([
         tarefasQuery,
         conversasQuery
       ]);
 
-      if (leadsRes.error) throw leadsRes.error;
       if (tarefasRes.error) throw tarefasRes.error;
       if (conversasRes.error) throw conversasRes.error;
 
-      const normalizedLeads = (leadsRes.data || []).map((lead) => ({
+      let allLeads: Lead[] = [];
+      let pageNum = 0;
+      const limitNum = 1000;
+      let keepFetching = true;
+
+      while (keepFetching) {
+        const from = pageNum * limitNum;
+        const to = from + limitNum - 1;
+        let query = supabase
+          .from('leads')
+          .select('*, responsavel_membro:responsavel_membro_id(nome,email)', { count: 'exact' })
+          .order('data_entrada', { ascending: false, nullsFirst: false })
+          .range(from, to);
+
+        if (corretorScopeId) {
+          query = query.eq('corretor_id', corretorScopeId);
+        }
+        if (profile.tipo_usuario === 'corretor_membro') {
+          query = query.eq('responsavel_profile_id', profile.id);
+        }
+
+        const queryRes = await query;
+        if (queryRes.error) throw queryRes.error;
+
+        const rows = queryRes.data || [];
+        allLeads = [...allLeads, ...(rows as Lead[])];
+
+        if (rows.length < limitNum) {
+          keepFetching = false;
+        } else {
+          pageNum += 1;
+        }
+      }
+
+      const normalizedLeads = allLeads.map((lead) => ({
         ...lead,
         status: normalizeLeadStatus(lead.status)
       })) as Lead[];
 
       setLeads(normalizedLeads);
-      setTarefas((tarefasRes.data || []) as LeadTarefa[]);
-      setConversas((conversasRes.data || []) as WhatsAppConversa[]);
+      setTarefas(tarefasRes.data || []);
+      setConversas(conversasRes.data || []);
       setSelectedLead((current) => {
         if (!current) return null;
         return normalizedLeads.find((lead) => lead.id === current.id) || null;
@@ -838,6 +863,8 @@ export default function CrmPage() {
                 const columnLeads = getLeadsByStatus(column.id);
                 const statusStyle = getLeadStatusStyle(column.id);
                 const commercialTotal = getCommercialTotal(column.id);
+                const limit = visibleLimits[column.id] || 50;
+                const visibleLeads = columnLeads.slice(0, limit);
 
                 return (
                   <div key={column.id} className="min-w-[285px] flex-1 snap-start sm:min-w-[310px]">
@@ -867,7 +894,7 @@ export default function CrmPage() {
                       onDrop={() => handleDrop(column.id)}
                       className={`min-h-[220px] space-y-3 rounded-[2rem] border p-3 transition-colors ${draggedLeadId ? 'border-blue-200 bg-blue-50/70' : statusStyle.column}`}
                     >
-                      {columnLeads.map((lead) => {
+                      {visibleLeads.map((lead) => {
                         const qualification = getLeadQualification(lead, tipoCampanha);
                         const selected = selectedLead?.id === lead.id;
                         const importWarnings = getLeadImportWarnings(lead);
@@ -930,6 +957,15 @@ export default function CrmPage() {
                           </button>
                         );
                       })}
+                      {columnLeads.length > limit && (
+                        <button
+                          type="button"
+                          onClick={() => setVisibleLimits(prev => ({ ...prev, [column.id]: limit + 100 }))}
+                          className="w-full py-3.5 bg-slate-50 hover:bg-blue-50 border border-dashed border-slate-200 hover:border-blue-300 text-slate-500 hover:text-blue-600 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 mt-4"
+                        >
+                          Carregar mais ({columnLeads.length - limit} restantes)
+                        </button>
+                      )}
                       {columnLeads.length === 0 && (
                         <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-white/60 py-12 text-center">
                           <OrionMark size={18} className="mx-auto mb-2 opacity-25" />
