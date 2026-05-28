@@ -213,101 +213,99 @@ export default function DashboardPage() {
           }
         }
 
-        if (allStats.length > 0) {
-          const statsRes = allStats;
-          const thisMonthKey = monthKey(new Date());
-          const soldLeads = statsRes.filter(l => l.status === 'Venda realizada');
-          const lostLeads = statsRes.filter(l => l.status === 'Sem interesse');
-          const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
-          setStats({
-            total: statsRes.length,
-            waiting: statsRes.filter(l => l.status === 'Aguardando atendimento').length,
-            inProgress: statsRes.filter(l => l.status === 'Em negociação').length,
-            quoted: statsRes.filter(l => l.status === 'Cotação enviada').length,
-            sold: soldLeads.length,
-            soldThisMonth: statsRes.filter(l => l.status === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
-            stale: statsRes.filter(l => {
-              if (l.status !== 'Aguardando atendimento' || !l.data_entrada) return false;
-              return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
-            }).length,
-            lost: lostLeads.length,
-            revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
-            salesRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
-            salesPotential: statsRes
-              .filter((lead) => activeRevenueStatuses.includes(String(lead.status || '')))
-              .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
-          });
+        const statsRes = allStats;
+        const thisMonthKey = monthKey(new Date());
+        const soldLeads = statsRes.filter(l => l.status === 'Venda realizada');
+        const lostLeads = statsRes.filter(l => l.status === 'Sem interesse');
+        const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
+        setStats({
+          total: statsRes.length,
+          waiting: statsRes.filter(l => l.status === 'Aguardando atendimento').length,
+          inProgress: statsRes.filter(l => l.status === 'Em negociação').length,
+          quoted: statsRes.filter(l => l.status === 'Cotação enviada').length,
+          sold: soldLeads.length,
+          soldThisMonth: statsRes.filter(l => l.status === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
+          stale: statsRes.filter(l => {
+            if (l.status !== 'Aguardando atendimento' || !l.data_entrada) return false;
+            return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
+          }).length,
+          lost: lostLeads.length,
+          revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
+          salesRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
+          salesPotential: statsRes
+            .filter((lead) => activeRevenueStatuses.includes(String(lead.status || '')))
+            .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
+        });
 
-          const months = getLastMonths();
-          const monthMap = new Map(months.map((month) => [month.key, { ...month }]));
+        const months = getLastMonths();
+        const monthMap = new Map(months.map((month) => [month.key, { ...month }]));
 
-          statsRes.forEach((lead) => {
-            if (!lead.data_entrada) return;
-            const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
-            if (current) current.leads += 1;
-          });
+        statsRes.forEach((lead) => {
+          if (!lead.data_entrada) return;
+          const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
+          if (current) current.leads += 1;
+        });
 
-          const days = getLastDays();
-          const dayMap = new Map(days.map((day) => [day.key, { ...day }]));
-          statsRes.forEach((lead) => {
-            if (!lead.data_entrada) return;
-            const current = dayMap.get(dayKey(new Date(lead.data_entrada)));
-            if (current) current.leads += 1;
-          });
-          setWeeklyLeads(Array.from(dayMap.values()));
+        const days = getLastDays();
+        const dayMap = new Map(days.map((day) => [day.key, { ...day }]));
+        statsRes.forEach((lead) => {
+          if (!lead.data_entrada) return;
+          const current = dayMap.get(dayKey(new Date(lead.data_entrada)));
+          if (current) current.leads += 1;
+        });
+        setWeeklyLeads(Array.from(dayMap.values()));
 
-          const cityMap = new Map<string, number>();
-          statsRes.forEach((lead) => {
-            const city = String(lead.cidade || '').trim();
-            if (!city || city === '-') return;
-            cityMap.set(city, (cityMap.get(city) || 0) + 1);
-          });
-          setTopCities(
-            Array.from(cityMap.entries())
-              .map(([city, leads]) => ({ city, leads }))
-              .sort((a, b) => b.leads - a.leads || a.city.localeCompare(b.city))
-              .slice(0, 5)
+        const cityMap = new Map<string, number>();
+        statsRes.forEach((lead) => {
+          const city = String(lead.cidade || '').trim();
+          if (!city || city === '-') return;
+          cityMap.set(city, (cityMap.get(city) || 0) + 1);
+        });
+        setTopCities(
+          Array.from(cityMap.entries())
+            .map(([city, leads]) => ({ city, leads }))
+            .sort((a, b) => b.leads - a.leads || a.city.localeCompare(b.city))
+            .slice(0, 5)
+        );
+
+        if (accessToken) {
+          const spendResults = await Promise.all(
+            months.map(async (month) => {
+              const range = monthRange(month.key);
+
+              try {
+                const response = await fetch('/api/integrations/meta/spend', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                  },
+                  body: JSON.stringify({
+                    corretor_id: profile.corretor_id,
+                    data_inicio: range.since,
+                    data_fim: range.until,
+                  }),
+                });
+
+                const payload = await response.json();
+                return {
+                  key: month.key,
+                  spend: response.ok ? Number(payload.spend || 0) : 0,
+                };
+              } catch (error) {
+                console.error('Erro ao buscar investimento Meta do mes:', month.key, error);
+                return { key: month.key, spend: 0 };
+              }
+            })
           );
 
-          if (accessToken) {
-            const spendResults = await Promise.all(
-              months.map(async (month) => {
-                const range = monthRange(month.key);
-
-                try {
-                  const response = await fetch('/api/integrations/meta/spend', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${accessToken}`,
-                    },
-                    body: JSON.stringify({
-                      corretor_id: profile.corretor_id,
-                      data_inicio: range.since,
-                      data_fim: range.until,
-                    }),
-                  });
-
-                  const payload = await response.json();
-                  return {
-                    key: month.key,
-                    spend: response.ok ? Number(payload.spend || 0) : 0,
-                  };
-                } catch (error) {
-                  console.error('Erro ao buscar investimento Meta do mes:', month.key, error);
-                  return { key: month.key, spend: 0 };
-                }
-              })
-            );
-
-            spendResults.forEach((result) => {
-              const current = monthMap.get(result.key);
-              if (current) current.spend = result.spend;
-            });
-          }
-
-          setMonthlyPerformance(Array.from(monthMap.values()));
+          spendResults.forEach((result) => {
+            const current = monthMap.get(result.key);
+            if (current) current.spend = result.spend;
+          });
         }
+
+        setMonthlyPerformance(Array.from(monthMap.values()));
       } catch (err: unknown) {
         console.error("Dashboard general error:", err);
       } finally {
