@@ -33,6 +33,7 @@ export default function BrokerInboxPage() {
   const [leadPhone, setLeadPhone] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [messages, setMessages] = useState<InboxMessage[]>([]);
@@ -185,6 +186,7 @@ export default function BrokerInboxPage() {
   }
 
   useEffect(() => {
+    setSendError(null);
     if (selectedConversation?.id) {
       void fetchMessages(selectedConversation.id);
     } else {
@@ -268,11 +270,12 @@ export default function BrokerInboxPage() {
 
     const token = await getToken();
     if (!token) {
-      setConnectError('Sessao expirada. Entre novamente.');
+      setSendError('Sessao expirada. Entre novamente.');
       return;
     }
 
     setSendingMessage(true);
+    setSendError(null);
     const isNew = selectedConversation.id.startsWith('new-');
 
     const response = await fetch('/api/inbox/messages', {
@@ -295,12 +298,12 @@ export default function BrokerInboxPage() {
     setSendingMessage(false);
 
     if (!response.ok) {
-      setConnectError(payload.error || 'Nao consegui enviar agora. Tente novamente em instantes.');
+      setSendError(payload.error || 'Nao consegui enviar agora. Tente novamente em instantes.');
       return;
     }
 
     setMessageText('');
-    setConnectError(null);
+    setSendError(null);
 
     if (payload.success && payload.conversation) {
       const realConv = payload.conversation as Conversation;
@@ -515,6 +518,11 @@ export default function BrokerInboxPage() {
                   </div>
                 )}
               </div>
+              {sendError && (
+                <div className="mx-5 mt-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-bold text-red-700 shadow-sm">
+                  {sendError}
+                </div>
+              )}
               <div className="border-t border-gray-100 bg-white p-4">
                 <div className="flex gap-3">
                   <textarea
