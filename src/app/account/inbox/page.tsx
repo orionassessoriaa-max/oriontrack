@@ -21,7 +21,8 @@ type QuickReport = {
   spend: number;
   cpl: number | null;
   corretorNome: string;
-  date: string;
+  dateInicio: string;
+  dateFim: string;
 };
 
 export default function AccountInboxPage() {
@@ -30,7 +31,8 @@ export default function AccountInboxPage() {
   const today = new Date().toISOString().slice(0, 10);
   const [selectedCorretorId, setSelectedCorretorId] = useState('');
   const [reportCorretorId, setReportCorretorId] = useState('');
-  const [reportDate, setReportDate] = useState(today);
+  const [reportDateInicio, setReportDateInicio] = useState(today);
+  const [reportDateFim, setReportDateFim] = useState(today);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [report, setReport] = useState<QuickReport | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -109,8 +111,8 @@ export default function AccountInboxPage() {
         .from('leads')
         .select('id', { count: 'exact', head: true })
         .eq('corretor_id', reportCorretorId)
-        .gte('data_entrada', `${reportDate}T00:00:00`)
-        .lte('data_entrada', `${reportDate}T23:59:59`),
+        .gte('data_entrada', `${reportDateInicio}T00:00:00`)
+        .lte('data_entrada', `${reportDateFim}T23:59:59`),
       fetch('/api/integrations/meta/spend', {
         method: 'POST',
         headers: {
@@ -119,8 +121,8 @@ export default function AccountInboxPage() {
         },
         body: JSON.stringify({
           corretor_id: reportCorretorId,
-          data_inicio: reportDate,
-          data_fim: reportDate,
+          data_inicio: reportDateInicio,
+          data_fim: reportDateFim,
         }),
       }),
     ]);
@@ -134,7 +136,8 @@ export default function AccountInboxPage() {
       spend,
       cpl: leads > 0 ? spend / leads : null,
       corretorNome: corretor?.nome || 'Corretor',
-      date: reportDate,
+      dateInicio: reportDateInicio,
+      dateFim: reportDateFim,
     });
     setLoadingReport(false);
   };
@@ -142,7 +145,10 @@ export default function AccountInboxPage() {
   const copyReport = async () => {
     if (!report) return;
     const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-    const text = `Relatorio ${report.corretorNome} - ${report.date}\nLeads: ${report.leads}\nInvestimento: ${money.format(report.spend)}\nCPL: ${report.cpl === null ? 'N/A' : money.format(report.cpl)}`;
+    const dateRangeStr = report.dateInicio === report.dateFim 
+      ? new Date(`${report.dateInicio}T12:00:00`).toLocaleDateString('pt-BR')
+      : `${new Date(`${report.dateInicio}T12:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${report.dateFim}T12:00:00`).toLocaleDateString('pt-BR')}`;
+    const text = `Relatorio ${report.corretorNome} - ${dateRangeStr}\nLeads: ${report.leads}\nInvestimento: ${money.format(report.spend)}\nCPL: ${report.cpl === null ? 'N/A' : money.format(report.cpl)}`;
     await navigator.clipboard.writeText(text);
     alert('Relatorio copiado.');
   };
@@ -373,18 +379,30 @@ export default function AccountInboxPage() {
                 </select>
               </label>
 
-              <label className="block">
-                <span className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Data do relatorio</span>
-                <div className="relative mt-2">
-                  <CalendarDays className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input
-                    type="date"
-                    value={reportDate}
-                    onChange={(event) => setReportDate(event.target.value)}
-                    className="orion-control w-full px-5 py-4 pr-12 text-sm font-black text-slate-800 outline-none"
-                  />
-                </div>
-              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Data Inicial</span>
+                  <div className="relative mt-2">
+                    <input
+                      type="date"
+                      value={reportDateInicio}
+                      onChange={(event) => setReportDateInicio(event.target.value)}
+                      className="orion-control w-full px-4 py-3.5 text-sm font-black text-slate-800 outline-none"
+                    />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Data Final</span>
+                  <div className="relative mt-2">
+                    <input
+                      type="date"
+                      value={reportDateFim}
+                      onChange={(event) => setReportDateFim(event.target.value)}
+                      className="orion-control w-full px-4 py-3.5 text-sm font-black text-slate-800 outline-none"
+                    />
+                  </div>
+                </label>
+              </div>
 
               <button
                 onClick={generateReport}
@@ -398,7 +416,12 @@ export default function AccountInboxPage() {
             {report && (
               <div className="mt-6 border border-blue-100 bg-blue-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">{report.corretorNome}</p>
-                <p className="mt-1 text-xs font-bold text-blue-700/70">{new Date(`${report.date}T12:00:00`).toLocaleDateString('pt-BR')}</p>
+                <p className="mt-1 text-xs font-bold text-blue-700/70">
+                  {report.dateInicio === report.dateFim
+                    ? new Date(`${report.dateInicio}T12:00:00`).toLocaleDateString('pt-BR')
+                    : `${new Date(`${report.dateInicio}T12:00:00`).toLocaleDateString('pt-BR')} até ${new Date(`${report.dateFim}T12:00:00`).toLocaleDateString('pt-BR')}`
+                  }
+                </p>
 
                 <div className="mt-4 grid grid-cols-1 gap-3">
                   <Metric icon={Users} label="Leads" value={String(report.leads)} />
