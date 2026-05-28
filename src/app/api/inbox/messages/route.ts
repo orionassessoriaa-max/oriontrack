@@ -70,8 +70,14 @@ export async function POST(request: Request) {
     const leadIdParam = String(body.lead_id || '').trim();
     const nameParam = String(body.nome_contato || '').trim();
 
-    if ((!conversationId && !phoneParam) || !text) {
-      return NextResponse.json({ error: 'Escreva uma mensagem para enviar.' }, { status: 400 });
+    // Novas propriedades de mídia
+    const mediaBase64 = String(body.media || '').trim();
+    const mimetype = String(body.mimetype || '').trim();
+    const fileName = String(body.fileName || '').trim();
+    const mediatype = String(body.mediatype || '').trim();
+
+    if ((!conversationId && !phoneParam) || (!text && !mediaBase64)) {
+      return NextResponse.json({ error: 'Escreva uma mensagem ou envie um arquivo.' }, { status: 400 });
     }
 
     let conversation: any = null;
@@ -82,8 +88,24 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
       }
     } else {
-      if (!guard.profile.corretor_id) {
-        return NextResponse.json({ error: 'Apenas corretores vinculados podem iniciar conversas.' }, { status: 400 });
+      let corretorId = guard.profile.corretor_id;
+
+      // Se for admin/gerente e não tiver corretor_id, tenta obter do lead
+      if (!corretorId && leadIdParam) {
+        const { data: leadData } = await supabaseAdmin
+          .from('leads')
+          .select('corretor_id')
+          .eq('id', leadIdParam)
+          .maybeSingle();
+        if (leadData?.corretor_id) {
+          corretorId = leadData.corretor_id;
+        }
+      }
+
+      if (!corretorId) {
+        return NextResponse.json({ 
+          error: 'Apenas corretores vinculados ou administradores atendendo a um lead com corretor podem iniciar conversas.' 
+        }, { status: 400 });
       }
 
       const phone = normalizePhone(phoneParam || conversationId.replace('new-', ''));
@@ -94,7 +116,7 @@ export async function POST(request: Request) {
       const { data: existing } = await supabaseAdmin
         .from('whatsapp_conversas')
         .select('*')
-        .eq('corretor_id', guard.profile.corretor_id)
+        .eq('corretor_id', corretorId)
         .eq('telefone', phone)
         .limit(1)
         .maybeSingle();
@@ -117,7 +139,7 @@ export async function POST(request: Request) {
         const { data: created, error: createError } = await supabaseAdmin
           .from('whatsapp_conversas')
           .insert([{
-            corretor_id: guard.profile.corretor_id,
+            corretor_id: corretorId,
             lead_id: leadIdParam || null,
             telefone: phone,
             nome_contato: contactName,
@@ -140,13 +162,35 @@ export async function POST(request: Request) {
 
     const instance = evolutionInstanceName(guard.profile.id);
     const instanceApiKey = await getEvolutionInstanceApiKey(instance);
-    const payload = await evolutionFetch(`/message/sendText/${instance}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        number: phone,
-        text,
-      }),
-    }, instanceApiKey);
+    
+    let payload: any = null;
+
+    if (mediaBase64) {
+      // Remove prefixo do data URI se houver
+      const base64Data = mediaBase64.includes(';base64,') 
+        ? mediaBase64.split(';base64,')[1] 
+        : mediaBase64;
+
+      payload = await evolutionFetch(`/message/sendMedia/${instance}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          number: phone,
+          mediatype: mediatype || 'document',
+          mimetype: mimetype || 'application/octet-stream',
+          media: base64Data,
+          fileName: fileName || 'arquivo',
+          caption: text || undefined,
+        }),
+      }, instanceApiKey);
+    } else {
+      payload = await evolutionFetch(`/message/sendText/${instance}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          number: phone,
+          text,
+        }),
+      }, instanceApiKey);
+    }
 
     const providerId =
       payload?.key?.id ||
@@ -155,13 +199,19 @@ export async function POST(request: Request) {
       payload?.id ||
       null;
 
+    let messageTextDb = text;
+    if (mediaBase64) {
+      const typeLabel = mediatype === 'image' ? '📷 Imagem' : mediatype === 'audio' ? '🎵 Áudio' : mediatype === 'video' ? '🎥 Vídeo' : '📎 Arquivo';
+      messageTextDb = text ? `${typeLabel}: ${text}` : `${typeLabel} (${fileName})`;
+    }
+
     const { data: inserted, error: insertError } = await supabaseAdmin
       .from('whatsapp_mensagens')
       .insert([{
         conversa_id: conversationId,
         direction: 'outbound',
         remetente: guard.profile.nome || guard.profile.email_real || guard.profile.email || 'Orion',
-        mensagem: text,
+        mensagem: messageTextDb,
         provider_message_id: providerId,
         metadata: payload || {},
       }])
