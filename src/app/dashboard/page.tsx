@@ -181,21 +181,40 @@ export default function DashboardPage() {
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
 
-        let statsRequest = supabase
-          .from('leads')
-          .select('status, data_entrada, cidade, valor_negociacao, valor_comissao')
-          .eq('corretor_id', profile.corretor_id);
+        let allStats: LeadMetricRow[] = [];
+        let pageNum = 0;
+        const limitNum = 1000;
+        let keepFetching = true;
 
-        if (profile.tipo_usuario === 'corretor_membro') {
-          statsRequest = statsRequest.eq('responsavel_profile_id', profile.id);
+        while (keepFetching) {
+          const from = pageNum * limitNum;
+          const to = from + limitNum - 1;
+          let statsRequest = supabase
+            .from('leads')
+            .select('status, data_entrada, cidade, valor_negociacao, valor_comissao')
+            .eq('corretor_id', profile.corretor_id)
+            .range(from, to);
+
+          if (profile.tipo_usuario === 'corretor_membro') {
+            statsRequest = statsRequest.eq('responsavel_profile_id', profile.id);
+          }
+
+          const statsQuery = await statsRequest;
+
+          if (statsQuery.error) throw statsQuery.error;
+
+          const dataRows = statsQuery.data || [];
+          allStats = [...allStats, ...(dataRows as LeadMetricRow[])];
+
+          if (dataRows.length < limitNum) {
+            keepFetching = false;
+          } else {
+            pageNum += 1;
+          }
         }
 
-        const statsQuery = await statsRequest;
-
-        if (statsQuery.error) throw statsQuery.error;
-
-        if (statsQuery.data) {
-          const statsRes = statsQuery.data as LeadMetricRow[];
+        if (allStats.length > 0) {
+          const statsRes = allStats;
           const thisMonthKey = monthKey(new Date());
           const soldLeads = statsRes.filter(l => l.status === 'Venda realizada');
           const lostLeads = statsRes.filter(l => l.status === 'Sem interesse');
