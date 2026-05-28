@@ -109,12 +109,26 @@ export default function BrokerInboxPage() {
       matchedConv = rows.find((r) => normalizePhone(r.telefone) === targetPhone);
 
       if (!matchedConv) {
+        const leadId = params.get('lead');
+        let contactName = params.get('nome') ? decodeURIComponent(params.get('nome')!) : 'Novo Contato';
+
+        if (leadId && contactName === 'Novo Contato') {
+          const { data: leadData } = await supabase
+            .from('leads')
+            .select('nome')
+            .eq('id', leadId)
+            .maybeSingle();
+          if (leadData?.nome) {
+            contactName = leadData.nome;
+          }
+        }
+
         const tempConv: Conversation = {
           id: 'new-' + targetPhone,
-          lead_id: params.get('lead') || null,
+          lead_id: leadId || null,
           corretor_id: profile.corretor_id,
           telefone: targetPhone,
-          nome_contato: params.get('nome') ? decodeURIComponent(params.get('nome')!) : 'Novo Contato',
+          nome_contato: contactName,
           status: 'aberta',
           ultima_mensagem_at: new Date().toISOString(),
         };

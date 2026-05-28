@@ -103,7 +103,17 @@ export async function POST(request: Request) {
         conversation = existing;
         conversationId = existing.id;
       } else {
-        const contactName = nameParam || phone;
+        let contactName = nameParam || phone;
+        if (leadIdParam && (!nameParam || nameParam === 'Novo Contato')) {
+          const { data: leadData } = await supabaseAdmin
+            .from('leads')
+            .select('nome')
+            .eq('id', leadIdParam)
+            .maybeSingle();
+          if (leadData?.nome) {
+            contactName = leadData.nome;
+          }
+        }
         const { data: created, error: createError } = await supabaseAdmin
           .from('whatsapp_conversas')
           .insert([{
