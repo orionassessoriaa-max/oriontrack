@@ -40,6 +40,48 @@ export default function BrokerInboxPage() {
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
 
+  // Status de conexão reais do servidor
+  const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
+  const [whatsappStatus, setWhatsappStatus] = useState<'checking' | 'open' | 'connecting' | 'close'>('checking');
+
+  const normalizePhone = (value: string) => {
+    let digits = value.replace(/\D/g, '');
+    if (!digits) return '';
+    if (!digits.startsWith('55') && digits.length >= 10 && digits.length <= 11) digits = `55${digits}`;
+    return digits;
+  };
+
+  async function getToken() {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || '';
+  }
+
+  async function fetchConnectionStatus() {
+    const token = await getToken();
+    if (!token) return;
+
+    try {
+      const response = await fetch('/api/inbox/evolution/connect', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload.success) {
+        setIsWhatsAppConnected(payload.connected);
+        setWhatsappStatus(payload.state || 'close');
+        if (payload.connected) {
+          setQrCode(null);
+          setConnectError(null);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao buscar status da conexao:', err);
+    }
+  }
+
   async function fetchInbox() {
     if (!profile?.corretor_id) {
       setLoading(false);
@@ -48,7 +90,8 @@ export default function BrokerInboxPage() {
 
     setLoading(true);
     const params = new URLSearchParams(window.location.search);
-    setLeadPhone(params.get('telefone') || '');
+    const urlPhone = params.get('telefone') || '';
+    setLeadPhone(urlPhone);
 
     const { data } = await supabase
       .from('whatsapp_conversas')
@@ -58,21 +101,63 @@ export default function BrokerInboxPage() {
       .limit(80);
 
     const rows = (data || []) as Conversation[];
+
+    // Adiciona conversa temporária se vier lead na URL e não houver conversa salva no banco
+    let matchedConv = null;
+    if (urlPhone) {
+      const targetPhone = normalizePhone(urlPhone);
+      matchedConv = rows.find((r) => normalizePhone(r.telefone) === targetPhone);
+
+      if (!matchedConv) {
+        const tempConv: Conversation = {
+          id: 'new-' + targetPhone,
+          lead_id: params.get('lead') || null,
+          corretor_id: profile.corretor_id,
+          telefone: targetPhone,
+          nome_contato: params.get('nome') ? decodeURIComponent(params.get('nome')!) : 'Novo Contato',
+          status: 'aberta',
+          ultima_mensagem_at: new Date().toISOString(),
+        };
+        rows.unshift(tempConv);
+        matchedConv = tempConv;
+      }
+    }
+
     setConversations(rows);
-    setSelectedConversation(rows[0] || null);
+    setSelectedConversation(matchedConv || rows[0] || null);
     setLoading(false);
+
+    // Também busca o status de conexão no carregamento
+    void fetchConnectionStatus();
   }
 
   useEffect(() => {
     void fetchInbox();
   }, [profile?.corretor_id]);
 
-  async function getToken() {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token || '';
-  }
+  useEffect(() => {
+    // Busca o status de conexão do WhatsApp ao montar
+    if (profile?.id) {
+      void fetchConnectionStatus();
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    // Polling a cada 5 segundos se estiver gerando QR Code ou no modo conectando
+    if (!isWhatsAppConnected && (qrCode || whatsappStatus === 'connecting')) {
+      const interval = setInterval(() => {
+        void fetchConnectionStatus();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [isWhatsAppConnected, qrCode, whatsappStatus]);
 
   async function fetchMessages(conversationId: string) {
+    if (conversationId.startsWith('new-')) {
+      setMessages([]);
+      return;
+    }
+
     const token = await getToken();
     if (!token) return;
 
@@ -127,7 +212,8 @@ export default function BrokerInboxPage() {
 
     setQrCode(payload.qrcode || null);
     if (!payload.qrcode) {
-      setConnectError('Nao recebi o QR Code. Tente novamente ou avise a equipe da Orion.');
+      // Se não veio QR Code, pode já estar conectado no servidor. Atualiza o status.
+      void fetchConnectionStatus();
     }
   }
 
@@ -158,6 +244,8 @@ export default function BrokerInboxPage() {
       return;
     }
 
+    setIsWhatsAppConnected(false);
+    setWhatsappStatus('close');
     alert('Instancia limpa e reiniciada no servidor! Clique em "Conectar meu WhatsApp" novamente para gerar um QR Code limpo.');
   }
 
@@ -171,6 +259,8 @@ export default function BrokerInboxPage() {
     }
 
     setSendingMessage(true);
+    const isNew = selectedConversation.id.startsWith('new-');
+
     const response = await fetch('/api/inbox/messages', {
       method: 'POST',
       headers: {
@@ -180,6 +270,11 @@ export default function BrokerInboxPage() {
       body: JSON.stringify({
         conversation_id: selectedConversation.id,
         mensagem: messageText.trim(),
+        ...(isNew ? {
+          telefone: selectedConversation.telefone,
+          lead_id: selectedConversation.lead_id,
+          nome_contato: selectedConversation.nome_contato,
+        } : {}),
       }),
     });
     const payload = await response.json().catch(() => ({}));
@@ -192,7 +287,23 @@ export default function BrokerInboxPage() {
 
     setMessageText('');
     setConnectError(null);
-    if (payload.message) setMessages((current) => [...current, payload.message]);
+
+    if (payload.success && payload.conversation) {
+      const realConv = payload.conversation as Conversation;
+      // Substitui a conversa temporária pela conversa real salva no banco
+      setConversations((current) => {
+        const filtered = current.filter((c) => c.id !== selectedConversation.id);
+        if (!filtered.some((c) => c.id === realConv.id)) {
+          return [realConv, ...filtered];
+        }
+        return filtered;
+      });
+      setSelectedConversation(realConv);
+      if (payload.message) setMessages([payload.message]);
+    } else {
+      if (payload.message) setMessages((current) => [...current, payload.message]);
+    }
+
     void fetchInbox();
   }
 
@@ -218,69 +329,92 @@ export default function BrokerInboxPage() {
       </div>
 
       <div className="mb-8 grid gap-5 lg:grid-cols-[1fr_1.4fr]">
-        <div className="orion-panel border-blue-100 bg-blue-50 p-6">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
-            <QrCode size={24} />
-          </div>
-          <h2 className="text-xl font-black text-gray-950">Conectar WhatsApp</h2>
-          <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
-            Escaneie o QR Code e atenda seus leads direto por aqui. Suas conversas ficam organizadas para voce responder rapido, acompanhar retornos e nao perder oportunidades.
-          </p>
-          <label className="mt-5 flex cursor-pointer items-start gap-4 rounded-2xl border border-blue-200 bg-white p-5 text-left leading-relaxed shadow-sm transition-all hover:border-blue-400 hover:shadow-md dark:border-blue-400/30 dark:bg-slate-900/80 dark:hover:border-blue-300">
-            <input
-              type="checkbox"
-              checked={acceptedTerms}
-              onChange={(event) => setAcceptedTerms(event.target.checked)}
-              className="peer sr-only"
-            />
-            <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-blue-300 bg-blue-50 text-transparent transition-all peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white dark:border-blue-300/60 dark:bg-blue-950">
-              <CheckCircle2 size={18} />
-            </span>
-            <span className="flex-1">
-              <span className="block text-base font-black leading-snug text-slate-950 dark:text-white">
-                Aceito conectar meu WhatsApp ao Orion Track
-              </span>
-              <span className="mt-2 block text-sm font-semibold leading-7 text-slate-600 dark:text-slate-200">
-                Entendo que as conversas dos meus leads poderao aparecer nesta tela para facilitar meu atendimento, manter o historico organizado e acompanhar cada oportunidade com mais seguranca.
-              </span>
-            </span>
-          </label>
-          <button
-            onClick={connectWhatsApp}
-            disabled={connecting || !acceptedTerms}
-            className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {connecting ? <Loader2 className="animate-spin" size={18} /> : <Smartphone size={18} />}
-            {connecting ? 'Gerando QR Code...' : 'Conectar meu WhatsApp'}
-          </button>
-          {qrCode ? (
-            <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-center">
-              <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="mx-auto h-52 w-52 rounded-xl object-contain" />
-              <p className="mt-3 text-xs font-black uppercase tracking-widest text-blue-700">Escaneie com o WhatsApp</p>
+        {isWhatsAppConnected ? (
+          <div className="orion-panel border-emerald-100 bg-emerald-50 p-6">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
+              <CheckCircle2 size={24} />
+            </div>
+            <h2 className="text-xl font-black text-gray-950">WhatsApp Conectado!</h2>
+            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
+              Sua conta está conectada com sucesso ao Orion Track. Você já pode enviar e receber mensagens de seus leads em tempo real nesta tela.
+            </p>
+            <div className="mt-5 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-widest text-emerald-700">Status da Conexão</p>
+              <p className="mt-1 text-sm font-bold text-slate-700">Ativo • Pronto para responder</p>
               <button
                 type="button"
                 onClick={disconnectWhatsApp}
                 className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100 transition-all cursor-pointer"
               >
-                Resetar Conexão / Gerar Novo QR Code
+                Desconectar WhatsApp (Limpar Sessão)
               </button>
             </div>
-          ) : null}
-          {connectError ? (
-            <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-left shadow-sm">
-              <p className="text-xs font-bold text-red-700">{connectError}</p>
-              <button
-                type="button"
-                onClick={disconnectWhatsApp}
-                className="mt-3 w-full rounded-xl bg-red-600 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-700 transition-all cursor-pointer text-center"
-              >
-                Resetar Conexão (Limpar Cache do Servidor)
-              </button>
+          </div>
+        ) : (
+          <div className="orion-panel border-blue-100 bg-blue-50 p-6">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
+              <QrCode size={24} />
             </div>
-          ) : (
-            <p className="mt-3 text-xs font-bold text-blue-700">Quando o QR Code aparecer, abra o WhatsApp no celular, toque em aparelhos conectados e faca a leitura.</p>
-          )}
-        </div>
+            <h2 className="text-xl font-black text-gray-950">Conectar WhatsApp</h2>
+            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
+              Escaneie o QR Code e atenda seus leads direto por aqui. Suas conversas ficam organizadas para voce responder rapido, acompanhar retornos e nao perder oportunidades.
+            </p>
+            <label className="mt-5 flex cursor-pointer items-start gap-4 rounded-2xl border border-blue-200 bg-white p-5 text-left leading-relaxed shadow-sm transition-all hover:border-blue-400 hover:shadow-md dark:border-blue-400/30 dark:bg-slate-900/80 dark:hover:border-blue-300">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(event) => setAcceptedTerms(event.target.checked)}
+                className="peer sr-only"
+              />
+              <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-blue-300 bg-blue-50 text-transparent transition-all peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white dark:border-blue-300/60 dark:bg-blue-950">
+                <CheckCircle2 size={18} />
+              </span>
+              <span className="flex-1">
+                <span className="block text-base font-black leading-snug text-slate-950 dark:text-white">
+                  Aceito conectar meu WhatsApp ao Orion Track
+                </span>
+                <span className="mt-2 block text-sm font-semibold leading-7 text-slate-600 dark:text-slate-200">
+                  Entendo que as conversas dos meus leads poderao aparecer nesta tela para facilitar meu atendimento, manter o historico organizado e acompanhar cada oportunidade com mais seguranca.
+                </span>
+              </span>
+            </label>
+            <button
+              onClick={connectWhatsApp}
+              disabled={connecting || !acceptedTerms}
+              className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {connecting ? <Loader2 className="animate-spin" size={18} /> : <Smartphone size={18} />}
+              {connecting ? 'Gerando QR Code...' : 'Conectar meu WhatsApp'}
+            </button>
+            {qrCode ? (
+              <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-center">
+                <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="mx-auto h-52 w-52 rounded-xl object-contain" />
+                <p className="mt-3 text-xs font-black uppercase tracking-widest text-blue-700">Escaneie com o WhatsApp</p>
+                <button
+                  type="button"
+                  onClick={disconnectWhatsApp}
+                  className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100 transition-all cursor-pointer"
+                >
+                  Resetar Conexão / Gerar Novo QR Code
+                </button>
+              </div>
+            ) : null}
+            {connectError ? (
+              <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-left shadow-sm">
+                <p className="text-xs font-bold text-red-700">{connectError}</p>
+                <button
+                  type="button"
+                  onClick={disconnectWhatsApp}
+                  className="mt-3 w-full rounded-xl bg-red-600 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-700 transition-all cursor-pointer text-center"
+                >
+                  Resetar Conexão (Limpar Cache do Servidor)
+                </button>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs font-bold text-blue-700">Quando o QR Code aparecer, abra o WhatsApp no celular, toque em aparelhos conectados e faca a leitura.</p>
+            )}
+          </div>
+        )}
 
         <div className="orion-panel border-emerald-100 bg-emerald-50 p-6">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
@@ -289,7 +423,7 @@ export default function BrokerInboxPage() {
           <h2 className="text-xl font-black text-gray-950">Como vai funcionar</h2>
           <div className="mt-4 grid gap-3 text-sm font-bold text-slate-600 md:grid-cols-3">
             <span className="rounded-2xl bg-white/80 p-4">1. Voce conecta seu WhatsApp pelo QR Code.</span>
-            <span className="rounded-2xl bg-white/80 p-4">2. As conversas dos leads ficam organizadas por atendimento.</span>
+            <span className="rounded-2xl bg-white/80 p-4">2. Suas novas conversas e envios do CRM são salvos aqui.</span>
             <span className="rounded-2xl bg-white/80 p-4">3. No CRM, o botao de conversar leva direto para esse lead.</span>
           </div>
           {leadPhone && (
@@ -358,7 +492,10 @@ export default function BrokerInboxPage() {
                       <MessageSquare className="mx-auto mb-4 text-blue-500" size={42} />
                       <h3 className="text-xl font-black text-gray-900">Conversa pronta para atender</h3>
                       <p className="mx-auto mt-2 max-w-md text-sm font-bold leading-relaxed text-slate-500">
-                        Quando o cliente responder, as mensagens aparecem aqui. Voce tambem pode iniciar o contato pelo campo abaixo.
+                        {selectedConversation.id.startsWith('new-')
+                          ? 'Esta é uma nova conversa iniciada pelo CRM. Digite sua primeira mensagem abaixo para enviar pelo WhatsApp e salvar o contato.'
+                          : 'Quando o cliente responder, as mensagens aparecem aqui. Voce tambem pode iniciar o contato pelo campo abaixo.'
+                        }
                       </p>
                     </div>
                   </div>

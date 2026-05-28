@@ -1110,7 +1110,7 @@ export default function CrmPage() {
                 <Phone size={16} /> Ligar
               </a>
               <a
-                href={`/inbox?lead=${selectedLead.id}&telefone=${cleanPhone(selectedLead.telefone)}`}
+                href={`/inbox?lead=${selectedLead.id}&telefone=${cleanPhone(selectedLead.telefone)}&nome=${encodeURIComponent(selectedLead.nome || '')}`}
                 className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white"
               >
                 <MessageSquare size={16} /> Chamar inbox
