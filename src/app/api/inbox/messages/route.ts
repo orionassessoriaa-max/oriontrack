@@ -184,6 +184,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, message: inserted, conversation });
   } catch (error: any) {
+    console.error('[POST /api/inbox/messages] ERROR:', error);
     return NextResponse.json({ error: error.message || 'Nao consegui enviar a mensagem agora.' }, { status: 500 });
   }
 }
