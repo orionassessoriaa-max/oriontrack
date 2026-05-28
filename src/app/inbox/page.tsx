@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Loader2, MessageSquare, QrCode, RefreshCw, Send, Smartphone } from 'lucide-react';
+import { CheckCircle2, Loader2, MessageSquare, Paperclip, QrCode, RefreshCw, Send, Smartphone, X } from 'lucide-react';
 
 type Conversation = {
   id: string;
@@ -40,6 +40,26 @@ export default function BrokerInboxPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelectedFile(file);
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFilePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+  };
 
   // Status de conexão reais do servidor
   const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
@@ -266,7 +286,7 @@ export default function BrokerInboxPage() {
   }
 
   async function sendMessage() {
-    if (!selectedConversation || !messageText.trim()) return;
+    if (!selectedConversation || (!messageText.trim() && !filePreview)) return;
 
     const token = await getToken();
     if (!token) {
@@ -277,6 +297,18 @@ export default function BrokerInboxPage() {
     setSendingMessage(true);
     setSendError(null);
     const isNew = selectedConversation.id.startsWith('new-');
+
+    // Mapear mimetype para mediatype
+    let mediatype = 'document';
+    if (selectedFile) {
+      if (selectedFile.type.startsWith('image/')) {
+        mediatype = 'image';
+      } else if (selectedFile.type.startsWith('video/')) {
+        mediatype = 'video';
+      } else if (selectedFile.type.startsWith('audio/')) {
+        mediatype = 'audio';
+      }
+    }
 
     const response = await fetch('/api/inbox/messages', {
       method: 'POST',
@@ -292,6 +324,12 @@ export default function BrokerInboxPage() {
           lead_id: selectedConversation.lead_id,
           nome_contato: selectedConversation.nome_contato,
         } : {}),
+        ...(filePreview ? {
+          media: filePreview,
+          mimetype: selectedFile?.type,
+          fileName: selectedFile?.name,
+          mediatype,
+        } : {}),
       }),
     });
     const payload = await response.json().catch(() => ({}));
@@ -304,6 +342,8 @@ export default function BrokerInboxPage() {
 
     setMessageText('');
     setSendError(null);
+    setSelectedFile(null);
+    setFilePreview(null);
 
     if (payload.success && payload.conversation) {
       const realConv = payload.conversation as Conversation;
@@ -518,13 +558,48 @@ export default function BrokerInboxPage() {
                   </div>
                 )}
               </div>
+              {filePreview && (
+                <div className="mx-5 mt-3 flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50 p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    {selectedFile?.type.startsWith('image/') ? (
+                      <img src={filePreview} alt="Preview do anexo" className="h-12 w-12 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
+                        <Paperclip size={20} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-black text-slate-800 truncate max-w-[200px] sm:max-w-xs">{selectedFile?.name}</p>
+                      <p className="text-[10px] font-bold text-slate-400">
+                        {selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB' : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeFile}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-400 hover:text-red-500 shadow-sm transition-all cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
               {sendError && (
                 <div className="mx-5 mt-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-bold text-red-700 shadow-sm">
                   {sendError}
                 </div>
               )}
               <div className="border-t border-gray-100 bg-white p-4">
-                <div className="flex gap-3">
+                <div className="flex items-center gap-3">
+                  <label className="flex h-[52px] w-[52px] cursor-pointer shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-blue-300 hover:bg-white hover:text-blue-600">
+                    <Paperclip size={20} />
+                    <input
+                      type="file"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
+                    />
+                  </label>
                   <textarea
                     value={messageText}
                     onChange={(event) => setMessageText(event.target.value)}
@@ -540,8 +615,8 @@ export default function BrokerInboxPage() {
                   />
                   <button
                     onClick={sendMessage}
-                    disabled={sendingMessage || !messageText.trim()}
-                    className="flex min-w-[112px] cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={sendingMessage || (!messageText.trim() && !filePreview)}
+                    className="flex min-w-[112px] h-[52px] cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {sendingMessage ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} Enviar
                   </button>
