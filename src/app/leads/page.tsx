@@ -175,6 +175,7 @@ export default function BrokerLeadsPage() {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [dateFilterType, setDateFilterType] = useState('todos');
   const [operadoraFilter, setOperadoraFilter] = useState('todas');
   const [campaignFilter, setCampaignFilter] = useState('todos');
   const [adsetFilter, setAdsetFilter] = useState('todos');
@@ -224,7 +225,7 @@ export default function BrokerLeadsPage() {
         .from('leads')
         .select('*, responsavel_membro:responsavel_membro_id(nome,email)', { count: 'exact' })
         .eq('corretor_id', profile.corretor_id)
-        .order('data_entrada', { ascending: false })
+        .order('data_entrada', { ascending: false, nullsFirst: false })
         .range(from, to);
 
       if (profile.tipo_usuario === 'corretor_membro') {
@@ -548,10 +549,14 @@ export default function BrokerLeadsPage() {
     const adsetMatch = adsetFilter === 'todos' || leadAdset(lead) === adsetFilter;
     const adMatch = adFilter === 'todos' || leadAd(lead) === adFilter;
     const leadDate = lead.data_entrada ? new Date(lead.data_entrada) : null;
+    const dateTypeMatch =
+      dateFilterType === 'todos' ||
+      (dateFilterType === 'com_data' && lead.data_entrada !== null) ||
+      (dateFilterType === 'sem_data' && lead.data_entrada === null);
     const fromMatch = !dateFrom || (leadDate && leadDate >= new Date(dateFrom));
     const toMatch = !dateTo || (leadDate && leadDate <= new Date(dateTo + 'T23:59:59'));
 
-    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && campaignMatch && adsetMatch && adMatch && fromMatch && toMatch;
+    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && campaignMatch && adsetMatch && adMatch && dateTypeMatch && fromMatch && toMatch;
   });
 
   const filterOptions = (values: string[]) => Array.from(new Set(values.filter((value) => value && value !== '-'))).sort((a, b) => a.localeCompare(b));
@@ -579,6 +584,7 @@ export default function BrokerLeadsPage() {
     searchTerm ||
     dateFrom ||
     dateTo ||
+    dateFilterType !== 'todos' ||
     cnpjFilter !== 'todos' ||
     statusFilter !== 'todos' ||
     operadoraFilter !== 'todas' ||
@@ -591,6 +597,7 @@ export default function BrokerLeadsPage() {
     setSearchTerm('');
     setDateFrom('');
     setDateTo('');
+    setDateFilterType('todos');
     setCnpjFilter('todos');
     setStatusFilter('todos');
     setOperadoraFilter('todas');
@@ -723,6 +730,11 @@ export default function BrokerLeadsPage() {
           </div>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="orion-control min-w-[165px] flex-[0_0_165px] px-4 py-3.5 text-sm" />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="orion-control min-w-[165px] flex-[0_0_165px] px-4 py-3.5 text-sm" />
+          <select value={dateFilterType} onChange={(e) => setDateFilterType(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
+            <option value="todos">Data: todos</option>
+            <option value="com_data">Apenas com data</option>
+            <option value="sem_data">Sem data</option>
+          </select>
           <select value={cnpjFilter} onChange={(e) => setCnpjFilter(e.target.value)} className="orion-control min-w-[170px] flex-[1_1_170px] px-4 py-3.5 text-sm">
             <option value="todos">CNPJ: todos</option>
             <option value="com">Com CNPJ</option>

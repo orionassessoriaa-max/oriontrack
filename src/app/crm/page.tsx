@@ -195,7 +195,7 @@ export default function CrmPage() {
       let leadsQuery = supabase
         .from('leads')
         .select('*, responsavel_membro:responsavel_membro_id(nome,email)')
-        .order('data_entrada', { ascending: false })
+        .order('data_entrada', { ascending: false, nullsFirst: false })
         .limit(200);
 
       let tarefasQuery = supabase

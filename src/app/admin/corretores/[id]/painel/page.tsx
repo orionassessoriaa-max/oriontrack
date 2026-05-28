@@ -20,7 +20,7 @@ export default function AdminCorretorPainelPage({ params }: { params: Promise<{ 
 
       const [{ data: corretorData, error: corretorError }, { data: leadsData, error: leadsError }] = await Promise.all([
         supabase.from('corretores').select('*').eq('id', id).maybeSingle(),
-        supabase.from('leads').select('*').eq('corretor_id', id).order('data_entrada', { ascending: false }),
+        supabase.from('leads').select('*').eq('corretor_id', id).order('data_entrada', { ascending: false, nullsFirst: false }),
       ]);
 
       if (!corretorError) setCorretor(corretorData);

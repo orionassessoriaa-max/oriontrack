@@ -7,7 +7,7 @@ import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 type CsvRow = Record<string, string>;
 type LeadInsert = {
   corretor_id: string;
-  data_entrada: string;
+  data_entrada: string | null;
   nome: string;
   telefone: string;
   idades: string;
@@ -317,7 +317,7 @@ function resolveLeadDate(row: CsvRow) {
     if (parsed) return parsed;
   }
 
-  return new Date().toISOString();
+  return null;
 }
 
 function statusFromSheet(value: string) {
