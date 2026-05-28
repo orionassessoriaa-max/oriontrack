@@ -321,8 +321,15 @@ export default function AccountInboxPage() {
               </>
             )}
             {connectError && (
-              <div className="mt-5 max-w-xl border border-red-100 bg-red-50 px-5 py-4 text-left text-sm font-bold leading-6 text-red-700 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-200">
-                {connectError}
+              <div className="mt-5 max-w-xl border border-red-100 bg-red-50 px-5 py-4 text-left text-sm font-bold leading-6 text-red-700 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-200 shadow-sm">
+                <p>{connectError}</p>
+                <button
+                  type="button"
+                  onClick={disconnectWhatsApp}
+                  className="mt-3 w-full rounded-xl bg-red-600 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-700 transition-all cursor-pointer text-center"
+                >
+                  Resetar Conexão (Limpar Cache do Servidor)
+                </button>
               </div>
             )}
             <div className="mt-6 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
