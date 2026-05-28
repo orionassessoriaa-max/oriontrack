@@ -25,7 +25,6 @@ type Membro = {
   status: string;
   ordem: number;
   ultimo_lead_at: string | null;
-  foto_url?: string | null;
 };
 
 type Credentials = {
@@ -603,17 +602,9 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                 <div key={member.id} className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-white hover:shadow-lg">
                   <div className="grid gap-4 xl:grid-cols-[1fr_1.4fr_auto] xl:items-center">
                   <div className="flex min-w-0 items-center gap-4">
-                    {member.foto_url ? (
-                      <img
-                        src={member.foto_url}
-                        alt={member.nome}
-                        className="h-12 w-12 rounded-full object-cover border-2 border-blue-500/10 shadow-sm"
-                      />
-                    ) : (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-black text-white shadow-md">
-                        {member.nome.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-black text-white">
+                      {member.nome.slice(0, 2).toUpperCase()}
+                    </div>
                     <div className="min-w-0">
                       <p className="font-black text-slate-950">{member.nome}</p>
                       <p className="break-all text-xs font-bold text-slate-500">{member.email}</p>

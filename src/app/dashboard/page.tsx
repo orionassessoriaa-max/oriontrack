@@ -20,7 +20,6 @@ import {
   Target,
   Info,
   AlertTriangle,
-  Search,
   type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
@@ -408,343 +407,97 @@ export default function DashboardPage() {
     { icon: LayoutDashboard, label: 'Kanban Comercial', desc: 'Organize seus leads por etapa.', href: '/kanban', color: 'indigo' },
     { icon: Globe, label: 'Minha Página', desc: 'Acesse seu link de captação.', href: '/minha-pagina', color: 'purple' },
     { icon: HelpCircle, label: 'Ajuda Orion', desc: 'Solicite suporte ou alinhamento.', href: '/ajuda', color: 'slate' },
+    { icon: GraduationCap, label: 'Treinamento', desc: 'Apoio para melhorar sua conversão.', href: '/ajuda?tipo=treinamento_comercial', color: 'green' },
     { icon: CalendarDays, label: 'Reunião Alinhamento', desc: 'Ajuste o perfil dos seus leads.', href: '/ajuda?tipo=alinhamento_leads', color: 'orange' },
   ];
 
   return (
     <InternalLayout>
-      {/* Pills Horizontal Top Navbar */}
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-[22px] bg-[#111418] border border-white/[0.08] p-2.5 shadow-flux">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Link href="/dashboard" className="rounded-flux-pill bg-[#0863FF] px-6 py-3.5 text-xs font-black uppercase tracking-wider text-white shadow-md">
-            📊 Dashboard
-          </Link>
-          <Link href="/leads" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-[#8C95A3] hover:bg-white/[0.04] hover:text-white transition-all">
-            👥 Leads
-          </Link>
-          <Link href="/kanban" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-[#8C95A3] hover:bg-white/[0.04] hover:text-white transition-all">
-            📋 Kanban
-          </Link>
-          <Link href="/minha-pagina" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-[#8C95A3] hover:bg-white/[0.04] hover:text-white transition-all">
-            🌐 Minha LP
-          </Link>
-          <Link href="/ajuda" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-[#8C95A3] hover:bg-white/[0.04] hover:text-white transition-all">
-            ❓ Ajuda
-          </Link>
-        </div>
-
-        <div className="flex items-center gap-3 pr-2">
-          {/* Subtle search pill */}
-          <div className="relative hidden md:block">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={15} />
-            <input 
-              type="text" 
-              placeholder="Buscar no painel..." 
-              className="rounded-flux-pill border border-white/[0.08] bg-[#161a20] py-2.5 pl-10 pr-4 text-xs font-semibold text-white placeholder:text-slate-500 outline-none w-48 focus:w-60 focus:bg-black transition-all shadow-sm" 
-            />
-          </div>
-          {/* Notification Button */}
-          <button className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#111418] text-[#8C95A3] shadow-sm hover:bg-[#161a20] hover:text-white transition-all border border-white/[0.08]">
-            <div className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-[#0863FF] ring-2 ring-black animate-pulse" />
-            <span className="text-base">🔔</span>
-          </button>
-          {/* Mini profile circle */}
-          <div className="h-10 w-10 overflow-hidden rounded-full border-2 border-[#0863FF] shadow-sm bg-[#161a20]">
-            <div className="h-full w-full flex items-center justify-center font-black text-[#0863FF] text-sm">
-              {firstName ? firstName.charAt(0).toUpperCase() : 'O'}
-            </div>
-          </div>
-        </div>
+      {/* Header Section */}
+      <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
+        <h1 className="mb-2 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
+          {isDataLoading ? (
+            <span className="inline-block w-48 h-10 bg-gray-100 animate-pulse rounded-lg" />
+          ) : (
+            `Olá, ${firstName}`
+          )}
+        </h1>
+        <p className="mb-2 text-lg font-bold text-blue-600 sm:text-xl">Seu centro de vendas Orion está pronto para acelerar seus resultados</p>
+        <p className="max-w-2xl text-sm font-medium leading-relaxed text-gray-500 sm:text-base">
+          Acompanhe seus leads, avance cada negociação e transforme oportunidades em comissão com mais controle, velocidade e clareza.
+        </p>
       </div>
 
-      {/* Main Title Section */}
-      <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end animate-in fade-in slide-in-from-top-4 duration-700">
-        <div>
-          <h1 className="mb-1.5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            {isDataLoading ? (
-              <span className="inline-block w-48 h-10 bg-white/5 animate-pulse rounded-lg" />
-            ) : (
-              `Olá, ${firstName}`
-            )}
-          </h1>
-          <p className="text-sm font-medium text-[#8C95A3]">Analise as tendências comerciais e converta leads em tempo recorde.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="rounded-flux-pill border border-white/[0.08] bg-[#111418] px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-200 shadow-sm hover:bg-[#161a20] transition-all flex items-center gap-1.5">
-            Mensal <span className="text-[10px]">▼</span>
-          </button>
-          <button className="rounded-flux-pill bg-[#0863FF] px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-md hover:bg-opacity-90 transition-all flex items-center gap-1.5">
-            📥 Exportar <ArrowRight size={14} className="rotate-90" />
-          </button>
-        </div>
-      </div>
-
-      {/* TOP METRICS ROW (3-Column layout matching FluxCRM) */}
-      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Card 1: Revenue Highlight Card in Orion Blue/Navy Gradient */}
-        <div className="group relative overflow-hidden rounded-[22px] bg-gradient-to-br from-[#07111F] via-[#0863FF]/30 to-[#0863FF] border border-white/[0.08] p-8 text-white shadow-xl flex flex-col justify-between min-h-[220px] transition-all duration-500 hover:-translate-y-1">
-          {/* Top Info Area */}
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-blue-200/90 opacity-90">Comissão Vendida</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-tight">
-                {isDataLoading ? (
-                  <span className="inline-block w-36 h-9 bg-white/20 animate-pulse rounded-lg" />
-                ) : (
-                  formatCurrency(stats.revenueRealized)
-                )}
-              </h2>
-            </div>
-            <Link href="/leads?status=Venda%20realizada" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white border border-white/25 hover:bg-[#0863FF] hover:border-[#0863FF] transition-all shadow-md">
-              <ArrowRight size={18} className="-rotate-45" />
-            </Link>
+      {/* Intro Card */}
+      <div className="mb-12 grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">
+        <div className="group relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white shadow-xl shadow-blue-600/20 sm:rounded-[2.5rem] sm:p-10 lg:col-span-2">
+          <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+            <OrionMark size={70} variant="light" />
           </div>
-          {/* Bottom tag */}
-          <div className="mt-6 flex">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0863FF]/15 border border-[#0863FF]/20 px-3.5 py-1.5 text-xs font-black uppercase tracking-wider text-[#0863FF]">
-              ↗ {salesConversionRate.toFixed(1).replace('.', ',')}% Conversão Geral
-            </span>
-          </div>
-        </div>
-
-        {/* Card 2: Total Purchase (Total Vendas Realizadas) in White with diagonal stripes accent */}
-        <div className="group relative overflow-hidden rounded-[22px] bg-[#111418] p-8 border border-white/[0.08] shadow-flux flex flex-col justify-between min-h-[220px] transition-all duration-500 hover:-translate-y-1 bg-diagonal-stripes-dark">
-          {/* Top Info Area */}
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-[#8C95A3]">Total em Vendas</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-tight text-white">
-                {isDataLoading ? (
-                  <span className="inline-block w-36 h-9 bg-white/5 animate-pulse rounded-lg" />
-                ) : (
-                  formatCurrency(stats.salesRealized)
-                )}
-              </h2>
-            </div>
-            <Link href="/leads?status=Venda%20realizada" className="flex h-11 w-11 items-center justify-center rounded-full bg-[#161a20] text-white border border-white/[0.08] hover:bg-[#0863FF] hover:border-[#0863FF] transition-all shadow-sm">
-              <ArrowRight size={18} className="-rotate-45" />
-            </Link>
-          </div>
-          {/* Bottom tag */}
-          <div className="mt-6 flex">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-1.5 text-xs font-black uppercase tracking-wider text-emerald-400">
-              ↗ {stats.sold} Vendas Fechadas
-            </span>
-          </div>
-        </div>
-
-        {/* Card 3: Sales Target (Pipeline Previsão) with custom double-segment progress bar */}
-        <div className="group relative overflow-hidden rounded-[22px] bg-[#111418] p-8 border border-white/[0.08] shadow-flux flex flex-col justify-between min-h-[220px] transition-all duration-500 hover:-translate-y-1">
-          {/* Top Info Area */}
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-[#8C95A3]">Venda Prevista (Pipeline)</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-tight text-white">
-                {isDataLoading ? (
-                  <span className="inline-block w-36 h-9 bg-white/5 animate-pulse rounded-lg" />
-                ) : (
-                  formatCurrency(stats.salesPotential)
-                )}
-              </h2>
-            </div>
-            <button className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-white/5 hover:text-white transition-all">
-              <span className="text-lg">•••</span>
-            </button>
-          </div>
-          {/* Custom Dual Segmented Progress Bar */}
-          <div className="mt-6">
-            <div className="h-4 w-full overflow-hidden rounded-full bg-[#161a20] border border-white/5 flex p-0.5">
-              <div 
-                className="h-full rounded-full bg-[#0863FF] shadow-inner" 
-                style={{ width: `${Math.min(100, Math.max(15, (stats.salesRealized / Math.max(stats.salesPotential, 1)) * 100))}%` }} 
-              />
-              <div 
-                className="h-full rounded-full bg-[#0863FF]/30 bg-diagonal-stripes animate-pulse -ml-2" 
-                style={{ width: `${Math.min(100, Math.max(15, (stats.revenueRealized / Math.max(stats.salesPotential, 1)) * 100))}%` }} 
-              />
-            </div>
-            <div className="mt-3.5 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#0863FF]" /> Realizado</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#0863FF]/30" /> Previsto</span>
+          <div className="relative z-10">
+            <h2 className="mb-4 text-2xl font-black">Seu painel comercial</h2>
+            <p className="mb-8 max-w-md text-base font-medium text-blue-100 sm:text-lg">
+              Veja seus leads, atualize a etapa de cada atendimento e acompanhe sua evolução comercial em tempo real.
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <Link href="/leads" className="bg-white text-blue-600 px-6 py-4 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-50 transition-all shadow-lg">
+                Ver meus leads <ArrowRight size={18} />
+              </Link>
+              <Link href="/kanban" className="bg-blue-500/30 text-white border border-white/20 backdrop-blur-md px-6 py-4 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-500/40 transition-all">
+                Abrir Kanban
+              </Link>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* SECOND ROW: CUSTOMER SATISFACTION (ARC) & STATISTICS GRAPH CHART (FLUXCRM STYLE) */}
-      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
-        {/* Left Card: Customer Satisfaction (Redesigned as Arc Gauge using conversion/CSAT metrics) */}
-        <div className="group rounded-[22px] bg-[#111418] p-8 border border-white/[0.08] shadow-flux flex flex-col justify-between min-h-[360px] transition-all duration-500 hover:shadow-xl">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="text-xl font-semibold tracking-tight text-white">Conversão de Leads</h3>
-              <p className="text-[10px] font-bold text-[#8C95A3] mt-1 uppercase tracking-wider">Desempenho Comercial</p>
-            </div>
-            <button className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-white/5 hover:text-white transition-all">
-              <span className="text-lg">•••</span>
-            </button>
-          </div>
-
-          {/* SVG Semicircle gauge */}
-          <div className="relative flex flex-col items-center justify-center pt-8 pb-4">
-            <svg className="w-56 h-28" viewBox="0 0 100 50">
-              {/* Semicircle track using custom dashed pattern for beautiful segment look */}
-              <path
-                d="M 10 50 A 40 40 0 0 1 90 50"
-                fill="none"
-                stroke="#161a20"
-                strokeWidth="7"
-                strokeLinecap="round"
-                strokeDasharray="1.5 3.5"
-              />
-              {/* Highlight active progress semicircle track */}
-              <path
-                d="M 10 50 A 40 40 0 0 1 90 50"
-                fill="none"
-                stroke="url(#gaugeOrionGradient)"
-                strokeWidth="7.5"
-                strokeLinecap="round"
-                strokeDasharray="1.5 3.5"
-                strokeDashoffset={125 - (125 * Math.min(salesConversionRate, 100)) / 100}
-              />
-              <defs>
-                <linearGradient id="gaugeOrionGradient" x1="0" x2="1" y1="0" y2="0">
-                  <stop offset="0%" stopColor="#0863FF" />
-                  <stop offset="100%" stopColor="#3b82f6" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <div className="absolute bottom-1 text-center">
-              <span className="text-4xl font-semibold text-white leading-none">
-                {salesConversionRate.toFixed(1).replace('.', ',')}%
-              </span>
-              <p className="text-[10px] font-bold text-[#8C95A3] uppercase tracking-widest mt-1">Taxa Geral</p>
-            </div>
-          </div>
-
-          {/* Tag indicators at bottom */}
+        <div className="flex flex-col justify-between rounded-[1.75rem] border border-gray-100 bg-white p-6 shadow-sm sm:rounded-[2.5rem] sm:p-8">
           <div>
-            <div className="mb-4 flex items-center justify-center gap-5 text-[10px] font-black uppercase tracking-widest text-[#8C95A3] border-t border-white/[0.08] pt-5">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#0863FF]" /> Vendas</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#2a2f36]" /> Leads</span>
+            <div className="flex items-center gap-2 text-blue-600 mb-4 font-black text-xs uppercase tracking-widest">
+              <Info size={14} /> Como usar seu painel
             </div>
-            <div className="rounded-2xl bg-[#161a20] border border-white/[0.04] p-4 text-center">
-              <p className="text-xs font-bold text-[#8C95A3] leading-relaxed">
-                Suas vendas estão acima da média da equipe Orion. Continue acelerando!
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Card: Statistics / Monthly Growth (Redesigned with FluxCRM columns) */}
-        <div className="group rounded-[22px] bg-[#111418] p-8 border border-white/[0.08] shadow-flux flex flex-col justify-between min-h-[360px] transition-all duration-500 hover:shadow-xl">
-          {/* Header Area */}
-          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <h3 className="text-xl font-semibold tracking-tight text-white">Evolução Mensal</h3>
-              <p className="text-[10px] font-bold text-[#8C95A3] mt-1 uppercase tracking-wider">Investimento Meta Ads x Leads</p>
-            </div>
-            {/* Top dropdown pills */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button className="rounded-flux-pill bg-[#161a20] border border-white/[0.08] px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-[#8C95A3] hover:bg-black transition-all">
-                Meta Ads
-              </button>
-              <button className="rounded-flux-pill bg-[#161a20] border border-white/[0.08] px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-[#8C95A3] hover:bg-black transition-all">
-                Histórico
-              </button>
-              <button className="rounded-flux-pill bg-[#0863FF] px-4.5 py-2.5 text-[11px] font-black uppercase tracking-wider text-white shadow-md">
-                Últimos 6 meses
-              </button>
-            </div>
-          </div>
-
-          {/* Gráfico com as barras listradas elegantes de FluxCRM */}
-          <div
-            className="scrollbar-visible grid min-h-[220px] grid-cols-6 items-end gap-4 overflow-x-auto pb-2 [grid-template-columns:repeat(6,minmax(86px,1fr))]"
-            onMouseEnter={() => setChartHovering(true)}
-            onMouseLeave={() => setChartHovering(false)}
-          >
-            {monthlyPerformance.map((month, index) => (
-              <div key={month.key} className="group/month flex h-full flex-col justify-end gap-3.5">
-                {/* Visual Bars Container */}
-                <div className="relative flex h-48 items-end gap-2.5 rounded-[1.5rem] bg-[#161a20]/40 p-2.5 transition-all duration-300 group-hover/month:-translate-y-1.5 group-hover/month:bg-white/[0.02] group-hover/month:shadow-md">
-                  
-                  {/* Spend Column (Orion Blue) */}
-                  <div className="flex flex-1 flex-col items-center justify-end h-full">
-                    <div
-                      className="dashboard-month-bar w-full rounded-t-full bg-gradient-to-t from-[#07111F] to-[#0863FF] shadow-sm group-hover/month:shadow-md"
-                      style={{
-                        ['--bar-height' as string]: `${Math.max((month.spend / maxMonthlySpend) * 140, month.spend > 0 ? 14 : 0)}px`,
-                        ['--bar-delay' as string]: `${index * 90}ms`,
-                        height: `${Math.max((month.spend / maxMonthlySpend) * 140, month.spend > 0 ? 14 : 0)}px`,
-                        transform: chartHovering ? 'scaleY(1.04)' : 'scaleY(1)',
-                        transitionDelay: chartHovering ? `${index * 90}ms` : '0ms',
-                      }}
-                    />
+            <ul className="space-y-4">
+              {[
+                'Veja seus novos leads',
+                'Atualize a etapa no Kanban Comercial',
+                'Solicite apoios na área Ajuda Orion',
+                'Acesse sua LP em Minha Página'
+              ].map((text, i) => (
+                <li key={i} className="flex gap-3 text-sm font-bold text-gray-600">
+                  <div className="w-5 h-5 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shrink-0 text-[10px]">
+                    {i+1}
                   </div>
-
-                  {/* Leads Column (Orion Blue/30 Striped) */}
-                  <div className="flex flex-1 flex-col items-center justify-end h-full">
-                    <div
-                      className="dashboard-month-bar w-full rounded-t-full bg-gradient-to-t from-[#0863FF]/30 to-[#0863FF]/60 shadow-sm bg-diagonal-stripes group-hover/month:shadow-md"
-                      style={{
-                        ['--bar-height' as string]: `${Math.max((month.leads / maxMonthlyLeads) * 140, month.leads > 0 ? 14 : 0)}px`,
-                        ['--bar-delay' as string]: `${index * 90 + 45}ms`,
-                        height: `${Math.max((month.leads / maxMonthlyLeads) * 140, month.leads > 0 ? 14 : 0)}px`,
-                        transform: chartHovering ? 'scaleY(1.04)' : 'scaleY(1)',
-                        transitionDelay: chartHovering ? `${index * 90 + 45}ms` : '0ms',
-                      }}
-                    />
-                  </div>
-
-                  {/* Elegant floating tooltip on hover */}
-                  <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded-xl border border-white/[0.08] bg-[#000000] px-3 py-1.5 text-[9px] font-black text-white opacity-0 shadow-lg transition-opacity group-hover/month:opacity-100 z-20 whitespace-nowrap">
-                    💸 Investido: {formatCurrency(month.spend)}
-                  </div>
-                </div>
-
-                {/* X-Axis Month label */}
-                <div className="text-center">
-                  <p className="text-xs font-black uppercase text-slate-400">{month.label}</p>
-                  <p className="mt-1 text-[10px] font-bold text-[#0863FF]">{month.leads} leads</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Legenda Customizada */}
-          <div className="mt-5 flex flex-wrap gap-4 text-[10px] font-black uppercase tracking-widest text-[#8C95A3] border-t border-white/[0.08] pt-5">
-            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-[#0863FF]" /> Investimento Meta</span>
-            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-[#0863FF]/30" /> Leads Recebidos</span>
+                  {text}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>
 
-      {/* THIRD ROW: FUNNEL (Orion Traffic Funnel) & WEEKLY INPUT (7 DAYS) */}
-      <div className="mb-12 overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#111418] shadow-flux transition-all duration-500 hover:-translate-y-0.5 hover:shadow-xl">
-        <div className="border-b border-white/[0.08] bg-gradient-to-r from-[#000000] via-[#07111F] to-[#111418] p-7 text-white">
+      <div className="mb-12 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-600/10 dark-dashboard-panel sm:rounded-[2rem]">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 p-5 text-white sm:p-7">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-[#0863FF]">Overview comercial</p>
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Funil Orion Track</h2>
-              <p className="mt-2 max-w-2xl text-sm font-bold leading-relaxed text-[#8C95A3]">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">Overview comercial</p>
+              <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Funil Orion Track</h2>
+              <p className="mt-2 max-w-2xl text-sm font-bold leading-relaxed text-blue-100">
                 Uma visão executiva do caminho do lead: entrada, atendimento, cotação e venda.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/60 p-3.5 backdrop-blur">
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">CPL mês</p>
                 <p className="mt-1 text-lg font-black">{formatCurrency(currentMonthCpl)}</p>
               </div>
-              <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/60 p-3.5 backdrop-blur">
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Cotação</p>
                 <p className="mt-1 text-lg font-black">{quoteRate.toFixed(1).replace('.', ',')}%</p>
               </div>
-              <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/60 p-3.5 backdrop-blur">
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Venda</p>
                 <p className="mt-1 text-lg font-black">{salesRate.toFixed(1).replace('.', ',')}%</p>
               </div>
-              <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/60 p-3.5 backdrop-blur">
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Comissão</p>
                 <p className="mt-1 text-lg font-black">{formatCurrency(stats.revenueRealized)}</p>
               </div>
@@ -753,14 +506,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-5 p-4 sm:p-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.5rem] border border-white/[0.08] bg-[#161a20]/30 p-4 shadow-sm dark-dashboard-inner sm:p-6">
+          <div className="rounded-[1.5rem] border border-slate-100 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm dark-dashboard-inner sm:p-6">
             <div className="mb-5 flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0863FF] text-white shadow-lg">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
                 <Target size={24} />
               </div>
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#0863FF]">Funil comercial</p>
-                <h3 className="text-2xl font-semibold tracking-tight text-white">Performance por etapa</h3>
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-600">Funil comercial</p>
+                <h3 className="text-2xl font-black tracking-tight text-gray-950">Performance por etapa</h3>
               </div>
             </div>
 
@@ -769,7 +522,7 @@ export default function DashboardPage() {
                 <defs>
                   <linearGradient id="funnelTopGradient" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="#33d4ff" />
-                    <stop offset="48%" stopColor="#0863FF" />
+                    <stop offset="48%" stopColor="#0789f6" />
                     <stop offset="100%" stopColor="#0754c7" />
                   </linearGradient>
                   <linearGradient id="funnelMiddleGradient" x1="0" x2="1" y1="0" y2="1">
@@ -779,7 +532,7 @@ export default function DashboardPage() {
                   </linearGradient>
                   <linearGradient id="funnelQuoteGradient" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="#7da8ff" />
-                    <stop offset="52%" stopColor="#0863FF" />
+                    <stop offset="52%" stopColor="#5167ff" />
                     <stop offset="100%" stopColor="#3145c9" />
                   </linearGradient>
                   <linearGradient id="funnelSalesGradient" x1="0" x2="1" y1="0" y2="1">
@@ -789,7 +542,7 @@ export default function DashboardPage() {
                   </linearGradient>
                   <radialGradient id="funnelMouthGradient" cx="50%" cy="45%" r="60%">
                     <stop offset="0%" stopColor="#06243c" stopOpacity="0.72" />
-                    <stop offset="58%" stopColor="#0863FF" stopOpacity="0.42" />
+                    <stop offset="58%" stopColor="#0b8fe8" stopOpacity="0.42" />
                     <stop offset="100%" stopColor="#77dcff" stopOpacity="0.92" />
                   </radialGradient>
                   <linearGradient id="funnelSideShine" x1="0" x2="1" y1="0" y2="1">
@@ -801,7 +554,7 @@ export default function DashboardPage() {
                     <feDropShadow dx="0" dy="18" stdDeviation="18" floodColor="#00284d" floodOpacity="0.34" />
                   </filter>
                   <filter id="orionFunnelLift" x="-25%" y="-25%" width="150%" height="150%">
-                    <feDropShadow dx="0" dy="24" stdDeviation="18" floodColor="#0863FF" floodOpacity="0.42" />
+                    <feDropShadow dx="0" dy="24" stdDeviation="18" floodColor="#0ea5e9" floodOpacity="0.42" />
                   </filter>
                 </defs>
 
@@ -838,13 +591,36 @@ export default function DashboardPage() {
                 })}
               </svg>
             </div>
+
+            <div className="hidden">
+              {(funnelSteps as any[]).map((step, index) => (
+                <Link
+                  key={step.name}
+                  href={index === 0 ? '/leads' : `/leads?status=${encodeURIComponent(index === 1 ? 'Aguardando atendimento' : index === 2 ? 'Cotação enviada' : 'Venda realizada')}`}
+                  className="orion-funnel-slice group"
+                  style={{
+                    width: `${step.width}%`,
+                    ['--slice-color' as string]: step.color,
+                    ['--slice-glow' as string]: step.glow,
+                  }}
+                >
+                  <span className="orion-funnel-rim" />
+                  <span className="orion-funnel-shine" />
+                  <div className="orion-funnel-content">
+                    <p className="text-sm font-black uppercase tracking-[0.22em] text-white">{step.name}</p>
+                    <p className="text-4xl font-black leading-none text-white drop-shadow">{step.value}</p>
+                    <p className="mt-1 text-[11px] font-bold text-white/80">{step.detail}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
 
           <div className="grid gap-4">
             {[
-              { label: 'Sem resposta', value: staleOpportunityCount, hint: 'oportunidades sem resposta', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20', icon: AlertTriangle },
-              { label: 'Em negociação', value: stats.inProgress, hint: 'leads em conversa ativa', color: 'bg-[#0863FF]/10 text-[#0863FF] border-[#0863FF]/20', icon: Clock },
-              { label: 'Venda prevista', value: formatCurrency(stats.salesPotential), hint: 'valor previsto dos leads ativos', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: TrendingUp },
+              { label: 'Sem resposta', value: staleOpportunityCount, hint: 'precisam de atenção rápida', color: 'bg-amber-50 text-amber-700 border-amber-100', icon: AlertTriangle },
+              { label: 'Em negociação', value: stats.inProgress, hint: 'leads em conversa ativa', color: 'bg-blue-50 text-blue-700 border-blue-100', icon: Clock },
+              { label: 'Venda prevista', value: formatCurrency(stats.salesPotential), hint: 'valor previsto dos leads ativos', color: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: TrendingUp },
             ].map((item) => (
               <div key={item.label} className={`group rounded-[1.5rem] border p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${item.color}`}>
                 <div className="flex items-center justify-between gap-4">
@@ -853,7 +629,7 @@ export default function DashboardPage() {
                     <p className="mt-2 text-3xl font-black">{item.value}</p>
                     <p className="mt-1 text-xs font-bold opacity-80">{item.hint}</p>
                   </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/40 border border-white/5 transition-transform duration-300 group-hover:scale-110">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/75 transition-transform duration-300 group-hover:scale-110">
                     <item.icon size={22} />
                   </div>
                 </div>
@@ -863,39 +639,158 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* FOURTH ROW: WEEKLY RHYTHM & CITY RANKING (RECONSTRUCTED) */}
-      <div className="mb-12 grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {/* Weekly Input Card */}
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#111418] p-6 shadow-flux sm:p-8 transition-all hover:shadow-xl">
-          <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
+      <div className="mb-12 grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_1.8fr]">
+        <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#0863FF]">Últimos 7 dias</p>
-              <h2 className="text-2xl font-semibold text-white">Ritmo de Entrada</h2>
-              <p className="mt-1 text-sm font-bold text-[#8C95A3]">Volume diário de leads captados.</p>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Resumo deste mês</p>
+              <h2 className="text-2xl font-black text-gray-950">Perfil comercial</h2>
             </div>
-            <div className="rounded-2xl bg-[#161a20] border border-white/[0.08] px-5 py-3 text-right">
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#0863FF]">Total</p>
-              <p className="text-3xl font-black text-white">{weeklyTotal}</p>
-              <p className="text-[11px] font-bold text-[#0863FF]">leads na semana</p>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <BarChart3 size={24} />
             </div>
           </div>
-          
-          <div className="grid gap-6 lg:grid-cols-[1fr_170px]">
-            {/* Semicustom weekly bars */}
-            <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/30 p-4">
-              <div className="flex h-56 items-end gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <MiniMetric icon={Users} label="Leads no mês" value={currentMonth.leads} />
+            <MiniMetric icon={DollarSign} label="Investido no mês" value={formatCurrency(currentMonth.spend)} />
+            <MiniMetric icon={Target} label="CPL do mês" value={formatCurrency(currentMonthCpl)} />
+            <MiniMetric icon={TrendingUp} label="Conversão mês" value={`${currentMonthConversion.toFixed(1).replace('.', ',')}%`} />
+            <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
+            <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
+          </div>
+          <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Corretor</p>
+            <p className="text-sm font-black text-gray-900">{corretorData?.nome || profile?.nome || '-'}</p>
+            <p className="mt-1 text-xs font-bold text-slate-500">{corretorData?.email || profile?.email || '-'}</p>
+          </div>
+        </div>
+
+        <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
+          <div className="mb-6 flex flex-col justify-between gap-2 md:flex-row md:items-end">
+            <div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Crescimento mensal</p>
+              <h2 className="text-2xl font-black text-gray-950">Investimento Meta x leads</h2>
+            </div>
+            <p className="text-xs font-bold text-slate-400">Últimos 6 meses</p>
+          </div>
+          <div
+            className="scrollbar-visible grid min-h-72 grid-cols-6 items-end gap-3 overflow-x-auto pb-2 [grid-template-columns:repeat(6,minmax(86px,1fr))]"
+            onMouseEnter={() => setChartHovering(true)}
+            onMouseLeave={() => setChartHovering(false)}
+          >
+            {monthlyPerformance.map((month, index) => (
+              <div key={month.key} className="group/month flex h-full flex-col justify-end gap-3">
+                <div className="flex h-48 items-end gap-1.5 rounded-2xl bg-slate-50 px-2 pb-2 transition-all duration-300 group-hover/month:-translate-y-1 group-hover/month:bg-blue-50/60 group-hover/month:shadow-lg group-hover/month:shadow-blue-500/10">
+                  <div className="flex flex-1 flex-col items-center justify-end">
+                    <div
+                      className="dashboard-month-bar w-full rounded-t-lg bg-gradient-to-t from-blue-700 to-blue-400 shadow-sm shadow-blue-500/20 group-hover/month:shadow-lg group-hover/month:shadow-blue-500/30"
+                      style={{
+                        ['--bar-height' as string]: `${Math.max((month.spend / maxMonthlySpend) * chartHeight, month.spend > 0 ? 14 : 0)}px`,
+                        ['--bar-delay' as string]: `${index * 90}ms`,
+                        height: `${Math.max((month.spend / maxMonthlySpend) * chartHeight, month.spend > 0 ? 14 : 0)}px`,
+                        transform: chartHovering ? 'scaleY(1.08)' : 'scaleY(1)',
+                        transitionDelay: chartHovering ? `${index * 90}ms` : '0ms',
+                      }}
+                    />
+                  </div>
+                  <div className="flex flex-1 flex-col items-center justify-end">
+                    <div
+                      className="dashboard-month-bar w-full rounded-t-lg bg-gradient-to-t from-emerald-600 to-emerald-300 shadow-sm shadow-emerald-500/20 group-hover/month:shadow-lg group-hover/month:shadow-emerald-500/30"
+                      style={{
+                        ['--bar-height' as string]: `${Math.max((month.leads / maxMonthlyLeads) * chartHeight, month.leads > 0 ? 14 : 0)}px`,
+                        ['--bar-delay' as string]: `${index * 90 + 45}ms`,
+                        height: `${Math.max((month.leads / maxMonthlyLeads) * chartHeight, month.leads > 0 ? 14 : 0)}px`,
+                        transform: chartHovering ? 'scaleY(1.08)' : 'scaleY(1)',
+                        transitionDelay: chartHovering ? `${index * 90 + 45}ms` : '0ms',
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs font-black uppercase text-slate-700">{month.label}</p>
+                  <p className="mt-1 text-[10px] font-bold text-blue-600">{formatCurrency(month.spend)}</p>
+                  <p className="text-[10px] font-bold text-emerald-600">{month.leads} leads</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-3 text-[11px] font-black uppercase tracking-widest">
+            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-2 text-blue-700"><span className="h-2 w-2 rounded-full bg-blue-600" /> Investimento</span>
+            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Leads</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-12 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <p className="text-sm font-black text-gray-900">Taxa de Conversão</p>
+            <Target size={18} className="text-slate-500" />
+          </div>
+          <p className="text-3xl font-black text-gray-950">{salesConversionRate.toFixed(1).replace('.', ',')}%</p>
+          <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">
+            <span className="text-emerald-600">✓ {stats.sold} vendas</span>
+            <span className="text-slate-500">{stats.total} leads</span>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <p className="text-sm font-black text-gray-900">Comissão vendida</p>
+            <DollarSign size={18} className="text-slate-500" />
+          </div>
+          <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.revenueRealized)}</p>
+          <p className="mt-2 text-xs font-bold text-emerald-600">comissão das vendas realizadas</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <p className="text-sm font-black text-gray-900">Venda prevista</p>
+            <TrendingUp size={18} className="text-slate-500" />
+          </div>
+          <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.salesPotential)}</p>
+          <p className="mt-2 text-xs font-bold text-slate-500">valor previsto dos leads ativos</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <p className="text-sm font-black text-gray-900">Valor total de vendas</p>
+            <BarChart3 size={18} className="text-slate-500" />
+          </div>
+          <p className="text-3xl font-black text-gray-950">{formatCurrency(stats.salesRealized)}</p>
+          <p className="mt-2 text-xs font-bold text-blue-600">soma das vendas realizadas</p>
+        </div>
+      </div>
+
+      <div className="mb-12 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
+          <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
+            <div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Últimos 7 dias</p>
+              <h2 className="text-2xl font-black text-gray-950">Ritmo de entrada</h2>
+              <p className="mt-1 text-sm font-bold text-slate-500">Volume diário de leads recebidos.</p>
+            </div>
+            <div className="rounded-2xl bg-blue-50 px-5 py-3 text-right">
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Total</p>
+              <p className="text-3xl font-black text-blue-700">{weeklyTotal}</p>
+              <p className="text-[11px] font-bold text-blue-500">leads na semana</p>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[1fr_170px]">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:p-4">
+              <div className="flex h-56 items-end gap-2 sm:gap-3">
                 {weeklyLeads.map((day) => {
                   const height = Math.max((day.leads / maxWeeklyLeads) * 100, day.leads > 0 ? 14 : 5);
                   const isBest = day.key === bestWeeklyDay.key && day.leads > 0;
 
                   return (
                     <div key={day.key} className="group/day flex min-w-0 flex-1 flex-col items-center gap-3">
-                      <div className="relative flex h-44 w-full items-end justify-center rounded-2xl bg-[#111418] border border-white/5 px-2 py-2">
+                      <div className="relative flex h-44 w-full items-end justify-center rounded-2xl bg-white px-2 py-2">
                         <div
-                          className={`dashboard-week-bar w-full max-w-10 rounded-full group-hover/day:shadow-md transition-all ${
+                          className={`dashboard-week-bar w-full max-w-10 rounded-xl group-hover/day:shadow-lg ${
                             isBest
-                              ? 'bg-gradient-to-t from-[#0863FF] to-blue-500 shadow-lg shadow-[#0863FF]/25 bg-diagonal-stripes'
-                              : 'bg-gradient-to-t from-[#0863FF]/30 to-[#0863FF]'
+                              ? 'bg-gradient-to-t from-blue-700 to-cyan-400 shadow-lg shadow-blue-500/25'
+                              : 'bg-gradient-to-t from-blue-500 to-blue-300'
                           }`}
                           style={{
                             ['--bar-height' as string]: `${height}%`,
@@ -903,60 +798,57 @@ export default function DashboardPage() {
                             height: `${height}%`
                           }}
                         />
-                        <div className="pointer-events-none absolute -top-3 rounded-xl border border-white/[0.08] bg-[#000000] px-2 py-1 text-[9px] font-black text-white opacity-0 shadow-sm transition-opacity group-hover/day:opacity-100">
+                        <div className="pointer-events-none absolute -top-3 rounded-xl border border-slate-100 bg-white px-2 py-1 text-[10px] font-black text-slate-700 opacity-0 shadow-sm transition-opacity group-hover/day:opacity-100">
                           {day.leads} leads
                         </div>
                       </div>
-                      <span className="text-[10px] font-black text-[#8C95A3] sm:text-xs">{day.label}</span>
+                      <span className="text-[10px] font-black text-slate-500 sm:text-xs">{day.label}</span>
                     </div>
                   );
                 })}
               </div>
             </div>
-
-            {/* Side summary details */}
             <div className="grid gap-3">
-              <div className="rounded-2xl bg-[#161a20] border border-white/[0.08] p-4 text-white">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Melhor dia</p>
-                <p className="text-2xl font-black text-[#0863FF]">{bestWeeklyDay.label}</p>
-                <p className="mt-1 text-sm font-bold text-slate-300">{bestWeeklyDay.leads} leads</p>
+              <div className="rounded-2xl bg-slate-950 p-4 text-white">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Melhor dia</p>
+                <p className="text-2xl font-black">{bestWeeklyDay.label}</p>
+                <p className="mt-1 text-sm font-bold text-blue-200">{bestWeeklyDay.leads} leads</p>
               </div>
-              <div className="rounded-2xl border border-white/[0.08] bg-[#111418] p-4">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Média/dia</p>
-                <p className="text-2xl font-black text-white">
+              <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Média/dia</p>
+                <p className="text-2xl font-black text-gray-950">
                   {(weeklyTotal / Math.max(weeklyLeads.length, 1)).toFixed(1).replace('.', ',')}
                 </p>
-                <p className="mt-1 text-xs font-bold text-[#8C95A3]">leads por dia</p>
+                <p className="mt-1 text-xs font-bold text-slate-500">leads por dia</p>
               </div>
-              <Link href="/leads" className="inline-flex items-center justify-center gap-2 rounded-flux-pill bg-[#0863FF] px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-opacity-90">
+              <Link href="/leads" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-700">
                 Ver leads <ArrowRight size={14} />
               </Link>
             </div>
           </div>
         </div>
 
-        {/* Top Cities ranking */}
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#111418] p-6 shadow-flux sm:p-8 transition-all hover:shadow-xl">
+        <div className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
           <div className="mb-6 flex items-end justify-between gap-4">
             <div>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#0863FF]">Geolocalização</p>
-              <h2 className="text-2xl font-semibold text-white font-black">Top Cidades</h2>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Ranking</p>
+              <h2 className="text-2xl font-black text-gray-950">Top 5 Cidades</h2>
             </div>
-            <p className="text-xs font-bold text-[#8C95A3]">Por leads captados</p>
+            <p className="text-xs font-bold text-slate-400">Por volume de leads</p>
           </div>
           <div className="space-y-5">
             {topCities.length > 0 ? topCities.map((city, index) => (
               <div key={`${city.city}-${index}`} className="group/city">
                 <div className="mb-2 flex items-center justify-between gap-4 text-sm">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="w-7 shrink-0 text-xs font-bold text-slate-500">#{index + 1}</span>
-                    <span className="truncate font-black text-white">{city.city}</span>
+                    <span className="w-7 shrink-0 text-xs font-bold text-slate-400">#{index + 1}</span>
+                    <span className="truncate font-black text-gray-900">{city.city}</span>
                   </div>
-                  <span className="shrink-0 text-xs font-bold text-[#8C95A3]">{city.leads} leads</span>
+                  <span className="shrink-0 text-xs font-bold text-slate-500">{city.leads} leads</span>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-[#161a20]">
+                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
                   <div
-                    className="dashboard-progress-bar h-full rounded-full bg-gradient-to-r from-[#0863FF] to-blue-500 transition-all duration-500 group-hover/city:shadow-lg group-hover/city:shadow-[#0863FF]/25"
+                    className="dashboard-progress-bar h-full rounded-full bg-blue-600 transition-all duration-500 group-hover/city:bg-gradient-to-r group-hover/city:from-blue-500 group-hover/city:to-cyan-400 group-hover/city:shadow-lg group-hover/city:shadow-blue-500/25"
                     style={{
                       ['--bar-width' as string]: `${Math.max((city.leads / maxCityLeads) * 100, 8)}%`,
                       ['--bar-delay' as string]: `${index * 80}ms`,
@@ -966,57 +858,108 @@ export default function DashboardPage() {
                 </div>
               </div>
             )) : (
-              <div className="rounded-2xl border border-dashed border-white/5 py-14 text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Sem cidades registradas</p>
+              <div className="rounded-2xl border border-dashed border-slate-200 py-14 text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sem cidades registradas</p>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* QUICK ACTIONS GRID */}
+      {/* Metrics Section */}
+      <div className="mb-12">
+        <div className="flex items-center gap-3 mb-6">
+          <h2 className="text-xl font-black text-gray-900 tracking-tight">Desempenho Geral</h2>
+          <div className="h-px flex-1 bg-gray-100" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+          <Link href="/leads"><StatCard title="Leads recebidos" value={stats.total} icon={Users} color="blue" loading={isDataLoading} /></Link>
+          <Link href="/leads?status=Aguardando atendimento"><StatCard title="Aguardando" value={stats.waiting} icon={Target} color="purple" loading={isDataLoading} /></Link>
+          <Link href="/leads?status=Em negociação"><StatCard title="Em negociação" value={stats.inProgress} icon={Clock} color="orange" loading={isDataLoading} /></Link>
+          <Link href="/leads?status=Cotação enviada"><StatCard title="Cotações enviadas" value={stats.quoted} icon={Send} color="indigo" loading={isDataLoading} /></Link>
+          <Link href="/leads?status=Venda realizada"><StatCard title="Vendas realizadas" value={stats.sold} icon={TrendingUp} color="green" loading={isDataLoading} /></Link>
+        </div>
+      </div>
+
+      <div className="mb-12 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">
+          <h3 className="mb-6 text-sm font-black uppercase tracking-widest text-gray-900">Distribuição por etapa</h3>
+          <div className="space-y-4">
+            {performanceBars.map((bar, index) => (
+              <div key={bar.label} className="group/stage">
+                <div className="mb-2 flex justify-between text-xs font-bold text-gray-500">
+                  <span>{bar.label}</span>
+                  <span>{bar.value}</span>
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className={`dashboard-progress-bar h-full rounded-full ${bar.color} transition-all duration-500 group-hover/stage:brightness-110 group-hover/stage:shadow-lg`}
+                    style={{
+                      ['--bar-width' as string]: `${(bar.value / maxMetric) * 100}%`,
+                      ['--bar-delay' as string]: `${index * 90}ms`,
+                      width: `${(bar.value / maxMetric) * 100}%`
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <Link href="/leads?status=Aguardando atendimento" className="rounded-[2rem] border border-amber-100 bg-amber-50 p-6 transition-all hover:bg-amber-100">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-amber-600 shadow-sm">
+            <AlertTriangle size={24} />
+          </div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-amber-700">Necessita atenção</p>
+          <h3 className="text-2xl font-black text-amber-950">{staleOpportunityCount} oportunidades sem resposta</h3>
+          <p className="mt-3 text-sm font-bold leading-relaxed text-amber-800">
+            Priorize leads novos. A regra ideal é responder em até 20 minutos para aumentar a chance de contato.
+          </p>
+        </Link>
+      </div>
+
+      {/* Quick Actions Grid */}
       <div className="mb-16">
-        <h2 className="text-xl font-semibold text-white mb-8 flex items-center gap-2">
-          Atalhos de Vendas
-          <div className="h-px flex-1 bg-white/[0.08] ml-2" />
+        <h2 className="text-xl font-black text-gray-900 mb-8 flex items-center gap-2">
+          Ações rápidas
+          <div className="h-px flex-1 bg-gray-100 ml-2" />
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {quickActions.map((action, idx) => (
             <Link 
               key={idx} 
               href={action.href}
-              className="group flex min-h-48 flex-col justify-between rounded-[22px] border border-white/[0.08] bg-[#111418] p-6 shadow-flux transition-all duration-500 hover:border-[#0863FF]/30 hover:shadow-xl sm:h-64 sm:p-8"
+              className="group flex min-h-48 flex-col justify-between rounded-[1.75rem] border border-gray-100 bg-white p-6 shadow-sm transition-all duration-500 hover:border-blue-200 hover:shadow-xl sm:h-64 sm:rounded-[2.5rem] sm:p-8"
             >
               <div className="flex justify-between items-start">
-                <div className="p-4 bg-[#161a20] border border-white/5 text-[#0863FF] rounded-2xl group-hover:bg-[#0863FF] group-hover:text-white transition-all duration-300 transform group-hover:scale-110 shadow-inner">
+                <div className="p-4 bg-slate-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 transform group-hover:scale-110 shadow-inner">
                   <action.icon size={28} />
                 </div>
-                <ArrowRight size={20} className="text-slate-500 group-hover:text-[#0863FF] transition-colors" />
+                <ArrowRight size={20} className="text-gray-300 group-hover:text-blue-600 transition-colors" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white mb-2">{action.label}</h3>
-                <p className="text-sm text-[#8C95A3] font-bold leading-relaxed">{action.desc}</p>
+                <h3 className="text-xl font-black text-gray-900 mb-2">{action.label}</h3>
+                <p className="text-sm text-gray-500 font-medium leading-relaxed">{action.desc}</p>
               </div>
             </Link>
           ))}
         </div>
       </div>
 
-      {/* YOUR OPERATIONAL TIME */}
-      <div className="mb-10 rounded-[22px] border border-white/[0.08] bg-[#111418] p-6 sm:p-10 shadow-flux">
+      {/* Your Orion Team */}
+      <div className="mb-10 rounded-[2rem] border border-gray-100 bg-slate-50 p-5 sm:rounded-[3rem] sm:p-10">
         <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-white tracking-tight mb-2">Seu Time Orion</h2>
-          <p className="text-[#8C95A3] font-bold text-sm">Essas são as pessoas da Orion responsáveis por acompanhar sua operação.</p>
+          <h2 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Seu time Orion</h2>
+          <p className="text-gray-500 font-medium">Essas são as pessoas da Orion responsáveis por acompanhar sua operação.</p>
         </div>
 
         {isDataLoading ? (
           <div className="flex gap-4">
-             <div className="w-32 h-32 bg-[#161a20] rounded-3xl animate-pulse" />
-             <div className="w-32 h-32 bg-[#161a20] rounded-3xl animate-pulse" />
+             <div className="w-32 h-32 bg-white rounded-3xl animate-pulse" />
+             <div className="w-32 h-32 bg-white rounded-3xl animate-pulse" />
           </div>
         ) : timeOperacional.length === 0 ? (
-          <div className="bg-[#111418] p-8 rounded-[2rem] border border-white/[0.08] text-center">
-             <p className="text-[#8C95A3] font-bold italic">Seu time operacional ainda não foi definido. Fale com a Orion.</p>
+          <div className="bg-white p-8 rounded-[2rem] border border-gray-100 text-center">
+             <p className="text-gray-500 font-bold italic">Seu time operacional ainda não foi definido. Fale com a Orion.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
@@ -1024,7 +967,7 @@ export default function DashboardPage() {
               const foto = getTeamMemberPhoto(membro.nome);
 
               return (
-                <div key={`${membro.nome}-${index}`} className="bg-[#161a20] p-6 rounded-[22px] border border-white/[0.08] shadow-sm flex flex-col items-center text-center group hover:scale-105 transition-all duration-500 hover:shadow-xl hover:border-[#0863FF]/30">
+                <div key={`${membro.nome}-${index}`} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col items-center text-center group hover:scale-105 transition-all duration-500 hover:shadow-xl hover:border-blue-100">
                   <div className="w-24 h-24 mb-4 relative">
                     {foto ? (
                       <img 
@@ -1033,13 +976,13 @@ export default function DashboardPage() {
                         className="w-full h-full rounded-2xl object-cover shadow-md group-hover:rotate-3 transition-transform duration-500"
                       />
                     ) : (
-                      <div className="w-full h-full bg-[#111418] text-[#0863FF] border border-white/[0.08] rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg group-hover:rotate-6 transition-transform">
+                      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg group-hover:rotate-6 transition-transform">
                         {membro.nome?.charAt(0).toUpperCase()}
                       </div>
                     )}
                   </div>
-                  <h3 className="font-semibold text-white mb-1 leading-tight">{membro.nome}</h3>
-                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{membro.cargo}</p>
+                  <h3 className="font-black text-gray-900 mb-1 leading-tight">{membro.nome}</h3>
+                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{membro.cargo}</p>
                 </div>
               );
             })}
@@ -1052,12 +995,12 @@ export default function DashboardPage() {
 
 function MiniMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number | string }) {
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-[#111418] p-4 shadow-sm">
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-[#161a20] text-[#0863FF]">
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-blue-600">
         <Icon size={17} />
       </div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-white">{value}</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+      <p className="mt-1 text-xl font-black text-gray-950">{value}</p>
     </div>
   );
 }
