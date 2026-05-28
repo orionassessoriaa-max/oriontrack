@@ -38,9 +38,6 @@ export default function AccountInboxPage() {
   const [connectingWhatsApp, setConnectingWhatsApp] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [whatsAppConnected, setWhatsAppConnected] = useState(false);
-  const [checkingStatus, setCheckingStatus] = useState(true);
-  const [disconnecting, setDisconnecting] = useState(false);
 
   const selectedCorretor = useMemo(() => {
     return corretores.find((corretor) => corretor.id === selectedCorretorId) || corretores[0];
@@ -185,86 +182,6 @@ export default function AccountInboxPage() {
     setQrCode(payload.qrcode);
   };
 
-  async function checkWhatsAppStatus() {
-    setCheckingStatus(true);
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) {
-      setCheckingStatus(false);
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/inbox/evolution/connect', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const payload = await response.json();
-      if (response.ok && payload.connected) {
-        setWhatsAppConnected(true);
-      } else {
-        setWhatsAppConnected(false);
-      }
-    } catch {
-      setWhatsAppConnected(false);
-    } finally {
-      setCheckingStatus(false);
-    }
-  }
-
-  async function disconnectWhatsApp() {
-    if (!confirm('Deseja realmente desconectar seu WhatsApp do Orion Track? Isso encerrará a sessão ativa e removerá as configurações no servidor.')) {
-      return;
-    }
-
-    setDisconnecting(true);
-    setConnectError(null);
-
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) {
-      setConnectError('Sua sessao expirou. Entre novamente.');
-      setDisconnecting(false);
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/inbox/evolution/connect', {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (response.ok) {
-        setWhatsAppConnected(false);
-        setQrCode(null);
-      } else {
-        setConnectError(payload.error || 'Nao consegui desconectar o WhatsApp agora.');
-      }
-    } catch (err: any) {
-      setConnectError(err.message || 'Erro ao desconectar.');
-    } finally {
-      setDisconnecting(false);
-    }
-  }
-
-  useEffect(() => {
-    if (profile?.id) {
-      void checkWhatsAppStatus();
-    }
-  }, [profile?.id]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (qrCode && !whatsAppConnected) {
-      interval = setInterval(() => {
-        void checkWhatsAppStatus();
-      }, 5000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [qrCode, whatsAppConnected]);
-
-
   const weeklyRows = interactions.filter((interaction) => !weeklyOnlyDone || interaction.status === 'feito');
 
   return (
@@ -277,25 +194,14 @@ export default function AccountInboxPage() {
             Converse com clientes, marque interacoes do dia e gere resumos sem sair da tela.
           </p>
         </div>
-        {whatsAppConnected ? (
-          <button
-            onClick={disconnectWhatsApp}
-            disabled={disconnecting}
-            className="flex min-h-[52px] cursor-pointer items-center justify-center gap-2 bg-red-600 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-red-600/20 transition-all hover:-translate-y-0.5 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {disconnecting ? <Loader2 className="animate-spin" size={17} /> : <Smartphone size={17} />}
-            {disconnecting ? 'Desconectando' : 'Desconectar WhatsApp'}
-          </button>
-        ) : (
-          <button
-            onClick={connectWhatsApp}
-            disabled={connectingWhatsApp}
-            className="flex min-h-[52px] cursor-pointer items-center justify-center gap-2 bg-blue-600 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {connectingWhatsApp ? <Loader2 className="animate-spin" size={17} /> : <Smartphone size={17} />}
-            {connectingWhatsApp ? 'Gerando QR Code' : 'Conectar WhatsApp'}
-          </button>
-        )}
+        <button
+          onClick={connectWhatsApp}
+          disabled={connectingWhatsApp}
+          className="flex min-h-[52px] cursor-pointer items-center justify-center gap-2 bg-blue-600 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {connectingWhatsApp ? <Loader2 className="animate-spin" size={17} /> : <Smartphone size={17} />}
+          {connectingWhatsApp ? 'Gerando QR Code' : 'Conectar WhatsApp'}
+        </button>
       </div>
 
       <div className="grid min-h-[680px] gap-5 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(420px,1fr)_380px]">
@@ -341,45 +247,16 @@ export default function AccountInboxPage() {
               <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{selectedCorretor?.nome || 'Selecione um corretor'}</h2>
               <p className="text-xs font-bold text-slate-500 dark:text-slate-300">Atendimento separado por cliente, com historico e relatorio ao lado.</p>
             </div>
-            {whatsAppConnected ? (
-              <button
-                onClick={disconnectWhatsApp}
-                disabled={disconnecting}
-                className="min-h-[48px] whitespace-nowrap bg-red-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-red-600/10 transition-all hover:-translate-y-0.5 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {disconnecting ? 'Desconectando...' : 'Desconectar WhatsApp'}
-              </button>
-            ) : (
-              <button
-                onClick={connectWhatsApp}
-                disabled={connectingWhatsApp}
-                className="min-h-[48px] whitespace-nowrap bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-slate-950/10 transition-all hover:-translate-y-0.5 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {connectingWhatsApp ? 'Gerando QR Code...' : 'Conectar WhatsApp'}
-              </button>
-            )}
+            <button
+              onClick={connectWhatsApp}
+              disabled={connectingWhatsApp}
+              className="min-h-[48px] whitespace-nowrap bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-slate-950/10 transition-all hover:-translate-y-0.5 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {connectingWhatsApp ? 'Gerando QR Code...' : 'Conectar WhatsApp'}
+            </button>
           </div>
           <div className="flex min-h-[580px] flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 p-6 text-center dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/40">
-            {whatsAppConnected ? (
-              <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-                <div className="flex h-20 w-20 items-center justify-center bg-emerald-600 text-white shadow-2xl shadow-emerald-600/25">
-                  <MessageSquare size={38} />
-                </div>
-                <h3 className="mt-5 text-3xl font-black text-slate-900 dark:text-white">WhatsApp Conectado!</h3>
-                <p className="mt-3 max-w-lg text-base font-bold leading-7 text-slate-500 dark:text-slate-300">
-                  Seu painel está sincronizado com a Evolution API. Você está pronto para atender seus leads e gerenciar contatos com o seu próprio número de WhatsApp comercial.
-                </p>
-                <div className="mt-7 flex flex-wrap justify-center gap-3">
-                  <button 
-                    onClick={disconnectWhatsApp}
-                    disabled={disconnecting}
-                    className="flex cursor-pointer items-center gap-2 border border-red-200 bg-white px-5 py-3 text-xs font-black uppercase tracking-widest text-red-600 transition-all hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50"
-                  >
-                    Desconectar Número
-                  </button>
-                </div>
-              </div>
-            ) : qrCode ? (
+            {qrCode ? (
               <div className="w-full max-w-md border border-blue-100 bg-white p-6 shadow-xl dark:border-blue-400/20 dark:bg-slate-900">
                 <QrCode className="mx-auto text-blue-600" size={34} />
                 <h3 className="mt-3 text-2xl font-black text-slate-950 dark:text-white">Escaneie para conectar</h3>
@@ -415,9 +292,7 @@ export default function AccountInboxPage() {
             <div className="mt-6 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
               <div className="border border-blue-100 bg-white p-4 text-left dark:border-white/10 dark:bg-white/10">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Status</p>
-                <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">
-                  {whatsAppConnected ? 'WhatsApp Conectado' : qrCode ? 'Aguardando leitura' : 'Pronto para conectar'}
-                </p>
+                <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{qrCode ? 'Aguardando leitura' : 'Pronto para conectar'}</p>
               </div>
               <div className="border border-blue-100 bg-white p-4 text-left dark:border-white/10 dark:bg-white/10">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Hoje</p>

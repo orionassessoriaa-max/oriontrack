@@ -79,16 +79,16 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   }, [loading, user, profile, pathname, router]);
 
   useEffect(() => {
-    window.localStorage.setItem('orion:tema_sistema', 'escuro');
-    document.documentElement.classList.add('theme-noturno');
-    document.body.classList.add('theme-noturno');
-    document.documentElement.style.colorScheme = 'dark';
+    window.localStorage.setItem('orion:tema_sistema', 'claro');
+    document.documentElement.classList.remove('theme-noturno');
+    document.body.classList.remove('theme-noturno');
+    document.documentElement.style.colorScheme = 'light';
   }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#000000] flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#0863FF]" size={40} />
+      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
       </div>
     );
   }
@@ -99,25 +99,25 @@ export default function InternalLayout({ children }: { children: React.ReactNode
 
   if (!profile) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#000000] p-6">
-        <div className="max-w-md rounded-[22px] border border-white/[0.08] bg-[#111418] p-8 text-center shadow-lg">
-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
+      <div className="flex min-h-screen items-center justify-center bg-[#f8fafc] p-6">
+        <div className="max-w-md rounded-[2rem] border border-amber-100 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
             <AlertCircle size={28} />
           </div>
-          <h1 className="text-xl font-black text-white">Perfil não carregou</h1>
-          <p className="mt-2 text-sm font-bold leading-relaxed text-[#8C95A3]">
-            A sessão existe, mas o perfil do usuário não foi encontrado ou demorou para responder.
+          <h1 className="text-xl font-black text-gray-900">Perfil nÃ£o carregou</h1>
+          <p className="mt-2 text-sm font-bold leading-relaxed text-gray-500">
+            A sessÃ£o existe, mas o perfil do usuÃ¡rio nÃ£o foi encontrado ou demorou para responder.
           </p>
           <div className="mt-6 flex gap-3">
             <button
               onClick={refreshProfile}
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#0863FF] px-4 py-3 text-sm font-black text-white hover:bg-opacity-90 transition-all"
+              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white"
             >
               <RefreshCw size={16} /> Tentar
             </button>
             <button
               onClick={signOut}
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/[0.08] bg-[#161a20] px-4 py-3 text-sm font-black text-[#8C95A3] hover:text-white transition-all"
+              className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-gray-100 px-4 py-3 text-sm font-black text-gray-600"
             >
               <LogOut size={16} /> Sair
             </button>
@@ -128,12 +128,9 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="flex min-h-screen bg-[#07111F] bg-gradient-to-br from-[#000000] via-[#07111F] to-[#0c0d1a] relative overflow-hidden text-white">
-      {/* Premium Fintech Radial Glow */}
-      <div className="absolute top-[-300px] left-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#0863FF]/5 rounded-full blur-[180px] pointer-events-none z-0" />
-      
+    <div className="flex min-h-screen bg-[#f8fafc]">
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
-      <main className={`${sidebarCollapsed ? 'lg:ml-0 lg:w-full' : 'lg:ml-64 lg:w-[calc(100%-16rem)]'} w-full min-w-0 px-3 py-5 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7 relative z-10`}>
+      <main className={`${sidebarCollapsed ? 'lg:ml-0 lg:w-full' : 'lg:ml-64 lg:w-[calc(100%-16rem)]'} w-full min-w-0 px-3 py-5 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7`}>
         <div className="mx-auto max-w-none transition-all duration-300">
           {children}
         </div>
