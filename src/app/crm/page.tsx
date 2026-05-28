@@ -63,9 +63,9 @@ function cleanPhone(phone?: string | null) {
 }
 
 function qualificationClass(tone: 'good' | 'warning' | 'neutral') {
-  if (tone === 'good') return 'border-emerald-100 bg-emerald-50 text-emerald-700';
-  if (tone === 'warning') return 'border-amber-100 bg-amber-50 text-amber-700';
-  return 'border-slate-200 bg-slate-50 text-slate-600';
+  if (tone === 'good') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400 font-semibold';
+  if (tone === 'warning') return 'border-amber-500/20 bg-amber-500/10 text-amber-400 font-semibold';
+  return 'border-white/[0.08] bg-[#161a20] text-[#8C95A3] font-semibold';
 }
 
 const COMMERCIAL_REQUIRED_STATUSES: LeadStatus[] = [
@@ -770,50 +770,50 @@ export default function CrmPage() {
     <InternalLayout>
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div className="min-w-0">
-          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">CRM Orion</p>
-          <h1 className="text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">Pipeline Comercial</h1>
-          <p className="font-medium text-gray-500">Arraste leads entre etapas, clique no cliente e registre observacoes, ligacoes e WhatsApp.</p>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#0863FF]">CRM Orion</p>
+          <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Pipeline Comercial</h1>
+          <p className="font-medium text-[#8C95A3]">Arraste leads entre etapas, clique no cliente e registre observações, ligações e WhatsApp.</p>
         </div>
         <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
           <div className="relative w-full lg:w-[320px]">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Buscar cliente..."
-              className="w-full rounded-2xl border-none bg-white py-3 pl-11 pr-4 text-sm font-bold shadow-sm focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-2xl border border-white/[0.08] bg-[#111418] py-3 pl-11 pr-4 text-sm font-bold text-white placeholder-slate-500 shadow-sm focus:border-[#0863FF] focus:outline-none transition-all"
             />
           </div>
           <select
             value={pageFilter}
             onChange={(event) => setPageFilter(event.target.value)}
-            className="w-full rounded-2xl border-none bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500/20 lg:w-[240px] lg:min-w-[240px]"
+            className="w-full rounded-2xl border border-white/[0.08] bg-[#111418] px-5 py-3 text-sm font-black text-white shadow-sm focus:border-[#0863FF] focus:outline-none lg:w-[240px] lg:min-w-[240px] transition-all"
           >
-            <option value="todas">Todas as paginas</option>
+            <option value="todas">Todas as páginas</option>
             {pageOptions.map((page) => <option key={page} value={page}>{page}</option>)}
-            <option value="__sem_pagina__">Sem pagina</option>
+            <option value="__sem_pagina__">Sem página</option>
           </select>
-          <button onClick={fetchCrm} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md lg:w-[170px]">
+          <button onClick={fetchCrm} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.08] bg-[#111418] px-5 py-3 text-sm font-black text-white shadow-sm transition-all hover:bg-[#161a20] hover:-translate-y-0.5 hover:shadow-md lg:w-[170px]">
             {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Atualizar
           </button>
         </div>
       </div>
 
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-5">
-        <Stat label="Leads" value={leads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="border-gray-100 bg-white text-slate-600" />
-        <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} active={metricFilter === 'sem_resposta'} onClick={() => setMetricFilter('sem_resposta')} className="border-amber-100 bg-amber-50 text-amber-700" />
-        <Stat label="Tarefas" value={openTasks} icon={Clock} active={metricFilter === 'tarefas'} onClick={() => setMetricFilter('tarefas')} className="border-blue-100 bg-blue-50 text-blue-700" />
-        <Stat label="Hoje" value={todayTasks} icon={CheckCircle2} active={metricFilter === 'hoje'} onClick={() => setMetricFilter('hoje')} className="border-emerald-100 bg-emerald-50 text-emerald-700" />
-        <Stat label="Fit ICP" value={`${fitStats.good}/${fitStats.warning}`} icon={OrionMark} active={metricFilter === 'fit_icp'} onClick={() => setMetricFilter('fit_icp')} className="border-violet-100 bg-violet-50 text-violet-700" />
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-5 animate-in fade-in slide-in-from-top-4 duration-500">
+        <Stat label="Leads" value={leads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="" />
+        <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} active={metricFilter === 'sem_resposta'} onClick={() => setMetricFilter('sem_resposta')} className="" />
+        <Stat label="Tarefas" value={openTasks} icon={Clock} active={metricFilter === 'tarefas'} onClick={() => setMetricFilter('tarefas')} className="" />
+        <Stat label="Hoje" value={todayTasks} icon={CheckCircle2} active={metricFilter === 'hoje'} onClick={() => setMetricFilter('hoje')} className="" />
+        <Stat label="Fit ICP" value={`${fitStats.good}/${fitStats.warning}`} icon={OrionMark} active={metricFilter === 'fit_icp'} onClick={() => setMetricFilter('fit_icp')} className="" />
       </div>
 
       {metricFilter !== 'todos' && (
-        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm font-bold text-blue-700">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#0863FF]/30 bg-[#0863FF]/10 px-5 py-4 text-sm font-bold text-white shadow-flux">
           <span>Filtro ativo: {metricLabels[metricFilter]} ({filteredLeads.length})</span>
           <button
             type="button"
             onClick={() => setMetricFilter('todos')}
-            className="rounded-xl bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-blue-700 shadow-sm"
+            className="rounded-xl bg-[#0863FF] px-4 py-2 text-[11px] font-black uppercase tracking-widest text-white shadow-md hover:bg-opacity-90 transition-all"
           >
             Limpar
           </button>
@@ -842,23 +842,23 @@ export default function CrmPage() {
 
                 return (
                   <div key={column.id} className="min-w-[285px] flex-1 snap-start sm:min-w-[310px]">
-                    <div className="sticky top-0 z-20 mb-3 rounded-flux-card-inner border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="sticky top-0 z-20 mb-3 rounded-flux-card-inner border border-white/[0.08] bg-[#111418] p-4 shadow-flux">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
                             <span className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
-                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">{column.label}</h3>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-white">{column.label}</h3>
                           </div>
-                          <p className="mt-1 text-xs font-medium text-gray-400">{column.desc}</p>
+                          <p className="mt-1 text-xs font-medium text-[#8C95A3]">{column.desc}</p>
                         </div>
-                        <span className="rounded-full border border-slate-100 bg-slate-50 px-2.5 py-1 text-[10px] font-black text-slate-600">
+                        <span className="rounded-full border border-white/[0.08] bg-[#161a20] px-2.5 py-1 text-[10px] font-black text-[#8C95A3]">
                           {columnLeads.length}
                         </span>
                       </div>
                       {requiresCommercialData(column.id) && (
-                        <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Total na etapa</p>
-                          <p className="text-sm font-black text-emerald-800">{formatCurrencyValue(commercialTotal)}</p>
+                        <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500/80">Total na etapa</p>
+                          <p className="text-sm font-bold text-emerald-400">{formatCurrencyValue(commercialTotal)}</p>
                         </div>
                       )}
                     </div>
@@ -866,7 +866,7 @@ export default function CrmPage() {
                     <div
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={() => handleDrop(column.id)}
-                      className={`min-h-[220px] space-y-3 rounded-flux-card border p-3 transition-colors ${draggedLeadId ? 'border-blue-200 bg-blue-50/70' : statusStyle.column}`}
+                      className={`min-h-[220px] space-y-3 rounded-flux-card border p-3 transition-all duration-300 ${draggedLeadId ? 'border-[#0863FF]/45 bg-[#0863FF]/5 shadow-[0_0_20px_rgba(8,99,255,0.05)]' : 'border-white/[0.08] bg-[#111418]/30'}`}
                     >
                       <AnimatePresence mode="popLayout">
                         {columnLeads.map((lead) => {
@@ -886,17 +886,17 @@ export default function CrmPage() {
                               onDragStart={() => setDraggedLeadId(lead.id)}
                               onDragEnd={() => setDraggedLeadId(null)}
                               onClick={() => setSelectedLead(lead)}
-                              className={`w-full rounded-flux-card-inner border bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 text-left shadow-sm transition-all hover:shadow-md cursor-pointer ${
+                              className={`w-full rounded-flux-card-inner border p-4 text-left shadow-sm transition-all duration-300 hover:shadow-lg cursor-pointer ${
                                 selected 
-                                  ? 'border-blue-400 ring-4 ring-blue-100 dark:ring-blue-900/30' 
-                                  : 'border-white/30 dark:border-white/5'
+                                  ? 'border-[#0863FF] bg-[#161A20] ring-4 ring-[#0863FF]/15' 
+                                  : 'border-white/[0.08] bg-[#161A20] hover:border-white/[0.15] hover:bg-[#1c222a]'
                               }`}
                             >
                               <div className="mb-3 flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="font-black text-gray-900 dark:text-white leading-tight">{lead.nome}</p>
-                                  <p className="mt-1.5 flex items-center gap-2 text-xs font-bold text-slate-500">
-                                    <Phone size={13} className="text-blue-500" /> {lead.telefone}
+                                  <p className="font-semibold text-white leading-tight">{lead.nome}</p>
+                                  <p className="mt-1.5 flex items-center gap-2 text-xs font-bold text-[#8C95A3]">
+                                    <Phone size={13} className="text-[#0863FF]" /> {lead.telefone}
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -911,27 +911,27 @@ export default function CrmPage() {
                                 </div>
                               </div>
                               {importWarnings.length > 0 && (
-                                <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                                <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-400">
                                   Dados incompletos: {importWarnings.join(', ')}
                                 </div>
                               )}
-                              <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
+                              <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-[#8C95A3]">
                                 <span>CNPJ: {lead.possui_cnpj || '-'}</span>
                                 <span>Vidas: {lead.idades || '-'}</span>
-                                <span className="col-span-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 px-2.5 py-1.5 text-blue-700 dark:text-blue-300 font-extrabold">Pagina: {lead.operadora || 'Sem pagina'}</span>
+                                <span className="col-span-2 rounded-xl bg-[#0863FF]/10 border border-[#0863FF]/15 px-2.5 py-1.5 text-[#0863FF] font-extrabold">Página: {lead.operadora || 'Sem página'}</span>
                                 {lead.responsavel_membro?.nome && (
-                                  <span className="col-span-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 px-2.5 py-1.5 text-emerald-700 dark:text-emerald-300 font-extrabold">Responsavel: {lead.responsavel_membro.nome}</span>
+                                  <span className="col-span-2 rounded-xl bg-emerald-500/10 border border-emerald-500/15 px-2.5 py-1.5 text-emerald-400 font-extrabold">Responsável: {lead.responsavel_membro.nome}</span>
                                 )}
                                 {lead.cadencia_inicio && (
-                                  <span className={`col-span-2 rounded-xl px-2.5 py-1.5 font-extrabold ${lead.cadencia_ativa ? 'bg-violet-50/80 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300' : 'bg-slate-50 text-slate-500'}`}>
-                                    Cadencia: {lead.cadencia_ativa ? `dia ${getCadenceDays(lead)}` : `${getCadenceDays(lead)} dia(s) encerrada`}
+                                  <span className={`col-span-2 rounded-xl px-2.5 py-1.5 font-extrabold border ${lead.cadencia_ativa ? 'bg-violet-500/10 border-violet-500/15 text-violet-400' : 'bg-white/5 border-white/5 text-slate-400'}`}>
+                                    Cadência: {lead.cadencia_ativa ? `dia ${getCadenceDays(lead)}` : `${getCadenceDays(lead)} dia(s) encerrada`}
                                   </span>
                                 )}
-                                <span className="truncate">{lead.cidade || 'Cidade nao informada'}</span>
+                                <span className="truncate">{lead.cidade || 'Cidade não informada'}</span>
                                 <span className="truncate">{lead.investimento || 'Sem investimento'}</span>
                                 {requiresCommercialData(normalizeLeadStatus(lead.status)) && (
                                   <>
-                                    <span className="col-span-2 border-t border-dashed border-slate-100 pt-2 mt-1">Negociação: {formatCurrencyValue(lead.valor_negociacao)}</span>
+                                    <span className="col-span-2 border-t border-dashed border-white/[0.08] pt-2 mt-1">Negociação: {formatCurrencyValue(lead.valor_negociacao)}</span>
                                     <span className="col-span-2">Comissão: {formatCurrencyValue(lead.valor_comissao)}</span>
                                   </>
                                 )}
@@ -944,9 +944,9 @@ export default function CrmPage() {
                         })}
                       </AnimatePresence>
                       {columnLeads.length === 0 && (
-                        <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-white/60 dark:bg-slate-900/40 py-12 text-center">
+                        <div className="rounded-[1.5rem] border border-dashed border-white/[0.08] bg-[#161a20]/20 py-12 text-center">
                           <OrionMark size={18} className="mx-auto mb-2 opacity-25 animate-pulse" />
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Sem leads aqui</p>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-[#8C95A3]">Sem leads aqui</p>
                         </div>
                       )}
                     </div>
@@ -955,7 +955,7 @@ export default function CrmPage() {
               })}
             </div>
             {boardScrollWidth > boardClientWidth && (
-              <div className="sticky bottom-0 z-40 -mt-5 border-t border-slate-200 bg-white/95 px-2 py-2 backdrop-blur">
+              <div className="sticky bottom-0 z-40 -mt-5 border-t border-white/[0.08] bg-black/80 px-2 py-2 backdrop-blur">
                 <div
                   ref={boardScrollbarRef}
                   onScroll={() => syncBoardScroll('bar')}
@@ -975,45 +975,45 @@ export default function CrmPage() {
             className="fixed inset-0 z-[90] bg-slate-950/35 backdrop-blur-sm"
             onClick={() => setSelectedLead(null)}
           />
-          <aside className="fixed inset-y-0 right-0 z-[100] w-full max-w-[620px] overflow-y-auto border-l border-gray-100 bg-white p-5 shadow-2xl shadow-slate-950/20 sm:p-6">
+          <aside className="fixed inset-y-0 right-0 z-[100] w-full max-w-[620px] overflow-y-auto border-l border-white/[0.08] bg-[#111418] p-5 shadow-2xl shadow-black/80 sm:p-6 text-white scrollbar-hidden">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Cliente selecionado</p>
-                <h2 className="text-2xl font-black text-gray-900">{selectedLead.nome}</h2>
-                <p className="mt-1 text-sm font-bold text-slate-500">{selectedLead.telefone}</p>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#0863FF]">Cliente selecionado</p>
+                <h2 className="text-2xl font-semibold tracking-tight text-white">{selectedLead.nome}</h2>
+                <p className="mt-1 text-sm font-bold text-[#8C95A3]">{selectedLead.telefone}</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setEditing((current) => !current)} className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black uppercase tracking-widest text-blue-600 hover:bg-blue-100">
+                <button onClick={() => setEditing((current) => !current)} className="rounded-xl bg-[#0863FF] px-4 py-2 text-xs font-black uppercase tracking-widest text-white shadow-md hover:bg-opacity-90 transition-all">
                   {editing ? 'Ver ficha' : 'Editar'}
                 </button>
-                <button onClick={() => setSelectedLead(null)} className="rounded-xl bg-slate-50 p-2 text-slate-400 hover:text-slate-700">
+                <button onClick={() => setSelectedLead(null)} className="rounded-xl bg-[#161a20] border border-white/[0.08] p-2 text-[#8C95A3] hover:text-white transition-all">
                   <X size={18} />
                 </button>
               </div>
             </div>
 
-            <div className="mb-5 rounded-[1.5rem] border border-blue-100 bg-blue-50 p-4">
+            <div className="mb-5 rounded-[1.5rem] border border-[#0863FF]/30 bg-[#0863FF]/5 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Status comercial</p>
-                  <p className="text-sm font-black text-blue-950">{getLeadStatusStyle(selectedLead.status).label}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#0863FF]">Status comercial</p>
+                  <p className="text-sm font-bold text-white">{getLeadStatusStyle(selectedLead.status).label}</p>
                 </div>
-                {isStale(selectedLead) && <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">Atenção</span>}
+                {isStale(selectedLead) && <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-400 animate-pulse">Atenção</span>}
               </div>
               <select
                 value={normalizeLeadStatus(selectedLead.status)}
                 onChange={(event) => updateLeadStatus(selectedLead.id, event.target.value as LeadStatus)}
-                className="w-full rounded-2xl border-none bg-white px-4 py-3 text-sm font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-2xl border border-white/[0.08] bg-[#161a20] px-4 py-3 text-sm font-bold text-white focus:border-[#0863FF] focus:outline-none transition-all"
               >
                 {columns.map((column) => <option key={column.id} value={column.id}>{column.label}</option>)}
               </select>
             </div>
 
-            <div className="mb-5 rounded-[1.5rem] border border-violet-100 bg-violet-50 p-4">
+            <div className="mb-5 rounded-[1.5rem] border border-violet-500/20 bg-violet-500/5 p-4">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-violet-600">Cadencia de atendimento</p>
-                  <p className="mt-1 text-sm font-bold text-violet-950">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-violet-400">Cadencia de atendimento</p>
+                  <p className="mt-1 text-sm font-bold text-white">
                     {selectedLead.cadencia_ativa
                       ? `Ativa no dia ${getCadenceDays(selectedLead)}`
                       : selectedLead.cadencia_inicio
@@ -1021,16 +1021,16 @@ export default function CrmPage() {
                         : 'Ainda nao iniciada'}
                   </p>
                 </div>
-                <Clock className="text-violet-500" size={22} />
+                <Clock className="text-violet-400" size={22} />
               </div>
-              <p className="mb-3 text-xs font-semibold leading-relaxed text-violet-900/70">
+              <p className="mb-3 text-xs font-semibold leading-relaxed text-[#8C95A3]">
                 Use quando o lead nao responder. O Orion conta os dias em cadencia e registra o inicio e a parada na timeline do cliente.
               </p>
               <button
                 type="button"
                 disabled={saving}
                 onClick={() => toggleCadence(selectedLead, selectedLead.cadencia_ativa ? 'stop' : 'start')}
-                className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white transition disabled:opacity-50 ${selectedLead.cadencia_ativa ? 'bg-slate-950 hover:bg-slate-800' : 'bg-violet-600 hover:bg-violet-700'}`}
+                className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white transition disabled:opacity-50 ${selectedLead.cadencia_ativa ? 'bg-black border border-white/5 hover:bg-[#161a20]' : 'bg-violet-600 hover:bg-violet-700'}`}
               >
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <Clock size={16} />}
                 {selectedLead.cadencia_ativa ? 'Parar cadencia' : 'Iniciar cadencia'}
@@ -1038,26 +1038,26 @@ export default function CrmPage() {
             </div>
 
             {canAssignTeamLeads && teamMembers.length > 0 && (
-              <div className="mb-5 rounded-[1.5rem] border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="mb-5 rounded-[1.5rem] border border-white/[0.08] bg-[#161a20] p-4 shadow-flux">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-black text-[#0863FF] border border-white/5">
                     <Users size={18} />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Enviar lead</p>
-                    <h3 className="text-sm font-black text-slate-950">Atribuir para integrante do time</h3>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Enviar lead</p>
+                    <h3 className="text-sm font-bold text-white">Atribuir para integrante do time</h3>
                   </div>
                 </div>
                 <select
                   value={selectedLead.responsavel_membro_id || ''}
                   onChange={(event) => assignLeadToMember(selectedLead.id, event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full rounded-2xl border border-white/[0.08] bg-[#111418] px-4 py-3 text-sm font-bold text-white focus:border-[#0863FF] focus:outline-none transition-all"
                 >
                   <option value="">Selecione quem vai receber</option>
                   {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
                 </select>
                 {assigningLeadId === selectedLead.id && (
-                  <p className="mt-2 flex items-center gap-2 text-xs font-black text-blue-600">
+                  <p className="mt-2 flex items-center gap-2 text-xs font-black text-[#0863FF]">
                     <Loader2 className="animate-spin" size={14} /> Enviando lead...
                   </p>
                 )}
@@ -1065,8 +1065,8 @@ export default function CrmPage() {
             )}
 
             {editing ? (
-              <form onSubmit={saveLeadDetails} className="mb-5 rounded-[1.5rem] border border-gray-100 p-4">
-                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-gray-900">Editar ficha</h3>
+              <form onSubmit={saveLeadDetails} className="mb-5 rounded-[1.5rem] border border-white/[0.08] bg-[#161a20] p-4 shadow-sm animate-in fade-in duration-300">
+                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-white">Editar ficha</h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   <EditField label="Nome" value={editForm.nome} onChange={(value) => setEditForm((prev) => ({ ...prev, nome: value }))} />
                   <EditField label="Telefone" value={editForm.telefone} onChange={(value) => setEditForm((prev) => ({ ...prev, telefone: value }))} />
@@ -1086,10 +1086,10 @@ export default function CrmPage() {
                   <InfoCard label="Comissão automática" value={formatCurrencyValue(calculateCommissionFromSale(editForm.valor_negociacao))} />
                 </div>
                 <label className="mt-3 block">
-                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400">Observações internas</span>
-                  <textarea value={editForm.observacoes} onChange={(event) => setEditForm((prev) => ({ ...prev, observacoes: event.target.value }))} rows={3} className="w-full resize-none rounded-2xl border-none bg-slate-50 p-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20" />
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Observações internas</span>
+                  <textarea value={editForm.observacoes} onChange={(event) => setEditForm((prev) => ({ ...prev, observacoes: event.target.value }))} rows={3} className="w-full resize-none rounded-2xl border border-white/[0.08] bg-[#111418] p-4 text-sm font-bold text-white placeholder-slate-500 focus:border-[#0863FF] focus:outline-none transition-all" />
                 </label>
-                <button disabled={saving} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+                <button disabled={saving} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0863FF] px-4 py-3 text-sm font-black text-white hover:bg-opacity-90 transition-all shadow-md disabled:opacity-50">
                   {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Salvar alterações
                 </button>
               </form>
@@ -1118,49 +1118,49 @@ export default function CrmPage() {
             <div className="mb-5 grid grid-cols-2 gap-3">
               <a
                 href={`tel:${cleanPhone(selectedLead.telefone)}`}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white"
+                className="flex items-center justify-center gap-2 rounded-2xl bg-[#161a20] border border-white/[0.08] px-4 py-3 text-sm font-black text-white hover:bg-[#1c222a] transition-all"
               >
-                <Phone size={16} /> Ligar
+                <Phone size={16} className="text-[#0863FF]" /> Ligar
               </a>
               <a
                 href={`/inbox?lead=${selectedLead.id}&telefone=${cleanPhone(selectedLead.telefone)}`}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white"
+                className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm font-black text-emerald-400 hover:bg-emerald-500/15 transition-all"
               >
                 <MessageSquare size={16} /> Chamar inbox
               </a>
             </div>
 
-            <form onSubmit={addNote} className="mb-5 rounded-[1.5rem] border border-gray-100 bg-slate-50 p-4">
-              <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400">Observacoes</label>
+            <form onSubmit={addNote} className="mb-5 rounded-[1.5rem] border border-white/[0.08] bg-[#161a20] p-4 shadow-sm">
+              <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Observações</label>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
                 placeholder="Ex: lead pediu retorno, enviou documentos, ficou de falar com socio..."
-                className="w-full resize-none rounded-2xl border-none bg-white p-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                className="w-full resize-none rounded-2xl border border-white/[0.08] bg-[#111418] p-4 text-sm font-bold text-white placeholder-slate-500 focus:border-[#0863FF] focus:outline-none transition-all"
               />
-              <button disabled={saving} className="mt-3 flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+              <button disabled={saving} className="mt-3 flex items-center gap-2 rounded-2xl bg-[#0863FF] px-5 py-3 text-sm font-black text-white disabled:opacity-50 hover:bg-opacity-90 transition-all shadow-md">
                 <Send size={16} /> Salvar observacao
               </button>
             </form>
 
             {selectedLead.observacoes && cleanLeadObservationText(selectedLead.observacoes) && (
-              <div className="mb-5 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">UTMs / observacoes da planilha</p>
-                <p className="text-sm font-bold leading-relaxed text-slate-600">{cleanLeadObservationText(selectedLead.observacoes)}</p>
+              <div className="mb-5 rounded-[1.5rem] border border-white/[0.08] bg-[#161a20] p-4">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">UTMs / observações da planilha</p>
+                <p className="text-sm font-bold leading-relaxed text-[#8C95A3]">{cleanLeadObservationText(selectedLead.observacoes)}</p>
               </div>
             )}
 
-            <form onSubmit={uploadAttachment} className="mb-5 rounded-[1.5rem] border border-blue-100 bg-blue-50 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-blue-950">
-                <Paperclip size={16} /> Fotos e arquivos
+            <form onSubmit={uploadAttachment} className="mb-5 rounded-[1.5rem] border border-[#0863FF]/20 bg-[#0863FF]/5 p-4">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-white">
+                <Paperclip size={16} className="text-[#0863FF]" /> Fotos e arquivos
               </h3>
-              <label className="block cursor-pointer rounded-2xl border border-dashed border-blue-200 bg-white p-4 text-center transition-all hover:border-blue-400">
-                <Upload className="mx-auto mb-2 text-blue-500" size={22} />
-                <span className="block text-sm font-black text-slate-700">
+              <label className="block cursor-pointer rounded-2xl border border-dashed border-[#0863FF]/30 bg-[#111418] p-4 text-center transition-all hover:border-[#0863FF]">
+                <Upload className="mx-auto mb-2 text-[#0863FF]" size={22} />
+                <span className="block text-sm font-black text-white">
                   {selectedFile ? selectedFile.name : 'Selecionar foto ou arquivo'}
                 </span>
-                <span className="mt-1 block text-[11px] font-bold text-slate-400">PNG, JPG, PDF ou documento do cliente</span>
+                <span className="mt-1 block text-[11px] font-bold text-[#8C95A3]">PNG, JPG, PDF ou documento do cliente</span>
                 <input
                   type="file"
                   className="hidden"
@@ -1169,39 +1169,39 @@ export default function CrmPage() {
               </label>
               <button
                 disabled={!selectedFile || uploadingFile}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0863FF] px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50 hover:bg-opacity-90 transition-all shadow-md"
               >
                 {uploadingFile ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />} Anexar ao lead
               </button>
             </form>
 
-            <form onSubmit={addTask} className="mb-5 rounded-[1.5rem] border border-gray-100 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-gray-900">
-                <Plus size={16} /> Follow-up
+            <form onSubmit={addTask} className="mb-5 rounded-[1.5rem] border border-white/[0.08] bg-[#161a20] p-4 shadow-sm">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-white">
+                <Plus size={16} className="text-[#0863FF]" /> Follow-up
               </h3>
               <input
                 value={taskTitle}
                 onChange={(event) => setTaskTitle(event.target.value)}
                 placeholder="Ex: retornar amanha"
-                className="mb-3 w-full rounded-2xl border-none bg-slate-50 px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                className="mb-3 w-full rounded-2xl border border-white/[0.08] bg-[#111418] px-4 py-3 text-sm font-bold text-white placeholder-slate-500 focus:border-[#0863FF] focus:outline-none transition-all"
               />
               <input
                 type="datetime-local"
                 value={taskDue}
                 onChange={(event) => setTaskDue(event.target.value)}
-                className="mb-3 w-full rounded-2xl border-none bg-slate-50 px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                className="mb-3 w-full rounded-2xl border border-white/[0.08] bg-[#111418] px-4 py-3 text-sm font-bold text-white focus:border-[#0863FF] focus:outline-none transition-all"
               />
-              <button disabled={saving} className="w-full rounded-2xl bg-slate-900 py-3 text-sm font-black text-white disabled:opacity-50">Criar lembrete</button>
+              <button disabled={saving} className="w-full rounded-2xl bg-[#0863FF] py-3 text-sm font-black text-white hover:bg-opacity-90 transition-all shadow-md disabled:opacity-50">Criar lembrete</button>
             </form>
 
             {selectedTasks.length > 0 && (
               <div className="mb-5 space-y-2">
-                <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Tarefas abertas</h3>
+                <h3 className="text-sm font-black uppercase tracking-widest text-white">Tarefas abertas</h3>
                 {selectedTasks.map((task) => (
-                  <div key={task.id} className="rounded-2xl border border-gray-100 p-3">
-                    <p className="text-sm font-black text-gray-900">{task.titulo}</p>
-                    <p className="mt-1 text-[11px] font-bold text-slate-400">{task.vencimento ? format(new Date(task.vencimento), 'dd/MM HH:mm', { locale: ptBR }) : 'Sem prazo'}</p>
-                    <button onClick={() => completeTask(task.id)} className="mt-2 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                  <div key={task.id} className="rounded-2xl border border-white/[0.08] bg-[#161a20] p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-white">{task.titulo}</p>
+                    <p className="mt-1.5 text-[11px] font-bold text-[#8C95A3]">{task.vencimento ? format(new Date(task.vencimento), 'dd/MM HH:mm', { locale: ptBR }) : 'Sem prazo'}</p>
+                    <button onClick={() => completeTask(task.id)} className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-400 hover:bg-emerald-500/15 transition-all">
                       <CheckCircle2 size={13} /> concluir
                     </button>
                   </div>
@@ -1210,23 +1210,23 @@ export default function CrmPage() {
             )}
 
             <div>
-              <h3 className="mb-3 text-sm font-black uppercase tracking-widest text-gray-900">Timeline</h3>
-              <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+              <h3 className="mb-3 text-sm font-black uppercase tracking-widest text-white">Timeline</h3>
+              <div className="max-h-64 space-y-3 overflow-y-auto pr-1 scrollbar-hidden">
                 {atividades.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center text-sm font-bold text-slate-400">Nenhuma atividade registrada.</div>
+                  <div className="rounded-2xl border border-dashed border-white/[0.08] bg-[#161a20]/40 p-6 text-center text-sm font-bold text-[#8C95A3]">Nenhuma atividade registrada.</div>
                 ) : atividades.map((activity) => (
-                  <div key={activity.id} className="rounded-2xl border border-gray-100 p-4">
-                    <div className="mb-1 flex items-center justify-between gap-3">
-                      <p className="font-black text-gray-900">{activity.titulo}</p>
-                      <span className="text-[10px] font-bold text-slate-400">{format(new Date(activity.created_at), 'dd/MM HH:mm', { locale: ptBR })}</span>
+                  <div key={activity.id} className="rounded-2xl border border-white/[0.08] bg-[#161a20] p-4 shadow-sm">
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <p className="font-semibold text-white leading-tight">{activity.titulo}</p>
+                      <span className="text-[10px] font-bold text-[#8C95A3] shrink-0">{format(new Date(activity.created_at), 'dd/MM HH:mm', { locale: ptBR })}</span>
                     </div>
                     {activity.descricao && (
                       activity.descricao.startsWith('http') ? (
-                        <a href={activity.descricao} target="_blank" className="text-sm font-black text-blue-600 hover:underline">
+                        <a href={activity.descricao} target="_blank" className="text-sm font-black text-[#0863FF] hover:underline transition-all">
                           Abrir arquivo anexado
                         </a>
                       ) : (
-                        <p className="text-sm font-medium text-slate-500">{activity.descricao}</p>
+                        <p className="text-sm font-medium text-[#8C95A3] leading-relaxed">{activity.descricao}</p>
                       )
                     )}
                   </div>
@@ -1239,13 +1239,13 @@ export default function CrmPage() {
       </div>
 
       {conversas.length > 0 && (
-        <div className="mt-4 rounded-[2rem] border border-emerald-100 bg-emerald-50 p-5">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-emerald-950">
+        <div className="mt-8 rounded-[22px] border border-emerald-500/20 bg-emerald-500/5 p-6 shadow-sm">
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-emerald-400">
             <MessageSquare size={16} /> Inbox WhatsApp
           </h3>
-          <div className="flex gap-3 overflow-x-auto">
+          <div className="flex gap-3 overflow-x-auto scrollbar-hidden">
             {conversas.slice(0, 8).map((conversation) => (
-              <div key={conversation.id} className="min-w-52 rounded-2xl bg-white p-3 text-sm font-bold text-emerald-950">
+              <div key={conversation.id} className="min-w-52 rounded-2xl border border-white/[0.08] bg-[#161a20] p-4 text-sm font-bold text-white shadow-sm hover:border-[#0863FF]/30 transition-all">
                 {conversation.nome_contato || conversation.telefone}
               </div>
             ))}
@@ -1254,21 +1254,21 @@ export default function CrmPage() {
       )}
 
       {commercialModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
           <form
             onSubmit={submitCommercialModal}
-            className="w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/25"
+            className="w-full max-w-xl rounded-[22px] border border-white/[0.08] bg-[#111418] p-6 sm:p-8 shadow-2xl shadow-black/90 text-white"
           >
-            <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Dados comerciais</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-950">Avancar para {getLeadStatusStyle(commercialModal.status).label}</h2>
-                <p className="mt-1 text-sm font-bold text-slate-500">{commercialModal.lead.nome}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#0863FF]">Dados comerciais</p>
+                <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-white">Avançar para {getLeadStatusStyle(commercialModal.status).label}</h2>
+                <p className="mt-1 text-sm font-bold text-[#8C95A3]">{commercialModal.lead.nome}</p>
               </div>
               <button
                 type="button"
                 onClick={() => closeCommercialModal(null)}
-                className="rounded-2xl bg-slate-100 p-2 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
+                className="rounded-xl bg-[#161a20] border border-white/[0.08] p-2.5 text-[#8C95A3] hover:text-white transition-all"
                 aria-label="Fechar"
               >
                 <X size={18} />
@@ -1276,7 +1276,7 @@ export default function CrmPage() {
             </div>
 
             {commercialModalError && (
-              <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-black text-red-600">
+              <div className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-400">
                 {commercialModalError}
               </div>
             )}
@@ -1284,39 +1284,39 @@ export default function CrmPage() {
             {commercialModal.status === 'Sem interesse' ? (
               <div className="grid gap-4">
                 <label className="block">
-                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Motivo</span>
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Motivo</span>
                   <select
                     autoFocus
                     value={commercialModal.sem_interesse_motivo}
                     onChange={(event) => setCommercialModal((current) => current ? { ...current, sem_interesse_motivo: event.target.value } : current)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                    className="w-full rounded-2xl border border-white/[0.08] bg-[#161a20] px-4 py-3 text-base font-bold text-white focus:border-[#0863FF] focus:outline-none transition-all"
                   >
                     <option value="">Selecione o motivo</option>
-                    <option value="Preco acima do esperado">Preco acima do esperado</option>
-                    <option value="Ja fechou com outro corretor">Ja fechou com outro corretor</option>
-                    <option value="Nao quer contratar agora">Nao quer contratar agora</option>
+                    <option value="Preco acima do esperado">Preço acima do esperado</option>
+                    <option value="Ja fechou com outro corretor">Já fechou com outro corretor</option>
+                    <option value="Nao quer contratar agora">Não quer contratar agora</option>
                     <option value="Fora do perfil de atendimento">Fora do perfil de atendimento</option>
-                    <option value="Nao respondeu apos tentativas">Nao respondeu apos tentativas</option>
+                    <option value="Nao respondeu apos tentativas">Não respondeu após tentativas</option>
                     <option value="Outro motivo">Outro motivo</option>
                   </select>
                 </label>
-                <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <span className="text-sm font-black text-slate-800">Chegou a fazer cotacao?</span>
+                <label className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-[#161a20] px-4 py-3">
+                  <span className="text-sm font-black text-white">Chegou a fazer cotação?</span>
                   <input
                     type="checkbox"
                     checked={commercialModal.sem_interesse_fez_cotacao}
                     onChange={(event) => setCommercialModal((current) => current ? { ...current, sem_interesse_fez_cotacao: event.target.checked } : current)}
-                    className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    className="h-5 w-5 rounded border-white/[0.08] bg-[#111418] text-[#0863FF] focus:ring-[#0863FF]"
                   />
                 </label>
                 {commercialModal.sem_interesse_fez_cotacao && (
                   <label className="block">
-                    <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da cotacao</span>
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Valor da cotação</span>
                     <input
                       value={commercialModal.valor_negociacao}
                       onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_negociacao: event.target.value } : current)}
                       placeholder="Ex: 1200"
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      className="w-full rounded-2xl border border-white/[0.08] bg-[#161a20] px-4 py-3 text-base font-bold text-white placeholder-slate-500 focus:border-[#0863FF] focus:outline-none transition-all"
                     />
                   </label>
                 )}
@@ -1324,20 +1324,20 @@ export default function CrmPage() {
             ) : (
               <div className="grid gap-4">
                 <label className="block">
-                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da negociacao</span>
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Valor da negociação</span>
                   <input
                     autoFocus
                     value={commercialModal.valor_negociacao}
                     onChange={(event) => setCommercialModal((current) => current ? { ...current, valor_negociacao: event.target.value } : current)}
                     placeholder="Ex: 1200"
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                    className="w-full rounded-2xl border border-white/[0.08] bg-[#161a20] px-4 py-3 text-base font-bold text-white placeholder-slate-500 focus:border-[#0863FF] focus:outline-none transition-all"
                   />
                 </label>
 
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
-                  <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-emerald-700">Comissão calculada automaticamente</span>
-                  <p className="text-lg font-black text-emerald-800">{formatCurrencyValue(calculateCommissionFromSale(commercialModal.valor_negociacao))}</p>
-                  <p className="mt-1 text-xs font-bold text-emerald-700">250% sobre o valor da negociação.</p>
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-emerald-400">
+                  <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-emerald-500/80">Comissão calculada automaticamente</span>
+                  <p className="text-lg font-bold text-emerald-400">{formatCurrencyValue(calculateCommissionFromSale(commercialModal.valor_negociacao))}</p>
+                  <p className="mt-1 text-xs font-medium text-emerald-500/70">250% sobre o valor da negociação.</p>
                 </div>
               </div>
             )}
@@ -1346,13 +1346,13 @@ export default function CrmPage() {
               <button
                 type="button"
                 onClick={() => closeCommercialModal(null)}
-                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                className="rounded-2xl border border-white/[0.08] bg-[#161a20] px-5 py-3 text-sm font-black text-[#8C95A3] hover:text-white transition-all"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700"
+                className="rounded-2xl bg-[#0863FF] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[#0863FF]/20 transition hover:-translate-y-0.5 hover:bg-opacity-90"
               >
                 Salvar e mover lead
               </button>
@@ -1366,9 +1366,9 @@ export default function CrmPage() {
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-slate-50 p-4">
-      <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</p>
-      <p className="break-words text-sm font-black text-gray-900">{value}</p>
+    <div className="rounded-2xl border border-white/[0.08] bg-[#161a20] p-4">
+      <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">{label}</p>
+      <p className="break-words text-sm font-semibold text-white">{value}</p>
     </div>
   );
 }
@@ -1376,11 +1376,11 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 function EditField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</span>
+      <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border-none bg-slate-50 px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+        className="w-full rounded-2xl border border-white/[0.08] bg-[#161a20] px-4 py-3 text-sm font-bold text-white placeholder-slate-500 focus:border-[#0863FF] focus:outline-none transition-all"
       />
     </label>
   );
@@ -1389,11 +1389,11 @@ function EditField({ label, value, onChange }: { label: string; value: string; o
 function EditSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</span>
+      <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border-none bg-slate-50 px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+        className="w-full rounded-2xl border border-white/[0.08] bg-[#161a20] px-4 py-3 text-sm font-bold text-white focus:border-[#0863FF] focus:outline-none transition-all"
       >
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
@@ -1416,20 +1416,40 @@ function Stat({
   active?: boolean;
   onClick?: () => void;
 }) {
+  const isStale = label === 'Sem resposta';
+  const isTasks = label === 'Tarefas';
+  const isToday = label === 'Hoje';
+  const isFit = label === 'Fit ICP';
+
+  let customBadgeClass = '';
+  if (active) {
+    customBadgeClass = 'bg-[#0863FF] border-[#0863FF] text-white shadow-lg shadow-[#0863FF]/20';
+  } else {
+    customBadgeClass = 'bg-[#111418] border-white/[0.08] hover:bg-[#161a20] hover:-translate-y-0.5 text-slate-400';
+  }
+
+  let textValueColor = active ? 'text-white' : 'text-white';
+  let iconColor = '';
+  if (!active) {
+    if (isStale) iconColor = 'text-amber-500';
+    else if (isTasks) iconColor = 'text-[#0863FF]';
+    else if (isToday) iconColor = 'text-emerald-400';
+    else if (isFit) iconColor = 'text-violet-400';
+    else iconColor = 'text-slate-400';
+  } else {
+    iconColor = 'text-white';
+  }
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`glass-panel glass-card-glow rounded-[1.75rem] border p-5 text-left shadow-sm transition-all focus:outline-none focus:ring-4 focus:ring-blue-500/10 cursor-pointer ${
-        active 
-          ? 'ring-2 ring-blue-500/70 border-blue-500/60 bg-blue-500/10 shadow-[0_12px_24px_-8px_rgba(59,130,246,0.35)]' 
-          : 'border-white/20'
-      } ${className}`}
+      className={`rounded-[22px] border p-5 text-left shadow-sm transition-all focus:outline-none cursor-pointer flex flex-col justify-between min-h-[110px] ${customBadgeClass}`}
     >
-      <p className="mb-2.5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-85">
-        <Icon size={14} className="animate-pulse" /> {label}
+      <p className="mb-2.5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest leading-none">
+        <Icon size={14} className={`animate-pulse ${iconColor}`} /> {label}
       </p>
-      <p className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{value}</p>
+      <p className={`text-3xl font-semibold tracking-tight ${textValueColor}`}>{value}</p>
     </button>
   );
 }

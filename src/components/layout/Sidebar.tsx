@@ -178,11 +178,11 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
           className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm lg:hidden"
         />
       )}
-      <div className={cn('fixed left-0 top-0 z-50 flex h-screen max-w-[86vw] flex-col bg-[#0f172a] text-white shadow-2xl transition-all duration-300', collapsed ? 'w-0 overflow-visible' : 'w-72 lg:w-64')}>
+      <div className={cn('fixed left-0 top-0 z-50 flex h-screen max-w-[86vw] flex-col bg-[#000000] border-r border-white/[0.08] text-white shadow-2xl transition-all duration-300', collapsed ? 'w-0 overflow-visible' : 'w-72 lg:w-64')}>
       <button
         type="button"
         onClick={() => setCollapsed((current) => !current)}
-        className={cn('absolute top-4 z-[60] flex h-10 w-10 items-center justify-center border border-white/10 bg-[#0f172a] text-white shadow-lg transition-all', collapsed ? 'left-2 rounded-r-lg' : 'right-[-18px] rounded-lg')}
+        className={cn('absolute top-4 z-[60] flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-[#000000] text-slate-400 hover:text-white shadow-lg transition-all', collapsed ? 'left-2 rounded-r-lg' : 'right-[-18px] rounded-lg')}
         title={collapsed ? 'Expandir menu' : 'Recolher menu'}
       >
         {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
@@ -191,17 +191,17 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
       <div className={cn('flex h-full flex-col transition-opacity duration-200', collapsed ? 'pointer-events-none opacity-0' : 'opacity-100')}>
         <div className="mb-2 p-6">
           <Link href={profile?.tipo_usuario === 'admin' ? '/admin' : profile?.tipo_usuario === 'gestor_trafego' ? '/trafego/relatorios' : profile?.tipo_usuario === 'designer' ? '/designer' : profile?.tipo_usuario === 'account_manager' ? '/account' : profile?.tipo_usuario === 'corretor_membro' ? '/crm' : '/dashboard'} onClick={closeOnMobile} className="block">
-            <img src="/brand-logo.png" alt="ORION TRACK" className="h-24 w-auto" />
+            <img src="/brand-logo.png" alt="ORION TRACK" className="h-24 w-auto object-contain" />
           </Link>
           {isViewingAsUser && (
-            <div className="mt-4 border border-amber-400/20 bg-amber-400/10 p-3">
+            <div className="mt-4 border border-amber-400/20 bg-amber-400/10 p-3 rounded-xl">
               <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">Modo admin</p>
               <p className="mt-1 text-xs font-bold text-white">
                 Voce esta acessando como {isViewingAsGestor ? 'gestor' : isViewingAsDesigner ? 'designer' : isViewingAsAccount ? 'account' : 'corretor'}.
               </p>
               <button
                 onClick={stopViewingAsCorretor}
-                className="mt-3 flex w-full items-center justify-center gap-2 bg-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/15"
+                className="mt-3 flex w-full items-center justify-center gap-2 bg-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/15 rounded-lg"
               >
                 <RotateCcw size={13} /> Voltar ao admin
               </button>
@@ -209,10 +209,10 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
           )}
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-4">
+        <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 py-4 scrollbar-hidden">
           {loading ? (
             <div className="flex justify-center py-10">
-              <Loader2 className="animate-spin text-blue-500" size={24} />
+              <Loader2 className="animate-spin text-[#0863FF]" size={24} />
             </div>
           ) : getMenu().map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
@@ -222,29 +222,29 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                 href={item.href}
                 onClick={closeOnMobile}
                 className={cn(
-                  'group flex items-center gap-3 px-4 py-3 transition-all duration-200',
-                  isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                  'group flex items-center gap-3 px-4 py-3 transition-all duration-200 rounded-xl',
+                  isActive ? 'bg-[#0863FF] text-white shadow-lg shadow-[#0863FF]/20 font-bold' : 'text-[#8C95A3] hover:bg-white/[0.04] hover:text-white'
                 )}
               >
-                <item.icon size={20} className={cn(isActive ? 'text-white' : 'text-gray-400 group-hover:text-white')} />
+                <item.icon size={20} className={cn(isActive ? 'text-white' : 'text-[#8C95A3] group-hover:text-white transition-colors')} />
                 <span className="text-sm font-semibold">{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-auto border-t border-white/5 bg-white/[0.02] p-4">
-          <div className="flex items-center gap-3 border border-white/5 bg-white/5 p-2">
-            <div className="flex h-10 w-10 items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black shadow-inner">
+        <div className="mt-auto border-t border-white/[0.08] bg-black p-4">
+          <div className="flex items-center gap-3 border border-white/[0.08] bg-[#111418] p-3 rounded-2xl">
+            <div className="flex h-10 w-10 items-center justify-center bg-[#161a20] border border-white/[0.08] rounded-xl text-sm font-black shadow-inner">
               {initials}
             </div>
             <div className="min-w-0 flex-1 overflow-hidden">
               <p className="truncate text-xs font-bold text-white">{profile?.nome || 'Usuario'}</p>
-              <p className="text-[10px] font-bold uppercase tracking-tighter text-gray-500">
+              <p className="text-[10px] font-bold uppercase tracking-tighter text-[#8C95A3]">
                 {isViewingAsUser ? roleLabel : roleLabel}
               </p>
             </div>
-            <button onClick={signOut} className="p-2 text-gray-500 transition-colors hover:text-red-400" title="Sair">
+            <button onClick={signOut} className="p-2 text-slate-500 transition-colors hover:text-red-400" title="Sair">
               <LogOut size={18} />
             </button>
           </div>

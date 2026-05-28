@@ -414,21 +414,21 @@ export default function DashboardPage() {
   return (
     <InternalLayout>
       {/* Pills Horizontal Top Navbar */}
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-flux-card bg-[#f1f5f9] p-2.5 shadow-flux">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-[22px] bg-[#111418] border border-white/[0.08] p-2.5 shadow-flux">
         <div className="flex flex-wrap items-center gap-1.5">
-          <Link href="/dashboard" className="rounded-flux-pill bg-[#0c1a3a] px-6 py-3.5 text-xs font-black uppercase tracking-wider text-white shadow-md">
+          <Link href="/dashboard" className="rounded-flux-pill bg-[#0863FF] px-6 py-3.5 text-xs font-black uppercase tracking-wider text-white shadow-md">
             📊 Dashboard
           </Link>
-          <Link href="/leads" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 hover:bg-slate-200/60 hover:text-[#0c1a3a] transition-all">
+          <Link href="/leads" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-[#8C95A3] hover:bg-white/[0.04] hover:text-white transition-all">
             👥 Leads
           </Link>
-          <Link href="/kanban" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 hover:bg-slate-200/60 hover:text-[#0c1a3a] transition-all">
+          <Link href="/kanban" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-[#8C95A3] hover:bg-white/[0.04] hover:text-white transition-all">
             📋 Kanban
           </Link>
-          <Link href="/minha-pagina" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 hover:bg-slate-200/60 hover:text-[#0c1a3a] transition-all">
+          <Link href="/minha-pagina" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-[#8C95A3] hover:bg-white/[0.04] hover:text-white transition-all">
             🌐 Minha LP
           </Link>
-          <Link href="/ajuda" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 hover:bg-slate-200/60 hover:text-[#0c1a3a] transition-all">
+          <Link href="/ajuda" className="rounded-flux-pill px-6 py-3.5 text-xs font-black uppercase tracking-wider text-[#8C95A3] hover:bg-white/[0.04] hover:text-white transition-all">
             ❓ Ajuda
           </Link>
         </div>
@@ -436,21 +436,21 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3 pr-2">
           {/* Subtle search pill */}
           <div className="relative hidden md:block">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={15} />
             <input 
               type="text" 
               placeholder="Buscar no painel..." 
-              className="rounded-flux-pill border-none bg-white py-2.5 pl-10 pr-4 text-xs font-semibold text-[#07152a] placeholder:text-slate-400 outline-none w-48 focus:w-60 focus:bg-white transition-all shadow-sm" 
+              className="rounded-flux-pill border border-white/[0.08] bg-[#161a20] py-2.5 pl-10 pr-4 text-xs font-semibold text-white placeholder:text-slate-500 outline-none w-48 focus:w-60 focus:bg-black transition-all shadow-sm" 
             />
           </div>
           {/* Notification Button */}
-          <button className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm hover:bg-slate-50 transition-all border border-slate-100">
-            <div className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-blue-600 ring-2 ring-white animate-pulse" />
+          <button className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#111418] text-[#8C95A3] shadow-sm hover:bg-[#161a20] hover:text-white transition-all border border-white/[0.08]">
+            <div className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-[#0863FF] ring-2 ring-black animate-pulse" />
             <span className="text-base">🔔</span>
           </button>
           {/* Mini profile circle */}
-          <div className="h-10 w-10 overflow-hidden rounded-full border-2 border-[#0c1a3a] shadow-sm bg-slate-200">
-            <div className="h-full w-full flex items-center justify-center font-black text-[#0c1a3a] text-sm">
+          <div className="h-10 w-10 overflow-hidden rounded-full border-2 border-[#0863FF] shadow-sm bg-[#161a20]">
+            <div className="h-full w-full flex items-center justify-center font-black text-[#0863FF] text-sm">
               {firstName ? firstName.charAt(0).toUpperCase() : 'O'}
             </div>
           </div>
@@ -460,20 +460,20 @@ export default function DashboardPage() {
       {/* Main Title Section */}
       <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end animate-in fade-in slide-in-from-top-4 duration-700">
         <div>
-          <h1 className="mb-1.5 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+          <h1 className="mb-1.5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             {isDataLoading ? (
-              <span className="inline-block w-48 h-10 bg-slate-100 animate-pulse rounded-lg" />
+              <span className="inline-block w-48 h-10 bg-white/5 animate-pulse rounded-lg" />
             ) : (
               `Olá, ${firstName}`
             )}
           </h1>
-          <p className="text-sm font-bold text-slate-400">Analise as tendências comerciais e converta leads em tempo recorde.</p>
+          <p className="text-sm font-medium text-[#8C95A3]">Analise as tendências comerciais e converta leads em tempo recorde.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="rounded-flux-pill border border-slate-200 bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-700 shadow-sm hover:bg-slate-50 transition-all flex items-center gap-1.5">
+          <button className="rounded-flux-pill border border-white/[0.08] bg-[#111418] px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-200 shadow-sm hover:bg-[#161a20] transition-all flex items-center gap-1.5">
             Mensal <span className="text-[10px]">▼</span>
           </button>
-          <button className="rounded-flux-pill bg-[#0c1a3a] px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-md hover:bg-opacity-90 transition-all flex items-center gap-1.5">
+          <button className="rounded-flux-pill bg-[#0863FF] px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-md hover:bg-opacity-90 transition-all flex items-center gap-1.5">
             📥 Exportar <ArrowRight size={14} className="rotate-90" />
           </button>
         </div>
@@ -482,12 +482,12 @@ export default function DashboardPage() {
       {/* TOP METRICS ROW (3-Column layout matching FluxCRM) */}
       <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Card 1: Revenue Highlight Card in Orion Blue/Navy Gradient */}
-        <div className="group relative overflow-hidden rounded-flux-card bg-gradient-to-br from-[#0c1a3a] via-[#152e61] to-[#2563eb] p-8 text-white shadow-xl shadow-blue-900/10 flex flex-col justify-between min-h-[220px] transition-all duration-500 hover:shadow-2xl hover:shadow-blue-600/15 hover:-translate-y-1">
+        <div className="group relative overflow-hidden rounded-[22px] bg-gradient-to-br from-[#07111F] via-[#0863FF]/30 to-[#0863FF] border border-white/[0.08] p-8 text-white shadow-xl flex flex-col justify-between min-h-[220px] transition-all duration-500 hover:-translate-y-1">
           {/* Top Info Area */}
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-widest text-cyan-200 opacity-90">Comissão Vendida</p>
-              <h2 className="mt-4 text-4xl font-black tracking-tight">
+              <p className="text-xs font-black uppercase tracking-widest text-blue-200/90 opacity-90">Comissão Vendida</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-tight">
                 {isDataLoading ? (
                   <span className="inline-block w-36 h-9 bg-white/20 animate-pulse rounded-lg" />
                 ) : (
@@ -495,77 +495,77 @@ export default function DashboardPage() {
                 )}
               </h2>
             </div>
-            <Link href="/leads?status=Venda%20realizada" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white border border-white/25 hover:bg-white hover:text-[#0c1a3a] transition-all shadow-md">
+            <Link href="/leads?status=Venda%20realizada" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white border border-white/25 hover:bg-[#0863FF] hover:border-[#0863FF] transition-all shadow-md">
               <ArrowRight size={18} className="-rotate-45" />
             </Link>
           </div>
           {/* Bottom tag */}
           <div className="mt-6 flex">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-400/25 border border-cyan-400/30 px-3.5 py-1.5 text-xs font-black uppercase tracking-wider text-cyan-200 backdrop-blur-md">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0863FF]/15 border border-[#0863FF]/20 px-3.5 py-1.5 text-xs font-black uppercase tracking-wider text-[#0863FF]">
               ↗ {salesConversionRate.toFixed(1).replace('.', ',')}% Conversão Geral
             </span>
           </div>
         </div>
 
         {/* Card 2: Total Purchase (Total Vendas Realizadas) in White with diagonal stripes accent */}
-        <div className="group relative overflow-hidden rounded-flux-card bg-white p-8 border border-slate-100 shadow-flux flex flex-col justify-between min-h-[220px] transition-all duration-500 hover:shadow-xl hover:-translate-y-1 bg-diagonal-stripes-dark">
+        <div className="group relative overflow-hidden rounded-[22px] bg-[#111418] p-8 border border-white/[0.08] shadow-flux flex flex-col justify-between min-h-[220px] transition-all duration-500 hover:-translate-y-1 bg-diagonal-stripes-dark">
           {/* Top Info Area */}
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-widest text-slate-400">Total em Vendas</p>
-              <h2 className="mt-4 text-4xl font-black tracking-tight text-slate-900">
+              <p className="text-xs font-black uppercase tracking-widest text-[#8C95A3]">Total em Vendas</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-tight text-white">
                 {isDataLoading ? (
-                  <span className="inline-block w-36 h-9 bg-slate-100 animate-pulse rounded-lg" />
+                  <span className="inline-block w-36 h-9 bg-white/5 animate-pulse rounded-lg" />
                 ) : (
                   formatCurrency(stats.salesRealized)
                 )}
               </h2>
             </div>
-            <Link href="/leads?status=Venda%20realizada" className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-50 text-[#0c1a3a] border border-slate-200 hover:bg-[#0c1a3a] hover:text-white transition-all shadow-sm">
+            <Link href="/leads?status=Venda%20realizada" className="flex h-11 w-11 items-center justify-center rounded-full bg-[#161a20] text-white border border-white/[0.08] hover:bg-[#0863FF] hover:border-[#0863FF] transition-all shadow-sm">
               <ArrowRight size={18} className="-rotate-45" />
             </Link>
           </div>
           {/* Bottom tag */}
           <div className="mt-6 flex">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-100 px-3.5 py-1.5 text-xs font-black uppercase tracking-wider text-emerald-700">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-1.5 text-xs font-black uppercase tracking-wider text-emerald-400">
               ↗ {stats.sold} Vendas Fechadas
             </span>
           </div>
         </div>
 
         {/* Card 3: Sales Target (Pipeline Previsão) with custom double-segment progress bar */}
-        <div className="group relative overflow-hidden rounded-flux-card bg-white p-8 border border-slate-100 shadow-flux flex flex-col justify-between min-h-[220px] transition-all duration-500 hover:shadow-xl hover:-translate-y-1">
+        <div className="group relative overflow-hidden rounded-[22px] bg-[#111418] p-8 border border-white/[0.08] shadow-flux flex flex-col justify-between min-h-[220px] transition-all duration-500 hover:-translate-y-1">
           {/* Top Info Area */}
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-widest text-slate-400">Venda Prevista (Pipeline)</p>
-              <h2 className="mt-4 text-4xl font-black tracking-tight text-slate-900">
+              <p className="text-xs font-black uppercase tracking-widest text-[#8C95A3]">Venda Prevista (Pipeline)</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-tight text-white">
                 {isDataLoading ? (
-                  <span className="inline-block w-36 h-9 bg-slate-100 animate-pulse rounded-lg" />
+                  <span className="inline-block w-36 h-9 bg-white/5 animate-pulse rounded-lg" />
                 ) : (
                   formatCurrency(stats.salesPotential)
                 )}
               </h2>
             </div>
-            <button className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all">
+            <button className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-white/5 hover:text-white transition-all">
               <span className="text-lg">•••</span>
             </button>
           </div>
           {/* Custom Dual Segmented Progress Bar */}
           <div className="mt-6">
-            <div className="h-4 w-full overflow-hidden rounded-full bg-slate-100 flex p-0.5">
+            <div className="h-4 w-full overflow-hidden rounded-full bg-[#161a20] border border-white/5 flex p-0.5">
               <div 
-                className="h-full rounded-full bg-[#0c1a3a] shadow-inner" 
+                className="h-full rounded-full bg-[#0863FF] shadow-inner" 
                 style={{ width: `${Math.min(100, Math.max(15, (stats.salesRealized / Math.max(stats.salesPotential, 1)) * 100))}%` }} 
               />
               <div 
-                className="h-full rounded-full bg-cyan-400 bg-diagonal-stripes animate-pulse -ml-2" 
+                className="h-full rounded-full bg-[#0863FF]/30 bg-diagonal-stripes animate-pulse -ml-2" 
                 style={{ width: `${Math.min(100, Math.max(15, (stats.revenueRealized / Math.max(stats.salesPotential, 1)) * 100))}%` }} 
               />
             </div>
-            <div className="mt-3.5 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-500">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#0c1a3a]" /> Realizado</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan-400" /> Previsto</span>
+            <div className="mt-3.5 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#0863FF]" /> Realizado</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#0863FF]/30" /> Previsto</span>
             </div>
           </div>
         </div>
@@ -574,13 +574,13 @@ export default function DashboardPage() {
       {/* SECOND ROW: CUSTOMER SATISFACTION (ARC) & STATISTICS GRAPH CHART (FLUXCRM STYLE) */}
       <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
         {/* Left Card: Customer Satisfaction (Redesigned as Arc Gauge using conversion/CSAT metrics) */}
-        <div className="group rounded-flux-card bg-white p-8 border border-slate-100 shadow-flux flex flex-col justify-between min-h-[360px] transition-all duration-500 hover:shadow-xl">
+        <div className="group rounded-[22px] bg-[#111418] p-8 border border-white/[0.08] shadow-flux flex flex-col justify-between min-h-[360px] transition-all duration-500 hover:shadow-xl">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="text-xl font-black tracking-tight text-slate-900">Conversão de Leads</h3>
-              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Desempenho Comercial</p>
+              <h3 className="text-xl font-semibold tracking-tight text-white">Conversão de Leads</h3>
+              <p className="text-[10px] font-bold text-[#8C95A3] mt-1 uppercase tracking-wider">Desempenho Comercial</p>
             </div>
-            <button className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all">
+            <button className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-white/5 hover:text-white transition-all">
               <span className="text-lg">•••</span>
             </button>
           </div>
@@ -592,7 +592,7 @@ export default function DashboardPage() {
               <path
                 d="M 10 50 A 40 40 0 0 1 90 50"
                 fill="none"
-                stroke="#e2e8f0"
+                stroke="#161a20"
                 strokeWidth="7"
                 strokeLinecap="round"
                 strokeDasharray="1.5 3.5"
@@ -609,28 +609,27 @@ export default function DashboardPage() {
               />
               <defs>
                 <linearGradient id="gaugeOrionGradient" x1="0" x2="1" y1="0" y2="0">
-                  <stop offset="0%" stopColor="#0c1a3a" />
-                  <stop offset="50%" stopColor="#2563eb" />
-                  <stop offset="100%" stopColor="#06b6d4" />
+                  <stop offset="0%" stopColor="#0863FF" />
+                  <stop offset="100%" stopColor="#3b82f6" />
                 </linearGradient>
               </defs>
             </svg>
             <div className="absolute bottom-1 text-center">
-              <span className="text-4xl font-black text-slate-900 leading-none">
+              <span className="text-4xl font-semibold text-white leading-none">
                 {salesConversionRate.toFixed(1).replace('.', ',')}%
               </span>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Taxa Geral</p>
+              <p className="text-[10px] font-bold text-[#8C95A3] uppercase tracking-widest mt-1">Taxa Geral</p>
             </div>
           </div>
 
           {/* Tag indicators at bottom */}
           <div>
-            <div className="mb-4 flex items-center justify-center gap-5 text-[10px] font-black uppercase tracking-widest text-slate-500 border-t border-slate-100 pt-5">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#0c1a3a]" /> Vendas</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-slate-300" /> Leads</span>
+            <div className="mb-4 flex items-center justify-center gap-5 text-[10px] font-black uppercase tracking-widest text-[#8C95A3] border-t border-white/[0.08] pt-5">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#0863FF]" /> Vendas</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#2a2f36]" /> Leads</span>
             </div>
-            <div className="rounded-2xl bg-slate-50 p-4 text-center">
-              <p className="text-xs font-bold text-slate-600 leading-relaxed">
+            <div className="rounded-2xl bg-[#161a20] border border-white/[0.04] p-4 text-center">
+              <p className="text-xs font-bold text-[#8C95A3] leading-relaxed">
                 Suas vendas estão acima da média da equipe Orion. Continue acelerando!
               </p>
             </div>
@@ -638,22 +637,22 @@ export default function DashboardPage() {
         </div>
 
         {/* Right Card: Statistics / Monthly Growth (Redesigned with FluxCRM columns) */}
-        <div className="group rounded-flux-card bg-white p-8 border border-slate-100 shadow-flux flex flex-col justify-between min-h-[360px] transition-all duration-500 hover:shadow-xl">
+        <div className="group rounded-[22px] bg-[#111418] p-8 border border-white/[0.08] shadow-flux flex flex-col justify-between min-h-[360px] transition-all duration-500 hover:shadow-xl">
           {/* Header Area */}
           <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <h3 className="text-xl font-black tracking-tight text-slate-900">Evolução Mensal</h3>
-              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Investimento Meta Ads x Leads</p>
+              <h3 className="text-xl font-semibold tracking-tight text-white">Evolução Mensal</h3>
+              <p className="text-[10px] font-bold text-[#8C95A3] mt-1 uppercase tracking-wider">Investimento Meta Ads x Leads</p>
             </div>
             {/* Top dropdown pills */}
             <div className="flex flex-wrap items-center gap-2">
-              <button className="rounded-flux-pill bg-slate-50 border border-slate-200/80 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition-all">
+              <button className="rounded-flux-pill bg-[#161a20] border border-white/[0.08] px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-[#8C95A3] hover:bg-black transition-all">
                 Meta Ads
               </button>
-              <button className="rounded-flux-pill bg-slate-50 border border-slate-200/80 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition-all">
+              <button className="rounded-flux-pill bg-[#161a20] border border-white/[0.08] px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-[#8C95A3] hover:bg-black transition-all">
                 Histórico
               </button>
-              <button className="rounded-flux-pill bg-[#0c1a3a] px-4.5 py-2.5 text-[11px] font-black uppercase tracking-wider text-white shadow-md">
+              <button className="rounded-flux-pill bg-[#0863FF] px-4.5 py-2.5 text-[11px] font-black uppercase tracking-wider text-white shadow-md">
                 Últimos 6 meses
               </button>
             </div>
@@ -668,12 +667,12 @@ export default function DashboardPage() {
             {monthlyPerformance.map((month, index) => (
               <div key={month.key} className="group/month flex h-full flex-col justify-end gap-3.5">
                 {/* Visual Bars Container */}
-                <div className="relative flex h-48 items-end gap-2.5 rounded-[1.5rem] bg-slate-50/50 p-2.5 transition-all duration-300 group-hover/month:-translate-y-1.5 group-hover/month:bg-blue-50/20 group-hover/month:shadow-md">
+                <div className="relative flex h-48 items-end gap-2.5 rounded-[1.5rem] bg-[#161a20]/40 p-2.5 transition-all duration-300 group-hover/month:-translate-y-1.5 group-hover/month:bg-white/[0.02] group-hover/month:shadow-md">
                   
                   {/* Spend Column (Orion Blue) */}
                   <div className="flex flex-1 flex-col items-center justify-end h-full">
                     <div
-                      className="dashboard-month-bar w-full rounded-t-full bg-gradient-to-t from-[#0c1a3a] to-[#2563eb] shadow-sm group-hover/month:shadow-md"
+                      className="dashboard-month-bar w-full rounded-t-full bg-gradient-to-t from-[#07111F] to-[#0863FF] shadow-sm group-hover/month:shadow-md"
                       style={{
                         ['--bar-height' as string]: `${Math.max((month.spend / maxMonthlySpend) * 140, month.spend > 0 ? 14 : 0)}px`,
                         ['--bar-delay' as string]: `${index * 90}ms`,
@@ -684,10 +683,10 @@ export default function DashboardPage() {
                     />
                   </div>
 
-                  {/* Leads Column (Cyan Striped) */}
+                  {/* Leads Column (Orion Blue/30 Striped) */}
                   <div className="flex flex-1 flex-col items-center justify-end h-full">
                     <div
-                      className="dashboard-month-bar w-full rounded-t-full bg-gradient-to-t from-cyan-500 to-cyan-300 shadow-sm bg-diagonal-stripes group-hover/month:shadow-md"
+                      className="dashboard-month-bar w-full rounded-t-full bg-gradient-to-t from-[#0863FF]/30 to-[#0863FF]/60 shadow-sm bg-diagonal-stripes group-hover/month:shadow-md"
                       style={{
                         ['--bar-height' as string]: `${Math.max((month.leads / maxMonthlyLeads) * 140, month.leads > 0 ? 14 : 0)}px`,
                         ['--bar-delay' as string]: `${index * 90 + 45}ms`,
@@ -699,53 +698,53 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Elegant floating tooltip on hover */}
-                  <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded-xl border border-slate-100 bg-[#0c1a3a] px-3 py-1.5 text-[9px] font-black text-white opacity-0 shadow-lg transition-opacity group-hover/month:opacity-100 z-20 whitespace-nowrap">
+                  <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded-xl border border-white/[0.08] bg-[#000000] px-3 py-1.5 text-[9px] font-black text-white opacity-0 shadow-lg transition-opacity group-hover/month:opacity-100 z-20 whitespace-nowrap">
                     💸 Investido: {formatCurrency(month.spend)}
                   </div>
                 </div>
 
                 {/* X-Axis Month label */}
                 <div className="text-center">
-                  <p className="text-xs font-black uppercase text-slate-700">{month.label}</p>
-                  <p className="mt-1 text-[10px] font-bold text-emerald-600">{month.leads} leads</p>
+                  <p className="text-xs font-black uppercase text-slate-400">{month.label}</p>
+                  <p className="mt-1 text-[10px] font-bold text-[#0863FF]">{month.leads} leads</p>
                 </div>
               </div>
             ))}
           </div>
 
           {/* Legenda Customizada */}
-          <div className="mt-5 flex flex-wrap gap-4 text-[10px] font-black uppercase tracking-widest text-slate-500 border-t border-slate-100 pt-5">
-            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-[#0c1a3a]" /> Investimento Meta</span>
-            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-cyan-400" /> Leads Recebidos</span>
+          <div className="mt-5 flex flex-wrap gap-4 text-[10px] font-black uppercase tracking-widest text-[#8C95A3] border-t border-white/[0.08] pt-5">
+            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-[#0863FF]" /> Investimento Meta</span>
+            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-[#0863FF]/30" /> Leads Recebidos</span>
           </div>
         </div>
       </div>
 
       {/* THIRD ROW: FUNNEL (Orion Traffic Funnel) & WEEKLY INPUT (7 DAYS) */}
-      <div className="mb-12 overflow-hidden rounded-flux-card border border-slate-200 bg-white shadow-flux transition-all duration-500 hover:-translate-y-0.5 hover:shadow-xl">
-        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-950 via-[#0c1a3a] to-slate-900 p-7 text-white">
+      <div className="mb-12 overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#111418] shadow-flux transition-all duration-500 hover:-translate-y-0.5 hover:shadow-xl">
+        <div className="border-b border-white/[0.08] bg-gradient-to-r from-[#000000] via-[#07111F] to-[#111418] p-7 text-white">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">Overview comercial</p>
-              <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Funil Orion Track</h2>
-              <p className="mt-2 max-w-2xl text-sm font-bold leading-relaxed text-blue-100">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-[#0863FF]">Overview comercial</p>
+              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Funil Orion Track</h2>
+              <p className="mt-2 max-w-2xl text-sm font-bold leading-relaxed text-[#8C95A3]">
                 Uma visão executiva do caminho do lead: entrada, atendimento, cotação e venda.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-3.5 backdrop-blur">
+              <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/60 p-3.5 backdrop-blur">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">CPL mês</p>
                 <p className="mt-1 text-lg font-black">{formatCurrency(currentMonthCpl)}</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-3.5 backdrop-blur">
+              <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/60 p-3.5 backdrop-blur">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Cotação</p>
                 <p className="mt-1 text-lg font-black">{quoteRate.toFixed(1).replace('.', ',')}%</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-3.5 backdrop-blur">
+              <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/60 p-3.5 backdrop-blur">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Venda</p>
                 <p className="mt-1 text-lg font-black">{salesRate.toFixed(1).replace('.', ',')}%</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-3.5 backdrop-blur">
+              <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/60 p-3.5 backdrop-blur">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-200">Comissão</p>
                 <p className="mt-1 text-lg font-black">{formatCurrency(stats.revenueRealized)}</p>
               </div>
@@ -754,14 +753,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-5 p-4 sm:p-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.5rem] border border-slate-100 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm dark-dashboard-inner sm:p-6">
+          <div className="rounded-[1.5rem] border border-white/[0.08] bg-[#161a20]/30 p-4 shadow-sm dark-dashboard-inner sm:p-6">
             <div className="mb-5 flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0863FF] text-white shadow-lg">
                 <Target size={24} />
               </div>
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-600">Funil comercial</p>
-                <h3 className="text-2xl font-black tracking-tight text-gray-950">Performance por etapa</h3>
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#0863FF]">Funil comercial</p>
+                <h3 className="text-2xl font-semibold tracking-tight text-white">Performance por etapa</h3>
               </div>
             </div>
 
@@ -770,7 +769,7 @@ export default function DashboardPage() {
                 <defs>
                   <linearGradient id="funnelTopGradient" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="#33d4ff" />
-                    <stop offset="48%" stopColor="#0789f6" />
+                    <stop offset="48%" stopColor="#0863FF" />
                     <stop offset="100%" stopColor="#0754c7" />
                   </linearGradient>
                   <linearGradient id="funnelMiddleGradient" x1="0" x2="1" y1="0" y2="1">
@@ -780,7 +779,7 @@ export default function DashboardPage() {
                   </linearGradient>
                   <linearGradient id="funnelQuoteGradient" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="#7da8ff" />
-                    <stop offset="52%" stopColor="#5167ff" />
+                    <stop offset="52%" stopColor="#0863FF" />
                     <stop offset="100%" stopColor="#3145c9" />
                   </linearGradient>
                   <linearGradient id="funnelSalesGradient" x1="0" x2="1" y1="0" y2="1">
@@ -790,7 +789,7 @@ export default function DashboardPage() {
                   </linearGradient>
                   <radialGradient id="funnelMouthGradient" cx="50%" cy="45%" r="60%">
                     <stop offset="0%" stopColor="#06243c" stopOpacity="0.72" />
-                    <stop offset="58%" stopColor="#0b8fe8" stopOpacity="0.42" />
+                    <stop offset="58%" stopColor="#0863FF" stopOpacity="0.42" />
                     <stop offset="100%" stopColor="#77dcff" stopOpacity="0.92" />
                   </radialGradient>
                   <linearGradient id="funnelSideShine" x1="0" x2="1" y1="0" y2="1">
@@ -802,7 +801,7 @@ export default function DashboardPage() {
                     <feDropShadow dx="0" dy="18" stdDeviation="18" floodColor="#00284d" floodOpacity="0.34" />
                   </filter>
                   <filter id="orionFunnelLift" x="-25%" y="-25%" width="150%" height="150%">
-                    <feDropShadow dx="0" dy="24" stdDeviation="18" floodColor="#0ea5e9" floodOpacity="0.42" />
+                    <feDropShadow dx="0" dy="24" stdDeviation="18" floodColor="#0863FF" floodOpacity="0.42" />
                   </filter>
                 </defs>
 
@@ -843,9 +842,9 @@ export default function DashboardPage() {
 
           <div className="grid gap-4">
             {[
-              { label: 'Sem resposta', value: staleOpportunityCount, hint: 'oportunidades sem resposta', color: 'bg-amber-50 text-amber-700 border-amber-100', icon: AlertTriangle },
-              { label: 'Em negociação', value: stats.inProgress, hint: 'leads em conversa ativa', color: 'bg-blue-50 text-blue-700 border-blue-100', icon: Clock },
-              { label: 'Venda prevista', value: formatCurrency(stats.salesPotential), hint: 'valor previsto dos leads ativos', color: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: TrendingUp },
+              { label: 'Sem resposta', value: staleOpportunityCount, hint: 'oportunidades sem resposta', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20', icon: AlertTriangle },
+              { label: 'Em negociação', value: stats.inProgress, hint: 'leads em conversa ativa', color: 'bg-[#0863FF]/10 text-[#0863FF] border-[#0863FF]/20', icon: Clock },
+              { label: 'Venda prevista', value: formatCurrency(stats.salesPotential), hint: 'valor previsto dos leads ativos', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: TrendingUp },
             ].map((item) => (
               <div key={item.label} className={`group rounded-[1.5rem] border p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${item.color}`}>
                 <div className="flex items-center justify-between gap-4">
@@ -854,7 +853,7 @@ export default function DashboardPage() {
                     <p className="mt-2 text-3xl font-black">{item.value}</p>
                     <p className="mt-1 text-xs font-bold opacity-80">{item.hint}</p>
                   </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/75 transition-transform duration-300 group-hover:scale-110">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/40 border border-white/5 transition-transform duration-300 group-hover:scale-110">
                     <item.icon size={22} />
                   </div>
                 </div>
@@ -867,23 +866,23 @@ export default function DashboardPage() {
       {/* FOURTH ROW: WEEKLY RHYTHM & CITY RANKING (RECONSTRUCTED) */}
       <div className="mb-12 grid grid-cols-1 gap-6 xl:grid-cols-2">
         {/* Weekly Input Card */}
-        <div className="rounded-flux-card border border-gray-100 bg-white p-6 shadow-flux sm:p-8 transition-all hover:shadow-xl">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#111418] p-6 shadow-flux sm:p-8 transition-all hover:shadow-xl">
           <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
             <div>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Últimos 7 dias</p>
-              <h2 className="text-2xl font-black text-slate-900">Ritmo de Entrada</h2>
-              <p className="mt-1 text-sm font-bold text-slate-400">Volume diário de leads captados.</p>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#0863FF]">Últimos 7 dias</p>
+              <h2 className="text-2xl font-semibold text-white">Ritmo de Entrada</h2>
+              <p className="mt-1 text-sm font-bold text-[#8C95A3]">Volume diário de leads captados.</p>
             </div>
-            <div className="rounded-2xl bg-blue-50 px-5 py-3 text-right">
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#0c1a3a]">Total</p>
-              <p className="text-3xl font-black text-[#0c1a3a]">{weeklyTotal}</p>
-              <p className="text-[11px] font-bold text-blue-600">leads na semana</p>
+            <div className="rounded-2xl bg-[#161a20] border border-white/[0.08] px-5 py-3 text-right">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#0863FF]">Total</p>
+              <p className="text-3xl font-black text-white">{weeklyTotal}</p>
+              <p className="text-[11px] font-bold text-[#0863FF]">leads na semana</p>
             </div>
           </div>
           
           <div className="grid gap-6 lg:grid-cols-[1fr_170px]">
             {/* Semicustom weekly bars */}
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#161a20]/30 p-4">
               <div className="flex h-56 items-end gap-3">
                 {weeklyLeads.map((day) => {
                   const height = Math.max((day.leads / maxWeeklyLeads) * 100, day.leads > 0 ? 14 : 5);
@@ -891,12 +890,12 @@ export default function DashboardPage() {
 
                   return (
                     <div key={day.key} className="group/day flex min-w-0 flex-1 flex-col items-center gap-3">
-                      <div className="relative flex h-44 w-full items-end justify-center rounded-2xl bg-white px-2 py-2">
+                      <div className="relative flex h-44 w-full items-end justify-center rounded-2xl bg-[#111418] border border-white/5 px-2 py-2">
                         <div
                           className={`dashboard-week-bar w-full max-w-10 rounded-full group-hover/day:shadow-md transition-all ${
                             isBest
-                              ? 'bg-gradient-to-t from-[#0c1a3a] to-cyan-400 shadow-lg shadow-blue-500/25 bg-diagonal-stripes'
-                              : 'bg-gradient-to-t from-blue-600 to-blue-400'
+                              ? 'bg-gradient-to-t from-[#0863FF] to-blue-500 shadow-lg shadow-[#0863FF]/25 bg-diagonal-stripes'
+                              : 'bg-gradient-to-t from-[#0863FF]/30 to-[#0863FF]'
                           }`}
                           style={{
                             ['--bar-height' as string]: `${height}%`,
@@ -904,11 +903,11 @@ export default function DashboardPage() {
                             height: `${height}%`
                           }}
                         />
-                        <div className="pointer-events-none absolute -top-3 rounded-xl border border-slate-100 bg-[#0c1a3a] px-2 py-1 text-[9px] font-black text-white opacity-0 shadow-sm transition-opacity group-hover/day:opacity-100">
+                        <div className="pointer-events-none absolute -top-3 rounded-xl border border-white/[0.08] bg-[#000000] px-2 py-1 text-[9px] font-black text-white opacity-0 shadow-sm transition-opacity group-hover/day:opacity-100">
                           {day.leads} leads
                         </div>
                       </div>
-                      <span className="text-[10px] font-black text-slate-500 sm:text-xs">{day.label}</span>
+                      <span className="text-[10px] font-black text-[#8C95A3] sm:text-xs">{day.label}</span>
                     </div>
                   );
                 })}
@@ -917,19 +916,19 @@ export default function DashboardPage() {
 
             {/* Side summary details */}
             <div className="grid gap-3">
-              <div className="rounded-2xl bg-[#0c1a3a] p-4 text-white">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Melhor dia</p>
-                <p className="text-2xl font-black text-cyan-300">{bestWeeklyDay.label}</p>
-                <p className="mt-1 text-sm font-bold text-blue-200">{bestWeeklyDay.leads} leads</p>
+              <div className="rounded-2xl bg-[#161a20] border border-white/[0.08] p-4 text-white">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Melhor dia</p>
+                <p className="text-2xl font-black text-[#0863FF]">{bestWeeklyDay.label}</p>
+                <p className="mt-1 text-sm font-bold text-slate-300">{bestWeeklyDay.leads} leads</p>
               </div>
-              <div className="rounded-2xl border border-slate-100 bg-white p-4">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Média/dia</p>
-                <p className="text-2xl font-black text-gray-950">
+              <div className="rounded-2xl border border-white/[0.08] bg-[#111418] p-4">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Média/dia</p>
+                <p className="text-2xl font-black text-white">
                   {(weeklyTotal / Math.max(weeklyLeads.length, 1)).toFixed(1).replace('.', ',')}
                 </p>
-                <p className="mt-1 text-xs font-bold text-slate-500">leads por dia</p>
+                <p className="mt-1 text-xs font-bold text-[#8C95A3]">leads por dia</p>
               </div>
-              <Link href="/leads" className="inline-flex items-center justify-center gap-2 rounded-flux-pill bg-blue-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-700">
+              <Link href="/leads" className="inline-flex items-center justify-center gap-2 rounded-flux-pill bg-[#0863FF] px-4 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-opacity-90">
                 Ver leads <ArrowRight size={14} />
               </Link>
             </div>
@@ -937,27 +936,27 @@ export default function DashboardPage() {
         </div>
 
         {/* Top Cities ranking */}
-        <div className="rounded-flux-card border border-gray-100 bg-white p-6 shadow-flux sm:p-8 transition-all hover:shadow-xl">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#111418] p-6 shadow-flux sm:p-8 transition-all hover:shadow-xl">
           <div className="mb-6 flex items-end justify-between gap-4">
             <div>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Geolocalização</p>
-              <h2 className="text-2xl font-black text-slate-900 font-black">Top Cidades</h2>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#0863FF]">Geolocalização</p>
+              <h2 className="text-2xl font-semibold text-white font-black">Top Cidades</h2>
             </div>
-            <p className="text-xs font-bold text-slate-400">Por leads captados</p>
+            <p className="text-xs font-bold text-[#8C95A3]">Por leads captados</p>
           </div>
           <div className="space-y-5">
             {topCities.length > 0 ? topCities.map((city, index) => (
               <div key={`${city.city}-${index}`} className="group/city">
                 <div className="mb-2 flex items-center justify-between gap-4 text-sm">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="w-7 shrink-0 text-xs font-bold text-slate-400">#{index + 1}</span>
-                    <span className="truncate font-black text-gray-900">{city.city}</span>
+                    <span className="w-7 shrink-0 text-xs font-bold text-slate-500">#{index + 1}</span>
+                    <span className="truncate font-black text-white">{city.city}</span>
                   </div>
-                  <span className="shrink-0 text-xs font-bold text-slate-500">{city.leads} leads</span>
+                  <span className="shrink-0 text-xs font-bold text-[#8C95A3]">{city.leads} leads</span>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-2.5 overflow-hidden rounded-full bg-[#161a20]">
                   <div
-                    className="dashboard-progress-bar h-full rounded-full bg-gradient-to-r from-[#0c1a3a] to-blue-500 transition-all duration-500 group-hover/city:from-blue-500 group-hover/city:to-cyan-400 group-hover/city:shadow-lg group-hover/city:shadow-blue-500/25"
+                    className="dashboard-progress-bar h-full rounded-full bg-gradient-to-r from-[#0863FF] to-blue-500 transition-all duration-500 group-hover/city:shadow-lg group-hover/city:shadow-[#0863FF]/25"
                     style={{
                       ['--bar-width' as string]: `${Math.max((city.leads / maxCityLeads) * 100, 8)}%`,
                       ['--bar-delay' as string]: `${index * 80}ms`,
@@ -967,8 +966,8 @@ export default function DashboardPage() {
                 </div>
               </div>
             )) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 py-14 text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sem cidades registradas</p>
+              <div className="rounded-2xl border border-dashed border-white/5 py-14 text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">Sem cidades registradas</p>
               </div>
             )}
           </div>
@@ -977,26 +976,26 @@ export default function DashboardPage() {
 
       {/* QUICK ACTIONS GRID */}
       <div className="mb-16">
-        <h2 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
+        <h2 className="text-xl font-semibold text-white mb-8 flex items-center gap-2">
           Atalhos de Vendas
-          <div className="h-px flex-1 bg-slate-100 ml-2" />
+          <div className="h-px flex-1 bg-white/[0.08] ml-2" />
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {quickActions.map((action, idx) => (
             <Link 
               key={idx} 
               href={action.href}
-              className="group flex min-h-48 flex-col justify-between rounded-flux-card border border-gray-100 bg-white p-6 shadow-flux transition-all duration-500 hover:border-blue-200 hover:shadow-xl sm:h-64 sm:p-8"
+              className="group flex min-h-48 flex-col justify-between rounded-[22px] border border-white/[0.08] bg-[#111418] p-6 shadow-flux transition-all duration-500 hover:border-[#0863FF]/30 hover:shadow-xl sm:h-64 sm:p-8"
             >
               <div className="flex justify-between items-start">
-                <div className="p-4 bg-slate-50 text-blue-600 rounded-2xl group-hover:bg-[#0c1a3a] group-hover:text-white transition-all duration-300 transform group-hover:scale-110 shadow-inner">
+                <div className="p-4 bg-[#161a20] border border-white/5 text-[#0863FF] rounded-2xl group-hover:bg-[#0863FF] group-hover:text-white transition-all duration-300 transform group-hover:scale-110 shadow-inner">
                   <action.icon size={28} />
                 </div>
-                <ArrowRight size={20} className="text-slate-300 group-hover:text-[#0c1a3a] transition-colors" />
+                <ArrowRight size={20} className="text-slate-500 group-hover:text-[#0863FF] transition-colors" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-[#0c1a3a] mb-2">{action.label}</h3>
-                <p className="text-sm text-slate-400 font-bold leading-relaxed">{action.desc}</p>
+                <h3 className="text-xl font-semibold text-white mb-2">{action.label}</h3>
+                <p className="text-sm text-[#8C95A3] font-bold leading-relaxed">{action.desc}</p>
               </div>
             </Link>
           ))}
@@ -1004,20 +1003,20 @@ export default function DashboardPage() {
       </div>
 
       {/* YOUR OPERATIONAL TIME */}
-      <div className="mb-10 rounded-flux-card border border-gray-100 bg-slate-50 p-6 sm:p-10 shadow-flux">
+      <div className="mb-10 rounded-[22px] border border-white/[0.08] bg-[#111418] p-6 sm:p-10 shadow-flux">
         <div className="mb-8">
-          <h2 className="text-2xl font-black text-[#0c1a3a] tracking-tight mb-2">Seu Time Orion</h2>
-          <p className="text-slate-400 font-bold text-sm">Essas são as pessoas da Orion responsáveis por acompanhar sua operação.</p>
+          <h2 className="text-2xl font-semibold text-white tracking-tight mb-2">Seu Time Orion</h2>
+          <p className="text-[#8C95A3] font-bold text-sm">Essas são as pessoas da Orion responsáveis por acompanhar sua operação.</p>
         </div>
 
         {isDataLoading ? (
           <div className="flex gap-4">
-             <div className="w-32 h-32 bg-white rounded-3xl animate-pulse" />
-             <div className="w-32 h-32 bg-white rounded-3xl animate-pulse" />
+             <div className="w-32 h-32 bg-[#161a20] rounded-3xl animate-pulse" />
+             <div className="w-32 h-32 bg-[#161a20] rounded-3xl animate-pulse" />
           </div>
         ) : timeOperacional.length === 0 ? (
-          <div className="bg-white p-8 rounded-[2rem] border border-gray-100 text-center">
-             <p className="text-slate-400 font-bold italic">Seu time operacional ainda não foi definido. Fale com a Orion.</p>
+          <div className="bg-[#111418] p-8 rounded-[2rem] border border-white/[0.08] text-center">
+             <p className="text-[#8C95A3] font-bold italic">Seu time operacional ainda não foi definido. Fale com a Orion.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
@@ -1025,7 +1024,7 @@ export default function DashboardPage() {
               const foto = getTeamMemberPhoto(membro.nome);
 
               return (
-                <div key={`${membro.nome}-${index}`} className="bg-white p-6 rounded-flux-card border border-gray-100 shadow-sm flex flex-col items-center text-center group hover:scale-105 transition-all duration-500 hover:shadow-xl hover:border-blue-100">
+                <div key={`${membro.nome}-${index}`} className="bg-[#161a20] p-6 rounded-[22px] border border-white/[0.08] shadow-sm flex flex-col items-center text-center group hover:scale-105 transition-all duration-500 hover:shadow-xl hover:border-[#0863FF]/30">
                   <div className="w-24 h-24 mb-4 relative">
                     {foto ? (
                       <img 
@@ -1034,13 +1033,13 @@ export default function DashboardPage() {
                         className="w-full h-full rounded-2xl object-cover shadow-md group-hover:rotate-3 transition-transform duration-500"
                       />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg group-hover:rotate-6 transition-transform">
+                      <div className="w-full h-full bg-[#111418] text-[#0863FF] border border-white/[0.08] rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg group-hover:rotate-6 transition-transform">
                         {membro.nome?.charAt(0).toUpperCase()}
                       </div>
                     )}
                   </div>
-                  <h3 className="font-black text-[#0c1a3a] mb-1 leading-tight">{membro.nome}</h3>
-                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{membro.cargo}</p>
+                  <h3 className="font-semibold text-white mb-1 leading-tight">{membro.nome}</h3>
+                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{membro.cargo}</p>
                 </div>
               );
             })}
@@ -1053,12 +1052,12 @@ export default function DashboardPage() {
 
 function MiniMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number | string }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-blue-600">
+    <div className="rounded-2xl border border-white/[0.08] bg-[#111418] p-4 shadow-sm">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-[#161a20] text-[#0863FF]">
         <Icon size={17} />
       </div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-1 text-xl font-black text-gray-950">{value}</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-[#8C95A3]">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-white">{value}</p>
     </div>
   );
 }
