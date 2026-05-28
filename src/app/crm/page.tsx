@@ -842,7 +842,7 @@ export default function CrmPage() {
 
                 return (
                   <div key={column.id} className="min-w-[285px] flex-1 snap-start sm:min-w-[310px]">
-                    <div className="sticky top-0 z-20 mb-3 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="sticky top-0 z-20 mb-3 rounded-flux-card-inner border border-gray-100 bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
@@ -866,7 +866,7 @@ export default function CrmPage() {
                     <div
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={() => handleDrop(column.id)}
-                      className={`min-h-[220px] space-y-3 rounded-[2rem] border p-3 transition-colors ${draggedLeadId ? 'border-blue-200 bg-blue-50/70' : statusStyle.column}`}
+                      className={`min-h-[220px] space-y-3 rounded-flux-card border p-3 transition-colors ${draggedLeadId ? 'border-blue-200 bg-blue-50/70' : statusStyle.column}`}
                     >
                       <AnimatePresence mode="popLayout">
                         {columnLeads.map((lead) => {
@@ -886,7 +886,7 @@ export default function CrmPage() {
                               onDragStart={() => setDraggedLeadId(lead.id)}
                               onDragEnd={() => setDraggedLeadId(null)}
                               onClick={() => setSelectedLead(lead)}
-                              className={`w-full rounded-[1.5rem] border bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 text-left shadow-sm transition-all hover:shadow-md cursor-pointer ${
+                              className={`w-full rounded-flux-card-inner border bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 text-left shadow-sm transition-all hover:shadow-md cursor-pointer ${
                                 selected 
                                   ? 'border-blue-400 ring-4 ring-blue-100 dark:ring-blue-900/30' 
                                   : 'border-white/30 dark:border-white/5'

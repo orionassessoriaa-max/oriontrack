@@ -837,3 +837,54 @@ body.theme-noturno main :is(input, select, textarea):disabled,
   50% { opacity: 0.4; transform: scale(1.05); }
 }
 
+/* --- ESTILOS DE REDESENHO PREMIUM (ESTILO FLUXCRM) --- */
+
+.rounded-flux-card {
+  border-radius: 2.25rem !important;
+}
+
+.rounded-flux-card-inner {
+  border-radius: 1.5rem !important;
+}
+
+.rounded-flux-pill {
+  border-radius: 9999px !important;
+}
+
+.bg-diagonal-stripes {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 16px 16px;
+}
+
+.bg-diagonal-stripes-dark {
+  background-image: linear-gradient(
+    45deg,
+    rgba(15, 23, 42, 0.05) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(15, 23, 42, 0.05) 50%,
+    rgba(15, 23, 42, 0.05) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 16px 16px;
+}
+
+.shadow-flux {
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.03) !important;
+}
+
+.shadow-flux-hover:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 20px 45px -15px rgba(37, 99, 235, 0.08) !important;
+}
+
