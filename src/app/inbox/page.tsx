@@ -267,7 +267,16 @@ export default function BrokerInboxPage() {
             </div>
           ) : null}
           {connectError ? (
-            <p className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700">{connectError}</p>
+            <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-left shadow-sm">
+              <p className="text-xs font-bold text-red-700">{connectError}</p>
+              <button
+                type="button"
+                onClick={disconnectWhatsApp}
+                className="mt-3 w-full rounded-xl bg-red-600 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-700 transition-all cursor-pointer text-center"
+              >
+                Resetar Conexão (Limpar Cache do Servidor)
+              </button>
+            </div>
           ) : (
             <p className="mt-3 text-xs font-bold text-blue-700">Quando o QR Code aparecer, abra o WhatsApp no celular, toque em aparelhos conectados e faca a leitura.</p>
           )}
