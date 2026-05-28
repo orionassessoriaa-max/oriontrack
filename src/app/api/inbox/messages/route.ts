@@ -64,16 +64,63 @@ export async function POST(request: Request) {
     if ('error' in guard) return guard.error;
 
     const body = await request.json().catch(() => ({}));
-    const conversationId = String(body.conversation_id || '');
+    let conversationId = String(body.conversation_id || '');
     const text = String(body.mensagem || '').trim();
+    const phoneParam = String(body.telefone || '').trim();
+    const leadIdParam = String(body.lead_id || '').trim();
+    const nameParam = String(body.nome_contato || '').trim();
 
-    if (!conversationId || !text) {
+    if ((!conversationId && !phoneParam) || !text) {
       return NextResponse.json({ error: 'Escreva uma mensagem para enviar.' }, { status: 400 });
     }
 
-    const conversation = await getConversation(conversationId);
-    if (!canAccessConversation(guard.profile, conversation)) {
-      return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
+    let conversation: any = null;
+
+    if (conversationId && !conversationId.startsWith('new-')) {
+      conversation = await getConversation(conversationId);
+      if (!canAccessConversation(guard.profile, conversation)) {
+        return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
+      }
+    } else {
+      if (!guard.profile.corretor_id) {
+        return NextResponse.json({ error: 'Apenas corretores vinculados podem iniciar conversas.' }, { status: 400 });
+      }
+
+      const phone = normalizePhone(phoneParam || conversationId.replace('new-', ''));
+      if (!phone) {
+        return NextResponse.json({ error: 'Telefone do contato invalido.' }, { status: 400 });
+      }
+
+      const { data: existing } = await supabaseAdmin
+        .from('whatsapp_conversas')
+        .select('*')
+        .eq('corretor_id', guard.profile.corretor_id)
+        .eq('telefone', phone)
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        conversation = existing;
+        conversationId = existing.id;
+      } else {
+        const contactName = nameParam || phone;
+        const { data: created, error: createError } = await supabaseAdmin
+          .from('whatsapp_conversas')
+          .insert([{
+            corretor_id: guard.profile.corretor_id,
+            lead_id: leadIdParam || null,
+            telefone: phone,
+            nome_contato: contactName,
+            status: 'aberta',
+            ultima_mensagem_at: new Date().toISOString(),
+          }])
+          .select('*')
+          .single();
+
+        if (createError) throw createError;
+        conversation = created;
+        conversationId = created.id;
+      }
     }
 
     const phone = normalizePhone(conversation.telefone);
@@ -125,7 +172,7 @@ export async function POST(request: Request) {
       metadata: { phone },
     });
 
-    return NextResponse.json({ success: true, message: inserted });
+    return NextResponse.json({ success: true, message: inserted, conversation });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao consegui enviar a mensagem agora.' }, { status: 500 });
   }
