@@ -182,6 +182,35 @@ export default function AccountInboxPage() {
     setQrCode(payload.qrcode);
   };
 
+  const disconnectWhatsApp = async () => {
+    setConnectingWhatsApp(true);
+    setQrCode(null);
+    setConnectError(null);
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+
+    if (!token) {
+      setConnectingWhatsApp(false);
+      setConnectError('Sua sessao expirou. Entre novamente.');
+      return;
+    }
+
+    const response = await fetch('/api/inbox/evolution/connect', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setConnectingWhatsApp(false);
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setConnectError(payload.error || 'Nao consegui resetar a conexao agora.');
+      return;
+    }
+
+    alert('Instancia limpa e reiniciada no servidor! Clique em "Conectar WhatsApp" novamente para gerar um QR Code limpo.');
+  };
+
   const weeklyRows = interactions.filter((interaction) => !weeklyOnlyDone || interaction.status === 'feito');
 
   return (
@@ -264,6 +293,13 @@ export default function AccountInboxPage() {
                   Abra o WhatsApp no celular, toque em aparelhos conectados e leia o QR Code.
                 </p>
                 <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="mx-auto mt-5 h-64 w-64 bg-white object-contain p-3" />
+                <button
+                  type="button"
+                  onClick={disconnectWhatsApp}
+                  className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100 transition-all cursor-pointer"
+                >
+                  Resetar Conexão / Gerar Novo QR Code
+                </button>
               </div>
             ) : (
               <>

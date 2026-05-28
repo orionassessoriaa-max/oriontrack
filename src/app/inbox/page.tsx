@@ -131,6 +131,36 @@ export default function BrokerInboxPage() {
     }
   }
 
+  async function disconnectWhatsApp() {
+    setConnecting(true);
+    setConnectError(null);
+    setQrCode(null);
+
+    const token = await getToken();
+    if (!token) {
+      setConnectError('Sessao expirada. Entre novamente.');
+      setConnecting(false);
+      return;
+    }
+
+    const response = await fetch('/api/inbox/evolution/connect', {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+      },
+    });
+    setConnecting(false);
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setConnectError(payload.error || 'Nao consegui resetar a conexao.');
+      return;
+    }
+
+    alert('Instancia limpa e reiniciada no servidor! Clique em "Conectar meu WhatsApp" novamente para gerar um QR Code limpo.');
+  }
+
   async function sendMessage() {
     if (!selectedConversation || !messageText.trim()) return;
 
@@ -227,6 +257,13 @@ export default function BrokerInboxPage() {
             <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-center">
               <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="mx-auto h-52 w-52 rounded-xl object-contain" />
               <p className="mt-3 text-xs font-black uppercase tracking-widest text-blue-700">Escaneie com o WhatsApp</p>
+              <button
+                type="button"
+                onClick={disconnectWhatsApp}
+                className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100 transition-all cursor-pointer"
+              >
+                Resetar Conexão / Gerar Novo QR Code
+              </button>
             </div>
           ) : null}
           {connectError ? (
