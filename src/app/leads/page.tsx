@@ -88,7 +88,7 @@ const COMMERCIAL_REQUIRED_STATUSES: LeadStatus[] = [
 ];
 
 const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
-const PAGE_SIZE = 5000;
+const PAGE_SIZE = 1000;
 
 function parseCurrencyInput(value?: string | number | null) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
