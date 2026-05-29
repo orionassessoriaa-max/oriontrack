@@ -625,6 +625,21 @@ body.theme-noturno main :is(input, select, textarea):disabled,
   color: #0f172a !important;
 }
 
+/* Fix ugly white/light-blue hovers on list rows and cards in dark theme */
+.theme-noturno .hover\:bg-blue-50\/40:hover,
+.theme-noturno .hover\:bg-blue-50\/30:hover,
+.theme-noturno .hover\:bg-blue-50\/20:hover,
+.theme-noturno .hover\:bg-blue-50\/10:hover,
+.theme-noturno .hover\:bg-blue-50:hover {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+.theme-noturno .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
+.theme-noturno .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.theme-noturno .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
 /* Premium Growth Animations */
 @keyframes orion-fade-in-up {
   from {

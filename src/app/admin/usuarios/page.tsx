@@ -654,7 +654,7 @@ export default function AdminUsuariosPage() {
                   .includes(MASTER_ADMIN_EMAIL);
 
                 return (
-                  <div key={profile.id} className="grid gap-5 p-5 transition-colors hover:bg-blue-50/40 sm:p-6 2xl:grid-cols-[minmax(460px,1fr)_minmax(420px,auto)] 2xl:items-center">
+                  <div key={profile.id} className="grid gap-5 p-5 sm:p-6 2xl:grid-cols-[minmax(460px,1fr)_minmax(420px,auto)] 2xl:items-center">
                     <button
                       type="button"
                       onClick={() => void openUserPanel(profile)}
@@ -668,7 +668,7 @@ export default function AdminUsuariosPage() {
                           className="h-14 w-14 rounded-xl object-cover shadow-sm ring-1 ring-slate-200"
                         />
                       ) : (
-                        <div className="force-white flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 text-sm font-black shadow-sm">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black text-white shadow-inner">
                           {profile.tipo_usuario === 'admin' ? <Shield size={20} /> : profile.nome.slice(0, 2).toUpperCase()}
                         </div>
                       )}
