@@ -1437,7 +1437,7 @@ function CustomDonutPizzaChart({
   }, [total]);
 
   return (
-    <div className="flex flex-col lg:flex-row items-center gap-12 justify-center w-full py-6">
+    <div className="flex flex-col items-center gap-8 justify-center w-full py-2">
       {/* Spectacular Glowing Total Orb */}
       <div className="relative w-48 h-48 flex items-center justify-center select-none group shrink-0">
         {/* Animated Radial Pulse Rings in the background */}
@@ -1485,12 +1485,12 @@ function CustomDonutPizzaChart({
         </div>
       </div>
 
-      {/* Enlarged premium detailed data legend */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-left w-full max-w-sm sm:max-w-md">
+      {/* Enlarged premium detailed data legend (Centered below the Orb with full width columns) */}
+      <div className="grid grid-cols-2 gap-3 text-left w-full max-w-sm sm:max-w-md">
         {displaySlices.map((slice, i) => (
           <div 
             key={i} 
-            className="flex items-center gap-3 text-xs p-2.5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all duration-300 shadow-md"
+            className="flex items-center gap-3 text-xs p-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all duration-300 shadow-md min-w-0"
             title={`${slice.label}: ${slice.value} leads`}
           >
             <span 
@@ -1500,8 +1500,8 @@ function CustomDonutPizzaChart({
                 boxShadow: `0 0 8px ${slice.color}`
               }} 
             />
-            <div>
-              <p className="font-extrabold text-white leading-tight text-xs sm:text-sm">{slice.label}</p>
+            <div className="min-w-0 flex-1">
+              <p className="font-extrabold text-white leading-tight text-xs sm:text-sm truncate" title={slice.label}>{slice.label}</p>
               <p className="text-[10px] font-bold text-slate-300 mt-0.5">
                 {slice.value} leads <span className="text-slate-400 font-bold">({((slice.value / displayTotal) * 100).toFixed(0)}%)</span>
               </p>
