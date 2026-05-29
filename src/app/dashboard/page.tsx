@@ -506,9 +506,17 @@ export default function DashboardPage() {
 
         {/* Column 2: Gorgeous concentric glowing SVG Pizza (Donut) Chart */}
         <div className="rounded-[1.5rem] border border-slate-100 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-6 lg:col-span-2">
-          <div className="mb-6">
-            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">Distribuição de Leads</p>
-            <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">Leads por Etapa</h2>
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <p className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">Distribuição de Leads</p>
+              <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">Leads por Etapa</h2>
+            </div>
+            <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-2.5 text-right shrink-0">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Total Geral</p>
+              <p className="mt-1.5 text-lg font-black text-white leading-none">
+                {stats.waiting + stats.inProgress + stats.quoted + stats.sold + stats.lost}
+              </p>
+            </div>
           </div>
           <div className="min-h-[220px] flex items-center justify-center">
             {isDataLoading ? (
@@ -1227,14 +1235,14 @@ function CustomDonutPizzaChart({
         <div 
           className="w-36 h-36 relative"
           style={{
-            transform: 'rotateX(58deg) rotateZ(-15deg)',
+            transform: 'rotateX(40deg) rotateZ(-10deg)',
             transformStyle: 'preserve-3d',
           }}
         >
           {/* Extruded Depth Layers (Stacking 6 SVGs to create 3D cylinder depth) */}
           {[...Array(6)].map((_, layerIndex) => {
             const isTop = layerIndex === 5;
-            const offset = (5 - layerIndex) * 1.8; // ~10px extrusion depth
+            const offset = (5 - layerIndex) * 2.0; // ~10px extrusion depth
             let accumulatedPercent = 0;
 
             return (
@@ -1280,14 +1288,6 @@ function CustomDonutPizzaChart({
               </svg>
             );
           })}
-        </div>
-
-        {/* Flat Glass-Floating total text in the center */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
-          <div className="bg-[#0b1329]/95 border border-white/10 rounded-full h-20 w-20 flex flex-col items-center justify-center shadow-2xl backdrop-blur-md select-none transform hover:scale-110 transition-all duration-300">
-            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 leading-none">Total</p>
-            <p className="mt-1.5 text-xl font-black text-white leading-none">{slices.length > 0 ? total : 0}</p>
-          </div>
         </div>
       </div>
 
