@@ -1375,25 +1375,9 @@ function CustomDonutPizzaChart({
   sold: number;
   lost: number;
 }) {
-  const [animationProgress, setAnimationProgress] = useState(0);
+  const [animatedTotal, setAnimatedTotal] = useState(0);
 
-  useEffect(() => {
-    let start: number;
-    const duration = 1200; // 1.2s
-    const animate = (timestamp: number) => {
-      if (!start) start = timestamp;
-      const elapsed = timestamp - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 4); // easeOutQuart
-      setAnimationProgress(ease);
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-  }, [waiting, inProgress, quoted, sold, lost]);
-
-  const total = (waiting + inProgress + quoted + sold + lost) || 1;
+  const total = (waiting + inProgress + quoted + sold + lost) || 0;
   const slices = [
     { label: 'Aguardando', value: waiting, color: '#a78bfa' },
     { label: 'Negociação', value: inProgress, color: '#f59e0b' },
@@ -1410,69 +1394,70 @@ function CustomDonutPizzaChart({
   ];
   const displayTotal = displaySlices.reduce((a, b) => a + b.value, 0);
 
-  const radius = 40;
-  const circ = 2 * Math.PI * radius; // ~251.3
-  
+  useEffect(() => {
+    let start: number;
+    const duration = 1200; // 1.2s
+    const animate = (timestamp: number) => {
+      if (!start) start = timestamp;
+      const elapsed = timestamp - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 4); // easeOutQuart
+      
+      setAnimatedTotal(Math.floor(ease * total));
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    requestAnimationFrame(animate);
+  }, [total]);
+
   return (
-    <div className="flex flex-col lg:flex-row items-center gap-12 justify-center w-full">
-      {/* 3D Tilted Donut Container */}
-      <div className="relative w-44 h-44 [perspective:1000px] flex items-center justify-center select-none">
-        <div 
-          className="w-36 h-36 relative"
-          style={{
-            transform: 'rotateX(40deg) rotateZ(-10deg)',
-            transformStyle: 'preserve-3d',
-          }}
-        >
-          {/* Extruded Depth Layers (Stacking 6 SVGs to create 3D cylinder depth) */}
-          {[...Array(6)].map((_, layerIndex) => {
-            const isTop = layerIndex === 5;
-            const offset = (5 - layerIndex) * 2.0; // ~10px extrusion depth
-            let accumulatedPercent = 0;
+    <div className="flex flex-col lg:flex-row items-center gap-12 justify-center w-full py-6">
+      {/* Spectacular Glowing Total Orb */}
+      <div className="relative w-48 h-48 flex items-center justify-center select-none group shrink-0">
+        {/* Animated Radial Pulse Rings in the background */}
+        <div className="absolute inset-4 rounded-full bg-gradient-to-tr from-purple-600 via-pink-600 to-cyan-500 opacity-20 blur-xl group-hover:opacity-40 group-hover:scale-110 transition-all duration-700 animate-pulse" />
+        <div className="absolute inset-8 rounded-full border border-purple-500/30 animate-[spin_8s_linear_infinite] opacity-60" style={{ borderStyle: 'dashed' }} />
+        <div className="absolute inset-12 rounded-full border border-cyan-400/20 animate-[spin_12s_linear_infinite_reverse] opacity-40" />
 
-            return (
-              <svg
-                key={layerIndex}
-                viewBox="0 0 100 100"
-                className={`absolute inset-0 w-full h-full -rotate-90 transition-all duration-300 ${
-                  isTop ? 'pointer-events-auto' : 'pointer-events-none'
-                }`}
-                style={{
-                  transform: `translateY(${offset}px) translateZ(${layerIndex * 0.5}px)`,
-                  filter: isTop
-                    ? 'drop-shadow(0 10px 15px rgba(0, 0, 0, 0.45))'
-                    : 'brightness(0.6) contrast(1.2)',
-                  opacity: isTop ? 1 : 0.85,
-                }}
-              >
-                {displaySlices.map((slice, i) => {
-                  const percent = slice.value / displayTotal;
-                  const strokeDasharray = `${percent * circ * animationProgress} ${circ}`;
-                  const strokeDashoffset = -accumulatedPercent * circ;
-                  accumulatedPercent += percent;
+        {/* Outer glowing animated neon ring (SVG) */}
+        <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full animate-[spin_16s_linear_infinite] pointer-events-none">
+          <defs>
+            <linearGradient id="orbGlowGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#c084fc" />
+              <stop offset="50%" stopColor="#ec4899" />
+              <stop offset="100%" stopColor="#22d3ee" />
+            </linearGradient>
+          </defs>
+          <circle
+            cx="50"
+            cy="50"
+            r="44"
+            fill="transparent"
+            stroke="url(#orbGlowGrad)"
+            strokeWidth="2.5"
+            strokeDasharray="60 120 40 40"
+            strokeLinecap="round"
+            style={{
+              filter: 'drop-shadow(0 0 6px rgba(236, 72, 153, 0.45))'
+            }}
+          />
+        </svg>
 
-                  return (
-                    <circle
-                      key={i}
-                      cx="50"
-                      cy="50"
-                      r={radius}
-                      fill="transparent"
-                      stroke={slice.color}
-                      strokeWidth="11"
-                      strokeDasharray={strokeDasharray}
-                      strokeDashoffset={strokeDashoffset}
-                      strokeLinecap="round"
-                      className={isTop ? "transition-all duration-300 hover:stroke-[13px] cursor-pointer" : ""}
-                      style={{
-                        filter: isTop ? `drop-shadow(0 0 4px ${slice.color}33)` : 'none'
-                      }}
-                    />
-                  );
-                })}
-              </svg>
-            );
-          })}
+        {/* Core Glassmorphic Floating Orb */}
+        <div className="relative rounded-full h-32 w-32 bg-[#090e1a]/85 border border-white/10 flex flex-col items-center justify-center shadow-2xl backdrop-blur-md transform group-hover:scale-105 group-hover:border-purple-500/30 transition-all duration-500 select-none">
+          {/* Inner ambient glow */}
+          <div className="absolute inset-2 rounded-full bg-gradient-to-tr from-purple-500/10 to-cyan-400/10 opacity-50 pointer-events-none" />
+          
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 leading-none">Total Geral</p>
+          
+          {/* Premium Gradient Number with Rolling Counter */}
+          <p className="mt-2.5 text-4xl font-black tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-cyan-400 drop-shadow-[0_0_12px_rgba(236, 72, 153, 0.3)]">
+            {animatedTotal}
+          </p>
+          
+          <p className="mt-1 text-[9px] font-bold text-slate-500 tracking-wider leading-none">leads ativos</p>
         </div>
       </div>
 
