@@ -28,6 +28,7 @@ import { supabase } from '@/lib/supabase/client';
 import { getTeamMemberPhoto } from '@/lib/orionTeam';
 import OrionMark from '@/components/ui/OrionMark';
 import { useRouter } from 'next/navigation';
+import OrionFunnel from '@/components/ui/OrionFunnel';
 
 type CorretorDashboardData = {
   id: string;
@@ -607,276 +608,33 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid gap-5 p-4 sm:p-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.5rem] border border-slate-100 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm dark-dashboard-inner sm:p-6">
-            <div className="mb-5 flex items-center gap-4">
+        <div className="grid gap-6 grid-cols-1 xl:grid-cols-[1.35fr_0.65fr] p-4 sm:p-6">
+          {/* Left: Responsive 3D Glass Interactive Funnel */}
+          <div className="rounded-[1.5rem] border border-white/5 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-7 flex flex-col justify-between">
+            <div className="mb-6 flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
                 <Target size={24} />
               </div>
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-600">Funil comercial</p>
-                <h3 className="text-2xl font-black tracking-tight text-gray-950">Performance por etapa</h3>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-400">Funil comercial</p>
+                <h3 className="text-2xl font-black tracking-tight text-white">Performance por etapa</h3>
               </div>
             </div>
 
-            <div className="orion-traffic-funnel mx-auto py-2">
-              <svg viewBox="0 0 840 640" role="img" aria-label="Funil comercial Orion Track">
-                <defs>
-                  {/* Neon Glow Filters */}
-                  <filter id="funnelGlow1" x="-25%" y="-25%" width="150%" height="150%">
-                    <feDropShadow dx="0" dy="0" stdDeviation="10" floodColor="#00bcff" floodOpacity="0.6" />
-                  </filter>
-                  <filter id="funnelGlow2" x="-25%" y="-25%" width="150%" height="150%">
-                    <feDropShadow dx="0" dy="0" stdDeviation="10" floodColor="#00c2ff" floodOpacity="0.6" />
-                  </filter>
-                  <filter id="funnelGlow3" x="-25%" y="-25%" width="150%" height="150%">
-                    <feDropShadow dx="0" dy="0" stdDeviation="10" floodColor="#7822d5" floodOpacity="0.6" />
-                  </filter>
-                  <filter id="funnelGlow4" x="-25%" y="-25%" width="150%" height="150%">
-                    <feDropShadow dx="0" dy="0" stdDeviation="10" floodColor="#00b4af" floodOpacity="0.6" />
-                  </filter>
-
-                  {/* Glass Gradients for Mouth Interiors */}
-                  <linearGradient id="funnelMouth1" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#08224b" />
-                    <stop offset="100%" stopColor="#004da3" />
-                  </linearGradient>
-                  <linearGradient id="funnelMouth2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#002d3c" />
-                    <stop offset="100%" stopColor="#006385" />
-                  </linearGradient>
-                  <linearGradient id="funnelMouth3" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2c0650" />
-                    <stop offset="100%" stopColor="#4f127e" />
-                  </linearGradient>
-                  <linearGradient id="funnelMouth4" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#002d2c" />
-                    <stop offset="100%" stopColor="#005d5a" />
-                  </linearGradient>
-
-                  {/* Body Gradients */}
-                  <linearGradient id="funnelBody1" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0f62e6" />
-                    <stop offset="100%" stopColor="#002b78" />
-                  </linearGradient>
-                  <linearGradient id="funnelBody2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#00a8e0" />
-                    <stop offset="100%" stopColor="#005978" />
-                  </linearGradient>
-                  <linearGradient id="funnelBody3" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6719cd" />
-                    <stop offset="100%" stopColor="#3c0b78" />
-                  </linearGradient>
-                  <linearGradient id="funnelBody4" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#00a39e" />
-                    <stop offset="100%" stopColor="#005956" />
-                  </linearGradient>
-
-                  {/* Glossy Overlay Reflective shine */}
-                  <linearGradient id="funnelGlossShine" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
-                    <stop offset="35%" stopColor="#ffffff" stopOpacity="0.10" />
-                    <stop offset="70%" stopColor="#ffffff" stopOpacity="0.0" />
-                    <stop offset="100%" stopColor="#ffffff" stopOpacity="0.15" />
-                  </linearGradient>
-                </defs>
-
-                {/* BACKGROUND GLOW */}
-                <circle cx="260" cy="300" r="180" fill="#007cff" opacity="0.06" filter="blur(80px)" pointerEvents="none" />
-
-                {/* TIER 1 (Leads / Entradas captadas) */}
-                <g
-                  onMouseEnter={() => setHoveredTier(1)}
-                  onMouseLeave={() => setHoveredTier(null)}
-                  onClick={() => router.push('/leads')}
-                  className="cursor-pointer select-none"
-                  style={{
-                    transform: hoveredTier === 1 ? 'scale(1.04) translateY(-4px)' : 'scale(1) translateY(0px)',
-                    transformOrigin: '260px 160px',
-                    filter: hoveredTier === 1 ? 'url(#funnelGlow1) brightness(1.1)' : 'none',
-                    transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-                  }}
-                >
-                  {/* Inside Rim */}
-                  <ellipse cx="260" cy="100" rx="200" ry="38" fill="url(#funnelMouth1)" stroke="#58aeff" strokeWidth="2.5" />
-                  
-                  {/* Tier 3D Truncated Cone Body */}
-                  <path
-                    d="M 60 100 A 200 38 0 0 0 460 100 L 385 210 A 125 22 0 0 1 135 210 Z"
-                    fill="url(#funnelBody1)"
-                    stroke="#2b88ff"
-                    strokeWidth="1.5"
-                  />
-                  {/* Glossy highlight path overlay */}
-                  <path
-                    d="M 60 100 A 200 38 0 0 0 460 100 L 385 210 A 125 22 0 0 1 135 210 Z"
-                    fill="url(#funnelGlossShine)"
-                    pointerEvents="none"
-                  />
-
-                  {/* Value Text (Very bold and large) */}
-                  <text x="260" y="172" textAnchor="middle" fill="#ffffff" fontSize="72" fontWeight="900" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-                    {stats.total}
-                  </text>
-
-                  {/* Connector Line, Dots & Label */}
-                  <g className="transition-opacity duration-300" style={{ opacity: hoveredTier !== null && hoveredTier !== 1 ? 0.45 : 1 }}>
-                    <circle cx="420" cy="150" r="6" fill="#00bcff" style={{ filter: 'drop-shadow(0 0 6px #00bcff)' }} />
-                    <line x1="420" y1="150" x2="560" y2="150" stroke="#00bcff" strokeWidth="3" />
-                    <circle cx="560" cy="150" r="6" fill="#00bcff" style={{ filter: 'drop-shadow(0 0 6px #00bcff)' }} />
-                    <text x="576" y="158" fill="#f8fafc" fontSize="24" fontWeight="900" className="tracking-wide">
-                      Entradas captadas
-                    </text>
-                  </g>
-                </g>
-
-                {/* TIER 2 (Atendimento / Em funil comercial) */}
-                <g
-                  onMouseEnter={() => setHoveredTier(2)}
-                  onMouseLeave={() => setHoveredTier(null)}
-                  onClick={() => router.push('/leads?status=Aguardando%20atendimento')}
-                  className="cursor-pointer select-none"
-                  style={{
-                    transform: hoveredTier === 2 ? 'scale(1.04) translateY(-3px)' : 'scale(1) translateY(0px)',
-                    transformOrigin: '260px 280px',
-                    filter: hoveredTier === 2 ? 'url(#funnelGlow2) brightness(1.15)' : 'none',
-                    transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-                  }}
-                >
-                  {/* Top Lip Rim */}
-                  <ellipse cx="260" cy="220" rx="125" ry="22" fill="url(#funnelMouth2)" stroke="#22d3ee" strokeWidth="2.5" />
-                  
-                  {/* Truncated Cone Body */}
-                  <path
-                    d="M 135 220 A 125 22 0 0 0 385 220 L 330 320 A 70 14 0 0 1 190 320 Z"
-                    fill="url(#funnelBody2)"
-                    stroke="#00c8e6"
-                    strokeWidth="1.5"
-                  />
-                  {/* Glossy highlight */}
-                  <path
-                    d="M 135 220 A 125 22 0 0 0 385 220 L 330 320 A 70 14 0 0 1 190 320 Z"
-                    fill="url(#funnelGlossShine)"
-                    pointerEvents="none"
-                  />
-
-                  {/* Value Text */}
-                  <text x="260" y="290" textAnchor="middle" fill="#ffffff" fontSize="64" fontWeight="900" style={{ textShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
-                    {activePipeline}
-                  </text>
-
-                  {/* Connector Line, Dots & Label */}
-                  <g className="transition-opacity duration-300" style={{ opacity: hoveredTier !== null && hoveredTier !== 2 ? 0.45 : 1 }}>
-                    <circle cx="356" cy="270" r="6" fill="#00c2ff" style={{ filter: 'drop-shadow(0 0 6px #00c2ff)' }} />
-                    <line x1="356" y1="270" x2="560" y2="270" stroke="#00c2ff" strokeWidth="3" />
-                    <circle cx="560" cy="270" r="6" fill="#00c2ff" style={{ filter: 'drop-shadow(0 0 6px #00c2ff)' }} />
-                    <text x="576" y="278" fill="#f8fafc" fontSize="24" fontWeight="900" className="tracking-wide">
-                      Em funil comercial
-                    </text>
-                  </g>
-                </g>
-
-                {/* TIER 3 (Cotação / Propostas e vendas) */}
-                <g
-                  onMouseEnter={() => setHoveredTier(3)}
-                  onMouseLeave={() => setHoveredTier(null)}
-                  onClick={() => router.push('/leads?status=Cota%C3%A7%C3%A3o%20enviada')}
-                  className="cursor-pointer select-none"
-                  style={{
-                    transform: hoveredTier === 3 ? 'scale(1.04) translateY(-2px)' : 'scale(1) translateY(0px)',
-                    transformOrigin: '260px 390px',
-                    filter: hoveredTier === 3 ? 'url(#funnelGlow3) brightness(1.15)' : 'none',
-                    transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-                  }}
-                >
-                  {/* Top Lip Rim */}
-                  <ellipse cx="260" cy="330" rx="76" ry="14" fill="url(#funnelMouth3)" stroke="#a78bfa" strokeWidth="2.5" />
-                  
-                  {/* Truncated Cone Body */}
-                  <path
-                    d="M 184 330 A 76 14 0 0 0 336 330 L 306 430 A 46 9 0 0 1 214 430 Z"
-                    fill="url(#funnelBody3)"
-                    stroke="#8d42f5"
-                    strokeWidth="1.5"
-                  />
-                  {/* Glossy Highlight */}
-                  <path
-                    d="M 184 330 A 76 14 0 0 0 336 330 L 306 430 A 46 9 0 0 1 214 430 Z"
-                    fill="url(#funnelGlossShine)"
-                    pointerEvents="none"
-                  />
-
-                  {/* Value Text */}
-                  <text x="260" y="398" textAnchor="middle" fill="#ffffff" fontSize="54" fontWeight="900" style={{ textShadow: '0 4px 8px rgba(0,0,0,0.5)' }}>
-                    {stats.quoted + stats.sold}
-                  </text>
-
-                  {/* Connector Line, Dots & Label */}
-                  <g className="transition-opacity duration-300" style={{ opacity: hoveredTier !== null && hoveredTier !== 3 ? 0.45 : 1 }}>
-                    <circle cx="308" cy="380" r="6" fill="#a78bfa" style={{ filter: 'drop-shadow(0 0 6px #a78bfa)' }} />
-                    <line x1="308" y1="380" x2="560" y2="380" stroke="#a78bfa" strokeWidth="3" />
-                    <circle cx="560" cy="380" r="6" fill="#a78bfa" style={{ filter: 'drop-shadow(0 0 6px #a78bfa)' }} />
-                    <text x="576" y="388" fill="#f8fafc" fontSize="24" fontWeight="900" className="tracking-wide">
-                      Propostas e vendas
-                    </text>
-                  </g>
-                </g>
-
-                {/* TIER 4 (Vendas / Conversões fechadas) */}
-                <g
-                  onMouseEnter={() => setHoveredTier(4)}
-                  onMouseLeave={() => setHoveredTier(null)}
-                  onClick={() => router.push('/leads?status=Venda%20realizada')}
-                  className="cursor-pointer select-none"
-                  style={{
-                    transform: hoveredTier === 4 ? 'scale(1.04) translateY(2px)' : 'scale(1) translateY(0px)',
-                    transformOrigin: '260px 500px',
-                    filter: hoveredTier === 4 ? 'url(#funnelGlow4) brightness(1.2)' : 'none',
-                    transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-                  }}
-                >
-                  {/* Top Lip Rim */}
-                  <ellipse cx="260" cy="440" rx="48" ry="9" fill="url(#funnelMouth4)" stroke="#2dd4bf" strokeWidth="2" />
-                  
-                  {/* Extruded Rounded Bottom Capsule Cone Tip */}
-                  <path
-                    d="M 212 440 A 48 9 0 0 0 308 440 C 308 440 295 560 260 570 C 225 560 212 440 212 440 Z"
-                    fill="url(#funnelBody4)"
-                    stroke="#00c2be"
-                    strokeWidth="1.5"
-                  />
-                  {/* Glossy Highlight */}
-                  <path
-                    d="M 212 440 A 48 9 0 0 0 308 440 C 308 440 295 560 260 570 C 225 560 212 440 212 440 Z"
-                    fill="url(#funnelGlossShine)"
-                    pointerEvents="none"
-                  />
-
-                  {/* Value Text */}
-                  <text x="260" y="508" textAnchor="middle" fill="#ffffff" fontSize="44" fontWeight="900" style={{ textShadow: '0 4px 6px rgba(0,0,0,0.5)' }}>
-                    {stats.sold}
-                  </text>
-
-                  {/* Connector Line, Dots & Label */}
-                  <g className="transition-opacity duration-300" style={{ opacity: hoveredTier !== null && hoveredTier !== 4 ? 0.45 : 1 }}>
-                    <circle cx="278" cy="500" r="6" fill="#2dd4bf" style={{ filter: 'drop-shadow(0 0 6px #2dd4bf)' }} />
-                    <line x1="278" y1="500" x2="560" y2="500" stroke="#2dd4bf" strokeWidth="3" />
-                    <circle cx="560" cy="500" r="6" fill="#2dd4bf" style={{ filter: 'drop-shadow(0 0 6px #2dd4bf)' }} />
-                    <text x="576" y="508" fill="#f8fafc" fontSize="24" fontWeight="900" className="tracking-wide">
-                      Conversões fechadas
-                    </text>
-                  </g>
-                </g>
-              </svg>
-            </div>
+            <OrionFunnel
+              total={stats.total}
+              activePipeline={activePipeline}
+              quotedAndSold={stats.quoted + stats.sold}
+              sold={stats.sold}
+            />
           </div>
 
-          {/* Monthly commercial context and profile */}
-          <div className="rounded-[1.5rem] border border-gray-100 bg-[#090e1a] p-5 shadow-sm sm:rounded-[2rem] sm:p-6 flex flex-col justify-between">
+          {/* Right: Monthly Commercial Context & Connected Broker */}
+          <div className="rounded-[1.5rem] border border-white/5 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-7 flex flex-col justify-between">
             <div>
-              <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="mb-6 flex items-start justify-between gap-4">
                 <div>
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Resumo deste mês</p>
+                  <p className="mb-1 text-xs font-black uppercase tracking-widest text-cyan-400">Resumo deste mês</p>
                   <h2 className="text-xl font-black text-white">Perfil comercial</h2>
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
@@ -892,7 +650,7 @@ export default function DashboardPage() {
                 <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
               </div>
             </div>
-            <div className="mt-6 rounded-2xl bg-[#0b1324] border border-white/5 p-4 text-left">
+            <div className="mt-8 rounded-2xl bg-[#0b1324] border border-white/5 p-4 text-left">
               <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">Corretor Conectado</p>
               <p className="text-sm font-black text-white">{corretorData?.nome || profile?.nome || '-'}</p>
               <p className="mt-1 text-xs font-bold text-slate-400">{corretorData?.email || profile?.email || '-'}</p>
@@ -1122,12 +880,12 @@ export default function DashboardPage() {
 
 function MiniMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number | string }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-blue-600">
+    <div className="rounded-2xl border border-white/5 bg-[#0b1324] p-4 shadow-sm">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-blue-400">
         <Icon size={17} />
       </div>
       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-1 text-xl font-black text-gray-950">{value}</p>
+      <p className="mt-1 text-lg sm:text-xl font-black text-white">{value}</p>
     </div>
   );
 }
