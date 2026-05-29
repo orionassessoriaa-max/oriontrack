@@ -2,7 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { Plus, Search, Eye, Loader2, ShieldAlert, RefreshCw, Palette, MessageSquare, Copy, Edit2 } from 'lucide-react';
+import { 
+  Plus, 
+  Search, 
+  Eye, 
+  Loader2, 
+  ShieldAlert, 
+  RefreshCw, 
+  Palette, 
+  MessageSquare, 
+  Copy, 
+  Edit2,
+  Filter
+} from 'lucide-react';
 import { Profile, UserRole } from '@/types';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
@@ -33,6 +45,7 @@ export default function TeamRoleListPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const Icon = role === 'designer' ? Palette : MessageSquare;
 
   async function fetchPeople() {
@@ -63,8 +76,15 @@ export default function TeamRoleListPage({
   }, []);
 
   const filtered = people.filter((person) => {
-    const target = `${person.nome} ${person.email} ${person.email_real || ''}`.toLowerCase();
-    return target.includes(search.toLowerCase());
+    const matchesSearch = `${person.nome} ${person.email} ${person.email_real || ''}`.toLowerCase().includes(search.toLowerCase());
+    
+    const normalizedStatus = person.status?.toLowerCase() || 'ativo';
+    const matchesStatus = 
+      statusFilter === 'all' || 
+      (statusFilter === 'active' && (normalizedStatus === 'active' || normalizedStatus === 'ativo')) ||
+      (statusFilter === 'inactive' && (normalizedStatus === 'inactive' || normalizedStatus === 'inativo'));
+
+    return matchesSearch && matchesStatus;
   });
 
   async function copyId(id: string) {
@@ -85,34 +105,48 @@ export default function TeamRoleListPage({
     <InternalLayout>
       <div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">{title}</h1>
+          <h1 className="text-3xl font-black tracking-tight text-gray-900">{title}</h1>
           <p className="font-medium text-gray-500">{description}</p>
         </div>
         <Link
           href={`/admin/usuarios?tipo=${role}`}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 font-black text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-700"
+          className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-8 py-4 font-black text-white shadow-xl shadow-blue-600/20 transition-all hover:bg-blue-700"
         >
           <Plus size={20} />
           {newLabel}
         </Link>
       </div>
 
-      <div className="mb-8 rounded-[2.5rem] border border-gray-100 bg-white p-6 shadow-sm">
-        <div className="group relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-blue-500" size={18} />
-          <input
-            type="text"
-            placeholder="Buscar por nome ou email..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="w-full rounded-2xl border-none bg-gray-50 py-4 pl-12 pr-4 font-medium transition-all focus:ring-2 focus:ring-blue-500/20"
-          />
+      <div className="orion-panel mb-8 space-y-6 p-6 lg:p-8">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div className="md:col-span-8 relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-blue-500" size={18} />
+            <input
+              type="text"
+              placeholder="Buscar por nome ou email..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="orion-control w-full py-4 pl-12 pr-4 font-medium"
+            />
+          </div>
+          <div className="md:col-span-4 relative">
+            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="orion-control w-full appearance-none py-4 pl-12 pr-4 font-bold"
+            >
+              <option value="all">Todos Status</option>
+              <option value="active">Ativos</option>
+              <option value="inactive">Inativos</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
+      <div className="orion-table-shell mb-12">
         {loading ? (
-          <div className="flex justify-center p-20">
+          <div className="flex justify-center p-24">
             <Loader2 className="animate-spin text-blue-600" size={40} />
           </div>
         ) : error ? (
@@ -127,8 +161,8 @@ export default function TeamRoleListPage({
             </button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="p-20 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-slate-50 text-slate-300">
+          <div className="p-24 text-center">
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[2rem] bg-slate-50 text-slate-300">
               <Icon size={40} />
             </div>
             <h3 className="mb-1 text-xl font-bold text-gray-900">{emptyTitle}</h3>
@@ -136,14 +170,13 @@ export default function TeamRoleListPage({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
+            <table className="w-full min-w-[1000px] border-collapse text-left">
               <thead>
                 <tr className="bg-gray-50/50">
-                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">{title}</th>
-                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Email</th>
-                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">ID</th>
-                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Cadastro</th>
-                  <th className="px-8 py-5 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Ações</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-gray-400">{role === 'designer' ? 'Designer / Time' : 'Account / Time'}</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-gray-400">Cadastro</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-gray-400 text-center">Status</th>
+                  <th className="px-8 py-6 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -151,39 +184,41 @@ export default function TeamRoleListPage({
                   <tr key={person.id} className="group transition-colors hover:bg-blue-50/30">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 text-lg font-black text-slate-600">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-lg font-black text-white shadow-inner">
                           {person.foto_url || getTeamMemberPhoto(person.nome) ? (
                             <img src={person.foto_url || getTeamMemberPhoto(person.nome) || ''} alt={person.nome} className="h-full w-full object-cover" />
                           ) : person.nome?.[0].toUpperCase()}
                         </div>
-                        <p className="font-bold text-gray-900 transition-colors group-hover:text-blue-600">{person.nome}</p>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 transition-colors group-hover:text-blue-600">{person.nome}</p>
+                          <p className="text-[10px] font-bold uppercase tracking-tighter text-gray-400">
+                            {person.email} {person.email_real ? `(Real: ${person.email_real})` : ''}
+                          </p>
+                          <p className="mt-1 rounded-lg bg-slate-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500 w-fit">
+                            ID n8n: <span className="normal-case tracking-normal text-slate-700">{person.id}</span>
+                          </p>
+                        </div>
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <span className="text-sm font-medium text-slate-500">{person.email}</span>
-                      {person.email_real && <p className="mt-1 text-xs font-medium text-slate-400">Real: {person.email_real}</p>}
-                    </td>
-                    <td className="px-8 py-6">
-                      <button
-                        type="button"
-                        onClick={() => copyId(person.id)}
-                        className="inline-flex max-w-[220px] items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-500 transition-all hover:bg-blue-50 hover:text-blue-700"
-                        title={person.id}
-                      >
-                        <Copy size={13} />
-                        <span className="truncate">{person.id}</span>
-                      </button>
-                    </td>
-                    <td className="px-8 py-6">
-                      <span className="text-xs font-bold text-gray-400">
+                      <span className="text-xs font-bold text-slate-500">
                         {person.created_at ? new Date(person.created_at).toLocaleDateString('pt-BR') : '-'}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6 text-center">
+                      <span className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                        (person.status?.toLowerCase() === 'active' || person.status?.toLowerCase() === 'ativo')
+                          ? "bg-green-50 text-green-600 border-green-100" 
+                          : "bg-red-50 text-red-600 border-red-100"
+                      }`}>
+                        {(person.status?.toLowerCase() === 'active' || person.status?.toLowerCase() === 'ativo') ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>
                     <td className="px-8 py-6 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Link
                           href={`/admin/usuarios?edit=${person.id}`}
-                          className="p-2.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-2xl transition-all"
+                          className="cursor-pointer p-3 text-slate-400 transition-all hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-600"
                           title={`Editar ${person.nome}`}
                         >
                           <Edit2 size={18} />
@@ -191,10 +226,18 @@ export default function TeamRoleListPage({
                         <button
                           type="button"
                           onClick={() => void openPanel(person)}
-                          className="p-2.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-2xl transition-all"
+                          className="cursor-pointer p-3 text-slate-400 transition-all hover:-translate-y-0.5 hover:bg-emerald-50 hover:text-emerald-600"
                           title={`Abrir painel de ${person.nome}`}
                         >
                           <Eye size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => copyId(person.id)}
+                          className="cursor-pointer p-3 text-slate-400 transition-all hover:-translate-y-0.5 hover:bg-blue-50 hover:text-blue-600"
+                          title="Copiar ID"
+                        >
+                          <Copy size={18} />
                         </button>
                       </div>
                     </td>
