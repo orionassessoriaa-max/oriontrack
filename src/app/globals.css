@@ -432,21 +432,31 @@ body.theme-noturno {
 
 .theme-noturno input,
 .theme-noturno select,
-.theme-noturno textarea {
-  background-color: #060b13 !important;
-  color: #f8fbff !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-html.theme-noturno body main :is(input, select, textarea),
-body.theme-noturno main :is(input, select, textarea),
-.theme-noturno main :is(input, select, textarea).orion-profile-field {
+.theme-noturno textarea,
+.theme-noturno .orion-control,
+.theme-noturno main input,
+.theme-noturno main select,
+.theme-noturno main textarea,
+.theme-noturno main .orion-control,
+.theme-noturno main :is(input, select, textarea, .orion-control) {
   background: #060b13 !important;
-  color: #f8fbff !important;
-  -webkit-text-fill-color: #f8fbff !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: #060b13 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
   box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.04) !important;
   opacity: 1 !important;
+}
+
+.theme-noturno select option,
+.theme-noturno .orion-control option,
+.theme-noturno main select option,
+.theme-noturno main .orion-control option {
+  background: #090e1a !important;
+  background-color: #090e1a !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 
 html.theme-noturno body main :is(input, select, textarea):disabled,
