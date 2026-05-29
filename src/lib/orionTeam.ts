@@ -24,7 +24,7 @@ const TEAM_PHOTOS: Record<string, string> = {
   geovana: '/fotos/GEOVANNA GESTORA.png',
   lucas: '/fotos/LUCAS ACOOUNT.png',
   patrick: '/fotos/PATRICK ADMIN.png',
-  nataline: '/fotos/132.png',
+  nataline: '/fotos/NATALINE DESIGNER.png',
   matheus: '/fotos/MATHEUS GESTOR.png',
   pedro: '/fotos/PEDRO ADMIN.png',
   leo: '/fotos/LÉO CLOSER.png',

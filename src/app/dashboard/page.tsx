@@ -341,6 +341,14 @@ export default function DashboardPage() {
     setCarouselIndex((prev) => (prev + 1) % timeOperacional.length);
   };
 
+  useEffect(() => {
+    if (timeOperacional.length <= 1) return;
+    const interval = setInterval(() => {
+      setCarouselIndex((prev) => (prev + 1) % timeOperacional.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [timeOperacional.length]);
+
   const staleOpportunityCount = stats.stale;
   const maxMetric = Math.max(stats.waiting, stats.inProgress, stats.quoted, stats.sold, 1);
   const performanceBars = [
@@ -848,7 +856,7 @@ export default function DashboardPage() {
         <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-2xl font-black text-white tracking-tight mb-2">Seu time Orion</h2>
-            <p className="text-slate-400 font-medium">Essas são as pessoas da Orion responsáveis por acompanhar sua operação.</p>
+            <p className="text-slate-400 font-medium">Por trás de toda corretora campeã, existe um time jogando junto.</p>
           </div>
           {/* Custom Carousel Navigation Arrows (Top right) */}
           {!isDataLoading && timeOperacional.length > 1 && (
@@ -902,7 +910,7 @@ export default function DashboardPage() {
                         <img 
                           src={foto} 
                           alt={membro.nome}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 pointer-events-none"
+                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700 pointer-events-none"
                         />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-black text-6xl shadow-inner select-none pointer-events-none">

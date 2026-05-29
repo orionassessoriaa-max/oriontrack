@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -47,8 +48,90 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(true);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [toast, setToast] = useState<{ id: string; titulo: string; mensagem: string } | null>(null);
 
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, isViewingAsDesigner, isViewingAsAccount, stopViewingAsCorretor } = useAuth();
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => {
+      setToast(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const fetchUnreadCount = async () => {
+      try {
+        let query = supabase
+          .from('notificacoes')
+          .select('id', { count: 'exact', head: true })
+          .eq('lida', false);
+
+        if (profile.tipo_usuario !== 'admin') {
+          query = query.or(`destinatario_profile_id.eq.${profile.id},destinatario_tipo.eq.${profile.tipo_usuario},destinatario_tipo.eq.todos`);
+        }
+
+        const { count, error } = await query;
+        if (!error && count !== null) {
+          setUnreadCount(count);
+        }
+      } catch (err) {
+        console.error('Error fetching unread count:', err);
+      }
+    };
+
+    fetchUnreadCount();
+
+    const channel = supabase
+      .channel('realtime:notificacoes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notificacoes' },
+        (payload) => {
+          const newNotif = payload.new;
+          const forMe = 
+            profile.tipo_usuario === 'admin' ||
+            newNotif.destinatario_profile_id === profile.id ||
+            newNotif.destinatario_tipo === profile.tipo_usuario ||
+            newNotif.destinatario_tipo === 'todos';
+
+          if (forMe) {
+            setUnreadCount((prev) => prev + 1);
+            setToast({
+              id: String(Date.now()),
+              titulo: newNotif.titulo || 'Nova Notificação',
+              mensagem: newNotif.mensagem || 'Você recebeu um novo aviso.'
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'notificacoes' },
+        (payload) => {
+          if (payload.new.lida && !payload.old.lida) {
+            const forMe = 
+              profile.tipo_usuario === 'admin' ||
+              payload.new.destinatario_profile_id === profile.id ||
+              payload.new.destinatario_tipo === profile.tipo_usuario ||
+              payload.new.destinatario_tipo === 'todos';
+            
+            if (forMe) {
+              setUnreadCount((prev) => Math.max(0, prev - 1));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, profile?.tipo_usuario]);
   const isViewingAsUser = isViewingAsCorretor || isViewingAsGestor || isViewingAsDesigner || isViewingAsAccount;
   const impersonationRoleLabel = (() => {
     if (isViewingAsGestor) return 'Gestor';
@@ -226,12 +309,13 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                 <>
                   {directItems.map((item) => {
                     const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+                    const isNotification = item.label === 'Notificacoes';
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
                         className={cn(
-                          'group flex items-center gap-1.5 rounded-xl px-2.5 py-2 xl:px-3 xl:py-2.5 transition-all duration-250 whitespace-nowrap text-[10px] xl:text-[11px] 2xl:text-xs font-black uppercase tracking-wider shrink-0',
+                          'group flex items-center gap-1.5 rounded-xl px-2.5 py-2 xl:px-3 xl:py-2.5 transition-all duration-250 whitespace-nowrap text-[10px] xl:text-[11px] 2xl:text-xs font-black uppercase tracking-wider shrink-0 relative',
                           isActive
                             ? 'bg-blue-600/12 text-cyan-400 border border-cyan-500/20'
                             : 'text-slate-400 hover:bg-white/5 hover:text-white'
@@ -242,6 +326,11 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                           className={cn(isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-white')}
                         />
                         <span>{item.label}</span>
+                        {isNotification && unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-rose-500 text-[8px] font-black text-white shadow-[0_0_8px_rgba(244,63,94,0.6)] animate-pulse">
+                            {unreadCount}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}
@@ -272,13 +361,14 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                           <div className="max-h-[380px] overflow-y-auto pr-1 scrollbar-none">
                             {dropdownItems.map((item) => {
                               const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+                              const isNotification = item.label === 'Notificacoes';
                               return (
                                 <Link
                                   key={item.href}
                                   href={item.href}
                                   onClick={() => setMoreMenuOpen(false)}
                                   className={cn(
-                                    'group flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 text-xs xl:text-sm font-extrabold mb-1 last:mb-0',
+                                    'group flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 text-xs xl:text-sm font-extrabold mb-1 last:mb-0 relative',
                                     isActive
                                       ? 'bg-blue-600/15 text-cyan-400 border border-cyan-500/20 shadow-inner'
                                       : 'text-slate-400 hover:bg-white/5 hover:text-white'
@@ -289,6 +379,11 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                                     className={cn(isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-white')}
                                   />
                                   <span>{item.label}</span>
+                                  {isNotification && unreadCount > 0 && (
+                                    <span className="absolute right-4 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-[0_0_8px_rgba(244,63,94,0.6)]">
+                                      {unreadCount}
+                                    </span>
+                                  )}
                                 </Link>
                               );
                             })}
@@ -373,24 +468,63 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
             <nav className="space-y-1.5 pb-12">
               {getMenu().map((item) => {
                 const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+                const isNotification = item.label === 'Notificacoes';
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setCollapsed(true)}
                     className={cn(
-                      'group flex items-center gap-3 rounded-2xl px-5 py-3.5 transition-all duration-200',
+                      'group flex items-center gap-3 rounded-2xl px-5 py-3.5 transition-all duration-200 relative',
                       isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'
                     )}
                   >
                     <item.icon size={20} className={cn(isActive ? 'text-white' : 'text-slate-400 group-hover:text-white')} />
                     <span className="text-sm font-semibold">{item.label}</span>
+                    {isNotification && unreadCount > 0 && (
+                      <span className="absolute right-5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-[0_0_8px_rgba(244,63,94,0.6)]">
+                        {unreadCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
             </nav>
           </div>
         </>
+      )}
+
+      {/* Real-time Floating Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[9999] w-[350px] animate-in fade-in-50 slide-in-from-bottom-5 duration-300">
+          <div className="rounded-3xl border border-blue-500/30 bg-[#090e1a]/95 backdrop-blur-md p-5 shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+            <div className="flex items-center gap-3 mb-2.5">
+              <div className="p-2 rounded-xl bg-blue-500/20 text-cyan-400">
+                <Bell size={18} className="animate-bounce" />
+              </div>
+              <h4 className="font-black text-sm text-white">{toast.titulo}</h4>
+            </div>
+            <p className="text-xs font-semibold text-slate-300 leading-normal mb-3.5">{toast.mensagem}</p>
+            <div className="flex justify-between items-center border-t border-white/5 pt-3">
+              <Link
+                href="/notificacoes"
+                onClick={() => {
+                  setToast(null);
+                  closeOnMobile();
+                }}
+                className="text-[10px] font-black text-cyan-400 uppercase tracking-widest hover:text-cyan-300 transition-colors"
+              >
+                Ver tudo
+              </Link>
+              <button
+                onClick={() => setToast(null)}
+                className="text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
