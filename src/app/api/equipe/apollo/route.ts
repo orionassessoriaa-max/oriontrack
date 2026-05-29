@@ -107,7 +107,7 @@ export async function GET(request: Request) {
     const auditRes = await supabaseAdmin
       .from('audit_logs')
       .select('action, entity_id, metadata, created_at')
-      .in('action', ['team.objective.create', 'team.objective.update', 'team.points.add', 'team.points.delete', 'team.meta.update', 'team.sale.create', 'team.sale.delete'])
+      .in('action', ['team.objective.create', 'team.objective.update', 'team.objective.delete', 'team.points.add', 'team.points.delete', 'team.meta.update', 'team.sale.create', 'team.sale.update', 'team.sale.delete'])
       .order('created_at', { ascending: false })
       .limit(500);
 
@@ -117,6 +117,13 @@ export async function GET(request: Request) {
       );
     }
   }
+
+  const deletedObjectiveIds = new Set(
+    auditEntries
+      .filter((entry: any) => entry.action === 'team.objective.delete')
+      .map((entry: any) => String(entry.entity_id || entry.metadata?.objective_id || ''))
+      .filter(Boolean)
+  );
 
   const latestMetaAudit = auditEntries.find((entry: any) => entry.action === 'team.meta.update');
   const meta = hasTeamTables && metaRes.data
@@ -163,21 +170,41 @@ export async function GET(request: Request) {
     });
 
     const latestStatus = new Map<string, string>();
+    const latestTitulo = new Map<string, string>();
+    const latestValor = new Map<string, number>();
+
     auditEntries
       .filter((entry: any) => entry.action === 'team.objective.update')
       .forEach((entry: any) => {
         const objectiveId = String(entry.entity_id || entry.metadata?.objective_id || '');
+        if (!objectiveId) return;
+
         const status = String(entry.metadata?.status || '');
-        if (objectiveId && !latestStatus.has(objectiveId) && ['aberto', 'em_andamento', 'feito'].includes(status)) {
+        if (!latestStatus.has(objectiveId) && ['aberto', 'em_andamento', 'feito'].includes(status)) {
           latestStatus.set(objectiveId, status);
+        }
+
+        const titulo = String(entry.metadata?.titulo || '').trim();
+        if (!latestTitulo.has(objectiveId) && titulo) {
+          latestTitulo.set(objectiveId, titulo);
+        }
+
+        const valor = entry.metadata?.valor_estimado !== undefined ? Number(entry.metadata.valor_estimado) : undefined;
+        if (!latestValor.has(objectiveId) && valor !== undefined && Number.isFinite(valor)) {
+          latestValor.set(objectiveId, valor);
         }
       });
 
     objectives = objectives.map((objective: any) => ({
       ...objective,
       status: latestStatus.get(String(objective.id)) || objective.status,
+      titulo: latestTitulo.get(String(objective.id)) || objective.titulo,
+      valor_estimado: latestValor.has(String(objective.id)) ? latestValor.get(String(objective.id))! : objective.valor_estimado,
     }));
   }
+
+  // Filter out deleted objectives in both standard/fallback modes if audit log lists them as deleted
+  objectives = objectives.filter((objective: any) => !deletedObjectiveIds.has(String(objective.id)));
 
   const rawMembers = membersData.filter((member: any) => {
     const email = String(member.email || '').toLowerCase();
@@ -259,20 +286,56 @@ export async function GET(request: Request) {
   const sales = !salesRes.error
     ? (salesRes.data || [])
         .filter((sale: any) => !deletedSaleIds.has(String(sale.id || '')))
-    : auditEntries
-        .filter((entry: any) => entry.action === 'team.sale.create')
-        .slice()
-        .reverse()
-        .map((entry: any) => ({
-          id: String(entry.entity_id || entry.metadata?.sale_id || `sale:${entry.created_at}`),
-          equipe: 'apollo',
-          mes: APOLLO_MONTH,
-          nome: String(entry.metadata?.nome || ''),
-          vendido: String(entry.metadata?.vendido || ''),
-          valor: Number(entry.metadata?.valor || 0),
-          created_at: entry.created_at,
-        }))
-        .filter((sale: any) => !deletedSaleIds.has(String(sale.id || '')));
+    : (() => {
+        let fallbackSales = auditEntries
+          .filter((entry: any) => entry.action === 'team.sale.create')
+          .slice()
+          .reverse()
+          .map((entry: any) => ({
+            id: String(entry.entity_id || entry.metadata?.sale_id || `sale:${entry.created_at}`),
+            equipe: 'apollo',
+            mes: APOLLO_MONTH,
+            nome: String(entry.metadata?.nome || ''),
+            vendido: String(entry.metadata?.vendido || ''),
+            valor: Number(entry.metadata?.valor || 0),
+            created_at: entry.created_at,
+          }));
+
+        const latestSaleNome = new Map<string, string>();
+        const latestSaleVendido = new Map<string, string>();
+        const latestSaleValor = new Map<string, number>();
+
+        auditEntries
+          .filter((entry: any) => entry.action === 'team.sale.update')
+          .forEach((entry: any) => {
+            const saleId = String(entry.entity_id || entry.metadata?.sale_id || '');
+            if (!saleId) return;
+
+            const nome = String(entry.metadata?.nome || '').trim();
+            if (!latestSaleNome.has(saleId) && nome) {
+              latestSaleNome.set(saleId, nome);
+            }
+
+            const vendido = String(entry.metadata?.vendido || '').trim();
+            if (!latestSaleVendido.has(saleId) && vendido) {
+              latestSaleVendido.set(saleId, vendido);
+            }
+
+            const valor = entry.metadata?.valor !== undefined ? Number(entry.metadata.valor) : undefined;
+            if (!latestSaleValor.has(saleId) && valor !== undefined && Number.isFinite(valor)) {
+              latestSaleValor.set(saleId, valor);
+            }
+          });
+
+        return fallbackSales
+          .map((sale: any) => ({
+            ...sale,
+            nome: latestSaleNome.get(String(sale.id)) || sale.nome,
+            vendido: latestSaleVendido.get(String(sale.id)) || sale.vendido,
+            valor: latestSaleValor.has(String(sale.id)) ? latestSaleValor.get(String(sale.id))! : sale.valor,
+          }))
+          .filter((sale: any) => !deletedSaleIds.has(String(sale.id || '')));
+      })();
 
   const totalVendas = sales.reduce((sum: number, sale: any) => sum + Number(sale.valor || 0), 0);
   const totalObjetivos = objectives.reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
@@ -511,26 +574,127 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true });
   }
 
+  if (action === 'edit_sale') {
+    const id = String(body.id || '');
+    const nome = String(body.nome || '').trim();
+    const vendido = String(body.vendido || '').trim();
+    const valor = parseMoney(body.valor);
+
+    if (!id) return NextResponse.json({ error: 'Venda invalida.' }, { status: 400 });
+    if (!nome || !vendido || !Number.isFinite(valor) || valor <= 0) {
+      return NextResponse.json({ error: 'Informe o cliente, o produto e o valor da venda.' }, { status: 400 });
+    }
+
+    if (!UUID_RE.test(id)) {
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.sale.update',
+        entity_type: 'equipe_venda',
+        entity_id: id,
+        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, sale_id: id, nome, vendido, valor },
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('equipe_vendas')
+      .update({
+        nome,
+        vendido,
+        valor,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('equipe', 'apollo');
+
+    if (error) {
+      if (!isTeamStorageError(error)) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.sale.update',
+        entity_type: 'equipe_venda',
+        entity_id: id,
+        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, sale_id: id, nome, vendido, valor },
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    await writeAuditLog(request, guard.profile, {
+      action: 'team.sale.update',
+      entity_type: 'equipe_venda',
+      entity_id: id,
+      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, nome, vendido, valor },
+    });
+
+    return NextResponse.json({ success: true });
+  }
+
+  if (action === 'delete_objective') {
+    const id = String(body.id || '');
+    if (!id) return NextResponse.json({ error: 'Objetivo invalido.' }, { status: 400 });
+
+    if (UUID_RE.test(id)) {
+      const { error } = await supabaseAdmin
+        .from('equipe_objetivos')
+        .delete()
+        .eq('id', id)
+        .eq('equipe', 'apollo');
+
+      if (error && !isTeamStorageError(error)) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+    }
+
+    await writeAuditLog(request, guard.profile, {
+      action: 'team.objective.delete',
+      entity_type: 'equipe_objetivo',
+      entity_id: id,
+      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, objective_id: id },
+    });
+
+    return NextResponse.json({ success: true });
+  }
+
   if (action === 'update_objective') {
     const id = String(body.id || '');
-    const status = String(body.status || 'aberto');
-    if (!id || !['aberto', 'em_andamento', 'feito'].includes(status)) {
-      return NextResponse.json({ error: 'Objetivo invalido.' }, { status: 400 });
+    if (!id) return NextResponse.json({ error: 'Objetivo invalido.' }, { status: 400 });
+
+    const status = body.status !== undefined ? String(body.status) : undefined;
+    const titulo = body.titulo !== undefined ? String(body.titulo).trim() : undefined;
+    const valorEstimado = body.valor_estimado !== undefined ? parseMoney(body.valor_estimado) : undefined;
+
+    if (status !== undefined && !['aberto', 'em_andamento', 'feito'].includes(status)) {
+      return NextResponse.json({ error: 'Status invalido.' }, { status: 400 });
     }
+    if (titulo !== undefined && !titulo) {
+      return NextResponse.json({ error: 'Titulo invalido.' }, { status: 400 });
+    }
+    if (valorEstimado !== undefined && (!Number.isFinite(valorEstimado) || valorEstimado <= 0)) {
+      return NextResponse.json({ error: 'Valor estimado invalido.' }, { status: 400 });
+    }
+
+    const metadata: any = { equipe: 'apollo', mes: APOLLO_MONTH, objective_id: id };
+    if (status !== undefined) metadata.status = status;
+    if (titulo !== undefined) metadata.titulo = titulo;
+    if (valorEstimado !== undefined) metadata.valor_estimado = valorEstimado;
 
     if (!UUID_RE.test(id)) {
       await writeAuditLog(request, guard.profile, {
         action: 'team.objective.update',
         entity_type: 'equipe_objetivo',
         entity_id: id,
-        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, objective_id: id, status },
+        metadata,
       });
       return NextResponse.json({ success: true });
     }
 
+    const updateData: any = { updated_at: new Date().toISOString() };
+    if (status !== undefined) updateData.status = status;
+    if (titulo !== undefined) updateData.titulo = titulo;
+    if (valorEstimado !== undefined) updateData.valor_estimado = valorEstimado;
+
     const { error } = await supabaseAdmin
       .from('equipe_objetivos')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update(updateData)
       .eq('id', id)
       .eq('equipe', 'apollo');
 
@@ -543,15 +707,16 @@ export async function POST(request: Request) {
         action: 'team.objective.update',
         entity_type: 'equipe_objetivo',
         entity_id: id,
-        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, objective_id: id, status },
+        metadata,
       });
       return NextResponse.json({ success: true });
     }
+
     await writeAuditLog(request, guard.profile, {
       action: 'team.objective.update',
       entity_type: 'equipe_objetivo',
       entity_id: id,
-      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, status },
+      metadata,
     });
     return NextResponse.json({ success: true });
   }

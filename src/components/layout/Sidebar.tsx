@@ -50,6 +50,12 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, isViewingAsDesigner, isViewingAsAccount, stopViewingAsCorretor } = useAuth();
   const isViewingAsUser = isViewingAsCorretor || isViewingAsGestor || isViewingAsDesigner || isViewingAsAccount;
+  const impersonationRoleLabel = (() => {
+    if (isViewingAsGestor) return 'Gestor';
+    if (isViewingAsDesigner) return 'Designer';
+    if (isViewingAsAccount) return 'Account';
+    return 'Corretor';
+  })();
   const isMasterAdmin = Boolean(actualProfile?.is_admin_master) || [actualProfile?.email, actualProfile?.email_real]
     .filter(Boolean)
     .map((email) => String(email).toLowerCase())
@@ -302,12 +308,12 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
         <div className="flex items-center gap-3 sm:gap-4">
           {isViewingAsUser && (
             <div className="hidden xl:flex items-center gap-3 border border-amber-400/20 bg-amber-400/10 px-3.5 py-1.5 rounded-xl">
-              <span className="text-[9px] font-black uppercase tracking-widest text-amber-200 animate-pulse">Modo admin</span>
+              <span className="text-[9px] font-black uppercase tracking-[0.32em] text-amber-200 animate-pulse">Modo admin</span>
               <button
                 onClick={stopViewingAsCorretor}
                 className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/15 cursor-pointer"
               >
-                <RotateCcw size={10} /> Sair do Corretor
+                <RotateCcw size={10} /> Sair do {impersonationRoleLabel}
               </button>
             </div>
           )}
@@ -355,7 +361,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
               <div className="mb-4 border border-amber-400/20 bg-amber-400/10 p-4 rounded-2xl">
                 <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">Modo admin</p>
                 <p className="mt-1 text-xs font-bold text-white">
-                  Voce esta acessando como corretor.
+                  Voce esta acessando como {impersonationRoleLabel.toLowerCase()}.
                 </p>
                 <button
                   onClick={stopViewingAsCorretor}
