@@ -483,17 +483,17 @@ export default function DashboardPage() {
         <div className="rounded-[1.5rem] border border-slate-100 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-6 lg:col-span-3">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <p className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400">Evolução Mensal</p>
+              <p className="mb-1 text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-cyan-400">Evolução Mensal</p>
               <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">Investimento Meta x Leads</h2>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Últimos 6 meses</p>
-              <div className="mt-1.5 flex items-center gap-4 text-[10px] font-extrabold uppercase">
-                <span className="flex items-center gap-1.5 text-cyan-400">
-                  <span className="h-2 w-2 rounded-full bg-cyan-400" /> Investimento
+              <p className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">Últimos 6 meses</p>
+              <div className="mt-2 flex items-center gap-5 text-xs sm:text-sm font-extrabold uppercase">
+                <span className="flex items-center gap-2 text-cyan-400">
+                  <span className="h-3 w-3 rounded-full bg-cyan-400" /> Investimento
                 </span>
-                <span className="flex items-center gap-1.5 text-emerald-400">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400" /> Leads
+                <span className="flex items-center gap-2 text-emerald-400">
+                  <span className="h-3 w-3 rounded-full bg-emerald-400" /> Leads
                 </span>
               </div>
             </div>
@@ -715,16 +715,16 @@ export default function DashboardPage() {
                   />
 
                   {/* Value Text (Very bold and large) */}
-                  <text x="260" y="166" textAnchor="middle" fill="#ffffff" fontSize="46" fontWeight="900" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                  <text x="260" y="172" textAnchor="middle" fill="#ffffff" fontSize="72" fontWeight="900" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
                     {stats.total}
                   </text>
 
                   {/* Connector Line, Dots & Label */}
                   <g className="transition-opacity duration-300" style={{ opacity: hoveredTier !== null && hoveredTier !== 1 ? 0.45 : 1 }}>
-                    <circle cx="420" cy="150" r="3.5" fill="#00bcff" style={{ filter: 'drop-shadow(0 0 4px #00bcff)' }} />
-                    <line x1="420" y1="150" x2="560" y2="150" stroke="#00bcff" strokeWidth="1.5" />
-                    <circle cx="560" cy="150" r="3.5" fill="#00bcff" style={{ filter: 'drop-shadow(0 0 4px #00bcff)' }} />
-                    <text x="576" y="154" fill="#f8fafc" fontSize="12" fontWeight="900" className="tracking-wide">
+                    <circle cx="420" cy="150" r="6" fill="#00bcff" style={{ filter: 'drop-shadow(0 0 6px #00bcff)' }} />
+                    <line x1="420" y1="150" x2="560" y2="150" stroke="#00bcff" strokeWidth="3" />
+                    <circle cx="560" cy="150" r="6" fill="#00bcff" style={{ filter: 'drop-shadow(0 0 6px #00bcff)' }} />
+                    <text x="576" y="158" fill="#f8fafc" fontSize="24" fontWeight="900" className="tracking-wide">
                       Entradas captadas
                     </text>
                   </g>
@@ -761,16 +761,16 @@ export default function DashboardPage() {
                   />
 
                   {/* Value Text */}
-                  <text x="260" y="284" textAnchor="middle" fill="#ffffff" fontSize="40" fontWeight="900" style={{ textShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                  <text x="260" y="290" textAnchor="middle" fill="#ffffff" fontSize="64" fontWeight="900" style={{ textShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
                     {activePipeline}
                   </text>
 
                   {/* Connector Line, Dots & Label */}
                   <g className="transition-opacity duration-300" style={{ opacity: hoveredTier !== null && hoveredTier !== 2 ? 0.45 : 1 }}>
-                    <circle cx="356" cy="270" r="3.5" fill="#00c2ff" style={{ filter: 'drop-shadow(0 0 4px #00c2ff)' }} />
-                    <line x1="356" y1="270" x2="560" y2="270" stroke="#00c2ff" strokeWidth="1.5" />
-                    <circle cx="560" cy="270" r="3.5" fill="#00c2ff" style={{ filter: 'drop-shadow(0 0 4px #00c2ff)' }} />
-                    <text x="576" y="274" fill="#f8fafc" fontSize="12" fontWeight="900" className="tracking-wide">
+                    <circle cx="356" cy="270" r="6" fill="#00c2ff" style={{ filter: 'drop-shadow(0 0 6px #00c2ff)' }} />
+                    <line x1="356" y1="270" x2="560" y2="270" stroke="#00c2ff" strokeWidth="3" />
+                    <circle cx="560" cy="270" r="6" fill="#00c2ff" style={{ filter: 'drop-shadow(0 0 6px #00c2ff)' }} />
+                    <text x="576" y="278" fill="#f8fafc" fontSize="24" fontWeight="900" className="tracking-wide">
                       Em funil comercial
                     </text>
                   </g>
@@ -807,16 +807,16 @@ export default function DashboardPage() {
                   />
 
                   {/* Value Text */}
-                  <text x="260" y="392" textAnchor="middle" fill="#ffffff" fontSize="34" fontWeight="900" style={{ textShadow: '0 4px 8px rgba(0,0,0,0.5)' }}>
+                  <text x="260" y="398" textAnchor="middle" fill="#ffffff" fontSize="54" fontWeight="900" style={{ textShadow: '0 4px 8px rgba(0,0,0,0.5)' }}>
                     {stats.quoted + stats.sold}
                   </text>
 
                   {/* Connector Line, Dots & Label */}
                   <g className="transition-opacity duration-300" style={{ opacity: hoveredTier !== null && hoveredTier !== 3 ? 0.45 : 1 }}>
-                    <circle cx="308" cy="380" r="3.5" fill="#a78bfa" style={{ filter: 'drop-shadow(0 0 4px #a78bfa)' }} />
-                    <line x1="308" y1="380" x2="560" y2="380" stroke="#a78bfa" strokeWidth="1.5" />
-                    <circle cx="560" cy="380" r="3.5" fill="#a78bfa" style={{ filter: 'drop-shadow(0 0 4px #a78bfa)' }} />
-                    <text x="576" y="384" fill="#f8fafc" fontSize="12" fontWeight="900" className="tracking-wide">
+                    <circle cx="308" cy="380" r="6" fill="#a78bfa" style={{ filter: 'drop-shadow(0 0 6px #a78bfa)' }} />
+                    <line x1="308" y1="380" x2="560" y2="380" stroke="#a78bfa" strokeWidth="3" />
+                    <circle cx="560" cy="380" r="6" fill="#a78bfa" style={{ filter: 'drop-shadow(0 0 6px #a78bfa)' }} />
+                    <text x="576" y="388" fill="#f8fafc" fontSize="24" fontWeight="900" className="tracking-wide">
                       Propostas e vendas
                     </text>
                   </g>
@@ -853,16 +853,16 @@ export default function DashboardPage() {
                   />
 
                   {/* Value Text */}
-                  <text x="260" y="500" textAnchor="middle" fill="#ffffff" fontSize="26" fontWeight="900" style={{ textShadow: '0 4px 6px rgba(0,0,0,0.5)' }}>
+                  <text x="260" y="508" textAnchor="middle" fill="#ffffff" fontSize="44" fontWeight="900" style={{ textShadow: '0 4px 6px rgba(0,0,0,0.5)' }}>
                     {stats.sold}
                   </text>
 
                   {/* Connector Line, Dots & Label */}
                   <g className="transition-opacity duration-300" style={{ opacity: hoveredTier !== null && hoveredTier !== 4 ? 0.45 : 1 }}>
-                    <circle cx="278" cy="500" r="3.5" fill="#2dd4bf" style={{ filter: 'drop-shadow(0 0 4px #2dd4bf)' }} />
-                    <line x1="278" y1="500" x2="560" y2="500" stroke="#2dd4bf" strokeWidth="1.5" />
-                    <circle cx="560" cy="500" r="3.5" fill="#2dd4bf" style={{ filter: 'drop-shadow(0 0 4px #2dd4bf)' }} />
-                    <text x="576" y="504" fill="#f8fafc" fontSize="12" fontWeight="900" className="tracking-wide">
+                    <circle cx="278" cy="500" r="6" fill="#2dd4bf" style={{ filter: 'drop-shadow(0 0 6px #2dd4bf)' }} />
+                    <line x1="278" y1="500" x2="560" y2="500" stroke="#2dd4bf" strokeWidth="3" />
+                    <circle cx="560" cy="500" r="6" fill="#2dd4bf" style={{ filter: 'drop-shadow(0 0 6px #2dd4bf)' }} />
+                    <text x="576" y="508" fill="#f8fafc" fontSize="24" fontWeight="900" className="tracking-wide">
                       Conversões fechadas
                     </text>
                   </g>
@@ -1144,12 +1144,13 @@ function CustomGrowthAreaChart({
 
   useEffect(() => {
     let start: number;
-    const duration = 1200; // 1.2 seconds
+    const duration = 1600; // Smooth 1.6s transition
     const animate = (timestamp: number) => {
       if (!start) start = timestamp;
       const elapsed = timestamp - start;
       const progress = Math.min(elapsed / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 4); // easeOutQuart
+      // Nice organic cubic ease
+      const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
       setAnimationProgress(ease);
       if (progress < 1) {
         requestAnimationFrame(animate);
@@ -1180,14 +1181,20 @@ function CustomGrowthAreaChart({
     return { x, y };
   });
 
-  // Calculate animated points rising up from bottom baseline (170)
-  const spendPoints = baseSpendPoints.map(p => {
-    const animatedY = 170 - (170 - p.y) * animationProgress;
+  // Calculate animated points rising up staggered from left to right (climbing effect)
+  const spendPoints = baseSpendPoints.map((p, i) => {
+    const startPct = (i / Math.max(data.length, 1)) * 0.45; // Stagger start from 0 to 0.45
+    const pointProgress = Math.max(0, Math.min(1, (animationProgress - startPct) / 0.55));
+    const pointEase = 1 - Math.pow(1 - pointProgress, 3); // ease out cubic
+    const animatedY = 170 - (170 - p.y) * pointEase;
     return { x: p.x, y: animatedY };
   });
 
-  const leadPoints = baseLeadPoints.map(p => {
-    const animatedY = 170 - (170 - p.y) * animationProgress;
+  const leadPoints = baseLeadPoints.map((p, i) => {
+    const startPct = (i / Math.max(data.length, 1)) * 0.45;
+    const pointProgress = Math.max(0, Math.min(1, (animationProgress - startPct) / 0.55));
+    const pointEase = 1 - Math.pow(1 - pointProgress, 3);
+    const animatedY = 170 - (170 - p.y) * pointEase;
     return { x: p.x, y: animatedY };
   });
 
@@ -1251,41 +1258,53 @@ function CustomGrowthAreaChart({
           d={getLinePath(spendPoints)}
           fill="none"
           stroke="#06b6d4"
-          strokeWidth="3"
+          strokeWidth="3.5"
           strokeLinecap="round"
-          filter="drop-shadow(0 0 4px rgba(6, 182, 212, 0.4))"
+          filter="drop-shadow(0 0 5px rgba(6, 182, 212, 0.55))"
         />
         <path
           d={getLinePath(leadPoints)}
           fill="none"
           stroke="#10b981"
-          strokeWidth="3"
+          strokeWidth="3.5"
           strokeLinecap="round"
-          filter="drop-shadow(0 0 4px rgba(16, 185, 129, 0.4))"
+          filter="drop-shadow(0 0 5px rgba(16, 185, 129, 0.55))"
         />
 
         {/* Nodes and Labels */}
         {data.map((d, i) => {
           const sp = spendPoints[i];
           const lp = leadPoints[i];
+          
+          // Staggered node opacity and scaling based on left-to-right timeline
+          const startPct = (i / Math.max(data.length, 1)) * 0.45;
+          const pointProgress = Math.max(0, Math.min(1, (animationProgress - startPct) / 0.55));
+          const pointEase = 1 - Math.pow(1 - pointProgress, 3);
+          const nodeOpacity = pointProgress;
+          const nodeScale = 0.3 + 0.7 * pointEase;
+
           return (
-            <g key={i}>
+            <g key={i} style={{ opacity: nodeOpacity }}>
               {/* Spend Node */}
               <circle
                 cx={sp.x}
                 cy={sp.y}
-                r="4"
+                r="5"
                 fill="#ffffff"
                 stroke="#06b6d4"
-                strokeWidth="2"
+                strokeWidth="2.5"
                 className="transition-all duration-300 hover:scale-150 cursor-pointer"
-                style={{ filter: 'drop-shadow(0 0 4px rgba(6, 182, 212, 0.6))' }}
+                style={{ 
+                  filter: 'drop-shadow(0 0 5px rgba(6, 182, 212, 0.8))',
+                  transform: `scale(${nodeScale})`,
+                  transformOrigin: `${sp.x}px ${sp.y}px`
+                }}
               />
               {/* Spend Node Hover Trigger Area */}
               <circle
                 cx={sp.x}
                 cy={sp.y}
-                r="14"
+                r="16"
                 fill="transparent"
                 className="cursor-pointer"
                 onMouseEnter={() => setHoveredNode({
@@ -1302,18 +1321,22 @@ function CustomGrowthAreaChart({
               <circle
                 cx={lp.x}
                 cy={lp.y}
-                r="4"
+                r="5"
                 fill="#ffffff"
                 stroke="#10b981"
-                strokeWidth="2"
+                strokeWidth="2.5"
                 className="transition-all duration-300 hover:scale-150 cursor-pointer"
-                style={{ filter: 'drop-shadow(0 0 4px rgba(16, 185, 129, 0.6))' }}
+                style={{ 
+                  filter: 'drop-shadow(0 0 5px rgba(16, 185, 129, 0.8))',
+                  transform: `scale(${nodeScale})`,
+                  transformOrigin: `${lp.x}px ${lp.y}px`
+                }}
               />
               {/* Leads Node Hover Trigger Area */}
               <circle
                 cx={lp.x}
                 cy={lp.y}
-                r="14"
+                r="16"
                 fill="transparent"
                 className="cursor-pointer"
                 onMouseEnter={() => setHoveredNode({
@@ -1326,14 +1349,15 @@ function CustomGrowthAreaChart({
                 onMouseLeave={() => setHoveredNode(null)}
               />
 
-              {/* Label */}
+              {/* Month Label - Much larger and high contrast */}
               <text
                 x={sp.x}
-                y={height - 8}
+                y={height - 4}
                 textAnchor="middle"
-                fill="#94a3b8"
-                fontSize="9"
-                fontWeight="bold"
+                fill="#cbd5e1"
+                fontSize="12"
+                fontWeight="900"
+                className="uppercase tracking-wider font-extrabold select-none"
               >
                 {d.label}
               </text>
@@ -1345,15 +1369,15 @@ function CustomGrowthAreaChart({
       {/* Floating Tooltip */}
       {hoveredNode && (
         <div
-          className="absolute z-30 pointer-events-none rounded-xl bg-slate-950/95 border border-white/10 px-3 py-2 text-xs font-black shadow-2xl backdrop-blur-md transition-all duration-200"
+          className="absolute z-30 pointer-events-none rounded-2xl bg-slate-950/95 border border-white/10 px-4 py-2.5 shadow-2xl backdrop-blur-md transition-all duration-200"
           style={{
             left: `${(hoveredNode.x / width) * 100}%`,
             top: `${(hoveredNode.y / height) * 100 - 15}%`,
             transform: 'translate(-50%, -100%)',
           }}
         >
-          <p className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">{hoveredNode.label}</p>
-          <p className="mt-0.5 text-sm font-black" style={{ color: hoveredNode.color }}>{hoveredNode.value}</p>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold leading-none">{hoveredNode.label}</p>
+          <p className="mt-1 text-sm font-black leading-none" style={{ color: hoveredNode.color }}>{hoveredNode.value}</p>
           {/* Arrow */}
           <div className="absolute left-1/2 bottom-0 h-2 w-2 -translate-x-1/2 translate-y-1/2 rotate-45 border-r border-b border-white/10 bg-slate-950" />
         </div>
