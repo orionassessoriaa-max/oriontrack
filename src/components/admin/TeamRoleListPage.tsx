@@ -184,13 +184,25 @@ export default function TeamRoleListPage({
                   <tr key={person.id} className="group transition-colors hover:bg-blue-50/30">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-lg font-black text-white shadow-inner">
+                        <button
+                          type="button"
+                          onClick={() => void openPanel(person)}
+                          className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-lg font-black text-white shadow-sm transition-all hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500/20 cursor-pointer"
+                          title={`Entrar como ${role === 'designer' ? 'designer' : 'account'}`}
+                        >
                           {person.foto_url || getTeamMemberPhoto(person.nome) ? (
                             <img src={person.foto_url || getTeamMemberPhoto(person.nome) || ''} alt={person.nome} className="h-full w-full object-cover" />
                           ) : person.nome?.[0].toUpperCase()}
-                        </div>
+                        </button>
                         <div className="min-w-0">
-                          <p className="font-bold text-gray-900 transition-colors group-hover:text-blue-600">{person.nome}</p>
+                          <button
+                            type="button"
+                            onClick={() => void openPanel(person)}
+                            className="block text-left font-bold text-gray-900 transition-colors hover:text-blue-600 cursor-pointer"
+                            title={`Entrar como ${role === 'designer' ? 'designer' : 'account'}`}
+                          >
+                            {person.nome}
+                          </button>
                           <p className="text-[10px] font-bold uppercase tracking-tighter text-gray-400">
                             {person.email} {person.email_real ? `(Real: ${person.email_real})` : ''}
                           </p>

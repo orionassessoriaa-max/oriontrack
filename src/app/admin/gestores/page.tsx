@@ -162,13 +162,25 @@ export default function AdminGestoresPage() {
                   <tr key={g.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-lg font-black text-white shadow-inner">
+                        <button
+                          type="button"
+                          onClick={() => startViewingAsGestor(g.id)}
+                          className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-lg font-black text-white shadow-sm transition-all hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500/20 cursor-pointer"
+                          title="Entrar como gestor"
+                        >
                           {g.foto_url || getTeamMemberPhoto(g.nome) ? (
                             <img src={g.foto_url || getTeamMemberPhoto(g.nome) || ''} alt={g.nome} className="h-full w-full object-cover" />
                           ) : g.nome?.[0].toUpperCase()}
-                        </div>
+                        </button>
                         <div className="min-w-0">
-                          <p className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{g.nome}</p>
+                          <button
+                            type="button"
+                            onClick={() => startViewingAsGestor(g.id)}
+                            className="block text-left font-bold text-gray-900 transition-colors hover:text-blue-600 cursor-pointer"
+                            title="Entrar como gestor"
+                          >
+                            {g.nome}
+                          </button>
                           <p className="text-[10px] font-bold uppercase tracking-tighter text-gray-400">{g.email}</p>
                           <p className="mt-1 rounded-lg bg-slate-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500 w-fit">
                             ID n8n: <span className="normal-case tracking-normal text-slate-700">{g.id}</span>
