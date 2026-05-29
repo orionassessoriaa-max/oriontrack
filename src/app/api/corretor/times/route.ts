@@ -78,7 +78,8 @@ async function ensureTeam(corretorId: string, nome = 'Time comercial') {
     .from('corretor_times')
     .select('*')
     .eq('corretor_id', corretorId)
-    .eq('ativo', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (findError) throw findError;
@@ -216,6 +217,28 @@ export async function POST(request: Request) {
         entity_type: 'corretor_times',
         entity_id: team.id,
         metadata: { corretor_id: corretorId, nome },
+      });
+
+      return NextResponse.json({ success: true, team: data });
+    }
+
+    if (action === 'toggle_distribution') {
+      const active = Boolean(body.active);
+      
+      const { data, error } = await supabaseAdmin
+        .from('corretor_times')
+        .update({ ativo: active })
+        .eq('id', team.id)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.distribution.toggle',
+        entity_type: 'corretor_times',
+        entity_id: team.id,
+        metadata: { corretor_id: corretorId, active },
       });
 
       return NextResponse.json({ success: true, team: data });

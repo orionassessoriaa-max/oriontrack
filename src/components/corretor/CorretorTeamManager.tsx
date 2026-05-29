@@ -15,6 +15,7 @@ type Team = {
   nome: string;
   corretor_id: string;
   proximo_indice: number;
+  ativo: boolean;
 };
 
 type Membro = {
@@ -170,7 +171,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     const token = await getToken();
 
     if (!token) {
-      setError('Sessao expirada. Entre novamente.');
+      setError('Sessão expirada. Entre novamente.');
       setLoading(false);
       return;
     }
@@ -182,7 +183,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error || 'Erro ao carregar time. Se voce esta logado como corretor, seu cadastro precisa estar vinculado ao registro de corretor.');
+      setError(payload.error || 'Erro ao carregar time. Se você está logado como corretor, seu cadastro precisa estar vinculado ao registro de corretor.');
       setLoading(false);
       return;
     }
@@ -201,7 +202,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
 
   async function postTeam(body: Record<string, unknown>) {
     const token = await getToken();
-    if (!token) throw new Error('Sessao expirada. Entre novamente.');
+    if (!token) throw new Error('Sessão expirada. Entre novamente.');
 
     const response = await fetch('/api/corretor/times', {
       method: 'POST',
@@ -301,6 +302,20 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     }
   }
 
+  async function toggleTeamDistribution(active: boolean) {
+    setSettingsSaving(true);
+    setError(null);
+
+    try {
+      await postTeam({ action: 'toggle_distribution', active });
+      await fetchTeam();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
   async function copyAccess() {
     if (!credentials) return;
     await navigator.clipboard.writeText(
@@ -311,27 +326,32 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
 
   return (
     <div className="space-y-6">
-      {error && <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-black text-red-600">{error}</div>}
+      {error && (
+        <div className="rounded-2xl border border-red-500/10 bg-red-500/5 p-4 text-sm font-black text-red-400">
+          {error}
+        </div>
+      )}
 
       {credentials && (
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
-          <div className="mb-4 flex items-center gap-3 text-emerald-700">
-            <CheckCircle2 size={22} />
+        <div className="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 p-5 shadow-lg shadow-emerald-500/5 animate-in fade-in duration-300">
+          <div className="mb-4 flex items-center gap-3 text-emerald-400">
+            <CheckCircle2 size={22} className="animate-pulse" />
             <div>
-              <p className="font-black">Membro criado com senha provisoria</p>
-              <p className="text-xs font-bold">Envie esses dados para o primeiro acesso.</p>
+              <p className="font-black text-white">Membro criado com senha provisória</p>
+              <p className="text-xs font-bold text-slate-400">Envie esses dados para o primeiro acesso.</p>
             </div>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-            <div className="rounded-xl bg-white/80 p-3 text-sm font-bold">{credentials.email}</div>
-            <div className="rounded-xl bg-white p-3 text-sm font-black">{credentials.senha_provisoria}</div>
-            <button onClick={copyAccess} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white">
-              <Copy size={16} /> Copiar
+            <div className="rounded-2xl bg-white/5 border border-white/5 p-3.5 text-sm font-bold text-slate-300">{credentials.email}</div>
+            <div className="rounded-2xl bg-white/5 border border-white/5 p-3.5 text-sm font-black text-cyan-400">{credentials.senha_provisoria}</div>
+            <button onClick={copyAccess} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition-all hover:bg-emerald-700 shadow-md">
+              <Copy size={16} /> Copiar Acesso
             </button>
           </div>
         </div>
       )}
 
+      {/* Stats Section */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Leads do time', value: teamSummary.total, detail: `${teamSummary.assigned} atribuídos`, icon: Users, tone: 'blue' },
@@ -341,50 +361,56 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
         ].map((card) => {
           const Icon = card.icon;
           const tone = {
-            blue: 'border-blue-100 bg-blue-50 text-blue-700',
-            amber: 'border-amber-100 bg-amber-50 text-amber-700',
-            emerald: 'border-emerald-100 bg-emerald-50 text-emerald-700',
-            slate: 'border-slate-200 bg-slate-50 text-slate-800',
+            blue: 'border-blue-500/10 bg-blue-500/5 text-blue-400 hover:border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.05)]',
+            amber: 'border-amber-500/10 bg-amber-500/5 text-amber-400 hover:border-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.05)]',
+            emerald: 'border-emerald-500/10 bg-emerald-500/5 text-emerald-400 hover:border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.05)]',
+            slate: 'border-white/5 bg-[#090e1a]/85 text-slate-300 hover:border-white/10 shadow-2xl',
           }[card.tone];
           return (
-            <div key={card.label} className={`rounded-2xl border p-5 shadow-sm ${tone}`}>
+            <div key={card.label} className={`rounded-3xl border p-6 transition-all duration-300 ${tone}`}>
               <div className="mb-4 flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-widest">{card.label}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{card.label}</p>
                 <Icon size={20} />
               </div>
-              <p className="text-3xl font-black text-slate-950">{card.value}</p>
-              <p className="mt-2 text-xs font-black uppercase tracking-widest opacity-70">{card.detail}</p>
+              <p className="text-3xl font-black text-white">{card.value}</p>
+              <p className="mt-2 text-xs font-black uppercase tracking-widest opacity-70 text-slate-400">{card.detail}</p>
             </div>
           );
         })}
       </section>
 
+      {/* Row with Distribution Performance and Ranking */}
       <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between gap-4">
+        {/* Left Column: Distribution por integrante */}
+        <div className="rounded-3xl border border-white/5 bg-[#090e1a]/85 backdrop-blur-md p-6 sm:p-7 shadow-2xl">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Performance</p>
-              <h2 className="mt-1 text-xl font-black text-slate-950">Distribuição por integrante</h2>
+              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Desempenho Comercial</p>
+              <h2 className="mt-1 text-xl font-black text-white">Distribuição por Integrante</h2>
             </div>
-            <span className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-600">
+            <span className="rounded-full bg-white/5 border border-white/5 px-4 py-2 text-xs font-black text-slate-300">
               {teamSummary.unassigned} sem responsável
             </span>
           </div>
           <div className="space-y-4">
             {memberStats.length === 0 ? (
-              <p className="rounded-2xl bg-slate-50 p-6 text-center text-sm font-bold text-slate-400">Crie integrantes para ver a distribuição automática.</p>
+              <p className="rounded-2xl bg-white/5 border border-dashed border-white/5 p-8 text-center text-sm font-bold text-slate-400">
+                Crie integrantes para ver a distribuição automática.
+              </p>
             ) : memberStats.map((member) => {
               const width = teamSummary.total ? Math.max(8, Math.round((member.totalLeads / teamSummary.total) * 100)) : 0;
               return (
-                <div key={member.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <div key={member.id} className="rounded-2xl border border-white/5 bg-[#070b13] p-5 hover:border-cyan-500/20 transition-colors group">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-950">{member.nome}</p>
-                      <p className="text-xs font-bold text-slate-500">{member.totalLeads} leads | {member.vendas} vendas | {currency(member.comissao)}</p>
+                      <p className="truncate text-sm font-black text-white group-hover:text-cyan-400 transition-colors">{member.nome}</p>
+                      <p className="text-xs font-bold text-slate-400 mt-1">
+                        {member.totalLeads} leads | {member.vendas} vendas | {currency(member.comissao)} comissão
+                      </p>
                     </div>
-                    <span className="text-lg font-black text-blue-600">{width}%</span>
+                    <span className="text-lg font-black text-cyan-400">{width}%</span>
                   </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-white">
+                  <div className="h-3 overflow-hidden rounded-full bg-[#090f1d] border border-white/5">
                     <div className="h-full rounded-full bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400 transition-all duration-700" style={{ width: `${width}%` }} />
                   </div>
                 </div>
@@ -393,29 +419,32 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-400 text-slate-950">
-              <Crown size={22} />
+        {/* Right Column: Vendas do Time Ranking */}
+        <div className="rounded-3xl border border-white/5 bg-[#090e1a]/85 backdrop-blur-md p-6 sm:p-7 shadow-2xl text-white">
+          <div className="mb-6 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-400 border border-amber-400/20 shadow-md">
+              <Crown size={20} className="animate-pulse" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Ranking</p>
-              <h2 className="text-xl font-black">Vendas do time</h2>
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Classificação</p>
+              <h2 className="text-xl font-black">Vendas do Time</h2>
             </div>
           </div>
           <div className="space-y-3">
             {ranking.length === 0 ? (
-              <p className="rounded-2xl bg-white/5 p-5 text-sm font-bold text-slate-300">O ranking aparece quando houver integrantes.</p>
+              <p className="rounded-2xl bg-white/5 border border-dashed border-white/5 p-8 text-center text-sm font-bold text-slate-400">
+                O ranking aparecerá quando houver integrantes.
+              </p>
             ) : ranking.map((member, index) => (
-              <div key={member.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-white/6 p-4">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-sm font-black">#{index + 1}</span>
+              <div key={member.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-[#070b13] border border-white/5 p-4 hover:border-amber-400/20 transition-colors">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 border border-white/5 text-xs font-black text-slate-400">#{index + 1}</span>
                 <div className="min-w-0">
-                  <p className="truncate font-black">{member.nome}</p>
-                  <p className="text-xs font-bold text-slate-300">{member.totalLeads} leads | {member.semResposta} sem resposta</p>
+                  <p className="truncate font-black text-white">{member.nome}</p>
+                  <p className="text-[10px] font-semibold text-slate-400 mt-1">{member.totalLeads} leads recebidos</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-black text-emerald-300">{member.vendas}</p>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">vendas</p>
+                  <p className="text-xl font-black text-emerald-400">{member.vendas}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 leading-none mt-1">vendas</p>
                 </div>
               </div>
             ))}
@@ -423,228 +452,275 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
         </div>
       </section>
 
+      {/* Row with Configurations, Create and Assign Leads Form */}
       <div className="grid gap-6 xl:grid-cols-[1fr_1.2fr]">
-        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-              <Users size={23} />
+        {/* Left Form: Configs, Create and Assign */}
+        <div className="rounded-3xl border border-white/5 bg-[#090e1a]/85 backdrop-blur-md p-6 sm:p-7 shadow-2xl hover:border-blue-500/20 hover:shadow-blue-500/5 transition-all duration-300 flex flex-col justify-between">
+          <div>
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-cyan-400 border border-cyan-500/20 shadow-md">
+                <Users size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-white">Configurações e Equipe</h2>
+                <p className="text-xs font-bold text-slate-400">Organize a distribuição de leads para o seu time comercial.</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-950">Meu time comercial</h2>
-              <p className="text-sm font-bold text-slate-500">Organize quem vai atender os leads novos das campanhas.</p>
+
+            {/* Nome do Time Input */}
+            <div className="mb-4">
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nome do Time</span>
+                <input
+                  value={nomeTime}
+                  onChange={(event) => setNomeTime(event.target.value)}
+                  className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-black text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={saveTeamName}
+                disabled={saving}
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3.5 text-xs font-black text-white transition-all hover:bg-blue-700 disabled:opacity-50 cursor-pointer shadow-lg shadow-blue-600/15"
+              >
+                {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                Salvar nome do time
+              </button>
+            </div>
+
+            {/* Configurações do Time Expandable Section */}
+            <div className="mb-6">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((current) => !current)}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/5 bg-white/5 px-5 py-3.5 text-xs font-black text-slate-300 transition-all hover:bg-white/10 hover:text-white cursor-pointer"
+              >
+                <Settings size={16} className={settingsOpen ? 'rotate-90 transition-transform' : 'transition-transform'} />
+                {settingsOpen ? 'Fechar Configurações do Time' : 'Configurações de Distribuição'}
+              </button>
+
+              {settingsOpen && (
+                <div className="mt-4 rounded-2xl border border-blue-500/15 bg-blue-500/5 p-5 animate-in fade-in slide-in-from-top-2 duration-300 space-y-5">
+                  
+                  {/* Distribution Toggle Option 1: Owner Participation */}
+                  <div className="flex items-start gap-4">
+                    <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#070b13] text-cyan-400 border border-white/5">
+                      <ShieldCheck size={19} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black text-white text-sm">Participar da Distribuição</p>
+                      <p className="mt-1 text-[11px] font-bold leading-relaxed text-slate-400">
+                        Quando ativado, você (corretor principal) também receberá leads na roleta e aparecerá nos relatórios.
+                      </p>
+                      {settings.owner_profile && (
+                        <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-cyan-400">
+                          Perfil: {settings.owner_profile.nome}
+                        </p>
+                      )}
+                    </div>
+                    <label className="relative inline-flex cursor-pointer items-center shrink-0">
+                      <input
+                        type="checkbox"
+                        className="peer sr-only"
+                        checked={settings.owner_in_distribution}
+                        disabled={settingsSaving}
+                        onChange={(event) => toggleOwnerDistribution(event.target.checked)}
+                      />
+                      <span className="h-6 w-11 rounded-full bg-white/10 transition peer-checked:bg-cyan-500 peer-disabled:opacity-50" />
+                      <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+                    </label>
+                  </div>
+
+                  <div className="h-px bg-white/5" />
+
+                  {/* Distribution Toggle Option 2: RANDOMIZAÇÃO ATIVA (NEW USER REQUEST) */}
+                  <div className="flex items-start gap-4">
+                    <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#070b13] text-cyan-400 border border-white/5">
+                      <Send size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black text-white text-sm">Distribuição Automática (Roleta)</p>
+                      <p className="mt-1 text-[11px] font-bold leading-relaxed text-slate-400">
+                        Quando ativado, os novos leads recebidos pelas integrações/webhook serão distribuídos aleatoriamente em rodízio entre os integrantes. Se desativado, ficarão sem responsável.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex cursor-pointer items-center shrink-0">
+                      <input
+                        type="checkbox"
+                        className="peer sr-only"
+                        checked={team?.ativo ?? true}
+                        disabled={settingsSaving || !team}
+                        onChange={(event) => toggleTeamDistribution(event.target.checked)}
+                      />
+                      <span className="h-6 w-11 rounded-full bg-white/10 transition peer-checked:bg-cyan-500 peer-disabled:opacity-50" />
+                      <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <label className="block">
-            <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Nome do time</span>
-            <input
-              value={nomeTime}
-              onChange={(event) => setNomeTime(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={saveTeamName}
-            disabled={saving}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white transition-all hover:bg-blue-700 disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-            Salvar nome do time
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSettingsOpen((current) => !current)}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-black text-slate-700 transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-          >
-            <Settings size={18} />
-            Configurações do time
-          </button>
-
-          {settingsOpen && (
-            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-start gap-3">
-                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600">
-                  <ShieldCheck size={19} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-black text-slate-950">Participar da distribuição</p>
-                  <p className="mt-1 text-xs font-bold leading-relaxed text-slate-600">
-                    Quando ativado, o dono do time tambem pode receber leads novos das campanhas e aparece nos relatorios e ranking.
-                  </p>
-                  {settings.owner_profile && (
-                    <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-blue-700">
-                      Dono do time: {settings.owner_profile.nome}
-                    </p>
-                  )}
-                </div>
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input
-                    type="checkbox"
-                    className="peer sr-only"
-                    checked={settings.owner_in_distribution}
-                    disabled={settingsSaving}
-                    onChange={(event) => toggleOwnerDistribution(event.target.checked)}
-                  />
-                  <span className="h-7 w-12 rounded-full bg-slate-300 transition peer-checked:bg-blue-600 peer-disabled:opacity-50" />
-                  <span className="absolute left-1 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
-                </label>
-              </div>
-            </div>
-          )}
-
-          <form onSubmit={createMember} className="mt-8 space-y-4 border-t border-slate-100 pt-6">
+          {/* Adicionar Membro Form */}
+          <form onSubmit={createMember} className="mt-6 border-t border-white/5 pt-6 space-y-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Novos Acessos</p>
+            <h3 className="text-base font-black text-white">Criar Integrante da Equipe</h3>
+            
             <label className="block">
-              <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Nome do integrante</span>
+              <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nome do Integrante</span>
               <input
                 required
                 value={nome}
                 onChange={(event) => setNome(event.target.value)}
                 placeholder="Nome da pessoa"
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
               />
             </label>
             <label className="block">
-              <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Email real</span>
+              <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Email Real</span>
               <input
                 required
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="pessoa@email.com"
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
               />
             </label>
             <button
               disabled={saving}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white transition-all hover:bg-emerald-700 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-600/15"
             >
-              {saving ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
-              Criar integrante
+              {saving ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+              Criar Acesso e Fila
             </button>
           </form>
 
+          {/* Atribuir Manualmente Form */}
           {canAssignLeads && (
-            <form onSubmit={assignLead} className="mt-8 space-y-4 border-t border-slate-100 pt-6">
+            <form onSubmit={assignLead} className="mt-8 border-t border-white/5 pt-6 space-y-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Enviar lead</p>
-                <h3 className="mt-1 text-lg font-black text-slate-950">Atribuir manualmente</h3>
-                <p className="text-sm font-bold text-slate-500">Use quando quiser mandar um lead especifico para alguem do time.</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Atribuição Manual</p>
+                <h3 className="text-base font-black text-white">Transferir Lead</h3>
+                <p className="text-xs font-bold text-slate-400 mt-1">Mande um lead específico da sua carteira para algum integrante.</p>
               </div>
               {assignMessage && (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-sm font-black text-emerald-700">
+                <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-3 text-xs font-black text-emerald-400">
                   {assignMessage}
                 </div>
               )}
               <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Lead</span>
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Lead</span>
                 <select
                   required
                   value={selectedLeadId}
                   onChange={(event) => setSelectedLeadId(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
                 >
-                  <option value="">Selecione o lead</option>
+                  <option value="" className="bg-[#090e1a]">Selecione o lead</option>
                   {leads.map((lead) => {
                     const currentMember = membros.find((member) => member.id === lead.responsavel_membro_id);
                     return (
-                      <option key={lead.id} value={lead.id}>
-                        {lead.nome} {lead.telefone ? `- ${lead.telefone}` : ''} {currentMember ? `(atual: ${currentMember.nome})` : ''}
+                      <option key={lead.id} value={lead.id} className="bg-[#090e1a]">
+                        {lead.nome} {lead.telefone ? `- ${lead.telefone}` : ''} {currentMember ? `(atendente: ${currentMember.nome})` : ''}
                       </option>
                     );
                   })}
                 </select>
               </label>
               <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Integrante</span>
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Integrante</span>
                 <select
                   required
                   value={selectedMemberId}
                   onChange={(event) => setSelectedMemberId(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
                 >
-                  <option value="">Selecione quem vai receber</option>
-                  {membros.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
+                  <option value="" className="bg-[#090e1a]">Selecione quem vai atender</option>
+                  {membros.map((member) => <option key={member.id} value={member.id} className="bg-[#090e1a]">{member.nome}</option>)}
                 </select>
               </label>
               <button
                 disabled={assigning || membros.length === 0 || leads.length === 0}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-sm font-black text-white transition-all hover:bg-slate-800 disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#070b13] border border-white/5 px-5 py-4 text-sm font-black text-slate-300 hover:text-white transition-all hover:bg-white/5 disabled:opacity-50 cursor-pointer"
               >
-                {assigning ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-                Enviar lead
+                {assigning ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+                Confirmar Transferência
               </button>
             </form>
           )}
         </div>
 
-        <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:shadow-xl">
-          <div className="border-b border-slate-100 p-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">{team?.nome || 'Time comercial'}</p>
-            <h2 className="mt-1 text-xl font-black text-slate-950">Integrantes cadastrados</h2>
-            <p className="mt-2 text-sm font-bold text-slate-500">
-              Acompanhe quem atende cada oportunidade e veja a evolucao do time.
+        {/* Right List: Integrantes cadastrados */}
+        <div className="overflow-hidden rounded-3xl border border-white/5 bg-[#090e1a]/85 backdrop-blur-md shadow-2xl hover:border-blue-500/20 transition-all duration-300">
+          <div className="border-b border-white/5 p-6">
+            <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">{team?.nome || 'Time comercial'}</p>
+            <h2 className="mt-1 text-xl font-black text-white">Integrantes Cadastrados</h2>
+            <p className="mt-2 text-xs font-bold text-slate-400">
+              Acompanhe quem atende cada oportunidade, visualize a fila comercial e audite as métricas operacionais.
             </p>
           </div>
 
           {loading ? (
-            <div className="flex justify-center p-16">
-              <Loader2 className="animate-spin text-blue-600" size={36} />
+            <div className="flex justify-center p-24">
+              <Loader2 className="animate-spin text-cyan-400" size={36} />
             </div>
           ) : membros.length === 0 ? (
-            <div className="p-16 text-center text-sm font-bold text-slate-400">
-              Nenhum integrante criado ainda.
+            <div className="p-24 text-center text-sm font-bold text-slate-500 border border-dashed border-white/5 m-6 rounded-2xl">
+              Nenhum integrante criado ainda na carteira.
             </div>
           ) : (
-            <div className="grid gap-4 p-5">
+            <div className="grid gap-4 p-6">
               {memberStats.map((member, index) => (
-                <div key={member.id} className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-white hover:shadow-lg">
-                  <div className="grid gap-4 xl:grid-cols-[1fr_1.4fr_auto] xl:items-center">
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-black text-white">
-                      {member.nome.slice(0, 2).toUpperCase()}
+                <div key={member.id} className="rounded-2xl border border-white/5 bg-[#070b13] p-5 transition-all duration-300 hover:-translate-y-1 hover:border-cyan-500/20 hover:bg-white/[0.01]">
+                  <div className="grid gap-5 xl:grid-cols-[1fr_1.4fr_auto] xl:items-center">
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black text-white shadow-md shadow-blue-500/10">
+                        {member.nome.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-black text-white">{member.nome}</p>
+                        <p className="break-all text-xs font-semibold text-slate-400 mt-1">{member.email}</p>
+                        <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-cyan-400">
+                          Posição: #{index + 1} {member.ultimo_lead_at ? `| último em ${new Date(member.ultimo_lead_at).toLocaleDateString('pt-BR')}` : ''}
+                        </p>
+                        {member.profile_id === settings.owner_profile?.id && (
+                          <span className="mt-2 inline-flex rounded-full bg-blue-500/15 border border-blue-500/20 px-3 py-1 text-[8px] font-black uppercase tracking-widest text-cyan-400 leading-none">
+                            Dono do time
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-black text-slate-950">{member.nome}</p>
-                      <p className="break-all text-xs font-bold text-slate-500">{member.email}</p>
-                      <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-600">
-                        Fila #{index + 1} {member.ultimo_lead_at ? `| ultimo lead ${new Date(member.ultimo_lead_at).toLocaleDateString('pt-BR')}` : ''}
-                      </p>
-                      {member.profile_id === settings.owner_profile?.id && (
-                        <span className="mt-2 inline-flex rounded-full bg-blue-100 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-blue-700">
-                          Dono do time
-                        </span>
-                      )}
+                    
+                    {/* Member Stats Pillars */}
+                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                      <div className="rounded-2xl bg-blue-500/5 border border-blue-500/10 p-3.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-blue-400">Leads</p>
+                        <p className="text-xl font-black text-white mt-1">{member.totalLeads}</p>
+                      </div>
+                      <div className="rounded-2xl bg-amber-500/5 border border-amber-500/10 p-3.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-400">Sem Resposta</p>
+                        <p className="text-xl font-black text-white mt-1">{member.semResposta}</p>
+                      </div>
+                      <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/10 p-3.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Vendas</p>
+                        <p className="text-xl font-black text-white mt-1">{member.vendas}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white/5 border border-white/5 p-3.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Comissão</p>
+                        <p className="text-xs font-black text-white mt-2.5 truncate">{currency(member.comissao)}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <div className="rounded-xl bg-blue-50 p-3">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Leads</p>
-                      <p className="text-lg font-black text-slate-950">{member.totalLeads}</p>
-                    </div>
-                    <div className="rounded-xl bg-amber-50 p-3">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">Sem resposta</p>
-                      <p className="text-lg font-black text-slate-950">{member.semResposta}</p>
-                    </div>
-                    <div className="rounded-xl bg-emerald-50 p-3">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Vendas</p>
-                      <p className="text-lg font-black text-slate-950">{member.vendas}</p>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Comissão</p>
-                      <p className="text-sm font-black text-slate-950">{currency(member.comissao)}</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeMember(member)}
-                    disabled={member.profile_id === settings.owner_profile?.id}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600 transition-all hover:bg-red-100"
-                    title={member.profile_id === settings.owner_profile?.id ? 'Desative em Configurações do time.' : 'Remover integrante'}
-                  >
-                    <Trash2 size={15} /> Remover
-                  </button>
+
+                    <button
+                      type="button"
+                      onClick={() => removeMember(member)}
+                      disabled={member.profile_id === settings.owner_profile?.id}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/10 bg-red-500/5 px-4 py-3 text-xs font-black text-red-400 transition-all hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30 cursor-pointer"
+                      title={member.profile_id === settings.owner_profile?.id ? 'Desative em Configurações do time.' : 'Remover integrante'}
+                    >
+                      <Trash2 size={14} /> Remover
+                    </button>
                   </div>
                 </div>
               ))}

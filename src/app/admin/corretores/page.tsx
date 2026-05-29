@@ -273,7 +273,6 @@ function CorretoresContent() {
                 <tr className="bg-gray-50/50">
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Corretor / Parceiro</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Gestor de Tráfego</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Página de Captação</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
                   <th className="min-w-[340px] px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
                 </tr>
@@ -355,23 +354,7 @@ function CorretoresContent() {
                         )}
                       </div>
                     </td>
-                    <td className="px-8 py-6">
-                      {c.link_pagina ? (
-                        <div className="flex items-center gap-2">
-                          <Globe size={14} className="text-blue-500" />
-                          <a 
-                            href={c.link_pagina} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors truncate max-w-[200px]"
-                          >
-                            {c.link_pagina}
-                          </a>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest italic">Não vinculada</span>
-                      )}
-                    </td>
+
                     <td className="px-8 py-6 text-center">
                       <span className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border ${
                         (c.status?.toLowerCase() === 'active' || c.status?.toLowerCase() === 'ativo')
