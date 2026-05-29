@@ -79,16 +79,16 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   }, [loading, user, profile, pathname, router]);
 
   useEffect(() => {
-    window.localStorage.setItem('orion:tema_sistema', 'claro');
-    document.documentElement.classList.remove('theme-noturno');
-    document.body.classList.remove('theme-noturno');
-    document.documentElement.style.colorScheme = 'light';
+    window.localStorage.setItem('orion:tema_sistema', 'noturno');
+    document.documentElement.classList.add('theme-noturno');
+    document.body.classList.add('theme-noturno');
+    document.documentElement.style.colorScheme = 'dark';
   }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
-        <Loader2 className="animate-spin text-blue-600" size={40} />
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+        <Loader2 className="animate-spin text-cyan-500" size={40} />
       </div>
     );
   }
