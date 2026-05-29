@@ -160,7 +160,7 @@ export default function DesignerHomePage() {
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <p className="text-xs font-black uppercase tracking-widest text-cyan-400 flex items-center gap-1.5">
-            <Sparkles size={14} className="text-cyan-400" /> Designer
+            Designer
           </p>
         </div>
         <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">Painel de Criativos</h1>

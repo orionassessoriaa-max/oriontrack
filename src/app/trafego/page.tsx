@@ -141,7 +141,7 @@ export default function GestorDashboardPage() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2">
-              Gestão de Tráfego <Sparkles size={24} className="text-cyan-400 animate-pulse" />
+              Gestão de Tráfego
             </h1>
             <span className="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-400/20">
               Operacional

@@ -13,7 +13,7 @@ export default function AccountHomePage() {
         
         <div className="max-w-4xl relative z-10">
           <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-400 flex items-center gap-1.5">
-            <Sparkles size={14} className="text-cyan-400" /> Account manager
+            Account manager
           </p>
           <h1 className="mt-3 text-3xl sm:text-4xl font-black tracking-tight leading-tight">
             Central de Relacionamento Orion

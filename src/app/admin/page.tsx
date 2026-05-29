@@ -265,7 +265,7 @@ export default function AdminCentralPage() {
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-2">
             <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2">
-              Painel Orion <Sparkles size={24} className="text-cyan-400 animate-pulse" />
+              Painel Orion
             </h1>
             <span className="bg-blue-500/10 text-cyan-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-cyan-400/20 shadow-[0_0_15px_rgba(34,211,238,0.1)]">
               {getProfileRoleLabel(profile)}
