@@ -858,25 +858,6 @@ export default function DashboardPage() {
             <h2 className="text-2xl font-black text-white tracking-tight mb-2">Seu time Orion</h2>
             <p className="text-slate-400 font-medium">Por trás de toda corretora campeã, existe um time jogando junto.</p>
           </div>
-          {/* Custom Carousel Navigation Arrows (Top right) */}
-          {!isDataLoading && timeOperacional.length > 1 && (
-            <div className="flex gap-2 shrink-0">
-              <button 
-                onClick={prevSlide}
-                className="p-3.5 bg-white/5 border border-white/5 hover:bg-white/10 text-white rounded-2xl transition-all duration-300 shadow-md active:scale-95 cursor-pointer"
-                title="Anterior"
-              >
-                <ArrowLeft size={18} />
-              </button>
-              <button 
-                onClick={nextSlide}
-                className="p-3.5 bg-white/5 border border-white/5 hover:bg-white/10 text-white rounded-2xl transition-all duration-300 shadow-md active:scale-95 cursor-pointer"
-                title="Próximo"
-              >
-                <ArrowRight size={18} />
-              </button>
-            </div>
-          )}
         </div>
 
         {isDataLoading ? (
@@ -891,12 +872,27 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="relative w-full overflow-hidden py-2 px-1">
-            <motion.div 
-              className="flex gap-6 w-max"
-              animate={{ x: -carouselIndex * 324 }} // 300px card width + 24px gap
-              transition={{ type: "spring", stiffness: 100, damping: 17 }}
-            >
-              {timeOperacional.map((membro, index: number) => {
+            <style>{`
+              @keyframes marqueeContinuous {
+                0% {
+                  transform: translateX(0);
+                }
+                100% {
+                  transform: translateX(-33.3333%);
+                }
+              }
+              .animate-marquee-continuous {
+                display: flex;
+                gap: 1.5rem;
+                width: max-content;
+                animation: marqueeContinuous 35s linear infinite;
+              }
+              .animate-marquee-continuous:hover {
+                animation-play-state: paused;
+              }
+            `}</style>
+            <div className="animate-marquee-continuous">
+              {[...timeOperacional, ...timeOperacional, ...timeOperacional].map((membro, index: number) => {
                 const foto = getTeamMemberPhoto(membro.nome);
 
                 return (
@@ -927,7 +923,7 @@ export default function DashboardPage() {
                   </div>
                 );
               })}
-            </motion.div>
+            </div>
           </div>
         )}
       </div>
