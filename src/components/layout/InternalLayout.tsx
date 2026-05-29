@@ -58,7 +58,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
           }
         }
         else if (isAccountManager) {
-          if (!isAccountRoute && !isCreativeRoute && !isTeamRoute && !pathname.startsWith('/trafego/relatorios') && !pathname.startsWith('/admin/leads') && pathname !== '/perfil' && pathname !== '/notificacoes') {
+          if (!isAccountRoute && !isCreativeRoute && !isTeamRoute && !pathname.startsWith('/trafego/relatorios') && pathname !== '/perfil' && pathname !== '/notificacoes') {
             router.push('/account');
           }
         }
@@ -128,7 +128,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f8fafc]">
+    <div className="flex min-h-screen flex-col bg-[#020617] text-white">
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
       <main className="w-full min-w-0 px-3 py-5 pt-24 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7 lg:pt-28">
         <div className="mx-auto max-w-none transition-all duration-300">

@@ -48,11 +48,21 @@ export default function TrafficCorretoresPage() {
       const { data, error: supabaseError } = await supabase
         .from('corretores')
         .select('*')
-        .eq('gestor_trafego_id', profile.id)
+        .in('status', ['active', 'ativo', 'Ativo'])
         .order('nome');
 
       if (supabaseError) throw supabaseError;
-      setCorretores(data || []);
+
+      let filtered = data || [];
+      if (profile.tipo_usuario === 'gestor_trafego') {
+        filtered = filtered.filter(c => {
+          if (c.gestor_trafego_id === profile.id) return true;
+          const team = Array.isArray(c.time_operacional) ? c.time_operacional : [];
+          return team.some((member: any) => member?.profile_id === profile.id || member?.id === profile.id);
+        });
+      }
+
+      setCorretores(filtered);
     } catch (err: any) {
       console.error('Error fetching traffic manager corretores:', err);
       setError("Erro ao carregar sua lista de corretores.");

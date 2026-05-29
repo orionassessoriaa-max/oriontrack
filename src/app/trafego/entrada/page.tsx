@@ -15,6 +15,7 @@ type EntradaForm = {
   campanhas_ativas: boolean;
   operadoras: string[];
   operadora_outros: string;
+  observacoes: string;
 };
 
 const emptyForm: EntradaForm = {
@@ -23,7 +24,8 @@ const emptyForm: EntradaForm = {
   regioes_campanha: '',
   campanhas_ativas: false,
   operadoras: [],
-  operadora_outros: ''
+  operadora_outros: '',
+  observacoes: ''
 };
 
 export default function EntradaGestorPage() {
@@ -63,11 +65,21 @@ export default function EntradaGestorPage() {
       const { data, error: fetchError } = await supabase
         .from('corretores')
         .select('*')
-        .eq('gestor_trafego_id', profile.id)
+        .in('status', ['active', 'ativo', 'Ativo'])
         .order('nome', { ascending: true });
 
       if (fetchError) throw fetchError;
-      setCorretores(data || []);
+
+      let filtered = data || [];
+      if (profile.tipo_usuario === 'gestor_trafego') {
+        filtered = filtered.filter(c => {
+          if (c.gestor_trafego_id === profile.id) return true;
+          const team = Array.isArray(c.time_operacional) ? c.time_operacional : [];
+          return team.some((member: any) => member?.profile_id === profile.id || member?.id === profile.id);
+        });
+      }
+
+      setCorretores(filtered);
     } catch (err: any) {
       console.error('Erro ao carregar entrada:', err);
       setError('Nao foi possivel carregar os corretores vinculados.');
@@ -94,7 +106,8 @@ export default function EntradaGestorPage() {
       operadoras: customOperadora
         ? [...selectedOperadoras.filter((item) => item !== customOperadora), 'Outros']
         : selectedOperadoras,
-      operadora_outros: customOperadora || ''
+      operadora_outros: customOperadora || '',
+      observacoes: corretor.observacoes || ''
     });
   };
 
@@ -133,6 +146,7 @@ export default function EntradaGestorPage() {
         operadoras_info: { selecionadas: operadoras },
         campanhas_ativas: formData.campanhas_ativas,
         onboarding_status,
+        observacoes: formData.observacoes || null,
       })
       .eq('id', selectedId);
 
@@ -151,6 +165,7 @@ export default function EntradaGestorPage() {
       campanhas_ativas: formData.campanhas_ativas,
       operadoras_info: { selecionadas: operadoras },
       onboarding_status,
+      observacoes: formData.observacoes,
     } : c));
   };
 
@@ -274,6 +289,17 @@ export default function EntradaGestorPage() {
                   rows={3}
                   className="w-full resize-none rounded-2xl border-none bg-slate-50 p-5 text-sm font-medium focus:ring-2 focus:ring-blue-500"
                   placeholder="Ex: Sao Paulo capital, ABC, Guarulhos..."
+                />
+              </div>
+
+              <div className="mt-6 space-y-2">
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Observações</label>
+                <textarea
+                  value={formData.observacoes}
+                  onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                  rows={3}
+                  className="w-full resize-none rounded-2xl border-none bg-slate-50 p-5 text-sm font-medium focus:ring-2 focus:ring-blue-500"
+                  placeholder="Informações adicionais, observações de campanha ou notas gerais..."
                 />
               </div>
 

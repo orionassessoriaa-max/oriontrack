@@ -6,7 +6,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Clock, ClipboardList, Loader2, MessageSquare, Palette, Trash2, Upload } from 'lucide-react';
+import { CheckCircle2, Clock, ClipboardList, Loader2, MessageSquare, Palette, Trash2, Upload, Sparkles, ChevronRight } from 'lucide-react';
 
 type DemandStatus = 'pendente' | 'atrasado' | 'feito' | 'entregue' | 'aprovado' | 'revisao';
 type AssetStatus = 'em_aprovacao' | 'aprovado' | 'revisao' | 'rodando';
@@ -45,10 +45,10 @@ function visibleStatus(demand: Demand) {
 }
 
 function statusClass(status: string) {
-  if (status === 'aprovado' || status === 'entregue' || status === 'feito') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (status === 'revisao') return 'bg-blue-50 text-blue-700 border-blue-200';
-  if (status === 'atrasado') return 'bg-red-50 text-red-700 border-red-200';
-  return 'bg-blue-50 text-blue-700 border-blue-200';
+  if (status === 'aprovado' || status === 'entregue' || status === 'feito') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+  if (status === 'revisao') return 'bg-blue-500/10 text-cyan-400 border-cyan-500/20';
+  if (status === 'atrasado') return 'bg-red-500/10 text-red-400 border-red-500/20';
+  return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
 }
 
 function isResponsibleForDesigner(item: Demand | CreativeAsset, profileId?: string | null) {
@@ -158,12 +158,16 @@ export default function DesignerHomePage() {
   return (
     <InternalLayout>
       <div className="mb-8">
-        <p className="text-xs font-black uppercase tracking-widest text-blue-600">Designer</p>
-        <h1 className="text-3xl font-black text-slate-950">Painel de criativos</h1>
-        <p className="mt-2 text-sm font-bold text-slate-500">Gerencie demandas, entregue ofertas e acompanhe aprovacoes e revisoes dos corretores.</p>
+        <div className="flex items-center gap-3 mb-2">
+          <p className="text-xs font-black uppercase tracking-widest text-cyan-400 flex items-center gap-1.5">
+            <Sparkles size={14} className="text-cyan-400" /> Designer
+          </p>
+        </div>
+        <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">Painel de Criativos</h1>
+        <p className="mt-2 text-sm font-semibold text-slate-400">Gerencie demandas, entregue ofertas e acompanhe aprovações e revisões dos corretores.</p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <Counter active={filter === 'pendentes'} onClick={() => setFilter('pendentes')} icon={Clock} label="Pendentes" value={stats.pendentes} tone="blue" />
         <Counter active={filter === 'atrasadas'} onClick={() => setFilter('atrasadas')} icon={Clock} label="Atrasadas" value={stats.atrasadas} tone="red" />
         <Counter active={filter === 'entregues'} onClick={() => setFilter('entregues')} icon={CheckCircle2} label="Entregues" value={stats.entregues} tone="emerald" />
@@ -172,54 +176,74 @@ export default function DesignerHomePage() {
         <Counter active={filter === 'arquivos'} onClick={() => setFilter('arquivos')} icon={Palette} label="Arquivos" value={stats.arquivos} tone="slate" />
       </div>
 
-      <div className="mt-6 grid gap-5 md:grid-cols-2">
-        <Link href="/criativos/demandas" className="group border border-slate-200 bg-white p-6 shadow-sm transition hover:border-blue-300">
-          <ClipboardList className="text-blue-600" size={28} />
-          <h2 className="mt-5 text-xl font-black text-slate-950">Demandas</h2>
-          <p className="mt-2 text-sm font-bold text-slate-500">Ver solicitacoes, prazos, excluir entregas e subir o criativo dentro da demanda.</p>
+      <div className="mt-8 grid gap-6 md:grid-cols-2">
+        <Link href="/criativos/demandas" className="group border border-white/5 bg-[#090e1a]/85 p-6 rounded-2xl shadow-xl transition-all duration-300 hover:border-blue-500/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.08)] flex flex-col justify-between min-h-[160px]">
+          <div>
+            <div className="p-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl w-fit group-hover:scale-105 transition-transform">
+              <ClipboardList size={24} />
+            </div>
+            <h2 className="mt-4 text-xl font-black text-white group-hover:text-cyan-400 transition-colors">Visualizar Demandas</h2>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Ver solicitações, prazos, excluir entregas e subir o criativo dentro da demanda.</p>
+          </div>
+          <span className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-cyan-400 group-hover:text-white transition-colors">
+            Acessar Demandas <ChevronRight size={12} />
+          </span>
         </Link>
-        <Link href="/designer/ofertas" className="group border border-slate-200 bg-white p-6 shadow-sm transition hover:border-blue-300">
-          <Upload className="text-blue-600" size={28} />
-          <h2 className="mt-5 text-xl font-black text-slate-950">Ofertas e arquivos</h2>
-          <p className="mt-2 text-sm font-bold text-slate-500">Selecionar corretor, subir criativos avulsos e consultar historico de entregas.</p>
+        <Link href="/designer/ofertas" className="group border border-white/5 bg-[#090e1a]/85 p-6 rounded-2xl shadow-xl transition-all duration-300 hover:border-blue-500/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.08)] flex flex-col justify-between min-h-[160px]">
+          <div>
+            <div className="p-3 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl w-fit group-hover:scale-105 transition-transform">
+              <Upload size={24} />
+            </div>
+            <h2 className="mt-4 text-xl font-black text-white group-hover:text-cyan-400 transition-colors">Ofertas e arquivos</h2>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Selecionar corretor, subir criativos avulsos e consultar histórico de entregas.</p>
+          </div>
+          <span className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-cyan-400 group-hover:text-white transition-colors">
+            Subir Arquivos <ChevronRight size={12} />
+          </span>
         </Link>
       </div>
 
-      <section className="mt-8 border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 p-5">
-          <h2 className="text-lg font-black text-slate-950">
+      <section className="mt-8 border border-white/5 bg-[#090e1a]/80 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden mb-12">
+        <div className="border-b border-white/5 p-5 bg-white/[0.01]">
+          <h2 className="text-lg font-black text-white">
             {showingAssets ? filter === 'revisao' ? 'Criativos para revisar' : filter === 'aprovados' ? 'Criativos aprovados' : 'Arquivos enviados' : 'Demandas'}
           </h2>
-          <p className="mt-1 text-xs font-bold text-slate-500">Clique nos quadros acima para alternar a lista.</p>
+          <p className="mt-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Clique nos quadros acima para alternar a lista.</p>
         </div>
 
         {loading ? (
           <div className="flex h-56 items-center justify-center">
-            <Loader2 className="animate-spin text-blue-600" size={34} />
+            <Loader2 className="animate-spin text-cyan-400" size={34} />
           </div>
         ) : showingAssets ? (
           filteredAssets.length === 0 ? (
             <EmptyState />
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-white/5">
               {filteredAssets.map((asset) => (
                 <div key={asset.id} className="grid gap-4 p-5 md:grid-cols-[96px_1fr_auto] md:items-center">
-                  <div className="force-white h-24 w-24 overflow-hidden border border-slate-200">
-                    {asset.arquivo_url ? <img src={asset.arquivo_url} alt={asset.titulo} className="h-full w-full object-cover" /> : <Palette className="m-8 text-slate-300" />}
+                  <div className="h-24 w-24 overflow-hidden border border-white/5 bg-slate-900 rounded-xl flex items-center justify-center relative">
+                    {asset.arquivo_url ? (
+                      <img src={asset.arquivo_url} alt={asset.titulo} className="h-full w-full object-cover" />
+                    ) : (
+                      <Palette className="text-slate-700" size={28} />
+                    )}
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${statusClass(asset.status)}`}>{asset.status}</span>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{asset.corretores?.nome || 'Sem corretor'}</span>
+                      <span className={`border px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${statusClass(asset.status)}`}>
+                        {asset.status.replace('_', ' ')}
+                      </span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{asset.corretores?.nome || 'Sem corretor'}</span>
                     </div>
-                    <h3 className="mt-2 text-lg font-black text-slate-950">{asset.titulo}</h3>
-                    <p className="mt-1 text-sm font-bold text-slate-500">{asset.descricao || 'Sem descricao'}</p>
+                    <h3 className="mt-2.5 text-lg font-black text-white">{asset.titulo}</h3>
+                    <p className="mt-1 text-sm font-semibold text-slate-400">{asset.descricao || 'Sem descrição'}</p>
                     {asset.comentario_corretor && (
-                      <p className="mt-3 border-l-4 border-blue-400 bg-blue-50 p-3 text-xs font-bold text-blue-900">{asset.comentario_corretor}</p>
+                      <p className="mt-3 border-l-4 border-cyan-400 bg-cyan-950/20 p-3 rounded-r-xl text-xs font-semibold text-cyan-300">{asset.comentario_corretor}</p>
                     )}
                   </div>
                   {asset.arquivo_url && (
-                    <a href={asset.arquivo_url} target="_blank" className="bg-slate-950 px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white">
+                    <a href={asset.arquivo_url} target="_blank" className="bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2.5 text-center text-xs font-black uppercase tracking-widest text-white rounded-xl transition-colors">
                       Abrir
                     </a>
                   )}
@@ -230,7 +254,7 @@ export default function DesignerHomePage() {
         ) : filteredDemands.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-white/5">
             {filteredDemands.map((demand) => {
               const status = visibleStatus(demand);
               const canDelete = ['entregue', 'feito', 'aprovado', 'revisao'].includes(status);
@@ -238,25 +262,27 @@ export default function DesignerHomePage() {
                 <div key={demand.id} className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${statusClass(status)}`}>{status}</span>
-                      <span className="bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600">{demand.tipo_criativo === 'otimizacao' ? 'Otimizacao' : 'Novo criativo'}</span>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{demand.corretores?.nome || 'Sem corretor'}</span>
+                      <span className={`border px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${statusClass(status)}`}>{status}</span>
+                      <span className="bg-white/5 border border-white/5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest text-slate-400">{demand.tipo_criativo === 'otimizacao' ? 'Otimização' : 'Novo criativo'}</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{demand.corretores?.nome || 'Sem corretor'}</span>
                     </div>
-                    <h3 className="mt-2 text-lg font-black text-slate-950">{demand.titulo}</h3>
-                    <p className="mt-1 text-sm font-bold text-slate-500">{demand.descricao || 'Sem briefing detalhado'}</p>
-                    <p className="mt-2 text-xs font-black uppercase tracking-widest text-slate-400">Prazo: {demand.data_entrega || 'sem prazo'} | Conta: {demand.meta_account_id || 'sem conta'}</p>
+                    <h3 className="mt-2.5 text-lg font-black text-white">{demand.titulo}</h3>
+                    <p className="mt-1 text-sm font-semibold text-slate-400">{demand.descricao || 'Sem briefing detalhado'}</p>
+                    <p className="mt-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Prazo: <span className="text-slate-400">{demand.data_entrega || 'sem prazo'}</span> | Conta: <span className="text-slate-400">{demand.meta_account_id || 'sem conta'}</span>
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Link href="/criativos/demandas" className="bg-blue-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+                    <Link href="/criativos/demandas" className="bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white rounded-xl transition-colors shadow-md shadow-blue-600/10">
                       Abrir demanda
                     </Link>
                     {canDelete && (
                       <button
                         onClick={() => deleteDemand(demand)}
                         disabled={deletingId === demand.id}
-                        className="flex items-center gap-2 border border-red-100 bg-red-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-600"
+                        className="flex items-center gap-2 border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-red-400 rounded-xl transition-all hover:bg-red-500/15"
                       >
-                        {deletingId === demand.id ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />} Remover
+                        {deletingId === demand.id ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} Remover
                       </button>
                     )}
                   </div>
@@ -272,31 +298,30 @@ export default function DesignerHomePage() {
 
 function Counter({ icon: Icon, label, value, tone, active, onClick }: { icon: any; label: string; value: number; tone: string; active: boolean; onClick: () => void }) {
   const tones: Record<string, string> = {
-    blue: 'bg-blue-50 text-blue-700 border-blue-100',
-    red: 'bg-red-50 text-red-700 border-red-100',
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    amber: 'bg-blue-50 text-blue-700 border-blue-100',
-    slate: 'bg-slate-50 text-slate-700 border-slate-100',
+    blue: 'bg-blue-500/10 text-blue-400 border-blue-500/15 hover:border-blue-500/35 shadow-blue-500/5',
+    red: 'bg-red-500/10 text-red-400 border-red-500/15 hover:border-red-500/35 shadow-red-500/5',
+    emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/15 hover:border-emerald-500/35 shadow-emerald-500/5',
+    slate: 'bg-slate-500/10 text-slate-400 border-slate-500/15 hover:border-slate-500/35 shadow-slate-500/5',
   };
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`border p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${tones[tone]} ${active ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+      className={`border p-5 text-left rounded-2xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${tones[tone]} ${active ? 'ring-2 ring-cyan-500/50 ring-offset-2 ring-offset-[#020617]' : ''}`}
     >
-      <Icon size={20} />
-      <p className="mt-4 text-[10px] font-black uppercase tracking-widest">{label}</p>
-      <p className="mt-2 text-3xl font-black">{value}</p>
+      <Icon size={20} className="stroke-[2.5]" />
+      <p className="mt-4 text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+      <p className="mt-1 text-3xl font-black text-white">{value}</p>
     </button>
   );
 }
 
 function EmptyState() {
   return (
-    <div className="p-12 text-center">
-      <Palette className="mx-auto text-slate-300" size={38} />
-      <p className="mt-4 text-xs font-black uppercase tracking-widest text-slate-400">Nada encontrado nesta etapa</p>
+    <div className="p-16 text-center opacity-65">
+      <Palette className="mx-auto text-slate-700 mb-4" size={38} />
+      <p className="text-xs font-black uppercase tracking-widest text-slate-500">Nenhum criativo ou demanda nesta etapa</p>
     </div>
   );
 }

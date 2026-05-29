@@ -116,7 +116,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Home, label: 'Account', href: '/account' },
     { icon: MessageSquare, label: 'Inbox', href: '/account/inbox' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
-    { icon: FileSearch, label: 'Leads', href: '/admin/leads' },
     { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
@@ -198,7 +197,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
               profile?.tipo_usuario === 'admin'
                 ? '/admin'
                 : profile?.tipo_usuario === 'gestor_trafego'
-                  ? '/trafego/relatorios'
+                  ? '/trafego'
                   : profile?.tipo_usuario === 'designer'
                     ? '/designer'
                     : profile?.tipo_usuario === 'account_manager'
@@ -208,20 +207,20 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                         : '/dashboard'
             }
             onClick={closeOnMobile}
-            className="block"
+            className="block shrink-0"
           >
             <img src="/brand-logo.png" alt="ORION TRACK" className="h-10 w-auto object-contain sm:h-12" />
           </Link>
-
+ 
           {/* Desktop Horizontal Navigation Items */}
-          <nav className="hidden lg:flex items-center gap-1.5 py-1 relative">
+          <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 py-1 relative">
             {loading ? (
               <Loader2 className="animate-spin text-blue-500" size={16} />
             ) : (() => {
               const menuItems = getMenu();
-              const hasMore = menuItems.length > 6;
-              const directItems = hasMore ? menuItems.slice(0, 5) : menuItems;
-              const dropdownItems = hasMore ? menuItems.slice(5) : [];
+              const hasMore = menuItems.length > 5;
+              const directItems = hasMore ? menuItems.slice(0, 4) : menuItems;
+              const dropdownItems = hasMore ? menuItems.slice(4) : [];
               
               return (
                 <>
@@ -232,14 +231,14 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                         key={item.href}
                         href={item.href}
                         className={cn(
-                          'group flex items-center gap-2 rounded-xl px-3.5 py-2.5 transition-all duration-250 whitespace-nowrap text-xs xl:text-sm font-extrabold shrink-0',
+                          'group flex items-center gap-1.5 rounded-xl px-2.5 py-2 xl:px-3 xl:py-2.5 transition-all duration-250 whitespace-nowrap text-[10px] xl:text-[11px] 2xl:text-xs font-black uppercase tracking-wider shrink-0',
                           isActive
                             ? 'bg-blue-600/12 text-cyan-400 border border-cyan-500/20'
                             : 'text-slate-400 hover:bg-white/5 hover:text-white'
                         )}
                       >
                         <item.icon
-                          size={15}
+                          size={14}
                           className={cn(isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-white')}
                         />
                         <span>{item.label}</span>
@@ -252,7 +251,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                       <button
                         onClick={() => setMoreMenuOpen(!moreMenuOpen)}
                         className={cn(
-                          'group flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 transition-all duration-250 whitespace-nowrap text-xs xl:text-sm font-extrabold cursor-pointer select-none border border-transparent shrink-0',
+                          'group flex items-center gap-1 xl:gap-1.5 rounded-xl px-2.5 py-2 xl:px-3 xl:py-2.5 transition-all duration-250 whitespace-nowrap text-[10px] xl:text-[11px] 2xl:text-xs font-black uppercase tracking-wider cursor-pointer select-none border border-transparent shrink-0',
                           moreMenuOpen
                             ? 'bg-blue-600/12 text-cyan-400 border border-cyan-500/20'
                             : 'text-slate-400 hover:bg-white/5 hover:text-white'
@@ -260,7 +259,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                       >
                         <span>Mais</span>
                         <ChevronDown
-                          size={15}
+                          size={14}
                           className={cn(
                             'transition-transform duration-200',
                             moreMenuOpen ? 'rotate-180 text-cyan-400' : 'text-slate-400 group-hover:text-white'
@@ -303,17 +302,17 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
             })()}
           </nav>
         </div>
-
+ 
         {/* Right Section: User Profile & Mobile Hamburger Menu */}
-        <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
           {isViewingAsUser && (
-            <div className="hidden xl:flex items-center gap-3 border border-amber-400/20 bg-amber-400/10 px-3.5 py-1.5 rounded-xl">
-              <span className="text-[9px] font-black uppercase tracking-[0.32em] text-amber-200 animate-pulse">Modo admin</span>
+            <div className="hidden xl:flex items-center gap-2 border border-amber-400/20 bg-amber-400/10 px-2.5 py-1.5 rounded-xl shrink-0">
+              <span className="text-[8px] 2xl:text-[9px] font-black uppercase tracking-[0.2em] 2xl:tracking-[0.32em] text-amber-200 animate-pulse">Modo admin</span>
               <button
                 onClick={stopViewingAsCorretor}
-                className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/15 cursor-pointer"
+                className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-lg text-[8px] 2xl:text-[9px] font-black uppercase tracking-wider text-white transition-colors hover:bg-white/15 cursor-pointer shrink-0"
               >
-                <RotateCcw size={10} /> Sair do {impersonationRoleLabel}
+                <RotateCcw size={8} /> Sair do {impersonationRoleLabel}
               </button>
             </div>
           )}

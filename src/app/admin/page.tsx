@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { StatCard } from '@/components/ui/Stats';
 import { 
   Users, 
   Target, 
@@ -20,10 +19,11 @@ import {
   CheckCircle2,
   ChevronRight,
   UserCog,
-  LayoutDashboard
+  LayoutDashboard,
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { Lead, Corretor, Profile } from '@/types';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -69,6 +69,13 @@ export default function AdminCentralPage() {
   const [corretoresSemGestor, setCorretoresSemGestor] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Advanced Alerts State
+  const [corretoresList, setCorretoresList] = useState<any[]>([]);
+  const [gestoresList, setGestoresList] = useState<any[]>([]);
+  const [alertsList, setAlertsList] = useState<any[]>([]);
+  const [showNoBalanceModal, setShowNoBalanceModal] = useState(false);
+  const [showPendingOnboardingModal, setShowPendingOnboardingModal] = useState(false);
+
   useEffect(() => {
     fetchStats();
   }, []);
@@ -106,7 +113,7 @@ export default function AdminCentralPage() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'nova');
 
-      // 5. Gestores e seus corretores
+      // 5. Gestores e corretores
       const [profilesRes, corretoresRes] = await Promise.all([
         supabase
           .from('profiles')
@@ -115,7 +122,7 @@ export default function AdminCentralPage() {
           .in('status', ['active', 'ativo', 'Ativo']),
         supabase
           .from('corretores')
-          .select('id, gestor_trafego_id, time_operacional')
+          .select('id, nome, gestor_trafego_id, time_operacional, onboarding_status, status')
       ]);
 
       const gestores = profilesRes.data || [];
@@ -123,6 +130,9 @@ export default function AdminCentralPage() {
         ...corretor,
         gestor_resolvido_id: inferGestorIdFromTeam(corretor, gestores),
       }));
+
+      setGestoresList(gestores);
+      setCorretoresList(corretores);
 
       const statsPorGestor = gestores.map(g => {
         const count = corretores.filter(c => c.gestor_resolvido_id === g.id).length;
@@ -140,6 +150,27 @@ export default function AdminCentralPage() {
       });
       setGestoresStats(statsPorGestor);
       setCorretoresSemGestor(semGestor);
+
+      // Fetch Meta spend/balance alerts
+      const sessionRes = await supabase.auth.getSession();
+      const token = sessionRes.data.session?.access_token;
+      if (token) {
+        const response = await fetch('/api/integrations/meta/alerts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            data_inicio: format(new Date(), 'yyyy-MM-dd'),
+            data_fim: format(new Date(), 'yyyy-MM-dd')
+          })
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          setAlertsList(payload.accounts || []);
+        }
+      }
     } catch (err) {
       console.error('Error fetching admin stats:', err);
     } finally {
@@ -147,69 +178,108 @@ export default function AdminCentralPage() {
     }
   };
 
+  // Computations
+  const noBalanceList = useMemo(() => {
+    const rawNoBalance = alertsList.filter(a => a.saldo !== null && Number(a.saldo) <= 0);
+    return rawNoBalance.map(a => {
+      const cObj = corretoresList.find(c => c.id === a.corretor_id);
+      const gestorId = cObj ? inferGestorIdFromTeam(cObj, gestoresList) : null;
+      const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
+      return {
+        corretor_id: a.corretor_id,
+        corretor_nome: a.corretor_nome,
+        meta_ad_account_name: a.meta_ad_account_name || `act_${a.meta_ad_account_id}`,
+        gestor_nome: gestorNome
+      };
+    });
+  }, [alertsList, corretoresList, gestoresList]);
+
+  const pendingOnboardingList = useMemo(() => {
+    const rawPending = corretoresList.filter(c => 
+      ['active', 'ativo', 'Ativo'].includes(c.status || '') && 
+      (!c.onboarding_status || c.onboarding_status === 'pendente')
+    );
+    return rawPending.map(c => {
+      const gestorId = inferGestorIdFromTeam(c, gestoresList);
+      const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
+      return {
+        corretor_id: c.id,
+        corretor_nome: c.nome,
+        gestor_nome: gestorNome
+      };
+    });
+  }, [corretoresList, gestoresList]);
+
   const quickActions = [
     { 
       title: 'Novo Corretor', 
       desc: 'Registrar parceiro e acesso', 
       href: '/admin/corretores/novo', 
       icon: UserPlus, 
-      color: 'bg-blue-600', 
-      textColor: 'text-white' 
+      color: 'from-blue-600 to-indigo-600', 
+      borderColor: 'border-blue-500/20 hover:border-blue-500/50',
+      glowColor: 'shadow-blue-500/10'
     },
     { 
       title: 'Todos os Leads', 
       desc: 'Auditar e cadastrar leads', 
       href: '/admin/leads', 
       icon: FileSearch, 
-      color: 'bg-white', 
-      textColor: 'text-gray-900' 
+      color: 'from-cyan-600 to-blue-600', 
+      borderColor: 'border-cyan-500/20 hover:border-cyan-500/50',
+      glowColor: 'shadow-cyan-500/10'
     },
     { 
       title: 'Gerenciar Páginas', 
       desc: 'Vincular links dos corretores', 
       href: '/admin/paginas', 
       icon: Globe, 
-      color: 'bg-white', 
-      textColor: 'text-gray-900' 
+      color: 'from-violet-600 to-purple-600', 
+      borderColor: 'border-violet-500/20 hover:border-violet-500/50',
+      glowColor: 'shadow-violet-500/10'
     },
     { 
       title: 'Relatórios', 
       desc: 'Gerar relatório e CPL', 
       href: '/trafego/relatorios', 
       icon: BarChart3, 
-      color: 'bg-white', 
-      textColor: 'text-gray-900' 
+      color: 'from-emerald-600 to-teal-600', 
+      borderColor: 'border-emerald-500/20 hover:border-emerald-500/50',
+      glowColor: 'shadow-emerald-500/10'
     },
     { 
       title: 'Suporte', 
       desc: 'Acompanhar solicitações', 
       href: '/admin/suporte', 
       icon: HelpCircle, 
-      color: 'bg-white', 
-      textColor: 'text-gray-900' 
+      color: 'from-amber-600 to-orange-600', 
+      borderColor: 'border-amber-500/20 hover:border-amber-500/50',
+      glowColor: 'shadow-amber-500/10'
     },
   ];
 
   return (
     <InternalLayout>
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-4xl font-black text-gray-900 tracking-tight">Painel Orion Track</h1>
-            <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100">
+          <div className="flex flex-wrap items-center gap-3 mb-2">
+            <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2">
+              Painel Orion <Sparkles size={24} className="text-cyan-400 animate-pulse" />
+            </h1>
+            <span className="bg-blue-500/10 text-cyan-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-cyan-400/20 shadow-[0_0_15px_rgba(34,211,238,0.1)]">
               {getProfileRoleLabel(profile)}
             </span>
           </div>
-          <p className="text-gray-500 font-medium text-lg">Gestão centralizada de corretores, leads e operação.</p>
+          <p className="text-slate-400 font-medium text-base sm:text-lg">Gestão centralizada de corretores, leads e operação.</p>
         </div>
-        <div className="bg-white px-6 py-4 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400">
+        <div className="bg-[#090e1a]/80 backdrop-blur-md px-6 py-4 rounded-2xl border border-white/5 shadow-2xl flex items-center gap-4">
+          <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-cyan-400">
             <Calendar size={20} />
           </div>
           <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Data Atual</p>
-            <p className="font-bold text-gray-900 leading-none">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1.5">Data Atual</p>
+            <p className="font-extrabold text-white leading-none">
               {format(new Date(), "dd 'de' MMMM", { locale: ptBR })}
             </p>
           </div>
@@ -217,106 +287,195 @@ export default function AdminCentralPage() {
       </div>
 
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Link href="/admin/corretores">
-          <StatCard
-            title="Corretores Ativos"
-            value={stats.totalCorretores}
-            icon={Users}
-            color="blue"
-            loading={loading}
-          />
+          <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-blue-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Corretores Ativos</p>
+              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 group-hover:scale-110 transition-transform">
+                <Users size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-blue-400 transition-colors">{stats.totalCorretores}</p>
+            )}
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500/0 via-blue-500/40 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
         </Link>
+
         <Link href="/admin/gestores">
-          <StatCard
-            title="Gestores ativos"
-            value={stats.totalGestores}
-            icon={UserCog}
-            color="green"
-            loading={loading}
-          />
+          <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-emerald-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Gestores ativos</p>
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:scale-110 transition-transform">
+                <UserCog size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-emerald-400 transition-colors">{stats.totalGestores}</p>
+            )}
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-emerald-500/0 via-emerald-500/40 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
         </Link>
+
         <Link href="/admin/accounts">
-          <StatCard
-            title="Accounts ativos"
-            value={stats.totalAccounts}
-            icon={Users}
-            color="purple"
-            loading={loading}
-          />
+          <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-purple-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Accounts ativos</p>
+              <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 group-hover:scale-110 transition-transform">
+                <Users size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-purple-400 transition-colors">{stats.totalAccounts}</p>
+            )}
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-purple-500/0 via-purple-500/40 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
         </Link>
+
         <Link href="/admin/designers">
-          <StatCard
-            title="Designers ativos"
-            value={stats.totalDesigners}
-            icon={LayoutDashboard}
-            color="blue"
-            loading={loading}
-          />
+          <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-cyan-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(6,182,212,0.15)] transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Designers ativos</p>
+              <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 group-hover:scale-110 transition-transform">
+                <LayoutDashboard size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-cyan-400 transition-colors">{stats.totalDesigners}</p>
+            )}
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-cyan-500/0 via-cyan-500/40 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
         </Link>
       </div>
 
-      {/* Corretores por Gestor Section */}
-      <div className="mb-16">
-        <div className="flex items-center gap-4 mb-8">
-          <h2 className="text-2xl font-black text-gray-900 tracking-tight">Corretores por Gestor</h2>
-          <div className="h-px flex-1 bg-gray-100" />
+      {/* Alertas e Acompanhamento Section */}
+      <div className="mb-12">
+        <div className="flex items-center gap-4 mb-6">
+          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Alertas e Acompanhamento</h2>
+          <div className="h-px flex-1 bg-white/5" />
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Card: Corretores Sem Saldo */}
+          <div 
+            onClick={() => setShowNoBalanceModal(true)}
+            className="group relative bg-[#090e1a]/85 border border-red-500/10 hover:border-red-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(239,68,68,0.1)] transition-all duration-300 cursor-pointer"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Corretores Sem Saldo</p>
+              <div className="p-2.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 group-hover:scale-110 transition-transform">
+                <AlertTriangle size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-red-400 transition-colors">
+                {noBalanceList.length}
+              </p>
+            )}
+            <p className="text-[10px] font-semibold text-slate-500 mt-2 flex items-center gap-1 group-hover:text-slate-400 transition-colors">
+              Clique para detalhar os gestores responsáveis <ArrowRight size={10} />
+            </p>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-red-500/0 via-red-500/40 to-red-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+
+          {/* Card: Entradas Pendentes */}
+          <div 
+            onClick={() => setShowPendingOnboardingModal(true)}
+            className="group relative bg-[#090e1a]/85 border border-indigo-500/10 hover:border-indigo-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(99,102,241,0.1)] transition-all duration-300 cursor-pointer"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Entradas Pendentes</p>
+              <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 group-hover:scale-110 transition-transform">
+                <Clock size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-indigo-400 transition-colors">
+                {pendingOnboardingList.length}
+              </p>
+            )}
+            <p className="text-[10px] font-semibold text-slate-500 mt-2 flex items-center gap-1 group-hover:text-slate-400 transition-colors">
+              Clique para detalhar os corretores e gestores <ArrowRight size={10} />
+            </p>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-indigo-500/0 via-indigo-500/40 to-indigo-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </div>
+      </div>
+
+      {/* Corretores por Gestor Section */}
+      <div className="mb-12">
+        <div className="flex items-center gap-4 mb-6">
+          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Corretores por Gestor</h2>
+          <div className="h-px flex-1 bg-white/5" />
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {loading ? (
-             Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-48 bg-white rounded-[2rem] border border-gray-100 animate-pulse" />
+             Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-48 bg-[#090e1a]/50 rounded-2xl border border-white/5 animate-pulse" />
             ))
           ) : (
             <>
               {gestoresStats.map((gestor) => (
-                <div key={gestor.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col justify-between group hover:shadow-xl hover:border-blue-200 transition-all">
+                <div key={gestor.id} className="bg-[#090e1a]/80 backdrop-blur-md p-6 rounded-2xl border border-white/5 shadow-xl flex flex-col justify-between group hover:border-blue-500/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.1)] transition-all duration-300">
                   <div>
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center font-black text-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
-                        {gestor.nome[0]}
+                      <div className="w-12 h-12 bg-blue-500/10 text-cyan-400 border border-cyan-500/15 rounded-xl flex items-center justify-center font-black text-lg group-hover:bg-gradient-to-br group-hover:from-blue-500 group-hover:to-cyan-400 group-hover:text-white transition-all">
+                        {gestor.nome[0].toUpperCase()}
                       </div>
-                      <div>
-                        <h3 className="font-black text-gray-900 leading-tight">{gestor.nome}</h3>
-                        <p className="text-[10px] font-medium text-gray-400">{gestor.email}</p>
+                      <div className="min-w-0">
+                        <h3 className="font-extrabold text-white leading-tight truncate group-hover:text-cyan-400 transition-colors">{gestor.nome}</h3>
+                        <p className="text-[10px] font-bold text-slate-500 truncate">{gestor.email}</p>
                       </div>
                     </div>
-                    <div className="bg-slate-50 p-4 rounded-xl">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Corretores Vinculados</p>
-                      <p className="text-2xl font-black text-gray-900">{gestor.count}</p>
+                    <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Corretores Vinculados</p>
+                      <p className="text-3xl font-black text-white group-hover:scale-105 origin-left transition-transform">{gestor.count}</p>
                     </div>
                   </div>
                   <Link 
                     href={`/admin/corretores?gestor=${gestor.id}`}
-                    className="mt-6 w-full py-3 bg-white border border-gray-100 text-gray-900 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all flex items-center justify-center gap-2"
+                    className="mt-5 w-full py-2.5 bg-white/5 border border-white/5 text-white font-extrabold text-[10px] uppercase tracking-widest rounded-xl hover:bg-gradient-to-r hover:from-blue-600 hover:to-cyan-500 hover:border-blue-600 hover:shadow-lg hover:shadow-blue-500/10 transition-all flex items-center justify-center gap-2"
                   >
-                    Ver corretores <ArrowRight size={14} />
+                    Ver corretores <ArrowRight size={12} />
                   </Link>
                 </div>
               ))}
 
-              <div className="bg-slate-50 p-6 rounded-[2rem] border border-dashed border-slate-200 flex flex-col justify-between group hover:border-orange-200 transition-all">
+              <div className="bg-[#090e1a]/40 p-6 rounded-2xl border border-dashed border-white/10 flex flex-col justify-between group hover:border-orange-500/40 hover:bg-[#090e1a]/60 transition-all duration-300">
                 <div>
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-white text-slate-400 rounded-2xl flex items-center justify-center font-black text-lg group-hover:bg-orange-500 group-hover:text-white transition-all shadow-sm">
+                    <div className="w-12 h-12 bg-white/5 text-slate-400 border border-white/5 rounded-xl flex items-center justify-center font-black text-lg group-hover:bg-gradient-to-br group-hover:from-orange-500 group-hover:to-amber-400 group-hover:text-white transition-all">
                       ?
                     </div>
                     <div>
-                      <h3 className="font-black text-gray-900 leading-tight">Sem gestor definido</h3>
-                      <p className="text-[10px] font-medium text-gray-400">Aguardando atribuição</p>
+                      <h3 className="font-extrabold text-white leading-tight">Sem gestor definido</h3>
+                      <p className="text-[10px] font-bold text-slate-500">Aguardando atribuição</p>
                     </div>
                   </div>
-                  <div className="bg-white p-4 rounded-xl border border-white">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Corretores Livres</p>
-                    <p className="text-2xl font-black text-gray-900">{corretoresSemGestor}</p>
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Corretores Livres</p>
+                    <p className="text-3xl font-black text-white group-hover:scale-105 origin-left transition-transform">{corretoresSemGestor}</p>
                   </div>
                 </div>
                 <Link 
                   href="/admin/corretores?gestor=sem-gestor"
-                  className="mt-6 w-full py-3 bg-white border border-gray-100 text-gray-900 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all flex items-center justify-center gap-2"
+                  className="mt-5 w-full py-2.5 bg-white/5 border border-white/5 text-white font-extrabold text-[10px] uppercase tracking-widest rounded-xl hover:bg-gradient-to-r hover:from-orange-600 hover:to-amber-500 hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/10 transition-all flex items-center justify-center gap-2"
                 >
-                  Ver corretores <ArrowRight size={14} />
+                  Ver corretores <ArrowRight size={12} />
                 </Link>
               </div>
             </>
@@ -325,35 +484,29 @@ export default function AdminCentralPage() {
       </div>
 
       {/* Quick Actions Section */}
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <h2 className="text-2xl font-black text-gray-900 tracking-tight">Ações rápidas</h2>
-          <div className="h-px flex-1 bg-gray-100" />
+          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Ações rápidas</h2>
+          <div className="h-px flex-1 bg-white/5" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {quickActions.map((action, idx) => (
             <Link 
               key={idx} 
               href={action.href}
-              className={`group p-8 rounded-[2.5rem] border transition-all duration-300 flex flex-col justify-between h-64 ${
-                action.color === 'bg-blue-600' 
-                  ? 'bg-blue-600 border-blue-600 shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:scale-[1.02]' 
-                  : 'bg-white border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 hover:scale-[1.02]'
-              }`}
+              className={`group p-6 rounded-2xl border ${action.borderColor} bg-[#090e1a]/80 backdrop-blur-md hover:scale-[1.02] shadow-xl hover:${action.glowColor} transition-all duration-300 flex flex-col justify-between h-56`}
             >
               <div className="flex justify-between items-start">
-                <div className={`p-4 rounded-2xl transition-all duration-300 transform group-hover:scale-110 ${
-                  action.color === 'bg-blue-600' ? 'bg-white/20 text-white' : 'bg-slate-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
-                }`}>
-                  <action.icon size={28} />
+                <div className={`p-3 rounded-xl bg-gradient-to-br ${action.color} text-white shadow-lg transition-transform duration-300 group-hover:scale-110`}>
+                  <action.icon size={22} />
                 </div>
-                <ChevronRight size={20} className={action.color === 'bg-blue-600' ? 'text-white/40' : 'text-gray-300 group-hover:text-blue-600'} />
+                <ChevronRight size={18} className="text-slate-500 group-hover:text-white transition-colors" />
               </div>
               
-              <div>
-                <h3 className={`text-xl font-black mb-2 ${action.textColor}`}>{action.title}</h3>
-                <p className={`text-sm font-medium ${action.color === 'bg-blue-600' ? 'text-blue-100' : 'text-gray-400'}`}>
+              <div className="mt-4">
+                <h3 className="text-lg font-black text-white mb-1 group-hover:text-cyan-400 transition-colors">{action.title}</h3>
+                <p className="text-xs font-medium text-slate-400 leading-relaxed">
                   {action.desc}
                 </p>
               </div>
@@ -362,13 +515,88 @@ export default function AdminCentralPage() {
         </div>
       </div>
 
+      {/* Modal: Corretores Sem Saldo */}
+      {showNoBalanceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-[#090e1a]/95 border border-red-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
+            <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> Corretores Sem Saldo
+            </h3>
+            <p className="text-xs font-semibold text-slate-500 mb-6">Contas no Meta Ads com saldo zerado ou esgotado.</p>
+            
+            <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
+              {noBalanceList.length === 0 ? (
+                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhum corretor sem saldo.</p>
+              ) : (
+                noBalanceList.map((item) => (
+                  <div key={item.corretor_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-extrabold text-white">{item.corretor_nome}</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Gestor: {item.gestor_nome}</p>
+                      <p className="text-[9px] font-semibold text-slate-600 mt-1">Conta: {item.meta_ad_account_name}</p>
+                    </div>
+                    <span className="text-xs font-black text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-full">
+                      R$ 0,00
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <button
+              onClick={() => setShowNoBalanceModal(false)}
+              className="mt-6 w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Entradas Pendentes */}
+      {showPendingOnboardingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-[#090e1a]/95 border border-indigo-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
+            <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" /> Entradas Pendentes
+            </h3>
+            <p className="text-xs font-semibold text-slate-500 mb-6">Processos de onboarding/entrada aguardando preenchimento.</p>
+            
+            <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
+              {pendingOnboardingList.length === 0 ? (
+                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhuma entrada pendente.</p>
+              ) : (
+                pendingOnboardingList.map((item) => (
+                  <div key={item.corretor_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-extrabold text-white">{item.corretor_nome}</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Gestor: {item.gestor_nome}</p>
+                    </div>
+                    <span className="text-[9px] font-black text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      Pendente
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <button
+              onClick={() => setShowPendingOnboardingModal(false)}
+              className="mt-6 w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Footer Decoration */}
-      <div className="mt-20 pt-10 border-t border-gray-100 flex justify-between items-center opacity-40">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Orion Track v2.0</p>
-        <div className="flex gap-4">
-          <div className="w-2 h-2 rounded-full bg-green-500" />
-          <div className="w-2 h-2 rounded-full bg-green-500" />
-          <div className="w-2 h-2 rounded-full bg-green-500" />
+      <div className="mt-16 pt-8 border-t border-white/5 flex justify-between items-center opacity-45">
+        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Orion Track v2.0</p>
+        <div className="flex gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
         </div>
       </div>
     </InternalLayout>

@@ -23,6 +23,8 @@ import { format } from 'date-fns';
 type ReportCorretor = {
   id: string;
   nome: string;
+  gestor_trafego_id?: string | null;
+  time_operacional?: any;
 };
 
 interface TrafficReport {
@@ -86,7 +88,7 @@ export default function TrafficReportsPage() {
     try {
       const corretoresQuery = supabase
         .from('corretores')
-        .select('id, nome')
+        .select('id, nome, gestor_trafego_id, time_operacional')
         .in('status', ['active', 'ativo', 'Ativo'])
         .order('nome', { ascending: true });
 
@@ -96,7 +98,6 @@ export default function TrafficReportsPage() {
         .order('created_at', { ascending: false });
 
       if (profile.tipo_usuario === 'gestor_trafego') {
-        corretoresQuery.eq('gestor_trafego_id', profile.id);
         reportsQuery.eq('gestor_id', profile.id);
       }
 
@@ -116,7 +117,16 @@ export default function TrafficReportsPage() {
         return;
       }
 
-      setCorretores(corretoresData || []);
+      let filteredCorretores = corretoresData || [];
+      if (profile.tipo_usuario === 'gestor_trafego') {
+        filteredCorretores = filteredCorretores.filter(c => {
+          if (c.gestor_trafego_id === profile.id) return true;
+          const team = Array.isArray(c.time_operacional) ? c.time_operacional : [];
+          return team.some((member: any) => member?.profile_id === profile.id || member?.id === profile.id);
+        });
+      }
+
+      setCorretores(filteredCorretores);
       setReports((reportsData as TrafficReport[]) || []);
     } catch (err: unknown) {
       console.error('Catch Error:', err);
