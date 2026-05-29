@@ -403,6 +403,7 @@ body.theme-noturno {
 .theme-noturno .text-gray-900,
 .theme-noturno .text-gray-950,
 .theme-noturno .text-slate-900,
+.theme-noturno .text-slate-950,
 .theme-noturno .text-emerald-950,
 .theme-noturno .text-blue-950 {
   color: #ffffff !important;
@@ -449,6 +450,23 @@ body.theme-noturno {
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.04) !important;
   opacity: 1 !important;
+}
+
+.theme-noturno input:focus,
+.theme-noturno select:focus,
+.theme-noturno textarea:focus,
+.theme-noturno .orion-control:focus,
+.theme-noturno main input:focus,
+.theme-noturno main select:focus,
+.theme-noturno main textarea:focus,
+.theme-noturno main .orion-control:focus,
+.theme-noturno main :is(input:focus, select:focus, textarea:focus, .orion-control:focus) {
+  background: #060b13 !important;
+  background-color: #060b13 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border: 1px solid #06b6d4 !important;
 }
 
 .theme-noturno select option,
@@ -729,6 +747,7 @@ body.theme-noturno main :is(input, select, textarea):disabled,
 /* Ensure text elements on cards have proper color contrast */
 .theme-noturno .text-gray-950,
 .theme-noturno .text-slate-900,
+.theme-noturno .text-slate-950,
 .theme-noturno .text-slate-800,
 .theme-noturno .text-gray-900 {
   color: #ffffff !important;
