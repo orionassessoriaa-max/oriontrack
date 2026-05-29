@@ -20,11 +20,15 @@ export const ORION_TEAM_MEMBERS: OrionTeamMember[] = [
 ];
 
 const TEAM_PHOTOS: Record<string, string> = {
-  ewertton: '/fotos/Ewertton.png',
-  geovana: '/fotos/Geovana.png',
-  lucas: '/fotos/lucas.png',
-  patrick: '/fotos/Patrick.png',
-  nataline: '/fotos/Nataline.png',
+  ewertton: '/fotos/EWERTTON DEVOPS.png',
+  geovana: '/fotos/GEOVANNA GESTORA.png',
+  lucas: '/fotos/LUCAS ACOOUNT.png',
+  patrick: '/fotos/PATRICK ADMIN.png',
+  nataline: '/fotos/132.png',
+  matheus: '/fotos/MATHEUS GESTOR.png',
+  pedro: '/fotos/PEDRO ADMIN.png',
+  leo: '/fotos/LÉO CLOSER.png',
+  renan: '/fotos/RENAN SDR.png',
 };
 
 export function normalizeTeamMemberName(name?: string | null) {
@@ -36,7 +40,13 @@ export function normalizeTeamMemberName(name?: string | null) {
 }
 
 export function getTeamMemberPhoto(name?: string | null) {
-  return TEAM_PHOTOS[normalizeTeamMemberName(name)] || null;
+  const normName = normalizeTeamMemberName(name);
+  for (const key of Object.keys(TEAM_PHOTOS)) {
+    if (normName.includes(key)) {
+      return TEAM_PHOTOS[key];
+    }
+  }
+  return null;
 }
 
 export function isTrafficManagerMember(member: OrionTeamMember) {

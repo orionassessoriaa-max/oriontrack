@@ -15,6 +15,7 @@ import {
   Globe, 
   HelpCircle, 
   ArrowRight,
+  ArrowLeft,
   GraduationCap,
   CalendarDays,
   Target,
@@ -29,6 +30,7 @@ import { getTeamMemberPhoto } from '@/lib/orionTeam';
 import OrionMark from '@/components/ui/OrionMark';
 import { useRouter } from 'next/navigation';
 import OrionFunnel from '@/components/ui/OrionFunnel';
+import { motion } from 'framer-motion';
 
 type CorretorDashboardData = {
   id: string;
@@ -133,6 +135,7 @@ export default function DashboardPage() {
   const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const [hoveredTier, setHoveredTier] = useState<number | null>(null);
+  const [carouselIndex, setCarouselIndex] = useState(0);
   const [corretorData, setCorretorData] = useState<CorretorDashboardData | null>(null);
   const [stats, setStats] = useState({
     total: 0,
@@ -327,6 +330,16 @@ export default function DashboardPage() {
   const timeOperacional = Array.isArray(corretorData?.time_operacional)
     ? corretorData.time_operacional
     : [];
+
+  const prevSlide = () => {
+    if (timeOperacional.length <= 1) return;
+    setCarouselIndex((prev) => (prev - 1 + timeOperacional.length) % timeOperacional.length);
+  };
+
+  const nextSlide = () => {
+    if (timeOperacional.length <= 1) return;
+    setCarouselIndex((prev) => (prev + 1) % timeOperacional.length);
+  };
 
   const staleOpportunityCount = stats.stale;
   const maxMetric = Math.max(stats.waiting, stats.inProgress, stats.quoted, stats.sold, 1);
@@ -830,47 +843,83 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 🚀 STEP 8: OPERATIONAL TEAM SECTION */}
-      <div className="mb-10 rounded-[2rem] border border-white/5 bg-[#090e1a] p-5 sm:rounded-[3rem] sm:p-10">
-        <div className="mb-8">
-          <h2 className="text-2xl font-black text-white tracking-tight mb-2">Seu time Orion</h2>
-          <p className="text-slate-400 font-medium">Essas são as pessoas da Orion responsáveis por acompanhar sua operação.</p>
+      {/* 🚀 STEP 8: OPERATIONAL TEAM SECTION (With Carousel & Large full-body photos) */}
+      <div className="mb-10 rounded-[2rem] border border-white/5 bg-[#090e1a] p-5 sm:rounded-[3rem] sm:p-10 overflow-hidden">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-white tracking-tight mb-2">Seu time Orion</h2>
+            <p className="text-slate-400 font-medium">Essas são as pessoas da Orion responsáveis por acompanhar sua operação.</p>
+          </div>
+          {/* Custom Carousel Navigation Arrows (Top right) */}
+          {!isDataLoading && timeOperacional.length > 1 && (
+            <div className="flex gap-2 shrink-0">
+              <button 
+                onClick={prevSlide}
+                className="p-3.5 bg-white/5 border border-white/5 hover:bg-white/10 text-white rounded-2xl transition-all duration-300 shadow-md active:scale-95 cursor-pointer"
+                title="Anterior"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <button 
+                onClick={nextSlide}
+                className="p-3.5 bg-white/5 border border-white/5 hover:bg-white/10 text-white rounded-2xl transition-all duration-300 shadow-md active:scale-95 cursor-pointer"
+                title="Próximo"
+              >
+                <ArrowRight size={18} />
+              </button>
+            </div>
+          )}
         </div>
 
         {isDataLoading ? (
-          <div className="flex gap-4">
-             <div className="w-32 h-32 bg-[#070b13] rounded-3xl animate-pulse" />
-             <div className="w-32 h-32 bg-[#070b13] rounded-3xl animate-pulse" />
+          <div className="flex gap-6 overflow-hidden">
+             <div className="w-[300px] h-[460px] bg-[#070b13] border border-white/5 rounded-[2.5rem] animate-pulse flex-shrink-0" />
+             <div className="w-[300px] h-[460px] bg-[#070b13] border border-white/5 rounded-[2.5rem] animate-pulse flex-shrink-0" />
+             <div className="w-[300px] h-[460px] bg-[#070b13] border border-white/5 rounded-[2.5rem] animate-pulse flex-shrink-0" />
           </div>
         ) : timeOperacional.length === 0 ? (
           <div className="bg-[#070b13] p-8 rounded-[2rem] border border-white/5 text-center">
              <p className="text-slate-400 font-bold italic">Seu time operacional ainda não foi definido. Fale com a Orion.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-            {timeOperacional.map((membro, index: number) => {
-              const foto = getTeamMemberPhoto(membro.nome);
+          <div className="relative w-full overflow-hidden py-2 px-1">
+            <motion.div 
+              className="flex gap-6 w-max"
+              animate={{ x: -carouselIndex * 324 }} // 300px card width + 24px gap
+              transition={{ type: "spring", stiffness: 100, damping: 17 }}
+            >
+              {timeOperacional.map((membro, index: number) => {
+                const foto = getTeamMemberPhoto(membro.nome);
 
-              return (
-                <div key={`${membro.nome}-${index}`} className="bg-[#070b13] p-6 rounded-[2.5rem] border border-white/5 shadow-sm flex flex-col items-center text-center group hover:scale-105 transition-all duration-500 hover:shadow-xl hover:border-blue-500/20">
-                  <div className="w-24 h-24 mb-4 relative">
-                    {foto ? (
-                      <img 
-                        src={foto} 
-                        alt={membro.nome}
-                        className="w-full h-full rounded-2xl object-cover shadow-md group-hover:rotate-3 transition-transform duration-500"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl flex items-center justify-center font-black text-2xl shadow-lg group-hover:rotate-6 transition-transform">
-                        {membro.nome?.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                return (
+                  <div 
+                    key={`${membro.nome}-${index}`} 
+                    className="bg-[#070b13] p-5 rounded-[2.5rem] border border-white/5 shadow-2xl flex flex-col justify-between h-[460px] group hover:scale-[1.02] hover:border-blue-500/25 transition-all duration-500 hover:shadow-blue-500/5 select-none shrink-0 w-[300px]"
+                  >
+                    {/* Large Full-Body/Portrait Photo (Not cropped in a small square, beautiful rounded container) */}
+                    <div className="w-full h-[340px] relative rounded-[2rem] overflow-hidden border border-white/5 bg-[#090f1d] mb-4">
+                      {foto ? (
+                        <img 
+                          src={foto} 
+                          alt={membro.nome}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 pointer-events-none"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-black text-6xl shadow-inner select-none pointer-events-none">
+                          {membro.nome?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Team Details */}
+                    <div className="text-center pb-2">
+                      <h3 className="font-black text-lg text-white mb-1 leading-tight group-hover:text-blue-400 transition-colors">{membro.nome}</h3>
+                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{membro.cargo}</p>
+                    </div>
                   </div>
-                  <h3 className="font-black text-white mb-1 leading-tight">{membro.nome}</h3>
-                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{membro.cargo}</p>
-                </div>
-              );
-            })}
+                );
+              })}
+            </motion.div>
           </div>
         )}
       </div>
