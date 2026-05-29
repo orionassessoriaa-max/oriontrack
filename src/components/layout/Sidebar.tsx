@@ -43,7 +43,7 @@ type SidebarProps = {
 
 export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, isViewingAsDesigner, isViewingAsAccount, stopViewingAsCorretor } = useAuth();
   const isViewingAsUser = isViewingAsCorretor || isViewingAsGestor || isViewingAsDesigner || isViewingAsAccount;
   const isMasterAdmin = Boolean(actualProfile?.is_admin_master) || [actualProfile?.email, actualProfile?.email_real]
@@ -170,87 +170,149 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   return (
     <>
-      {!collapsed && (
-        <button
-          type="button"
-          aria-label="Fechar menu"
-          onClick={() => setCollapsed(true)}
-          className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm lg:hidden"
-        />
-      )}
-      <div className={cn('fixed left-0 top-0 z-50 flex h-screen max-w-[86vw] flex-col bg-[#0f172a] text-white shadow-2xl transition-all duration-300', collapsed ? 'w-0 overflow-visible' : 'w-72 lg:w-64')}>
-      <button
-        type="button"
-        onClick={() => setCollapsed((current) => !current)}
-        className={cn('absolute top-4 z-[60] flex h-10 w-10 items-center justify-center border border-white/10 bg-[#0f172a] text-white shadow-lg transition-all', collapsed ? 'left-2 rounded-r-lg' : 'right-[-18px] rounded-lg')}
-        title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-      >
-        {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-      </button>
-
-      <div className={cn('flex h-full flex-col transition-opacity duration-200', collapsed ? 'pointer-events-none opacity-0' : 'opacity-100')}>
-        <div className="mb-2 p-6">
-          <Link href={profile?.tipo_usuario === 'admin' ? '/admin' : profile?.tipo_usuario === 'gestor_trafego' ? '/trafego/relatorios' : profile?.tipo_usuario === 'designer' ? '/designer' : profile?.tipo_usuario === 'account_manager' ? '/account' : profile?.tipo_usuario === 'corretor_membro' ? '/crm' : '/dashboard'} onClick={closeOnMobile} className="block">
-            <img src="/brand-logo.png" alt="ORION TRACK" className="h-24 w-auto" />
+      {/* Top Horizontal Navbar Header */}
+      <div className="fixed left-0 right-0 top-0 z-50 flex h-20 w-full items-center justify-between border-b border-white/5 bg-[#020617] px-4 text-white shadow-xl transition-all duration-300 sm:px-6">
+        <div className="flex items-center gap-6">
+          <Link
+            href={
+              profile?.tipo_usuario === 'admin'
+                ? '/admin'
+                : profile?.tipo_usuario === 'gestor_trafego'
+                  ? '/trafego/relatorios'
+                  : profile?.tipo_usuario === 'designer'
+                    ? '/designer'
+                    : profile?.tipo_usuario === 'account_manager'
+                      ? '/account'
+                      : profile?.tipo_usuario === 'corretor_membro'
+                        ? '/crm'
+                        : '/dashboard'
+            }
+            onClick={closeOnMobile}
+            className="block"
+          >
+            <img src="/brand-logo.png" alt="ORION TRACK" className="h-10 w-auto object-contain sm:h-12" />
           </Link>
+
+          {/* Desktop Horizontal Navigation Items */}
+          <nav className="hidden lg:flex items-center gap-1.5 overflow-x-auto py-1 max-w-[45vw] xl:max-w-[55vw] scrollbar-none">
+            {loading ? (
+              <Loader2 className="animate-spin text-blue-500" size={16} />
+            ) : (
+              getMenu().map((item) => {
+                const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'group flex items-center gap-2 rounded-xl px-3.5 py-2.5 transition-all duration-250 whitespace-nowrap text-xs xl:text-sm font-extrabold',
+                      isActive
+                        ? 'bg-blue-600/12 text-cyan-400 border border-cyan-500/20'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    )}
+                  >
+                    <item.icon
+                      size={15}
+                      className={cn(isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-white')}
+                    />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })
+            )}
+          </nav>
+        </div>
+
+        {/* Right Section: User Profile & Mobile Hamburger Menu */}
+        <div className="flex items-center gap-3 sm:gap-4">
           {isViewingAsUser && (
-            <div className="mt-4 border border-amber-400/20 bg-amber-400/10 p-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">Modo admin</p>
-              <p className="mt-1 text-xs font-bold text-white">
-                Voce esta acessando como {isViewingAsGestor ? 'gestor' : isViewingAsDesigner ? 'designer' : isViewingAsAccount ? 'account' : 'corretor'}.
-              </p>
+            <div className="hidden xl:flex items-center gap-3 border border-amber-400/20 bg-amber-400/10 px-3.5 py-1.5 rounded-xl">
+              <span className="text-[9px] font-black uppercase tracking-widest text-amber-200 animate-pulse">Modo admin</span>
               <button
                 onClick={stopViewingAsCorretor}
-                className="mt-3 flex w-full items-center justify-center gap-2 bg-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/15"
+                className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/15 cursor-pointer"
               >
-                <RotateCcw size={13} /> Voltar ao admin
+                <RotateCcw size={10} /> Sair do Corretor
               </button>
             </div>
           )}
-        </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-4">
-          {loading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="animate-spin text-blue-500" size={24} />
-            </div>
-          ) : getMenu().map((item) => {
-            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={closeOnMobile}
-                className={cn(
-                  'group flex items-center gap-3 px-4 py-3 transition-all duration-200',
-                  isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
-                )}
-              >
-                <item.icon size={20} className={cn(isActive ? 'text-white' : 'text-gray-400 group-hover:text-white')} />
-                <span className="text-sm font-semibold">{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto border-t border-white/5 bg-white/[0.02] p-4">
-          <div className="flex items-center gap-3 border border-white/5 bg-white/5 p-2">
-            <div className="flex h-10 w-10 items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black shadow-inner">
+          <div className="flex items-center gap-3 border border-white/5 bg-white/5 p-1.5 rounded-2xl">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-black shadow-inner">
               {initials}
             </div>
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <p className="truncate text-xs font-bold text-white">{profile?.nome || 'Usuario'}</p>
-              <p className="text-[10px] font-bold uppercase tracking-tighter text-gray-500">
-                {isViewingAsUser ? roleLabel : roleLabel}
-              </p>
+            <div className="hidden sm:block text-left min-w-[70px] max-w-[140px]">
+              <p className="truncate text-xs font-bold text-white leading-none">{profile?.nome || 'Usuario'}</p>
+              <p className="mt-1 text-[8px] font-bold uppercase tracking-tighter text-slate-500 leading-none">{roleLabel}</p>
             </div>
-            <button onClick={signOut} className="p-2 text-gray-500 transition-colors hover:text-red-400" title="Sair">
-              <LogOut size={18} />
+            <button
+              onClick={signOut}
+              className="p-1.5 text-slate-500 transition-colors hover:text-red-400 cursor-pointer"
+              title="Sair"
+            >
+              <LogOut size={15} />
             </button>
           </div>
+
+          {/* Hamburger button for mobile/tablet */}
+          <button
+            type="button"
+            onClick={() => setCollapsed((current) => !current)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white transition-all hover:bg-white/10 lg:hidden cursor-pointer"
+            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
         </div>
       </div>
-    </div>
+
+      {/* Floating Overlay Mobile Menu Drawer */}
+      {!collapsed && (
+        <>
+          <button
+            type="button"
+            aria-label="Fechar menu"
+            onClick={() => setCollapsed(true)}
+            className="fixed inset-0 top-20 z-40 bg-slate-950/75 backdrop-blur-md lg:hidden"
+          />
+          <div className="fixed left-0 right-0 top-20 z-50 flex h-[calc(100vh-5rem)] w-full flex-col bg-[#020617] border-t border-white/5 p-6 text-white shadow-2xl transition-all duration-300 lg:hidden overflow-y-auto">
+            {isViewingAsUser && (
+              <div className="mb-4 border border-amber-400/20 bg-amber-400/10 p-4 rounded-2xl">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">Modo admin</p>
+                <p className="mt-1 text-xs font-bold text-white">
+                  Voce esta acessando como corretor.
+                </p>
+                <button
+                  onClick={stopViewingAsCorretor}
+                  className="mt-3 flex w-full items-center justify-center gap-2 bg-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/15"
+                >
+                  <RotateCcw size={13} /> Voltar ao admin
+                </button>
+              </div>
+            )}
+            <nav className="space-y-1.5 pb-12">
+              {getMenu().map((item) => {
+                const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setCollapsed(true)}
+                    className={cn(
+                      'group flex items-center gap-3 rounded-2xl px-5 py-3.5 transition-all duration-200',
+                      isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    )}
+                  >
+                    <item.icon size={20} className={cn(isActive ? 'text-white' : 'text-slate-400 group-hover:text-white')} />
+                    <span className="text-sm font-semibold">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        </>
+      )}
     </>
   );
 }
+

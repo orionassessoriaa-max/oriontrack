@@ -128,9 +128,9 @@ export default function InternalLayout({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="flex min-h-screen flex-col bg-[#f8fafc]">
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
-      <main className={`${sidebarCollapsed ? 'lg:ml-0 lg:w-full' : 'lg:ml-64 lg:w-[calc(100%-16rem)]'} w-full min-w-0 px-3 py-5 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7`}>
+      <main className="w-full min-w-0 px-3 py-5 pt-24 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7 lg:pt-28">
         <div className="mx-auto max-w-none transition-all duration-300">
           {children}
         </div>
@@ -138,3 +138,4 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     </div>
   );
 }
+
