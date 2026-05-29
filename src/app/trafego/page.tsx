@@ -18,7 +18,8 @@ import {
   ChevronRight,
   ShieldAlert,
   Sparkles,
-  Trophy
+  Trophy,
+  Clock
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -97,7 +98,7 @@ export default function GestorDashboardPage() {
   };
 
   const activeCampaignsCount = corretores.filter(c => c.campanhas_ativas).length;
-  const onboardingFinishedCount = corretores.filter(c => c.onboarding_status === 'dados_completos' || c.onboarding_status === 'campanhas_ativas').length;
+  const pendingOnboardingCount = corretores.filter(c => !c.onboarding_status || c.onboarding_status === 'pendente').length;
 
   const quickActions = [
     {
@@ -184,7 +185,7 @@ export default function GestorDashboardPage() {
       ) : (
         <>
           {/* Stats Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
             <Link href="/trafego/corretores">
               <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-blue-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
@@ -197,17 +198,6 @@ export default function GestorDashboardPage() {
                 <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500/0 via-blue-500/40 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             </Link>
-
-            <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-cyan-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(6,182,212,0.15)] transition-all duration-300">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Leads Totais Gerados</p>
-                <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 group-hover:scale-110 transition-transform">
-                  <BarChart3 size={18} />
-                </div>
-              </div>
-              <p className="text-3xl font-black text-white group-hover:text-cyan-400 transition-colors">{totalLeads}</p>
-              <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-cyan-500/0 via-cyan-500/40 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
 
             <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-emerald-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all duration-300">
               <div className="flex items-center justify-between mb-4">
@@ -222,13 +212,13 @@ export default function GestorDashboardPage() {
 
             <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-purple-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] transition-all duration-300">
               <div className="flex items-center justify-between mb-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Onboarding Concluído</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Entradas Pendentes</p>
                 <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 group-hover:scale-110 transition-transform">
-                  <CheckCircle2 size={18} />
+                  <Clock size={18} />
                 </div>
               </div>
               <p className="text-3xl font-black text-white group-hover:text-purple-400 transition-colors">
-                {onboardingFinishedCount} <span className="text-slate-500 text-sm font-bold">/ {corretores.length}</span>
+                {pendingOnboardingCount}
               </p>
               <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-purple-500/0 via-purple-500/40 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
