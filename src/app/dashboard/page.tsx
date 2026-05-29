@@ -507,7 +507,7 @@ export default function DashboardPage() {
         {/* Column 2: Gorgeous concentric glowing SVG Pizza (Donut) Chart */}
         <div className="rounded-[1.5rem] border border-slate-100 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-6 lg:col-span-2">
           <div className="mb-6">
-            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">Distribuição Pizza</p>
+            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">Distribuição de Leads</p>
             <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">Leads por Etapa</h2>
           </div>
           <div className="min-h-[220px] flex items-center justify-center">
@@ -946,6 +946,25 @@ function CustomGrowthAreaChart({
   data: { label: string; spend: number; leads: number }[];
   formatCurrency: (v: number) => string;
 }) {
+  const [animationProgress, setAnimationProgress] = useState(0);
+  const [hoveredNode, setHoveredNode] = useState<{ x: number; y: number; value: string; label: string; color: string } | null>(null);
+
+  useEffect(() => {
+    let start: number;
+    const duration = 1200; // 1.2 seconds
+    const animate = (timestamp: number) => {
+      if (!start) start = timestamp;
+      const elapsed = timestamp - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 4); // easeOutQuart
+      setAnimationProgress(ease);
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    requestAnimationFrame(animate);
+  }, [data]);
+
   const maxSpend = Math.max(...data.map(d => d.spend), 1);
   const maxLeads = Math.max(...data.map(d => d.leads), 1);
   
@@ -955,17 +974,28 @@ function CustomGrowthAreaChart({
   const chartW = width - padding * 2;
   const chartH = height - padding * 2;
   
-  // Calculate points
-  const spendPoints = data.map((d, i) => {
+  // Calculate raw points
+  const baseSpendPoints = data.map((d, i) => {
     const x = padding + (i / Math.max(data.length - 1, 1)) * chartW;
     const y = padding + chartH - (d.spend / maxSpend) * chartH;
     return { x, y };
   });
 
-  const leadPoints = data.map((d, i) => {
+  const baseLeadPoints = data.map((d, i) => {
     const x = padding + (i / Math.max(data.length - 1, 1)) * chartW;
     const y = padding + chartH - (d.leads / maxLeads) * chartH;
     return { x, y };
+  });
+
+  // Calculate animated points rising up from bottom baseline (170)
+  const spendPoints = baseSpendPoints.map(p => {
+    const animatedY = 170 - (170 - p.y) * animationProgress;
+    return { x: p.x, y: animatedY };
+  });
+
+  const leadPoints = baseLeadPoints.map(p => {
+    const animatedY = 170 - (170 - p.y) * animationProgress;
+    return { x: p.x, y: animatedY };
   });
 
   const getAreaPath = (points: { x: number; y: number }[]) => {
@@ -976,7 +1006,7 @@ function CustomGrowthAreaChart({
     for (let i = 1; i < points.length; i++) {
       d += ` L ${points[i].x} ${points[i].y}`;
     }
-    d += ` L ${last.x} ${padding + chartH} L ${first.x} ${padding + chartH} Z`;
+    d += ` L ${last.x} 170 L ${first.x} 170 Z`;
     return d;
   };
 
@@ -990,7 +1020,7 @@ function CustomGrowthAreaChart({
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full relative">
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full overflow-visible">
         <defs>
           <linearGradient id="spendAreaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -1055,7 +1085,26 @@ function CustomGrowthAreaChart({
                 fill="#ffffff"
                 stroke="#06b6d4"
                 strokeWidth="2"
+                className="transition-all duration-300 hover:scale-150 cursor-pointer"
+                style={{ filter: 'drop-shadow(0 0 4px rgba(6, 182, 212, 0.6))' }}
               />
+              {/* Spend Node Hover Trigger Area */}
+              <circle
+                cx={sp.x}
+                cy={sp.y}
+                r="14"
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredNode({
+                  x: sp.x,
+                  y: sp.y,
+                  value: formatCurrency(d.spend),
+                  label: 'Investimento',
+                  color: '#06b6d4'
+                })}
+                onMouseLeave={() => setHoveredNode(null)}
+              />
+
               {/* Leads Node */}
               <circle
                 cx={lp.x}
@@ -1064,7 +1113,26 @@ function CustomGrowthAreaChart({
                 fill="#ffffff"
                 stroke="#10b981"
                 strokeWidth="2"
+                className="transition-all duration-300 hover:scale-150 cursor-pointer"
+                style={{ filter: 'drop-shadow(0 0 4px rgba(16, 185, 129, 0.6))' }}
               />
+              {/* Leads Node Hover Trigger Area */}
+              <circle
+                cx={lp.x}
+                cy={lp.y}
+                r="14"
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredNode({
+                  x: lp.x,
+                  y: lp.y,
+                  value: `${d.leads} leads`,
+                  label: 'Leads',
+                  color: '#10b981'
+                })}
+                onMouseLeave={() => setHoveredNode(null)}
+              />
+
               {/* Label */}
               <text
                 x={sp.x}
@@ -1080,6 +1148,23 @@ function CustomGrowthAreaChart({
           );
         })}
       </svg>
+
+      {/* Floating Tooltip */}
+      {hoveredNode && (
+        <div
+          className="absolute z-30 pointer-events-none rounded-xl bg-slate-950/95 border border-white/10 px-3 py-2 text-xs font-black shadow-2xl backdrop-blur-md transition-all duration-200"
+          style={{
+            left: `${(hoveredNode.x / width) * 100}%`,
+            top: `${(hoveredNode.y / height) * 100 - 15}%`,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          <p className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">{hoveredNode.label}</p>
+          <p className="mt-0.5 text-sm font-black" style={{ color: hoveredNode.color }}>{hoveredNode.value}</p>
+          {/* Arrow */}
+          <div className="absolute left-1/2 bottom-0 h-2 w-2 -translate-x-1/2 translate-y-1/2 rotate-45 border-r border-b border-white/10 bg-slate-950" />
+        </div>
+      )}
     </div>
   );
 }
@@ -1097,6 +1182,24 @@ function CustomDonutPizzaChart({
   sold: number;
   lost: number;
 }) {
+  const [animationProgress, setAnimationProgress] = useState(0);
+
+  useEffect(() => {
+    let start: number;
+    const duration = 1200; // 1.2s
+    const animate = (timestamp: number) => {
+      if (!start) start = timestamp;
+      const elapsed = timestamp - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 4); // easeOutQuart
+      setAnimationProgress(ease);
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    requestAnimationFrame(animate);
+  }, [waiting, inProgress, quoted, sold, lost]);
+
   const total = (waiting + inProgress + quoted + sold + lost) || 1;
   const slices = [
     { label: 'Aguardando', value: waiting, color: '#a78bfa' },
@@ -1117,52 +1220,96 @@ function CustomDonutPizzaChart({
   const radius = 40;
   const circ = 2 * Math.PI * radius; // ~251.3
   
-  let accumulatedPercent = 0;
-
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-6 justify-center">
-      <div className="relative w-36 h-36">
-        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-          {displaySlices.map((slice, i) => {
-            const percent = slice.value / displayTotal;
-            const strokeDasharray = `${percent * circ} ${circ}`;
-            const strokeDashoffset = -accumulatedPercent * circ;
-            accumulatedPercent += percent;
+    <div className="flex flex-col lg:flex-row items-center gap-12 justify-center w-full">
+      {/* 3D Tilted Donut Container */}
+      <div className="relative w-44 h-44 [perspective:1000px] flex items-center justify-center select-none">
+        <div 
+          className="w-36 h-36 relative"
+          style={{
+            transform: 'rotateX(58deg) rotateZ(-15deg)',
+            transformStyle: 'preserve-3d',
+          }}
+        >
+          {/* Extruded Depth Layers (Stacking 6 SVGs to create 3D cylinder depth) */}
+          {[...Array(6)].map((_, layerIndex) => {
+            const isTop = layerIndex === 5;
+            const offset = (5 - layerIndex) * 1.8; // ~10px extrusion depth
+            let accumulatedPercent = 0;
 
             return (
-              <circle
-                key={i}
-                cx="50"
-                cy="50"
-                r={radius}
-                fill="transparent"
-                stroke={slice.color}
-                strokeWidth="10"
-                strokeDasharray={strokeDasharray}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                className="transition-all duration-500 hover:stroke-[12px]"
+              <svg
+                key={layerIndex}
+                viewBox="0 0 100 100"
+                className={`absolute inset-0 w-full h-full -rotate-90 transition-all duration-300 ${
+                  isTop ? 'pointer-events-auto' : 'pointer-events-none'
+                }`}
                 style={{
-                  filter: `drop-shadow(0 0 3px ${slice.color}44)`
+                  transform: `translateY(${offset}px) translateZ(${layerIndex * 0.5}px)`,
+                  filter: isTop
+                    ? 'drop-shadow(0 10px 15px rgba(0, 0, 0, 0.45))'
+                    : 'brightness(0.6) contrast(1.2)',
+                  opacity: isTop ? 1 : 0.85,
                 }}
-              />
+              >
+                {displaySlices.map((slice, i) => {
+                  const percent = slice.value / displayTotal;
+                  const strokeDasharray = `${percent * circ * animationProgress} ${circ}`;
+                  const strokeDashoffset = -accumulatedPercent * circ;
+                  accumulatedPercent += percent;
+
+                  return (
+                    <circle
+                      key={i}
+                      cx="50"
+                      cy="50"
+                      r={radius}
+                      fill="transparent"
+                      stroke={slice.color}
+                      strokeWidth="11"
+                      strokeDasharray={strokeDasharray}
+                      strokeDashoffset={strokeDashoffset}
+                      strokeLinecap="round"
+                      className={isTop ? "transition-all duration-300 hover:stroke-[13px] cursor-pointer" : ""}
+                      style={{
+                        filter: isTop ? `drop-shadow(0 0 4px ${slice.color}33)` : 'none'
+                      }}
+                    />
+                  );
+                })}
+              </svg>
             );
           })}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 leading-none">Total</p>
-          <p className="mt-1 text-lg font-black text-white leading-none">{slices.length > 0 ? total : 0}</p>
+        </div>
+
+        {/* Flat Glass-Floating total text in the center */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
+          <div className="bg-[#0b1329]/95 border border-white/10 rounded-full h-20 w-20 flex flex-col items-center justify-center shadow-2xl backdrop-blur-md select-none transform hover:scale-110 transition-all duration-300">
+            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 leading-none">Total</p>
+            <p className="mt-1.5 text-xl font-black text-white leading-none">{slices.length > 0 ? total : 0}</p>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-left">
+      {/* Enlarged premium detailed data legend */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-left w-full max-w-sm sm:max-w-md">
         {displaySlices.map((slice, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs">
-            <span className="h-2.5 w-2.5 rounded-full shrink-0 animate-pulse" style={{ backgroundColor: slice.color }} />
+          <div 
+            key={i} 
+            className="flex items-center gap-3 text-xs p-2.5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all duration-300 shadow-md"
+            title={`${slice.label}: ${slice.value} leads`}
+          >
+            <span 
+              className="h-3 w-3 rounded-full shrink-0 animate-pulse shadow-sm" 
+              style={{ 
+                backgroundColor: slice.color,
+                boxShadow: `0 0 8px ${slice.color}`
+              }} 
+            />
             <div>
-              <p className="font-extrabold text-white leading-tight">{slice.label}</p>
-              <p className="text-[10px] font-bold text-slate-400">
-                {slice.value} ({((slice.value / displayTotal) * 100).toFixed(0)}%)
+              <p className="font-extrabold text-white leading-tight text-xs sm:text-sm">{slice.label}</p>
+              <p className="text-[10px] font-bold text-slate-300 mt-0.5">
+                {slice.value} leads <span className="text-slate-400 font-bold">({((slice.value / displayTotal) * 100).toFixed(0)}%)</span>
               </p>
             </div>
           </div>
