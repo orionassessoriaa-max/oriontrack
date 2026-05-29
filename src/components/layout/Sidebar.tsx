@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   AlertTriangle,
   Bell,
+  ChevronDown,
   ClipboardList,
   FileSearch,
   FileText,
@@ -44,12 +45,25 @@ type SidebarProps = {
 export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(true);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, isViewingAsDesigner, isViewingAsAccount, stopViewingAsCorretor } = useAuth();
   const isViewingAsUser = isViewingAsCorretor || isViewingAsGestor || isViewingAsDesigner || isViewingAsAccount;
   const isMasterAdmin = Boolean(actualProfile?.is_admin_master) || [actualProfile?.email, actualProfile?.email_real]
     .filter(Boolean)
     .map((email) => String(email).toLowerCase())
     .includes('ewerttonherculano@gmail.com');
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const adminMenu = [
     { icon: Home, label: 'Visao Geral', href: '/admin' },
@@ -194,32 +208,93 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
           </Link>
 
           {/* Desktop Horizontal Navigation Items */}
-          <nav className="hidden lg:flex items-center gap-1.5 overflow-x-auto py-1 max-w-[45vw] xl:max-w-[55vw] scrollbar-none">
+          <nav className="hidden lg:flex items-center gap-1.5 py-1 relative">
             {loading ? (
               <Loader2 className="animate-spin text-blue-500" size={16} />
-            ) : (
-              getMenu().map((item) => {
-                const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'group flex items-center gap-2 rounded-xl px-3.5 py-2.5 transition-all duration-250 whitespace-nowrap text-xs xl:text-sm font-extrabold',
-                      isActive
-                        ? 'bg-blue-600/12 text-cyan-400 border border-cyan-500/20'
-                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                    )}
-                  >
-                    <item.icon
-                      size={15}
-                      className={cn(isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-white')}
-                    />
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })
-            )}
+            ) : (() => {
+              const menuItems = getMenu();
+              const hasMore = menuItems.length > 6;
+              const directItems = hasMore ? menuItems.slice(0, 5) : menuItems;
+              const dropdownItems = hasMore ? menuItems.slice(5) : [];
+              
+              return (
+                <>
+                  {directItems.map((item) => {
+                    const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          'group flex items-center gap-2 rounded-xl px-3.5 py-2.5 transition-all duration-250 whitespace-nowrap text-xs xl:text-sm font-extrabold shrink-0',
+                          isActive
+                            ? 'bg-blue-600/12 text-cyan-400 border border-cyan-500/20'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        )}
+                      >
+                        <item.icon
+                          size={15}
+                          className={cn(isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-white')}
+                        />
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                  
+                  {hasMore && (
+                    <div className="relative animate-in fade-in duration-300" ref={dropdownRef}>
+                      <button
+                        onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                        className={cn(
+                          'group flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 transition-all duration-250 whitespace-nowrap text-xs xl:text-sm font-extrabold cursor-pointer select-none border border-transparent shrink-0',
+                          moreMenuOpen
+                            ? 'bg-blue-600/12 text-cyan-400 border border-cyan-500/20'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        )}
+                      >
+                        <span>Mais</span>
+                        <ChevronDown
+                          size={15}
+                          className={cn(
+                            'transition-transform duration-200',
+                            moreMenuOpen ? 'rotate-180 text-cyan-400' : 'text-slate-400 group-hover:text-white'
+                          )}
+                        />
+                      </button>
+                      
+                      {moreMenuOpen && (
+                        <div className="absolute right-0 top-full mt-2.5 z-50 w-64 rounded-2xl bg-[#090e1a]/95 backdrop-blur-md border border-white/5 p-2 shadow-2xl orion-dropdown-animate animate-in fade-in-50 slide-in-from-top-2 duration-200">
+                          <div className="max-h-[380px] overflow-y-auto pr-1 scrollbar-none">
+                            {dropdownItems.map((item) => {
+                              const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+                              return (
+                                <Link
+                                  key={item.href}
+                                  href={item.href}
+                                  onClick={() => setMoreMenuOpen(false)}
+                                  className={cn(
+                                    'group flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 text-xs xl:text-sm font-extrabold mb-1 last:mb-0',
+                                    isActive
+                                      ? 'bg-blue-600/15 text-cyan-400 border border-cyan-500/20 shadow-inner'
+                                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                                  )}
+                                >
+                                  <item.icon
+                                    size={15}
+                                    className={cn(isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-white')}
+                                  />
+                                  <span>{item.label}</span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </nav>
         </div>
 

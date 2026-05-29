@@ -1035,3 +1035,29 @@ body.theme-noturno main :is(input, select, textarea):disabled,
     width: 10px;
   }
 }
+
+/* Premium Animations and Classes for Top Dropdown */
+@keyframes orion-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.orion-dropdown-animate {
+  animation: orion-dropdown-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Scrollbar None Override */
+.scrollbar-none {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+}
