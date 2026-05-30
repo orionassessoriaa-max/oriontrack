@@ -309,7 +309,6 @@ export default function CrmPage() {
   }
 
   async function assignLeadToMember(leadId: string, memberId: string) {
-    if (!memberId) return;
     const token = await getToken();
     if (!token) {
       alert('Sessao expirada. Entre novamente.');
@@ -323,7 +322,7 @@ export default function CrmPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId }),
+      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId || 'unassigned' }),
     });
     const payload = await response.json().catch(() => ({}));
 
@@ -335,8 +334,8 @@ export default function CrmPage() {
 
     const member = teamMembers.find((item) => item.id === memberId);
     const assignedPayload = {
-      responsavel_membro_id: memberId,
-      responsavel_membro: member ? { nome: member.nome, email: member.email } : undefined,
+      responsavel_membro_id: memberId && memberId !== 'unassigned' ? memberId : null,
+      responsavel_membro: member ? { nome: member.nome, email: member.email } : null,
     };
     setLeads((current) => current.map((lead) => lead.id === leadId ? { ...lead, ...assignedPayload } : lead));
     setSelectedLead((current) => current?.id === leadId ? { ...current, ...assignedPayload } : current);
@@ -1072,11 +1071,11 @@ export default function CrmPage() {
                   </div>
                 </div>
                 <select
-                  value={selectedLead.responsavel_membro_id || ''}
+                  value={selectedLead.responsavel_membro_id || 'unassigned'}
                   onChange={(event) => assignLeadToMember(selectedLead.id, event.target.value)}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20"
                 >
-                  <option value="">Selecione quem vai receber</option>
+                  <option value="unassigned">Sem responsável (Liberado para todos)</option>
                   {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
                 </select>
                 {assigningLeadId === selectedLead.id && (

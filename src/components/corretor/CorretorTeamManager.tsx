@@ -419,7 +419,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           {/* Feature Showcase Grid */}
           <div className="grid gap-4 sm:grid-cols-3 max-w-3xl mx-auto pt-4 text-left">
             {[
-              { icon: Sparkles, title: "Roleta Inteligente", text: "Distribua leads instantaneamente um a um para sua equipe ativa." },
+              { icon: Sparkles, title: "Automação de Vendas", text: "Distribua clientes instantaneamente de forma justa para sua equipe ativa." },
               { icon: Users, title: "Acessos Exclusivos", text: "Seus corretores têm login exclusivo para gerenciar o funil do CRM." },
               { icon: Crown, title: "Ranking Gamificado", text: "Estimule vendas e comissões com um ranking atualizado em tempo real." },
             ].map((f, i) => {
@@ -661,7 +661,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Painel do Time Comercial</p>
             <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">{team.nome}</h1>
-            <p className="text-xs font-bold text-slate-400 mt-1">Lidere sua força de vendas, gerencie a roleta de distribuição e analise a performance comercial.</p>
+            <p className="text-xs font-bold text-slate-400 mt-1">Lidere sua força de vendas, gerencie a automação de atendimento e analise a performance comercial.</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -891,7 +891,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                     <div className="min-w-0 flex-1">
                       <p className="font-black text-white text-sm">Participar da Distribuição</p>
                       <p className="mt-1 text-[11px] font-bold leading-relaxed text-slate-400">
-                        Quando ativado, você (corretor principal) também receberá leads na roleta e aparecerá nos relatórios.
+                        Ative se você também quiser entrar na escala de rodízio de clientes e disputar vendas com o seu time.
                       </p>
                       {settings.owner_profile && (
                         <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-cyan-400">

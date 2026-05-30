@@ -549,8 +549,32 @@ export async function POST(request: Request) {
 
       const leadId = String(body.lead_id || '').trim();
       const memberId = String(body.member_id || '').trim();
-      if (!leadId || !memberId) {
-        return NextResponse.json({ error: 'Selecione o lead e o integrante.' }, { status: 400 });
+      if (!leadId) {
+        return NextResponse.json({ error: 'Selecione o lead.' }, { status: 400 });
+      }
+
+      // Handle unassigning lead (releasing it back to the shared/unowned queue)
+      if (memberId === 'unassigned' || !memberId) {
+        const { error: updateError } = await supabaseAdmin
+          .from('leads')
+          .update({
+            responsavel_membro_id: null,
+            responsavel_profile_id: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', leadId)
+          .eq('corretor_id', corretorId);
+
+        if (updateError) throw updateError;
+
+        await writeAuditLog(request, guard.profile, {
+          action: 'team.lead.unassign',
+          entity_type: 'lead',
+          entity_id: leadId,
+          metadata: { corretor_id: corretorId },
+        });
+
+        return NextResponse.json({ success: true, unassigned: true });
       }
 
       const { data: member } = await supabaseAdmin

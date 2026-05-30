@@ -288,7 +288,6 @@ export default function BrokerLeadsPage() {
   };
 
   const assignLeadToMember = async (leadId: string, memberId: string) => {
-    if (!memberId) return;
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) {
@@ -303,7 +302,7 @@ export default function BrokerLeadsPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId }),
+      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId || 'unassigned' }),
     });
     const payload = await response.json().catch(() => ({}));
 
@@ -316,8 +315,8 @@ export default function BrokerLeadsPage() {
     const member = teamMembers.find((item) => item.id === memberId);
     setLeads((current) => current.map((lead) => lead.id === leadId ? {
       ...lead,
-      responsavel_membro_id: memberId,
-      responsavel_membro: member ? { nome: member.nome, email: member.email } : lead.responsavel_membro,
+      responsavel_membro_id: memberId && memberId !== 'unassigned' ? memberId : null,
+      responsavel_membro: member ? { nome: member.nome, email: member.email } : null,
     } : lead));
     setSavingStatusId(null);
   };
@@ -916,11 +915,11 @@ export default function BrokerLeadsPage() {
                     <td className="border border-slate-100 px-3 py-3">
                       {canAssignTeamLeads && teamMembers.length > 0 ? (
                         <select
-                          value={lead.responsavel_membro_id || ''}
+                          value={lead.responsavel_membro_id || 'unassigned'}
                           onChange={(event) => assignLeadToMember(lead.id, event.target.value)}
                           className="w-full min-w-[170px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500/20"
                         >
-                          <option value="">Enviar para...</option>
+                          <option value="unassigned">Sem responsável (Liberado)</option>
                           {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
                         </select>
                       ) : (
