@@ -78,11 +78,30 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     }
   }, [loading, user, profile, pathname, router]);
 
+  const [tema, setTema] = useState<string>('noturno');
+
   useEffect(() => {
-    window.localStorage.setItem('orion:tema_sistema', 'noturno');
-    document.documentElement.classList.add('theme-noturno');
-    document.body.classList.add('theme-noturno');
-    document.documentElement.style.colorScheme = 'dark';
+    const handleThemeChange = () => {
+      const savedTheme = window.localStorage.getItem('orion:tema_sistema') || 'noturno';
+      setTema(savedTheme);
+      if (savedTheme === 'noturno') {
+        document.documentElement.classList.remove('theme-claro');
+        document.body.classList.remove('theme-claro');
+        document.documentElement.classList.add('theme-noturno');
+        document.body.classList.add('theme-noturno');
+        document.documentElement.style.colorScheme = 'dark';
+      } else {
+        document.documentElement.classList.remove('theme-noturno');
+        document.body.classList.remove('theme-noturno');
+        document.documentElement.classList.add('theme-claro');
+        document.body.classList.add('theme-claro');
+        document.documentElement.style.colorScheme = 'light';
+      }
+    };
+
+    handleThemeChange();
+    window.addEventListener('orion:theme_changed', handleThemeChange);
+    return () => window.removeEventListener('orion:theme_changed', handleThemeChange);
   }, []);
 
   if (loading) {
@@ -127,8 +146,12 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     );
   }
 
+  const isDark = tema === 'noturno';
+
   return (
-    <div className="flex min-h-screen flex-col bg-[#020617] text-white">
+    <div className={`flex min-h-screen flex-col transition-colors duration-300 ${
+      isDark ? 'bg-[#020617] text-white' : 'bg-[#f8fafc] text-slate-800'
+    }`}>
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
       <main className="w-full min-w-0 px-3 py-5 pt-24 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7 lg:pt-28">
         <div className="mx-auto max-w-none transition-all duration-300">

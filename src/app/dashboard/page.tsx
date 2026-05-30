@@ -637,7 +637,7 @@ export default function DashboardPage() {
       {/* Header Section */}
       <div className="mb-10 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
         <div>
-          <h1 className="mb-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
+          <h1 className="mb-2 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
             {isDataLoading ? (
               <span className="inline-block w-48 h-10 bg-gray-100 animate-pulse rounded-lg" />
             ) : (

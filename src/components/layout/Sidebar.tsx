@@ -50,6 +50,18 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [toast, setToast] = useState<{ id: string; titulo: string; mensagem: string } | null>(null);
+  const [tema, setTema] = useState<string>('noturno');
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      setTema(window.localStorage.getItem('orion:tema_sistema') || 'noturno');
+    };
+    handleThemeChange();
+    window.addEventListener('orion:theme_changed', handleThemeChange);
+    return () => window.removeEventListener('orion:theme_changed', handleThemeChange);
+  }, []);
+
+  const isDark = tema === 'noturno';
 
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, isViewingAsDesigner, isViewingAsAccount, stopViewingAsCorretor } = useAuth();
 
@@ -273,7 +285,10 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   return (
     <>
       {/* Top Horizontal Navbar Header */}
-      <div className="fixed left-0 right-0 top-0 z-50 flex h-20 w-full items-center justify-between border-b border-white/5 bg-[#020617] px-4 text-white shadow-xl transition-all duration-300 sm:px-6">
+      <div className={cn(
+        "fixed left-0 right-0 top-0 z-50 flex h-20 w-full items-center justify-between border-b px-4 text-white shadow-xl transition-all duration-300 sm:px-6",
+        isDark ? "bg-[#020617] border-white/5" : "bg-[#0f172a] border-white/10"
+      )}>
         <div className="flex items-center gap-6">
           <Link
             href={
@@ -357,7 +372,10 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                       </button>
                       
                       {moreMenuOpen && (
-                        <div className="absolute right-0 top-full mt-2.5 z-50 w-64 rounded-2xl bg-[#090e1a]/95 backdrop-blur-md border border-white/5 p-2 shadow-2xl orion-dropdown-animate animate-in fade-in-50 slide-in-from-top-2 duration-200">
+                        <div className={cn(
+                          "absolute right-0 top-full mt-2.5 z-50 w-64 rounded-2xl backdrop-blur-md border p-2 shadow-2xl orion-dropdown-animate animate-in fade-in-50 slide-in-from-top-2 duration-200",
+                          isDark ? "bg-[#090e1a]/95 border-white/5" : "bg-[#0f172a]/95 border-white/10"
+                        )}>
                           <div className="max-h-[380px] overflow-y-auto pr-1 scrollbar-none">
                             {dropdownItems.map((item) => {
                               const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
@@ -450,7 +468,10 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
             onClick={() => setCollapsed(true)}
             className="fixed inset-0 top-20 z-40 bg-slate-950/75 backdrop-blur-md lg:hidden"
           />
-          <div className="fixed left-0 right-0 top-20 z-50 flex h-[calc(100vh-5rem)] w-full flex-col bg-[#020617] border-t border-white/5 p-6 text-white shadow-2xl transition-all duration-300 lg:hidden overflow-y-auto">
+          <div className={cn(
+            "fixed left-0 right-0 top-20 z-50 flex h-[calc(100vh-5rem)] w-full flex-col border-t p-6 text-white shadow-2xl transition-all duration-300 lg:hidden overflow-y-auto",
+            isDark ? "bg-[#020617] border-white/5" : "bg-[#0f172a] border-white/10"
+          )}>
             {isViewingAsUser && (
               <div className="mb-4 border border-amber-400/20 bg-amber-400/10 p-4 rounded-2xl">
                 <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">Modo admin</p>
