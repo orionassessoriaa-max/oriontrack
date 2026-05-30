@@ -24,11 +24,11 @@ async function requireTrafficAccess(request: Request) {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('id, tipo_usuario')
+    .select('id, tipo_usuario, corretor_id')
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!profile || !['admin', 'gestor_trafego'].includes(profile.tipo_usuario)) {
+  if (!profile || !['admin', 'gestor_trafego', 'corretor', 'corretor_membro'].includes(profile.tipo_usuario)) {
     return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
   }
 
@@ -156,6 +156,11 @@ export async function POST(request: Request) {
 
     if (guard.profile.tipo_usuario === 'gestor_trafego') {
       query.eq('gestor_trafego_id', guard.user.id);
+    } else if (['corretor', 'corretor_membro'].includes(guard.profile.tipo_usuario)) {
+      if (!guard.profile.corretor_id) {
+        return NextResponse.json({ success: true, accounts: [] });
+      }
+      query.eq('id', guard.profile.corretor_id);
     }
 
     const { data: corretores, error } = await query;

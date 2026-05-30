@@ -52,7 +52,7 @@ export default function LoginPage() {
       if (profile.tipo_usuario === 'admin') {
         router.replace('/admin');
       } else if (profile.tipo_usuario === 'gestor_trafego') {
-        router.replace('/trafego/relatorios');
+        router.replace('/trafego');
       } else if (profile.tipo_usuario === 'designer') {
         router.replace('/designer');
       } else if (profile.tipo_usuario === 'account_manager') {

@@ -47,9 +47,9 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         // But NO /admin dashboard or system settings
         else if (isTrafficManager) {
           if (isAdminRoute && !pathname.startsWith('/admin/corretores')) {
-             router.push('/trafego/leads');
+             router.push('/trafego');
           } else if (isBrokerRoute || isDesignerRoute || isAccountRoute) {
-             router.push('/trafego/leads');
+             router.push('/trafego');
           }
         }
         else if (isDesigner) {

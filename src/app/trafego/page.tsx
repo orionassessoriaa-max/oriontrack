@@ -27,6 +27,7 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getOnboardingStatus } from '@/lib/onboarding';
+import MetaDatePicker from '@/components/ui/MetaDatePicker';
 
 type Corretor = {
   id: string;
@@ -46,22 +47,13 @@ export default function GestorDashboardPage() {
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalLeads, setTotalLeads] = useState(0);
+  const [criticalAccounts, setCriticalAccounts] = useState<any[]>([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const [presetLabel, setPresetLabel] = useState('Todo o período');
   const [error, setError] = useState<string | null>(null);
 
-  const [dataInicio, setDataInicio] = useState(() => {
-    const d = new Date();
-    const first = new Date(d.getFullYear(), d.getMonth(), 1);
-    const tzOffset = first.getTimezoneOffset() * 60000;
-    const local = new Date(first.getTime() - tzOffset);
-    return local.toISOString().slice(0, 10);
-  });
-  const [dataFim, setDataFim] = useState(() => {
-    const d = new Date();
-    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    const tzOffset = last.getTimezoneOffset() * 60000;
-    const local = new Date(last.getTime() - tzOffset);
-    return local.toISOString().slice(0, 10);
-  });
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
 
   useEffect(() => {
     fetchDashboardData();
@@ -96,15 +88,66 @@ export default function GestorDashboardPage() {
       // 2. Fetch total leads for these brokers
       if (filteredCorretores.length > 0) {
         const brokerIds = filteredCorretores.map(c => c.id);
-        const { count, error: lError } = await supabase
+        let leadsRequest = supabase
           .from('leads')
           .select('*', { count: 'exact', head: true })
-          .in('corretor_id', brokerIds)
-          .gte('data_entrada', `${dataInicio}T00:00:00.000Z`)
-          .lte('data_entrada', `${dataFim}T23:59:59.999Z`);
+          .in('corretor_id', brokerIds);
+
+        if (dataInicio) {
+          leadsRequest = leadsRequest.gte('data_entrada', `${dataInicio}T00:00:00.000Z`);
+        }
+        if (dataFim) {
+          leadsRequest = leadsRequest.lte('data_entrada', `${dataFim}T23:59:59.999Z`);
+        }
+
+        const { count, error: lError } = await leadsRequest;
 
         if (lError) console.error('Error fetching leads count:', lError);
         setTotalLeads(count || 0);
+      }
+
+      // 3. Fetch Meta Ads alerts to identify critical accounts under gestor management
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (accessToken) {
+        setLoadingAlerts(true);
+        try {
+          const response = await fetch('/api/integrations/meta/alerts', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({}),
+          });
+          if (response.ok) {
+            const payload = await response.json();
+            const accounts = payload.accounts || [];
+            
+            const critical = accounts.filter((acc: any) => {
+              const isCard = String(acc.forma_pagamento || '').toLowerCase().includes('cartao') || 
+                             String(acc.forma_pagamento || '').toLowerCase().includes('cartão') ||
+                             String(acc.forma_pagamento || '').toLowerCase().includes('card') ||
+                             String(acc.forma_pagamento || '').toLowerCase().includes('visa') ||
+                             String(acc.forma_pagamento || '').toLowerCase().includes('mastercard');
+              const hasPaymentError = acc.error && (
+                /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(acc.error))
+              );
+              
+              const isCriticalCpl = acc.cpl !== null && acc.cpl > 25;
+              const isCriticalBalance = !isCard && acc.saldo !== null && acc.saldo < 100;
+              const isCardError = isCard && (hasPaymentError || (acc.saldo !== null && acc.saldo <= 0));
+              const hasGeneralError = acc.error && !isCard;
+
+              return isCriticalCpl || isCriticalBalance || isCardError || hasGeneralError;
+            });
+            setCriticalAccounts(critical);
+          }
+        } catch (err) {
+          console.error('Error loading critical accounts on gestor dashboard:', err);
+        } finally {
+          setLoadingAlerts(false);
+        }
       }
     } catch (err: any) {
       console.error('Error loading gestor dashboard:', err);
@@ -192,35 +235,16 @@ export default function GestorDashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-xl py-2 px-3 text-xs font-bold text-white focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
-            />
-            <span className="text-xs font-bold text-slate-500">até</span>
-            <input
-              type="date"
-              value={dataFim}
-              onChange={(e) => setDataFim(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-xl py-2 px-3 text-xs font-bold text-white focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
-            />
-          </div>
-          <button
-            onClick={() => {
-              const d = new Date();
-              const first = new Date(d.getFullYear(), d.getMonth(), 1);
-              const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-              const tzOffsetF = first.getTimezoneOffset() * 60000;
-              const tzOffsetL = last.getTimezoneOffset() * 60000;
-              setDataInicio(new Date(first.getTime() - tzOffsetF).toISOString().slice(0, 10));
-              setDataFim(new Date(last.getTime() - tzOffsetL).toISOString().slice(0, 10));
+          <MetaDatePicker
+            startDate={dataInicio}
+            endDate={dataFim}
+            preset={presetLabel}
+            onChange={(start, end, label) => {
+              setDataInicio(start);
+              setDataFim(end);
+              setPresetLabel(label);
             }}
-            className="text-[10px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 bg-white/5 border border-white/5 py-2.5 px-4 rounded-xl transition animate-pulse"
-          >
-            Mês Atual
-          </button>
+          />
         </div>
       </div>
 
@@ -245,6 +269,90 @@ export default function GestorDashboardPage() {
         </div>
       ) : (
         <>
+          {/* Alertas Críticos de Contas Meta Ads */}
+          {criticalAccounts.length > 0 && (
+            <div className="mb-10 p-6 rounded-[2rem] border border-red-500/20 bg-red-500/5 shadow-[0_0_30px_rgba(239,68,68,0.06)] backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center shrink-0">
+                  <ShieldAlert size={20} className="animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-white leading-none">Contas Críticas em Alerta</h2>
+                  <p className="text-xs font-bold text-red-400/80 mt-1.5">Campanhas ou saldos que requerem atenção imediata.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {criticalAccounts.map((acc) => {
+                  const isCard = String(acc.forma_pagamento || '').toLowerCase().includes('cartao') || 
+                                 String(acc.forma_pagamento || '').toLowerCase().includes('cartão') ||
+                                 String(acc.forma_pagamento || '').toLowerCase().includes('card') ||
+                                 String(acc.forma_pagamento || '').toLowerCase().includes('visa') ||
+                                 String(acc.forma_pagamento || '').toLowerCase().includes('mastercard');
+                  const hasPaymentError = acc.error && (
+                    /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(acc.error))
+                  );
+
+                  let badgeText = 'Normal';
+                  let badgeTone = 'emerald';
+                  let detailText = '';
+
+                  if (acc.cpl !== null && acc.cpl > 25) {
+                    badgeText = 'CPL Alto';
+                    badgeTone = 'red';
+                    detailText = `CPL de R$ ${Number(acc.cpl).toFixed(2).replace('.', ',')} acima do limite.`;
+                  } else if (isCard && (hasPaymentError || (acc.saldo !== null && acc.saldo <= 0))) {
+                    badgeText = 'Erro Pagamento';
+                    badgeTone = 'red';
+                    detailText = 'Falha de processamento no cartão de crédito.';
+                  } else if (!isCard && acc.saldo !== null && acc.saldo <= 0) {
+                    badgeText = 'Sem Saldo';
+                    badgeTone = 'red';
+                    detailText = 'Campanhas suspensas por falta de créditos.';
+                  } else if (!isCard && acc.saldo !== null && acc.saldo < 100) {
+                    badgeText = 'Saldo Baixo';
+                    badgeTone = 'amber';
+                    detailText = `Saldo de R$ ${Number(acc.saldo).toFixed(2).replace('.', ',')} abaixo do limite de R$ 100.`;
+                  } else if (acc.error) {
+                    badgeText = 'Erro Meta';
+                    badgeTone = 'amber';
+                    detailText = acc.error;
+                  }
+
+                  return (
+                    <div key={acc.corretor_id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors flex flex-col justify-between gap-3 group">
+                      <div>
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="font-extrabold text-white text-sm truncate group-hover:text-cyan-400 transition-colors">{acc.corretor_nome}</p>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest leading-none border ${
+                            badgeTone === 'red'
+                              ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          }`}>
+                            {badgeText}
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-semibold text-slate-500 truncate leading-none">
+                          {acc.meta_ad_account_name || `act_${acc.meta_ad_account_id}`}
+                        </p>
+                        <p className="text-xs font-bold text-slate-300 mt-2">{detailText}</p>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1">
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{isCard ? 'Cartão de Crédito' : 'Pré-pago'}</span>
+                        <Link 
+                          href="/trafego/avisos-meta"
+                          className="text-[9px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1"
+                        >
+                          Ver Avisos <ArrowRight size={10} />
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Stats Section */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
             <Link href="/trafego/corretores">

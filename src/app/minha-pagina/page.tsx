@@ -117,40 +117,6 @@ export default function MinhaPaginaPage() {
                 </div>
               )}
             </div>
-
-            {/* Informações do Perfil */}
-            <div className="bg-white p-10 rounded-[2.5rem] border border-gray-100 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-8">Dados do Parceiro</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Smartphone size={18} className="text-gray-400" />
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">WhatsApp</p>
-                      <p className="font-bold text-gray-800">{corretor.telefone}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Mail size={18} className="text-gray-400" />
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Email</p>
-                      <p className="font-bold text-gray-800">{corretor.email}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Shield size={18} className="text-gray-400" />
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Status da Conta</p>
-                      <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${corretor.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                        {corretor.status === 'active' ? 'Ativa' : 'Inativa'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         ) : (
           <div className="bg-white p-20 rounded-[2.5rem] border border-gray-100 shadow-sm text-center text-gray-500 font-medium">

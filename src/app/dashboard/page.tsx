@@ -23,6 +23,8 @@ import {
   AlertTriangle,
   Loader2,
   ChevronDown,
+  ShieldAlert,
+  CheckCircle2,
   type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
@@ -32,6 +34,7 @@ import OrionMark from '@/components/ui/OrionMark';
 import { useRouter } from 'next/navigation';
 import OrionFunnel from '@/components/ui/OrionFunnel';
 import { motion } from 'framer-motion';
+import { normalizeLeadStatus } from '@/lib/leadStatus';
 
 type CorretorDashboardData = {
   id: string;
@@ -132,12 +135,85 @@ function getLastDays(total = 7) {
   });
 }
 
+function getBrokerMetaStatus(account: any) {
+  if (!account) return null;
+  const isCard = String(account.forma_pagamento || '').toLowerCase().includes('cartao') || 
+                 String(account.forma_pagamento || '').toLowerCase().includes('cartão') ||
+                 String(account.forma_pagamento || '').toLowerCase().includes('card') ||
+                 String(account.forma_pagamento || '').toLowerCase().includes('visa') ||
+                 String(account.forma_pagamento || '').toLowerCase().includes('mastercard');
+
+  const hasPaymentError = account.error && (
+    /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(account.error))
+  );
+
+  // 1. CPL alto
+  if (account.cpl !== null && account.cpl > 25) {
+    return {
+      status: 'cpl_alto',
+      title: 'CPL Elevado',
+      detail: `CPL de R$ ${Number(account.cpl).toFixed(2).replace('.', ',')} está acima do ideal de R$ 25,00.`,
+      tone: 'red',
+    };
+  }
+
+  // 2. Erro no Pagamento (Cartão)
+  if (isCard && (hasPaymentError || (account.saldo !== null && account.saldo <= 0))) {
+    return {
+      status: 'erro_pagamento',
+      title: 'Erro no Pagamento',
+      detail: 'Ocorreu um erro no processamento da cobrança do cartão de crédito da sua conta.',
+      tone: 'red',
+    };
+  }
+
+  // 3. Sem Saldo (Pré-pago)
+  if (!isCard && account.saldo !== null && account.saldo <= 0) {
+    return {
+      status: 'sem_saldo',
+      title: 'Sem Saldo',
+      detail: 'Sua conta está sem saldo de anúncio. Insira créditos para continuar recebendo leads.',
+      tone: 'red',
+    };
+  }
+
+  // 4. Saldo Baixo (Pré-pago)
+  if (!isCard && account.saldo !== null && account.saldo < 100) {
+    return {
+      status: 'saldo_baixo',
+      title: 'Saldo Baixo',
+      detail: `Seu saldo está em R$ ${Number(account.saldo).toFixed(2).replace('.', ',')}. Recarregue para evitar pausa nas campanhas.`,
+      tone: 'amber',
+    };
+  }
+
+  // 5. Erro Geral
+  if (account.error) {
+    return {
+      status: 'erro_meta',
+      title: 'Alerta de Integração',
+      detail: account.error,
+      tone: 'amber',
+    };
+  }
+
+  // 6. Com Saldo (Normal)
+  return {
+    status: 'com_saldo',
+    title: 'Com Saldo',
+    detail: isCard ? 'Seu cartão está ativo para cobrança automática.' : 'Saldo suficiente para veiculação de anúncios.',
+    tone: 'emerald',
+  };
+}
+
 export default function DashboardPage() {
   const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const [hoveredTier, setHoveredTier] = useState<number | null>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [corretorData, setCorretorData] = useState<CorretorDashboardData | null>(null);
+  const [metaAccount, setMetaAccount] = useState<any>(null);
+  const [loadingMeta, setLoadingMeta] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     waiting: 0,
@@ -157,23 +233,11 @@ export default function DashboardPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [chartHovering, setChartHovering] = useState(false);
 
-  const [dataInicio, setDataInicio] = useState(() => {
-    const d = new Date();
-    const first = new Date(d.getFullYear(), d.getMonth(), 1);
-    const tzOffset = first.getTimezoneOffset() * 60000;
-    const local = new Date(first.getTime() - tzOffset);
-    return local.toISOString().slice(0, 10);
-  });
-  const [dataFim, setDataFim] = useState(() => {
-    const d = new Date();
-    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    const tzOffset = last.getTimezoneOffset() * 60000;
-    const local = new Date(last.getTime() - tzOffset);
-    return local.toISOString().slice(0, 10);
-  });
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
 
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [presetLabel, setPresetLabel] = useState('Este mês');
+  const [presetLabel, setPresetLabel] = useState('Todo o período');
 
   const formatDateDisplay = (start: string, end: string) => {
     if (!start || !end) return '';
@@ -183,6 +247,14 @@ export default function DashboardPage() {
   };
 
   const applyPreset = (preset: string) => {
+    if (preset === 'todo_periodo') {
+      setDataInicio('');
+      setDataFim('');
+      setPresetLabel('Todo o período');
+      setShowDatePicker(false);
+      return;
+    }
+
     const d = new Date();
     let start = new Date();
     let end = new Date();
@@ -271,10 +343,16 @@ export default function DashboardPage() {
           let statsRequest = supabase
             .from('leads')
             .select('status, data_entrada, cidade, valor_negociacao, valor_comissao')
-            .eq('corretor_id', profile.corretor_id)
-            .gte('data_entrada', `${dataInicio}T00:00:00.000Z`)
-            .lte('data_entrada', `${dataFim}T23:59:59.999Z`)
-            .range(from, to);
+            .eq('corretor_id', profile.corretor_id);
+
+          if (dataInicio) {
+            statsRequest = statsRequest.gte('data_entrada', `${dataInicio}T00:00:00.000Z`);
+          }
+          if (dataFim) {
+            statsRequest = statsRequest.lte('data_entrada', `${dataFim}T23:59:59.999Z`);
+          }
+
+          statsRequest = statsRequest.range(from, to);
 
           if (profile.tipo_usuario === 'corretor_membro') {
             statsRequest = statsRequest.eq('responsavel_profile_id', profile.id);
@@ -296,25 +374,25 @@ export default function DashboardPage() {
 
         const statsRes = allStats;
         const thisMonthKey = monthKey(new Date());
-        const soldLeads = statsRes.filter(l => l.status === 'Venda realizada');
-        const lostLeads = statsRes.filter(l => l.status === 'Sem interesse');
+        const soldLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
+        const lostLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Sem interesse');
         const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
         setStats({
           total: statsRes.length,
-          waiting: statsRes.filter(l => l.status === 'Aguardando atendimento').length,
-          inProgress: statsRes.filter(l => l.status === 'Em negociação').length,
-          quoted: statsRes.filter(l => l.status === 'Cotação enviada').length,
+          waiting: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Aguardando atendimento').length,
+          inProgress: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Em negociação').length,
+          quoted: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Cotação enviada').length,
           sold: soldLeads.length,
-          soldThisMonth: statsRes.filter(l => l.status === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
+          soldThisMonth: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
           stale: statsRes.filter(l => {
-            if (l.status !== 'Aguardando atendimento' || !l.data_entrada) return false;
+            if (normalizeLeadStatus(l.status) !== 'Aguardando atendimento' || !l.data_entrada) return false;
             return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
           }).length,
           lost: lostLeads.length,
           revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
           salesRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
           salesPotential: statsRes
-            .filter((lead) => activeRevenueStatuses.includes(String(lead.status || '')))
+            .filter((lead) => activeRevenueStatuses.includes(normalizeLeadStatus(lead.status)))
             .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
         });
 
@@ -384,6 +462,33 @@ export default function DashboardPage() {
             const current = monthMap.get(result.key);
             if (current) current.spend = result.spend;
           });
+        }
+
+        // Fetch Meta Account alerts for this broker specifically
+        if (profile.corretor_id && accessToken) {
+          setLoadingMeta(true);
+          try {
+            const response = await fetch('/api/integrations/meta/alerts', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({}),
+            });
+            if (response.ok) {
+              const payload = await response.json();
+              if (payload.accounts && payload.accounts.length > 0) {
+                setMetaAccount(payload.accounts[0]);
+              } else {
+                setMetaAccount(null);
+              }
+            }
+          } catch (err) {
+            console.error('Error fetching broker meta status:', err);
+          } finally {
+            setLoadingMeta(false);
+          }
         }
 
         setMonthlyPerformance(Array.from(monthMap.values()));
@@ -550,7 +655,7 @@ export default function DashboardPage() {
               className="flex items-center gap-3 bg-white/5 border border-white/5 hover:bg-white/10 transition px-5 py-3 rounded-2xl text-xs font-black text-white cursor-pointer select-none outline-none"
             >
               <CalendarDays size={16} className="text-blue-400 shrink-0" />
-              <span className="font-extrabold">{presetLabel} ({formatDateDisplay(dataInicio, dataFim)})</span>
+              <span className="font-extrabold">{presetLabel} {dataInicio && dataFim ? `(${formatDateDisplay(dataInicio, dataFim)})` : ''}</span>
               <ChevronDown size={14} className="text-slate-400 shrink-0" />
             </button>
 
@@ -567,6 +672,7 @@ export default function DashboardPage() {
                   <div className="flex flex-col gap-1 md:w-44 border-r border-white/5 pr-3 shrink-0">
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 pl-2">Atalhos rápidos</p>
                     {[
+                      { id: 'todo_periodo', label: 'Todo o período' },
                       { id: 'hoje', label: 'Hoje' },
                       { id: 'ontem', label: 'Ontem' },
                       { id: '7dias', label: 'Últimos 7 dias' },
@@ -661,6 +767,71 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Meta Ads Account Financial Status Bar */}
+      {metaAccount && (() => {
+        const metaStatus = getBrokerMetaStatus(metaAccount);
+        if (!metaStatus) return null;
+
+        const isCard = String(metaAccount.forma_pagamento || '').toLowerCase().includes('cartao') || 
+                       String(metaAccount.forma_pagamento || '').toLowerCase().includes('cartão') ||
+                       String(metaAccount.forma_pagamento || '').toLowerCase().includes('card') ||
+                       String(metaAccount.forma_pagamento || '').toLowerCase().includes('visa') ||
+                       String(metaAccount.forma_pagamento || '').toLowerCase().includes('mastercard');
+
+        return (
+          <div className={`mb-8 p-5 sm:p-6 rounded-[1.5rem] border backdrop-blur-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${
+            metaStatus.tone === 'red'
+              ? 'bg-red-500/5 border-red-500/20 text-red-200 shadow-[0_0_20px_rgba(239,68,68,0.05)]'
+              : metaStatus.tone === 'amber'
+                ? 'bg-amber-500/5 border-amber-500/20 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.05)]'
+                : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.02)]'
+          }`}>
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                metaStatus.tone === 'red'
+                  ? 'bg-red-500/10 text-red-400'
+                  : metaStatus.tone === 'amber'
+                    ? 'bg-amber-500/10 text-amber-400'
+                    : 'bg-emerald-500/10 text-emerald-400'
+              }`}>
+                {metaStatus.tone === 'red' ? (
+                  <ShieldAlert size={22} className="animate-pulse" />
+                ) : metaStatus.tone === 'amber' ? (
+                  <AlertTriangle size={22} />
+                ) : (
+                  <CheckCircle2 size={22} />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black uppercase tracking-widest leading-none px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
+                    Status Meta Ads
+                  </span>
+                  <span className={`text-[10px] font-black uppercase tracking-widest leading-none px-2 py-0.5 rounded-full ${
+                    metaStatus.tone === 'red'
+                      ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                      : metaStatus.tone === 'amber'
+                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  }`}>
+                    {metaStatus.title}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-bold text-slate-200">{metaStatus.detail}</p>
+              </div>
+            </div>
+            {!isCard && metaAccount.saldo !== null && (
+              <div className="text-left sm:text-right shrink-0 border-t sm:border-t-0 sm:border-l border-white/5 pt-3 sm:pt-0 sm:pl-6">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo Disponível</p>
+                <p className="text-xl font-black text-white mt-1">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(metaAccount.saldo)}
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* 🚀 STEP 1: KEY NUMBERS AT THE VERY TOP (Swapped General Performance StatCards here!) */}
       <div className="mb-10">

@@ -172,7 +172,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setViewingProfile(gestorProfile);
     clearViewingStorage();
     window.sessionStorage.setItem('orion:viewing_gestor_id', gestorId);
-    router.push('/trafego/leads');
+    router.push('/trafego');
   };
 
   const startViewingAsDesigner = async (designerId: string) => {

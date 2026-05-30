@@ -58,7 +58,9 @@ export default function DialogProvider({ children }: { children: React.ReactNode
   useEffect(() => {
     const originalAlert = window.alert;
     window.alert = (message?: any) => {
-      void value.alertDialog(String(message ?? ''));
+      const msgStr = String(message ?? '');
+      const isSuccess = /sucesso|copiado|criado|salvo|atualizado|excluído|excluido|adicionado/i.test(msgStr);
+      void value.alertDialog(msgStr, isSuccess ? { variant: 'success', title: 'Sucesso' } : undefined);
     };
     return () => {
       window.alert = originalAlert;
@@ -108,7 +110,9 @@ export default function DialogProvider({ children }: { children: React.ReactNode
                 className={`cursor-pointer rounded-2xl px-5 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 ${
                   dialog.variant === 'danger'
                     ? 'bg-red-600 shadow-red-600/20 hover:bg-red-700'
-                    : 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-700'
+                    : dialog.variant === 'success'
+                      ? 'bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-700'
+                      : 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-700'
                 }`}
               >
                 {dialog.confirmLabel || 'Confirmar'}

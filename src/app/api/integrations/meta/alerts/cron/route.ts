@@ -1,0 +1,261 @@
+import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { evolutionFetch, normalizePhone } from '@/lib/evolution';
+
+type CorretorMeta = {
+  id: string;
+  nome: string;
+  gestor_trafego_id: string | null;
+  meta_ad_account_id: string | null;
+  meta_ad_account_name: string | null;
+};
+
+function normalizeAccountId(accountId: string) {
+  return accountId.replace(/^act_/, '');
+}
+
+function getLeadCount(actions: any[]) {
+  const leadActions = new Set([
+    'lead',
+    'onsite_conversion.lead_grouped',
+    'offsite_conversion.fb_pixel_lead',
+    'onsite_conversion.messaging_conversation_started_7d',
+    'onsite_conversion.lead',
+  ]);
+
+  return (actions || []).reduce((total, action) => {
+    return leadActions.has(action.action_type) ? total + Number(action.value || 0) : total;
+  }, 0);
+}
+
+function parseMoneyFromMetaText(value?: string | null) {
+  const text = String(value || '');
+  const match = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})|\d+(?:\.\d{2})?)/);
+  if (!match?.[1]) return null;
+
+  const normalized = match[1].includes(',')
+    ? match[1].replace(/\./g, '').replace(',', '.')
+    : match[1];
+
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
+  const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
+  const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
+  insightsUrl.searchParams.set('fields', 'spend,ctr,actions');
+  insightsUrl.searchParams.set('level', 'account');
+  insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
+  insightsUrl.searchParams.set('access_token', accessToken);
+
+  const accountUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}`);
+  accountUrl.searchParams.set('fields', 'balance,currency,amount_spent,funding_source_details');
+  accountUrl.searchParams.set('access_token', accessToken);
+
+  const [insightsResponse, accountResponse] = await Promise.all([
+    fetch(insightsUrl.toString(), { cache: 'no-store' }),
+    fetch(accountUrl.toString(), { cache: 'no-store' }),
+  ]);
+
+  const [insightsPayload, accountPayload] = await Promise.all([
+    insightsResponse.json(),
+    accountResponse.json(),
+  ]);
+
+  if (!insightsResponse.ok || insightsPayload.error) {
+    throw new Error(insightsPayload.error?.message || 'Erro ao consultar metricas Meta.');
+  }
+
+  const row = insightsPayload.data?.[0] || {};
+  const spend = Number(row.spend || 0);
+  const leads = getLeadCount(row.actions || []);
+  const cpl = leads > 0 ? spend / leads : null;
+  const ctr = Number(row.ctr || 0);
+  const rawBalance = accountPayload?.balance;
+  const balance = rawBalance === undefined || rawBalance === null ? null : Number(rawBalance) / 100;
+  const fundingDetails = accountPayload?.funding_source_details;
+  const fundingText = JSON.stringify(fundingDetails || {}).toLowerCase();
+  const isCard = fundingText.includes('card') || fundingText.includes('cart') || fundingText.includes('visa') || fundingText.includes('mastercard') || fundingText.includes('amex');
+  const displayBalance = parseMoneyFromMetaText(fundingDetails?.display_string);
+  const effectiveBalance = displayBalance ?? balance;
+  const formaPagamento = isCard
+    ? 'Cartao'
+    : fundingDetails?.display_string || fundingDetails?.type || (balance !== null ? 'Saldo pre-pago' : 'Nao informado');
+
+  return {
+    corretor_id: corretor.id,
+    corretor_nome: corretor.nome,
+    gestor_trafego_id: corretor.gestor_trafego_id,
+    meta_ad_account_id: corretor.meta_ad_account_id,
+    meta_ad_account_name: corretor.meta_ad_account_name,
+    spend,
+    leads,
+    cpl,
+    ctr,
+    saldo: effectiveBalance,
+    currency: accountPayload?.currency || 'BRL',
+    forma_pagamento: formaPagamento,
+    alerta_cpl_alto: cpl !== null && cpl > 25,
+    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < 100,
+    error: undefined as string | undefined,
+  };
+}
+
+export async function POST(request: Request) {
+  try {
+    // 1. Validar Token de Segurança da Cron
+    const authHeader = request.headers.get('Authorization');
+    const cronSecret = process.env.CRON_SECRET || process.env.EVOLUTION_API_KEY;
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+    }
+
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    if (!accessToken) {
+      return NextResponse.json({ error: 'META_ACCESS_TOKEN não configurado no servidor.' }, { status: 500 });
+    }
+
+    // 2. Coletar todos os corretores que possuem conta vinculada
+    const { data: corretores, error: dbError } = await supabaseAdmin
+      .from('corretores')
+      .select('id, nome, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name')
+      .not('meta_ad_account_id', 'is', null)
+      .not('gestor_trafego_id', 'is', null);
+
+    if (dbError) throw dbError;
+
+    if (!corretores || corretores.length === 0) {
+      return NextResponse.json({ success: true, message: 'Nenhuma conta vinculada encontrada.' });
+    }
+
+    // 3. Buscar métricas do Meta Ads para as últimas 24 horas (dia de hoje)
+    const today = new Date().toISOString().slice(0, 10);
+    const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
+
+    const settled = await Promise.allSettled(
+      corretores.map((c) => fetchAccountMetrics(c, today, today, accessToken, graphVersion))
+    );
+
+    const accountsWithMetrics = settled.map((result, index) => {
+      if (result.status === 'fulfilled') return result.value;
+      const c = corretores[index];
+      return {
+        corretor_id: c.id,
+        corretor_nome: c.nome,
+        gestor_trafego_id: c.gestor_trafego_id,
+        meta_ad_account_id: c.meta_ad_account_id,
+        meta_ad_account_name: c.meta_ad_account_name,
+        spend: 0,
+        leads: 0,
+        cpl: null,
+        ctr: 0,
+        saldo: null,
+        currency: 'BRL',
+        forma_pagamento: 'Não informado',
+        alerta_cpl_alto: false,
+        alerta_saldo_baixo: false,
+        error: result.reason?.message || 'Erro ao consultar a conta.',
+      };
+    });
+
+    // 4. Agrupar os alertas críticos por Gestor de Tráfego
+    const alertsByGestor: Record<string, string[]> = {};
+
+    accountsWithMetrics.forEach((acc) => {
+      if (!acc.gestor_trafego_id) return;
+
+      const isCard = String(acc.forma_pagamento || '').toLowerCase().includes('cartao') || 
+                     String(acc.forma_pagamento || '').toLowerCase().includes('cartão') ||
+                     String(acc.forma_pagamento || '').toLowerCase().includes('card') ||
+                     String(acc.forma_pagamento || '').toLowerCase().includes('visa') ||
+                     String(acc.forma_pagamento || '').toLowerCase().includes('mastercard');
+      const hasPaymentError = acc.error && (
+        /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(acc.error))
+      );
+
+      let alertMessage = '';
+
+      if (acc.cpl !== null && acc.cpl > 25) {
+        alertMessage = `🔴 CPL ALTO: R$ ${acc.cpl.toFixed(2).replace('.', ',')} (Meta de R$ 25,00)`;
+      } else if (isCard && (hasPaymentError || (acc.saldo !== null && acc.saldo <= 0))) {
+        alertMessage = `🔴 ERRO NO PAGAMENTO: Cobrança falhou no cartão de crédito.`;
+      } else if (!isCard && acc.saldo !== null && acc.saldo <= 0) {
+        alertMessage = `🔴 SEM SALDO: Conta zerada, campanhas pausadas.`;
+      } else if (!isCard && acc.saldo !== null && acc.saldo < 100) {
+        alertMessage = `🟡 SALDO BAIXO: Restam R$ ${acc.saldo.toFixed(2).replace('.', ',')} (Abaixo de R$ 100,00)`;
+      } else if (acc.error && !isCard) {
+        alertMessage = `🟡 ERRO DE INTEGRAÇÃO: ${acc.error}`;
+      }
+
+      if (alertMessage) {
+        const formattedAlert = `👉 *${acc.corretor_nome}* (${acc.meta_ad_account_name || acc.meta_ad_account_id})\n   ${alertMessage}`;
+        if (!alertsByGestor[acc.gestor_trafego_id]) {
+          alertsByGestor[acc.gestor_trafego_id] = [];
+        }
+        alertsByGestor[acc.gestor_trafego_id].push(formattedAlert);
+      }
+    });
+
+    // 5. Enviar as mensagens para cada gestor via WhatsApp
+    const sendResults: any[] = [];
+    const gestorIds = Object.keys(alertsByGestor);
+
+    if (gestorIds.length > 0) {
+      // Carregar os perfis dos gestores para obter os telefones
+      const { data: gestores, error: gError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, nome, telefone')
+        .in('id', gestorIds);
+
+      if (gError) throw gError;
+
+      const evolutionInstance = process.env.EVOLUTION_SYSTEM_INSTANCE || 'orion_system';
+      const evolutionApiKey = process.env.EVOLUTION_API_KEY;
+
+      for (const gestor of (gestores || [])) {
+        const rawPhone = gestor.telefone;
+        const normalizedPhone = normalizePhone(rawPhone);
+        
+        if (!normalizedPhone) {
+          sendResults.push({ gestor_id: gestor.id, status: 'failed', reason: 'Gestor sem telefone cadastrado.' });
+          continue;
+        }
+
+        const alertsList = alertsByGestor[gestor.id];
+        const messageText = 
+`🔔 *ORION TRACK - MONITORAMENTO META ADS* 🔔
+
+Olá, *${gestor.nome.split(' ')[0]}*! Identificamos contas vinculadas sob sua gestão que necessitam de atenção imediata:
+
+${alertsList.join('\n\n')}
+
+_Por favor, acesse o painel Orion Track em https://oriontrack.com.br/trafego/avisos-meta para mais detalhes._`;
+
+        try {
+          await evolutionFetch(`/message/sendText/${evolutionInstance}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              number: normalizedPhone,
+              text: messageText,
+            }),
+          }, evolutionApiKey);
+
+          sendResults.push({ gestor_id: gestor.id, status: 'success', phone: normalizedPhone });
+        } catch (err: any) {
+          console.error(`Erro ao disparar WhatsApp de alerta para gestor ${gestor.id}:`, err);
+          sendResults.push({ gestor_id: gestor.id, status: 'failed', reason: err.message || 'Erro Evolution API' });
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      processed_accounts: accountsWithMetrics.length,
+      alerts_sent: sendResults,
+    });
+  } catch (error: any) {
+    console.error('[CRON META ALERTS ERROR]:', error);
+    return NextResponse.json({ error: error.message || 'Erro ao processar cron job de alertas Meta.' }, { status: 500 });
+  }
+}

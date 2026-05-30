@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { supabase } from '@/lib/supabase/client';
 import { AlertTriangle, Clock3, Loader2, RefreshCw, Search, TrendingUp, WalletCards } from 'lucide-react';
+import MetaDatePicker from '@/components/ui/MetaDatePicker';
 
 type MetaAlertRow = {
   corretor_id: string;
@@ -48,8 +49,9 @@ function dateDaysAgo(days: number) {
 export default function TrafficMetaAlertsPage() {
   const [rows, setRows] = useState<MetaAlertRow[]>([]);
   const [search, setSearch] = useState('');
-  const [dateStart, setDateStart] = useState(dateDaysAgo(7));
-  const [dateEnd, setDateEnd] = useState(new Date().toISOString().slice(0, 10));
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
+  const [presetLabel, setPresetLabel] = useState('Todo o período');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -73,8 +75,8 @@ export default function TrafficMetaAlertsPage() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        data_inicio: dateStart,
-        data_fim: dateEnd,
+        data_inicio: dateStart || '2024-01-01',
+        data_fim: dateEnd || new Date().toISOString().slice(0, 10),
         nome: search,
       }),
     });
@@ -93,7 +95,7 @@ export default function TrafficMetaAlertsPage() {
 
   useEffect(() => {
     void fetchAlerts();
-  }, []);
+  }, [dateStart, dateEnd]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -143,8 +145,8 @@ export default function TrafficMetaAlertsPage() {
       </div>
 
       <div className="mb-6 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-[1fr_170px_170px_auto] lg:items-end">
-          <div className="space-y-2">
+        <div className="flex flex-col md:flex-row gap-4 items-end justify-between">
+          <div className="flex-1 space-y-2 w-full">
             <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Nome</label>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -156,31 +158,19 @@ export default function TrafficMetaAlertsPage() {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Inicio</label>
-            <input
-              type="date"
-              value={dateStart}
-              onChange={(event) => setDateStart(event.target.value)}
-              className="w-full rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+          <div className="shrink-0 space-y-2 w-full md:w-auto">
+            <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Período de Análise</label>
+            <MetaDatePicker
+              startDate={dateStart}
+              endDate={dateEnd}
+              preset={presetLabel}
+              onChange={(start, end, label) => {
+                setDateStart(start);
+                setDateEnd(end);
+                setPresetLabel(label);
+              }}
             />
           </div>
-          <div className="space-y-2">
-            <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Fim</label>
-            <input
-              type="date"
-              value={dateEnd}
-              onChange={(event) => setDateEnd(event.target.value)}
-              className="w-full rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-          <button
-            onClick={fetchAlerts}
-            disabled={loading}
-            className="rounded-2xl border border-gray-100 bg-slate-900 px-5 py-4 text-sm font-black text-white transition-all hover:bg-black disabled:opacity-60"
-          >
-            Filtrar
-          </button>
         </div>
       </div>
 
@@ -222,44 +212,77 @@ export default function TrafficMetaAlertsPage() {
                 <tr>
                   <td colSpan={8} className="py-16 text-center text-sm font-bold text-slate-400">Nenhuma conta vinculada encontrada para este filtro.</td>
                 </tr>
-              ) : rows.map((row) => (
-                <tr key={`${row.corretor_id}-${row.meta_ad_account_id}`} className={row.alerta_cpl_alto ? 'bg-red-50/40' : row.alerta_saldo_baixo ? 'bg-amber-50/40' : 'hover:bg-slate-50/60'}>
-                  <td className="px-6 py-5">
-                    {row.error ? (
-                      <Badge tone="amber" text="Erro Meta" />
-                    ) : row.alerta_cpl_alto ? (
-                      <Badge tone="red" text="CPL alto" />
-                    ) : row.alerta_saldo_baixo ? (
-                      <Badge tone="amber" text="Saldo baixo" />
-                    ) : (
-                      <Badge tone="emerald" text="Normal" />
-                    )}
-                  </td>
-                  <td className="px-6 py-5">
-                    <p className="font-black text-gray-900">{row.corretor_nome}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-500">{row.meta_ad_account_name || `act_${row.meta_ad_account_id}`}</p>
-                    {row.error && <p className="mt-2 max-w-md text-xs font-bold text-amber-600">{row.error}</p>}
-                  </td>
-                  <td className="px-6 py-5 text-sm font-black text-slate-700">{formatPercent(row.ctr)}</td>
-                  <td className="px-6 py-5 text-sm font-black text-slate-700">{row.leads}</td>
-                  <td className="px-6 py-5">
-                    <span className={`rounded-full px-3 py-1 text-xs font-black ${row.alerta_cpl_alto ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
-                      {row.cpl === null ? 'N/A' : formatCurrency(row.cpl, row.currency)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-5 text-sm font-black text-slate-700">{formatCurrency(row.spend, row.currency)}</td>
-                  <td className="px-6 py-5">
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                      {cleanPaymentLabel(row.forma_pagamento)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-5">
-                    <span className={`rounded-full px-3 py-1 text-xs font-black ${row.alerta_saldo_baixo ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
-                      {formatCurrency(row.saldo, row.currency)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              ) : rows.map((row) => {
+                const isCard = String(row.forma_pagamento || '').toLowerCase().includes('cartao') || 
+                               String(row.forma_pagamento || '').toLowerCase().includes('cartão') ||
+                               String(row.forma_pagamento || '').toLowerCase().includes('card') ||
+                               String(row.forma_pagamento || '').toLowerCase().includes('visa') ||
+                               String(row.forma_pagamento || '').toLowerCase().includes('mastercard');
+                const hasPaymentError = row.error && (
+                  /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(row.error))
+                );
+
+                let badgeText = 'Com Saldo';
+                let badgeTone: 'red' | 'amber' | 'emerald' = 'emerald';
+                let rowBgClass = 'hover:bg-slate-50/60';
+
+                if (row.cpl !== null && row.cpl > 25) {
+                  badgeText = 'CPL Alto';
+                  badgeTone = 'red';
+                  rowBgClass = 'bg-red-50/40';
+                } else if (isCard && (hasPaymentError || (row.saldo !== null && row.saldo <= 0))) {
+                  badgeText = 'Erro Pagamento';
+                  badgeTone = 'red';
+                  rowBgClass = 'bg-red-50/40';
+                } else if (!isCard && row.saldo !== null && row.saldo <= 0) {
+                  badgeText = 'Sem Saldo';
+                  badgeTone = 'red';
+                  rowBgClass = 'bg-red-50/40';
+                } else if (!isCard && row.saldo !== null && row.saldo < 100) {
+                  badgeText = 'Saldo Baixo';
+                  badgeTone = 'amber';
+                  rowBgClass = 'bg-amber-50/40';
+                } else if (row.error) {
+                  badgeText = 'Erro Meta';
+                  badgeTone = 'amber';
+                  rowBgClass = 'bg-amber-50/40';
+                }
+
+                return (
+                  <tr key={`${row.corretor_id}-${row.meta_ad_account_id}`} className={rowBgClass}>
+                    <td className="px-6 py-5">
+                      <Badge tone={badgeTone} text={badgeText} />
+                    </td>
+                    <td className="px-6 py-5">
+                      <p className="font-black text-gray-900">{row.corretor_nome}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">{row.meta_ad_account_name || `act_${row.meta_ad_account_id}`}</p>
+                      {row.error && <p className="mt-2 max-w-md text-xs font-bold text-amber-600">{row.error}</p>}
+                    </td>
+                    <td className="px-6 py-5 text-sm font-black text-slate-700">{formatPercent(row.ctr)}</td>
+                    <td className="px-6 py-5 text-sm font-black text-slate-700">{row.leads}</td>
+                    <td className="px-6 py-5">
+                      <span className={`rounded-full px-3 py-1 text-xs font-black ${row.cpl !== null && row.cpl > 25 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
+                        {row.cpl === null ? 'N/A' : formatCurrency(row.cpl, row.currency)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-5 text-sm font-black text-slate-700">{formatCurrency(row.spend, row.currency)}</td>
+                    <td className="px-6 py-5">
+                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                        {cleanPaymentLabel(row.forma_pagamento)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-5">
+                      {isCard ? (
+                        <span className="text-xs font-bold text-slate-400 italic">Oculto (Cartão)</span>
+                      ) : (
+                        <span className={`rounded-full px-3 py-1 text-xs font-black ${row.saldo !== null && row.saldo < 100 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                          {formatCurrency(row.saldo, row.currency)}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
