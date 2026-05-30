@@ -1510,5 +1510,25 @@ body.theme-claro {
   border-radius: 12px !important;
 }
 
+/* Maintain crisp white/colored typography inside dark header gradients & text banners */
+.theme-claro :is([class*="bg-gradient-to-r"][class*="via-blue-"], [class*="bg-gradient-to-r"][class*="from-slate-"], [class*="bg-gradient-to-r"][class*="to-slate-"]) :is(h1, h2, h3, h4, h5, h6, p, span, div) {
+  color: #ffffff !important;
+}
+
+.theme-claro :is([class*="bg-gradient-to-r"][class*="via-blue-"], [class*="bg-gradient-to-r"][class*="from-slate-"], [class*="bg-gradient-to-r"][class*="to-slate-"]) .text-cyan-300 {
+  color: #22d3ee !important; /* Saturated cyan-400 */
+}
+
+.theme-claro :is([class*="bg-gradient-to-r"][class*="via-blue-"], [class*="bg-gradient-to-r"][class*="from-slate-"], [class*="bg-gradient-to-r"][class*="to-slate-"]) .text-blue-100 {
+  color: #e0f2fe !important; /* Saturated sky-100 */
+}
+
+/* Do NOT override gradient texts that rely on transparency and background clipping */
+.theme-claro :is(.bg-clip-text, [class*="bg-clip-text"], .text-transparent, [class*="text-transparent"]) {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+
 
 
