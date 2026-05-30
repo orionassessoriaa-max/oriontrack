@@ -22,6 +22,7 @@ import {
   Info,
   AlertTriangle,
   Loader2,
+  ChevronDown,
   type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
@@ -170,6 +171,61 @@ export default function DashboardPage() {
     const local = new Date(last.getTime() - tzOffset);
     return local.toISOString().slice(0, 10);
   });
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [presetLabel, setPresetLabel] = useState('Este mês');
+
+  const formatDateDisplay = (start: string, end: string) => {
+    if (!start || !end) return '';
+    const [sYear, sMonth, sDay] = start.split('-');
+    const [eYear, eMonth, eDay] = end.split('-');
+    return `${sDay}/${sMonth}/${sYear} a ${eDay}/${eMonth}/${eYear}`;
+  };
+
+  const applyPreset = (preset: string) => {
+    const d = new Date();
+    let start = new Date();
+    let end = new Date();
+    const tzOffset = d.getTimezoneOffset() * 60000;
+
+    switch (preset) {
+      case 'hoje':
+        setPresetLabel('Hoje');
+        break;
+      case 'ontem':
+        start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+        end = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+        setPresetLabel('Ontem');
+        break;
+      case '7dias':
+        start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 6);
+        setPresetLabel('Últimos 7 dias');
+        break;
+      case '30dias':
+        start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 29);
+        setPresetLabel('Últimos 30 dias');
+        break;
+      case 'este_mes':
+        start = new Date(d.getFullYear(), d.getMonth(), 1);
+        end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        setPresetLabel('Este mês');
+        break;
+      case 'mes_passado':
+        start = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+        end = new Date(d.getFullYear(), d.getMonth(), 0);
+        setPresetLabel('Mês passado');
+        break;
+      default:
+        break;
+    }
+
+    const startStr = new Date(start.getTime() - tzOffset).toISOString().slice(0, 10);
+    const endStr = new Date(end.getTime() - tzOffset).toISOString().slice(0, 10);
+    
+    setDataInicio(startStr);
+    setDataFim(endStr);
+    setShowDatePicker(false);
+  };
 
   useEffect(() => {
     async function fetchCorretorData() {
@@ -485,23 +541,116 @@ export default function DashboardPage() {
           </h1>
           <p className="text-base font-bold text-blue-600 sm:text-lg">Painel de crescimento comercial e aceleração de vendas</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
-          {/* Integrated Date Picker Filter */}
-          <div className="flex items-center gap-2.5 bg-white/5 border border-white/5 px-4 py-3 rounded-2xl">
-            <CalendarDays size={16} className="text-blue-400 shrink-0" />
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
-              className="bg-transparent border-none p-0 text-xs font-black text-white focus:ring-0 w-24 cursor-pointer outline-none [color-scheme:dark]"
-            />
-            <span className="text-[10px] font-black uppercase text-blue-400/60 shrink-0">a</span>
-            <input
-              type="date"
-              value={dataFim}
-              onChange={(e) => setDataFim(e.target.value)}
-              className="bg-transparent border-none p-0 text-xs font-black text-white focus:ring-0 w-24 cursor-pointer outline-none [color-scheme:dark]"
-            />
+        <div className="relative flex flex-wrap items-center gap-3 shrink-0">
+          
+          {/* Custom Date Range Popover Button (Meta style) */}
+          <div className="relative">
+            <button
+              onClick={() => setShowDatePicker((prev) => !prev)}
+              className="flex items-center gap-3 bg-white/5 border border-white/5 hover:bg-white/10 transition px-5 py-3 rounded-2xl text-xs font-black text-white cursor-pointer select-none outline-none"
+            >
+              <CalendarDays size={16} className="text-blue-400 shrink-0" />
+              <span className="font-extrabold">{presetLabel} ({formatDateDisplay(dataInicio, dataFim)})</span>
+              <ChevronDown size={14} className="text-slate-400 shrink-0" />
+            </button>
+
+            {/* Popover Dropdown Panel */}
+            {showDatePicker && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40 cursor-default" 
+                  onClick={() => setShowDatePicker(false)}
+                />
+                <div className="absolute right-0 top-14 z-50 flex flex-col md:flex-row gap-4 p-5 rounded-3xl bg-[#0b1324] border border-white/5 shadow-2xl shadow-slate-950/80 w-[95vw] sm:w-[480px] animate-in fade-in slide-in-from-top-2 duration-200">
+                  
+                  {/* Presets List */}
+                  <div className="flex flex-col gap-1 md:w-44 border-r border-white/5 pr-3 shrink-0">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 pl-2">Atalhos rápidos</p>
+                    {[
+                      { id: 'hoje', label: 'Hoje' },
+                      { id: 'ontem', label: 'Ontem' },
+                      { id: '7dias', label: 'Últimos 7 dias' },
+                      { id: '30dias', label: 'Últimos 30 dias' },
+                      { id: 'este_mes', label: 'Este mês' },
+                      { id: 'mes_passado', label: 'Mês passado' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => applyPreset(preset.id)}
+                        className="text-left w-full text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 px-3 py-2.5 rounded-xl transition cursor-pointer"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom Input Range */}
+                  <div className="flex-1 flex flex-col justify-between gap-4">
+                    <div>
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Período Personalizado</p>
+                      <div className="grid gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-400">Data de Início</span>
+                          <div className="relative bg-white/5 border border-white/5 px-4 py-3 rounded-2xl flex items-center justify-between">
+                            <span className="text-xs font-bold text-white">
+                              {dataInicio ? formatDateDisplay(dataInicio, dataInicio).split(' a ')[0] : 'Selecione...'}
+                            </span>
+                            <CalendarDays size={14} className="text-slate-500" />
+                            <input
+                              type="date"
+                              value={dataInicio}
+                              onChange={(e) => {
+                                setDataInicio(e.target.value);
+                                setPresetLabel('Personalizado');
+                              }}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [color-scheme:dark]"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-400">Data de Fim</span>
+                          <div className="relative bg-white/5 border border-white/5 px-4 py-3 rounded-2xl flex items-center justify-between">
+                            <span className="text-xs font-bold text-white">
+                              {dataFim ? formatDateDisplay(dataFim, dataFim).split(' a ')[0] : 'Selecione...'}
+                            </span>
+                            <CalendarDays size={14} className="text-slate-500" />
+                            <input
+                              type="date"
+                              value={dataFim}
+                              onChange={(e) => {
+                                setDataFim(e.target.value);
+                                setPresetLabel('Personalizado');
+                              }}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [color-scheme:dark]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 border-t border-white/5 pt-3 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowDatePicker(false)}
+                        className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowDatePicker(false)}
+                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-lg shadow-blue-600/10 cursor-pointer"
+                      >
+                        Aplicar
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </>
+            )}
           </div>
 
           <Link href="/leads" className="bg-blue-600 text-white px-5 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-500/20 text-xs sm:text-sm whitespace-nowrap">
