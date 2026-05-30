@@ -229,7 +229,7 @@ export default function BrokerLeadsPage() {
         .range(from, to);
 
       if (profile.tipo_usuario === 'corretor_membro') {
-        leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
+        leadsQuery = leadsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
       }
 
       const { data, count, error: supabaseError } = await leadsQuery;

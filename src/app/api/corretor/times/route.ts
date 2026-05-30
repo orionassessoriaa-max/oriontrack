@@ -117,7 +117,27 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
     }
 
-    const team = await ensureTeam(corretorId);
+    const { data: team, error: teamError } = await supabaseAdmin
+      .from('corretor_times')
+      .select('*')
+      .eq('corretor_id', corretorId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (teamError) throw teamError;
+
+    if (!team) {
+      return NextResponse.json({
+        team: null,
+        membros: [],
+        leads: [],
+        settings: {
+          owner_in_distribution: false,
+          owner_profile: null,
+        },
+      });
+    }
 
     const { data: membros, error: membersError } = await supabaseAdmin
       .from('corretor_time_membros')
@@ -195,6 +215,22 @@ export async function POST(request: Request) {
 
     if (!corretor) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
+    }
+
+    if (action === 'create_team') {
+      const nome = String(body.nome || '').trim();
+      if (!nome) return NextResponse.json({ error: 'Informe o nome do time.' }, { status: 400 });
+
+      const team = await ensureTeam(corretorId, nome);
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.create',
+        entity_type: 'corretor_times',
+        entity_id: team.id,
+        metadata: { corretor_id: corretorId, nome },
+      });
+
+      return NextResponse.json({ success: true, team });
     }
 
     const team = await ensureTeam(corretorId, String(body.nome_time || 'Time comercial'));

@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Save, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Save, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
@@ -108,6 +108,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   });
   const [error, setError] = useState<string | null>(null);
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
+  const [nomeTimeInput, setNomeTimeInput] = useState('');
   const canAssignLeads = profile?.tipo_usuario === 'corretor';
 
   const memberStats = useMemo<MemberStats[]>(() => {
@@ -217,6 +218,21 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     return payload;
   }
 
+  async function createTeam(name: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = await postTeam({ action: 'create_team', nome: name });
+      setTeam(payload.team);
+      setNomeTime(payload.team.nome);
+      await fetchTeam();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveTeamName() {
     setSaving(true);
     setError(null);
@@ -324,8 +340,222 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     alert('Acesso copiado.');
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="animate-spin text-cyan-400" size={40} />
+      </div>
+    );
+  }
+
+  if (!team) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {error && (
+          <div className="rounded-2xl border border-red-500/10 bg-red-500/5 p-4 text-sm font-black text-red-400">
+            {error}
+          </div>
+        )}
+
+        <div className="rounded-[2.5rem] border border-white/5 bg-[#090e1a]/85 backdrop-blur-md p-8 md:p-12 shadow-2xl text-center space-y-8 relative overflow-hidden">
+          {/* Decorative Glowing Orbs */}
+          <div className="absolute -top-12 -left-12 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-12 -right-12 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Trophy Header Icon */}
+          <div className="flex justify-center">
+            <div className="relative">
+              <div className="absolute inset-0 bg-amber-500/20 rounded-full blur-xl animate-pulse" />
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 via-orange-500 to-yellow-400 text-white shadow-2xl relative border-2 border-white/10 animate-bounce">
+                <Trophy size={44} />
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-2xl mx-auto space-y-4">
+            <p className="text-[11px] font-black uppercase tracking-widest text-cyan-400">Time de Vendas Orion</p>
+            <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">Aqui seu time comercial entra em campo! 🚀</h2>
+            <p className="text-sm font-medium text-slate-400 leading-relaxed">
+              Com o <strong>Meu Time</strong>, você organiza sua força de vendas de forma simples e de alta performance. 
+              Cadastre integrantes, dê acessos exclusivos para cada vendedor e deixe o OrionTrack distribuir os leads 
+              automaticamente em rodízio ou gerencie de forma compartilhada!
+            </p>
+          </div>
+
+          {/* Feature Showcase Grid */}
+          <div className="grid gap-4 sm:grid-cols-3 max-w-3xl mx-auto pt-4 text-left">
+            {[
+              { icon: Sparkles, title: "Roleta Inteligente", text: "Distribua leads instantaneamente um a um para sua equipe ativa." },
+              { icon: Users, title: "Acessos Exclusivos", text: "Seus corretores têm login exclusivo para gerenciar o funil do CRM." },
+              { icon: Crown, title: "Ranking Gamificado", text: "Estimule vendas e comissões com um ranking atualizado em tempo real." },
+            ].map((f, i) => {
+              const Icon = f.icon;
+              return (
+                <div key={i} className="bg-white/5 border border-white/5 p-5 rounded-2xl hover:border-cyan-500/20 transition-all duration-300">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mb-3">
+                    <Icon size={20} />
+                  </div>
+                  <h4 className="font-black text-white text-sm">{f.title}</h4>
+                  <p className="text-xs text-slate-400 font-medium mt-1 leading-relaxed">{f.text}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Form Step */}
+          <div className="max-w-md mx-auto pt-6 border-t border-white/5">
+            <div className="bg-white/5 p-6 rounded-3xl border border-white/10 space-y-5">
+              <div>
+                <h3 className="font-black text-white text-lg">Você não possui um time. Deseja criar?</h3>
+                <p className="text-xs text-slate-400 font-bold mt-1">Dê um nome forte e marcante para a sua equipe!</p>
+              </div>
+
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={nomeTimeInput}
+                  onChange={(e) => setNomeTimeInput(e.target.value)}
+                  placeholder="Ex: Elite Orion, Dream Team..."
+                  className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-black text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all text-center"
+                />
+                
+                <button
+                  type="button"
+                  onClick={() => createTeam(nomeTimeInput)}
+                  disabled={saving || !nomeTimeInput.trim()}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 py-4 text-sm font-black text-white transition-all hover:scale-[1.02] shadow-lg shadow-blue-500/20 disabled:opacity-40 cursor-pointer"
+                >
+                  {saving ? <Loader2 className="animate-spin" size={18} /> : <ArrowRight size={18} />}
+                  Criar meu Time Comercial
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (membros.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {error && (
+          <div className="rounded-2xl border border-red-500/10 bg-red-500/5 p-4 text-sm font-black text-red-400">
+            {error}
+          </div>
+        )}
+
+        {credentials && (
+          <div className="rounded-3xl border border-emerald-500/15 bg-emerald-500/5 p-5 shadow-lg shadow-emerald-500/5 animate-in fade-in duration-300">
+            <div className="mb-4 flex items-center gap-3 text-emerald-400">
+              <CheckCircle2 size={22} className="animate-pulse" />
+              <div>
+                <p className="font-black text-white">Membro criado com senha provisória</p>
+                <p className="text-xs font-bold text-slate-400">Envie esses dados para o primeiro acesso.</p>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+              <div className="rounded-2xl bg-white/5 border border-white/5 p-3.5 text-sm font-bold text-slate-300">{credentials.email}</div>
+              <div className="rounded-2xl bg-white/5 border border-white/5 p-3.5 text-sm font-black text-cyan-400">{credentials.senha_provisoria}</div>
+              <button onClick={copyAccess} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition-all hover:bg-emerald-700 shadow-md">
+                <Copy size={16} /> Copiar Acesso
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-[2.5rem] border border-white/5 bg-[#090e1a]/85 backdrop-blur-md p-8 md:p-12 shadow-2xl space-y-8 relative overflow-hidden">
+          {/* Decorative Glowing Orbs */}
+          <div className="absolute -top-12 -right-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Stepper Header */}
+          <div className="flex justify-between items-center pb-6 border-b border-white/5">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Onboarding: Etapa 2 de 2</span>
+              <h2 className="text-2xl font-black text-white mt-1">🚀 Seu time "{team.nome}" está pronto!</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-black">✓</div>
+              <div className="h-px w-6 bg-emerald-500/20" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/20 border border-blue-500/30 text-cyan-400 text-xs font-black animate-pulse">2</div>
+            </div>
+          </div>
+
+          <div className="grid gap-8 md:grid-cols-2">
+            {/* Left Column: Context copy */}
+            <div className="space-y-6 justify-center flex flex-col">
+              <div className="space-y-4">
+                <h3 className="text-xl font-black text-white">Adicione o primeiro integrante do time</h3>
+                <p className="text-sm font-medium text-slate-400 leading-relaxed">
+                  Para liberar seu dashboard comercial, você precisa cadastrar pelo menos um vendedor (integrante) na equipe.
+                </p>
+                <p className="text-sm font-medium text-slate-400 leading-relaxed">
+                  Após o cadastro, o OrionTrack criará uma conta exclusiva e uma senha provisória de acesso para ele gerenciar o CRM e receber leads.
+                </p>
+              </div>
+
+              {/* Progress Box */}
+              <div className="bg-white/5 border border-white/5 p-5 rounded-2xl space-y-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black">✓</div>
+                  <span className="text-sm font-bold text-slate-300">Time comercial batizado: <strong className="text-emerald-400">{team.nome}</strong></span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/5 border border-dashed border-white/10 text-slate-500 text-xs font-black">2</div>
+                  <span className="text-sm font-bold text-slate-400">Adicionar integrante e ativar painel</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Creation Form */}
+            <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
+              <form onSubmit={createMember} className="space-y-4">
+                <div className="mb-4">
+                  <h4 className="font-black text-white text-base">Novo Integrante</h4>
+                  <p className="text-xs text-slate-400 font-bold mt-1">Preencha os dados do seu primeiro vendedor.</p>
+                </div>
+                
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nome do Integrante</span>
+                  <input
+                    required
+                    value={nome}
+                    onChange={(event) => setNome(event.target.value)}
+                    placeholder="Nome completo do vendedor"
+                    className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
+                  />
+                </label>
+                
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Email Comercial/Real</span>
+                  <input
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="exemplo@vendedor.com"
+                    className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
+                  />
+                </label>
+
+                <button
+                  disabled={saving || !nome.trim() || !email.trim()}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-500 py-4 text-sm font-black text-white transition-all hover:scale-[1.02] shadow-lg shadow-emerald-500/20 disabled:opacity-40 cursor-pointer"
+                >
+                  {saving ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
+                  Criar Acesso e Ativar Painel
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {error && (
         <div className="rounded-2xl border border-red-500/10 bg-red-500/5 p-4 text-sm font-black text-red-400">
           {error}
@@ -350,6 +580,87 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           </div>
         </div>
       )}
+
+      {/* Premium Team Header Row */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 p-6 rounded-[2.5rem] border border-white/5 bg-gradient-to-r from-[#090e1a] via-[#0b1426] to-[#090e1a] shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="flex items-center gap-4 relative">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-cyan-400 to-indigo-600 text-white shadow-xl shadow-blue-500/25 border border-white/10 relative group">
+            <Crown size={28} className="animate-pulse" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Painel do Time Comercial</p>
+            <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">{team.nome}</h1>
+            <p className="text-xs font-bold text-slate-400 mt-1">Lidere sua força de vendas, gerencie a roleta de distribuição e analise a performance comercial.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={fetchTeam}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-white/5 bg-white/5 px-5 py-3.5 text-xs font-black text-slate-300 hover:text-white transition-all hover:bg-white/10 cursor-pointer animate-in fade-in"
+          >
+            <RefreshCw size={15} /> Recarregar dados
+          </button>
+        </div>
+      </div>
+
+      {/* Explicativo das Regras & Funcionamento do Painel */}
+      <div className="rounded-[2rem] border border-white/5 bg-[#090e1a]/90 backdrop-blur-md p-6 shadow-2xl relative overflow-hidden">
+        <div className="absolute -top-12 -right-12 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl" />
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <BookOpen size={22} />
+          </div>
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-base font-black text-white">Manual Comercial de Distribuição & Roleta</h3>
+              <p className="text-xs font-bold text-slate-400 mt-1">Entenda as regras de negócios de como os leads serão atendidos no seu time:</p>
+            </div>
+            
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 pt-2">
+              <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
+                <div className="flex items-center gap-2 mb-2 text-cyan-400">
+                  <Send size={15} />
+                  <h4 className="text-xs font-black">Roleta Ativa (Rodízio)</h4>
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                  Os novos leads que chegarem via webhook ou campanhas são divididos de forma igualitária e sequencial entre todos os corretores ativos do time.
+                </p>
+              </div>
+
+              <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
+                <div className="flex items-center gap-2 mb-2 text-amber-400">
+                  <Users size={15} />
+                  <h4 className="text-xs font-black">Roleta Inativa (Geral)</h4>
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                  Se desativada, os leads chegam sem dono. **Eles aparecem no CRM de todos os integrantes ao mesmo tempo**, estimulando quem atende mais rápido!
+                </p>
+              </div>
+
+              <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
+                <div className="flex items-center gap-2 mb-2 text-emerald-400">
+                  <Crown size={15} />
+                  <h4 className="text-xs font-black">Painel & Rankings</h4>
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                  O ranking de vendas e o desempenho consideram as oportunidades marcadas como "Venda realizada" de cada integrante no CRM.
+                </p>
+              </div>
+
+              <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
+                <div className="flex items-center gap-2 mb-2 text-indigo-400">
+                  <HelpCircle size={15} />
+                  <h4 className="text-xs font-black">Atribuição Manual</h4>
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                  Mesmo com a roleta ativa, você (corretor administrador) pode delegar e transferir qualquer lead específico da sua carteira usando o formulário.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Stats Section */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -463,7 +774,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               </div>
               <div>
                 <h2 className="text-xl font-black text-white">Configurações e Equipe</h2>
-                <p className="text-xs font-bold text-slate-400">Organize a distribuição de leads para o seu time comercial.</p>
+                <p className="text-xs font-bold text-slate-400">Organize a distribution de leads para o seu time comercial.</p>
               </div>
             </div>
 
@@ -541,7 +852,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                     <div className="min-w-0 flex-1">
                       <p className="font-black text-white text-sm">Distribuição Automática (Roleta)</p>
                       <p className="mt-1 text-[11px] font-bold leading-relaxed text-slate-400">
-                        Quando ativado, os novos leads recebidos pelas integrações/webhook serão distribuídos aleatoriamente em rodízio entre os integrantes. Se desativado, ficarão sem responsável.
+                        Quando ativado, os novos leads recebidos pelas integrações/webhook serão distribuídos em rodízio de forma igualitária entre os integrantes. Se desativado, cada lead recebido será enviado para todos os integrantes ao mesmo tempo.
                       </p>
                     </div>
                     <label className="relative inline-flex cursor-pointer items-center shrink-0">
@@ -661,11 +972,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             </p>
           </div>
 
-          {loading ? (
-            <div className="flex justify-center p-24">
-              <Loader2 className="animate-spin text-cyan-400" size={36} />
-            </div>
-          ) : membros.length === 0 ? (
+          {membros.length === 0 ? (
             <div className="p-24 text-center text-sm font-bold text-slate-500 border border-dashed border-white/5 m-6 rounded-2xl">
               Nenhum integrante criado ainda na carteira.
             </div>

@@ -240,7 +240,7 @@ export default function CrmPage() {
           query = query.eq('corretor_id', corretorScopeId);
         }
         if (profile.tipo_usuario === 'corretor_membro') {
-          query = query.eq('responsavel_profile_id', profile.id);
+          query = query.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
         }
 
         const queryRes = await query;
