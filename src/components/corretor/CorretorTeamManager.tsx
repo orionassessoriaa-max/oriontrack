@@ -246,11 +246,45 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     }
   }
 
+  async function deleteTeam() {
+    const confirmed = await confirmDialog(
+      'Tem certeza de que deseja EXCLUIR COMPLETAMENTE este time comercial? Todos os integrantes cadastrados perderão o acesso ao OrionTrack e as oportunidades voltarão para a carteira geral sem responsável. Esta ação é irreversível!',
+      {
+        title: 'Excluir Time Comercial',
+        confirmLabel: 'Excluir Definitivamente',
+        variant: 'danger',
+      }
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      await postTeam({ action: 'delete_team' });
+      setTeam(null);
+      setMembros([]);
+      setNomeTime('Time comercial');
+      setNomeTimeInput('');
+      alert('Time excluído com sucesso.');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function createMember(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
     setError(null);
     setCredentials(null);
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      setError('Por favor, informe um e-mail válido com a extensão (ex: .com, .com.br).');
+      setSaving(false);
+      return;
+    }
 
     try {
       const payload = await postTeam({ action: 'create_member', nome, email });
@@ -531,6 +565,17 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                   <span className="text-sm font-bold text-slate-400">Adicionar integrante e ativar painel</span>
                 </div>
               </div>
+
+              {/* Reset Team Button */}
+              <button
+                type="button"
+                onClick={deleteTeam}
+                disabled={saving}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl border border-red-500/10 bg-red-500/5 hover:bg-red-500/10 py-3.5 text-xs font-black text-red-400 transition-all cursor-pointer shadow-md disabled:opacity-40"
+              >
+                <Trash2 size={14} />
+                Excluir Time e Começar de Novo
+              </button>
             </div>
 
             {/* Right Column: Creation Form */}
@@ -638,48 +683,48 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           </div>
           <div className="space-y-4">
             <div>
-              <h3 className="text-base font-black text-white">Manual Comercial de Distribuição & Roleta</h3>
-              <p className="text-xs font-bold text-slate-400 mt-1">Entenda as regras de negócios de como os leads serão atendidos no seu time:</p>
+              <h3 className="text-base font-black text-white">Manual Comercial da Distribuição de Clientes</h3>
+              <p className="text-xs font-bold text-slate-400 mt-1">Veja como as novas oportunidades de vendas são distribuídas na sua equipe:</p>
             </div>
             
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 pt-2">
               <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
                 <div className="flex items-center gap-2 mb-2 text-cyan-400">
                   <Send size={15} />
-                  <h4 className="text-xs font-black">Roleta Ativa (Rodízio)</h4>
+                  <h4 className="text-xs font-black">Rodízio Ativo (Escala)</h4>
                 </div>
                 <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                  Os novos leads que chegarem via webhook ou campanhas são divididos de forma igualitária e sequencial entre todos os corretores ativos do time.
+                  Os novos clientes que entrarem pelos anúncios ou site são distribuídos automaticamente de forma justa e sequencial entre todos os corretores ativos do time.
                 </p>
               </div>
 
               <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
                 <div className="flex items-center gap-2 mb-2 text-amber-400">
                   <Users size={15} />
-                  <h4 className="text-xs font-black">Roleta Inativa (Geral)</h4>
+                  <h4 className="text-xs font-black">Rodízio Inativo (Geral)</h4>
                 </div>
                 <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                  Se desativada, os leads chegam sem dono. **Eles aparecem no CRM de todos os integrantes ao mesmo tempo**, estimulando quem atende mais rápido!
+                  Se desativado, as novas oportunidades chegam sem um responsável definido. **Elas ficam visíveis no CRM para toda a equipe ao mesmo tempo**, e quem fizer o primeiro contato assume o atendimento!
                 </p>
               </div>
 
               <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
                 <div className="flex items-center gap-2 mb-2 text-emerald-400">
                   <Crown size={15} />
-                  <h4 className="text-xs font-black">Painel & Rankings</h4>
+                  <h4 className="text-xs font-black">Pódio & Rankings</h4>
                 </div>
                 <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                  O ranking de vendas e o desempenho consideram as oportunidades marcadas como "Venda realizada" de cada integrante no CRM.
+                  O pódio de vendas é atualizado em tempo real! Ele celebra a performance de cada corretor baseado nos fechamentos de contrato marcados no CRM.
                 </p>
               </div>
 
               <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
                 <div className="flex items-center gap-2 mb-2 text-indigo-400">
                   <HelpCircle size={15} />
-                  <h4 className="text-xs font-black">Atribuição Manual</h4>
+                  <h4 className="text-xs font-black">Direcionamento Manual</h4>
                 </div>
                 <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                  Mesmo com a roleta ativa, você (corretor administrador) pode delegar e transferir qualquer lead específico da sua carteira usando o formulário.
+                  Como líder, você tem total controle! Pode direcionar ou transferir qualquer cliente da sua própria carteira diretamente para um corretor específico a qualquer momento.
                 </p>
               </div>
             </div>
@@ -799,7 +844,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               </div>
               <div>
                 <h2 className="text-xl font-black text-white">Configurações e Equipe</h2>
-                <p className="text-xs font-bold text-slate-400">Organize a distribution de leads para o seu time comercial.</p>
+                <p className="text-xs font-bold text-slate-400">Configure a escala de atendimento e o nome de guerra da sua equipe.</p>
               </div>
             </div>
 
@@ -875,9 +920,9 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       <Send size={18} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-black text-white text-sm">Distribuição Automática (Roleta)</p>
+                      <p className="font-black text-white text-sm">Distribuição Automática (Rodízio)</p>
                       <p className="mt-1 text-[11px] font-bold leading-relaxed text-slate-400">
-                        Quando ativado, os novos leads recebidos pelas integrações/webhook serão distribuídos em rodízio de forma igualitária entre os integrantes. Se desativado, cada lead recebido será enviado para todos os integrantes ao mesmo tempo.
+                        Ativado: novos clientes são divididos automaticamente de forma igualitária (um para cada um). Desativado: novos clientes chegam liberados para todos, e quem fizer o primeiro contato no CRM assume o atendimento.
                       </p>
                     </div>
                     <label className="relative inline-flex cursor-pointer items-center shrink-0">
@@ -891,6 +936,26 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       <span className="h-6 w-11 rounded-full bg-white/10 transition peer-checked:bg-cyan-500 peer-disabled:opacity-50" />
                       <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
                     </label>
+                  </div>
+
+                  <div className="h-px bg-white/5" />
+
+                  {/* Danger Zone: Delete Team */}
+                  <div className="flex flex-col gap-3 p-4.5 rounded-2xl border border-red-500/10 bg-red-500/5">
+                    <div>
+                      <p className="font-black text-red-400 text-sm">Zona de Perigo</p>
+                      <p className="mt-1 text-[11px] font-bold leading-relaxed text-slate-400">
+                        Excluir este time comercial apagará permanentemente todos os acessos dos integrantes e removerá a fila de rodízio. Todos os leads ativos retornarão para a carteira geral sem responsável.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={deleteTeam}
+                      disabled={saving}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-4 py-2.5 text-xs font-black text-white transition-all cursor-pointer shadow-md self-start"
+                    >
+                      <Trash2 size={14} /> Excluir Time Comercial
+                    </button>
                   </div>
                 </div>
               )}
@@ -991,9 +1056,9 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
         <div className="overflow-hidden rounded-3xl border border-white/5 bg-[#090e1a]/85 backdrop-blur-md shadow-2xl hover:border-blue-500/20 transition-all duration-300">
           <div className="border-b border-white/5 p-6">
             <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">{team?.nome || 'Time comercial'}</p>
-            <h2 className="mt-1 text-xl font-black text-white">Integrantes Cadastrados</h2>
+            <h2 className="mt-1 text-xl font-black text-white">Corretores Cadastrados</h2>
             <p className="mt-2 text-xs font-bold text-slate-400">
-              Acompanhe quem atende cada oportunidade, visualize a fila comercial e audite as métricas operacionais.
+              Acompanhe de perto as vendas da sua equipe, celebre o progresso dos corretores e gerencie a força comercial do seu time.
             </p>
           </div>
 
@@ -1005,7 +1070,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             <div className="grid gap-4 p-6">
               {memberStats.map((member, index) => (
                 <div key={member.id} className="rounded-2xl border border-white/5 bg-[#070b13] p-5 transition-all duration-300 hover:-translate-y-1 hover:border-cyan-500/20 hover:bg-white/[0.01]">
-                  <div className="grid gap-5 xl:grid-cols-[1fr_1.4fr_auto] xl:items-center">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div className="flex min-w-0 items-center gap-4">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black text-white shadow-md shadow-blue-500/10">
                         {member.nome.slice(0, 2).toUpperCase()}
@@ -1014,7 +1079,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                         <p className="font-black text-white">{member.nome}</p>
                         <p className="break-all text-xs font-semibold text-slate-400 mt-1">{member.email}</p>
                         <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-cyan-400">
-                          Posição: #{index + 1} {member.ultimo_lead_at ? `| último em ${new Date(member.ultimo_lead_at).toLocaleDateString('pt-BR')}` : ''}
+                          Posição: #{index + 1} {member.ultimo_lead_at ? `| último atendimento em ${new Date(member.ultimo_lead_at).toLocaleDateString('pt-BR')}` : ''}
                         </p>
                         {member.profile_id === settings.owner_profile?.id && (
                           <span className="mt-2 inline-flex rounded-full bg-blue-500/15 border border-blue-500/20 px-3 py-1 text-[8px] font-black uppercase tracking-widest text-cyan-400 leading-none">
@@ -1024,23 +1089,23 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       </div>
                     </div>
                     
-                    {/* Member Stats Pillars */}
-                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                      <div className="rounded-2xl bg-blue-500/5 border border-blue-500/10 p-3.5">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-blue-400">Leads</p>
-                        <p className="text-xl font-black text-white mt-1">{member.totalLeads}</p>
+                    {/* Performance metrics badges (spacious layout with whitespace-nowrap) */}
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 justify-start md:justify-center flex-1 max-w-xl">
+                      <div className="bg-[#090f1d] border border-white/5 px-3 py-2 rounded-xl text-center min-w-[70px]">
+                        <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider">Leads</p>
+                        <p className="text-sm font-black text-white mt-0.5">{member.totalLeads}</p>
                       </div>
-                      <div className="rounded-2xl bg-amber-500/5 border border-amber-500/10 p-3.5">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-400">Sem Resposta</p>
-                        <p className="text-xl font-black text-white mt-1">{member.semResposta}</p>
+                      <div className="bg-[#090f1d] border border-white/5 px-3 py-2 rounded-xl text-center min-w-[70px]">
+                        <p className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">S/ Resp.</p>
+                        <p className="text-sm font-black text-white mt-0.5">{member.semResposta}</p>
                       </div>
-                      <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/10 p-3.5">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Vendas</p>
-                        <p className="text-xl font-black text-white mt-1">{member.vendas}</p>
+                      <div className="bg-[#090f1d] border border-white/5 px-3 py-2 rounded-xl text-center min-w-[70px]">
+                        <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Vendas</p>
+                        <p className="text-sm font-black text-white mt-0.5">{member.vendas}</p>
                       </div>
-                      <div className="rounded-2xl bg-white/5 border border-white/5 p-3.5">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Comissão</p>
-                        <p className="text-xs font-black text-white mt-2.5 truncate">{currency(member.comissao)}</p>
+                      <div className="bg-[#090f1d] border border-white/5 px-4 py-2 rounded-xl text-center min-w-[100px]">
+                        <p className="text-[9px] font-bold text-purple-400 uppercase tracking-wider">Comissão</p>
+                        <p className="text-xs font-black text-white mt-0.5 whitespace-nowrap">{currency(member.comissao)}</p>
                       </div>
                     </div>
 
@@ -1048,7 +1113,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       type="button"
                       onClick={() => removeMember(member)}
                       disabled={member.profile_id === settings.owner_profile?.id}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/10 bg-red-500/5 px-4 py-3 text-xs font-black text-red-400 transition-all hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30 cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/10 bg-red-500/5 px-4 py-3 text-xs font-black text-red-400 transition-all hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30 cursor-pointer shrink-0"
                       title={member.profile_id === settings.owner_profile?.id ? 'Desative em Configurações do time.' : 'Remover integrante'}
                     >
                       <Trash2 size={14} /> Remover

@@ -233,6 +233,85 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, team });
     }
 
+    if (action === 'delete_team') {
+      const { data: teamToDelete } = await supabaseAdmin
+        .from('corretor_times')
+        .select('id')
+        .eq('corretor_id', corretorId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!teamToDelete) {
+        return NextResponse.json({ error: 'Time nao encontrado.' }, { status: 404 });
+      }
+
+      // Fetch all members of this team
+      const { data: members } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .select('id, profile_id, profiles:profile_id(id, tipo_usuario)')
+        .eq('time_id', teamToDelete.id);
+
+      if (members && members.length > 0) {
+        // Dissociate leads first
+        await supabaseAdmin
+          .from('leads')
+          .update({
+            responsavel_membro_id: null,
+            responsavel_profile_id: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('corretor_id', corretorId);
+
+        // Delete each member and remove access if they are a regular member
+        for (const m of members) {
+          await supabaseAdmin
+            .from('corretor_time_membros')
+            .delete()
+            .eq('id', m.id);
+
+          const joinedProfile = Array.isArray((m as any).profiles) ? (m as any).profiles[0] : (m as any).profiles;
+          const memberRole = joinedProfile?.tipo_usuario;
+          const shouldRemoveAccess = m.profile_id && memberRole === 'corretor_membro';
+
+          if (shouldRemoveAccess) {
+            await supabaseAdmin
+              .from('profiles')
+              .delete()
+              .eq('id', m.profile_id)
+              .eq('tipo_usuario', 'corretor_membro');
+
+            const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(m.profile_id);
+            if (authDeleteError && authDeleteError.message !== 'User not found') {
+              console.error('team_member_auth_delete_failed_on_team_delete', authDeleteError.message);
+            }
+          } else if (m.profile_id && memberRole !== 'corretor') {
+            await supabaseAdmin
+              .from('profiles')
+              .update({ status: 'inactive' })
+              .eq('id', m.profile_id);
+          }
+        }
+      }
+
+      // Finally, delete the team itself
+      const { error: deleteTeamError } = await supabaseAdmin
+        .from('corretor_times')
+        .delete()
+        .eq('id', teamToDelete.id);
+
+      if (deleteTeamError) throw deleteTeamError;
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.delete',
+        entity_type: 'corretor_times',
+        entity_id: teamToDelete.id,
+        metadata: { corretor_id: corretorId },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
     const team = await ensureTeam(corretorId, String(body.nome_time || 'Time comercial'));
 
     if (action === 'update_team_name') {
@@ -417,8 +496,9 @@ export async function POST(request: Request) {
       const nome = String(body.nome || '').trim();
       const email = String(body.email || '').trim().toLowerCase();
 
-      if (!memberId || !nome || !email.includes('@')) {
-        return NextResponse.json({ error: 'Informe nome e email validos.' }, { status: 400 });
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!memberId || !nome || !emailRegex.test(email)) {
+        return NextResponse.json({ error: 'Informe um email válido com extensão (ex: .com, .com.br).' }, { status: 400 });
       }
 
       const { data: member } = await supabaseAdmin
@@ -521,8 +601,10 @@ export async function POST(request: Request) {
 
     const nome = String(body.nome || '').trim();
     const email = String(body.email || '').trim().toLowerCase();
-    if (!nome || !email.includes('@')) {
-      return NextResponse.json({ error: 'Informe nome e email real do membro.' }, { status: 400 });
+    
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!nome || !emailRegex.test(email)) {
+      return NextResponse.json({ error: 'Informe um email válido com extensão (ex: .com, .com.br).' }, { status: 400 });
     }
 
     const { data: duplicated } = await supabaseAdmin
