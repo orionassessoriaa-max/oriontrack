@@ -1037,7 +1037,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                   onChange={(event) => setSelectedMemberId(event.target.value)}
                   className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
                 >
-                  <option value="" className="bg-[#090e1a]">Selecione quem vai atender</option>
+                  <option value="" className="bg-[#090e1a]">Selecione o responsável</option>
                   {membros.map((member) => <option key={member.id} value={member.id} className="bg-[#090e1a]">{member.nome}</option>)}
                 </select>
               </label>
