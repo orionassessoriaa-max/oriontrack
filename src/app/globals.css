@@ -1107,3 +1107,256 @@ body.theme-noturno main :is(input, select, textarea):disabled,
 .scrollbar-none::-webkit-scrollbar {
   display: none !important;
 }
+
+/* ==========================================
+   PREMIUM LIGHT THEME (TEMA CLARO) OVERRIDES
+   ========================================== */
+
+html.theme-claro,
+body.theme-claro {
+  background: 
+    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.05), transparent 42%),
+    radial-gradient(circle at 88% 0%, rgba(99, 102, 241, 0.05), transparent 42%),
+    #edf2f7 !important;
+  color: #0f172a !important;
+}
+
+.theme-claro main {
+  background: transparent !important;
+}
+
+/* Card, panels and shadow overrides */
+.theme-claro .orion-panel,
+.theme-claro .orion-table-shell,
+.theme-claro .bg-white,
+.theme-claro .dark-dashboard-panel {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.04), 0 8px 16px -6px rgba(15, 23, 42, 0.02) !important;
+  border-radius: 20px !important;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease, border-color 0.4s ease !important;
+}
+
+.theme-claro .orion-panel:hover,
+.theme-claro .orion-table-shell:hover,
+.theme-claro .bg-white:hover,
+.theme-claro .dark-dashboard-panel:hover {
+  transform: translateY(-3px) scale(1.002);
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 20px 35px -10px rgba(15, 23, 42, 0.08), 0 6px 15px -4px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* Inner dashboard blocks and inputs */
+.theme-claro .bg-slate-50,
+.theme-claro .bg-gray-50,
+.theme-claro .bg-slate-100,
+.theme-claro .bg-gray-100,
+.theme-claro .dark-dashboard-inner,
+.theme-claro .bg-\[\#070b13\],
+.theme-claro .bg-\[\#0b1324\],
+.theme-claro .bg-\[\#090f1d\] {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Interactive fields and forms */
+.theme-claro .orion-control,
+.theme-claro main :is(input, select, textarea) {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  transition: all 0.3s ease !important;
+}
+
+.theme-claro .orion-control:focus,
+.theme-claro main :is(input, select, textarea):focus {
+  border-color: #2563eb !important;
+  outline: 3px solid rgba(37, 99, 235, 0.15) !important;
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.08) !important;
+}
+
+.theme-claro main :is(input, textarea)::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+}
+
+.theme-claro select option,
+.theme-claro .orion-control option,
+.theme-claro main select option,
+.theme-claro main .orion-control option {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+/* Table header and row hover */
+.theme-claro .orion-table-shell table th {
+  background: #eaf2fb !important;
+  color: #334155 !important;
+  border-bottom: 1px solid #d9e4f2 !important;
+}
+
+.theme-claro table tr:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-claro table td,
+.theme-claro table th {
+  border-color: #e2e8f0 !important;
+}
+
+/* Border and divider color corrections */
+.theme-claro .border,
+.theme-claro .border-gray-100,
+.theme-claro .border-slate-100,
+.theme-claro .border-slate-200,
+.theme-claro .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
+.theme-claro .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.theme-claro .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
+}
+
+/* Text and Title absolute contrast fixes */
+.theme-claro .text-gray-900,
+.theme-claro .text-gray-950,
+.theme-claro .text-slate-900,
+.theme-claro .text-slate-950,
+.theme-claro .text-emerald-950,
+.theme-claro .text-blue-950,
+.theme-claro .text-white,
+.theme-claro .text-slate-100,
+.theme-claro .text-blue-100,
+.theme-claro h1,
+.theme-claro h2,
+.theme-claro h3 {
+  color: #0f172a !important;
+}
+
+.theme-claro .text-gray-700,
+.theme-claro .text-slate-700,
+.theme-claro .text-gray-600,
+.theme-claro .text-slate-600 {
+  color: #334155 !important;
+}
+
+.theme-claro .text-gray-500,
+.theme-claro .text-slate-500,
+.theme-claro .text-gray-400,
+.theme-claro .text-slate-400 {
+  color: #475569 !important;
+}
+
+.theme-claro .text-blue-600,
+.theme-claro .text-blue-700 {
+  color: #2563eb !important;
+}
+
+.theme-claro .text-emerald-600,
+.theme-claro .text-emerald-700 {
+  color: #059669 !important;
+}
+
+/* Custom background translucent white/5 items */
+.theme-claro .bg-white\/5,
+.theme-claro button.bg-white\/5,
+.theme-claro a.bg-white\/5,
+.theme-claro div.bg-white\/5 {
+  background-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}
+
+.theme-claro .bg-white\/5:hover,
+.theme-claro button.bg-white\/5:hover,
+.theme-claro a.bg-white\/5:hover {
+  background-color: #94a3b8 !important;
+}
+
+.theme-claro .border-white\/5,
+.theme-claro .border-white\/10 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Meta status cards and details contrast */
+.theme-claro .text-red-200 {
+  color: #991b1b !important;
+}
+
+.theme-claro .text-amber-200 {
+  color: #92400e !important;
+}
+
+.theme-claro .text-emerald-200 {
+  color: #065f46 !important;
+}
+
+.theme-claro .bg-red-500\/5 {
+  background-color: #fef2f2 !important;
+  border-color: #fee2e2 !important;
+}
+
+.theme-claro .bg-amber-500\/5 {
+  background-color: #fffbeb !important;
+  border-color: #fef3c7 !important;
+}
+
+.theme-claro .bg-emerald-500\/5 {
+  background-color: #ecfdf5 !important;
+  border-color: #d1fae5 !important;
+}
+
+/* 3D Funnel legend boxes and card elements */
+.theme-claro .orion-funnel-3d-card,
+.theme-claro div[class*="bg-slate-950\/20"],
+.theme-claro div[class*="bg-slate-900\/60"],
+.theme-claro div[class*="bg-slate-900\/35"] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  opacity: 1 !important;
+  box-shadow: 0 4px 15px -3px rgba(15, 23, 42, 0.04) !important;
+}
+
+.theme-claro div[class*="bg-slate-950\/20"] h4,
+.theme-claro div[class*="bg-slate-900\/60"] h4,
+.theme-claro div[class*="bg-slate-900\/35"] h4 {
+  color: #0f172a !important;
+}
+
+.theme-claro div[class*="bg-slate-950\/20"] p,
+.theme-claro div[class*="bg-slate-900\/60"] p,
+.theme-claro div[class*="bg-slate-900\/35"] p {
+  color: #475569 !important;
+}
+
+/* Date range picker popup display overrides */
+.theme-claro .absolute.bg-\[\#0b1324\] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.15) !important;
+}
+
+.theme-claro .absolute.bg-\[\#0b1324\] button {
+  color: #334155 !important;
+}
+
+.theme-claro .absolute.bg-\[\#0b1324\] button:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.theme-claro .absolute.bg-\[\#0b1324\] button[class*="text-blue-400"] {
+  color: #2563eb !important;
+  background-color: #f1f5f9 !important;
+}
+
+.theme-claro .absolute.bg-\[\#0b1324\] input {
+  border-color: #cbd5e1 !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
