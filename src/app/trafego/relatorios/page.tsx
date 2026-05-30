@@ -57,8 +57,8 @@ export default function TrafficReportsPage() {
   // Form State
   const [formData, setFormData] = useState({
     corretor_id: '',
-    data_inicio: format(new Date(new Date().setDate(new Date().getDate() - 7)), 'yyyy-MM-dd'),
-    data_fim: format(new Date(), 'yyyy-MM-dd'),
+    data_inicio: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'),
+    data_fim: format(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0), 'yyyy-MM-dd'),
     valor_investido: '',
     usar_leads_manuais: false,
     quantidade_leads_manual: ''

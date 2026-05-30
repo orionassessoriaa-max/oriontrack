@@ -19,26 +19,26 @@ export default function OrionFunnel({
   const [hoveredTier, setHoveredTier] = useState<number | null>(null);
 
   // Framer Motion values for the falling particle
-  const animY = useMotionValue(162);
+  const animY = useMotionValue(145);
   const animVal = useMotionValue(total);
-
+ 
   // Smoothly format the moving value into a rounded integer
   const roundedVal = useTransform(animVal, (latest) => Math.round(latest));
   const [displayVal, setDisplayVal] = useState(total);
-
+ 
   // React state sync for rounded value to avoid any Hydration/Render mismatches
   useEffect(() => {
     return roundedVal.onChange((v) => setDisplayVal(v));
   }, [roundedVal]);
-
+ 
   // Center Y coordinates for each tier
   const tierYPositions: Record<number, number> = {
-    1: 162,
-    2: 278,
-    3: 386,
-    4: 500,
+    1: 145,
+    2: 255,
+    3: 370,
+    4: 485,
   };
-
+ 
   // Values corresponding to each tier
   const tierValues: Record<number, number> = {
     1: total,
@@ -46,7 +46,7 @@ export default function OrionFunnel({
     3: quotedAndSold,
     4: sold,
   };
-
+ 
   // Trigger staggered path animations on hover changes
   useEffect(() => {
     if (hoveredTier === null) {
@@ -55,18 +55,18 @@ export default function OrionFunnel({
       animate(animVal, total, { duration: 0.4, ease: 'easeOut' });
       return;
     }
-
+ 
     // Build the dynamic path keyframes from Tier 1 to the hovered Tier
     const yKeyframes: number[] = [tierYPositions[1]];
     const valKeyframes: number[] = [total];
-
+ 
     for (let i = 2; i <= hoveredTier; i++) {
       yKeyframes.push(tierYPositions[i]);
       valKeyframes.push(tierValues[i]);
     }
-
+ 
     const duration = 0.28 * hoveredTier; // Staggered duration based on path depth
-
+ 
     // Animate vertical Y movement with a bouncy impact feel
     animate(animY, yKeyframes, {
       duration,
@@ -77,14 +77,14 @@ export default function OrionFunnel({
       damping: 13,
       mass: 0.8,
     });
-
+ 
     // Animate dynamic intermediate values
     animate(animVal, valKeyframes, {
       duration,
       ease: 'easeInOut',
     });
   }, [hoveredTier, total, activePipeline, quotedAndSold, sold]);
-
+ 
   const funnelSteps = [
     {
       id: 1,
@@ -97,12 +97,14 @@ export default function OrionFunnel({
       bodyStroke: '#2b88ff',
       mouthFill: 'url(#funnelMouth1)',
       bodyFill: 'url(#funnelBody1)',
-      topLipPath: 'cx="260" cy="100" rx="200" ry="38"',
-      bodyPath: 'M 60 100 A 200 38 0 0 0 460 100 L 385 210 A 125 22 0 0 1 135 210 Z',
-      connectorY: 150,
+      cy: 80,
+      rx: 200,
+      ry: 36,
+      bodyPath: 'M 60 80 A 200 36 0 0 0 460 80 L 420 190 A 160 28 0 0 1 100 190 Z',
+      connectorY: 135,
       labelX: 576,
-      labelY: 158,
-      connectorLine: { x1: 420, x2: 560 },
+      labelY: 142,
+      connectorLine: { x1: 395, x2: 560 },
     },
     {
       id: 2,
@@ -115,12 +117,14 @@ export default function OrionFunnel({
       bodyStroke: '#00c8e6',
       mouthFill: 'url(#funnelMouth2)',
       bodyFill: 'url(#funnelBody2)',
-      topLipPath: 'cx="260" cy="220" rx="125" ry="22"',
-      bodyPath: 'M 135 220 A 125 22 0 0 0 385 220 L 330 320 A 70 14 0 0 1 190 320 Z',
-      connectorY: 270,
+      cy: 205,
+      rx: 150,
+      ry: 26,
+      bodyPath: 'M 110 205 A 150 26 0 0 0 410 205 L 370 305 A 110 19 0 0 1 150 305 Z',
+      connectorY: 255,
       labelX: 576,
-      labelY: 278,
-      connectorLine: { x1: 356, x2: 560 },
+      labelY: 262,
+      connectorLine: { x1: 345, x2: 560 },
     },
     {
       id: 3,
@@ -133,12 +137,14 @@ export default function OrionFunnel({
       bodyStroke: '#8d42f5',
       mouthFill: 'url(#funnelMouth3)',
       bodyFill: 'url(#funnelBody3)',
-      topLipPath: 'cx="260" cy="330" rx="76" ry="14"',
-      bodyPath: 'M 184 330 A 76 14 0 0 0 336 330 L 306 430 A 46 9 0 0 1 214 430 Z',
-      connectorY: 380,
+      cy: 320,
+      rx: 100,
+      ry: 17,
+      bodyPath: 'M 160 320 A 100 17 0 0 0 360 320 L 330 420 A 70 12 0 0 1 190 420 Z',
+      connectorY: 370,
       labelX: 576,
-      labelY: 388,
-      connectorLine: { x1: 308, x2: 560 },
+      labelY: 377,
+      connectorLine: { x1: 300, x2: 560 },
     },
     {
       id: 4,
@@ -151,15 +157,17 @@ export default function OrionFunnel({
       bodyStroke: '#00c2be',
       mouthFill: 'url(#funnelMouth4)',
       bodyFill: 'url(#funnelBody4)',
-      topLipPath: 'cx="260" cy="440" rx="48" ry="9"',
-      bodyPath: 'M 212 440 A 48 9 0 0 0 308 440 C 308 440 295 560 260 570 C 225 560 212 440 212 440 Z',
-      connectorY: 500,
+      cy: 435,
+      rx: 64,
+      ry: 11,
+      bodyPath: 'M 196 435 A 64 11 0 0 0 324 435 C 324 435 310 535 260 545 C 210 535 196 435 196 435 Z',
+      connectorY: 485,
       labelX: 576,
-      labelY: 508,
-      connectorLine: { x1: 278, x2: 560 },
+      labelY: 492,
+      connectorLine: { x1: 275, x2: 560 },
     },
   ];
-
+ 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-8 items-center w-full min-h-[500px]">
       {/* Left: Responsive 3D Glass Funnel SVG */}
@@ -179,7 +187,7 @@ export default function OrionFunnel({
             />
           )}
         </AnimatePresence>
-
+ 
         <svg viewBox="0 0 840 640" className="w-full h-auto overflow-visible">
           <defs>
             {/* SVG Glowing drop shadows */}
@@ -188,14 +196,14 @@ export default function OrionFunnel({
                 <feDropShadow dx="0" dy="0" stdDeviation="15" floodColor={step.color} floodOpacity="0.75" />
               </filter>
             ))}
-
+ 
             {/* Glowing particle glow */}
             <radialGradient id="particleGlow" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
               <stop offset="35%" stopColor="#a78bfa" stopOpacity="0.8" />
               <stop offset="100%" stopColor="#090e1a" stopOpacity="0" />
             </radialGradient>
-
+ 
             {/* Mouth Gradients */}
             <linearGradient id="funnelMouth1" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#08224b" stopOpacity="0.8" />
@@ -213,7 +221,7 @@ export default function OrionFunnel({
               <stop offset="0%" stopColor="#002d2c" stopOpacity="0.8" />
               <stop offset="100%" stopColor="#005d5a" stopOpacity="0.9" />
             </linearGradient>
-
+ 
             {/* Body Gradients */}
             <linearGradient id="funnelBody1" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#0f62e6" stopOpacity="0.65" />
@@ -231,7 +239,7 @@ export default function OrionFunnel({
               <stop offset="0%" stopColor="#00a39e" stopOpacity="0.65" />
               <stop offset="100%" stopColor="#005956" stopOpacity="0.85" />
             </linearGradient>
-
+ 
             {/* Premium Glossy Overlay Shine */}
             <linearGradient id="funnelGlossShine" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="#ffffff" stopOpacity="0.4" />
@@ -240,15 +248,15 @@ export default function OrionFunnel({
               <stop offset="100%" stopColor="#ffffff" stopOpacity="0.15" />
             </linearGradient>
           </defs>
-
+ 
           {/* BACKGROUND RING */}
           <circle cx="260" cy="300" r="220" fill="none" stroke="rgba(255, 255, 255, 0.02)" strokeWidth="1" strokeDasharray="5 15" pointerEvents="none" />
-
+ 
           {/* RENDER THE 3D GLASS SEGMENTS */}
           {funnelSteps.map((step) => {
             const isActive = hoveredTier === step.id;
             const isDimmed = hoveredTier !== null && !isActive;
-
+ 
             return (
               <g
                 key={step.id}
@@ -269,15 +277,15 @@ export default function OrionFunnel({
                   {/* Top Mouth Ellipse */}
                   <ellipse
                     cx="260"
-                    cy={step.id === 1 ? 100 : step.id === 2 ? 220 : step.id === 3 ? 330 : 440}
-                    rx={step.id === 1 ? 200 : step.id === 2 ? 125 : step.id === 3 ? 76 : 48}
-                    ry={step.id === 1 ? 38 : step.id === 2 ? 22 : step.id === 3 ? 14 : 9}
+                    cy={step.cy}
+                    rx={step.rx}
+                    ry={step.ry}
                     fill={step.mouthFill}
                     stroke={step.ellipseStroke}
                     strokeWidth={isActive ? '3' : '2'}
                     className="transition-all duration-300"
                   />
-
+ 
                   {/* Glass Body */}
                   <path
                     d={step.bodyPath}
@@ -285,14 +293,14 @@ export default function OrionFunnel({
                     stroke={step.bodyStroke}
                     strokeWidth="1.5"
                   />
-
+ 
                   {/* Reflective Gloss Overlay */}
                   <path
                     d={step.bodyPath}
                     fill="url(#funnelGlossShine)"
                     pointerEvents="none"
                   />
-
+ 
                   {/* Static Value Text (Hidden during active hover particle movement, otherwise glows) */}
                   <motion.text
                     x="260"
@@ -314,7 +322,7 @@ export default function OrionFunnel({
                     {step.value}
                   </motion.text>
                 </g>
-
+ 
                 {/* Connecting Lines and Labels (Fade out non-hovered paths) */}
                 <g
                   style={{

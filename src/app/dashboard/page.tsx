@@ -156,6 +156,21 @@ export default function DashboardPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [chartHovering, setChartHovering] = useState(false);
 
+  const [dataInicio, setDataInicio] = useState(() => {
+    const d = new Date();
+    const first = new Date(d.getFullYear(), d.getMonth(), 1);
+    const tzOffset = first.getTimezoneOffset() * 60000;
+    const local = new Date(first.getTime() - tzOffset);
+    return local.toISOString().slice(0, 10);
+  });
+  const [dataFim, setDataFim] = useState(() => {
+    const d = new Date();
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const tzOffset = last.getTimezoneOffset() * 60000;
+    const local = new Date(last.getTime() - tzOffset);
+    return local.toISOString().slice(0, 10);
+  });
+
   useEffect(() => {
     async function fetchCorretorData() {
       if (!profile || !['corretor', 'corretor_membro'].includes(profile.tipo_usuario)) {
@@ -201,6 +216,8 @@ export default function DashboardPage() {
             .from('leads')
             .select('status, data_entrada, cidade, valor_negociacao, valor_comissao')
             .eq('corretor_id', profile.corretor_id)
+            .gte('data_entrada', `${dataInicio}T00:00:00.000Z`)
+            .lte('data_entrada', `${dataFim}T23:59:59.999Z`)
             .range(from, to);
 
           if (profile.tipo_usuario === 'corretor_membro') {
@@ -322,7 +339,7 @@ export default function DashboardPage() {
     }
 
     fetchCorretorData();
-  }, [profile]);
+  }, [profile, dataInicio, dataFim]);
 
   const firstName = profile?.nome ? profile.nome.split(' ')[0] : '';
   const isDataLoading = authLoading || loadingData;
@@ -457,9 +474,9 @@ export default function DashboardPage() {
   return (
     <InternalLayout>
       {/* Header Section */}
-      <div className="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
+      <div className="mb-10 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
         <div>
-          <h1 className="mb-2 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
+          <h1 className="mb-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
             {isDataLoading ? (
               <span className="inline-block w-48 h-10 bg-gray-100 animate-pulse rounded-lg" />
             ) : (
@@ -468,11 +485,29 @@ export default function DashboardPage() {
           </h1>
           <p className="text-base font-bold text-blue-600 sm:text-lg">Painel de crescimento comercial e aceleração de vendas</p>
         </div>
-        <div className="flex gap-3 shrink-0">
-          <Link href="/leads" className="bg-blue-600 text-white px-5 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-500/20 text-xs sm:text-sm">
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {/* Integrated Date Picker Filter */}
+          <div className="flex items-center gap-2.5 bg-white/5 border border-white/5 px-4 py-3 rounded-2xl">
+            <CalendarDays size={16} className="text-blue-400 shrink-0" />
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className="bg-transparent border-none p-0 text-xs font-black text-white focus:ring-0 w-24 cursor-pointer outline-none [color-scheme:dark]"
+            />
+            <span className="text-[10px] font-black uppercase text-blue-400/60 shrink-0">a</span>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className="bg-transparent border-none p-0 text-xs font-black text-white focus:ring-0 w-24 cursor-pointer outline-none [color-scheme:dark]"
+            />
+          </div>
+
+          <Link href="/leads" className="bg-blue-600 text-white px-5 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-500/20 text-xs sm:text-sm whitespace-nowrap">
             Ver meus leads <ArrowRight size={16} />
           </Link>
-          <Link href="/kanban" className="bg-white/5 text-white border border-white/5 px-5 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-white/10 transition-all text-xs sm:text-sm">
+          <Link href="/kanban" className="bg-white/5 text-white border border-white/5 px-5 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-white/10 transition-all text-xs sm:text-sm whitespace-nowrap">
             Abrir Kanban
           </Link>
         </div>

@@ -48,9 +48,24 @@ export default function GestorDashboardPage() {
   const [totalLeads, setTotalLeads] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const [dataInicio, setDataInicio] = useState(() => {
+    const d = new Date();
+    const first = new Date(d.getFullYear(), d.getMonth(), 1);
+    const tzOffset = first.getTimezoneOffset() * 60000;
+    const local = new Date(first.getTime() - tzOffset);
+    return local.toISOString().slice(0, 10);
+  });
+  const [dataFim, setDataFim] = useState(() => {
+    const d = new Date();
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const tzOffset = last.getTimezoneOffset() * 60000;
+    const local = new Date(last.getTime() - tzOffset);
+    return local.toISOString().slice(0, 10);
+  });
+
   useEffect(() => {
     fetchDashboardData();
-  }, [profile?.id]);
+  }, [profile?.id, dataInicio, dataFim]);
 
   const fetchDashboardData = async () => {
     if (!profile?.id) return;
@@ -84,7 +99,9 @@ export default function GestorDashboardPage() {
         const { count, error: lError } = await supabase
           .from('leads')
           .select('*', { count: 'exact', head: true })
-          .in('corretor_id', brokerIds);
+          .in('corretor_id', brokerIds)
+          .gte('data_entrada', `${dataInicio}T00:00:00.000Z`)
+          .lte('data_entrada', `${dataFim}T23:59:59.999Z`);
 
         if (lError) console.error('Error fetching leads count:', lError);
         setTotalLeads(count || 0);
@@ -160,6 +177,50 @@ export default function GestorDashboardPage() {
               {format(new Date(), "dd 'de' MMMM", { locale: ptBR })}
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Date Filter Bar */}
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-[#090e1a]/85 border border-white/5 shadow-2xl">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/5 text-cyan-400 rounded-xl">
+            <Calendar size={18} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1.5">Filtrar Período</p>
+            <p className="text-xs font-black text-white leading-none">Monitoramento de leads do período</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-xl py-2 px-3 text-xs font-bold text-white focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
+            />
+            <span className="text-xs font-bold text-slate-500">até</span>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-xl py-2 px-3 text-xs font-bold text-white focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
+            />
+          </div>
+          <button
+            onClick={() => {
+              const d = new Date();
+              const first = new Date(d.getFullYear(), d.getMonth(), 1);
+              const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+              const tzOffsetF = first.getTimezoneOffset() * 60000;
+              const tzOffsetL = last.getTimezoneOffset() * 60000;
+              setDataInicio(new Date(first.getTime() - tzOffsetF).toISOString().slice(0, 10));
+              setDataFim(new Date(last.getTime() - tzOffsetL).toISOString().slice(0, 10));
+            }}
+            className="text-[10px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 bg-white/5 border border-white/5 py-2.5 px-4 rounded-xl transition animate-pulse"
+          >
+            Mês Atual
+          </button>
         </div>
       </div>
 
