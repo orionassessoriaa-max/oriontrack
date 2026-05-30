@@ -1108,45 +1108,54 @@ body.theme-noturno main :is(input, select, textarea):disabled,
   display: none !important;
 }
 
-/* ==========================================
-   PREMIUM LIGHT THEME (TEMA CLARO) OVERRIDES
-   ========================================== */
+/* ==========================================================
+   WORLD-CLASS PREMIUM LIGHT THEME (TEMA CLARO) DESIGN SYSTEM
+   ========================================================== */
 
 html.theme-claro,
 body.theme-claro {
   background: 
-    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.05), transparent 42%),
-    radial-gradient(circle at 88% 0%, rgba(99, 102, 241, 0.05), transparent 42%),
-    #edf2f7 !important;
-  color: #0f172a !important;
+    radial-gradient(circle at 15% 0%, rgba(59, 130, 246, 0.04), transparent 45%),
+    radial-gradient(circle at 85% 0%, rgba(6, 182, 212, 0.03), transparent 45%),
+    #f8fafc !important; /* Soft, incredibly clean professional slate-50 backdrop */
+  color: #0f172a !important; /* Rich Slate-900 for absolute legibility */
 }
 
 .theme-claro main {
   background: transparent !important;
 }
 
-/* Card, panels and shadow overrides */
+/* Glassmorphic White Cards / Panels (Replacing all clunky borders and grey backgrounds) */
 .theme-claro .orion-panel,
 .theme-claro .orion-table-shell,
 .theme-claro .bg-white,
-.theme-claro .dark-dashboard-panel {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.04), 0 8px 16px -6px rgba(15, 23, 42, 0.02) !important;
+.theme-claro .dark-dashboard-panel,
+.theme-claro div[className*="rounded-[1.5rem] bg-[#090e1a]"],
+.theme-claro div[className*="rounded-[2rem] bg-[#090e1a]"] {
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(15, 23, 42, 0.06) !important; /* Razor-thin, extremely elegant modern border */
+  box-shadow: 
+    0 1px 3px 0 rgba(15, 23, 42, 0.01),
+    0 4px 12px 0 rgba(15, 23, 42, 0.02),
+    0 12px 30px -10px rgba(15, 23, 42, 0.04) !important; /* Soft, high-end diffused shadow */
   border-radius: 20px !important;
-  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease, border-color 0.4s ease !important;
+  transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .theme-claro .orion-panel:hover,
 .theme-claro .orion-table-shell:hover,
 .theme-claro .bg-white:hover,
 .theme-claro .dark-dashboard-panel:hover {
-  transform: translateY(-3px) scale(1.002);
-  border-color: #cbd5e1 !important;
-  box-shadow: 0 20px 35px -10px rgba(15, 23, 42, 0.08), 0 6px 15px -4px rgba(15, 23, 42, 0.03) !important;
+  transform: translateY(-2px) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 
+    0 1px 3px 0 rgba(15, 23, 42, 0.01),
+    0 8px 20px 0 rgba(15, 23, 42, 0.04),
+    0 24px 48px -12px rgba(15, 23, 42, 0.08) !important; /* Premium elevate effect */
 }
 
-/* Inner dashboard blocks and inputs */
+/* Inner dashboard blocks and grey placeholders (Clean slate-50 styling) */
 .theme-claro .bg-slate-50,
 .theme-claro .bg-gray-50,
 .theme-claro .bg-slate-100,
@@ -1154,28 +1163,84 @@ body.theme-claro {
 .theme-claro .dark-dashboard-inner,
 .theme-claro .bg-\[\#070b13\],
 .theme-claro .bg-\[\#0b1324\],
-.theme-claro .bg-\[\#090f1d\] {
+.theme-claro .bg-\[\#090f1d\],
+.theme-claro .bg-\[\#090f1d\]\/5 {
   background-color: #f8fafc !important;
-  border-color: #e2e8f0 !important;
+  border: 1px solid rgba(15, 23, 42, 0.05) !important;
   color: #0f172a !important;
 }
 
-/* Interactive fields and forms */
+/* Ultra-Premium Stripe-Style Card Buttons (Replacing the ugly white-on-white text) */
+.theme-claro .bg-white\/5,
+.theme-claro button.bg-white\/5,
+.theme-claro a.bg-white\/5,
+.theme-claro div.bg-white\/5,
+.theme-claro button[onClick*="setShowDatePicker"],
+.theme-claro a[href*="kanban"] {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  color: #334155 !important;
+  font-weight: 750 !important;
+  box-shadow: 
+    0 1px 2px 0 rgba(15, 23, 42, 0.04),
+    inset 0 -1px 0 0 rgba(15, 23, 42, 0.02) !important; /* Crisp inset button line */
+  border-radius: 12px !important;
+  transition: all 200ms ease !important;
+  opacity: 1 !important;
+}
+
+.theme-claro .bg-white\/5:hover,
+.theme-claro button.bg-white\/5:hover,
+.theme-claro a.bg-white\/5:hover,
+.theme-claro button[onClick*="setShowDatePicker"]:hover,
+.theme-claro a[href*="kanban"]:hover {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.15) !important;
+  color: #0f172a !important;
+  transform: translateY(-0.5px) !important;
+  box-shadow: 
+    0 1px 3px 0 rgba(15, 23, 42, 0.06),
+    0 4px 8px 0 rgba(15, 23, 42, 0.02) !important;
+}
+
+.theme-claro button.bg-white\/5 svg,
+.theme-claro a.bg-white\/5 svg,
+.theme-claro button[onClick*="setShowDatePicker"] svg {
+  color: #3b82f6 !important; /* Elegant clean blue accent on icons */
+}
+
+/* Primary text buttons */
+.theme-claro .bg-white\/5 span,
+.theme-claro button.bg-white\/5 span,
+.theme-claro a.bg-white\/5 span,
+.theme-claro button[onClick*="setShowDatePicker"] span {
+  color: #334155 !important;
+}
+
+.theme-claro .border-white\/5,
+.theme-claro .border-white\/10 {
+  border-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+/* Interactive fields and form controls (Clean white cards, crisp shadows) */
 .theme-claro .orion-control,
 .theme-claro main :is(input, select, textarea) {
   background: #ffffff !important;
   color: #0f172a !important;
   -webkit-text-fill-color: #0f172a !important;
-  border: 1px solid #cbd5e1 !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
   border-radius: 12px !important;
-  transition: all 0.3s ease !important;
+  box-shadow: inset 0 1px 2px 0 rgba(15, 23, 42, 0.02) !important;
+  transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .theme-claro .orion-control:focus,
 .theme-claro main :is(input, select, textarea):focus {
-  border-color: #2563eb !important;
-  outline: 3px solid rgba(37, 99, 235, 0.15) !important;
-  box-shadow: 0 0 10px rgba(37, 99, 235, 0.08) !important;
+  border-color: #3b82f6 !important;
+  outline: none !important;
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.08),
+    0 1px 2px 0 rgba(15, 23, 42, 0.05) !important;
 }
 
 .theme-claro main :is(input, textarea)::placeholder {
@@ -1194,18 +1259,19 @@ body.theme-claro {
 
 /* Table header and row hover */
 .theme-claro .orion-table-shell table th {
-  background: #eaf2fb !important;
-  color: #334155 !important;
-  border-bottom: 1px solid #d9e4f2 !important;
+  background: #f1f5f9 !important; /* Soft, readable gray header */
+  color: #475569 !important;
+  font-weight: 850 !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
 }
 
 .theme-claro table tr:hover {
-  background-color: #f1f5f9 !important;
+  background-color: rgba(15, 23, 42, 0.01) !important;
 }
 
 .theme-claro table td,
 .theme-claro table th {
-  border-color: #e2e8f0 !important;
+  border-color: rgba(15, 23, 42, 0.04) !important;
 }
 
 /* Border and divider color corrections */
@@ -1216,10 +1282,10 @@ body.theme-claro {
 .theme-claro .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
 .theme-claro .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
 .theme-claro .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #e2e8f0 !important;
+  border-color: rgba(15, 23, 42, 0.05) !important;
 }
 
-/* Text and Title absolute contrast fixes */
+/* Elegant Slate Typography & Absolute Contrast */
 .theme-claro .text-gray-900,
 .theme-claro .text-gray-950,
 .theme-claro .text-slate-900,
@@ -1232,80 +1298,59 @@ body.theme-claro {
 .theme-claro h1,
 .theme-claro h2,
 .theme-claro h3 {
-  color: #0f172a !important;
+  color: #0f172a !important; /* Perfect high-contrast Slate 900 */
 }
 
 .theme-claro .text-gray-700,
 .theme-claro .text-slate-700,
 .theme-claro .text-gray-600,
 .theme-claro .text-slate-600 {
-  color: #334155 !important;
+  color: #334155 !important; /* Soft Slate 800 */
 }
 
 .theme-claro .text-gray-500,
 .theme-claro .text-slate-500,
 .theme-claro .text-gray-400,
 .theme-claro .text-slate-400 {
-  color: #475569 !important;
+  color: #475569 !important; /* Medium Slate 700 */
 }
 
 .theme-claro .text-blue-600,
 .theme-claro .text-blue-700 {
-  color: #2563eb !important;
+  color: #2563eb !important; /* Standard pure blue */
 }
 
 .theme-claro .text-emerald-600,
 .theme-claro .text-emerald-700 {
-  color: #059669 !important;
+  color: #059669 !important; /* Standard emerald green */
 }
 
-/* Custom background translucent white/5 items */
-.theme-claro .bg-white\/5,
-.theme-claro button.bg-white\/5,
-.theme-claro a.bg-white\/5,
-.theme-claro div.bg-white\/5 {
-  background-color: #cbd5e1 !important;
-  color: #0f172a !important;
-  border-color: #94a3b8 !important;
-}
-
-.theme-claro .bg-white\/5:hover,
-.theme-claro button.bg-white\/5:hover,
-.theme-claro a.bg-white\/5:hover {
-  background-color: #94a3b8 !important;
-}
-
-.theme-claro .border-white\/5,
-.theme-claro .border-white\/10 {
-  border-color: #cbd5e1 !important;
-}
-
-/* Meta status cards and details contrast */
+/* Meta status cards and details contrast (Premium soft pastel look) */
 .theme-claro .text-red-200 {
-  color: #991b1b !important;
+  color: #b91c1c !important; /* Dark bold red */
 }
 
 .theme-claro .text-amber-200 {
-  color: #92400e !important;
+  color: #b45309 !important; /* Dark bold amber */
 }
 
 .theme-claro .text-emerald-200 {
-  color: #065f46 !important;
+  color: #047857 !important; /* Dark bold emerald */
 }
 
 .theme-claro .bg-red-500\/5 {
   background-color: #fef2f2 !important;
-  border-color: #fee2e2 !important;
+  border: 1px solid rgba(239, 68, 68, 0.12) !important;
 }
 
 .theme-claro .bg-amber-500\/5 {
   background-color: #fffbeb !important;
-  border-color: #fef3c7 !important;
+  border: 1px solid rgba(245, 158, 11, 0.12) !important;
 }
 
 .theme-claro .bg-emerald-500\/5 {
   background-color: #ecfdf5 !important;
-  border-color: #d1fae5 !important;
+  border: 1px solid rgba(16, 185, 129, 0.12) !important;
 }
 
 /* 3D Funnel legend boxes and card elements */
@@ -1314,10 +1359,10 @@ body.theme-claro {
 .theme-claro div[class*="bg-slate-900\/60"],
 .theme-claro div[class*="bg-slate-900\/35"] {
   background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
+  border: 1px solid rgba(15, 23, 42, 0.05) !important;
   color: #0f172a !important;
   opacity: 1 !important;
-  box-shadow: 0 4px 15px -3px rgba(15, 23, 42, 0.04) !important;
+  box-shadow: 0 4px 12px 0 rgba(15, 23, 42, 0.02) !important;
 }
 
 .theme-claro div[class*="bg-slate-950\/20"] h4,
@@ -1335,13 +1380,15 @@ body.theme-claro {
 /* Date range picker popup display overrides */
 .theme-claro .absolute.bg-\[\#0b1324\] {
   background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
   color: #0f172a !important;
-  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.15) !important;
+  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.12) !important;
+  border-radius: 24px !important;
 }
 
 .theme-claro .absolute.bg-\[\#0b1324\] button {
-  color: #334155 !important;
+  color: #475569 !important;
+  border-radius: 10px !important;
 }
 
 .theme-claro .absolute.bg-\[\#0b1324\] button:hover {
@@ -1355,8 +1402,10 @@ body.theme-claro {
 }
 
 .theme-claro .absolute.bg-\[\#0b1324\] input {
-  border-color: #cbd5e1 !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
   background-color: #ffffff !important;
   color: #0f172a !important;
+  border-radius: 12px !important;
 }
+
 
