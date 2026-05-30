@@ -496,12 +496,37 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               </div>
 
               {/* Progress Box */}
-              <div className="bg-white/5 border border-white/5 p-5 rounded-2xl space-y-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black">✓</div>
-                  <span className="text-sm font-bold text-slate-300">Time comercial batizado: <strong className="text-emerald-400">{team.nome}</strong></span>
+              <div className="bg-white/5 border border-white/5 p-5 rounded-2xl space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black">✓</div>
+                    <span className="text-sm font-bold text-slate-300">Time comercial: <strong className="text-emerald-400">{team.nome}</strong></span>
+                  </div>
+                  
+                  {/* Inline Renaming Form */}
+                  <div className="flex flex-col gap-2 pl-9 bg-white/[0.02] border border-white/5 p-3 rounded-xl mt-1">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Alterar nome do time:</span>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={nomeTime}
+                        onChange={(e) => setNomeTime(e.target.value)}
+                        placeholder="Ex: Dream Team, Elite Orion..."
+                        className="flex-1 rounded-xl border border-white/5 bg-[#070b13] px-3.5 py-2 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-blue-500/30 focus:border-blue-500/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={saveTeamName}
+                        disabled={saving || !nomeTime.trim() || nomeTime === team.nome}
+                        className="rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs font-black text-white transition-all shadow-md disabled:opacity-40 cursor-pointer shrink-0"
+                      >
+                        {saving ? 'Gravando...' : 'Salvar'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
+
+                <div className="flex items-center gap-3 border-t border-white/5 pt-3.5">
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/5 border border-dashed border-white/10 text-slate-500 text-xs font-black">2</div>
                   <span className="text-sm font-bold text-slate-400">Adicionar integrante e ativar painel</span>
                 </div>
