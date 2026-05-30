@@ -335,7 +335,7 @@ export default function NovoCorretorPage() {
                         isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600'
                       }`}>
                         {foto ? (
-                          <img src={foto} alt={member.nome} className="h-full w-full object-cover" />
+                          <img src={foto} alt={member.nome} className="h-full w-full object-cover object-top" />
                         ) : (
                           member.nome[0]
                         )}

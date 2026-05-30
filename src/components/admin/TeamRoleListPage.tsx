@@ -191,7 +191,7 @@ export default function TeamRoleListPage({
                           title={`Entrar como ${role === 'designer' ? 'designer' : 'account'}`}
                         >
                           {person.foto_url || getTeamMemberPhoto(person.nome) ? (
-                            <img src={person.foto_url || getTeamMemberPhoto(person.nome) || ''} alt={person.nome} className="h-full w-full object-cover" />
+                            <img src={person.foto_url || getTeamMemberPhoto(person.nome) || ''} alt={person.nome} className="h-full w-full object-cover object-top" />
                           ) : person.nome?.[0].toUpperCase()}
                         </button>
                         <div className="min-w-0">

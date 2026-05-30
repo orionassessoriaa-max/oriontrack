@@ -477,7 +477,7 @@ export default function AdminUsuariosPage() {
               <label className="mt-2 flex cursor-pointer items-center gap-4 rounded-2xl bg-slate-50 px-5 py-4 text-sm font-bold text-slate-500 transition-all hover:bg-slate-100">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-blue-600 shadow-sm">
                   {form.foto_url ? (
-                    <img src={form.foto_url} alt="Foto" className="h-full w-full object-cover" />
+                    <img src={form.foto_url} alt="Foto" className="h-full w-full object-cover object-top" />
                   ) : (
                     <Camera size={18} />
                   )}
@@ -524,7 +524,7 @@ export default function AdminUsuariosPage() {
                         >
                           <div className="flex items-center gap-3">
                             <div className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl ${selected ? 'bg-white/20 text-white' : 'bg-white text-blue-600'}`}>
-                              {avatar ? <img src={avatar} alt={member.nome} className="h-full w-full object-cover" /> : member.nome[0]}
+                              {avatar ? <img src={avatar} alt={member.nome} className="h-full w-full object-cover object-top" /> : member.nome[0]}
                             </div>
                             <div className="min-w-0">
                               <p className="truncate text-xs font-black">{member.nome}</p>
@@ -665,7 +665,7 @@ export default function AdminUsuariosPage() {
                         <img
                           src={profile.foto_url || getTeamMemberPhoto(profile.nome) || ''}
                           alt={profile.nome}
-                          className="h-14 w-14 rounded-xl object-cover shadow-sm ring-1 ring-slate-200"
+                          className="h-14 w-14 rounded-xl object-cover object-top shadow-sm ring-1 ring-slate-200"
                         />
                       ) : (
                         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black text-white shadow-inner">

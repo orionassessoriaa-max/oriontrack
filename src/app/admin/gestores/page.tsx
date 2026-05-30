@@ -169,7 +169,7 @@ export default function AdminGestoresPage() {
                           title="Entrar como gestor"
                         >
                           {g.foto_url || getTeamMemberPhoto(g.nome) ? (
-                            <img src={g.foto_url || getTeamMemberPhoto(g.nome) || ''} alt={g.nome} className="h-full w-full object-cover" />
+                            <img src={g.foto_url || getTeamMemberPhoto(g.nome) || ''} alt={g.nome} className="h-full w-full object-cover object-top" />
                           ) : g.nome?.[0].toUpperCase()}
                         </button>
                         <div className="min-w-0">
