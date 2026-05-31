@@ -123,9 +123,9 @@ export default function InternalLayout({ children }: { children: React.ReactNode
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
             <AlertCircle size={28} />
           </div>
-          <h1 className="text-xl font-black text-gray-900">Perfil nÃ£o carregou</h1>
+          <h1 className="text-xl font-black text-gray-900">Perfil não carregou</h1>
           <p className="mt-2 text-sm font-bold leading-relaxed text-gray-500">
-            A sessÃ£o existe, mas o perfil do usuÃ¡rio nÃ£o foi encontrado ou demorou para responder.
+            A sessão existe, mas o perfil do usuário não foi encontrado ou demorou para responder.
           </p>
           <div className="mt-6 flex gap-3">
             <button

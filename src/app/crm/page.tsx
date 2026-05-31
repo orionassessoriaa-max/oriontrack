@@ -192,7 +192,8 @@ export default function CrmPage() {
     setError(null);
 
     try {
-      const corretorScopeId = ['corretor', 'corretor_membro'].includes(profile.tipo_usuario) ? profile.corretor_id : null;
+      const simulatedId = typeof window !== 'undefined' ? window.sessionStorage.getItem('orion:viewing_corretor_id') : null;
+      const corretorScopeId = simulatedId || (['corretor', 'corretor_membro'].includes(profile.tipo_usuario) ? profile.corretor_id : null);
       let tarefasQuery = supabase
         .from('lead_tarefas')
         .select('*')

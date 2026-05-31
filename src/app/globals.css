@@ -1305,7 +1305,11 @@ body.theme-claro {
 .theme-claro .text-white,
 .theme-claro .text-slate-50,
 .theme-claro .text-gray-50,
-.theme-claro .text-zinc-50 {
+.theme-claro .text-zinc-50,
+.theme-claro .text-gray-900,
+.theme-claro .text-slate-900,
+.theme-claro .text-gray-800,
+.theme-claro .text-slate-800 {
   color: #07152a !important; /* Rich Navy Slate-950 */
 }
 

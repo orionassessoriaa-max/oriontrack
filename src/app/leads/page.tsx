@@ -839,7 +839,7 @@ export default function BrokerLeadsPage() {
                   const cleanObservacoes = cleanLeadObservationText(lead.observacoes);
 
                   return (
-                  <tr key={lead.id} className="transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-blue-50/50">
+                  <tr key={lead.id} className="transition-colors border-b border-slate-100 dark:border-white/5 hover:bg-blue-50/50 dark:hover:bg-blue-500/10">
                     <td className="border border-slate-100 bg-slate-50 px-3 py-3 text-center text-xs font-black text-slate-400">{index + 1}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">
                       {lead.data_entrada ? format(new Date(lead.data_entrada), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '-'}
