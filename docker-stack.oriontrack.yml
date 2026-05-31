@@ -18,6 +18,7 @@ services:
       EVOLUTION_API_URL: "${EVOLUTION_API_URL}"
       EVOLUTION_API_KEY: "${EVOLUTION_API_KEY}"
       EVOLUTION_INSTANCE_PREFIX: "${EVOLUTION_INSTANCE_PREFIX:-orion}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
     deploy:
       replicas: 1
       restart_policy:
