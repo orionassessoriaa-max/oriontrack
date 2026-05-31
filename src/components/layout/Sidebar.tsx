@@ -435,13 +435,15 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
           )}
 
           <div className="flex items-center gap-3 border border-white/5 bg-white/5 p-1.5 rounded-2xl">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-black shadow-inner">
-              {initials}
-            </div>
-            <div className="hidden sm:block text-left min-w-[70px] max-w-[140px]">
-              <p className="truncate text-xs font-bold text-white leading-none">{profile?.nome || 'Usuario'}</p>
-              <p className="mt-1 text-[8px] font-bold uppercase tracking-tighter text-slate-500 leading-none">{roleLabel}</p>
-            </div>
+            <Link href="/perfil" className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-200" title="Ver meu Perfil">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-black shadow-inner">
+                {initials}
+              </div>
+              <div className="hidden sm:block text-left min-w-[70px] max-w-[140px]">
+                <p className="truncate text-xs font-bold text-white leading-none">{profile?.nome || 'Usuario'}</p>
+                <p className="mt-1 text-[8px] font-bold uppercase tracking-tighter text-slate-500 leading-none">{roleLabel}</p>
+              </div>
+            </Link>
             <button
               onClick={signOut}
               className="p-1.5 text-slate-500 transition-colors hover:text-red-400 cursor-pointer"
