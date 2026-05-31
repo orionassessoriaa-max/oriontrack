@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import {
   AlertTriangle,
   Bell,
+  Calculator,
   ChevronDown,
   ClipboardList,
   FileSearch,
@@ -175,6 +176,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: MessageSquare, label: 'Account', href: '/admin/accounts' },
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
     { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
+    { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: Globe, label: 'Paginas', href: '/admin/paginas' },
     { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
@@ -220,6 +222,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const corretorMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
+    { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: UserPlus, label: 'Meu time', href: '/time' },
@@ -233,6 +236,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const corretorMemberMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
+    { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },

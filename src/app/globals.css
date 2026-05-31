@@ -1533,6 +1533,37 @@ body.theme-claro {
   -webkit-text-fill-color: transparent !important;
 }
 
+/* Keep Top Navigation Header & Mobile Drawer user profile card and hamburger button high-contrast in Theme Claro */
+.theme-claro div[class*="fixed"][class*="h-20"] :is(div, button, a).bg-white\/5,
+.theme-claro div[class*="fixed"][class*="h-\[calc\(100vh-5rem\)\]"] :is(div, button, a).bg-white\/5 {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
+}
+
+.theme-claro div[class*="fixed"][class*="h-20"] :is(div, button, a).bg-white\/5:hover,
+.theme-claro div[class*="fixed"][class*="h-\[calc\(100vh-5rem\)\]"] :is(div, button, a).bg-white\/5:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.theme-claro div[class*="fixed"][class*="h-20"] :is(div, button, a).bg-white\/5 :is(span, p, a, button, svg),
+.theme-claro div[class*="fixed"][class*="h-\[calc\(100vh-5rem\)\]"] :is(div, button, a).bg-white\/5 :is(span, p, a, button, svg) {
+  color: #ffffff !important;
+}
+
+.theme-claro div[class*="fixed"][class*="h-20"] :is(div, button, a).bg-white\/5 p.text-slate-500,
+.theme-claro div[class*="fixed"][class*="h-\[calc\(100vh-5rem\)\]"] :is(div, button, a).bg-white\/5 p.text-slate-500,
+.theme-claro div[class*="fixed"][class*="h-20"] :is(div, button, a).bg-white\/5 :is(button, svg).text-slate-500,
+.theme-claro div[class*="fixed"][class*="h-\[calc\(100vh-5rem\)\]"] :is(div, button, a).bg-white\/5 :is(button, svg).text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+.theme-claro div[class*="fixed"][class*="h-20"] :is(div, button, a).bg-white\/5 button:hover :is(svg, span) {
+  color: #f87171 !important; /* Soft premium red on signout hover */
+}
+
+
 
 
 

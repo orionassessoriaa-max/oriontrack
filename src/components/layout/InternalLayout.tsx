@@ -30,7 +30,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isAccountRoute = pathname.startsWith('/account');
         const isCreativeRoute = pathname.startsWith('/criativos');
         const isTeamRoute = pathname.startsWith('/equipe');
-        const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes';
+        const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/simulador');
         const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
 
         if (isSharedRoute) return;
