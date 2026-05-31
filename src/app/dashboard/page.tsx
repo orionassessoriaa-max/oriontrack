@@ -55,6 +55,7 @@ type LeadMetricRow = {
   cidade?: string | null;
   valor_negociacao?: string | number | null;
   valor_comissao?: string | number | null;
+  responsavel_profile_id?: string | null;
 };
 
 type MonthlyPerformance = {
@@ -206,6 +207,43 @@ function getBrokerMetaStatus(account: any) {
   };
 }
 
+function normalizeCityName(city: string): string {
+  const trimmed = String(city || '').trim();
+  if (!trimmed || trimmed === '-') return '';
+  
+  // Convert to lowercase and remove accents
+  const normalized = trimmed
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  // Handle Brasília variations
+  if (normalized === 'brasilia' || normalized === 'brasilia df' || normalized === 'distrito federal' || normalized === 'df') {
+    return 'Brasília';
+  }
+  
+  // Handle São Paulo variations
+  if (normalized === 'sao paulo' || normalized === 'sao paulo sp' || normalized === 'sp') {
+    return 'São Paulo';
+  }
+
+  // Handle Rio de Janeiro variations
+  if (normalized === 'rio de janeiro' || normalized === 'rio de janeiro rj' || normalized === 'rj') {
+    return 'Rio de Janeiro';
+  }
+
+  // Return standard capitalized title case for other cities
+  return trimmed
+    .split(' ')
+    .map(word => {
+      const lower = word.toLowerCase();
+      // Keep small prepositions in lowercase
+      if (['de', 'da', 'do', 'dos', 'das', 'e', 'em'].includes(lower)) return lower;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
 export default function DashboardPage() {
   const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -232,6 +270,22 @@ export default function DashboardPage() {
   const [topCities, setTopCities] = useState<Array<{ city: string; leads: number }>>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [chartHovering, setChartHovering] = useState(false);
+
+  const [allTimeStats, setAllTimeStats] = useState({
+    total: 0,
+    sold: 0,
+    revenueRealized: 0,
+    salesRealized: 0,
+    salesPotential: 0
+  });
+  const [currentMonthStats, setCurrentMonthStats] = useState({
+    waiting: 0,
+    inProgress: 0,
+    quoted: 0,
+    sold: 0
+  });
+  const [periodSpend, setPeriodSpend] = useState(0);
+  const [chartAnimate, setChartAnimate] = useState(false);
 
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -361,11 +415,11 @@ export default function DashboardPage() {
 
         setCorretorData(data);
 
-        // 2. Buscar Estatísticas de Leads
+        // 2. Buscar Todos os Estatísticas de Leads (Sem filtro de data na query)
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
 
-        let allStats: LeadMetricRow[] = [];
+        let allLeads: LeadMetricRow[] = [];
         let pageNum = 0;
         const limitNum = 1000;
         let keepFetching = true;
@@ -375,17 +429,9 @@ export default function DashboardPage() {
           const to = from + limitNum - 1;
           let statsRequest = supabase
             .from('leads')
-            .select('status, data_entrada, cidade, valor_negociacao, valor_comissao')
-            .eq('corretor_id', profile.corretor_id);
-
-          if (dataInicio) {
-            statsRequest = statsRequest.gte('data_entrada', `${dataInicio}T00:00:00.000Z`);
-          }
-          if (dataFim) {
-            statsRequest = statsRequest.lte('data_entrada', `${dataFim}T23:59:59.999Z`);
-          }
-
-          statsRequest = statsRequest.range(from, to);
+            .select('status, data_entrada, cidade, valor_negociacao, valor_comissao, responsavel_profile_id')
+            .eq('corretor_id', profile.corretor_id)
+            .range(from, to);
 
           if (profile.tipo_usuario === 'corretor_membro') {
             statsRequest = statsRequest.eq('responsavel_profile_id', profile.id);
@@ -396,7 +442,7 @@ export default function DashboardPage() {
           if (statsQuery.error) throw statsQuery.error;
 
           const dataRows = statsQuery.data || [];
-          allStats = [...allStats, ...(dataRows as LeadMetricRow[])];
+          allLeads = [...allLeads, ...(dataRows as LeadMetricRow[])];
 
           if (dataRows.length < limitNum) {
             keepFetching = false;
@@ -405,52 +451,57 @@ export default function DashboardPage() {
           }
         }
 
-        const statsRes = allStats;
-        const thisMonthKey = monthKey(new Date());
-        const soldLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
-        const lostLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Sem interesse');
+        // Calculate all-time summary (used for the 4 financial cards step 3)
+        const allTimeSoldLeads = allLeads.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
         const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
-        setStats({
-          total: statsRes.length,
-          waiting: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Aguardando atendimento').length,
-          inProgress: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Em negociação').length,
-          quoted: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Cotação enviada').length,
-          sold: soldLeads.length,
-          soldThisMonth: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
-          stale: statsRes.filter(l => {
-            if (normalizeLeadStatus(l.status) !== 'Aguardando atendimento' || !l.data_entrada) return false;
-            return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
-          }).length,
-          lost: lostLeads.length,
-          revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
-          salesRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
-          salesPotential: statsRes
+        
+        setAllTimeStats({
+          total: allLeads.length,
+          sold: allTimeSoldLeads.length,
+          revenueRealized: allTimeSoldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
+          salesRealized: allTimeSoldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
+          salesPotential: allLeads
             .filter((lead) => activeRevenueStatuses.includes(normalizeLeadStatus(lead.status)))
             .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
         });
 
+        // Calculate current month summary (used for the progress bars step 6)
+        const thisMonthKey = monthKey(new Date());
+        const currentMonthLeads = allLeads.filter(l => l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey);
+        const currentMonthSoldLeads = currentMonthLeads.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
+        
+        setCurrentMonthStats({
+          waiting: currentMonthLeads.filter(l => normalizeLeadStatus(l.status) === 'Aguardando atendimento').length,
+          inProgress: currentMonthLeads.filter(l => normalizeLeadStatus(l.status) === 'Em negociação').length,
+          quoted: currentMonthLeads.filter(l => normalizeLeadStatus(l.status) === 'Cotação enviada').length,
+          sold: currentMonthSoldLeads.length
+        });
+
+        // Compute static 6-month performance timeline
         const months = getLastMonths();
         const monthMap = new Map(months.map((month) => [month.key, { ...month }]));
-
-        statsRes.forEach((lead) => {
+        allLeads.forEach((lead) => {
           if (!lead.data_entrada) return;
           const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
           if (current) current.leads += 1;
         });
 
+        // Compute static 7-day weekly leads rhythm
         const days = getLastDays();
         const dayMap = new Map(days.map((day) => [day.key, { ...day }]));
-        statsRes.forEach((lead) => {
+        allLeads.forEach((lead) => {
           if (!lead.data_entrada) return;
           const current = dayMap.get(dayKey(new Date(lead.data_entrada)));
           if (current) current.leads += 1;
         });
         setWeeklyLeads(Array.from(dayMap.values()));
 
+        // Compute static top cities ranking (with canonical normalization)
         const cityMap = new Map<string, number>();
-        statsRes.forEach((lead) => {
-          const city = String(lead.cidade || '').trim();
-          if (!city || city === '-') return;
+        allLeads.forEach((lead) => {
+          const rawCity = String(lead.cidade || '').trim();
+          const city = normalizeCityName(rawCity);
+          if (!city) return;
           cityMap.set(city, (cityMap.get(city) || 0) + 1);
         });
         setTopCities(
@@ -460,6 +511,34 @@ export default function DashboardPage() {
             .slice(0, 5)
         );
 
+        // Fetch exact period Meta spend
+        let currentPeriodSpend = 0;
+        if (accessToken && profile.corretor_id && dataInicio && dataFim) {
+          try {
+            const spendResponse = await fetch('/api/integrations/meta/spend', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                corretor_id: profile.corretor_id,
+                data_inicio: dataInicio,
+                data_fim: dataFim,
+              }),
+            });
+
+            if (spendResponse.ok) {
+              const spendPayload = await spendResponse.json();
+              currentPeriodSpend = Number(spendPayload.spend || 0);
+            }
+          } catch (error) {
+            console.error('Erro ao buscar investimento Meta do periodo:', error);
+          }
+        }
+        setPeriodSpend(currentPeriodSpend);
+
+        // Fetch monthly Meta spends (static 6-months)
         if (accessToken) {
           const spendResults = await Promise.all(
             months.map(async (month) => {
@@ -497,6 +576,48 @@ export default function DashboardPage() {
           });
         }
 
+        setMonthlyPerformance(Array.from(monthMap.values()));
+
+        // Filter leads in memory for active date filter (used for status, pizza, funnel)
+        let statsRes = allLeads;
+        if (dataInicio || dataFim) {
+          statsRes = allLeads.filter(lead => {
+            if (!lead.data_entrada) return false;
+            const entryTime = new Date(lead.data_entrada).getTime();
+            if (dataInicio) {
+              const startLimit = new Date(`${dataInicio}T00:00:00.000Z`).getTime();
+              if (entryTime < startLimit) return false;
+            }
+            if (dataFim) {
+              const endLimit = new Date(`${dataFim}T23:59:59.999Z`).getTime();
+              if (entryTime > endLimit) return false;
+            }
+            return true;
+          });
+        }
+
+        const soldLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
+        const lostLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Sem interesse');
+        
+        setStats({
+          total: statsRes.length,
+          waiting: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Aguardando atendimento').length,
+          inProgress: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Em negociação').length,
+          quoted: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Cotação enviada').length,
+          sold: soldLeads.length,
+          soldThisMonth: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
+          stale: statsRes.filter(l => {
+            if (normalizeLeadStatus(l.status) !== 'Aguardando atendimento' || !l.data_entrada) return false;
+            return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
+          }).length,
+          lost: lostLeads.length,
+          revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
+          salesRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
+          salesPotential: statsRes
+            .filter((lead) => activeRevenueStatuses.includes(normalizeLeadStatus(lead.status)))
+            .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
+        });
+
         // Fetch Meta Account alerts for this broker specifically
         if (profile.corretor_id && accessToken) {
           setLoadingMeta(true);
@@ -524,7 +645,6 @@ export default function DashboardPage() {
           }
         }
 
-        setMonthlyPerformance(Array.from(monthMap.values()));
       } catch (err: unknown) {
         console.error("Dashboard general error:", err);
       } finally {
@@ -537,6 +657,14 @@ export default function DashboardPage() {
 
   const firstName = profile?.nome ? profile.nome.split(' ')[0] : '';
   const isDataLoading = authLoading || loadingData;
+
+  useEffect(() => {
+    if (!isDataLoading) {
+      setChartAnimate(false);
+      const timer = setTimeout(() => setChartAnimate(true), 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isDataLoading, currentMonthStats]);
 
   const timeOperacional = Array.isArray(corretorData?.time_operacional)
     ? corretorData.time_operacional
@@ -561,30 +689,45 @@ export default function DashboardPage() {
   }, [timeOperacional.length]);
 
   const staleOpportunityCount = stats.stale;
-  const maxMetric = Math.max(stats.waiting, stats.inProgress, stats.quoted, stats.sold, 1);
+  const maxCurrentMonthMetric = Math.max(
+    currentMonthStats.waiting,
+    currentMonthStats.inProgress,
+    currentMonthStats.quoted,
+    currentMonthStats.sold,
+    1
+  );
+
   const performanceBars = [
-    { label: 'Aguardando', value: stats.waiting, color: 'bg-purple-500' },
-    { label: 'Em negociação', value: stats.inProgress, color: 'bg-orange-500' },
-    { label: 'Cotações', value: stats.quoted, color: 'bg-indigo-500' },
-    { label: 'Vendas', value: stats.sold, color: 'bg-emerald-500' },
+    { 
+      label: 'Aguardando', 
+      value: currentMonthStats.waiting, 
+      gradient: 'from-purple-500 via-pink-500 to-indigo-500', 
+      glowColor: 'rgba(168, 85, 247, 0.4)' 
+    },
+    { 
+      label: 'Em negociação', 
+      value: currentMonthStats.inProgress, 
+      gradient: 'from-amber-500 via-orange-500 to-red-500', 
+      glowColor: 'rgba(249, 115, 22, 0.4)' 
+    },
+    { 
+      label: 'Cotações', 
+      value: currentMonthStats.quoted, 
+      gradient: 'from-cyan-400 via-sky-500 to-blue-500', 
+      glowColor: 'rgba(34, 211, 238, 0.4)' 
+    },
+    { 
+      label: 'Vendas', 
+      value: currentMonthStats.sold, 
+      gradient: 'from-emerald-400 via-teal-500 to-green-500', 
+      glowColor: 'rgba(16, 185, 129, 0.4)' 
+    },
   ];
   const maxMonthlyLeads = Math.max(...monthlyPerformance.map((month) => month.leads), 1);
   const maxMonthlySpend = Math.max(...monthlyPerformance.map((month) => month.spend), 1);
   const currentMonth = monthlyPerformance[monthlyPerformance.length - 1] || { leads: 0, spend: 0 };
 
-  const periodSpend = (() => {
-    if (presetLabel === 'Todo o período') {
-      return monthlyPerformance.reduce((sum, m) => sum + m.spend, 0);
-    }
-    if (presetLabel === 'Mês passado') {
-      const prevDate = new Date();
-      prevDate.setMonth(prevDate.getMonth() - 1);
-      const prevKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-      const prevMonth = monthlyPerformance.find(m => m.key === prevKey);
-      return prevMonth ? prevMonth.spend : 0;
-    }
-    return currentMonth.spend;
-  })();
+
 
   const periodCpl = stats.total > 0 ? periodSpend / stats.total : 0;
   const periodConversion = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
@@ -598,6 +741,7 @@ export default function DashboardPage() {
         : `de ${presetLabel.toLowerCase()}`;
 
   const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
+  const allTimeSalesConversionRate = allTimeStats.total > 0 ? (allTimeStats.sold / allTimeStats.total) * 100 : 0;
   const chartHeight = 176;
   const maxWeeklyLeads = Math.max(...weeklyLeads.map((day) => day.leads), 1);
   const weeklyTotal = weeklyLeads.reduce((sum, day) => sum + day.leads, 0);
@@ -980,10 +1124,10 @@ export default function DashboardPage() {
               <Target size={16} />
             </div>
           </div>
-          <p className="text-3xl font-black text-white">{salesConversionRate.toFixed(1).replace('.', ',')}%</p>
+          <p className="text-3xl font-black text-white">{allTimeSalesConversionRate.toFixed(1).replace('.', ',')}%</p>
           <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-400 border-t border-white/5 pt-2">
-            <span>✓ {stats.sold} vendas</span>
-            <span>{stats.total} leads</span>
+            <span>✓ {allTimeStats.sold} vendas</span>
+            <span>{allTimeStats.total} leads</span>
           </div>
         </div>
 
@@ -994,7 +1138,7 @@ export default function DashboardPage() {
               <DollarSign size={16} />
             </div>
           </div>
-          <p className="text-3xl font-black text-white">{formatCurrency(stats.revenueRealized)}</p>
+          <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.revenueRealized)}</p>
           <div className="mt-2.5 text-[10px] font-bold text-emerald-400 border-t border-white/5 pt-2">
             comissão das vendas realizadas
           </div>
@@ -1007,7 +1151,7 @@ export default function DashboardPage() {
               <TrendingUp size={16} />
             </div>
           </div>
-          <p className="text-3xl font-black text-white">{formatCurrency(stats.salesPotential)}</p>
+          <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.salesPotential)}</p>
           <div className="mt-2.5 text-[10px] font-bold text-slate-500 border-t border-white/5 pt-2">
             valor previsto dos leads ativos
           </div>
@@ -1020,7 +1164,7 @@ export default function DashboardPage() {
               <BarChart3 size={16} />
             </div>
           </div>
-          <p className="text-3xl font-black text-white">{formatCurrency(stats.salesRealized)}</p>
+          <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.salesRealized)}</p>
           <div className="mt-2.5 text-[10px] font-bold text-blue-400 border-t border-white/5 pt-2">
             soma das vendas realizadas
           </div>
@@ -1203,24 +1347,30 @@ export default function DashboardPage() {
         <div className="rounded-[2rem] border border-white/5 bg-[#090e1a] p-6 shadow-xl lg:col-span-2">
           <h3 className="mb-6 text-sm font-black uppercase tracking-widest text-white">Estatísticas por Etapa</h3>
           <div className="space-y-4">
-            {performanceBars.map((bar, index) => (
-              <div key={bar.label} className="group/stage">
-                <div className="mb-2 flex justify-between text-xs font-bold text-slate-400">
-                  <span className="font-extrabold text-white">{bar.label}</span>
-                  <span>{bar.value}</span>
+            {performanceBars.map((bar, index) => {
+              const barWidth = chartAnimate 
+                ? `${(bar.value / maxCurrentMonthMetric) * 100}%` 
+                : '0%';
+
+              return (
+                <div key={bar.label} className="group/stage">
+                  <div className="mb-2 flex justify-between text-xs font-bold text-slate-400">
+                    <span className="font-extrabold text-white">{bar.label}</span>
+                    <span>{bar.value}</span>
+                  </div>
+                  <div className="h-3.5 overflow-hidden rounded-full bg-[#070b13] border border-white/5 relative shadow-inner">
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r ${bar.gradient} transition-all duration-[1200ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/stage:brightness-110`}
+                      style={{
+                        width: barWidth,
+                        boxShadow: `0 0 10px ${bar.glowColor}`,
+                        transitionDelay: `${index * 80}ms`
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="h-3 overflow-hidden rounded-full bg-[#070b13] border border-white/5">
-                  <div
-                    className={`dashboard-progress-bar h-full rounded-full ${bar.color} transition-all duration-500 group-hover/stage:brightness-110 group-hover/stage:shadow-lg`}
-                    style={{
-                      ['--bar-width' as string]: `${(bar.value / maxMetric) * 100}%`,
-                      ['--bar-delay' as string]: `${index * 90}ms`,
-                      width: `${(bar.value / maxMetric) * 100}%`
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
         <Link href="/leads?status=Aguardando atendimento" className="rounded-[2rem] border border-amber-500/20 bg-amber-500/5 p-6 transition-all hover:bg-amber-500/10">
@@ -1633,11 +1783,11 @@ function CustomDonutPizzaChart({
     { label: 'Sem interesse', value: lost, color: '#64748b' }
   ].filter(s => s.value > 0);
 
-  // Default demo values if all are zero
+  // Default values if all are zero
   const displaySlices = slices.length > 0 ? slices : [
-    { label: 'Aguardando', value: 1, color: '#a78bfa' },
-    { label: 'Negociação', value: 2, color: '#f59e0b' },
-    { label: 'Proposta', value: 1, color: '#38bdf8' }
+    { label: 'Aguardando', value: 0, color: '#a78bfa' },
+    { label: 'Negociação', value: 0, color: '#f59e0b' },
+    { label: 'Proposta', value: 0, color: '#38bdf8' }
   ];
   const displayTotal = displaySlices.reduce((a, b) => a + b.value, 0);
 
@@ -1726,7 +1876,7 @@ function CustomDonutPizzaChart({
             <div className="min-w-0 flex-1">
               <p className="font-extrabold text-white leading-tight text-xs sm:text-sm truncate" title={slice.label}>{slice.label}</p>
               <p className="text-[10px] font-bold text-slate-300 mt-0.5">
-                {slice.value} leads <span className="text-slate-400 font-bold">({((slice.value / displayTotal) * 100).toFixed(0)}%)</span>
+                {slice.value} leads <span className="text-slate-400 font-bold">({displayTotal > 0 ? ((slice.value / displayTotal) * 100).toFixed(0) : '0'}%)</span>
               </p>
             </div>
           </div>
