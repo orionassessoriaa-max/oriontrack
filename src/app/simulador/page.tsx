@@ -187,27 +187,29 @@ const PLANOS_PADRAO: Plano[] = [
 // Logos Vetoriais Premium Customizados em Imagem
 function RenderLogo({ id, className = "h-8 w-8" }: { id: string; className?: string }) {
   const mapping: { [key: string]: string } = {
-    'amil': '/operadoras/1.png',
-    'bradesco': '/operadoras/2.png',
-    'sulamerica': '/operadoras/3.png',
-    'porto': '/operadoras/4.png',
-    'unimed': '/operadoras/5.png'
+    'amil': '/operadoras/2.png',
+    'bradesco': '/operadoras/5.png',
+    'sulamerica': '/operadoras/1.png',
+    'porto': '/operadoras/3.png',
+    'alice': '/operadoras/4.png'
   };
 
   const src = mapping[id.toLowerCase()];
   if (src) {
     return (
-      <img
-        src={src}
-        alt={id}
-        className={`${className} object-contain rounded-lg bg-white/5 p-0.5`}
-      />
+      <div className={`${className} flex items-center justify-center rounded-xl bg-white border border-slate-200/60 shadow-sm overflow-hidden p-1 shrink-0`}>
+        <img
+          src={src}
+          alt={id}
+          className="h-full w-full object-contain"
+        />
+      </div>
     );
   }
 
   // Fallback para novas operadoras
   return (
-    <div className={`flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 text-[10px] font-black uppercase text-white shadow-md`}>
+    <div className={`${className} flex items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 text-[10px] font-black uppercase text-white shadow-md shrink-0`}>
       {id.slice(0, 2)}
     </div>
   );
@@ -798,7 +800,7 @@ Payload: {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-5">
           <div>
             <div className="flex items-center gap-2 text-cyan-400 font-extrabold text-xs uppercase tracking-widest">
-              <Sparkles size={14} className="animate-pulse" />
+              <img src="/orion-empty-logo.png" alt="Orion" className="object-contain animate-pulse shrink-0" style={{ height: 14, width: 14 }} />
               <span>Simulador Inteligente Apolo</span>
             </div>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">
@@ -871,24 +873,24 @@ Payload: {
                   {/* Tipo de Contrato */}
                   <div>
                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Contratação</label>
-                    <div className="mt-1.5 flex bg-white/5 border border-white/5 p-1 rounded-xl">
+                    <div className="mt-1.5 flex bg-white/5 border border-white/5 p-1 rounded-xl gap-0.5">
                       <button
                         onClick={() => { setTipoContrato('PME'); limparVidas(); }}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-2xs font-extrabold uppercase transition-all ${
+                        className={`flex-1 min-w-0 flex items-center justify-center gap-1 py-2 px-1 rounded-lg text-2xs font-extrabold uppercase transition-all ${
                           tipoContrato === 'PME' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        <Building size={12} />
-                        <span>PME (Empresarial)</span>
+                        <Building size={12} className="shrink-0" />
+                        <span className="truncate">PME (Empresa)</span>
                       </button>
                       <button
                         onClick={() => { setTipoContrato('PF'); limparVidas(); }}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-2xs font-extrabold uppercase transition-all ${
+                        className={`flex-1 min-w-0 flex items-center justify-center gap-1 py-2 px-1 rounded-lg text-2xs font-extrabold uppercase transition-all ${
                           tipoContrato === 'PF' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        <User size={12} />
-                        <span>Pessoa Física</span>
+                        <User size={12} className="shrink-0" />
+                        <span className="truncate">Pessoa Física</span>
                       </button>
                     </div>
                   </div>
@@ -1028,8 +1030,8 @@ Payload: {
 
               {totalVidas === 0 ? (
                 <div className="orion-panel flex flex-col items-center justify-center rounded-[2rem] border border-white/5 bg-[#0f172a]/20 p-12 text-center backdrop-blur-md shadow-inner">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-600/10 text-blue-400 border border-blue-500/10 mb-4 animate-bounce">
-                    <Sparkles size={28} />
+                  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-600/10 text-blue-400 border border-blue-500/10 mb-4 animate-bounce overflow-hidden p-3 bg-white shadow-md">
+                    <img src="/orion-empty-logo.png" alt="Orion" className="h-10 w-10 object-contain animate-pulse" />
                   </div>
                   <h3 className="text-lg font-black text-white">Insira as vidas para começar</h3>
                   <p className="mt-1 max-w-sm text-xs font-bold leading-relaxed text-slate-500">
@@ -1496,7 +1498,7 @@ Payload: {
             <div className="lg:col-span-8 orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-6 backdrop-blur-md shadow-2xl space-y-5">
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-cyan-400 mb-1">
-                  <Sparkles size={14} className="animate-spin-slow" />
+                  <img src="/orion-empty-logo.png" alt="Orion" className="object-contain animate-pulse shrink-0" style={{ height: 14, width: 14 }} />
                   <span>Apolo AI OCR & Table Parser</span>
                 </div>
                 <h3 className="text-lg font-black text-white">Alimentação Inteligente via PDF / Excel</h3>
@@ -1636,8 +1638,8 @@ Payload: {
               {/* Header do Modal */}
               <div className="flex items-center justify-between border-b border-white/5 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-600/10 text-cyan-400 font-black border border-cyan-500/20">
-                    <Sparkles size={20} className="animate-pulse" />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-600/10 text-cyan-400 font-black border border-cyan-500/20 overflow-hidden p-2.5 bg-white">
+                    <img src="/orion-empty-logo.png" alt="Orion" className="h-6 w-6 object-contain animate-pulse" />
                   </div>
                   <div>
                     <h3 className="text-base font-black text-white flex items-center gap-1.5">

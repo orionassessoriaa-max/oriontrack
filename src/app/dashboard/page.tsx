@@ -620,7 +620,7 @@ export default function DashboardPage() {
     {
       name: 'Atendimento',
       value: activePipeline,
-      detail: 'em funil comercial',
+      detail: 'em atendimento',
       href: '/leads?status=Aguardando%20atendimento',
       path: 'M112 232 C176 254 344 254 408 232 C392 285 371 337 341 386 C291 403 229 403 179 386 C149 337 128 285 112 232Z',
       labelY: 284,
@@ -646,7 +646,7 @@ export default function DashboardPage() {
     {
       name: 'Atendimento',
       value: activePipeline,
-      detail: 'em funil comercial',
+      detail: 'em atendimento',
       href: '/leads?status=Aguardando%20atendimento',
       path: 'M112 232 C176 254 344 254 408 232 C392 285 371 337 341 386 C291 403 229 403 179 386 C149 337 128 285 112 232Z',
       labelY: 284,

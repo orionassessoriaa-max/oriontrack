@@ -108,7 +108,7 @@ export default function OrionFunnel({
       id: 2,
       name: 'Atendimento',
       value: activePipeline,
-      detail: 'Em funil comercial',
+      detail: 'Em atendimento',
       color: '#00f5ff',
       glow: 'rgba(0, 245, 255, 0.4)',
       ellipseStroke: '#22d3ee',
