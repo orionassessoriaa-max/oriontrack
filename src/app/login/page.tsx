@@ -169,6 +169,10 @@ export default function LoginPage() {
         }`} 
       />
 
+      {/* Vinhetas cinematográficas para cobrir marcas d'água e aumentar contraste visual */}
+      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#020512] via-[#020512]/85 to-transparent z-10 pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#020512] via-[#020512]/50 to-transparent z-10 pointer-events-none" />
+
       {/* Botão de Pular Intro (Discreto, no topo direito) */}
       {videoState === 'playing-intro' && (
         <button
