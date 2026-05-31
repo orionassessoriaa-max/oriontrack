@@ -235,6 +235,38 @@ export default function DashboardPage() {
 
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [oldestDate, setOldestDate] = useState('');
+
+  useEffect(() => {
+    async function initializeDefaultDates() {
+      if (!profile || !['corretor', 'corretor_membro'].includes(profile.tipo_usuario)) return;
+      if (!profile.corretor_id) return;
+      
+      try {
+        const { data: oldestLeadData } = await supabase
+          .from('leads')
+          .select('data_entrada')
+          .eq('corretor_id', profile.corretor_id)
+          .order('data_entrada', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        let firstLeadDate = '2026-01-01';
+        if (oldestLeadData?.data_entrada) {
+          firstLeadDate = oldestLeadData.data_entrada.slice(0, 10);
+        }
+        
+        setOldestDate(firstLeadDate);
+        setDataInicio(firstLeadDate);
+        setDataFim(todayStr);
+      } catch (err) {
+        console.error('Error fetching oldest lead date:', err);
+      }
+    }
+
+    initializeDefaultDates();
+  }, [profile?.id, profile?.corretor_id]);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [presetLabel, setPresetLabel] = useState('Todo o período');
@@ -248,8 +280,9 @@ export default function DashboardPage() {
 
   const applyPreset = (preset: string) => {
     if (preset === 'todo_periodo') {
-      setDataInicio('');
-      setDataFim('');
+      const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      setDataInicio(oldestDate || '2026-01-01');
+      setDataFim(todayStr);
       setPresetLabel('Todo o período');
       setShowDatePicker(false);
       return;
@@ -538,8 +571,32 @@ export default function DashboardPage() {
   const maxMonthlyLeads = Math.max(...monthlyPerformance.map((month) => month.leads), 1);
   const maxMonthlySpend = Math.max(...monthlyPerformance.map((month) => month.spend), 1);
   const currentMonth = monthlyPerformance[monthlyPerformance.length - 1] || { leads: 0, spend: 0 };
-  const currentMonthCpl = currentMonth.leads > 0 ? currentMonth.spend / currentMonth.leads : 0;
-  const currentMonthConversion = currentMonth.leads > 0 ? (stats.soldThisMonth / currentMonth.leads) * 100 : 0;
+
+  const periodSpend = (() => {
+    if (presetLabel === 'Todo o período') {
+      return monthlyPerformance.reduce((sum, m) => sum + m.spend, 0);
+    }
+    if (presetLabel === 'Mês passado') {
+      const prevDate = new Date();
+      prevDate.setMonth(prevDate.getMonth() - 1);
+      const prevKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+      const prevMonth = monthlyPerformance.find(m => m.key === prevKey);
+      return prevMonth ? prevMonth.spend : 0;
+    }
+    return currentMonth.spend;
+  })();
+
+  const periodCpl = stats.total > 0 ? periodSpend / stats.total : 0;
+  const periodConversion = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
+
+  const periodLabelText = presetLabel === 'Todo o período'
+    ? 'no período'
+    : presetLabel === 'Este mês'
+      ? 'deste mês'
+      : presetLabel === 'Mês passado'
+        ? 'do mês passado'
+        : `de ${presetLabel.toLowerCase()}`;
+
   const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
   const chartHeight = 176;
   const maxWeeklyLeads = Math.max(...weeklyLeads.map((day) => day.leads), 1);
@@ -1010,7 +1067,7 @@ export default function DashboardPage() {
             <div>
               <div className="mb-6 flex items-start justify-between gap-4">
                 <div>
-                  <p className="mb-1 text-xs font-black uppercase tracking-widest text-cyan-400">Resumo deste mês</p>
+                  <p className="mb-1 text-xs font-black uppercase tracking-widest text-cyan-400">Resumo {periodLabelText}</p>
                   <h2 className="text-xl font-black text-white">Perfil comercial</h2>
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
@@ -1018,10 +1075,10 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <MiniMetric icon={Users} label="Leads no mês" value={currentMonth.leads} />
-                <MiniMetric icon={DollarSign} label="Investido no mês" value={formatCurrency(currentMonth.spend)} />
-                <MiniMetric icon={Target} label="CPL do mês" value={formatCurrency(currentMonthCpl)} />
-                <MiniMetric icon={TrendingUp} label="Conversão mês" value={`${currentMonthConversion.toFixed(1).replace('.', ',')}%`} />
+                <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
+                <MiniMetric icon={DollarSign} label={`Investido ${periodLabelText}`} value={formatCurrency(periodSpend)} />
+                <MiniMetric icon={Target} label={`CPL ${periodLabelText}`} value={formatCurrency(periodCpl)} />
+                <MiniMetric icon={TrendingUp} label={`Conversão ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
                 <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
                 <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
               </div>

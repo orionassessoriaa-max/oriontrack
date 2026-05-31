@@ -94,6 +94,12 @@ export default function TrafficMetaAlertsPage() {
   }
 
   useEffect(() => {
+    const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    setDateStart('2025-01-01');
+    setDateEnd(todayStr);
+  }, []);
+
+  useEffect(() => {
     void fetchAlerts();
   }, [dateStart, dateEnd]);
 

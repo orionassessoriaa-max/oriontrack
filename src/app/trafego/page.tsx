@@ -56,6 +56,12 @@ export default function GestorDashboardPage() {
   const [dataFim, setDataFim] = useState('');
 
   useEffect(() => {
+    const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    setDataInicio('2025-01-01');
+    setDataFim(todayStr);
+  }, []);
+
+  useEffect(() => {
     fetchDashboardData();
   }, [profile?.id, dataInicio, dataFim]);
 

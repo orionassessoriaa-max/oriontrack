@@ -49,10 +49,15 @@ export default function MetaDatePicker({
 
   const applyPreset = (presetName: string) => {
     if (presetName === 'todo_periodo') {
-      setTempStart('');
-      setTempEnd('');
+      const d = new Date();
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      const startStr = '2025-01-01'; // Default system start
+      const endStr = new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
+      
+      setTempStart(startStr);
+      setTempEnd(endStr);
       setActivePreset('Todo o período');
-      onChange('', '', 'Todo o período');
+      onChange(startStr, endStr, 'Todo o período');
       setIsOpen(false);
       return;
     }
