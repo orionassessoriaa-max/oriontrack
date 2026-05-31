@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import InternalLayout from '@/components/layout/InternalLayout';
+import { supabase } from '@/lib/supabase/client';
 import {
   Calculator,
   Plus,
@@ -27,15 +28,22 @@ import {
   User,
   Heart,
   ChevronRight,
-  Award
+  Award,
+  ChevronDown,
+  Edit2,
+  Save,
+  X,
+  Bell,
+  Eye,
+  Info
 } from 'lucide-react';
 
 // Formato de operadora
 interface Operadora {
   id: string;
   nome: string;
-  logoUrl?: string;
   corGradiente: string;
+  logoUrl?: string;
 }
 
 // Formato de plano
@@ -49,6 +57,7 @@ interface Plano {
   hospitais: string[];
   laboratorios: string[];
   precos: number[]; // 10 faixas etárias ANS
+  isDemo?: boolean;
 }
 
 // Faixas etárias ANS
@@ -85,7 +94,8 @@ const PLANOS_PADRAO: Plano[] = [
     reembolso: 'Sem reembolso',
     hospitais: ['Hospital Samaritano', 'Hospital São Luiz', 'Hospital da Luz', 'Hospital Metropolitano'],
     laboratorios: ['Delboni Auriemo', 'Lavoisier', 'A+ Medicina Diagnóstica'],
-    precos: [250, 310, 380, 420, 480, 550, 680, 820, 1100, 1950]
+    precos: [250, 310, 380, 420, 480, 550, 680, 820, 1100, 1950],
+    isDemo: true
   },
   {
     id: 'p2',
@@ -96,7 +106,8 @@ const PLANOS_PADRAO: Plano[] = [
     reembolso: 'R$ 80,00',
     hospitais: ['Hospital Samaritano', 'Hospital São Luiz', 'Hospital 9 de Julho', 'Hospital Alvorada'],
     laboratorios: ['Delboni Auriemo', 'Lavoisier', 'Feme', 'A+'],
-    precos: [310, 380, 470, 520, 595, 680, 840, 1020, 1360, 2410]
+    precos: [310, 380, 470, 520, 595, 680, 840, 1020, 1360, 2410],
+    isDemo: true
   },
   {
     id: 'p3',
@@ -107,7 +118,8 @@ const PLANOS_PADRAO: Plano[] = [
     reembolso: 'R$ 120,00',
     hospitais: ['Hospital Sírio-Libanês', 'Hospital Albert Einstein', 'Oswaldo Cruz', 'São Luiz'],
     laboratorios: ['Fleury', 'Delboni Auriemo', 'Salomão Zoppi'],
-    precos: [450, 560, 690, 780, 890, 1020, 1250, 1500, 2100, 3600]
+    precos: [450, 560, 690, 780, 890, 1020, 1250, 1500, 2100, 3600],
+    isDemo: true
   },
   {
     id: 'p4',
@@ -118,7 +130,8 @@ const PLANOS_PADRAO: Plano[] = [
     reembolso: 'R$ 150,00',
     hospitais: ['Hospital Sírio-Libanês', 'Hospital Samaritano', 'Hospital São Luiz', 'Pro-Cardíaco'],
     laboratorios: ['Fleury', 'Alta Diagnósticos', 'Delboni'],
-    precos: [420, 520, 650, 730, 840, 960, 1180, 1420, 1980, 3400]
+    precos: [420, 520, 650, 730, 840, 960, 1180, 1420, 1980, 3400],
+    isDemo: true
   },
   {
     id: 'p5',
@@ -129,7 +142,8 @@ const PLANOS_PADRAO: Plano[] = [
     reembolso: 'R$ 180,00',
     hospitais: ['Hospital Albert Einstein', 'Hospital Sírio-Libanês', 'Hospital Samaritano', 'Hospital São Luiz'],
     laboratorios: ['Fleury', 'Delboni Auriemo', 'CDB', 'A+'],
-    precos: [490, 610, 760, 860, 985, 1130, 1390, 1670, 2335, 4010]
+    precos: [490, 610, 760, 860, 985, 1130, 1390, 1670, 2335, 4010],
+    isDemo: true
   },
   {
     id: 'p6',
@@ -140,9 +154,9 @@ const PLANOS_PADRAO: Plano[] = [
     reembolso: 'Sem reembolso',
     hospitais: ['Hospital Unimed', 'Hospital Paulistano', 'Oswaldo Cruz', 'Hospital da Luz'],
     laboratorios: ['Delboni Auriemo', 'Lavoisier', 'A+'],
-    precos: [320, 390, 480, 540, 620, 710, 870, 1050, 1450, 2500]
+    precos: [320, 390, 480, 540, 620, 710, 870, 1050, 1450, 2500],
+    isDemo: true
   },
-  // Planos PF (Pessoa Física / Individual)
   {
     id: 'p7',
     operadoraId: 'amil',
@@ -152,7 +166,8 @@ const PLANOS_PADRAO: Plano[] = [
     reembolso: 'Sem reembolso',
     hospitais: ['Hospital da Luz', 'Hospital Metropolitano', 'Hospital Paulistano'],
     laboratorios: ['Lavoisier', 'A+'],
-    precos: [190, 230, 280, 310, 360, 410, 510, 610, 820, 1450]
+    precos: [190, 230, 280, 310, 360, 410, 510, 610, 820, 1450],
+    isDemo: true
   },
   {
     id: 'p8',
@@ -163,9 +178,97 @@ const PLANOS_PADRAO: Plano[] = [
     reembolso: 'Sem reembolso',
     hospitais: ['Hospital Unimed', 'Hospital da Luz', 'Hospital Beneficência Portuguesa'],
     laboratorios: ['Lavoisier', 'Delboni Auriemo'],
-    precos: [230, 280, 345, 380, 440, 500, 620, 745, 1010, 1785]
+    precos: [230, 280, 345, 380, 440, 500, 620, 745, 1010, 1785],
+    isDemo: true
   }
 ];
+
+// Logos Vetoriais Premium Customizados em SVG
+function RenderLogo({ id, className = "h-8 w-8" }: { id: string; className?: string }) {
+  if (id === 'amil') {
+    return (
+      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100" height="100" rx="24" fill="url(#amil-grad)" />
+        <path d="M50 20L25 75H38L50 48L62 75H75L50 20Z" fill="white" />
+        <path d="M50 48L40 70H60L50 48Z" fill="#22d3ee" />
+        <circle cx="50" cy="48" r="4" fill="white" />
+        <defs>
+          <linearGradient id="amil-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#1d4ed8" />
+            <stop offset="1" stopColor="#06b6d4" />
+          </linearGradient>
+        </defs>
+      </svg>
+    );
+  }
+  if (id === 'bradesco') {
+    return (
+      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100" height="100" rx="24" fill="url(#brad-grad)" />
+        <path d="M50 22C42 22 36 28 36 36C36 44 42 48 50 48C58 48 64 44 64 36C64 28 58 22 50 22ZM50 42C46.7 42 44 39.3 44 36C44 32.7 46.7 30 50 30C53.3 30 56 32.7 56 36C56 39.3 53.3 42 50 42Z" fill="white" />
+        <path d="M50 52C34.5 52 22 62.5 22 75H78C78 62.5 65.5 52 50 52ZM32.5 69C35.5 62.5 42.2 58.5 50 58.5C57.8 58.5 64.5 62.5 67.5 69H32.5Z" fill="white" />
+        <defs>
+          <linearGradient id="brad-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#dc2626" />
+            <stop offset="1" stopColor="#f43f5e" />
+          </linearGradient>
+        </defs>
+      </svg>
+    );
+  }
+  if (id === 'sulamerica') {
+    return (
+      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100" height="100" rx="24" fill="url(#sula-grad)" />
+        <circle cx="50" cy="50" r="28" stroke="white" strokeWidth="4" />
+        <circle cx="50" cy="50" r="14" fill="#fbbf24" />
+        <path d="M50 12V26M50 74V88M12 50H26M74 50H88" stroke="white" strokeWidth="4" strokeLinecap="round" />
+        <defs>
+          <linearGradient id="sula-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#0369a1" />
+            <stop offset="1" stopColor="#3b82f6" />
+          </linearGradient>
+        </defs>
+      </svg>
+    );
+  }
+  if (id === 'porto') {
+    return (
+      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100" height="100" rx="24" fill="url(#porto-grad)" />
+        <path d="M30 25H55C66 25 73 31 73 40C73 49 66 55 55 55H42V75H30V25ZM42 45H53.5C58.5 45 61.5 42.5 61.5 40C61.5 37.5 58.5 35 53.5 35H42V45Z" fill="white" />
+        <circle cx="68" cy="68" r="8" fill="#6366f1" />
+        <defs>
+          <linearGradient id="porto-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#1e40af" />
+            <stop offset="1" stopColor="#4f46e5" />
+          </linearGradient>
+        </defs>
+      </svg>
+    );
+  }
+  if (id === 'unimed') {
+    return (
+      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100" height="100" rx="24" fill="url(#unimed-grad)" />
+        <path d="M50 18L26 42H40V78H60V42H74L50 18Z" fill="white" />
+        <path d="M50 30L38 42H62L50 30Z" fill="#14b8a6" />
+        <defs>
+          <linearGradient id="unimed-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#059669" />
+            <stop offset="1" stopColor="#0d9488" />
+          </linearGradient>
+        </defs>
+      </svg>
+    );
+  }
+  // Fallback para novas operadoras
+  return (
+    <div className={`flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 text-[10px] font-black uppercase text-white shadow-md`}>
+      {id.slice(0, 2)}
+    </div>
+  );
+}
 
 export default function SimuladorPage() {
   const { profile } = useAuth();
@@ -176,13 +279,21 @@ export default function SimuladorPage() {
   const [planos, setPlanos] = useState<Plano[]>(PLANOS_PADRAO);
 
   // Estados de navegação interna
-  const [activeTab, setActiveTab] = useState<'simulacao' | 'planos' | 'admin'>('simulacao');
+  const [activeTab, setActiveTab] = useState<'simulacao' | 'catalogo' | 'admin'>('simulacao');
 
   // Estados dos filtros da simulação
   const [tipoContrato, setTipoContrato] = useState<'PF' | 'PME'>('PME');
   const [coparticipacaoFiltro, setCoparticipacaoFiltro] = useState<'Ambos' | 'Sim' | 'Não'>('Ambos');
   const [ufFiltro, setUfFiltro] = useState<string>('SP');
   const [buscaPlanos, setBuscaPlanos] = useState<string>('');
+
+  // Estado para Catálogo Hierárquico
+  const [selectedOperadoraId, setSelectedOperadoraId] = useState<string | null>(null);
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
+
+  // Estado de Edição Inline (Admins)
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<Plano>>({});
 
   // Quantidade de vidas por faixa etária
   const [vidas, setVidas] = useState<{ [key: string]: number }>({
@@ -206,6 +317,34 @@ export default function SimuladorPage() {
     totalVidas: number;
   } | null>(null);
 
+  // Apolo Smart AI Uploader Estados
+  const [isDragging, setIsDragging] = useState(false);
+  const [aiParsing, setAiParsing] = useState(false);
+  const [aiPreviewData, setAiPreviewData] = useState<Partial<Plano> & { operadoraNome?: string } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Webhook visual log do WhatsApp
+  const [whatsAppLog, setWhatsAppLog] = useState<string | null>(null);
+
+  // Carregar dependências de PDF.js e SheetJS
+  useEffect(() => {
+    // XLSX (SheetJS)
+    if (!(window as any).XLSX) {
+      const scriptX = document.createElement('script');
+      scriptX.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      scriptX.async = true;
+      document.body.appendChild(scriptX);
+    }
+    // PDF.js
+    if (!(window as any).pdfjsLib) {
+      const scriptP = document.createElement('script');
+      scriptP.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+      scriptP.async = true;
+      document.body.appendChild(scriptP);
+    }
+  }, []);
+
   // Carregar dados salvos no LocalStorage (se houver)
   useEffect(() => {
     const savedOperadoras = localStorage.getItem('orion:sim_operadoras');
@@ -220,6 +359,41 @@ export default function SimuladorPage() {
     setPlanos(novosPlanos);
     localStorage.setItem('orion:sim_operadoras', JSON.stringify(novasOps));
     localStorage.setItem('orion:sim_planos', JSON.stringify(novosPlanos));
+  };
+
+  // Disparar Notificação Interna e Simular WhatsApp Webhook
+  const dispararNotificacoes = async (operadoraNome: string, planoNome: string) => {
+    const titulo = `Tabela Atualizada: ${operadoraNome}!`;
+    const mensagem = `Apolo AI identificou novos reajustes de preços no plano "${planoNome}". As tabelas atualizadas já estão disponíveis no Simulador!`;
+
+    // 1. Inserir no Supabase (Notificação Interna)
+    try {
+      if (profile?.id) {
+        await supabase.from('notificacoes').insert([{
+          titulo,
+          mensagem,
+          destinatario_tipo: 'corretor',
+          remetente_profile_id: profile.id,
+          lida: false
+        }]);
+      }
+    } catch (dbErr) {
+      console.error('Erro ao gravar notificação no Supabase:', dbErr);
+    }
+
+    // 2. Simular Webhook do WhatsApp (Imprimir no console e exibir log visual para o usuário)
+    const logInfo = `[WhatsApp Webhook n8n Triggered]
+Payload: {
+  event: "price_update",
+  operator: "${operadoraNome}",
+  plan: "${planoNome}",
+  text: "🚨 *Aviso Orion Track*: A tabela de preços do plano *${planoNome}* (${operadoraNome}) acaba de ser atualizada com novas faixas de valores! Acesse o simulador para calcular propostas atualizadas."
+}`;
+    console.log(logInfo);
+    setWhatsAppLog(logInfo);
+    setTimeout(() => {
+      setWhatsAppLog(null);
+    }, 8000);
   };
 
   // Contagem total de vidas selecionadas
@@ -265,7 +439,6 @@ export default function SimuladorPage() {
       return true;
     })
     .map(plano => {
-      // Calcular preços por faixa etária baseada nas vidas informadas
       let custoTotal = 0;
       const detalheVidas = FAIXAS_ETARIAS.map((faixa, index) => {
         const quantidade = vidas[faixa.key] || 0;
@@ -286,148 +459,324 @@ export default function SimuladorPage() {
         detalheVidas
       };
     })
-    // Ordena do menor preço para o maior
     .sort((a, b) => a.custoTotal - b.custoTotal);
 
-  // Manipulação de Upload do CSV de Preços (Admin)
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<{ type: 'sucesso' | 'erro' | 'info'; message: string } | null>(null);
-
-  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCsvFile(file);
-    setUploadStatus({ type: 'info', message: 'Lendo e processando planilha...' });
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const text = event.target?.result as string;
-        const rows = text.split('\n').map(row => row.split(',').map(cell => cell.trim()));
-        
-        if (rows.length < 2) {
-          throw new Error('A planilha está vazia ou no formato inválido.');
-        }
-
-        // Header Check: Operadora, Plano, Tipo, Coparticipacao, Reembolso, Hospitais, Faixa_0_18, ...
-        const header = rows[0];
-        const indexOperadora = header.findIndex(h => h.toLowerCase().includes('operadora'));
-        const indexPlano = header.findIndex(h => h.toLowerCase().includes('plano'));
-        const indexTipo = header.findIndex(h => h.toLowerCase().includes('tipo'));
-        const indexCopart = header.findIndex(h => h.toLowerCase().includes('copart'));
-        const indexReembolso = header.findIndex(h => h.toLowerCase().includes('reemb'));
-        const indexHospitais = header.findIndex(h => h.toLowerCase().includes('hosp'));
-
-        if (indexOperadora === -1 || indexPlano === -1) {
-          throw new Error('Colunas "Operadora" e "Plano" são obrigatórias na planilha.');
-        }
-
-        const novosPlanos: Plano[] = [...planos];
-        const novasOperadoras: Operadora[] = [...operadoras];
-
-        let countImportados = 0;
-
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          if (row.length < 2 || !row[indexOperadora] || !row[indexPlano]) continue;
-
-          const nomeOp = row[indexOperadora];
-          const nomePlano = row[indexPlano];
-          const tipo = (row[indexTipo] || 'PME').toUpperCase() as 'PF' | 'PME';
-          const copart = (row[indexCopart] || 'Sim') as 'Sim' | 'Não';
-          const reembolso = row[indexReembolso] || 'Sem reembolso';
-          const hospitais = row[indexHospitais] ? row[indexHospitais].split(';').map(h => h.trim()) : ['Hospitais locais'];
-
-          // Operadora ID
-          let opId = nomeOp.toLowerCase().replace(/[^a-z0-9]/g, '');
-          let opExistente = novasOperadoras.find(o => o.id === opId);
-          if (!opExistente) {
-            opExistente = {
-              id: opId,
-              nome: nomeOp,
-              corGradiente: 'from-blue-600 to-indigo-500'
-            };
-            novasOperadoras.push(opExistente);
-          }
-
-          // Preços (10 faixas)
-          const precos = [
-            parseFloat(row[row.length - 10]) || 150,
-            parseFloat(row[row.length - 9]) || 180,
-            parseFloat(row[row.length - 8]) || 220,
-            parseFloat(row[row.length - 7]) || 260,
-            parseFloat(row[row.length - 6]) || 310,
-            parseFloat(row[row.length - 5]) || 380,
-            parseFloat(row[row.length - 4]) || 460,
-            parseFloat(row[row.length - 3]) || 550,
-            parseFloat(row[row.length - 2]) || 750,
-            parseFloat(row[row.length - 1]) || 1350
-          ];
-
-          const planoId = `csv_${Date.now()}_${i}`;
-          novosPlanos.unshift({
-            id: planoId,
-            operadoraId: opId,
-            nome: nomePlano,
-            tipo,
-            coparticipacao: copart,
-            reembolso,
-            hospitais,
-            laboratorios: ['Delboni', 'Lavoisier'],
-            precos
-          });
-          countImportados++;
-        }
-
-        salvarDados(novasOperadoras, novosPlanos);
-        setUploadStatus({
-          type: 'sucesso',
-          message: `Sucesso! Planilha processada. ${countImportados} planos importados/atualizados com sucesso.`
-        });
-      } catch (err: any) {
-        setUploadStatus({ type: 'erro', message: `Erro ao importar planilha: ${err.message}` });
-      }
-    };
-    reader.readAsText(file);
+  // Iniciar Edição Inline
+  const startEditing = (plano: Plano) => {
+    setEditingPlanId(plano.id);
+    setEditFormData({ ...plano });
   };
 
-  const baixarPlanilhaModelo = () => {
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + "Operadora,Plano,Tipo,Coparticipacao,Reembolso,Hospitais,Preco_0_18,Preco_19_23,Preco_24_28,Preco_29_33,Preco_34_38,Preco_39_43,Preco_44_48,Preco_49_53,Preco_54_58,Preco_59_mais\n"
-      + "Amil Saude,Amil S380 Premium,PME,Sim,Sem Reembolso,Albert Einstein;Sirio Libanes,250,300,350,400,450,500,600,750,1000,1800\n"
-      + "Unimed,Unimed Top,PF,Nao,R$ 100.00,Hospital Unimed;Oswaldo Cruz,200,240,290,320,370,420,500,600,800,1500";
+  // Salvar Edição Inline
+  const saveInlineEdit = (planId: string) => {
+    const updatedPlanos = planos.map(p => {
+      if (p.id === planId) {
+        const fullyUpdated = { ...p, ...editFormData } as Plano;
+        // Trigar notificações quando um preço é alterado
+        const op = operadoras.find(o => o.id === fullyUpdated.operadoraId);
+        dispararNotificacoes(op?.nome || 'Operadora', fullyUpdated.nome);
+        return fullyUpdated;
+      }
+      return p;
+    });
+
+    salvarDados(operadoras, updatedPlanos);
+    setEditingPlanId(null);
+    setSuccessMessage('Plano atualizado com sucesso e notificações enviadas!');
+    setTimeout(() => setSuccessMessage(null), 4000);
+  };
+
+  // Excluir Plano
+  const handleExcluirPlano = (planId: string) => {
+    if (window.confirm('Tem certeza de que deseja excluir permanentemente este plano?')) {
+      const updatedPlanos = planos.filter(p => p.id !== planId);
+      salvarDados(operadoras, updatedPlanos);
+      setSuccessMessage('Plano removido com sucesso!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    }
+  };
+
+  // Excluir Operadora
+  const handleExcluirOperadora = (operadoraId: string) => {
+    if (window.confirm('Excluir esta operadora removerá todos os planos associados a ela. Prosseguir?')) {
+      const novasOps = operadoras.filter(o => o.id !== operadoraId);
+      const novosPlanos = planos.filter(p => p.operadoraId !== operadoraId);
+      salvarDados(novasOps, novosPlanos);
+      setSelectedOperadoraId(null);
+      setSuccessMessage('Operadora e planos deletados!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    }
+  };
+
+  // Restaurar Tabelas Iniciais
+  const restaurarTabelasPadrao = () => {
+    if (window.confirm("Deseja restaurar os planos e preços padrão demonstrativos? Suas importações manuais serão perdidas.")) {
+      salvarDados(OPERADORAS_PADRAO, PLANOS_PADRAO);
+      setSuccessMessage('Dados de fábrica restaurados!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    }
+  };
+
+  // Extração de PDF e Excel usando bibliotecas do cliente (PDF.js e SheetJS)
+  const parseDocumentClientSide = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      // Tratamento para Excel
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv')) {
+        reader.onload = (e) => {
+          try {
+            const data = new Uint8Array(e.target?.result as ArrayBuffer);
+            const XLSX = (window as any).XLSX;
+            if (!XLSX) {
+              reject(new Error('Biblioteca SheetJS (XLSX) não carregou. Verifique sua conexão.'));
+              return;
+            }
+            const workbook = XLSX.read(data, { type: 'array' });
+            let fullText = '';
+            workbook.SheetNames.forEach((sheetName: string) => {
+              const worksheet = workbook.Sheets[sheetName];
+              const csv = XLSX.utils.sheet_to_csv(worksheet);
+              fullText += `--- Planilha: ${sheetName} ---\n${csv}\n`;
+            });
+            resolve(fullText);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } 
+      // Tratamento para PDF
+      else if (file.name.endsWith('.pdf')) {
+        reader.onload = async (e) => {
+          try {
+            const typedarray = new Uint8Array(e.target?.result as ArrayBuffer);
+            const pdfjsLib = (window as any).pdfjsLib;
+            if (!pdfjsLib) {
+              reject(new Error('Biblioteca PDF.js não carregou. Verifique sua conexão.'));
+              return;
+            }
+            // Definir worker de CDN
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+            const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+            
+            let fullText = '';
+            const maxPages = Math.min(pdf.numPages, 8); // Lê no máximo 8 páginas para evitar sobrecarga
+            for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+              const page = await pdf.getPage(pageNum);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.map((item: any) => item.str).join(' ');
+              fullText += `--- Página ${pageNum} ---\n${pageText}\n`;
+            }
+            resolve(fullText);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } 
+      // Arquivos de texto comuns
+      else {
+        reader.onload = (e) => {
+          resolve(e.target?.result as string || '');
+        };
+        reader.readAsText(file);
+      }
+    });
+  };
+
+  // Upload e Parsing com Apolo AI
+  const handleApoloFileUpload = async (file: File) => {
+    setAiParsing(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
     
+    try {
+      const extractedText = await parseDocumentClientSide(file);
+      
+      if (!extractedText.trim()) {
+        throw new Error('Não conseguimos extrair texto deste documento. Verifique se o arquivo não está vazio ou corrompido.');
+      }
+
+      // Envia conteúdo textual para o endpoint de parsing inteligente
+      const response = await fetch('/api/admin/simulador/parse-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileContent: extractedText,
+          fileName: file.name
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'A API do Apolo AI encontrou um erro no processamento do texto.');
+      }
+
+      const resData = await response.json();
+      const extractedJson = resData.data;
+
+      // Monta dados de preview
+      setAiPreviewData({
+        operadoraNome: extractedJson.operadora || 'Operadora Detectada',
+        nome: extractedJson.plano || 'Plano Detectado',
+        tipo: extractedJson.tipo === 'PF' ? 'PF' : 'PME',
+        coparticipacao: extractedJson.coparticipacao === 'Sim' ? 'Sim' : 'Não',
+        reembolso: extractedJson.reembolso || 'Sem reembolso',
+        hospitais: extractedJson.hospitais || ['Hospitais locais'],
+        laboratorios: ['Laboratórios recomendados'],
+        precos: extractedJson.precos && extractedJson.precos.length === 10 ? extractedJson.precos : [150, 200, 250, 300, 350, 400, 450, 500, 600, 800]
+      });
+
+    } catch (err: any) {
+      console.error('Erro no parser Apolo AI:', err);
+      setErrorMessage(err.message || 'Falha geral ao processar documento com Apolo AI.');
+    } finally {
+      setAiParsing(false);
+    }
+  };
+
+  // Salvar plano extraído pela IA
+  const confirmarSalvarAiPreview = () => {
+    if (!aiPreviewData) return;
+
+    const opNome = aiPreviewData.operadoraNome || 'Operadora Detectada';
+    let opId = opNome.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // 1. Verificar ou criar operadora
+    const novasOperadoras = [...operadoras];
+    let opExistente = novasOperadoras.find(o => o.id === opId);
+    if (!opExistente) {
+      const cores = [
+        'from-blue-600 to-indigo-600',
+        'from-emerald-600 to-teal-600',
+        'from-purple-600 to-violet-600',
+        'from-amber-600 to-orange-600',
+        'from-pink-600 to-rose-600'
+      ];
+      const corAleatoria = cores[Math.floor(Math.random() * cores.length)];
+      opExistente = {
+        id: opId,
+        nome: opNome,
+        corGradiente: corAleatoria
+      };
+      novasOperadoras.push(opExistente);
+    }
+
+    // 2. Criar novo plano
+    const novoPlano: Plano = {
+      id: `ai_${Date.now()}`,
+      operadoraId: opId,
+      nome: aiPreviewData.nome || 'Novo Plano AI',
+      tipo: aiPreviewData.tipo || 'PME',
+      coparticipacao: aiPreviewData.coparticipacao || 'Sim',
+      reembolso: aiPreviewData.reembolso || 'Sem reembolso',
+      hospitais: aiPreviewData.hospitais || ['Hospitais locais'],
+      laboratorios: ['Delboni Auriemo', 'Lavoisier'],
+      precos: aiPreviewData.precos || [150, 200, 250, 300, 350, 400, 450, 500, 600, 800],
+      isDemo: false // Marcado como real
+    };
+
+    const novosPlanos = [novoPlano, ...planos];
+    salvarDados(novasOperadoras, novosPlanos);
+    
+    // 3. Trigar notificações
+    dispararNotificacoes(opNome, novoPlano.nome);
+
+    setAiPreviewData(null);
+    setSuccessMessage(`Tabela de preços "${novoPlano.nome}" integrada e corretores notificados via WhatsApp & Sistema!`);
+    setActiveTab('catalogo');
+    setSelectedOperadoraId(opId);
+    setTimeout(() => setSuccessMessage(null), 6000);
+  };
+
+  // Manipulação de Drop de arquivos
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleApoloFileUpload(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleApoloFileUpload(file);
+  };
+
+  // Exportar dados da tabela ativa para CSV
+  const exportarParaCsv = (operadoraId: string) => {
+    const op = operadoras.find(o => o.id === operadoraId);
+    const planosDaOp = planos.filter(p => p.operadoraId === operadoraId);
+    
+    if (planosDaOp.length === 0) {
+      alert('Esta operadora não possui planos cadastrados para exportação.');
+      return;
+    }
+
+    let csvContent = "data:text/csv;charset=utf-8," 
+      + "Operadora,Plano,Tipo,Coparticipacao,Reembolso,Hospitais,Preco_0_18,Preco_19_23,Preco_24_28,Preco_29_33,Preco_34_38,Preco_39_43,Preco_44_48,Preco_49_53,Preco_54_58,Preco_59_mais\n";
+    
+    planosDaOp.forEach(p => {
+      const hospString = p.hospitais.join(';');
+      const precosString = p.precos.join(',');
+      csvContent += `"${op?.nome || ''}","${p.nome}","${p.tipo}","${p.coparticipacao}","${p.reembolso}","${hospString}",${precosString}\n`;
+    });
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "modelo_tabela_precos.csv");
+    link.setAttribute("download", `tabela_precos_${operadoraId}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const restaurarTabelasPadrao = () => {
-    if (window.confirm("Deseja realmente restaurar os planos e preços padrão de fábrica? Isso removerá as planilhas importadas.")) {
-      salvarDados(OPERADORAS_PADRAO, PLANOS_PADRAO);
-      setUploadStatus({ type: 'sucesso', message: 'Tabelas padrão restauradas com sucesso!' });
-    }
-  };
-
   return (
     <InternalLayout>
       <div className="space-y-6">
+        
+        {/* Notificações de Banner Superior */}
+        {successMessage && (
+          <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-4 text-xs font-extrabold text-emerald-400 flex items-center gap-3 animate-in fade-in-50 slide-in-from-top-4 duration-300">
+            <Check size={16} className="shrink-0" />
+            <p>{successMessage}</p>
+          </div>
+        )}
+
+        {/* WhatsApp Simulated Webhook Banner */}
+        {whatsAppLog && (
+          <div className="rounded-2xl bg-cyan-950/80 border border-cyan-500/30 p-4 text-2xs font-mono text-cyan-300 space-y-2 animate-in fade-in-50 slide-in-from-top-4 duration-300">
+            <div className="flex items-center gap-2 font-black text-cyan-400">
+              <Bell size={14} className="animate-bounce" />
+              <span>[Apolo Notificador] Webhook do WhatsApp de alta performance disparado com sucesso!</span>
+            </div>
+            <pre className="whitespace-pre-wrap bg-slate-950/60 p-3 rounded-xl border border-white/5">{whatsAppLog}</pre>
+          </div>
+        )}
+
         {/* Header Superior Dinâmico */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-5">
           <div>
             <div className="flex items-center gap-2 text-cyan-400 font-extrabold text-xs uppercase tracking-widest">
               <Sparkles size={14} className="animate-pulse" />
-              <span>Simulador Inteligente</span>
+              <span>Simulador Inteligente Apolo</span>
             </div>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">
-              Fazer Simulação de Planos
+              Multicálculo & Tabelas de Saúde
             </h1>
             <p className="mt-1 text-xs sm:text-sm font-bold text-slate-400">
-              Calcule instantaneamente tabelas de operadoras e compare benefícios de forma premium para seus clientes.
+              Calcule planos instantaneamente ou navegue no catálogo de preços de forma hierárquica e inteligente.
             </p>
           </div>
 
@@ -442,18 +791,22 @@ export default function SimuladorPage() {
               }`}
             >
               <Calculator size={14} />
-              <span>Simular</span>
+              <span>Simulador</span>
             </button>
             <button
-              onClick={() => setActiveTab('planos')}
+              onClick={() => {
+                setActiveTab('catalogo');
+                setSelectedOperadoraId(null);
+                setExpandedPlanId(null);
+              }}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
-                activeTab === 'planos'
+                activeTab === 'catalogo'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               <Layers size={14} />
-              <span>Planos ({planos.length})</span>
+              <span>Catálogo ({planos.length})</span>
             </button>
             {isAdmin && (
               <button
@@ -465,13 +818,13 @@ export default function SimuladorPage() {
                 }`}
               >
                 <Settings size={14} />
-                <span>Importar CSV</span>
+                <span>Importador Apolo</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* ================= ABA 1: SIMULAÇÃO DINÂMICA ================= */}
+        {/* ================= ABA 1: SIMULADOR (MULTICÁLCULO) ================= */}
         {activeTab === 'simulacao' && (
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
             
@@ -623,7 +976,7 @@ export default function SimuladorPage() {
               </div>
             </div>
 
-            {/* LADO DIREITO: RESULTADOS DO CÁLCULO E COMPARATIVO (7 colunas) */}
+            {/* LADO DIREITO: RESULTADOS DO CÁLCULO (7 colunas) */}
             <div className="xl:col-span-7 space-y-5">
               <div className="flex items-center justify-between bg-white/3 border border-white/5 rounded-2xl px-5 py-3">
                 <div className="flex items-center gap-3">
@@ -631,9 +984,9 @@ export default function SimuladorPage() {
                     <Calculator size={18} className="animate-spin-slow" />
                   </div>
                   <div>
-                    <h2 className="text-xs font-black uppercase tracking-wider text-slate-300">Planos Encontrados</h2>
+                    <h2 className="text-xs font-black uppercase tracking-wider text-slate-300">Planos Calculados</h2>
                     <p className="text-[10px] font-bold text-slate-500">
-                      Exibindo {planosCalculados.length} planos baseados no seu perfil.
+                      Exibindo {planosCalculados.length} opções com preços em tempo real.
                     </p>
                   </div>
                 </div>
@@ -668,9 +1021,9 @@ export default function SimuladorPage() {
                         {/* Indicador superior de operadora */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
                           <div className="flex items-center gap-3">
-                            {/* Logo Fallback Premium */}
-                            <div className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${op?.corGradiente || 'from-slate-700 to-slate-600'} text-xs font-black uppercase text-white shadow-lg`}>
-                              {op?.nome ? op.nome.slice(0, 2) : 'OP'}
+                            {/* Renderizador de Logo Premium */}
+                            <div className="shadow-lg shrink-0">
+                              <RenderLogo id={plano.operadoraId} className="h-12 w-12" />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
@@ -684,6 +1037,11 @@ export default function SimuladorPage() {
                                 }`}>
                                   {plano.coparticipacao === 'Sim' ? 'Com Coparticipação' : 'Sem Coparticipação'}
                                 </span>
+                                {plano.isDemo && (
+                                  <span className="bg-blue-500/15 border border-blue-500/30 text-blue-400 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md">
+                                    Exemplo de Demonstração
+                                  </span>
+                                )}
                               </div>
                               <h4 className="text-base font-black text-white group-hover:text-cyan-400 transition-colors">
                                 {plano.nome}
@@ -713,7 +1071,7 @@ export default function SimuladorPage() {
                             <div className="mt-1.5 flex flex-wrap gap-1.5">
                               {plano.hospitais.slice(0, 3).map((hosp, i) => (
                                 <span key={i} className="flex items-center gap-1 bg-white/2 border border-white/5 px-2.5 py-1 rounded-xl text-2xs font-extrabold text-slate-300">
-                                  <Heart size={8} className="text-rose-500" />
+                                  <Heart size={8} className="text-rose-500 animate-pulse" />
                                   {hosp}
                                 </span>
                               ))}
@@ -739,7 +1097,6 @@ export default function SimuladorPage() {
                         <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-4">
                           <button
                             onClick={() => {
-                              // Mostrar discriminativo detalhado
                               alert(`Preços Unitários por idade para o plano ${plano.nome}:\n` + plano.detalheVidas.filter(v => v.count > 0).map(v => `${v.count}x ${v.label} - R$ ${v.precoUnitario} (Subtotal: R$ ${v.subtotal})`).join('\n'));
                             }}
                             className="text-2xs font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors cursor-pointer"
@@ -769,163 +1126,593 @@ export default function SimuladorPage() {
           </div>
         )}
 
-        {/* ================= ABA 2: VISUALIZAÇÃO DE PLANOS ================= */}
-        {activeTab === 'planos' && (
-          <div className="orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-6 backdrop-blur-md shadow-2xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
-              <div>
-                <h3 className="text-base font-black text-white">Todos os Planos de Saúde Configurados</h3>
-                <p className="text-xs font-bold text-slate-500">Consulte as tabelas de preços indexadas no simulador da Orion Track.</p>
-              </div>
+        {/* ================= ABA 2: EXPLORADOR / CATÁLOGO HIERÁRQUICO ================= */}
+        {activeTab === 'catalogo' && (
+          <div className="space-y-6">
+            
+            {/* Visual 1: Se nenhuma operadora estiver selecionada, exibe a grade de operadoras */}
+            {!selectedOperadoraId ? (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-black text-white">Selecione uma Operadora Parceira</h3>
+                    <p className="text-xs font-bold text-slate-500">Navegue pelas tabelas comerciais completas indexadas no sistema.</p>
+                  </div>
+                  {isAdmin && (
+                    <button
+                      onClick={restaurarTabelasPadrao}
+                      className="flex items-center gap-1.5 bg-rose-600/20 border border-rose-500/20 text-rose-400 px-3.5 py-2 rounded-xl text-2xs font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all cursor-pointer"
+                    >
+                      <RefreshCw size={12} />
+                      <span>Restaurar Fábrica</span>
+                    </button>
+                  )}
+                </div>
 
-              {isAdmin && (
-                <button
-                  onClick={restaurarTabelasPadrao}
-                  className="flex items-center gap-1.5 bg-rose-600/20 border border-rose-500/20 text-rose-400 px-3.5 py-2 rounded-xl text-2xs font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all cursor-pointer"
-                >
-                  <RefreshCw size={12} />
-                  <span>Restaurar Fábrica</span>
-                </button>
-              )}
-            </div>
-
-            <div className="mt-6 overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-white/5 text-[10px] font-black uppercase tracking-wider text-slate-500">
-                    <th className="pb-3 pr-4">Operadora</th>
-                    <th className="pb-3 px-4">Nome do Plano</th>
-                    <th className="pb-3 px-4">Tipo</th>
-                    <th className="pb-3 px-4">Copart.</th>
-                    <th className="pb-3 px-4">Reembolso</th>
-                    <th className="pb-3 px-4">Preço Base (Faixa 0-18)</th>
-                    <th className="pb-3 px-4">Preço Teto (Faixa 59+)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-xs">
-                  {planos.map((plano) => {
-                    const op = operadoras.find(o => o.id === plano.operadoraId);
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {operadoras.map((op) => {
+                    const planosDaOp = planos.filter(p => p.operadoraId === op.id);
                     return (
-                      <tr key={plano.id} className="hover:bg-white/2 transition-colors">
-                        <td className="py-3.5 pr-4 font-bold text-white flex items-center gap-2">
-                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br ${op?.corGradiente || 'from-slate-700 to-slate-600'} text-[8px] font-black text-white`}>
-                            {op?.nome ? op.nome.slice(0, 2) : 'OP'}
-                          </span>
-                          <span>{op?.nome || 'Desconhecida'}</span>
-                        </td>
-                        <td className="py-3.5 px-4 font-black text-slate-300">{plano.nome}</td>
-                        <td className="py-3.5 px-4 font-bold text-slate-400">{plano.tipo}</td>
-                        <td className="py-3.5 px-4 font-bold text-slate-400">{plano.coparticipacao}</td>
-                        <td className="py-3.5 px-4 font-bold text-slate-400">{plano.reembolso}</td>
-                        <td className="py-3.5 px-4 font-black text-cyan-400">R$ {plano.precos[0].toLocaleString('pt-BR')}</td>
-                        <td className="py-3.5 px-4 font-black text-cyan-400">R$ {plano.precos[9].toLocaleString('pt-BR')}</td>
-                      </tr>
+                      <div
+                        key={op.id}
+                        onClick={() => setSelectedOperadoraId(op.id)}
+                        className="orion-panel cursor-pointer group flex flex-col justify-between overflow-hidden rounded-[2.5rem] border border-white/5 bg-[#0f172a]/40 p-6 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-blue-500/20"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="shadow-lg transition-transform group-hover:scale-105">
+                            <RenderLogo id={op.id} className="h-16 w-16" />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Operadora de Saúde</span>
+                            <h4 className="text-lg font-black text-white group-hover:text-cyan-400 transition-colors">{op.nome}</h4>
+                            <p className="text-xs font-bold text-slate-400 mt-0.5">
+                              {planosDaOp.length} planos cadastrados
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-between border-t border-white/5 pt-4 text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">
+                          <span>Explorar Planos</span>
+                          <ChevronRight size={16} className="text-blue-500 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              </div>
+            ) : (
+              // Visual 2: Operadora selecionada, exibe seus planos de forma hierárquica
+              <div className="orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-6 backdrop-blur-md shadow-2xl space-y-6">
+                
+                {/* Cabeçalho da Operadora Selecionada */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-5">
+                  <div className="flex items-center gap-4">
+                    <RenderLogo id={selectedOperadoraId} className="h-14 w-14" />
+                    <div>
+                      <button
+                        onClick={() => setSelectedOperadoraId(null)}
+                        className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:text-cyan-400 transition-colors"
+                      >
+                        ← Voltar para operadoras
+                      </button>
+                      <h2 className="text-xl font-black text-white mt-0.5">
+                        {operadoras.find(o => o.id === selectedOperadoraId)?.nome || 'Planos'}
+                      </h2>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => exportarParaCsv(selectedOperadoraId)}
+                      className="flex items-center gap-1.5 bg-white/5 border border-white/5 text-slate-300 px-3.5 py-2 rounded-xl text-2xs font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all cursor-pointer shadow-md"
+                    >
+                      <Download size={12} />
+                      <span>Exportar CSV</span>
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleExcluirOperadora(selectedOperadoraId)}
+                        className="flex items-center gap-1.5 bg-rose-600/10 border border-rose-500/20 text-rose-400 px-3.5 py-2 rounded-xl text-2xs font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all cursor-pointer"
+                      >
+                        <Trash2 size={12} />
+                        <span>Remover Operadora</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Planos desta Operadora */}
+                <div className="space-y-4">
+                  {planos.filter(p => p.operadoraId === selectedOperadoraId).length === 0 ? (
+                    <div className="text-center py-12 text-slate-500">
+                      <Layers className="mx-auto h-12 w-12 text-slate-600 mb-3" />
+                      <p className="text-xs font-bold">Nenhum plano ativo cadastrado para esta operadora.</p>
+                      {isAdmin && (
+                        <p className="text-3xs font-extrabold uppercase tracking-widest text-blue-500 mt-2 hover:underline cursor-pointer" onClick={() => setActiveTab('admin')}>
+                          Importe ou crie um agora
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    planos.filter(p => p.operadoraId === selectedOperadoraId).map((plano) => {
+                      const isExpanded = expandedPlanId === plano.id;
+                      const isEditing = editingPlanId === plano.id;
+
+                      return (
+                        <div
+                          key={plano.id}
+                          className={`rounded-[2rem] border transition-all duration-300 overflow-hidden ${
+                            isExpanded ? 'bg-slate-950/40 border-blue-500/20 shadow-xl' : 'bg-white/1 border-white/5'
+                          }`}
+                        >
+                          {/* Cabeçalho do Plano */}
+                          <div
+                            onClick={() => !isEditing && setExpandedPlanId(isExpanded ? null : plano.id)}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 cursor-pointer hover:bg-white/2 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`h-8 w-8 rounded-lg bg-blue-600/10 border border-blue-500/10 text-cyan-400 flex items-center justify-center`}>
+                                <FileText size={16} />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="text-sm font-black text-white">{plano.nome}</h4>
+                                  <span className="bg-white/5 border border-white/5 text-slate-400 text-[8px] font-black px-1.5 py-0.5 rounded">
+                                    {plano.tipo === 'PME' ? 'PME' : 'PF'}
+                                  </span>
+                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${
+                                    plano.coparticipacao === 'Sim' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
+                                  }`}>
+                                    {plano.coparticipacao === 'Sim' ? 'Coparticipação' : 'Sem Copart.'}
+                                  </span>
+                                  {plano.isDemo && (
+                                    <span className="bg-blue-600/10 text-cyan-400 border border-blue-500/20 text-[8px] font-black px-1.5 py-0.5 rounded">
+                                      Exemplo
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-500 mt-1">
+                                  Reembolso: {plano.reembolso} | {plano.hospitais.length} hospitais credenciados
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 self-end sm:self-auto">
+                              {isAdmin && (
+                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                  {isEditing ? (
+                                    <button
+                                      onClick={() => saveInlineEdit(plano.id)}
+                                      className="flex items-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-2xs font-black uppercase tracking-wider hover:bg-emerald-700 transition-colors cursor-pointer shadow-md"
+                                    >
+                                      <Save size={12} />
+                                      <span>Salvar</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        setExpandedPlanId(plano.id);
+                                        startEditing(plano);
+                                      }}
+                                      className="flex items-center gap-1 bg-white/5 border border-white/5 text-slate-300 px-3 py-1.5 rounded-xl text-2xs font-black uppercase tracking-wider hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                                    >
+                                      <Edit2 size={12} />
+                                      <span>Editar</span>
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={() => handleExcluirPlano(plano.id)}
+                                    className="p-1.5 bg-rose-600/10 border border-rose-500/20 text-rose-400 hover:bg-rose-600 hover:text-white rounded-xl transition-all cursor-pointer"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              )}
+
+                              <ChevronDown
+                                size={18}
+                                className={`text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Seção Expandida: Tabela e Detalhes */}
+                          {isExpanded && (
+                            <div className="border-t border-white/5 bg-slate-950/20 p-5 space-y-5 animate-in fade-in-50 duration-200">
+                              
+                              {/* Formulário/Inputs se estiver em Edição */}
+                              {isEditing ? (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white/3 border border-white/5 p-4 rounded-2xl">
+                                  <div>
+                                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Nome do Plano</label>
+                                    <input
+                                      type="text"
+                                      value={editFormData.nome || ''}
+                                      onChange={(e) => setEditFormData({ ...editFormData, nome: e.target.value })}
+                                      className="mt-1 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Reembolso</label>
+                                    <input
+                                      type="text"
+                                      value={editFormData.reembolso || ''}
+                                      onChange={(e) => setEditFormData({ ...editFormData, reembolso: e.target.value })}
+                                      className="mt-1 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Coparticipação</label>
+                                    <select
+                                      value={editFormData.coparticipacao || 'Sim'}
+                                      onChange={(e) => setEditFormData({ ...editFormData, coparticipacao: e.target.value as any })}
+                                      className="mt-1 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                                    >
+                                      <option value="Sim">Sim</option>
+                                      <option value="Não">Não</option>
+                                    </select>
+                                  </div>
+                                  <div className="md:col-span-3">
+                                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Hospitais (Separados por vírgula)</label>
+                                    <input
+                                      type="text"
+                                      value={editFormData.hospitais?.join(', ') || ''}
+                                      onChange={(e) => setEditFormData({ ...editFormData, hospitais: e.target.value.split(',').map(h => h.trim()) })}
+                                      className="mt-1 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {/* Tabelas de Preços por Faixa Etária */}
+                              <div>
+                                <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2.5">
+                                  Tabela de Preços por Faixas ANS (Mensalidade Unitária)
+                                </h5>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                  {FAIXAS_ETARIAS.map((faixa, index) => {
+                                    const valor = isEditing 
+                                      ? (editFormData.precos?.[index] || 0)
+                                      : plano.precos[index];
+
+                                    return (
+                                      <div key={faixa.key} className="bg-slate-900 border border-white/5 rounded-2xl p-3.5 flex flex-col justify-between">
+                                        <span className="text-[10px] font-extrabold text-slate-400">{faixa.label}</span>
+                                        {isEditing ? (
+                                          <div className="mt-2 flex items-center bg-white/5 border border-white/5 px-2 rounded-xl">
+                                            <span className="text-3xs font-bold text-slate-500 mr-1">R$</span>
+                                            <input
+                                              type="number"
+                                              value={valor}
+                                              onChange={(e) => {
+                                                const novosPrecos = [...(editFormData.precos || [])];
+                                                novosPrecos[index] = parseFloat(e.target.value) || 0;
+                                                setEditFormData({ ...editFormData, precos: novosPrecos });
+                                              }}
+                                              className="w-full bg-transparent border-none py-1 text-xs font-black text-cyan-400 focus:outline-none"
+                                            />
+                                          </div>
+                                        ) : (
+                                          <span className="text-sm font-black text-cyan-400 mt-1">
+                                            R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Hospitais Credenciados */}
+                              {!isEditing && (
+                                <div className="bg-slate-900 border border-white/5 p-4 rounded-2xl">
+                                  <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
+                                    <Heart size={12} className="text-rose-500" />
+                                    <span>Hospitais Credenciados Recomendados</span>
+                                  </h5>
+                                  <div className="flex flex-wrap gap-2">
+                                    {plano.hospitais.map((hosp, i) => (
+                                      <span key={i} className="bg-slate-950 border border-white/5 px-3 py-1.5 rounded-xl text-2xs font-extrabold text-slate-300">
+                                        {hosp}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= ABA 3: SMART AI UPLOADER (ADMINS) ================= */}
+        {activeTab === 'admin' && isAdmin && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Box Principal de Uploader Drag-and-Drop */}
+            <div className="lg:col-span-8 orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-6 backdrop-blur-md shadow-2xl space-y-5">
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-cyan-400 mb-1">
+                  <Sparkles size={14} className="animate-spin-slow" />
+                  <span>Apolo AI OCR & Table Parser</span>
+                </div>
+                <h3 className="text-lg font-black text-white">Alimentação Inteligente via PDF / Excel</h3>
+                <p className="text-xs font-bold text-slate-500">
+                  Arraste PDFs oficiais ou planilhas enviadas por representantes. O Apolo AI lerá o conteúdo, extrairá os preços de faixas ANS e estruturará de forma instantânea.
+                </p>
+              </div>
+
+              {/* Zona Drag-and-Drop */}
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-[2rem] p-10 flex flex-col items-center justify-center text-center transition-all duration-300 ${
+                  isDragging
+                    ? 'border-cyan-400 bg-blue-600/10 shadow-2xl shadow-cyan-500/10'
+                    : 'border-white/10 bg-white/2 hover:bg-white/3 hover:border-blue-500/30'
+                }`}
+              >
+                <div className={`h-14 w-14 rounded-2xl flex items-center justify-center border transition-all duration-300 mb-4 ${
+                  aiParsing 
+                    ? 'bg-blue-600/10 text-cyan-400 border-blue-500/30 animate-spin'
+                    : 'bg-blue-600/10 text-cyan-400 border-blue-500/10'
+                }`}>
+                  {aiParsing ? <RefreshCw size={24} /> : <FileSpreadsheet size={24} />}
+                </div>
+
+                {aiParsing ? (
+                  <div className="space-y-1.5 animate-pulse">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-cyan-300">Apolo AI está analisando o documento...</h4>
+                    <p className="text-[10px] font-bold text-slate-500">Extraindo faixas de preços, rede credenciada e regras comerciais. Aguarde.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Arraste seu arquivo PDF / Excel ou clique aqui</h4>
+                    <p className="text-[10px] font-bold text-slate-500">Formatos aceitos: .pdf, .xlsx, .xls, .csv</p>
+                  </div>
+                )}
+
+                <input
+                  type="file"
+                  accept=".pdf,.xlsx,.xls,.csv"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="apolo-file-input"
+                  disabled={aiParsing}
+                />
+                
+                {!aiParsing && (
+                  <label
+                    htmlFor="apolo-file-input"
+                    className="mt-6 flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all cursor-pointer shadow-md shadow-blue-600/20"
+                  >
+                    <Upload size={12} />
+                    <span>Selecionar Documento</span>
+                  </label>
+                )}
+              </div>
+
+              {/* Mensagem de Erro se houver */}
+              {errorMessage && (
+                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs font-extrabold text-rose-400 flex items-center gap-3">
+                  <AlertCircle size={16} className="shrink-0" />
+                  <p>{errorMessage}</p>
+                </div>
+              )}
+
+              {/* Informações Auxiliares */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/3 border border-white/5 p-4 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                    <HelpCircle size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-2xs font-black uppercase tracking-wider text-slate-300">Prefere enviar uma planilha modelo?</h4>
+                    <p className="text-[10px] font-bold text-slate-500">
+                      Você também pode baixar nossa planilha modelo padrão e subir com seus dados organizados.
+                    </p>
+                  </div>
+                </div>
+
+                <a
+                  href="/modelo_tabela_precos.csv"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const csvContent = "data:text/csv;charset=utf-8," 
+                      + "Operadora,Plano,Tipo,Coparticipacao,Reembolso,Hospitais,Preco_0_18,Preco_19_23,Preco_24_28,Preco_29_33,Preco_34_38,Preco_39_43,Preco_44_48,Preco_49_53,Preco_54_58,Preco_59_mais\n"
+                      + "Amil Saude,Amil S380 Premium,PME,Sim,Sem Reembolso,Albert Einstein;Sirio Libanes,250,300,350,400,450,500,600,750,1000,1800\n"
+                      + "Porto Seguro,Porto Ouro Max,PME,Nao,R$ 150.00,Hospital Samaritano;Pro-Cardíaco,350,420,490,550,620,700,850,1000,1350,2400";
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", "modelo_orion_tabela.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="flex items-center gap-1.5 bg-white/5 border border-white/5 text-slate-300 px-3.5 py-2 rounded-xl text-2xs font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all cursor-pointer shrink-0"
+                >
+                  <Download size={12} />
+                  <span>Modelo CSV</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Lado Direito: Regras do Apolo */}
+            <div className="lg:col-span-4 orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-6 backdrop-blur-md shadow-2xl space-y-4">
+              <h3 className="text-sm font-black uppercase tracking-widest text-slate-300">Como o Apolo AI lê tabelas?</h3>
+              
+              <div className="space-y-4 text-xs font-bold text-slate-400">
+                <div className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-2xs font-black text-cyan-400 border border-blue-500/10">1</span>
+                  <p>Lê as tabelas em PDF ou planilhas Excel cruas de todas as operadoras de saúde.</p>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-2xs font-black text-cyan-400 border border-blue-500/10">2</span>
+                  <p>Mapeia de forma inteligente as 10 faixas etárias padrão de precificação da ANS brasileira.</p>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-2xs font-black text-cyan-400 border border-blue-500/10">3</span>
+                  <p>Extrai as regras de **coparticipação**, reembolsos clínicos e a rede de hospitais credenciados.</p>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-2xs font-black text-cyan-400 border border-blue-500/10">4</span>
+                  <p>Exibe uma pré-visualização completa dos dados antes de registrar qualquer atualização oficial.</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ================= ABA 3: PAINEL DE IMPORTAÇÃO (ADMIN) ================= */}
-        {activeTab === 'admin' && isAdmin && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            {/* Box de Upload do CSV */}
-            <div className="lg:col-span-8 orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-6 backdrop-blur-md shadow-2xl space-y-5">
-              <div>
-                <h3 className="text-base font-black text-white">Alimentação em Massa via Planilha CSV</h3>
-                <p className="text-xs font-bold text-slate-500">
-                  Carregue tabelas de preços completas. O sistema irá ler as faixas etárias padrão da ANS e atualizar o simulador automaticamente.
-                </p>
-              </div>
-
-              {/* Área Dropzone de Arquivo */}
-              <div className="border-2 border-dashed border-white/10 rounded-[2rem] bg-white/2 p-8 flex flex-col items-center justify-center text-center transition-all hover:bg-white/3 hover:border-blue-500/30">
-                <div className="h-12 w-12 rounded-2xl bg-blue-600/10 text-cyan-400 flex items-center justify-center border border-blue-500/10 mb-3">
-                  <FileSpreadsheet size={24} />
-                </div>
-                
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Arraste seu arquivo CSV ou clique aqui</h4>
-                <p className="text-[10px] font-bold text-slate-500 mt-1">Apenas arquivos no formato .csv são aceitos.</p>
-
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleCsvUpload}
-                  className="hidden"
-                  id="csv-upload-input"
-                />
-                
-                <label
-                  htmlFor="csv-upload-input"
-                  className="mt-4 flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-2xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all cursor-pointer shadow-md"
-                >
-                  <Upload size={12} />
-                  <span>Selecionar arquivo</span>
-                </label>
-              </div>
-
-              {/* Status do Upload */}
-              {uploadStatus && (
-                <div className={`p-4 rounded-2xl border text-xs font-extrabold flex items-center gap-3 ${
-                  uploadStatus.type === 'sucesso'
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                    : uploadStatus.type === 'erro'
-                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                      : 'bg-blue-500/10 border-blue-500/30 text-cyan-400'
-                }`}>
-                  <AlertCircle size={16} />
-                  <p>{uploadStatus.message}</p>
-                </div>
-              )}
-
-              {/* Ajuda/Modelo */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/3 border border-white/5 p-4 rounded-2xl">
+        {/* ================= MODAL: SMART AI PREVIEW MODAL (APOLO PARSER) ================= */}
+        {aiPreviewData && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in-50 duration-200">
+            <div className="relative w-full max-w-3xl overflow-hidden rounded-[2.5rem] border border-cyan-500/30 bg-[#090e1a]/95 p-6 sm:p-8 shadow-[0_0_50px_rgba(6,182,212,0.2)] animate-in slide-in-from-bottom-6 duration-300">
+              
+              {/* Header do Modal */}
+              <div className="flex items-center justify-between border-b border-white/5 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
-                    <HelpCircle size={18} />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-600/10 text-cyan-400 font-black border border-cyan-500/20">
+                    <Sparkles size={20} className="animate-pulse" />
                   </div>
                   <div>
-                    <h4 className="text-2xs font-black uppercase tracking-wider text-slate-300">Como funciona o layout da planilha?</h4>
+                    <h3 className="text-base font-black text-white flex items-center gap-1.5">
+                      <span>Visualizar Extração Apolo AI</span>
+                      <span className="bg-cyan-500/20 text-cyan-300 text-[8px] font-black uppercase px-2 py-0.5 rounded-full">Revisão</span>
+                    </h3>
                     <p className="text-[10px] font-bold text-slate-500">
-                      Faça o download do nosso modelo pré-estruturado contendo todas as 10 faixas etárias padrão da ANS.
+                      Revise os dados extraídos pelo Apolo AI antes de salvar.
                     </p>
                   </div>
                 </div>
 
                 <button
-                  onClick={baixarPlanilhaModelo}
-                  className="flex items-center gap-1.5 bg-white/5 border border-white/5 text-slate-300 px-3.5 py-2 rounded-xl text-2xs font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all cursor-pointer shrink-0"
+                  onClick={() => setAiPreviewData(null)}
+                  className="rounded-xl bg-white/5 border border-white/5 p-2 text-slate-400 hover:text-white hover:bg-white/10 cursor-pointer"
                 >
-                  <Download size={12} />
-                  <span>Modelo CSV</span>
+                  <X size={16} />
                 </button>
               </div>
-            </div>
 
-            {/* Lado Direito: Resumo Informativo */}
-            <div className="lg:col-span-4 orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-6 backdrop-blur-md shadow-2xl space-y-4">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-300">Instruções de Importação</h3>
-              
-              <div className="space-y-4 text-xs font-bold text-slate-400">
-                <div className="flex items-start gap-2.5">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-2xs font-black text-cyan-400 border border-blue-500/10">1</span>
-                  <p>A coluna **Operadora** agrupará os planos sob o mesmo grupo visual.</p>
+              {/* Corpo Editável do Modal */}
+              <div className="mt-5 space-y-5 max-h-[400px] overflow-y-auto pr-1">
+                
+                {/* Informações Básicas */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 bg-white/2 border border-white/5 p-4 rounded-2xl">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Operadora</label>
+                    <input
+                      type="text"
+                      value={aiPreviewData.operadoraNome || ''}
+                      onChange={(e) => setAiPreviewData({ ...aiPreviewData, operadoraNome: e.target.value })}
+                      className="mt-1 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Nome do Plano</label>
+                    <input
+                      type="text"
+                      value={aiPreviewData.nome || ''}
+                      onChange={(e) => setAiPreviewData({ ...aiPreviewData, nome: e.target.value })}
+                      className="mt-1 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Contratação</label>
+                    <select
+                      value={aiPreviewData.tipo || 'PME'}
+                      onChange={(e) => setAiPreviewData({ ...aiPreviewData, tipo: e.target.value as any })}
+                      className="mt-1.5 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                    >
+                      <option value="PME">PME (Empresarial)</option>
+                      <option value="PF">Pessoa Física</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Coparticipação</label>
+                    <select
+                      value={aiPreviewData.coparticipacao || 'Sim'}
+                      onChange={(e) => setAiPreviewData({ ...aiPreviewData, coparticipacao: e.target.value as any })}
+                      className="mt-1.5 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                    >
+                      <option value="Sim">Sim</option>
+                      <option value="Não">Não</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Reembolso Clínico</label>
+                    <input
+                      type="text"
+                      value={aiPreviewData.reembolso || ''}
+                      onChange={(e) => setAiPreviewData({ ...aiPreviewData, reembolso: e.target.value })}
+                      className="mt-1 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Hospitais Credenciados (Separados por vírgula)</label>
+                    <input
+                      type="text"
+                      value={aiPreviewData.hospitais?.join(', ') || ''}
+                      onChange={(e) => setAiPreviewData({ ...aiPreviewData, hospitais: e.target.value.split(',').map(h => h.trim()) })}
+                      className="mt-1 w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none"
+                    />
+                  </div>
                 </div>
-                <div className="flex items-start gap-2.5">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-2xs font-black text-cyan-400 border border-blue-500/10">2</span>
-                  <p>A coluna **Tipo** deve conter apenas **PF** (Pessoa Física) ou **PME** (Empresarial).</p>
+
+                {/* Preços ANS Extraídos */}
+                <div>
+                  <h4 className="text-2xs font-black uppercase tracking-wider text-slate-500 mb-2.5">Tabela de Preços Extraída (10 faixas ANS)</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    {FAIXAS_ETARIAS.map((faixa, idx) => {
+                      const preco = aiPreviewData.precos?.[idx] || 0;
+                      return (
+                        <div key={faixa.key} className="bg-slate-900 border border-white/5 rounded-2xl p-3 flex flex-col justify-between">
+                          <span className="text-[9px] font-extrabold text-slate-400">{faixa.label}</span>
+                          <div className="mt-1.5 flex items-center bg-white/5 border border-white/5 px-2 rounded-xl">
+                            <span className="text-3xs font-bold text-slate-500 mr-1">R$</span>
+                            <input
+                              type="number"
+                              value={preco}
+                              onChange={(e) => {
+                                const novosPrecos = [...(aiPreviewData.precos || [])];
+                                novosPrecos[idx] = parseFloat(e.target.value) || 0;
+                                setAiPreviewData({ ...aiPreviewData, precos: novosPrecos });
+                              }}
+                              className="w-full bg-transparent border-none py-1 text-xs font-black text-cyan-400 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex items-start gap-2.5">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-2xs font-black text-cyan-400 border border-blue-500/10">3</span>
-                  <p>As últimas 10 colunas devem conter exclusivamente os valores numéricos dos preços (separados por vírgula na planilha) para cada faixa etária.</p>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-2xs font-black text-cyan-400 border border-blue-500/10">4</span>
-                  <p>Se o nome do plano já existir, ele será atualizado; caso contrário, será adicionado um novo plano na base de dados.</p>
-                </div>
+              </div>
+
+              {/* Footer do Modal */}
+              <div className="mt-6 flex flex-col sm:flex-row gap-3 border-t border-white/5 pt-4">
+                <button
+                  onClick={() => setAiPreviewData(null)}
+                  className="flex-1 bg-white/5 border border-white/5 text-slate-300 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all cursor-pointer text-center"
+                >
+                  Descartar
+                </button>
+
+                <button
+                  onClick={confirmarSalvarAiPreview}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all cursor-pointer shadow-md shadow-blue-600/20"
+                >
+                  <Check size={14} />
+                  <span>Gravar e Notificar</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1023,18 +1810,36 @@ export default function SimuladorPage() {
               <div className="mt-6 flex flex-col sm:flex-row gap-3 border-t border-white/5 pt-4">
                 <button
                   onClick={() => {
-                    alert('Proposta copiada para a área de transferência no formato de texto comercial!');
+                    const textContent = `📄 *PROPOSTA COMERCIAL ORION TRACK*
+----------------------------------------
+Plano: ${propostaModal.plano.nome}
+Coparticipação: ${propostaModal.plano.coparticipacao}
+Reembolso: ${propostaModal.plano.reembolso}
+Vidas Totais: ${propostaModal.totalVidas}
+
+*Resumo de Custos:*
+${propostaModal.vidasPorFaixa.map(v => `- ${v.count}x ${v.label}: R$ ${v.precoUnitario} (Subtotal: R$ ${v.subtotal})`).join('\n')}
+
+*Total Mensal Geral: R$ ${propostaModal.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*
+
+*Hospitais Recomendados:*
+${propostaModal.plano.hospitais.slice(0, 5).map(h => `• ${h}`).join('\n')}
+----------------------------------------
+_Gerado de forma premium via Orion Track CRM._`;
+
+                    navigator.clipboard.writeText(textContent);
+                    alert('Proposta copiada para a área de transferência no formato comercial para WhatsApp!');
                     setPropostaModal(null);
                   }}
                   className="flex-1 flex items-center justify-center gap-2 bg-white/5 border border-white/5 text-slate-300 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                 >
                   <Share2 size={14} />
-                  <span>Copiar Proposta</span>
+                  <span>Copiar Proposta WhatsApp</span>
                 </button>
 
                 <button
                   onClick={() => {
-                    alert('Proposta salva e enviada com sucesso!');
+                    alert('Simulação concluída com sucesso!');
                     setPropostaModal(null);
                   }}
                   className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all cursor-pointer shadow-md shadow-blue-600/20"

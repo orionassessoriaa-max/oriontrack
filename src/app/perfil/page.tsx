@@ -3,21 +3,87 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { User, Mail, Shield, Smartphone, MapPin, Loader2, Save, Moon, Sun } from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
+import { User, Mail, Shield, Smartphone, MapPin, Loader2, Save, Moon, Sun, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getProfileRoleLabel } from '@/lib/users';
 
+const formatarTelefone = (value: string) => {
+  if (!value) return '';
+  const apenasDigitos = value.replace(/\D/g, '');
+  const digitosLimitados = apenasDigitos.slice(0, 11);
+  
+  if (digitosLimitados.length <= 2) {
+    return digitosLimitados.length > 0 ? `(${digitosLimitados}` : '';
+  }
+  if (digitosLimitados.length <= 7) {
+    return `(${digitosLimitados.slice(0, 2)})${digitosLimitados.slice(2)}`;
+  }
+  return `(${digitosLimitados.slice(0, 2)})${digitosLimitados.slice(2, 7)}-${digitosLimitados.slice(7)}`;
+};
+
 export default function ProfilePage() {
-  const { profile, loading } = useAuth();
+  const { profile, loading, refreshProfile } = useAuth();
   const [tema, setTema] = useState<string>('noturno');
+  
+  // Estados para dados editáveis
+  const [nome, setNome] = useState('');
+  const [telefone, setTelefone] = useState('');
+  
+  // Estados de controle
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     setTema(window.localStorage.getItem('orion:tema_sistema') || 'noturno');
   }, []);
 
+  // Preencher estados editáveis quando o perfil carregar
+  useEffect(() => {
+    if (profile) {
+      setNome(profile.nome || '');
+      setTelefone(formatarTelefone(profile.telefone || ''));
+    }
+  }, [profile]);
+
   const handleThemeToggle = (newTheme: string) => {
     window.localStorage.setItem('orion:tema_sistema', newTheme);
     setTema(newTheme);
     window.dispatchEvent(new Event('orion:theme_changed'));
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.id) return;
+
+    setSaving(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          nome: nome.trim(),
+          telefone: telefone.trim()
+        })
+        .eq('id', profile.id);
+
+      if (updateError) throw updateError;
+
+      // Recarrega o perfil no AuthProvider
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err: any) {
+      console.error('Erro ao atualizar perfil:', err);
+      setError(err.message || 'Ocorreu um erro ao salvar as alterações do seu perfil.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -41,25 +107,108 @@ export default function ProfilePage() {
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="space-y-8 lg:col-span-2">
-          {/* Personal Data Card */}
-          <div className="border border-gray-100 bg-white p-8 shadow-sm rounded-2xl">
-            <h3 className="mb-6 text-lg font-bold text-gray-900">Dados pessoais</h3>
+          {/* Card de Dados Pessoais */}
+          <form onSubmit={handleSaveProfile} className="border border-gray-100 bg-white p-8 shadow-sm rounded-2xl space-y-6">
+            <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-4">Dados pessoais</h3>
+            
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-xs font-bold animate-in fade-in">
+                <AlertCircle size={16} className="shrink-0" />
+                <p>{error}</p>
+              </div>
+            )}
+
+            {success && (
+              <div className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3 text-green-700 text-xs font-black animate-in fade-in">
+                <CheckCircle2 size={16} className="shrink-0" />
+                <p>Perfil atualizado com sucesso!</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <Field icon={User} label="Nome completo" value={profile?.nome || ''} />
-              <Field icon={Mail} label="Email de acesso" value={profile?.email || ''} disabled />
-              <Field icon={Smartphone} label="Telefone / WhatsApp" value="" placeholder="(00) 00000-0000" />
-              <Field icon={Shield} label="Cargo / tipo" value={getProfileRoleLabel(profile)} disabled />
+              {/* Nome */}
+              <div className="space-y-2">
+                <label className="ml-1 text-xs font-bold uppercase tracking-widest text-gray-400">Nome completo</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    required
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    placeholder="Seu nome completo"
+                    className="w-full border-none py-4 pl-12 pr-4 font-medium transition-all focus:ring-2 focus:ring-blue-500 rounded-xl bg-gray-50 text-gray-900"
+                  />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="space-y-2 opacity-80">
+                <label className="ml-1 text-xs font-bold uppercase tracking-widest text-gray-400">Email de acesso</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="email"
+                    disabled
+                    value={profile?.email || ''}
+                    className="w-full border-none py-4 pl-12 pr-4 font-medium rounded-xl cursor-not-allowed bg-gray-100 text-gray-500"
+                  />
+                </div>
+              </div>
+
+              {/* WhatsApp */}
+              <div className="space-y-2">
+                <label className="ml-1 text-xs font-bold uppercase tracking-widest text-gray-400">Telefone / WhatsApp</label>
+                <div className="relative">
+                  <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    required
+                    value={telefone}
+                    onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
+                    placeholder="(99)99999-9999"
+                    maxLength={14}
+                    pattern="\(\d{2}\)\d{5}-\d{4}"
+                    title="Formato correto: (99)99999-9999"
+                    className="w-full border-none py-4 pl-12 pr-4 font-medium transition-all focus:ring-2 focus:ring-blue-500 rounded-xl bg-gray-50 text-gray-900"
+                  />
+                </div>
+              </div>
+
+              {/* Cargo / Tipo de Acesso */}
+              <div className="space-y-2 opacity-80">
+                <label className="ml-1 text-xs font-bold uppercase tracking-widest text-gray-400">Cargo / Tipo</label>
+                <div className="relative">
+                  <Shield className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    disabled
+                    value={getProfileRoleLabel(profile)}
+                    className="w-full border-none py-4 pl-12 pr-4 font-medium rounded-xl cursor-not-allowed bg-gray-100 text-gray-500"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="mt-8 flex justify-end">
-              <button className="flex items-center gap-2 bg-blue-600 px-8 py-4 font-bold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700 rounded-xl">
-                <Save size={20} />
-                Salvar alterações
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex items-center gap-2 bg-blue-600 px-8 py-4 font-bold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-700 rounded-xl disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  <>
+                    <Save size={20} />
+                    <span>Salvar alterações</span>
+                  </>
+                )}
               </button>
             </div>
-          </div>
+          </form>
 
-          {/* Theme Selection Card */}
+          {/* Tema Selection Card */}
           <div className="border border-gray-100 bg-white p-8 shadow-sm rounded-2xl">
             <h3 className="mb-2 text-lg font-bold text-gray-900">Aparência do sistema</h3>
             <p className="mb-6 text-sm text-gray-500 font-semibold">
@@ -123,7 +272,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Right Info Sidebar */}
+        {/* Info Sidebar Direita */}
         <div className="space-y-8">
           <div className="relative overflow-hidden bg-[#0f172a] p-8 text-white shadow-xl rounded-2xl">
             <div className="absolute right-0 top-0 h-32 w-32 bg-blue-600/20 blur-3xl animate-pulse" />
@@ -143,29 +292,17 @@ export default function ProfilePage() {
                   <Mail size={16} className="text-blue-400 shrink-0" />
                   <span className="truncate">{profile?.email}</span>
                 </div>
+                {profile?.telefone && (
+                  <div className="flex items-center gap-3 text-sm text-gray-400">
+                    <Smartphone size={16} className="text-blue-400 shrink-0" />
+                    <span>{formatarTelefone(profile.telefone)}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
     </InternalLayout>
-  );
-}
-
-function Field({ icon: Icon, label, value, disabled, placeholder }: { icon: any; label: string; value: string; disabled?: boolean; placeholder?: string }) {
-  return (
-    <div className="space-y-2">
-      <label className="ml-1 text-xs font-bold uppercase tracking-widest text-gray-400">{label}</label>
-      <div className="relative">
-        <Icon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-        <input
-          type="text"
-          defaultValue={value}
-          disabled={disabled}
-          placeholder={placeholder}
-          className={`orion-profile-field w-full border-none py-4 pl-12 pr-4 font-medium transition-all focus:ring-2 focus:ring-blue-500 rounded-xl ${disabled ? 'cursor-not-allowed bg-gray-100 text-gray-500' : 'bg-gray-50 text-gray-900'}`}
-        />
-      </div>
-    </div>
   );
 }

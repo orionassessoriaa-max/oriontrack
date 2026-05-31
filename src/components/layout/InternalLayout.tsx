@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import { AlertCircle, Loader2, LogOut, RefreshCw } from 'lucide-react';
+import ApoloAiWidget from '@/components/ui/ApoloAiWidget';
 
 export default function InternalLayout({ children }: { children: React.ReactNode }) {
   const { profile, loading, user, signOut, refreshProfile } = useAuth();
@@ -158,6 +159,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
           {children}
         </div>
       </main>
+      <ApoloAiWidget />
     </div>
   );
 }

@@ -15,6 +15,7 @@ export interface Profile {
   is_admin_master?: boolean | null;
   tema_sistema?: 'claro' | 'noturno' | null;
   equipe_orion?: 'apollo' | 'kripto_hunters' | null;
+  telefone?: string | null;
   created_at: string;
 }
 

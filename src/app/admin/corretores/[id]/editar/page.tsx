@@ -23,6 +23,20 @@ import Link from 'next/link';
 import { Profile, TipoCampanha } from '@/types';
 import { buildOperationalTeamMembers, getTeamMemberAvatar, isTrafficManagerMember, ORION_TEAM_MEMBERS, OrionTeamMember } from '@/lib/orionTeam';
 
+const formatarTelefone = (value: string) => {
+  if (!value) return '';
+  const apenasDigitos = value.replace(/\D/g, '');
+  const digitosLimitados = apenasDigitos.slice(0, 11);
+  
+  if (digitosLimitados.length <= 2) {
+    return digitosLimitados.length > 0 ? `(${digitosLimitados}` : '';
+  }
+  if (digitosLimitados.length <= 7) {
+    return `(${digitosLimitados.slice(0, 2)})${digitosLimitados.slice(2)}`;
+  }
+  return `(${digitosLimitados.slice(0, 2)})${digitosLimitados.slice(2, 7)}-${digitosLimitados.slice(7)}`;
+};
+
 export default function EditarCorretorPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
@@ -245,7 +259,14 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
                     type="text" 
                     required
                     value={formData.telefone}
-                    onChange={e => setFormData({...formData, telefone: e.target.value})}
+                    onChange={e => {
+                      const formatted = formatarTelefone(e.target.value);
+                      setFormData({...formData, telefone: formatted});
+                    }}
+                    placeholder="(99)99999-9999"
+                    maxLength={14}
+                    pattern="\(\d{2}\)\d{5}-\d{4}"
+                    title="Formato correto: (99)99999-9999"
                     className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium"
                   />
                 </div>

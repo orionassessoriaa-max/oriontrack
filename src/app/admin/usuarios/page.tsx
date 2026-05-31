@@ -12,6 +12,20 @@ import { useDialog } from '@/components/providers/DialogProvider';
 import { Camera, CheckCircle2, Copy, Edit2, KeyRound, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
+const formatarTelefone = (value: string) => {
+  if (!value) return '';
+  const apenasDigitos = value.replace(/\D/g, '');
+  const digitosLimitados = apenasDigitos.slice(0, 11);
+  
+  if (digitosLimitados.length <= 2) {
+    return digitosLimitados.length > 0 ? `(${digitosLimitados}` : '';
+  }
+  if (digitosLimitados.length <= 7) {
+    return `(${digitosLimitados.slice(0, 2)})${digitosLimitados.slice(2)}`;
+  }
+  return `(${digitosLimitados.slice(0, 2)})${digitosLimitados.slice(2, 7)}-${digitosLimitados.slice(7)}`;
+};
+
 type Credentials = {
   email: string;
   email_real: string | null;
@@ -576,8 +590,14 @@ export default function AdminUsuariosPage() {
                   <input
                     required
                     value={form.telefone}
-                    onChange={(event) => setForm((current) => ({ ...current, telefone: event.target.value }))}
-                    placeholder="(00) 00000-0000"
+                    onChange={(event) => {
+                      const formatted = formatarTelefone(event.target.value);
+                      setForm((current) => ({ ...current, telefone: formatted }));
+                    }}
+                    placeholder="(99)99999-9999"
+                    maxLength={14}
+                    pattern="\(\d{2}\)\d{5}-\d{4}"
+                    title="Formato correto: (99)99999-9999"
                     className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
