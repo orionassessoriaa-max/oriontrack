@@ -190,194 +190,177 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* Container Principal de Login (Split Screen Layout) */}
-      <AnimatePresence>
-        {videoState === 'paused-form' && (
-          <div className="w-full min-h-screen flex flex-col md:flex-row relative z-20">
-            
-            {/* Lado Esquerdo: Copys da marca */}
-            <div className="hidden md:flex flex-1 flex-col items-start justify-center p-12 lg:p-24 relative z-10 border-r border-white/5 bg-white/[0.005]">
-              <motion.div 
-                initial={{ opacity: 0, x: -35 }} 
-                animate={{ opacity: 1, x: 0 }} 
-                transition={{ duration: 0.8, ease: 'easeOut' }}
-                className="max-w-lg space-y-6 text-left"
-              >
-                <h1 className="text-4xl lg:text-5xl font-black text-white leading-tight tracking-tight uppercase">
-                  A gestão que coloca sua corretora no <span className="text-cyan-400 font-extrabold animate-pulse">ataque</span>.
-                </h1>
-                <p className="text-slate-300 text-base lg:text-lg leading-relaxed font-bold">
-                  Um CRM criado para corretores de planos de saúde venderem com mais controle, velocidade e previsibilidade.
-                </p>
-              </motion.div>
-            </div>
-
-            {/* Lado Direito: Formulário Glassmorphic */}
-            <div className="flex-1 flex items-center justify-center p-6 md:p-12">
-              <motion.div
-                initial={{ opacity: 0, x: 35, scale: 0.98 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -25, scale: 0.96 }}
-                transition={{ duration: 0.6, ease: 'easeOut' }}
-                className="w-full max-w-md"
-              >
-                <div className="bg-[#0b1329]/50 backdrop-blur-2xl border border-white/10 p-8 md:p-10 rounded-[2.5rem] shadow-[0_25px_60px_rgba(0,0,0,0.65)] relative overflow-hidden">
-                  <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/5 rounded-full blur-2xl pointer-events-none" />
-                  
-                  <div className="flex justify-center mb-7">
-                    <img src="/brand-logo.png" alt="ORION TRACK" className="h-16 w-auto object-contain" />
-                  </div>
-
-                  <AnimatePresence mode="wait">
-                    {view === 'login' ? (
-                      <motion.div 
-                        key="login" 
-                        initial={{ opacity: 0, x: 15 }} 
-                        animate={{ opacity: 1, x: 0 }} 
-                        exit={{ opacity: 0, x: -15 }}
-                        transition={{ duration: 0.25 }}
-                      >
-                        <div className="mb-6 text-center">
-                          <h2 className="text-xl font-black text-white tracking-tight uppercase">Acessar Orion</h2>
-                          <p className="text-slate-500 font-bold text-2xs uppercase tracking-wider mt-1">Plataforma Comercial de Leads</p>
-                        </div>
-
-                        {error && (
-                          <div className="mb-5 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-400 text-xs font-bold leading-normal">
-                            <AlertCircle size={16} className="shrink-0" /> {error}
-                          </div>
-                        )}
-
-                        <form onSubmit={handleLogin} className="space-y-4">
-                          <div className="space-y-1.5 group">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
-                            <div className="relative">
-                              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors" size={16} />
-                              <input
-                                type="email"
-                                required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="exemplo@orion.com.br"
-                                className="w-full bg-slate-900/40 border border-white/5 text-white rounded-2xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/35 transition-all text-sm font-semibold placeholder:text-slate-700"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5 group">
-                            <div className="flex justify-between items-center px-1">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Senha</label>
-                              <button 
-                                type="button" 
-                                onClick={() => setView('recovery')} 
-                                className="text-[9px] text-cyan-400 font-extrabold hover:underline uppercase tracking-wider"
-                              >
-                                Esqueceu?
-                              </button>
-                            </div>
-                            <div className="relative">
-                              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors" size={16} />
-                              <input
-                                type="password"
-                                required
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                                className="w-full bg-slate-900/40 border border-white/5 text-white rounded-2xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/35 transition-all text-sm font-semibold placeholder:text-slate-700"
-                              />
-                            </div>
-                          </div>
-
-                          <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-4.5 rounded-2xl shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 group text-sm uppercase tracking-wider disabled:opacity-50 disabled:pointer-events-none cursor-pointer mt-6"
-                          >
-                            {loading ? (
-                              <Loader2 className="animate-spin" size={18} />
-                            ) : (
-                              <>
-                                Entrar no Painel 
-                                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                              </>
-                            )}
-                          </button>
-                        </form>
-                      </motion.div>
-                    ) : (
-                      <motion.div 
-                        key="recovery" 
-                        initial={{ opacity: 0, x: 15 }} 
-                        animate={{ opacity: 1, x: 0 }} 
-                        exit={{ opacity: 0, x: -15 }}
-                        transition={{ duration: 0.25 }}
-                      >
-                        <div className="mb-6 text-center">
-                          <h2 className="text-xl font-black text-white tracking-tight uppercase">Recuperar Acesso</h2>
-                          <p className="text-slate-500 font-bold text-2xs uppercase tracking-wider mt-1">Enviaremos as instruções de redefinição</p>
-                        </div>
-
-                        {error && (
-                          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-400 text-xs font-bold leading-normal">
-                            <AlertCircle size={16} className="shrink-0" /> {error}
-                          </div>
-                        )}
-
-                        {success && (
-                          <div className="mb-4 p-4 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-center gap-3 text-green-400 text-xs font-bold leading-normal">
-                            <CheckCircle2 size={16} className="shrink-0" /> {success}
-                          </div>
-                        )}
-
-                        <form onSubmit={handleRecovery} className="space-y-4">
-                          <div className="space-y-1.5 group">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Corporativo</label>
-                            <div className="relative">
-                              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors" size={16} />
-                              <input
-                                type="email"
-                                required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="exemplo@orion.com.br"
-                                className="w-full bg-slate-900/40 border border-white/5 text-white rounded-2xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/35 transition-all text-sm font-semibold placeholder:text-slate-700"
-                              />
-                            </div>
-                          </div>
-
-                          <button 
-                            type="submit" 
-                            disabled={loading} 
-                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-4.5 rounded-2xl shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wider disabled:opacity-50 disabled:pointer-events-none cursor-pointer mt-6"
-                          >
-                            {loading ? (
-                              <Loader2 className="animate-spin" size={18} />
-                            ) : (
-                              <>
-                                Enviar Link 
-                                <ArrowRight size={16} />
-                              </>
-                            )}
-                          </button>
-                          
-                          <button 
-                            type="button" 
-                            onClick={() => setView('login')} 
-                            className="w-full text-xs text-slate-400 font-extrabold hover:text-white uppercase tracking-wider transition-colors mt-3 text-center cursor-pointer"
-                          >
-                            Voltar ao Login
-                          </button>
-                        </form>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+      {/* Container Principal de Login (Centralizado e Glassmorphic) */}
+      <div className="w-full max-w-md px-6 relative z-20">
+        <AnimatePresence>
+          {videoState === 'paused-form' && (
+            <motion.div
+              initial={{ opacity: 0, y: 35, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -25, scale: 0.96 }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+              className="w-full"
+            >
+              <div className="bg-[#0b1329]/50 backdrop-blur-2xl border border-white/10 p-8 md:p-10 rounded-[2.5rem] shadow-[0_25px_60px_rgba(0,0,0,0.65)] relative overflow-hidden">
+                <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/5 rounded-full blur-2xl pointer-events-none" />
+                
+                <div className="flex justify-center mb-7">
+                  <img src="/brand-logo.png" alt="ORION TRACK" className="h-16 w-auto object-contain" />
                 </div>
-              </motion.div>
-            </div>
-            
-          </div>
-        )}
-      </AnimatePresence>
+
+                <AnimatePresence mode="wait">
+                  {view === 'login' ? (
+                    <motion.div 
+                      key="login" 
+                      initial={{ opacity: 0, x: 15 }} 
+                      animate={{ opacity: 1, x: 0 }} 
+                      exit={{ opacity: 0, x: -15 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <div className="mb-6 text-center space-y-3">
+                        <h2 className="text-lg md:text-xl font-black text-white leading-tight tracking-tight uppercase">
+                          A gestão que coloca sua corretora no <span className="text-cyan-400 font-extrabold animate-pulse">ataque</span>.
+                        </h2>
+                        <p className="text-slate-400 font-bold text-3xs uppercase tracking-wider leading-relaxed">
+                          Um CRM criado para corretores de planos de saúde venderem com mais controle, velocidade e previsibilidade.
+                        </p>
+                      </div>
+
+                      {error && (
+                        <div className="mb-5 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-400 text-xs font-bold leading-normal">
+                          <AlertCircle size={16} className="shrink-0" /> {error}
+                        </div>
+                      )}
+
+                      <form onSubmit={handleLogin} className="space-y-4">
+                        <div className="space-y-1.5 group">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
+                          <div className="relative">
+                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors" size={16} />
+                            <input
+                              type="email"
+                              required
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                              placeholder="exemplo@orion.com.br"
+                              className="w-full bg-slate-900/40 border border-white/5 text-white rounded-2xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/35 transition-all text-sm font-semibold placeholder:text-slate-700"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5 group">
+                          <div className="flex justify-between items-center px-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Senha</label>
+                            <button 
+                              type="button" 
+                              onClick={() => setView('recovery')} 
+                              className="text-[9px] text-cyan-400 font-extrabold hover:underline uppercase tracking-wider"
+                            >
+                              Esqueceu?
+                            </button>
+                          </div>
+                          <div className="relative">
+                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors" size={16} />
+                            <input
+                              type="password"
+                              required
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              placeholder="••••••••"
+                              className="w-full bg-slate-900/40 border border-white/5 text-white rounded-2xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/35 transition-all text-sm font-semibold placeholder:text-slate-700"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-4.5 rounded-2xl shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 group text-sm uppercase tracking-wider disabled:opacity-50 disabled:pointer-events-none cursor-pointer mt-6"
+                        >
+                          {loading ? (
+                            <Loader2 className="animate-spin" size={18} />
+                          ) : (
+                            <>
+                              Entrar no Painel 
+                              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    </motion.div>
+                  ) : (
+                    <motion.div 
+                      key="recovery" 
+                      initial={{ opacity: 0, x: 15 }} 
+                      animate={{ opacity: 1, x: 0 }} 
+                      exit={{ opacity: 0, x: -15 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <div className="mb-6 text-center">
+                        <h2 className="text-xl font-black text-white tracking-tight uppercase">Recuperar Acesso</h2>
+                        <p className="text-slate-500 font-bold text-2xs uppercase tracking-wider mt-1">Enviaremos as instruções de redefinição</p>
+                      </div>
+
+                      {error && (
+                        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-400 text-xs font-bold leading-normal">
+                          <AlertCircle size={16} className="shrink-0" /> {error}
+                        </div>
+                      )}
+
+                      {success && (
+                        <div className="mb-4 p-4 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-center gap-3 text-green-400 text-xs font-bold leading-normal">
+                          <CheckCircle2 size={16} className="shrink-0" /> {success}
+                        </div>
+                      )}
+
+                      <form onSubmit={handleRecovery} className="space-y-4">
+                        <div className="space-y-1.5 group">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Corporativo</label>
+                          <div className="relative">
+                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors" size={16} />
+                            <input
+                              type="email"
+                              required
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                              placeholder="exemplo@orion.com.br"
+                              className="w-full bg-slate-900/40 border border-white/5 text-white rounded-2xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/35 transition-all text-sm font-semibold placeholder:text-slate-700"
+                            />
+                          </div>
+                        </div>
+
+                        <button 
+                          type="submit" 
+                          disabled={loading} 
+                          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-4.5 rounded-2xl shadow-lg shadow-blue-600/10 hover:shadow-blue-600/20 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wider disabled:opacity-50 disabled:pointer-events-none cursor-pointer mt-6"
+                        >
+                          {loading ? (
+                            <Loader2 className="animate-spin" size={18} />
+                          ) : (
+                            <>
+                              Enviar Link 
+                              <ArrowRight size={16} />
+                            </>
+                          )}
+                        </button>
+                        
+                        <button 
+                          type="button" 
+                          onClick={() => setView('login')} 
+                          className="w-full text-xs text-slate-400 font-extrabold hover:text-white uppercase tracking-wider transition-colors mt-3 text-center cursor-pointer"
+                        >
+                          Voltar ao Login
+                        </button>
+                      </form>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
     </div>
   );
 }
