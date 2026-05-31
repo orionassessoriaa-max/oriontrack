@@ -801,7 +801,7 @@ Payload: {
           <div>
             <div className="flex items-center gap-2 text-cyan-400 font-extrabold text-xs uppercase tracking-widest">
               <img src="/orion-empty-logo.png" alt="Orion" className="object-contain animate-pulse shrink-0" style={{ height: 14, width: 14 }} />
-              <span>Simulador Inteligente Apolo</span>
+              <span>Multicálculo Inteligente Apolo</span>
             </div>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">
               Multicálculo & Tabelas de Saúde
@@ -822,7 +822,7 @@ Payload: {
               }`}
             >
               <Calculator size={14} />
-              <span>Simulador</span>
+              <span>Multicálculo</span>
             </button>
             <button
               onClick={() => {

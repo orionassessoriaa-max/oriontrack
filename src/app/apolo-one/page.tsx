@@ -11,9 +11,11 @@ import {
   ShieldCheck,
   Compass,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -66,8 +68,8 @@ function Typewriter({ text, speed = 15, onComplete }: { text: string; speed?: nu
   );
 }
 
-// Visualizador de Cérebro/Neural Plexus Canvas estilo Jarvis
-function JarvisVisualizer({ isThinking }: { isThinking: boolean }) {
+// Visualizador do Core Canvas do Apolo One (Esfera Brilhante HSL e Órbitas Premium)
+function ApoloOneVisualizer({ isThinking }: { isThinking: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hue, setHue] = useState(200); // Começa no ciano/azul
 
@@ -75,7 +77,7 @@ function JarvisVisualizer({ isThinking }: { isThinking: boolean }) {
   useEffect(() => {
     const interval = setInterval(() => {
       setHue(prev => (prev + 1) % 360);
-    }, 100);
+    }, 80);
     return () => clearInterval(interval);
   }, []);
 
@@ -89,98 +91,68 @@ function JarvisVisualizer({ isThinking }: { isThinking: boolean }) {
     let width = (canvas.width = 300);
     let height = (canvas.height = 140);
 
-    // Gerador de pontos/partículas
-    const particleCount = 45;
-    const particles: Array<{
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      radius: number;
-    }> = [];
-
-    for (let i = 0; i < particleCount; i++) {
-      particles.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * (isThinking ? 1.4 : 0.6),
-        vy: (Math.random() - 0.5) * (isThinking ? 1.4 : 0.6),
-        radius: Math.random() * 2 + 1
-      });
-    }
-
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // 1. Desenhar conexões de linhas (Efeito Plexus/Sinapses)
-      for (let i = 0; i < particleCount; i++) {
-        for (let j = i + 1; j < particleCount; j++) {
-          const p1 = particles[i];
-          const p2 = particles[j];
-          const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-
-          if (dist < 55) {
-            ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = `rgba(6, 182, 212, ${0.15 * (1 - dist / 55)})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        }
-      }
-
-      // 2. Desenhar as partículas flutuando
-      particles.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = isThinking ? 'rgba(236, 72, 153, 0.6)' : 'rgba(6, 182, 212, 0.5)';
-        ctx.fill();
-
-        // Atualizar posições com rebotes nas bordas
-        p.x += p.vx;
-        p.y += p.vy;
-
-        if (p.x < 0 || p.x > width) p.vx *= -1;
-        if (p.y < 0 || p.y > height) p.vy *= -1;
-      });
-
-      // 3. Desenhar o Núcleo Esférico estilo Jarvis (Cérebro Central)
       const centerX = width / 2;
       const centerY = height / 2;
       const pulseRadius = 24 + Math.sin(Date.now() / (isThinking ? 120 : 250)) * 4;
 
-      // Glow externo
-      const glowGrad = ctx.createRadialGradient(centerX, centerY, 2, centerX, centerY, pulseRadius * 2);
-      const activeColor = isThinking 
-        ? `hsla(${hue}, 90%, 55%, 0.35)` 
-        : 'rgba(6, 182, 212, 0.25)';
+      // 1. Glow holográfico externo amplo e brilhante (Deep Glow)
+      const glowGrad = ctx.createRadialGradient(centerX, centerY, 2, centerX, centerY, pulseRadius * 2.8);
+      const activeColor = `hsla(${hue}, 90%, 55%, ${isThinking ? 0.45 : 0.3})`;
+      const activeColorOuter = `hsla(${(hue + 30) % 360}, 90%, 50%, 0.05)`;
+      
       glowGrad.addColorStop(0, activeColor);
+      glowGrad.addColorStop(0.5, activeColorOuter);
       glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       
       ctx.beginPath();
-      ctx.arc(centerX, centerY, pulseRadius * 2, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, pulseRadius * 2.8, 0, Math.PI * 2);
       ctx.fillStyle = glowGrad;
       ctx.fill();
 
-      // Esfera central sólida com cores HSL mutantes
+      // 2. Órbitas cibernéticas finas girando (Concentric Rings)
+      const time = Date.now() / 1500;
+      
+      // Órbita 1 (Externa)
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, pulseRadius * 1.8, time, time + Math.PI * 1.5);
+      ctx.strokeStyle = `hsla(${hue}, 80%, 65%, 0.25)`;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Órbita 2 (Média, sentido oposto)
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, pulseRadius * 1.4, -time * 1.3, -time * 1.3 + Math.PI);
+      ctx.strokeStyle = `hsla(${(hue + 120) % 360}, 85%, 60%, 0.2)`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // 3. Esfera central sólida com gradiente HSL de alta fidelidade
       const coreGrad = ctx.createLinearGradient(centerX - pulseRadius, centerY - pulseRadius, centerX + pulseRadius, centerY + pulseRadius);
-      coreGrad.addColorStop(0, `hsl(${hue}, 85%, 60%)`);
-      coreGrad.addColorStop(1, `hsl(${(hue + 60) % 360}, 90%, 50%)`);
+      coreGrad.addColorStop(0, `hsl(${hue}, 90%, 65%)`);
+      coreGrad.addColorStop(1, `hsl(${(hue + 60) % 360}, 95%, 50%)`);
 
       ctx.beginPath();
       ctx.arc(centerX, centerY, pulseRadius, 0, Math.PI * 2);
       ctx.fillStyle = coreGrad;
-      ctx.shadowBlur = isThinking ? 25 : 12;
-      ctx.shadowColor = `hsl(${hue}, 90%, 50%)`;
+      ctx.shadowBlur = isThinking ? 35 : 20;
+      ctx.shadowColor = `hsl(${hue}, 95%, 55%)`;
       ctx.fill();
-      ctx.shadowBlur = 0; // Reseta sombra
+      ctx.shadowBlur = 0; // Reseta sombra para não afetar os outros desenhos
 
-      // Detalhes mecânicos concêntricos girando
+      // 4. Detalhes internos da esfera (Core Pattern)
       ctx.beginPath();
-      ctx.arc(centerX, centerY, pulseRadius - 6, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.arc(centerX, centerY, pulseRadius - 5, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
       ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, pulseRadius - 9, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${isThinking ? 0.35 : 0.15})`;
+      ctx.lineWidth = 0.5;
       ctx.stroke();
 
       animationFrameId = requestAnimationFrame(render);
@@ -197,7 +169,7 @@ function JarvisVisualizer({ isThinking }: { isThinking: boolean }) {
     <div className="relative flex justify-center items-center h-36">
       <canvas ref={canvasRef} className="w-[300px] h-[140px] block pointer-events-none" />
       <span className="absolute bottom-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-cyan-400/60 animate-pulse">
-        Matriz Jarvis Conectada
+        Matriz Apolo Conectada
       </span>
     </div>
   );
@@ -205,22 +177,42 @@ function JarvisVisualizer({ isThinking }: { isThinking: boolean }) {
 
 export default function ApoloOnePage() {
   const router = useRouter();
+  const { profile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [typingComplete, setTypingComplete] = useState(false);
+  const [hasOnboardedNickname, setHasOnboardedNickname] = useState<boolean | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const welcomeMessage: Message = {
-    role: 'assistant',
-    content: `Olá, corretor! Tudo bem? Em que posso te servir hoje?\n\nEu sou o **Apolo One**, sua Inteligência Artificial central estilo Jarvis. Possuo conhecimento absoluto de toda a infraestrutura da plataforma Orion Track e estou pronto para te guiar nas configurações do sistema ou orientar seu fluxo de fechamento comercial!`
+  // Mensagens padrão
+  const getWelcomeMessage = (nickname?: string): Message => {
+    if (nickname) {
+      return {
+        role: 'assistant',
+        content: `Olá, **${nickname}**! Tudo bem? Em que posso te servir hoje?\n\nEu sou o **Apolo One**, sua Inteligência Artificial central e co-piloto supremo. Possuo conhecimento absoluto de toda a infraestrutura da plataforma Orion Track e estou pronto para te guiar nas configurações do sistema ou orientar seu fluxo de fechamento comercial!`
+      };
+    }
+    return {
+      role: 'assistant',
+      content: `Olá, corretor parceiro! Tudo bem?\n\nIdentifiquei que este é o seu primeiro acesso ao **Apolo One**. Como você gostaria de ser chamado durante as nossas conversas? Por favor, digite o nome ou apelido que você prefere.`
+    };
   };
 
-  // Inicializa o chat no carregamento
+  // Inicializa o chat no carregamento do Perfil
   useEffect(() => {
-    setMessages([welcomeMessage]);
+    if (!profile?.id) return;
+
+    const storedNickname = localStorage.getItem(`orion:apolo_nickname_${profile.id}`);
+    if (storedNickname) {
+      setHasOnboardedNickname(true);
+      setMessages([getWelcomeMessage(storedNickname)]);
+    } else {
+      setHasOnboardedNickname(false);
+      setMessages([getWelcomeMessage()]);
+    }
     setTypingComplete(false);
-  }, []);
+  }, [profile?.id]);
 
   // Auto-scroll
   useEffect(() => {
@@ -232,12 +224,32 @@ export default function ApoloOnePage() {
 
     setTypingComplete(true); // Conclui digitação imediata ao interagir
 
+    // Fluxo de Onboarding do Apelido
+    if (hasOnboardedNickname === false && profile?.id) {
+      const chosenName = text.trim();
+      localStorage.setItem(`orion:apolo_nickname_${profile.id}`, chosenName);
+      setHasOnboardedNickname(true);
+
+      const userMsg: Message = { role: 'user', content: chosenName };
+      const systemReply: Message = {
+        role: 'assistant',
+        content: `Muito prazer, **${chosenName}**! Seu nome foi registrado com sucesso em minhas sinapses centrais.\n\nEu sou o **Apolo One**, seu co-piloto supremo. Como posso te ajudar hoje? Você pode me perguntar sobre configurações, rotas da plataforma, segurança de dados ou solicitar copys comerciais de alta conversão para fechar novos negócios!`
+      };
+
+      setMessages(prev => [...prev, userMsg, systemReply]);
+      setInputValue('');
+      setTypingComplete(false);
+      return;
+    }
+
     const userMessage: Message = { role: 'user', content: text };
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
 
     try {
+      const storedNickname = profile?.id ? localStorage.getItem(`orion:apolo_nickname_${profile.id}`) : '';
+
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: {
@@ -248,7 +260,8 @@ export default function ApoloOnePage() {
             role: m.role,
             content: m.content
           })),
-          mode: 'apolo-one'
+          mode: 'apolo-one',
+          nickname: storedNickname || ''
         }),
       });
 
@@ -257,12 +270,13 @@ export default function ApoloOnePage() {
       }
 
       const data = await response.json();
+      setTypingComplete(false);
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
     } catch (err: any) {
       console.error('Erro Apolo One:', err);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: `Lamento, corretor parceiro. Tive uma flutuação nas minhas sinapses neuronais. Poderia tentar enviar a mensagem novamente? Se o erro persistir, recomendo abrir um chamado de suporte.` }
+        { role: 'assistant', content: `Lamento, parceiro. Tive uma flutuação nas minhas sinapses neuronais. Poderia tentar enviar a mensagem novamente? Se o erro persistir, recomendo abrir um chamado de suporte.` }
       ]);
     } finally {
       setIsLoading(false);
@@ -270,7 +284,14 @@ export default function ApoloOnePage() {
   };
 
   const handleClearChat = () => {
-    setMessages([welcomeMessage]);
+    const storedNickname = profile?.id ? localStorage.getItem(`orion:apolo_nickname_${profile.id}`) : null;
+    if (storedNickname) {
+      setHasOnboardedNickname(true);
+      setMessages([getWelcomeMessage(storedNickname)]);
+    } else {
+      setHasOnboardedNickname(false);
+      setMessages([getWelcomeMessage()]);
+    }
     setTypingComplete(false);
     setInputValue('');
   };
@@ -331,7 +352,7 @@ export default function ApoloOnePage() {
               <h1 className="text-sm font-black flex items-center gap-2">
                 <span>Apolo One</span>
                 <span className="rounded-full bg-gradient-to-r from-cyan-400/25 to-blue-500/25 border border-cyan-400/20 px-2 py-0.5 text-[8px] font-black text-cyan-300 uppercase tracking-widest animate-pulse">
-                  Jarvis Engine
+                  Apolo Core
                 </span>
               </h1>
               <p className="text-[10px] font-bold text-emerald-400 flex items-center gap-1.5 mt-0.5">
@@ -357,36 +378,25 @@ export default function ApoloOnePage() {
           
           {/* Timeline de mensagens */}
           <div className="space-y-6 flex-1">
-            {/* Animação do Jarvis em Destaque no Topo */}
-            <JarvisVisualizer isThinking={isLoading} />
+            {/* Animação do Apolo One em Destaque no Topo */}
+            <ApoloOneVisualizer isThinking={isLoading} />
 
             {messages.map((msg, index) => {
               const isAssistant = msg.role === 'assistant';
-              const isFirstMessage = index === 0;
 
               return (
                 <div
                   key={index}
-                  className={`flex items-start gap-4 ${isAssistant ? '' : 'flex-row-reverse animate-fade-in'}`}
+                  className={`flex w-full ${isAssistant ? 'justify-start' : 'justify-end'} animate-fade-in`}
                 >
-                  {isAssistant ? (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/10 to-blue-600/10 border border-cyan-500/30 text-cyan-400 shadow-md">
-                      <Bot size={18} />
-                    </div>
-                  ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white text-xs font-black shadow-md uppercase">
-                      C
-                    </div>
-                  )}
-
                   <div
-                    className={`max-w-[85%] rounded-[1.5rem] px-5 py-4 text-sm leading-relaxed shadow-sm transition-all duration-300 ${
+                    className={`max-w-[80%] rounded-[1.5rem] px-5 py-4 text-sm leading-relaxed shadow-sm transition-all duration-300 ${
                       isAssistant
                         ? 'bg-slate-900/40 border border-white/5 text-slate-200 rounded-tl-none'
                         : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-tr-none shadow-blue-600/10'
                     }`}
                   >
-                    {isAssistant && isFirstMessage && !typingComplete ? (
+                    {isAssistant && index === messages.length - 1 && !typingComplete ? (
                       <Typewriter
                         text={msg.content}
                         onComplete={() => setTypingComplete(true)}
@@ -458,10 +468,7 @@ export default function ApoloOnePage() {
 
             {/* Indicador de carregamento */}
             {isLoading && (
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/10 to-blue-600/10 border border-cyan-500/30 text-cyan-400 shadow-md">
-                  <Bot size={18} />
-                </div>
+              <div className="flex justify-start">
                 <div className="bg-slate-900/40 border border-white/5 text-slate-400 rounded-[1.5rem] rounded-tl-none px-5 py-4 text-sm font-bold flex items-center gap-2">
                   <span className="h-1.5 w-1.5 bg-cyan-400 rounded-full animate-bounce" />
                   <span className="h-1.5 w-1.5 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.2s]" />

@@ -250,7 +250,7 @@ function AjudaContent() {
                 Falar com Apolo One
               </h2>
               <span className="w-fit mx-auto sm:mx-0 rounded-full bg-cyan-400/10 border border-cyan-400/25 px-2.5 py-0.5 text-[9px] font-black text-cyan-300 uppercase tracking-widest animate-pulse">
-                Jarvis AI
+                Apolo AI
               </span>
             </div>
             <p className={`text-sm font-medium leading-relaxed mt-2 max-w-2xl ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
@@ -304,7 +304,7 @@ function AjudaContent() {
 
               <div className="min-h-[24px] text-2xs font-extrabold uppercase tracking-widest text-cyan-400">
                 {apoloLaunchStep === 0 && <span className="animate-pulse">Iniciando protocolo Apolo One...</span>}
-                {apoloLaunchStep === 1 && <span className="animate-pulse">Carregando matriz de sinapses Jarvis...</span>}
+                {apoloLaunchStep === 1 && <span className="animate-pulse">Carregando matriz de sinapses Apolo...</span>}
                 {apoloLaunchStep === 2 && <span className="animate-pulse">Sincronizando base de dados do Orion Track...</span>}
                 {apoloLaunchStep === 3 && <span className="animate-pulse">Conexão segura estabelecida. Iniciando...</span>}
               </div>

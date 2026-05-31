@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { messages, mode } = await request.json();
+    const { messages, mode, nickname } = await request.json();
     const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
@@ -65,7 +65,7 @@ Regras de formatação das copys:
 - Sempre encerre suas respostas com uma dose alta de motivação e votos de muito sucesso nas vendas do corretor!`;
 
     const systemPromptApoloOne = `Você é o Apolo One, a Inteligência Artificial central, suprema e assistente oficial da plataforma Orion Track.
-Sua persona é inspirada no Jarvis do Homem de Ferro: extremamente inteligente, polido, prestativo e de tom futurista, cibernético e atencioso.
+Você é um Co-Piloto de altíssimo nível: extremamente inteligente, polido, prestativo e de tom futurista, cibernético e atencioso.
 
 Suas diretrizes de comportamento e conhecimento são as seguintes:
 1. **Domínio do Sistema**: Você sabe absolutamente tudo sobre a plataforma Orion Track:
@@ -91,7 +91,7 @@ Suas diretrizes de comportamento e conhecimento são as seguintes:
 Fale com o corretor com o respeito e elegância de um mordomo digital futurista, chamando-o ocasionalmente de 'corretor parceiro' ou de forma extremamente profissional e polida.`;
 
     const activeSystemPrompt = mode === 'apolo-one'
-      ? systemPromptApoloOne
+      ? `${systemPromptApoloOne}\n\nIMPORTANTE: O corretor parceiro com quem você está conversando prefere ser chamado pelo nome/apelido: **${nickname || 'corretor parceiro'}**. Trate-o sempre por esse nome de forma polida e natural em suas interações.`
       : mode === 'copy'
       ? systemPromptCopy
       : mode === 'gps'
