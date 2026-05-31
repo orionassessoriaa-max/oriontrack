@@ -1513,7 +1513,7 @@ function CustomGrowthAreaChart({
   formatCurrency: (v: number) => string;
 }) {
   const [animationProgress, setAnimationProgress] = useState(0);
-  const [hoveredNode, setHoveredNode] = useState<{ x: number; y: number; value: string; label: string; color: string } | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let start: number;
@@ -1626,6 +1626,19 @@ function CustomGrowthAreaChart({
         <path d={getAreaPath(spendPoints)} fill="url(#spendAreaGrad)" />
         <path d={getAreaPath(leadPoints)} fill="url(#leadsAreaGrad)" />
 
+        {/* Vertical Highlight dashed line on active month hover */}
+        {hoveredIndex !== null && (
+          <line
+            x1={spendPoints[hoveredIndex].x}
+            y1={padding}
+            x2={spendPoints[hoveredIndex].x}
+            y2={height - padding}
+            stroke="rgba(255, 255, 255, 0.15)"
+            strokeDasharray="3 3"
+            pointerEvents="none"
+          />
+        )}
+
         {/* Neon Stroke Lines */}
         <path
           d={getLinePath(spendPoints)}
@@ -1656,105 +1669,117 @@ function CustomGrowthAreaChart({
           const nodeOpacity = pointProgress;
           const nodeScale = 0.3 + 0.7 * pointEase;
 
+          const isHovered = hoveredIndex === i;
+
           return (
             <g key={i} style={{ opacity: nodeOpacity }}>
               {/* Spend Node */}
               <circle
                 cx={sp.x}
                 cy={sp.y}
-                r="5"
+                r={isHovered ? "6" : "5"}
                 fill="#ffffff"
                 stroke="#06b6d4"
                 strokeWidth="2.5"
-                className="transition-all duration-300 hover:scale-150 cursor-pointer"
                 style={{ 
                   filter: 'drop-shadow(0 0 5px rgba(6, 182, 212, 0.8))',
                   transform: `scale(${nodeScale})`,
-                  transformOrigin: `${sp.x}px ${sp.y}px`
+                  transformOrigin: `${sp.x}px ${sp.y}px`,
+                  transition: 'all 0.15s ease'
                 }}
-              />
-              {/* Spend Node Hover Trigger Area */}
-              <circle
-                cx={sp.x}
-                cy={sp.y}
-                r="16"
-                fill="transparent"
-                className="cursor-pointer"
-                onMouseEnter={() => setHoveredNode({
-                  x: sp.x,
-                  y: sp.y,
-                  value: formatCurrency(d.spend),
-                  label: 'Investimento',
-                  color: '#06b6d4'
-                })}
-                onMouseLeave={() => setHoveredNode(null)}
               />
 
               {/* Leads Node */}
               <circle
                 cx={lp.x}
                 cy={lp.y}
-                r="5"
+                r={isHovered ? "6" : "5"}
                 fill="#ffffff"
                 stroke="#10b981"
                 strokeWidth="2.5"
-                className="transition-all duration-300 hover:scale-150 cursor-pointer"
                 style={{ 
                   filter: 'drop-shadow(0 0 5px rgba(16, 185, 129, 0.8))',
                   transform: `scale(${nodeScale})`,
-                  transformOrigin: `${lp.x}px ${lp.y}px`
+                  transformOrigin: `${lp.x}px ${lp.y}px`,
+                  transition: 'all 0.15s ease'
                 }}
               />
-              {/* Leads Node Hover Trigger Area */}
-              <circle
-                cx={lp.x}
-                cy={lp.y}
-                r="16"
-                fill="transparent"
-                className="cursor-pointer"
-                onMouseEnter={() => setHoveredNode({
-                  x: lp.x,
-                  y: lp.y,
-                  value: `${d.leads} leads`,
-                  label: 'Leads',
-                  color: '#10b981'
-                })}
-                onMouseLeave={() => setHoveredNode(null)}
-              />
 
-              {/* Month Label - Much larger and high contrast */}
+              {/* Month Label */}
               <text
                 x={sp.x}
                 y={height - 4}
                 textAnchor="middle"
-                fill="#cbd5e1"
+                fill={isHovered ? "#ffffff" : "#cbd5e1"}
                 fontSize="12"
                 fontWeight="900"
-                className="uppercase tracking-wider font-extrabold select-none"
+                className="uppercase tracking-wider font-extrabold select-none transition-colors duration-200"
               >
                 {d.label}
               </text>
             </g>
           );
         })}
+
+        {/* Large Transparent Full-Height Vertical Hover Columns */}
+        {data.map((d, i) => {
+          const sp = spendPoints[i];
+          const colW = chartW / Math.max(data.length - 1, 1);
+          const x = sp.x - colW / 2;
+          
+          return (
+            <rect
+              key={i}
+              x={x}
+              y={padding}
+              width={colW}
+              height={chartH}
+              fill="transparent"
+              className="cursor-pointer"
+              onMouseEnter={() => setHoveredIndex(i)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            />
+          );
+        })}
       </svg>
 
-      {/* Floating Tooltip */}
-      {hoveredNode && (
-        <div
-          className="absolute z-30 pointer-events-none rounded-2xl bg-slate-950/95 border border-white/10 px-4 py-2.5 shadow-2xl backdrop-blur-md transition-all duration-200"
-          style={{
-            left: `${(hoveredNode.x / width) * 100}%`,
-            top: `${(hoveredNode.y / height) * 100 - 15}%`,
-            transform: 'translate(-50%, -100%)',
-          }}
-        >
-          <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold leading-none">{hoveredNode.label}</p>
-          <p className="mt-1 text-sm font-black leading-none" style={{ color: hoveredNode.color }}>{hoveredNode.value}</p>
-          {/* Arrow */}
-          <div className="absolute left-1/2 bottom-0 h-2 w-2 -translate-x-1/2 translate-y-1/2 rotate-45 border-r border-b border-white/10 bg-slate-950" />
-        </div>
-      )}
+      {/* Premium Combined Unified Tooltip */}
+      {hoveredIndex !== null && (() => {
+        const d = data[hoveredIndex];
+        const sp = spendPoints[hoveredIndex];
+        const lp = leadPoints[hoveredIndex];
+        const tooltipX = sp.x;
+        const tooltipY = Math.min(sp.y, lp.y) - 20;
+
+        return (
+          <div
+            className="absolute z-30 pointer-events-none rounded-2xl bg-slate-950/95 border border-white/10 p-3.5 shadow-2xl backdrop-blur-md transition-all duration-150 flex flex-col gap-1.5 text-left min-w-[170px]"
+            style={{
+              left: `${(tooltipX / width) * 100}%`,
+              top: `${(tooltipY / height) * 100}%`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 border-b border-white/5 pb-1.5 mb-1.5 leading-none">
+              {d.label}
+            </p>
+            <div className="flex items-center gap-4 text-xs justify-between leading-none">
+              <span className="text-cyan-400 flex items-center gap-1.5 font-extrabold uppercase tracking-wider text-[10px]">
+                <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shrink-0" /> Investimento
+              </span>
+              <span className="text-white font-black">{formatCurrency(d.spend)}</span>
+            </div>
+            <div className="flex items-center gap-4 text-xs justify-between leading-none">
+              <span className="text-emerald-400 flex items-center gap-1.5 font-extrabold uppercase tracking-wider text-[10px]">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shrink-0" /> Leads
+              </span>
+              <span className="text-white font-black">{d.leads} leads</span>
+            </div>
+            {/* Arrow */}
+            <div className="absolute left-1/2 bottom-0 h-2 w-2 -translate-x-1/2 translate-y-1/2 rotate-45 border-r border-b border-white/10 bg-slate-950" />
+          </div>
+        );
+      })()}
     </div>
   );
 }

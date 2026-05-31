@@ -881,7 +881,7 @@ Payload: {
                         }`}
                       >
                         <Building size={12} className="shrink-0" />
-                        <span className="truncate">PME (Empresa)</span>
+                        <span className="truncate">PME</span>
                       </button>
                       <button
                         onClick={() => { setTipoContrato('PF'); limparVidas(); }}
@@ -890,7 +890,7 @@ Payload: {
                         }`}
                       >
                         <User size={12} className="shrink-0" />
-                        <span className="truncate">Pessoa Física</span>
+                        <span className="truncate">PF</span>
                       </button>
                     </div>
                   </div>
