@@ -77,16 +77,17 @@ export default function ApoloAiWidget() {
       });
 
       if (!response.ok) {
-        throw new Error('Falha ao obter resposta do Apolo.');
+        const errPayload = await response.json().catch(() => ({}));
+        throw new Error(errPayload.error || 'Falha ao obter resposta do Apolo.');
       }
 
       const data = await response.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao conversar com Apolo:', error);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'Ops! Ocorreu um erro ao me conectar com meus servidores. Certifique-se de que a chave de API da OpenAI está configurada corretamente nas variáveis de ambiente!' }
+        { role: 'assistant', content: `Ops! Ocorreu um erro ao me conectar com meus servidores. Detalhes: ${error.message || error}` }
       ]);
     } finally {
       setIsLoading(false);
@@ -112,7 +113,7 @@ export default function ApoloAiWidget() {
   ];
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] font-sans">
+    <div className="fixed bottom-6 right-6 z-[9999] font-sans flex flex-col items-end">
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -129,8 +130,8 @@ export default function ApoloAiWidget() {
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 border border-white/10 shadow-inner">
-                    <Sparkles className="h-5 w-5 text-cyan-300 animate-pulse" />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 border border-white/10 shadow-inner overflow-hidden">
+                    <img src="/orion-empty-logo.png" alt="Orion" className="h-6 w-6 object-contain animate-pulse" />
                   </div>
                   <div>
                     <h3 className="text-base font-black tracking-wide flex items-center gap-1.5">
@@ -164,7 +165,7 @@ export default function ApoloAiWidget() {
                   }`}
                 >
                   <Compass size={12} />
-                  <span>Apolo GPS</span>
+                  <span>Quer uma ajuda?</span>
                 </button>
                 <button
                   onClick={() => setMode('copy')}
@@ -315,9 +316,13 @@ export default function ApoloAiWidget() {
               animate={{ rotate: 0, opacity: 1 }}
               exit={{ rotate: -90, opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="relative"
+              className="relative flex items-center justify-center"
             >
-              <Sparkles size={20} className="animate-pulse text-cyan-300" />
+              <img
+                src="/orion-empty-logo.png"
+                alt="Apolo"
+                className="h-7 w-7 object-contain animate-pulse"
+              />
               {/* Notificação sutil pulando */}
               <span className="absolute -top-2 -right-2 flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>

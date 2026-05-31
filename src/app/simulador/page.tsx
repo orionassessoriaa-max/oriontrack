@@ -184,90 +184,55 @@ const PLANOS_PADRAO: Plano[] = [
 ];
 
 // Logos Vetoriais Premium Customizados em SVG
+// Logos Vetoriais Premium Customizados em Imagem
 function RenderLogo({ id, className = "h-8 w-8" }: { id: string; className?: string }) {
-  if (id === 'amil') {
+  const mapping: { [key: string]: string } = {
+    'amil': '/operadoras/1.png',
+    'bradesco': '/operadoras/2.png',
+    'sulamerica': '/operadoras/3.png',
+    'porto': '/operadoras/4.png',
+    'unimed': '/operadoras/5.png'
+  };
+
+  const src = mapping[id.toLowerCase()];
+  if (src) {
     return (
-      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100" height="100" rx="24" fill="url(#amil-grad)" />
-        <path d="M50 20L25 75H38L50 48L62 75H75L50 20Z" fill="white" />
-        <path d="M50 48L40 70H60L50 48Z" fill="#22d3ee" />
-        <circle cx="50" cy="48" r="4" fill="white" />
-        <defs>
-          <linearGradient id="amil-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#1d4ed8" />
-            <stop offset="1" stopColor="#06b6d4" />
-          </linearGradient>
-        </defs>
-      </svg>
+      <img
+        src={src}
+        alt={id}
+        className={`${className} object-contain rounded-lg bg-white/5 p-0.5`}
+      />
     );
   }
-  if (id === 'bradesco') {
-    return (
-      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100" height="100" rx="24" fill="url(#brad-grad)" />
-        <path d="M50 22C42 22 36 28 36 36C36 44 42 48 50 48C58 48 64 44 64 36C64 28 58 22 50 22ZM50 42C46.7 42 44 39.3 44 36C44 32.7 46.7 30 50 30C53.3 30 56 32.7 56 36C56 39.3 53.3 42 50 42Z" fill="white" />
-        <path d="M50 52C34.5 52 22 62.5 22 75H78C78 62.5 65.5 52 50 52ZM32.5 69C35.5 62.5 42.2 58.5 50 58.5C57.8 58.5 64.5 62.5 67.5 69H32.5Z" fill="white" />
-        <defs>
-          <linearGradient id="brad-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#dc2626" />
-            <stop offset="1" stopColor="#f43f5e" />
-          </linearGradient>
-        </defs>
-      </svg>
-    );
-  }
-  if (id === 'sulamerica') {
-    return (
-      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100" height="100" rx="24" fill="url(#sula-grad)" />
-        <circle cx="50" cy="50" r="28" stroke="white" strokeWidth="4" />
-        <circle cx="50" cy="50" r="14" fill="#fbbf24" />
-        <path d="M50 12V26M50 74V88M12 50H26M74 50H88" stroke="white" strokeWidth="4" strokeLinecap="round" />
-        <defs>
-          <linearGradient id="sula-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#0369a1" />
-            <stop offset="1" stopColor="#3b82f6" />
-          </linearGradient>
-        </defs>
-      </svg>
-    );
-  }
-  if (id === 'porto') {
-    return (
-      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100" height="100" rx="24" fill="url(#porto-grad)" />
-        <path d="M30 25H55C66 25 73 31 73 40C73 49 66 55 55 55H42V75H30V25ZM42 45H53.5C58.5 45 61.5 42.5 61.5 40C61.5 37.5 58.5 35 53.5 35H42V45Z" fill="white" />
-        <circle cx="68" cy="68" r="8" fill="#6366f1" />
-        <defs>
-          <linearGradient id="porto-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#1e40af" />
-            <stop offset="1" stopColor="#4f46e5" />
-          </linearGradient>
-        </defs>
-      </svg>
-    );
-  }
-  if (id === 'unimed') {
-    return (
-      <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100" height="100" rx="24" fill="url(#unimed-grad)" />
-        <path d="M50 18L26 42H40V78H60V42H74L50 18Z" fill="white" />
-        <path d="M50 30L38 42H62L50 30Z" fill="#14b8a6" />
-        <defs>
-          <linearGradient id="unimed-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#059669" />
-            <stop offset="1" stopColor="#0d9488" />
-          </linearGradient>
-        </defs>
-      </svg>
-    );
-  }
+
   // Fallback para novas operadoras
   return (
     <div className={`flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 text-[10px] font-black uppercase text-white shadow-md`}>
       {id.slice(0, 2)}
     </div>
   );
+}
+
+function copyTextToClipboard(text: string) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.top = '0';
+  textarea.style.left = '0';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand('copy');
+  } catch (err) {
+    console.error('Erro no fallback de copia:', err);
+  }
+  document.body.removeChild(textarea);
+  return Promise.resolve();
 }
 
 export default function SimuladorPage() {
@@ -294,6 +259,10 @@ export default function SimuladorPage() {
   // Estado de Edição Inline (Admins)
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<Plano>>({});
+
+  // Estados para comparação lado a lado
+  const [comparedPlanIds, setComparedPlanIds] = useState<string[]>([]);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
   // Quantidade de vidas por faixa etária
   const [vidas, setVidas] = useState<{ [key: string]: number }>({
@@ -352,6 +321,66 @@ export default function SimuladorPage() {
     if (savedOperadoras) setOperadoras(JSON.parse(savedOperadoras));
     if (savedPlanos) setPlanos(JSON.parse(savedPlanos));
   }, []);
+
+  // Carregar dados da URL (para integração com o CRM)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const idadesParam = params.get('idades');
+      const pjParam = params.get('pj');
+
+      if (idadesParam) {
+        const idadesArray = idadesParam
+          .split(',')
+          .map(i => parseInt(i.trim(), 10))
+          .filter(i => !isNaN(i));
+
+        const novasVidas = {
+          '0_18': 0,
+          '19_23': 0,
+          '24_28': 0,
+          '29_33': 0,
+          '34_38': 0,
+          '39_43': 0,
+          '44_48': 0,
+          '49_53': 0,
+          '54_58': 0,
+          '59_mais': 0
+        };
+
+        idadesArray.forEach(idade => {
+          if (idade <= 18) novasVidas['0_18']++;
+          else if (idade <= 23) novasVidas['19_23']++;
+          else if (idade <= 28) novasVidas['24_28']++;
+          else if (idade <= 33) novasVidas['29_33']++;
+          else if (idade <= 38) novasVidas['34_38']++;
+          else if (idade <= 43) novasVidas['39_43']++;
+          else if (idade <= 48) novasVidas['44_48']++;
+          else if (idade <= 53) novasVidas['49_53']++;
+          else if (idade <= 58) novasVidas['54_58']++;
+          else novasVidas['59_mais']++;
+        });
+
+        setVidas(novasVidas);
+      }
+
+      if (pjParam) {
+        setTipoContrato(pjParam === '1' ? 'PME' : 'PF');
+      }
+    }
+  }, []);
+
+  // Bloquear scroll do body quando o modal de proposta ou comparativo estiver aberto
+  useEffect(() => {
+    if (propostaModal || isCompareModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [propostaModal, isCompareModalOpen]);
 
   // Salvar dados no LocalStorage
   const salvarDados = (novasOps: Operadora[], novosPlanos: Plano[]) => {
@@ -1049,17 +1078,43 @@ Payload: {
                             </div>
                           </div>
 
-                          <div className="text-left sm:text-right">
-                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Custo Total Mensal</span>
-                            <div className="flex items-baseline sm:justify-end gap-1.5">
-                              <span className="text-xs font-black text-slate-400">R$</span>
-                              <span className="text-xl sm:text-2xl font-black text-cyan-400 tracking-tight">
-                                {plano.custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          <div className="flex items-center gap-4 self-end sm:self-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const isCompared = comparedPlanIds.includes(plano.id);
+                                if (isCompared) {
+                                  setComparedPlanIds(prev => prev.filter(id => id !== plano.id));
+                                } else {
+                                  if (comparedPlanIds.length >= 4) {
+                                    alert('Você pode comparar no máximo 4 planos simultaneamente.');
+                                    return;
+                                  }
+                                  setComparedPlanIds(prev => [...prev, plano.id]);
+                                }
+                              }}
+                              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer shrink-0 ${
+                                comparedPlanIds.includes(plano.id)
+                                  ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-300'
+                                  : 'bg-white/5 border-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+                              }`}
+                            >
+                              <Check size={11} className={comparedPlanIds.includes(plano.id) ? 'opacity-100' : 'opacity-30'} />
+                              <span>{comparedPlanIds.includes(plano.id) ? 'Comparando' : 'Comparar'}</span>
+                            </button>
+
+                            <div className="text-left sm:text-right">
+                              <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Custo Total Mensal</span>
+                              <div className="flex items-baseline sm:justify-end gap-1.5">
+                                <span className="text-xs font-black text-slate-400">R$</span>
+                                <span className="text-xl sm:text-2xl font-black text-cyan-400 tracking-tight">
+                                  {plano.custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <span className="text-[9px] font-bold text-slate-500 block">
+                                Média de R$ {precoMedio.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} por vida
                               </span>
                             </div>
-                            <span className="text-[9px] font-bold text-slate-500 block">
-                              Média de R$ {precoMedio.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} por vida
-                            </span>
                           </div>
                         </div>
 
@@ -1720,8 +1775,8 @@ Payload: {
 
         {/* ================= MODAL: VISUALIZAÇÃO DE PROPOSTA COMERCIAL ================= */}
         {propostaModal && (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in-50 duration-200">
-            <div className="relative w-full max-w-2xl overflow-hidden rounded-[2.5rem] border border-blue-500/30 bg-[#090e1a]/95 p-6 sm:p-8 shadow-[0_0_50px_rgba(59,130,246,0.3)] animate-in slide-in-from-bottom-6 duration-300">
+          <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto animate-in fade-in-50 duration-200">
+            <div className="relative w-full max-w-2xl overflow-hidden rounded-[2.5rem] border border-blue-500/30 bg-[#090e1a]/95 p-6 sm:p-8 shadow-[0_0_50px_rgba(59,130,246,0.3)] animate-in slide-in-from-bottom-6 duration-300 my-8">
               
               {/* Cabeçalho da Proposta */}
               <div className="flex items-center justify-between border-b border-white/5 pb-4">
@@ -1810,24 +1865,26 @@ Payload: {
               <div className="mt-6 flex flex-col sm:flex-row gap-3 border-t border-white/5 pt-4">
                 <button
                   onClick={() => {
-                    const textContent = `📄 *PROPOSTA COMERCIAL ORION TRACK*
-----------------------------------------
-Plano: ${propostaModal.plano.nome}
-Coparticipação: ${propostaModal.plano.coparticipacao}
-Reembolso: ${propostaModal.plano.reembolso}
-Vidas Totais: ${propostaModal.totalVidas}
+                    const textContent = `Olá! Tudo bem? 😊
 
-*Resumo de Custos:*
-${propostaModal.vidasPorFaixa.map(v => `- ${v.count}x ${v.label}: R$ ${v.precoUnitario} (Subtotal: R$ ${v.subtotal})`).join('\n')}
+Conforme conversamos, preparei uma simulação muito especial de plano de saúde para você analisar com calma. Busquei selecionar uma opção de excelente qualidade que atende perfeitamente o que você precisa:
 
-*Total Mensal Geral: R$ ${propostaModal.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*
+🏥 *Plano de Saúde:* ${propostaModal.plano.nome}
+⚖️ *Coparticipação:* ${propostaModal.plano.coparticipacao === 'Sim' ? 'Sim (mensalidade menor e taxas muito pequenas apenas quando usar)' : 'Não (mensalidade fixa, sem cobrança adicional em exames ou consultas)'}
+💰 *Reembolso para consultas particulares:* ${propostaModal.plano.reembolso !== 'Sem reembolso' ? propostaModal.plano.reembolso : 'Não possui (atendimento completo na rede credenciada)'}
+👥 *Quantidade de pessoas:* ${propostaModal.totalVidas} ${propostaModal.totalVidas === 1 ? 'vida' : 'vidas'}
 
-*Hospitais Recomendados:*
-${propostaModal.plano.hospitais.slice(0, 5).map(h => `• ${h}`).join('\n')}
-----------------------------------------
-_Gerado de forma premium via Orion Track CRM._`;
+📊 *Resumo de Valores por Faixa Etária:*
+${propostaModal.vidasPorFaixa.map(v => `• *${v.count}x ${v.label}:* R$ ${v.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cada (Subtotal: R$ ${v.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`).join('\n')}
 
-                    navigator.clipboard.writeText(textContent);
+⭐ *Investimento Mensal Total:* *R$ ${propostaModal.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*
+
+🏥 *Alguns dos ótimos hospitais inclusos:*
+${propostaModal.plano.hospitais.slice(0, 6).map(h => `• ${h}`).join('\n')}
+
+Estou aqui para tirar qualquer dúvida e te ajudar a escolher o melhor caminho para proteger quem você ama ou sua equipe! Se quiser fazer qualquer alteração ou simular outras opções, é só me chamar. O que achou dessa opção? 🚀✨`;
+
+                    copyTextToClipboard(textContent);
                     alert('Proposta copiada para a área de transferência no formato comercial para WhatsApp!');
                     setPropostaModal(null);
                   }}
@@ -1846,6 +1903,234 @@ _Gerado de forma premium via Orion Track CRM._`;
                 >
                   <Check size={14} />
                   <span>Concluir Simulação</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= BARRA FLUTUANTE DE SELEÇÃO PARA COMPARAÇÃO ================= */}
+        {comparedPlanIds.length > 0 && (
+          <div className="fixed bottom-6 left-1/2 z-[800] -translate-x-1/2 flex items-center justify-between gap-6 rounded-2xl border border-blue-500/20 bg-slate-900/90 px-6 py-4 shadow-xl shadow-slate-950/40 backdrop-blur-xl animate-in slide-in-from-bottom-10 duration-300 w-[90%] max-w-lg">
+            <div className="flex items-center gap-3">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600 text-xs font-black text-white">
+                {comparedPlanIds.length}
+              </span>
+              <span className="text-2xs font-black uppercase tracking-widest text-slate-300">
+                {comparedPlanIds.length === 1 ? 'Plano selecionado' : 'Planos selecionados'}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setComparedPlanIds([])}
+                className="rounded-xl border border-white/5 bg-white/5 px-3 py-1.5 text-3xs font-black uppercase tracking-wider text-slate-400 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              >
+                Limpar
+              </button>
+              <button
+                disabled={comparedPlanIds.length < 2}
+                onClick={() => setIsCompareModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-1.5 text-3xs font-black uppercase tracking-wider text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-blue-600/10"
+              >
+                <Layers size={11} />
+                <span>Comparar lado a lado</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= MODAL: COMPARAÇÃO DE PLANOS LADO A LADO ================= */}
+        {isCompareModalOpen && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto animate-in fade-in-50 duration-200">
+            <div className="relative w-full max-w-6xl overflow-hidden rounded-[2.5rem] border border-blue-500/30 bg-[#090e1a]/95 p-6 sm:p-8 shadow-[0_0_50px_rgba(59,130,246,0.3)] animate-in slide-in-from-bottom-6 duration-300 my-8">
+              
+              {/* Cabeçalho do Comparador */}
+              <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white font-black">
+                    <Layers size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white">Comparativo de Planos</h3>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Análise detalhada lado a lado para o cliente final
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setIsCompareModalOpen(false)}
+                  className="text-slate-400 hover:text-white transition-colors cursor-pointer text-xs font-bold bg-white/5 px-3 py-1.5 rounded-xl border border-white/5"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              {/* Tabela de Comparação */}
+              <div className="mt-6 overflow-x-auto scrollbar-thin pb-4">
+                <div className="min-w-[800px] grid" style={{ gridTemplateColumns: `200px repeat(${comparedPlanIds.length}, minmax(200px, 1fr))` }}>
+                  {/* Cabeçalho das Colunas */}
+                  <div className="p-4 flex items-center bg-white/2 rounded-l-2xl border-y border-l border-white/5">
+                    <span className="text-3xs font-black uppercase tracking-widest text-slate-500">Característica</span>
+                  </div>
+                  {comparedPlanIds.map((id, index) => {
+                    const plano = planosCalculados.find(p => p.id === id);
+                    const op = operadoras.find(o => o.id === plano?.operadoraId);
+                    if (!plano) return null;
+                    return (
+                      <div
+                        key={id}
+                        className={`p-4 text-center bg-white/2 border-y border-white/5 flex flex-col items-center justify-center gap-2 ${
+                          index === comparedPlanIds.length - 1 ? 'rounded-r-2xl border-r' : ''
+                        }`}
+                      >
+                        <RenderLogo id={plano.operadoraId} className="h-10 w-10 shrink-0" />
+                        <h4 className="text-xs font-black text-white leading-tight">{plano.nome}</h4>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">{op?.nome}</span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Custo Total */}
+                  <div className="p-4 flex items-center border-b border-white/5 text-2xs font-extrabold text-slate-400">Custo Total Mensal</div>
+                  {comparedPlanIds.map(id => {
+                    const plano = planosCalculados.find(p => p.id === id);
+                    if (!plano) return null;
+                    return (
+                      <div key={id} className="p-4 text-center border-b border-white/5 flex flex-col items-center justify-center">
+                        <span className="text-sm font-black text-cyan-400">
+                          R$ {plano.custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-500 mt-0.5">
+                          Média: R$ {(plano.custoTotal / totalVidas).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} / vida
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Coparticipação */}
+                  <div className="p-4 flex items-center border-b border-white/5 text-2xs font-extrabold text-slate-400">Coparticipação</div>
+                  {comparedPlanIds.map(id => {
+                    const plano = planosCalculados.find(p => p.id === id);
+                    if (!plano) return null;
+                    return (
+                      <div key={id} className="p-4 text-center border-b border-white/5 text-2xs font-bold text-slate-200">
+                        {plano.coparticipacao === 'Sim' ? (
+                          <span className="text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-lg">
+                            Com Coparticipação
+                          </span>
+                        ) : (
+                          <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-lg">
+                            Sem Coparticipação
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Reembolso */}
+                  <div className="p-4 flex items-center border-b border-white/5 text-2xs font-extrabold text-slate-400">Reembolso Clínicas</div>
+                  {comparedPlanIds.map(id => {
+                    const plano = planosCalculados.find(p => p.id === id);
+                    if (!plano) return null;
+                    return (
+                      <div key={id} className="p-4 text-center border-b border-white/5 text-2xs font-bold text-slate-200">
+                        {plano.reembolso}
+                      </div>
+                    );
+                  })}
+
+                  {/* Hospitais Principais */}
+                  <div className="p-4 flex items-center border-b border-white/5 text-2xs font-extrabold text-slate-400">Rede Credenciada</div>
+                  {comparedPlanIds.map(id => {
+                    const plano = planosCalculados.find(p => p.id === id);
+                    if (!plano) return null;
+                    return (
+                      <div key={id} className="p-4 border-b border-white/5 text-center flex flex-col items-center justify-center gap-1.5">
+                        {plano.hospitais.slice(0, 4).map((hosp, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 bg-white/2 border border-white/5 px-2 py-0.5 rounded-lg text-3xs text-slate-300">
+                            <Heart size={7} className="text-rose-500 shrink-0" />
+                            <span className="truncate max-w-[150px]">{hosp}</span>
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })}
+
+                  {/* Laboratórios Principais */}
+                  <div className="p-4 flex items-center border-b border-white/5 text-2xs font-extrabold text-slate-400">Laboratórios</div>
+                  {comparedPlanIds.map(id => {
+                    const plano = planosCalculados.find(p => p.id === id);
+                    if (!plano) return null;
+                    return (
+                      <div key={id} className="p-4 border-b border-white/5 text-center flex flex-col items-center justify-center gap-1.5">
+                        {plano.laboratorios.slice(0, 3).map((lab, i) => (
+                          <span key={i} className="inline-flex items-center bg-blue-500/5 border border-blue-500/10 px-2 py-0.5 rounded-lg text-3xs text-cyan-400">
+                            {lab}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })}
+
+                  {/* Diferencial Competitivo */}
+                  <div className="p-4 flex items-center border-b border-white/5 text-2xs font-extrabold text-slate-400">Diferencial / Destaque</div>
+                  {comparedPlanIds.map(id => {
+                    const plano = planosCalculados.find(p => p.id === id);
+                    if (!plano) return null;
+                    
+                    let destaque = 'Melhor custo-benefício para a região.';
+                    if (plano.operadoraId === 'bradesco') destaque = 'Reconhecido nacionalmente pela rede médica e rapidez no reembolso.';
+                    else if (plano.operadoraId === 'amil' && plano.nome.includes('S450')) destaque = 'Excelente cobertura hospitalar incluindo hospitais de ponta.';
+                    else if (plano.operadoraId === 'porto') destaque = 'Pontuação extra de fidelidade e excelente suporte corporativo.';
+                    else if (plano.operadoraId === 'sulamerica') destaque = 'Melhores taxas de reembolso para consultas particulares.';
+                    else if (plano.coparticipacao === 'Não') destaque = 'Total previsibilidade financeira sem sustos no fim do mês.';
+
+                    return (
+                      <div key={id} className="p-4 text-center border-b border-white/5 text-3xs font-extrabold text-slate-400 leading-relaxed max-w-[200px] mx-auto flex items-center justify-center text-cyan-300">
+                        {destaque}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Ações do Comparador */}
+              <div className="mt-6 flex flex-col sm:flex-row gap-3 border-t border-white/5 pt-4 justify-end">
+                <button
+                  onClick={() => setIsCompareModalOpen(false)}
+                  className="bg-white/5 border border-white/5 text-slate-300 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                >
+                  Voltar
+                </button>
+                <button
+                  onClick={() => {
+                    const headerText = `📊 *COMPARATIVO DE PLANOS DE SAÚDE*
+Aqui está uma comparação lado a lado detalhada das opções que selecionei para você analisar:
+
+`;
+                    const plansText = comparedPlanIds.map(id => {
+                      const plano = planosCalculados.find(p => p.id === id);
+                      if (!plano) return '';
+                      return `*${plano.nome}*
+💰 *Mensalidade:* R$ ${plano.custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+⚖️ *Coparticipação:* ${plano.coparticipacao}
+💰 *Reembolso:* ${plano.reembolso}
+🏥 *Hospitais principais:* ${plano.hospitais.slice(0, 3).join(', ')}
+🧪 *Laboratórios:* ${plano.laboratorios.slice(0, 2).join(', ')}
+`;
+                    }).join('\n-----------------------\n');
+
+                    const footerText = `\n-----------------------\nFico à total disposição para detalhar qualquer um dos planos acima ou prosseguir com o fechamento! Qual das opções se encaixa melhor no que você busca? 😊🚀`;
+
+                    copyTextToClipboard(headerText + plansText + footerText);
+                    alert('Comparativo copiado para a área de transferência no formato comercial para WhatsApp!');
+                    setIsCompareModalOpen(false);
+                  }}
+                  className="flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all cursor-pointer shadow-md shadow-blue-600/20"
+                >
+                  <Share2 size={14} />
+                  <span>Copiar Comparativo WhatsApp</span>
                 </button>
               </div>
             </div>

@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Paperclip,
   Phone,
+  Calculator,
   Plus,
   RefreshCw,
   Search,
@@ -357,6 +358,17 @@ export default function CrmPage() {
   useEffect(() => {
     void fetchCrm();
   }, [profile?.id, profile?.tipo_usuario, profile?.corretor_id]);
+
+  useEffect(() => {
+    if (commercialModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [commercialModal]);
 
   useEffect(() => {
     if (selectedLead?.id) {
@@ -1004,6 +1016,24 @@ export default function CrmPage() {
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Cliente selecionado</p>
                 <h2 className="text-2xl font-black text-gray-900">{selectedLead.nome}</h2>
                 <p className="mt-1 text-sm font-bold text-slate-500">{selectedLead.telefone}</p>
+                <p className="mt-1.5 text-xs font-semibold text-slate-400">
+                  Recebido em: {(() => {
+                    const dataStr = selectedLead.data_entrada || selectedLead.created_at;
+                    if (!dataStr) return 'Data não informada';
+                    try {
+                      const d = new Date(dataStr);
+                      if (isNaN(d.getTime())) return dataStr;
+                      const dia = String(d.getDate()).padStart(2, '0');
+                      const mes = String(d.getMonth() + 1).padStart(2, '0');
+                      const ano = d.getFullYear();
+                      const hora = String(d.getHours()).padStart(2, '0');
+                      const minuto = String(d.getMinutes()).padStart(2, '0');
+                      return `${dia}/${mes}/${ano} às ${hora}:${minuto}`;
+                    } catch {
+                      return dataStr;
+                    }
+                  })()}
+                </p>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setEditing((current) => !current)} className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black uppercase tracking-widest text-blue-600 hover:bg-blue-100">
@@ -1137,6 +1167,24 @@ export default function CrmPage() {
                 )}
               </div>
             )}
+
+            <div className="mb-5 flex items-center justify-between bg-blue-50/50 border border-blue-100/50 p-4 rounded-2xl gap-4">
+              <div className="flex-1">
+                <h4 className="text-xs font-black text-blue-950 uppercase tracking-wide">Precificação / Simulação</h4>
+                <p className="text-[10px] text-slate-500 font-bold mt-0.5">Calcule planos de todas as operadoras para as idades deste lead.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const idades = selectedLead.idades || '';
+                  window.location.href = `/simulador?idades=${encodeURIComponent(idades)}&nome=${encodeURIComponent(selectedLead.nome)}&pj=${selectedLead.possui_cnpj === 'Sim' ? '1' : '0'}`;
+                }}
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-2xs font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 shadow-md shadow-blue-600/10"
+              >
+                <Calculator size={13} />
+                <span>Simular</span>
+              </button>
+            </div>
 
             <div className="mb-5 grid grid-cols-2 gap-3">
               <a
@@ -1277,10 +1325,10 @@ export default function CrmPage() {
       )}
 
       {commercialModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm overflow-y-auto">
           <form
             onSubmit={submitCommercialModal}
-            className="w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/25"
+            className="w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/25 my-8"
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
