@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import InternalLayout from '@/components/layout/InternalLayout';
 import {
   Users,
@@ -13,13 +13,16 @@ import {
   X,
   DollarSign,
   Settings,
-  HelpCircle
+  HelpCircle,
+  Cpu,
+  Sparkles
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { SolicitacaoSuporte } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const SUPPORT_OPTIONS = [
   {
@@ -71,6 +74,7 @@ type SupportOption = typeof SUPPORT_OPTIONS[number];
 function AjudaContent() {
   const { profile } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialType = searchParams.get('tipo');
 
   const [loading, setLoading] = useState(false);
@@ -81,6 +85,32 @@ function AjudaContent() {
   const [showModal, setShowModal] = useState(false);
   const [selectedOption, setSelectedOption] = useState<SupportOption | null>(null);
   const [message, setMessage] = useState('');
+  const [isLaunchingApoloOne, setIsLaunchingApoloOne] = useState(false);
+  const [apoloLaunchStep, setApoloLaunchStep] = useState(0);
+  const [tema, setTema] = useState<string>('noturno');
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      setTema(window.localStorage.getItem('orion:tema_sistema') || 'noturno');
+    };
+    handleThemeChange();
+    window.addEventListener('orion:theme_changed', handleThemeChange);
+    return () => window.removeEventListener('orion:theme_changed', handleThemeChange);
+  }, []);
+
+  const isDark = tema === 'noturno';
+
+  const handleLaunchApoloOne = () => {
+    setIsLaunchingApoloOne(true);
+    setApoloLaunchStep(0);
+    
+    const t1 = setTimeout(() => setApoloLaunchStep(1), 600);
+    const t2 = setTimeout(() => setApoloLaunchStep(2), 1200);
+    const t3 = setTimeout(() => setApoloLaunchStep(3), 1800);
+    const t4 = setTimeout(() => {
+      router.push('/apolo-one');
+    }, 2500);
+  };
 
   useEffect(() => {
     fetchHistory();
@@ -194,9 +224,94 @@ function AjudaContent() {
   return (
     <InternalLayout>
       <div className="mb-12">
-        <h1 className="mb-2 text-4xl font-black tracking-tight text-gray-900">Como a Orion pode te ajudar?</h1>
-        <p className="text-lg font-medium text-gray-500">Abra um chamado para o admin acompanhar sua solicitacao.</p>
+        <h1 className={`mb-2 text-4xl font-black tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Como a Orion pode te ajudar?</h1>
+        <p className={`text-lg font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Abra um chamado para o admin acompanhar sua solicitacao.</p>
       </div>
+
+      {/* Prominent Box Apolo One */}
+      <div className={`mb-12 rounded-[2.5rem] border p-8 flex flex-col lg:flex-row items-center justify-between gap-8 relative overflow-hidden transition-all duration-300 ${
+        isDark 
+          ? 'border-cyan-500/20 bg-gradient-to-br from-indigo-950/40 via-[#090e1a]/90 to-blue-950/40 shadow-[0_15px_50px_rgba(6,182,212,0.06)]' 
+          : 'border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50/50 shadow-md'
+      }`}>
+        <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 relative z-10 text-center sm:text-left">
+          <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.5rem] shadow-lg ${
+            isDark 
+              ? 'bg-gradient-to-br from-cyan-400 to-blue-600 text-white shadow-cyan-500/20 animate-pulse' 
+              : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-blue-500/20'
+          }`}>
+            <Cpu size={32} />
+          </div>
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-center sm:justify-start gap-2.5">
+              <h2 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Falar com Apolo One
+              </h2>
+              <span className="w-fit mx-auto sm:mx-0 rounded-full bg-cyan-400/10 border border-cyan-400/25 px-2.5 py-0.5 text-[9px] font-black text-cyan-300 uppercase tracking-widest animate-pulse">
+                Jarvis AI
+              </span>
+            </div>
+            <p className={`text-sm font-medium leading-relaxed mt-2 max-w-2xl ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              Inicie uma conversa em tela cheia com o nosso co-piloto de inteligência artificial central. Um cérebro digital avançado treinado com domínio total da plataforma, pronto para resolver suas dúvidas e orientar sua operação em tempo recorde!
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleLaunchApoloOne}
+          className="w-full lg:w-auto shrink-0 flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-8 py-5 font-black text-white transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-lg shadow-blue-600/15 relative z-10"
+        >
+          Iniciar Apolo One <Sparkles size={16} />
+        </button>
+      </div>
+
+      {/* Futuristic Launcher Loading Overlay */}
+      <AnimatePresence>
+        {isLaunchingApoloOne && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950 p-6"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.1),transparent_70%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:30px_30px] opacity-20 pointer-events-none" />
+
+            <div className="relative mb-10 flex h-36 w-36 items-center justify-center">
+              <div className="absolute inset-0 rounded-full border border-cyan-500/20 border-t-cyan-400 border-b-blue-500 animate-spin [animation-duration:3s]" />
+              <div className="absolute -inset-4 rounded-full border border-indigo-500/10 border-l-purple-500 border-r-pink-500 animate-spin [animation-duration:6s] [animation-direction:reverse]" />
+              
+              <div className="h-20 w-20 rounded-full bg-gradient-to-br from-cyan-400 via-blue-600 to-purple-600 shadow-[0_0_50px_rgba(6,182,212,0.6)] animate-pulse flex items-center justify-center">
+                <Cpu size={32} className="text-white animate-spin [animation-duration:15s]" />
+              </div>
+            </div>
+
+            <div className="text-center space-y-3 max-w-sm">
+              <h3 className="text-lg font-black tracking-widest text-white uppercase flex items-center justify-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
+                Carregando Apolo One
+              </h3>
+              
+              <div className="h-1.5 w-60 bg-white/5 rounded-full overflow-hidden mx-auto border border-white/10 shadow-inner">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: '100%' }}
+                  transition={{ duration: 2.3, ease: 'easeInOut' }}
+                  className="h-full bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 shadow-[0_0_8px_rgba(6,182,212,0.5)]" 
+                />
+              </div>
+
+              <div className="min-h-[24px] text-2xs font-extrabold uppercase tracking-widest text-cyan-400">
+                {apoloLaunchStep === 0 && <span className="animate-pulse">Iniciando protocolo Apolo One...</span>}
+                {apoloLaunchStep === 1 && <span className="animate-pulse">Carregando matriz de sinapses Jarvis...</span>}
+                {apoloLaunchStep === 2 && <span className="animate-pulse">Sincronizando base de dados do Orion Track...</span>}
+                {apoloLaunchStep === 3 && <span className="animate-pulse">Conexão segura estabelecida. Iniciando...</span>}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {success && (
         <div className="mb-10 flex items-center gap-4 rounded-[2rem] border border-green-100 bg-green-50 p-6 font-bold text-green-700">
