@@ -256,43 +256,43 @@
     box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05) !important;
   }
 
-  .orion-status-opportunity {
+  .theme-claro .orion-status-opportunity {
     background: #e7f0ff !important;
     color: #004ed8 !important;
     border-color: #b9d2ff !important;
   }
 
-  .orion-status-contact {
+  .theme-claro .orion-status-contact {
     background: #dcfaff !important;
     color: #00758a !important;
     border-color: #a5f3fc !important;
   }
 
-  .orion-status-quote {
+  .theme-claro .orion-status-quote {
     background: #ece9ff !important;
     color: #4f46e5 !important;
     border-color: #c7d2fe !important;
   }
 
-  .orion-status-negotiation {
+  .theme-claro .orion-status-negotiation {
     background: #fff2cc !important;
     color: #a15c00 !important;
     border-color: #fde68a !important;
   }
 
-  .orion-status-sale {
+  .theme-claro .orion-status-sale {
     background: #dcfce7 !important;
     color: #00824f !important;
     border-color: #86efac !important;
   }
 
-  .orion-status-lost {
+  .theme-claro .orion-status-lost {
     background: #ffe4e6 !important;
     color: #be123c !important;
     border-color: #fecdd3 !important;
   }
 
-  .orion-status-neutral {
+  .theme-claro .orion-status-neutral {
     background: #eef2f7 !important;
     color: #334155 !important;
     border-color: #d6e0ea !important;
