@@ -395,6 +395,12 @@ export default function BrokerInboxPage() {
             <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
               Sua conta está conectada com sucesso ao Orion Track. Você já pode enviar e receber mensagens de seus leads em tempo real nesta tela.
             </p>
+            <div className="mt-3 rounded-2xl border border-emerald-200 bg-white/40 p-4 text-xs font-semibold leading-relaxed text-emerald-800 dark:text-emerald-200 flex items-start gap-2.5 shadow-sm">
+              <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-500" />
+              <span>
+                <strong>Nota de Utilidade</strong>: Esta conexão também serve para que o co-piloto **Apolo** lhe envie notificações de novos leads e alertas de reajustes de tabelas diretamente no seu WhatsApp em tempo real!
+              </span>
+            </div>
             <div className="mt-5 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
               <p className="text-xs font-black uppercase tracking-widest text-emerald-700">Status da Conexão</p>
               <p className="mt-1 text-sm font-bold text-slate-700">Ativo • Pronto para responder</p>

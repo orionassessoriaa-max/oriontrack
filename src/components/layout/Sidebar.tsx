@@ -184,6 +184,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: ClipboardList, label: 'Historico', href: '/admin/historico' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Solicitacoes de suporte', href: '/admin/suporte' },
+    { icon: Settings, label: 'Configurações', href: '/admin/configuracoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 

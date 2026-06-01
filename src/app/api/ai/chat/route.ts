@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { messages, mode, nickname } = await request.json();
+    const { messages, mode, nickname, tipo_usuario } = await request.json();
     const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
@@ -90,13 +90,26 @@ Suas diretrizes de comportamento e conhecimento são as seguintes:
 
 Fale com o corretor com o respeito e elegância de um mordomo digital futurista, chamando-o ocasionalmente de 'corretor parceiro' ou de forma extremamente profissional e polida.`;
 
-    const activeSystemPrompt = mode === 'apolo-one'
+    let customRolePrompt = '';
+    if (tipo_usuario === 'gestor_trafego') {
+      customRolePrompt = `\n\nATENÇÃO: Você está conversando com um **Gestor de Tráfego**. Adapte seu vocabulário e foque em Meta Ads, CPL (Custo por Lead), ROI, otimização de campanhas, conjuntos de anúncios, anúncios, pixels, UTMs, teste A/B de criativos e melhoria na captação de leads.`;
+    } else if (tipo_usuario === 'designer') {
+      customRolePrompt = `\n\nATENÇÃO: Você está conversando com um **Designer Criativo**. Adapte seu vocabulário e foque em criação visual, banners de alta conversão, criativos estáticos e em vídeo para Meta Ads/Instagram, paletas de cores premium, harmonia de fontes no Canva/Photoshop, e roteiros de criativos de vídeo fáceis de gravar.`;
+    } else if (tipo_usuario === 'account_manager') {
+      customRolePrompt = `\n\nATENÇÃO: Você está conversando com um **Account Manager (CS / Pós-Venda)**. Adapte seu vocabulário e foque em Customer Success, retenção de carteira de clientes ativos, distribuição justa/inteligente de leads, acompanhamento de métricas de vendas e produtividade do time de corretores.`;
+    } else if (tipo_usuario === 'admin') {
+      customRolePrompt = `\n\nATENÇÃO: Você está conversando com um **Administrador / Desenvolvedor do sistema**. Adapte seu vocabulário e foque em controle global, monitoramento da Evolution API (status de conexões de WhatsApp), integridade e performance do banco de dados no Supabase, segurança global, RLS (Row Level Security) e logs de auditoria.`;
+    } else {
+      customRolePrompt = `\n\nATENÇÃO: Você está conversando com um **Corretor de Seguros**. Adapte seu vocabulário e foque em vendas de planos de saúde, simulação de propostas, contornar objeções de clientes no WhatsApp, CRM, Kanban de leads e fechamento de vendas.`;
+    }
+
+    const activeSystemPrompt = (mode === 'apolo-one'
       ? `${systemPromptApoloOne}\n\nIMPORTANTE: O corretor parceiro com quem você está conversando prefere ser chamado pelo nome/apelido: **${nickname || 'corretor parceiro'}**. Trate-o sempre por esse nome de forma polida e natural em suas interações.`
       : mode === 'copy'
       ? systemPromptCopy
       : mode === 'gps'
       ? systemPromptNavegacao
-      : systemPromptUnified;
+      : systemPromptUnified) + customRolePrompt;
 
     const payloadMessages = [
       { role: 'system', content: activeSystemPrompt },

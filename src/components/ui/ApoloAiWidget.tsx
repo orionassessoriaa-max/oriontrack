@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   MessageSquare,
   X,
@@ -9,9 +9,15 @@ import {
   Compass,
   Copy,
   Bot,
-  RefreshCw
+  RefreshCw,
+  TrendingUp,
+  Palette,
+  Users,
+  Settings,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -72,6 +78,7 @@ function Typewriter({ text, speed = 10, onComplete }: TypewriterProps) {
 }
 
 export default function ApoloAiWidget() {
+  const { profile } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -79,11 +86,172 @@ export default function ApoloAiWidget() {
   const [typingComplete, setTypingComplete] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Mensagem unificada do Apolo Co-Piloto
-  const welcomeMessage: Message = {
-    role: 'assistant',
-    content: `Olá, corretor parceiro! Eu sou o **Apolo**, seu co-piloto e guia inteligente de alta conversão no Orion Track. 🧭\n\nEstou aqui para te ajudar em tudo o que precisar: seja para encontrar uma tela do sistema (como simulador ou CRM), ou para criar abordagens persuasivas de vendas para o seu WhatsApp e contornar objeções de clientes.\n\nEscolha uma das sugestões abaixo ou digite sua dúvida!`
-  };
+  // Determinar a mensagem de boas-vindas dinâmica baseado no cargo do usuário
+  const welcomeMessage: Message = useMemo(() => {
+    const role = profile?.tipo_usuario || 'corretor';
+    let content = `Olá, corretor parceiro! Eu sou o **Apolo**, seu co-piloto e guia inteligente de alta conversão no Orion Track. 🧭\n\nEstou aqui para te ajudar em tudo o que precisar: seja para encontrar uma tela do sistema (como simulador ou CRM), ou para criar abordagens persuasivas de vendas para o seu WhatsApp e contornar objeções de clientes.\n\nEscolha uma das sugestões abaixo ou digite sua dúvida!`;
+
+    if (role === 'gestor_trafego') {
+      content = `Olá, gestor de tráfego! Eu sou o **Apolo**, seu analista de inteligência de tráfego no Orion Track. 📊\n\nEstou aqui para te ajudar a maximizar o ROI das suas campanhas de planos de saúde, otimizar orçamentos no Meta Ads, planejar criativos e analisar o CPL. Como posso impulsionar seus resultados hoje?`;
+    } else if (role === 'designer') {
+      content = `Olá, designer criativo! Eu sou o **Apolo**, seu assistente de direção de arte e design focado em alta conversão. 🎨\n\nVamos idealizar criativos estáticos premium, roteiros para criativos em vídeo e definir paletas de cores magnéticas para atrair leads de saúde? Diga-me o que você gostaria de criar!`;
+    } else if (role === 'account_manager') {
+      content = `Olá, account manager! Eu sou o **Apolo**, seu especialista e assessor estratégico de CS no Orion Track. 🤝\n\nEstou à sua disposição para otimizar o relacionamento com os parceiros, refinar a distribuição inteligente de leads, melhorar as taxas de retenção e acelerar o onboarding. Qual é o nosso foco hoje?`;
+    } else if (role === 'admin') {
+      content = `Olá, administrador do Orion Track! Eu sou o **Apolo**, seu painel de suporte analítico a sistemas e bancos de dados. 💻\n\nPrecisa de ajuda com status de APIs (como Evolution), otimização de RLS, logs de auditoria e segurança global? Estou pronto para facilitar sua rotina técnica!`;
+    }
+
+    return { role: 'assistant', content };
+  }, [profile?.tipo_usuario]);
+
+  // Sugestões rápidas dinâmicas baseadas no cargo do usuário no formato Grid 2x2
+  const quickSuggestions = useMemo(() => {
+    const role = profile?.tipo_usuario || 'corretor';
+
+    if (role === 'gestor_trafego') {
+      return [
+        {
+          icon: TrendingUp,
+          title: 'Campanhas Meta',
+          desc: 'Como reduzir o CPL de planos de saúde no Meta Ads?',
+          text: 'Quais as melhores estratégias e práticas para reduzir o CPL em campanhas de planos de saúde no Meta Ads?'
+        },
+        {
+          icon: Sparkles,
+          title: 'Criativos de Tráfego',
+          desc: 'Ideias de criativos que mais convertem na área da saúde.',
+          text: 'Pode me dar ideias e conceitos de criativos em imagem e vídeo de alta conversão para o nicho de planos de saúde?'
+        },
+        {
+          icon: Compass,
+          title: 'Página de Vendas',
+          desc: 'Dicas de headlines e gatilhos para landing pages.',
+          text: 'Quais headlines e gatilhos mentais funcionam melhor em landing pages e páginas de vendas voltadas para conversão de leads de planos de saúde?'
+        },
+        {
+          icon: Copy,
+          title: 'Teste A/B',
+          desc: 'Como estruturar testes eficientes no gerenciador.',
+          text: 'Como devo estruturar um teste A/B no gerenciador do Meta Ads para otimizar público e criativos em planos de saúde?'
+        }
+      ];
+    }
+
+    if (role === 'designer') {
+      return [
+        {
+          icon: Palette,
+          title: 'Cores de Saúde',
+          desc: 'Paletas de cores magnéticas que inspiram confiança.',
+          text: 'Sugira paletas de cores premium e modernas para layouts do nicho de planos de saúde que transmitem autoridade e confiança.'
+        },
+        {
+          icon: MessageSquare,
+          title: 'Roteiros de Vídeo',
+          desc: 'Estrutura de criativos em vídeo para corretores.',
+          text: 'Crie um roteiro em vídeo dinâmico de 30 segundos com gancho magnético focado em planos de saúde para um corretor gravar.'
+        },
+        {
+          icon: Compass,
+          title: 'Hierarquia Visual',
+          desc: 'Boas práticas para estruturar banners comerciais.',
+          text: 'Quais as regras fundamentais de hierarquia visual e composição para desenhar um banner comercial de planos de saúde?'
+        },
+        {
+          icon: Sparkles,
+          title: 'Estilo Canva',
+          desc: 'Como manter um visual premium usando ferramentas online.',
+          text: 'Quais técnicas e fontes posso utilizar no Canva para criar posts de redes sociais com aspecto premium e corporativo?'
+        }
+      ];
+    }
+
+    if (role === 'account_manager') {
+      return [
+        {
+          icon: Users,
+          title: 'Retenção & CS',
+          desc: 'Como aumentar a fidelidade da carteira de clientes.',
+          text: 'Quais estratégias práticas de Customer Success posso adotar para reter e encantar clientes ativos de planos de saúde PME?'
+        },
+        {
+          icon: Compass,
+          title: 'Equipes & Leads',
+          desc: 'Melhores formas de distribuir leads e medir métricas.',
+          text: 'Como posso estruturar uma distribuição inteligente e justa de leads e quais métricas chaves de atendimento devo acompanhar?'
+        },
+        {
+          icon: MessageSquare,
+          title: 'Pós-Venda Ativo',
+          desc: 'Scripts e abordagens após o fechamento do contrato.',
+          text: 'Escreva um roteiro simpático de pós-venda para mandar no WhatsApp 30 dias após o fechamento do contrato.'
+        },
+        {
+          icon: Sparkles,
+          title: 'Gestão de Crise',
+          desc: 'Como lidar com corretores e clientes descontentes.',
+          text: 'Como contornar conflitos na distribuição de leads ou reclamações de clientes na carteira de forma assertiva?'
+        }
+      ];
+    }
+
+    if (role === 'admin') {
+      return [
+        {
+          icon: Settings,
+          title: 'Logs Evolution',
+          desc: 'Como verificar status e eventos da Evolution API.',
+          text: 'Como funciona o monitoramento e o fluxo de webhooks/instâncias na Evolution API do Orion Track?'
+        },
+        {
+          icon: ShieldCheck,
+          title: 'Segurança Supabase',
+          desc: 'Melhores práticas de RLS e integridade de tabelas.',
+          text: 'Me dê dicas e boas práticas para garantir a segurança e performance usando Row Level Security (RLS) no Supabase.'
+        },
+        {
+          icon: Compass,
+          title: 'Monitoramento de Filas',
+          desc: 'Como identificar engargalamentos no processamento.',
+          text: 'Como posso auditar atrasos de webhooks e garantir que as mensagens de WhatsApp sejam entregues instantaneamente?'
+        },
+        {
+          icon: Bot,
+          title: 'Prompt Engenharia',
+          desc: 'Como ajustar regras sistêmicas globais da IA Apolo.',
+          text: 'Dicas fundamentais de Prompt Engineering para refinar a precisão das respostas do Apolo nos canais de atendimento.'
+        }
+      ];
+    }
+
+    // Default: Corretor
+    return [
+      {
+        icon: Compass,
+        title: 'Guia de Navegação',
+        desc: 'Onde vejo minhas notificações e avisos de tabelas?',
+        text: 'Onde vejo minhas notificações e avisos de tabelas?'
+      },
+      {
+        icon: Sparkles,
+        title: 'Simular Planos',
+        desc: 'Como faço uma nova simulação de plano de saúde?',
+        text: 'Como posso fazer uma simulação de plano de saúde?'
+      },
+      {
+        icon: MessageSquare,
+        title: 'Abordagem WhatsApp',
+        desc: 'Escreva uma mensagem comercial de boas-vindas.',
+        text: 'Escreva uma mensagem de boas-vindas para mandar no WhatsApp de um lead recém-chegado.'
+      },
+      {
+        icon: Copy,
+        title: 'Objeção de Preço',
+        desc: 'Copy para o cliente que achou o plano caro.',
+        text: 'Me ajude a criar uma copy de WhatsApp para o cliente que achou o plano de saúde caro.'
+      }
+    ];
+  }, [profile?.tipo_usuario]);
 
   // Inicializar mensagens quando aberto
   useEffect(() => {
@@ -91,7 +259,7 @@ export default function ApoloAiWidget() {
       setMessages([welcomeMessage]);
       setTypingComplete(false);
     }
-  }, [isOpen]);
+  }, [isOpen, welcomeMessage]);
 
   // Rolar para a última mensagem
   useEffect(() => {
@@ -126,7 +294,8 @@ export default function ApoloAiWidget() {
             role: m.role,
             content: m.content
           })),
-          mode: 'unified'
+          mode: 'unified',
+          tipo_usuario: profile?.tipo_usuario || 'corretor'
         }),
       });
 
@@ -157,34 +326,6 @@ export default function ApoloAiWidget() {
     setTypingComplete(false);
     setInputValue('');
   };
-
-  // Sugestões no formato Grid 2x2
-  const quickSuggestions = [
-    {
-      icon: Compass,
-      title: 'Guia de Navegação',
-      desc: 'Onde vejo minhas notificações e avisos de tabelas?',
-      text: 'Onde vejo minhas notificações e avisos de tabelas?'
-    },
-    {
-      icon: Sparkles,
-      title: 'Simular Planos',
-      desc: 'Como faço uma nova simulação de plano de saúde?',
-      text: 'Como posso fazer uma simulação de plano de saúde?'
-    },
-    {
-      icon: MessageSquare,
-      title: 'Abordagem WhatsApp',
-      desc: 'Escreva uma mensagem comercial de boas-vindas.',
-      text: 'Escreva uma mensagem de boas-vindas para mandar no WhatsApp de um lead recém-chegado.'
-    },
-    {
-      icon: Copy,
-      title: 'Objeção de Preço',
-      desc: 'Copy para o cliente que achou o plano caro.',
-      text: 'Me ajude a criar uma copy de WhatsApp para o cliente que achou o plano de saúde caro.'
-    }
-  ];
 
   return (
     <>
