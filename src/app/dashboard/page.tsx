@@ -597,13 +597,33 @@ export default function DashboardPage() {
         }
 
         const soldLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
-        const lostLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Sem interesse');
+        
+        // Categorizar todos os 10 status possíveis nas 5 categorias principais para consistência matemática total (ex: 124 de 124 leads)
+        const waitingLeads = statsRes.filter(l => {
+          const s = normalizeLeadStatus(l.status);
+          return s === 'Aguardando atendimento';
+        });
+        
+        const inProgressLeads = statsRes.filter(l => {
+          const s = normalizeLeadStatus(l.status);
+          return s === 'Em negociação' || s === 'Contato feito' || s === 'Chamou duas vezes';
+        });
+        
+        const quotedLeads = statsRes.filter(l => {
+          const s = normalizeLeadStatus(l.status);
+          return s === 'Cotação enviada';
+        });
+        
+        const lostLeads = statsRes.filter(l => {
+          const s = normalizeLeadStatus(l.status);
+          return s === 'Sem interesse' || s === 'Não tive retorno' || s === 'Região sem comercialização' || s === 'Telefone não existe';
+        });
         
         setStats({
           total: statsRes.length,
-          waiting: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Aguardando atendimento').length,
-          inProgress: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Em negociação').length,
-          quoted: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Cotação enviada').length,
+          waiting: waitingLeads.length,
+          inProgress: inProgressLeads.length,
+          quoted: quotedLeads.length,
           sold: soldLeads.length,
           soldThisMonth: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
           stale: statsRes.filter(l => {
