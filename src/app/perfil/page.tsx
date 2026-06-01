@@ -5,7 +5,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { supabase } from '@/lib/supabase/client';
 import { User, Mail, Shield, Smartphone, MapPin, Loader2, Save, Moon, Sun, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getProfileRoleLabel } from '@/lib/users';
+import { getProfileRoleLabel, isDevOpsManagerProfile } from '@/lib/users';
 
 const formatarTelefone = (value: string) => {
   if (!value) return '';
@@ -24,6 +24,7 @@ const formatarTelefone = (value: string) => {
 export default function ProfilePage() {
   const { 
     profile, 
+    actualProfile,
     loading, 
     refreshProfile,
     isViewingAsCorretor,
@@ -33,6 +34,8 @@ export default function ProfilePage() {
   } = useAuth();
   
   const isImpersonating = isViewingAsCorretor || isViewingAsGestor || isViewingAsDesigner || isViewingAsAccount;
+  const isAdmin = actualProfile?.tipo_usuario === 'admin';
+  const isDev = isDevOpsManagerProfile(actualProfile);
   const [tema, setTema] = useState<string>('noturno');
   
   // Estados para dados editáveis
@@ -498,8 +501,8 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Tema Selection Card - Ocultado no modo de impersonificação do admin */}
-          {!isImpersonating && (
+          {/* Tema Selection Card - Ocultado no modo de impersonificação do admin, exceto se o usuário logado for Admin ou Dev */}
+          {(!isImpersonating || isAdmin || isDev) && (
             <div className="border border-gray-100 bg-white p-8 shadow-sm rounded-2xl">
               <h3 className="mb-2 text-lg font-bold text-gray-900">Aparência do sistema</h3>
               <p className="mb-6 text-sm text-gray-500 font-semibold">
