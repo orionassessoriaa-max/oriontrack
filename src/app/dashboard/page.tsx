@@ -598,7 +598,7 @@ export default function DashboardPage() {
 
         const soldLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
         
-        // Categorizar todos os 10 status possíveis nas 5 categorias principais para consistência matemática total (ex: 124 de 124 leads)
+        // Categorizar os status secundários nas 5 categorias primárias do painel
         const waitingLeads = statsRes.filter(l => {
           const s = normalizeLeadStatus(l.status);
           return s === 'Aguardando atendimento';
