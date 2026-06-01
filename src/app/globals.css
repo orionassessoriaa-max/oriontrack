@@ -1589,6 +1589,49 @@ body.theme-claro {
   color: #f87171 !important; /* Soft premium red on signout hover */
 }
 
+/* Dark Theme Status Selects and Badges Overrides */
+.theme-noturno .orion-status-opportunity {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+
+.theme-noturno .orion-status-contact {
+  background: rgba(6, 182, 212, 0.15) !important;
+  color: #22d3ee !important;
+  border-color: rgba(6, 182, 212, 0.25) !important;
+}
+
+.theme-noturno .orion-status-quote {
+  background: rgba(139, 92, 246, 0.15) !important;
+  color: #a78bfa !important;
+  border-color: rgba(139, 92, 246, 0.25) !important;
+}
+
+.theme-noturno .orion-status-negotiation {
+  background: rgba(245, 158, 11, 0.15) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.25) !important;
+}
+
+.theme-noturno .orion-status-sale {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+}
+
+.theme-noturno .orion-status-lost {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+
+.theme-noturno .orion-status-neutral {
+  background: rgba(148, 163, 184, 0.15) !important;
+  color: #cbd5e1 !important;
+  border-color: rgba(148, 163, 184, 0.25) !important;
+}
+
 
 
 
