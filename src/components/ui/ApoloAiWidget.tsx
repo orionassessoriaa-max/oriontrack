@@ -89,7 +89,7 @@ export default function ApoloAiWidget() {
   // Determinar a mensagem de boas-vindas dinâmica baseado no cargo do usuário
   const welcomeMessage: Message = useMemo(() => {
     const role = profile?.tipo_usuario || 'corretor';
-    let content = `Olá, corretor parceiro! Eu sou o **Apolo**, seu co-piloto e guia inteligente de alta conversão no Orion Track. 🧭\n\nEstou aqui para te ajudar em tudo o que precisar: seja para encontrar uma tela do sistema (como Multicálculo ou CRM), ou para criar abordagens persuasivas de vendas para o seu WhatsApp e contornar objeções de clientes.\n\nEscolha uma das sugestões abaixo ou digite sua dúvida!`;
+    let content = `Olá, corretor parceiro! Eu sou o **Apolo**, seu co-piloto e guia inteligente de alta conversão no Orion Track. 🧭\n\nEstou aqui para te ajudar em tudo o que precisar: seja para encontrar uma tela do sistema (como simulador ou CRM), ou para criar abordagens persuasivas de vendas para o seu WhatsApp e contornar objeções de clientes.\n\nEscolha uma das sugestões abaixo ou digite sua dúvida!`;
 
     if (role === 'gestor_trafego') {
       content = `Olá, gestor de tráfego! Eu sou o **Apolo**, seu analista de inteligência de tráfego no Orion Track. 📊\n\nEstou aqui para te ajudar a maximizar o ROI das suas campanhas de planos de saúde, otimizar orçamentos no Meta Ads, planejar criativos e analisar o CPL. Como posso impulsionar seus resultados hoje?`;
@@ -234,9 +234,9 @@ export default function ApoloAiWidget() {
       },
       {
         icon: Sparkles,
-        title: 'Gerar Multicálculo',
-        desc: 'Como faço um novo cálculo de plano de saúde?',
-        text: 'Como posso fazer um multicálculo de plano de saúde?'
+        title: 'Simular Planos',
+        desc: 'Como faço uma nova simulação de plano de saúde?',
+        text: 'Como posso fazer uma simulação de plano de saúde?'
       },
       {
         icon: MessageSquare,

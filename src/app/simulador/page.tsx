@@ -798,13 +798,14 @@ Payload: {
 
         {/* Header Superior Dinâmico */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-5">
+          {/* Header Title */}
           <div>
             <div className="flex items-center gap-2 text-cyan-400 font-extrabold text-xs uppercase tracking-widest">
               <img src="/orion-empty-logo.png" alt="Orion" className="object-contain animate-pulse shrink-0" style={{ height: 14, width: 14 }} />
-              <span>Multicálculo Inteligente Apolo</span>
+              <span>Simulador Inteligente Apolo</span>
             </div>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">
-              Multicálculo & Tabelas de Saúde
+              Simulador & Tabelas de Saúde
             </h1>
             <p className="mt-1 text-xs sm:text-sm font-bold text-slate-400">
               Calcule planos instantaneamente ou navegue no catálogo de preços de forma hierárquica e inteligente.
@@ -822,7 +823,7 @@ Payload: {
               }`}
             >
               <Calculator size={14} />
-              <span>Multicálculo</span>
+              <span>Simulador</span>
             </button>
             <button
               onClick={() => {
@@ -855,7 +856,7 @@ Payload: {
           </div>
         </div>
 
-        {/* ================= ABA 1: SIMULADOR (MULTICÁLCULO) ================= */}
+        {/* ================= ABA 1: SIMULADOR ================= */}
         {activeTab === 'simulacao' && (
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
             

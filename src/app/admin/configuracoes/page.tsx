@@ -34,7 +34,7 @@ export default function AdminConfiguracoesPage() {
   // Teste de Notificação
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState(
-    `🤖 *APOLO AI • ORION TRACK*\n*Notificação Oficial de Atualização de Sistema*\n\nOlá! ⚡\n\nPassando para informar que acabo de sincronizar e atualizar as tabelas de preços e coparticipações no seu painel do *Multicálculo*!\n\nAs seguintes operadoras sofreram reajustes e já estão 100% atualizadas para cotação:\n🟢 *Amil Saúde* (Tabelas Linear e Coparticipativa - Nacional)\n🔵 *Bradesco Saúde* (Novas tabelas SP/DF/RJ com reajuste de operadora)\n🔴 *SulAmérica* (Atualização de tabelas PME e Empresarial)\n\n_Apolo AI • Seu co-piloto supremo no Orion Track._`
+    `🤖 *APOLO AI • ORION TRACK*\n*Notificação Oficial de Atualização de Sistema*\n\nOlá! ⚡\n\nPassando para informar que acabo de sincronizar e atualizar as tabelas de preços e coparticipações no seu painel do *Simulador*!\n\nAs seguintes operadoras sofreram reajustes e já estão 100% atualizadas para cotação:\n🟢 *Amil Saúde* (Tabelas Linear e Coparticipativa - Nacional)\n🔵 *Bradesco Saúde* (Novas tabelas SP/DF/RJ com reajuste de operadora)\n🔴 *SulAmérica* (Atualização de tabelas PME e Empresarial)\n\n_Apolo AI • Seu co-piloto supremo no Orion Track._`
   );
   const [sendingTest, setSendingTest] = useState(false);
   const [testSuccess, setTestSuccess] = useState(false);
