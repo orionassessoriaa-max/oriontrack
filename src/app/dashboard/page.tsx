@@ -838,11 +838,19 @@ export default function DashboardPage() {
       {/* Header Section */}
       <div className="mb-10 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
         <div>
-          <h1 className="mb-2 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
+          <h1 className="mb-2 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl flex flex-wrap items-center gap-3">
             {isDataLoading ? (
               <span className="inline-block w-48 h-10 bg-gray-100 animate-pulse rounded-lg" />
             ) : (
-              `Olá, ${firstName}`
+              <>
+                <span>Olá, {firstName}</span>
+                {metaAccount && metaAccount.saldo !== null && (
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs font-black tracking-wide uppercase shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Saldo: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(metaAccount.saldo)}</span>
+                  </span>
+                )}
+              </>
             )}
           </h1>
           <p className="text-base font-bold text-blue-600 sm:text-lg">Painel de crescimento comercial e aceleração de vendas</p>
