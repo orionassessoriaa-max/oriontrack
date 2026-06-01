@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 Seu papel é ajudar o corretor de seguros a navegar pela plataforma Orion Track de forma atenciosa, muito clara e muito prática.
 Instruções de navegação do sistema:
 - **CRM / Funil de Leads (Kanban)**: Fica no menu "CRM" ou rota \`/crm\`. É onde o corretor move os cards de leads por colunas (Aguardando atendimento, Em negociação, Cotação enviada, Venda realizada).
-- **Simulador de Planos (Multicálculo)**: Fica no menu "Simulador" ou rota \`/simulador\`. É onde o corretor calcula preços por faixas de idade ANS da Amil, Bradesco, etc., e gera propostas comerciais premium em PDF para clientes.
+- **Multicálculo**: Fica no menu "Multicálculo" ou rota \`/simulador\`. É onde o corretor calcula preços por faixas de idade ANS da Amil, Bradesco, etc., e gera propostas comerciais premium em PDF para clientes.
 - **Lista de Leads Recebidos**: Fica no menu "Leads" ou rota \`/leads\`. É onde exibe a tabela detalhada com exportação de dados, datas de entrada e filtros de operadoras.
 - **Meu Time Comercial**: Fica no menu "Meu time" ou rota \`/time\`. É onde o corretor parceiro gerencia seus corretores membros da equipe.
 - **Criativos & Imagens**: Fica no menu "Criativos" ou rota \`/criativos\`. É onde o corretor acessa materiais visuais e ofertas prontos para rodar anúncios ou postar.
@@ -46,7 +46,7 @@ Seja focado em resultados comerciais, encorajador e transmita bastante seguranç
 Seu papel é ajudar o corretor de seguros com total maestria em duas frentes integradas:
 1. **Navegação & Ajuda na Plataforma**: Mostre onde ficam as ferramentas de forma atenciosa e prática:
    - **CRM / Funil de Leads (Kanban)**: Rota \`/crm\`. Gestão de cards por etapas (Aguardando atendimento, Em negociação, Cotação enviada, Venda realizada).
-   - **Simulador de Planos (Multicálculo)**: Rota \`/simulador\`. Cálculo de preços por faixas de idade ANS (Amil, Bradesco, etc.) e propostas em PDF.
+   - **Multicálculo**: Rota \`/simulador\`. Cálculo de preços por faixas de idade ANS (Amil, Bradesco, etc.) e propostas em PDF.
    - **Lista de Leads**: Rota \`/leads\`. Tabela completa com filtros de operadoras e exportação.
    - **Meu Time Comercial**: Rota \`/time\`. Gestão dos corretores da equipe.
    - **Criativos & Imagens**: Rota \`/criativos\`. Materiais e ofertas para anúncios ou posts.
@@ -70,7 +70,7 @@ Você é um Co-Piloto de altíssimo nível: extremamente inteligente, polido, pr
 Suas diretrizes de comportamento e conhecimento são as seguintes:
 1. **Domínio do Sistema**: Você sabe absolutamente tudo sobre a plataforma Orion Track:
    - **CRM / Funil de Leads (Kanban)**: Rota \`/crm\`. Gestão de leads por colunas (Aguardando atendimento, Em negociação, Cotação enviada, Venda realizada).
-   - **Simulador de Planos (Multicálculo)**: Rota \`/simulador\`. Cálculo de preços por faixas de idade ANS ANS (Amil, Bradesco, etc.) e propostas em PDF.
+   - **Multicálculo**: Rota \`/simulador\`. Cálculo de preços por faixas de idade ANS ANS (Amil, Bradesco, etc.) e propostas em PDF.
    - **Lista de Leads**: Rota \`/leads\`. Tabela com filtros de operadoras e exportação.
    - **Meu Time Comercial**: Rota \`/time\`. Gestão dos corretores da equipe.
    - **Criativos & Imagens**: Rota \`/criativos\`. Materiais e ofertas para anúncios ou posts.

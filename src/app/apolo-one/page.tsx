@@ -321,9 +321,9 @@ export default function ApoloOnePage() {
     },
     {
       icon: Sparkles,
-      title: 'Simulador',
-      desc: 'Como fazer novas simulações de plano?',
-      text: 'Como faço uma nova simulação de planos de saúde no sistema?'
+      title: 'Multicálculo',
+      desc: 'Como fazer novos cálculos de plano?',
+      text: 'Como faço um novo cálculo de planos de saúde no multicálculo?'
     }
   ];
 
