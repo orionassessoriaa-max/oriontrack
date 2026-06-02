@@ -35,6 +35,7 @@ type Sale = {
 
 type TeamPayload = {
   month: string;
+  monthLabel: string;
   meta: { meta_valor: number; prazo: string };
   objectives: Objective[];
   sales: Sale[];
@@ -55,6 +56,20 @@ type TeamPayload = {
     dailyMessages: { profile_id: string; text: string }[];
   };
   isAdmin: boolean;
+  previousMonth?: {
+    month: string;
+    label: string;
+    meta_valor: number;
+    realizadoTotal: number;
+    totalVendas: number;
+    totalObjetivos: number;
+    totalPontos: number;
+    objectivesCount: number;
+    salesCount: number;
+    progress: number;
+    hasData: boolean;
+  } | null;
+  needsMonthlySetup?: boolean;
   needsMigration?: boolean;
 };
 
@@ -112,7 +127,7 @@ export default function ApolloTeamPage() {
   const [pointsForm, setPointsForm] = useState({ profile_id: '', pontos: '5', motivo: '' });
   const [objectiveForm, setObjectiveForm] = useState({ titulo: '', valor_estimado: '' });
   const [saleForm, setSaleForm] = useState({ nome: '', vendido: '', valor: '' });
-  const [metaForm, setMetaForm] = useState({ meta_valor: '50000', prazo: '2026-05-31' });
+  const [metaForm, setMetaForm] = useState({ meta_valor: '', prazo: '' });
   const [editingObjective, setEditingObjective] = useState<{ id: string; titulo: string; valor_estimado: string } | null>(null);
   const [editingSale, setEditingSale] = useState<{ id: string; nome: string; vendido: string; valor: string } | null>(null);
 
@@ -139,8 +154,8 @@ export default function ApolloTeamPage() {
       const payload = await requestTeam();
       setData(payload);
       setMetaForm({
-        meta_valor: String(payload.meta?.meta_valor || 50000),
-        prazo: payload.meta?.prazo || '2026-05-31',
+        meta_valor: payload.meta?.meta_valor ? String(payload.meta.meta_valor) : '',
+        prazo: payload.meta?.prazo || '',
       });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Nao foi possivel carregar o time Apollo.');
@@ -184,10 +199,11 @@ export default function ApolloTeamPage() {
     await submitAction(body, successMessage);
   }
 
-  const metaValue = Number(data?.meta.meta_valor || 50000);
+  const metaValue = Number(data?.meta.meta_valor || 0);
   const progress = data?.summary.progress || 0;
   const forecastProgress = data?.summary.forecastProgress || 0;
   const topMember = data?.members[0];
+  const monthTitle = data?.monthLabel ? data.monthLabel.charAt(0).toUpperCase() + data.monthLabel.slice(1) : 'Mes atual';
 
   return (
     <InternalLayout>
@@ -200,14 +216,14 @@ export default function ApolloTeamPage() {
               <p className="text-xs font-black uppercase tracking-[0.32em] text-cyan-300">Time operacional</p>
               <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">Meu time Apollo</h1>
               <p className="mt-3 max-w-3xl text-sm font-bold leading-7 text-blue-100">
-                Placar do mes, ranking de entregas e objetivos de receita em uma tela. Integrantes acompanham; somente admins pontuam e mudam metas.
+                Placar de {monthTitle}, ranking de entregas e objetivos de receita em uma tela. A virada mensal zera o placar novo e preserva o fechamento anterior.
               </p>
             </div>
             <div className="border border-white/10 bg-white/10 p-5 backdrop-blur">
               <p className="text-[10px] font-black uppercase tracking-widest text-cyan-200">Realizado ate agora</p>
               <p className="mt-1 text-4xl font-black">{brl(data?.summary.realizadoTotal || 0)}</p>
               <p className="mt-2 text-xs font-bold text-blue-100">
-                Meta: {brl(metaValue)}. Faltam {data?.summary.daysRemaining ?? 0} dias para virar o jogo.
+                Meta: {metaValue > 0 ? brl(metaValue) : 'pendente'}. Faltam {data?.summary.daysRemaining ?? 0} dias para virar o jogo.
               </p>
             </div>
           </div>
@@ -217,6 +233,14 @@ export default function ApolloTeamPage() {
       {notice && (
         <div className="mb-5 border border-blue-200 bg-blue-50 p-4 text-sm font-black text-blue-700 dark:border-blue-400/30 dark:bg-blue-950/40 dark:text-blue-100">
           {notice}
+        </div>
+      )}
+
+      {data?.needsMonthlySetup && (
+        <div className="mb-5 border border-amber-300/40 bg-amber-950/40 p-5 text-sm font-black text-amber-100">
+          {data.isAdmin
+            ? `Configure a meta de ${monthTitle} para iniciar o novo ciclo. O mês anterior continua salvo no fechamento abaixo.`
+            : `A meta de ${monthTitle} ainda precisa ser configurada pelo admin. O placar novo começa zerado.`}
         </div>
       )}
 
@@ -235,6 +259,26 @@ export default function ApolloTeamPage() {
             <Metric icon={DollarSign} label="Vendas" value={brl(data.summary.totalVendas)} tone="violet" />
           </section>
 
+          {data.previousMonth?.hasData && (
+            <section className="mt-6 border border-white/5 bg-slate-900/60 p-5 backdrop-blur-md shadow-2xl shadow-blue-950/20">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Fechamento armazenado</p>
+                  <h2 className="mt-1 text-2xl font-black text-white">{data.previousMonth.label}</h2>
+                  <p className="mt-2 text-sm font-bold text-slate-400">
+                    Os dados do mês anterior ficam separados por ciclo e não entram no placar novo.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-4 lg:min-w-[620px]">
+                  <MiniHistory label="Realizado" value={brl(data.previousMonth.realizadoTotal)} />
+                  <MiniHistory label="Meta" value={brl(data.previousMonth.meta_valor)} />
+                  <MiniHistory label="Vendas" value={brl(data.previousMonth.totalVendas)} />
+                  <MiniHistory label="XP" value={`${data.previousMonth.totalPontos}`} />
+                </div>
+              </div>
+            </section>
+          )}
+
           <section className="mt-6 overflow-hidden border border-white/5 bg-slate-900/60 backdrop-blur-md shadow-2xl shadow-blue-950/25">
             <div className="grid gap-6 p-6 xl:grid-cols-[1fr_320px] xl:items-start">
               <div>
@@ -247,9 +291,9 @@ export default function ApolloTeamPage() {
                 </div>
                 <div className="mt-6 space-y-4">
                   <Progress label="Realizado na meta" value={progress} amount={brl(data.summary.realizadoTotal)} color="from-emerald-500 to-cyan-400" />
-                  <Progress label="Vendas registradas" value={Math.min(100, Math.round((data.summary.totalVendas / metaValue) * 100))} amount={brl(data.summary.totalVendas)} color="from-cyan-400 to-blue-600" />
+                  <Progress label="Vendas registradas" value={metaValue > 0 ? Math.min(100, Math.round((data.summary.totalVendas / metaValue) * 100)) : 0} amount={brl(data.summary.totalVendas)} color="from-cyan-400 to-blue-600" />
                   <Progress label="Previsao total dos objetivos" value={forecastProgress} amount={brl(data.summary.previsaoObjetivos)} color="from-blue-600 to-violet-500" />
-                  <Progress label="Em andamento" value={Math.min(100, Math.round((data.summary.emAndamentoObjetivos / metaValue) * 100))} amount={brl(data.summary.emAndamentoObjetivos)} color="from-amber-400 to-orange-500" />
+                  <Progress label="Em andamento" value={metaValue > 0 ? Math.min(100, Math.round((data.summary.emAndamentoObjetivos / metaValue) * 100)) : 0} amount={brl(data.summary.emAndamentoObjetivos)} color="from-amber-400 to-orange-500" />
                 </div>
                 <p className="mt-5 text-sm font-bold text-slate-400">
                   Vendas registradas entram direto no realizado. Objetivos concluidos tambem somam no placar principal da meta.
@@ -373,7 +417,7 @@ export default function ApolloTeamPage() {
               <section className="border border-white/5 bg-slate-900/60 backdrop-blur-md shadow-2xl shadow-blue-950/20">
                 <div className="border-b border-white/5 p-5">
                   <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-400">Objetivos</p>
-                  <h2 className="mt-1 text-xl font-black text-white">Renovacoes de Maio</h2>
+                  <h2 className="mt-1 text-xl font-black text-white">Objetivos de {monthTitle}</h2>
                 </div>
                 <div className="divide-y divide-white/5">
                   {data.objectives.map((objective) => (
@@ -518,10 +562,11 @@ export default function ApolloTeamPage() {
               {data.isAdmin && (
                 <section className="border border-white/5 bg-slate-900/60 p-5 backdrop-blur-md shadow-2xl shadow-blue-950/20">
                   <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-400">Meta</p>
-                  <h2 className="mt-1 text-xl font-black text-white">Ajustar alvo do mes</h2>
+                  <h2 className="mt-1 text-xl font-black text-white">{data.needsMonthlySetup ? 'Configurar novo mes' : 'Ajustar alvo do mes'}</h2>
                   <input
                     value={metaForm.meta_valor}
                     onChange={(event) => setMetaForm((current) => ({ ...current, meta_valor: event.target.value }))}
+                    placeholder="Meta do mes. Ex: 50000"
                     className="mt-4 w-full border border-white/10 bg-slate-950 px-4 py-3 text-sm font-black text-white outline-none focus:border-blue-500/50 transition"
                   />
                   <input
@@ -696,6 +741,15 @@ function Metric({ icon: Icon, label, value, tone }: { icon: any; label: string; 
       <Icon size={22} className="text-current" />
       <p className="mt-5 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
       <p className="mt-2 text-2xl font-black text-white">{value}</p>
+    </div>
+  );
+}
+
+function MiniHistory({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-white/5 bg-slate-950/60 p-4">
+      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-lg font-black text-white" title={value}>{value}</p>
     </div>
   );
 }

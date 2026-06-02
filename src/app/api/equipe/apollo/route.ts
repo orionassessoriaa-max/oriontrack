@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 
-const APOLLO_MONTH = '2026-05';
 const DEFAULT_OBJECTIVES = [
   ['Atual', 1500],
   ['Deltreggia', 1500],
@@ -15,6 +14,38 @@ const DEFAULT_OBJECTIVES = [
 
 const KRIPTO_HUNTERS_FALLBACK_NAMES = ['pedro ghisolfi'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const TEAM = 'apollo';
+
+function getCurrentMonthKey() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === 'year')?.value || String(new Date().getFullYear());
+  const month = parts.find((part) => part.type === 'month')?.value || String(new Date().getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function previousMonthKey(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const date = new Date(year, month - 2, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthDeadline(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+}
+
+function monthLabel(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  });
+}
 
 function canReadTeam(role: string) {
   return ['admin', 'gestor_trafego', 'designer', 'account_manager'].includes(role);
@@ -40,7 +71,64 @@ function isTeamStorageError(error: any) {
     || message.includes('Could not find');
 }
 
+async function loadMonthSnapshot(month: string) {
+  const [metaRes, objectivesRes, pointsRes, salesRes] = await Promise.all([
+    supabaseAdmin
+      .from('equipe_metas')
+      .select('*')
+      .eq('equipe', TEAM)
+      .eq('mes', month)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('equipe_objetivos')
+      .select('*')
+      .eq('equipe', TEAM)
+      .eq('mes', month),
+    supabaseAdmin
+      .from('equipe_pontos')
+      .select('pontos')
+      .eq('equipe', TEAM)
+      .eq('mes', month),
+    supabaseAdmin
+      .from('equipe_vendas')
+      .select('*')
+      .eq('equipe', TEAM)
+      .eq('mes', month),
+  ]);
+
+  if (metaRes.error || objectivesRes.error || pointsRes.error || salesRes.error) return null;
+
+  const objectives = objectivesRes.data || [];
+  const sales = salesRes.data || [];
+  const points = pointsRes.data || [];
+  const totalVendas = sales.reduce((sum: number, sale: any) => sum + Number(sale.valor || 0), 0);
+  const totalObjetivos = objectives.reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
+  const realizadoObjetivos = objectives
+    .filter((item: any) => item.status === 'feito')
+    .reduce((sum: number, item: any) => sum + Number(item.valor_estimado || 0), 0);
+  const metaValor = Number(metaRes.data?.meta_valor || 0);
+  const realizadoTotal = realizadoObjetivos + totalVendas;
+
+  return {
+    month,
+    label: monthLabel(month),
+    meta_valor: metaValor,
+    prazo: metaRes.data?.prazo || monthDeadline(month),
+    totalObjetivos,
+    realizadoObjetivos,
+    totalVendas,
+    realizadoTotal,
+    totalPontos: points.reduce((sum: number, point: any) => sum + Number(point.pontos || 0), 0),
+    objectivesCount: objectives.length,
+    salesCount: sales.length,
+    progress: metaValor > 0 ? Math.min(100, Math.round((realizadoTotal / metaValor) * 100)) : 0,
+    hasData: Boolean(metaRes.data || objectives.length || sales.length || points.length),
+  };
+}
+
 export async function GET(request: Request) {
+  const currentMonth = getCurrentMonthKey();
+  const previousMonth = previousMonthKey(currentMonth);
   const guard = await requireApiUser(request);
   if ('error' in guard) return guard.error;
   if (!canReadTeam(guard.profile.tipo_usuario)) {
@@ -77,25 +165,25 @@ export async function GET(request: Request) {
       .from('equipe_metas')
       .select('*')
       .eq('equipe', 'apollo')
-      .eq('mes', APOLLO_MONTH)
+      .eq('mes', currentMonth)
       .maybeSingle(),
     supabaseAdmin
       .from('equipe_objetivos')
       .select('*')
       .eq('equipe', 'apollo')
-      .eq('mes', APOLLO_MONTH)
+      .eq('mes', currentMonth)
       .order('created_at', { ascending: true }),
     supabaseAdmin
       .from('equipe_pontos')
       .select('id, profile_id, pontos, motivo, created_at, profiles:profile_id(nome, foto_url)')
       .eq('equipe', 'apollo')
-      .eq('mes', APOLLO_MONTH)
+      .eq('mes', currentMonth)
       .order('created_at', { ascending: false }),
     supabaseAdmin
       .from('equipe_vendas')
       .select('*')
       .eq('equipe', 'apollo')
-      .eq('mes', APOLLO_MONTH)
+      .eq('mes', currentMonth)
       .order('created_at', { ascending: false }),
   ]);
 
@@ -113,7 +201,7 @@ export async function GET(request: Request) {
 
     if (!auditRes.error) {
       auditEntries = (auditRes.data || []).filter((entry: any) =>
-        entry.metadata?.equipe === 'apollo' && entry.metadata?.mes === APOLLO_MONTH
+        entry.metadata?.equipe === 'apollo' && entry.metadata?.mes === currentMonth
       );
     }
   }
@@ -130,21 +218,21 @@ export async function GET(request: Request) {
     ? metaRes.data
     : {
         equipe: 'apollo',
-        mes: APOLLO_MONTH,
-        meta_valor: latestMetaAudit?.metadata?.meta_valor || 50000,
-        prazo: latestMetaAudit?.metadata?.prazo || '2026-05-31',
+        mes: currentMonth,
+        meta_valor: latestMetaAudit?.metadata?.meta_valor || 0,
+        prazo: latestMetaAudit?.metadata?.prazo || monthDeadline(currentMonth),
       };
 
   let objectives = hasTeamTables && objectivesRes.data?.length
     ? objectivesRes.data
-    : DEFAULT_OBJECTIVES.map(([titulo, valor]) => ({
+    : !hasTeamTables ? DEFAULT_OBJECTIVES.map(([titulo, valor]) => ({
         id: String(titulo),
         equipe: 'apollo',
-        mes: APOLLO_MONTH,
+        mes: currentMonth,
         titulo,
         valor_estimado: valor,
         status: 'aberto',
-      }));
+      })) : [];
 
   if (!hasTeamTables) {
     const createdObjectives = auditEntries
@@ -154,7 +242,7 @@ export async function GET(request: Request) {
       .map((entry: any) => ({
         id: String(entry.entity_id || entry.metadata?.objective_id || `custom:${entry.metadata?.titulo}`),
         equipe: 'apollo',
-        mes: APOLLO_MONTH,
+        mes: currentMonth,
         titulo: String(entry.metadata?.titulo || 'Objetivo'),
         valor_estimado: Number(entry.metadata?.valor_estimado || 0),
         status: String(entry.metadata?.status || 'aberto'),
@@ -294,7 +382,7 @@ export async function GET(request: Request) {
           .map((entry: any) => ({
             id: String(entry.entity_id || entry.metadata?.sale_id || `sale:${entry.created_at}`),
             equipe: 'apollo',
-            mes: APOLLO_MONTH,
+            mes: currentMonth,
             nome: String(entry.metadata?.nome || ''),
             vendido: String(entry.metadata?.vendido || ''),
             valor: Number(entry.metadata?.valor || 0),
@@ -349,12 +437,17 @@ export async function GET(request: Request) {
   const previsaoObjetivos = totalObjetivos;
   const previsaoAberta = Math.max(0, totalObjetivos - realizadoObjetivos);
   const totalPontos = Array.from(pointsByProfile.values()).reduce((sum, value) => sum + value, 0);
-  const deadline = new Date('2026-05-31T23:59:59-03:00');
+  const deadline = new Date(`${meta.prazo || monthDeadline(currentMonth)}T23:59:59-03:00`);
   const daysRemaining = Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / 86400000));
+  const metaValue = Number(meta.meta_valor || 0);
+  const previousMonthSnapshot = await loadMonthSnapshot(previousMonth);
   const dailyMessages = members.map((member: any, index: number) => {
     const firstName = String(member.nome || 'time').split(' ')[0];
+    const metaLabel = metaValue > 0
+      ? `meta de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metaValue)}`
+      : 'nova meta do mes';
     const variants = [
-      `${firstName}, faltam ${daysRemaining} dias. Uma acao bem feita hoje aproxima o Apollo da meta de R$ 50 mil.`,
+      `${firstName}, faltam ${daysRemaining} dias. Uma acao bem feita hoje aproxima o Apollo da ${metaLabel}.`,
       `${firstName}, hoje e dia de empurrar o placar. O ranking muda quando cada entrega vira ponto.`,
       `${firstName}, foco no que destrava receita: resolver rapido, registrar certo e puxar o proximo objetivo.`,
       `${firstName}, o Apollo vence no detalhe. Mais um passo hoje deixa a meta muito mais perto.`,
@@ -363,7 +456,9 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({
-    month: APOLLO_MONTH,
+    month: currentMonth,
+    monthLabel: monthLabel(currentMonth),
+    previousMonth: previousMonthSnapshot,
     meta,
     objectives,
     sales,
@@ -377,19 +472,21 @@ export async function GET(request: Request) {
       emAndamentoObjetivos,
       previsaoObjetivos,
       previsaoAberta,
-      faltanteMeta: Math.max(0, Number(meta.meta_valor || 50000) - realizadoTotal),
+      faltanteMeta: Math.max(0, metaValue - realizadoTotal),
       totalPontos,
       daysRemaining,
-      progress: Math.min(100, Math.round((realizadoTotal / Number(meta.meta_valor || 50000)) * 100)),
-      forecastProgress: Math.min(100, Math.round((previsaoObjetivos / Number(meta.meta_valor || 50000)) * 100)),
+      progress: metaValue > 0 ? Math.min(100, Math.round((realizadoTotal / metaValue) * 100)) : 0,
+      forecastProgress: metaValue > 0 ? Math.min(100, Math.round((previsaoObjetivos / metaValue) * 100)) : 0,
       dailyMessages,
     },
     isAdmin: guard.profile.tipo_usuario === 'admin',
+    needsMonthlySetup: hasTeamTables && !metaRes.data,
     needsMigration: false,
   });
 }
 
 export async function POST(request: Request) {
+  const currentMonth = getCurrentMonthKey();
   const limited = rateLimit(request, 'equipe:apollo:write', { limit: 60, windowMs: 10 * 60_000 });
   if (limited) return limited;
 
@@ -398,6 +495,19 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const action = String(body.action || '');
+
+  if (action && action !== 'update_meta') {
+    const { data: currentMeta, error: currentMetaError } = await supabaseAdmin
+      .from('equipe_metas')
+      .select('id')
+      .eq('equipe', TEAM)
+      .eq('mes', currentMonth)
+      .maybeSingle();
+
+    if (!currentMeta && !isTeamStorageError(currentMetaError)) {
+      return NextResponse.json({ error: 'Configure a meta do mes antes de registrar objetivos, vendas ou pontuacoes.' }, { status: 400 });
+    }
+  }
 
   if (action === 'add_points') {
     const profileId = String(body.profile_id || '');
@@ -410,7 +520,7 @@ export async function POST(request: Request) {
 
     const { error } = await supabaseAdmin.from('equipe_pontos').insert([{
       equipe: 'apollo',
-      mes: APOLLO_MONTH,
+      mes: currentMonth,
       profile_id: profileId,
       pontos,
       motivo,
@@ -424,7 +534,7 @@ export async function POST(request: Request) {
         action: 'team.points.add',
         entity_type: 'profile',
         entity_id: profileId,
-        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, profile_id: profileId, pontos, motivo },
+        metadata: { equipe: 'apollo', mes: currentMonth, profile_id: profileId, pontos, motivo },
       });
       return NextResponse.json({ success: true });
     }
@@ -433,7 +543,7 @@ export async function POST(request: Request) {
       action: 'team.points.add',
       entity_type: 'profile',
       entity_id: profileId,
-      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, pontos, motivo },
+      metadata: { equipe: 'apollo', mes: currentMonth, pontos, motivo },
     });
 
     return NextResponse.json({ success: true });
@@ -451,7 +561,7 @@ export async function POST(request: Request) {
 
     const { error } = await supabaseAdmin.from('equipe_objetivos').insert([{
       equipe: 'apollo',
-      mes: APOLLO_MONTH,
+      mes: currentMonth,
       titulo,
       valor_estimado: valor,
       created_by: guard.profile.id,
@@ -466,7 +576,7 @@ export async function POST(request: Request) {
         entity_id: fallbackId,
         metadata: {
           equipe: 'apollo',
-          mes: APOLLO_MONTH,
+          mes: currentMonth,
           objective_id: fallbackId,
           titulo,
           valor_estimado: valor,
@@ -478,7 +588,7 @@ export async function POST(request: Request) {
     await writeAuditLog(request, guard.profile, {
       action: 'team.objective.create',
       entity_type: 'equipe_objetivo',
-      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, titulo, valor_estimado: valor },
+      metadata: { equipe: 'apollo', mes: currentMonth, titulo, valor_estimado: valor },
     });
     return NextResponse.json({ success: true });
   }
@@ -495,7 +605,7 @@ export async function POST(request: Request) {
     const fallbackId = `sale:${Date.now()}:${nome.toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`;
     const { error } = await supabaseAdmin.from('equipe_vendas').insert([{
       equipe: 'apollo',
-      mes: APOLLO_MONTH,
+      mes: currentMonth,
       nome,
       vendido,
       valor,
@@ -509,7 +619,7 @@ export async function POST(request: Request) {
         action: 'team.sale.create',
         entity_type: 'equipe_venda',
         entity_id: fallbackId,
-        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, sale_id: fallbackId, nome, vendido, valor },
+        metadata: { equipe: 'apollo', mes: currentMonth, sale_id: fallbackId, nome, vendido, valor },
       });
       return NextResponse.json({ success: true });
     }
@@ -517,7 +627,7 @@ export async function POST(request: Request) {
     await writeAuditLog(request, guard.profile, {
       action: 'team.sale.create',
       entity_type: 'equipe_venda',
-      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, nome, vendido, valor },
+      metadata: { equipe: 'apollo', mes: currentMonth, nome, vendido, valor },
     });
     return NextResponse.json({ success: true });
   }
@@ -542,7 +652,7 @@ export async function POST(request: Request) {
       action: 'team.points.delete',
       entity_type: 'equipe_ponto',
       entity_id: id,
-      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, point_id: id },
+      metadata: { equipe: 'apollo', mes: currentMonth, point_id: id },
     });
 
     return NextResponse.json({ success: true });
@@ -568,7 +678,7 @@ export async function POST(request: Request) {
       action: 'team.sale.delete',
       entity_type: 'equipe_venda',
       entity_id: id,
-      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, sale_id: id },
+      metadata: { equipe: 'apollo', mes: currentMonth, sale_id: id },
     });
 
     return NextResponse.json({ success: true });
@@ -590,7 +700,7 @@ export async function POST(request: Request) {
         action: 'team.sale.update',
         entity_type: 'equipe_venda',
         entity_id: id,
-        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, sale_id: id, nome, vendido, valor },
+        metadata: { equipe: 'apollo', mes: currentMonth, sale_id: id, nome, vendido, valor },
       });
       return NextResponse.json({ success: true });
     }
@@ -613,7 +723,7 @@ export async function POST(request: Request) {
         action: 'team.sale.update',
         entity_type: 'equipe_venda',
         entity_id: id,
-        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, sale_id: id, nome, vendido, valor },
+        metadata: { equipe: 'apollo', mes: currentMonth, sale_id: id, nome, vendido, valor },
       });
       return NextResponse.json({ success: true });
     }
@@ -622,7 +732,7 @@ export async function POST(request: Request) {
       action: 'team.sale.update',
       entity_type: 'equipe_venda',
       entity_id: id,
-      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, nome, vendido, valor },
+      metadata: { equipe: 'apollo', mes: currentMonth, nome, vendido, valor },
     });
 
     return NextResponse.json({ success: true });
@@ -648,7 +758,7 @@ export async function POST(request: Request) {
       action: 'team.objective.delete',
       entity_type: 'equipe_objetivo',
       entity_id: id,
-      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, objective_id: id },
+      metadata: { equipe: 'apollo', mes: currentMonth, objective_id: id },
     });
 
     return NextResponse.json({ success: true });
@@ -672,7 +782,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Valor estimado invalido.' }, { status: 400 });
     }
 
-    const metadata: any = { equipe: 'apollo', mes: APOLLO_MONTH, objective_id: id };
+    const metadata: any = { equipe: 'apollo', mes: currentMonth, objective_id: id };
     if (status !== undefined) metadata.status = status;
     if (titulo !== undefined) metadata.titulo = titulo;
     if (valorEstimado !== undefined) metadata.valor_estimado = valorEstimado;
@@ -732,7 +842,7 @@ export async function POST(request: Request) {
       .from('equipe_metas')
       .upsert({
         equipe: 'apollo',
-        mes: APOLLO_MONTH,
+        mes: currentMonth,
         meta_valor: metaValor,
         prazo,
         created_by: guard.profile.id,
@@ -745,14 +855,14 @@ export async function POST(request: Request) {
       await writeAuditLog(request, guard.profile, {
         action: 'team.meta.update',
         entity_type: 'equipe_meta',
-        metadata: { equipe: 'apollo', mes: APOLLO_MONTH, meta_valor: metaValor, prazo },
+        metadata: { equipe: 'apollo', mes: currentMonth, meta_valor: metaValor, prazo },
       });
       return NextResponse.json({ success: true });
     }
     await writeAuditLog(request, guard.profile, {
       action: 'team.meta.update',
       entity_type: 'equipe_meta',
-      metadata: { equipe: 'apollo', mes: APOLLO_MONTH, meta_valor: metaValor, prazo },
+      metadata: { equipe: 'apollo', mes: currentMonth, meta_valor: metaValor, prazo },
     });
     return NextResponse.json({ success: true });
   }
