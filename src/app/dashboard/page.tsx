@@ -633,7 +633,10 @@ export default function DashboardPage() {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({}),
+              body: JSON.stringify({
+                data_inicio: dataInicio,
+                data_fim: dataFim,
+              }),
             });
             if (response.ok) {
               const payload = await response.json();
@@ -849,12 +852,6 @@ export default function DashboardPage() {
             ) : (
               <>
                 <span>Olá, {firstName}</span>
-                {metaAccount && metaAccount.saldo !== null && (
-                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs font-black tracking-wide uppercase shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Saldo: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(metaAccount.saldo)}</span>
-                  </span>
-                )}
               </>
             )}
           </h1>
@@ -1035,9 +1032,9 @@ export default function DashboardPage() {
                 <p className="mt-2 text-sm font-bold text-slate-200">{metaStatus.detail}</p>
               </div>
             </div>
-            {!isCard && metaAccount.saldo !== null && (
+            {metaAccount.saldo !== null && (
               <div className="text-left sm:text-right shrink-0 border-t sm:border-t-0 sm:border-l border-white/5 pt-3 sm:pt-0 sm:pl-6">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo Disponível</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo da Conta</p>
                 <p className="text-xl font-black text-white mt-1">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(metaAccount.saldo)}
                 </p>
