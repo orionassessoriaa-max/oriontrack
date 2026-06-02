@@ -6,7 +6,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 
 export default function CorretorTimePage() {
   const { profile } = useAuth();
-  const corretorId = profile?.tipo_usuario === 'corretor' ? profile.corretor_id || undefined : undefined;
+  const corretorId = (profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin') ? profile.corretor_id || undefined : undefined;
 
   return (
     <InternalLayout>

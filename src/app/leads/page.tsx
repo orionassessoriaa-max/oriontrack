@@ -191,7 +191,7 @@ export default function BrokerLeadsPage() {
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
-  const canAssignTeamLeads = profile?.tipo_usuario === 'corretor';
+  const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');

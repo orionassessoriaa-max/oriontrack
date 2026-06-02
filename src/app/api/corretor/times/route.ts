@@ -33,7 +33,7 @@ async function requireUser(request: Request) {
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!profile || !['admin', 'corretor'].includes(profile.tipo_usuario)) {
+  if (!profile || !['admin', 'corretor', 'corretor_admin'].includes(profile.tipo_usuario)) {
     return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
   }
 
@@ -149,7 +149,7 @@ export async function GET(request: Request) {
     if (membersError) throw membersError;
 
     let leads: any[] = [];
-    if (guard.profile.tipo_usuario === 'corretor') {
+    if (guard.profile.tipo_usuario === 'corretor' || guard.profile.tipo_usuario === 'corretor_admin') {
       const { data: leadsData, error: leadsError } = await supabaseAdmin
         .from('leads')
         .select('id, nome, telefone, status, cidade, investimento, valor_negociacao, valor_venda, valor_comissao, responsavel_membro_id, data_entrada, updated_at')

@@ -287,7 +287,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function initializeDefaultDates() {
-      if (!profile || !['corretor', 'corretor_membro'].includes(profile.tipo_usuario)) return;
+      if (!profile || !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario)) return;
       if (!profile.corretor_id) return;
       
       try {
@@ -382,7 +382,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function fetchCorretorData() {
-      if (!profile || !['corretor', 'corretor_membro'].includes(profile.tipo_usuario)) {
+      if (!profile || !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario)) {
         setLoadingData(false);
         return;
       }

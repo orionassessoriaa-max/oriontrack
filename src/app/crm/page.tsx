@@ -184,7 +184,7 @@ export default function CrmPage() {
   const [boardClientWidth, setBoardClientWidth] = useState(0);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
-  const canAssignTeamLeads = profile?.tipo_usuario === 'corretor';
+  const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
 
   async function fetchCrm() {
     if (!profile?.id) return;
@@ -271,7 +271,7 @@ export default function CrmPage() {
         return normalizedLeads.find((lead) => lead.id === current.id) || null;
       });
 
-      if (['corretor', 'corretor_membro'].includes(profile.tipo_usuario) && profile.corretor_id) {
+      if (['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario) && profile.corretor_id) {
         const { data: corretor } = await supabase
           .from('corretores')
           .select('tipo_campanha')
@@ -281,7 +281,7 @@ export default function CrmPage() {
         setTipoCampanha((corretor?.tipo_campanha as TipoCampanha | null) || 'ambos');
       }
 
-      if (profile.tipo_usuario === 'corretor') {
+      if (profile.tipo_usuario === 'corretor' || profile.tipo_usuario === 'corretor_admin') {
         await fetchTeamMembers();
       }
     } catch (err: any) {

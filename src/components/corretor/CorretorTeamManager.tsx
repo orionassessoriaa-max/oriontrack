@@ -111,7 +111,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
   const [nomeTimeInput, setNomeTimeInput] = useState('');
   const [memberRole, setMemberRole] = useState<'corretor_membro' | 'corretor_admin'>('corretor_membro');
-  const canAssignLeads = profile?.tipo_usuario === 'corretor';
+  const canAssignLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
 
   const memberStats = useMemo<MemberStats[]>(() => {
     return membros.map((member) => {
