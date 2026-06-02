@@ -1,12 +1,3 @@
-create or replace function public.is_corretor()
-returns boolean
-language sql
-security definer
-set search_path = public
-as $$
-  select public.current_profile_role() in ('corretor', 'corretor_admin')
-$$;
-
 drop policy if exists "Corretores can read own leads" on public.leads;
 create policy "Corretores can read own leads"
 on public.leads
