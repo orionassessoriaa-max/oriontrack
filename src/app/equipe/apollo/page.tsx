@@ -202,7 +202,7 @@ export default function ApolloTeamPage() {
   const metaValue = Number(data?.meta.meta_valor || 0);
   const progress = data?.summary.progress || 0;
   const forecastProgress = data?.summary.forecastProgress || 0;
-  const topMember = data?.members[0];
+  const topMember = data?.members.find((member) => Number(member.pontos || 0) > 0);
   const monthTitle = data?.monthLabel ? data.monthLabel.charAt(0).toUpperCase() + data.monthLabel.slice(1) : 'Mes atual';
 
   return (
@@ -302,9 +302,9 @@ export default function ApolloTeamPage() {
 
               <div className="border border-white/5 bg-slate-950/60 p-5 backdrop-blur-md">
                 <div className="flex items-center gap-3">
-                  <Crown className="text-amber-500" />
+                  {topMember ? <Crown className="text-amber-500" /> : <Trophy className="text-slate-500" />}
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">MVP do momento</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{topMember ? 'MVP do momento' : 'MVP aguardando'}</p>
                     <h3 className="text-xl font-black text-white">{topMember?.nome || 'Aguardando pontos'}</h3>
                   </div>
                 </div>
