@@ -250,6 +250,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     if (profile?.tipo_usuario === 'designer') return designerMenu;
     if (profile?.tipo_usuario === 'account_manager') return accountMenu;
     if (profile?.tipo_usuario === 'corretor_membro') return corretorMemberMenu;
+    if (profile?.tipo_usuario === 'corretor_admin') return corretorMenu;
     return corretorMenu;
   };
 
@@ -265,6 +266,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
         ? 'Designer'
         : profile?.tipo_usuario === 'account_manager'
           ? 'Account manager'
+          : profile?.tipo_usuario === 'corretor_admin'
+            ? 'Corretor Admin'
           : profile?.tipo_usuario === 'corretor_membro'
             ? 'Equipe comercial'
           : 'Corretor Parceiro';

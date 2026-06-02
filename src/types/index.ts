@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'corretor' | 'corretor_membro' | 'gestor_trafego' | 'designer' | 'account_manager';
+export type UserRole = 'admin' | 'corretor' | 'corretor_membro' | 'gestor_trafego' | 'designer' | 'account_manager' | 'corretor_admin';
 export type TipoCampanha = 'pme' | 'adesao' | 'ambos';
 
 export interface Profile {

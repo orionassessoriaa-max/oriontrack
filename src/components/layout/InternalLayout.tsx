@@ -20,7 +20,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
       } else if (profile) {
         const isAdmin = profile.tipo_usuario === 'admin';
         const isTrafficManager = profile.tipo_usuario === 'gestor_trafego';
-        const isCorretor = profile.tipo_usuario === 'corretor';
+        const isCorretor = profile.tipo_usuario === 'corretor' || profile.tipo_usuario === 'corretor_admin';
         const isCorretorMember = profile.tipo_usuario === 'corretor_membro';
         const isDesigner = profile.tipo_usuario === 'designer';
         const isAccountManager = profile.tipo_usuario === 'account_manager';

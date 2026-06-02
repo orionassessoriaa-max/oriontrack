@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { evolutionFetch, normalizePhone } from '@/lib/evolution';
+import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
 
 type CorretorMeta = {
   id: string;
@@ -8,6 +8,7 @@ type CorretorMeta = {
   gestor_trafego_id: string | null;
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
+  operadoras_info?: any;
 };
 
 function normalizeAccountId(accountId: string) {
@@ -83,6 +84,10 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     ? 'Cartao'
     : fundingDetails?.display_string || fundingDetails?.type || (balance !== null ? 'Saldo pre-pago' : 'Nao informado');
 
+  // Dynamic alert thresholds per broker
+  const cplLimit = Number(corretor.operadoras_info?.alerta_limite_cpl ?? 25);
+  const balanceLimit = Number(corretor.operadoras_info?.alerta_limite_saldo ?? 100);
+
   return {
     corretor_id: corretor.id,
     corretor_nome: corretor.nome,
@@ -96,9 +101,10 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     saldo: effectiveBalance,
     currency: accountPayload?.currency || 'BRL',
     forma_pagamento: formaPagamento,
-    alerta_cpl_alto: cpl !== null && cpl > 25,
-    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < 100,
+    alerta_cpl_alto: cpl !== null && cpl > cplLimit,
+    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < balanceLimit,
     error: undefined as string | undefined,
+    operadoras_info: corretor.operadoras_info,
   };
 }
 
@@ -119,7 +125,7 @@ export async function POST(request: Request) {
     // 2. Coletar todos os corretores que possuem conta vinculada
     const { data: corretores, error: dbError } = await supabaseAdmin
       .from('corretores')
-      .select('id, nome, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name')
+      .select('id, nome, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name, operadoras_info')
       .not('meta_ad_account_id', 'is', null)
       .not('gestor_trafego_id', 'is', null);
 
@@ -156,6 +162,7 @@ export async function POST(request: Request) {
         alerta_cpl_alto: false,
         alerta_saldo_baixo: false,
         error: result.reason?.message || 'Erro ao consultar a conta.',
+        operadoras_info: c.operadoras_info,
       };
     });
 
@@ -174,16 +181,20 @@ export async function POST(request: Request) {
         /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(acc.error))
       );
 
+      // Fetch dynamic thresholds for message formatting
+      const cplLimit = Number(acc.operadoras_info?.alerta_limite_cpl ?? 25);
+      const balanceLimit = Number(acc.operadoras_info?.alerta_limite_saldo ?? 100);
+
       let alertMessage = '';
 
-      if (acc.cpl !== null && acc.cpl > 25) {
-        alertMessage = `🔴 CPL ALTO: R$ ${acc.cpl.toFixed(2).replace('.', ',')} (Meta de R$ 25,00)`;
+      if (acc.cpl !== null && acc.cpl > cplLimit) {
+        alertMessage = `🔴 CPL ALTO: R$ ${acc.cpl.toFixed(2).replace('.', ',')} (Meta de R$ ${cplLimit.toFixed(2).replace('.', ',')})`;
       } else if (isCard && (hasPaymentError || (acc.saldo !== null && acc.saldo <= 0))) {
         alertMessage = `🔴 ERRO NO PAGAMENTO: Cobrança falhou no cartão de crédito.`;
       } else if (!isCard && acc.saldo !== null && acc.saldo <= 0) {
         alertMessage = `🔴 SEM SALDO: Conta zerada, campanhas pausadas.`;
-      } else if (!isCard && acc.saldo !== null && acc.saldo < 100) {
-        alertMessage = `🟡 SALDO BAIXO: Restam R$ ${acc.saldo.toFixed(2).replace('.', ',')} (Abaixo de R$ 100,00)`;
+      } else if (!isCard && acc.saldo !== null && acc.saldo < balanceLimit) {
+        alertMessage = `🟡 SALDO BAIXO: Restam R$ ${acc.saldo.toFixed(2).replace('.', ',')} (Abaixo de R$ ${balanceLimit.toFixed(2).replace('.', ',')})`;
       } else if (acc.error && !isCard) {
         alertMessage = `🟡 ERRO DE INTEGRAÇÃO: ${acc.error}`;
       }
@@ -210,8 +221,8 @@ export async function POST(request: Request) {
 
       if (gError) throw gError;
 
-      const evolutionInstance = process.env.EVOLUTION_SYSTEM_INSTANCE || 'orion_system';
-      const evolutionApiKey = process.env.EVOLUTION_API_KEY;
+      const evolutionInstance = 'apolo_master_sender';
+      const evolutionApiKey = await getEvolutionInstanceApiKey(evolutionInstance);
 
       for (const gestor of (gestores || [])) {
         const rawPhone = gestor.telefone;

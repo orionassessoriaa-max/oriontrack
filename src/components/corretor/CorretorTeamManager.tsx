@@ -26,6 +26,7 @@ type Membro = {
   status: string;
   ordem: number;
   ultimo_lead_at: string | null;
+  tipo_usuario?: string;
 };
 
 type Credentials = {
@@ -109,6 +110,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [error, setError] = useState<string | null>(null);
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
   const [nomeTimeInput, setNomeTimeInput] = useState('');
+  const [memberRole, setMemberRole] = useState<'corretor_membro' | 'corretor_admin'>('corretor_membro');
   const canAssignLeads = profile?.tipo_usuario === 'corretor';
 
   const memberStats = useMemo<MemberStats[]>(() => {
@@ -287,10 +289,11 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     }
 
     try {
-      const payload = await postTeam({ action: 'create_member', nome, email });
+      const payload = await postTeam({ action: 'create_member', nome, email, tipo_usuario: memberRole });
       setCredentials(payload.credentials);
       setNome('');
       setEmail('');
+      setMemberRole('corretor_membro');
       await fetchTeam();
     } catch (err: any) {
       setError(err.message);
@@ -607,6 +610,17 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                     placeholder="exemplo@vendedor.com"
                     className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
                   />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nível de Permissão</span>
+                  <select
+                    value={memberRole}
+                    onChange={(e) => setMemberRole(e.target.value as any)}
+                    className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all cursor-pointer"
+                  >
+                    <option value="corretor_membro" className="bg-[#070b13]">Corretor (Acesso Padrão)</option>
+                    <option value="corretor_admin" className="bg-[#070b13]">Corretor Admin (Acesso Completo)</option>
+                  </select>
                 </label>
 
                 <button
@@ -988,6 +1002,17 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                 className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
               />
             </label>
+            <label className="block">
+              <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nível de Permissão</span>
+              <select
+                value={memberRole}
+                onChange={(e) => setMemberRole(e.target.value as any)}
+                className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all cursor-pointer"
+              >
+                <option value="corretor_membro" className="bg-[#090e1a]">Corretor (Acesso Padrão)</option>
+                <option value="corretor_admin" className="bg-[#090e1a]">Corretor Admin (Acesso Completo)</option>
+              </select>
+            </label>
             <button
               disabled={saving}
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white transition-all hover:bg-emerald-700 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-600/15"
@@ -1070,54 +1095,64 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             <div className="grid gap-4 p-6">
               {memberStats.map((member, index) => (
                 <div key={member.id} className="rounded-2xl border border-white/5 bg-[#070b13] p-5 transition-all duration-300 hover:-translate-y-1 hover:border-cyan-500/20 hover:bg-white/[0.01]">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black text-white shadow-md shadow-blue-500/10">
-                        {member.nome.slice(0, 2).toUpperCase()}
+                  <div className="flex flex-col gap-4">
+                    {/* Top Row: User details (left) & Action button (right) */}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black text-white shadow-md shadow-blue-500/10">
+                          {member.nome.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-black text-white leading-tight">{member.nome}</p>
+                          <p className="break-all text-xs font-semibold text-slate-400 mt-1">{member.email}</p>
+                          <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-cyan-400">
+                            Posição: #{index + 1} {member.ultimo_lead_at ? `| último atendimento em ${new Date(member.ultimo_lead_at).toLocaleDateString('pt-BR')}` : ''}
+                          </p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {member.profile_id === settings.owner_profile?.id && (
+                              <span className="inline-flex rounded-full bg-blue-500/15 border border-blue-500/20 px-2.5 py-1 text-[8px] font-black uppercase tracking-widest text-cyan-400 leading-none">
+                                Dono do time
+                              </span>
+                            )}
+                            {member.tipo_usuario === 'corretor_admin' && (
+                              <span className="inline-flex rounded-full bg-emerald-500/15 border border-emerald-500/20 px-2.5 py-1 text-[8px] font-black uppercase tracking-widest text-emerald-400 leading-none">
+                                Admin do Time
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-black text-white">{member.nome}</p>
-                        <p className="break-all text-xs font-semibold text-slate-400 mt-1">{member.email}</p>
-                        <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-cyan-400">
-                          Posição: #{index + 1} {member.ultimo_lead_at ? `| último atendimento em ${new Date(member.ultimo_lead_at).toLocaleDateString('pt-BR')}` : ''}
-                        </p>
-                        {member.profile_id === settings.owner_profile?.id && (
-                          <span className="mt-2 inline-flex rounded-full bg-blue-500/15 border border-blue-500/20 px-3 py-1 text-[8px] font-black uppercase tracking-widest text-cyan-400 leading-none">
-                            Dono do time
-                          </span>
-                        )}
-                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeMember(member)}
+                        disabled={member.profile_id === settings.owner_profile?.id}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-500/10 bg-red-500/5 px-3 py-2.5 text-xs font-black text-red-400 transition-all hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30 cursor-pointer shrink-0 self-start"
+                        title={member.profile_id === settings.owner_profile?.id ? 'Desative em Configurações do time.' : 'Remover integrante'}
+                      >
+                        <Trash2 size={13} /> <span className="hidden sm:inline">Remover</span>
+                      </button>
                     </div>
-                    
-                    {/* Performance metrics badges (spacious layout with whitespace-nowrap) */}
-                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 justify-start md:justify-center flex-1 max-w-xl">
-                      <div className="bg-[#090f1d] border border-white/5 px-3 py-2 rounded-xl text-center min-w-[70px]">
+
+                    {/* Bottom Row: 4 metrics side-by-side, fully responsive */}
+                    <div className="grid grid-cols-4 gap-2 sm:gap-3 mt-1 border-t border-white/5 pt-4">
+                      <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
                         <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider">Leads</p>
                         <p className="text-sm font-black text-white mt-0.5">{member.totalLeads}</p>
                       </div>
-                      <div className="bg-[#090f1d] border border-white/5 px-3 py-2 rounded-xl text-center min-w-[70px]">
+                      <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
                         <p className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">S/ Resp.</p>
                         <p className="text-sm font-black text-white mt-0.5">{member.semResposta}</p>
                       </div>
-                      <div className="bg-[#090f1d] border border-white/5 px-3 py-2 rounded-xl text-center min-w-[70px]">
+                      <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
                         <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Vendas</p>
                         <p className="text-sm font-black text-white mt-0.5">{member.vendas}</p>
                       </div>
-                      <div className="bg-[#090f1d] border border-white/5 px-4 py-2 rounded-xl text-center min-w-[100px]">
+                      <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
                         <p className="text-[9px] font-bold text-purple-400 uppercase tracking-wider">Comissão</p>
-                        <p className="text-xs font-black text-white mt-0.5 whitespace-nowrap">{currency(member.comissao)}</p>
+                        <p className="text-xs font-black text-white mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{currency(member.comissao)}</p>
                       </div>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => removeMember(member)}
-                      disabled={member.profile_id === settings.owner_profile?.id}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/10 bg-red-500/5 px-4 py-3 text-xs font-black text-red-400 transition-all hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30 cursor-pointer shrink-0"
-                      title={member.profile_id === settings.owner_profile?.id ? 'Desative em Configurações do time.' : 'Remover integrante'}
-                    >
-                      <Trash2 size={14} /> Remover
-                    </button>
                   </div>
                 </div>
               ))}

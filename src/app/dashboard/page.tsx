@@ -278,12 +278,6 @@ export default function DashboardPage() {
     salesRealized: 0,
     salesPotential: 0
   });
-  const [currentMonthStats, setCurrentMonthStats] = useState({
-    waiting: 0,
-    inProgress: 0,
-    quoted: 0,
-    sold: 0
-  });
   const [periodSpend, setPeriodSpend] = useState(0);
   const [chartAnimate, setChartAnimate] = useState(false);
 
@@ -467,15 +461,6 @@ export default function DashboardPage() {
 
         // Calculate current month summary (used for the progress bars step 6)
         const thisMonthKey = monthKey(new Date());
-        const currentMonthLeads = allLeads.filter(l => l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey);
-        const currentMonthSoldLeads = currentMonthLeads.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
-        
-        setCurrentMonthStats({
-          waiting: currentMonthLeads.filter(l => normalizeLeadStatus(l.status) === 'Aguardando atendimento').length,
-          inProgress: currentMonthLeads.filter(l => normalizeLeadStatus(l.status) === 'Em negociação').length,
-          quoted: currentMonthLeads.filter(l => normalizeLeadStatus(l.status) === 'Cotação enviada').length,
-          sold: currentMonthSoldLeads.length
-        });
 
         // Compute static 6-month performance timeline
         const months = getLastMonths();
@@ -684,7 +669,7 @@ export default function DashboardPage() {
       const timer = setTimeout(() => setChartAnimate(true), 150);
       return () => clearTimeout(timer);
     }
-  }, [isDataLoading, currentMonthStats]);
+  }, [isDataLoading, stats]);
 
   const timeOperacional = Array.isArray(corretorData?.time_operacional)
     ? corretorData.time_operacional
@@ -710,35 +695,35 @@ export default function DashboardPage() {
 
   const staleOpportunityCount = stats.stale;
   const maxCurrentMonthMetric = Math.max(
-    currentMonthStats.waiting,
-    currentMonthStats.inProgress,
-    currentMonthStats.quoted,
-    currentMonthStats.sold,
+    stats.waiting,
+    stats.inProgress,
+    stats.quoted,
+    stats.sold,
     1
   );
 
   const performanceBars = [
     { 
       label: 'Aguardando', 
-      value: currentMonthStats.waiting, 
+      value: stats.waiting, 
       gradient: 'from-purple-500 via-pink-500 to-indigo-500', 
       glowColor: 'rgba(168, 85, 247, 0.4)' 
     },
     { 
       label: 'Em negociação', 
-      value: currentMonthStats.inProgress, 
+      value: stats.inProgress, 
       gradient: 'from-amber-500 via-orange-500 to-red-500', 
       glowColor: 'rgba(249, 115, 22, 0.4)' 
     },
     { 
       label: 'Cotações', 
-      value: currentMonthStats.quoted, 
+      value: stats.quoted, 
       gradient: 'from-cyan-400 via-sky-500 to-blue-500', 
       glowColor: 'rgba(34, 211, 238, 0.4)' 
     },
     { 
       label: 'Vendas', 
-      value: currentMonthStats.sold, 
+      value: stats.sold, 
       gradient: 'from-emerald-400 via-teal-500 to-green-500', 
       glowColor: 'rgba(16, 185, 129, 0.4)' 
     },

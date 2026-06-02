@@ -81,7 +81,8 @@ export async function POST(request: Request) {
       senha_provisoria, 
       observacoes, 
       time_operacional, 
-      gestor_trafego_id 
+      gestor_trafego_id,
+      nome_empresa
     } = body;
     
     const email = body.email?.trim().toLowerCase();
@@ -155,7 +156,8 @@ export async function POST(request: Request) {
           nome,
           tipo_usuario: 'corretor',
           corretor_id: corretor.id,
-          status: 'active'
+          status: 'active',
+          nome_empresa: nome_empresa || null
         }]);
 
       if (profileRecordError) throw profileRecordError;

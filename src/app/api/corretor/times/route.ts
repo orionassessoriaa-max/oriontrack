@@ -141,7 +141,7 @@ export async function GET(request: Request) {
 
     const { data: membros, error: membersError } = await supabaseAdmin
       .from('corretor_time_membros')
-      .select('id, time_id, corretor_id, profile_id, nome, email, status, ordem, ultimo_lead_at, created_at, profiles:profile_id(foto_url)')
+      .select('id, time_id, corretor_id, profile_id, nome, email, status, ordem, ultimo_lead_at, created_at, profiles:profile_id(foto_url, tipo_usuario)')
       .eq('time_id', team.id)
       .order('ordem', { ascending: true })
       .order('created_at', { ascending: true });
@@ -178,6 +178,7 @@ export async function GET(request: Request) {
         ultimo_lead_at: m.ultimo_lead_at,
         created_at: m.created_at,
         foto_url: joinedProfile?.foto_url || null,
+        tipo_usuario: joinedProfile?.tipo_usuario || 'corretor_membro',
       };
     });
 
@@ -272,14 +273,14 @@ export async function POST(request: Request) {
 
           const joinedProfile = Array.isArray((m as any).profiles) ? (m as any).profiles[0] : (m as any).profiles;
           const memberRole = joinedProfile?.tipo_usuario;
-          const shouldRemoveAccess = m.profile_id && memberRole === 'corretor_membro';
+          const shouldRemoveAccess = m.profile_id && (memberRole === 'corretor_membro' || memberRole === 'corretor_admin');
 
           if (shouldRemoveAccess) {
             await supabaseAdmin
               .from('profiles')
               .delete()
               .eq('id', m.profile_id)
-              .eq('tipo_usuario', 'corretor_membro');
+              .in('tipo_usuario', ['corretor_membro', 'corretor_admin']);
 
             const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(m.profile_id);
             if (authDeleteError && authDeleteError.message !== 'User not found') {
@@ -455,14 +456,14 @@ export async function POST(request: Request) {
 
       const joinedProfile = Array.isArray((member as any).profiles) ? (member as any).profiles[0] : (member as any).profiles;
       const memberRole = joinedProfile?.tipo_usuario;
-      const shouldRemoveAccess = member.profile_id && memberRole === 'corretor_membro';
+      const shouldRemoveAccess = member.profile_id && (memberRole === 'corretor_membro' || memberRole === 'corretor_admin');
 
       if (shouldRemoveAccess) {
         await supabaseAdmin
           .from('profiles')
           .delete()
           .eq('id', member.profile_id)
-          .eq('tipo_usuario', 'corretor_membro');
+          .in('tipo_usuario', ['corretor_membro', 'corretor_admin']);
 
         const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(member.profile_id);
         if (authDeleteError && authDeleteError.message !== 'User not found') {
@@ -503,7 +504,7 @@ export async function POST(request: Request) {
 
       const { data: member } = await supabaseAdmin
         .from('corretor_time_membros')
-        .select('id, profile_id')
+        .select('id, profile_id, profiles:profile_id(tipo_usuario)')
         .eq('id', memberId)
         .eq('corretor_id', corretorId)
         .maybeSingle();
@@ -520,15 +521,19 @@ export async function POST(request: Request) {
       if (error) throw error;
 
       if (member.profile_id) {
+        const joinedProfile = Array.isArray((member as any).profiles) ? (member as any).profiles[0] : (member as any).profiles;
+        const currentRole = joinedProfile?.tipo_usuario || 'corretor_membro';
+        const role = body.tipo_usuario === 'corretor_admin' ? 'corretor_admin' : (body.tipo_usuario === 'corretor_membro' ? 'corretor_membro' : currentRole);
+
         await supabaseAdmin
           .from('profiles')
-          .update({ nome, email, email_real: email })
+          .update({ nome, email, email_real: email, tipo_usuario: role })
           .eq('id', member.profile_id);
 
         await supabaseAdmin.auth.admin.updateUserById(member.profile_id, {
           email,
           email_confirm: true,
-          user_metadata: { nome, email_real: email, tipo_usuario: 'corretor_membro' }
+          user_metadata: { nome, email_real: email, tipo_usuario: role }
         });
       }
 
@@ -642,6 +647,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Este email ja esta no time desse corretor.' }, { status: 400 });
     }
 
+    const role = body.tipo_usuario === 'corretor_admin' ? 'corretor_admin' : 'corretor_membro';
     const senhaProvisoria = generateStrongPassword();
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -649,7 +655,7 @@ export async function POST(request: Request) {
       email_confirm: true,
       user_metadata: {
         nome,
-        tipo_usuario: 'corretor_membro',
+        tipo_usuario: role,
         corretor_id: corretorId,
         email_real: email,
       }
@@ -677,7 +683,7 @@ export async function POST(request: Request) {
           email,
           email_real: email,
           nome,
-          tipo_usuario: 'corretor_membro',
+          tipo_usuario: role,
           corretor_id: corretorId,
           status: 'active',
           precisa_trocar_senha: true,

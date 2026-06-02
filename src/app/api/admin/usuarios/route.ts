@@ -108,7 +108,7 @@ export async function GET(request: Request) {
 
     const visibleProfiles = (profiles || []).filter((profile: any) => {
       const status = String(profile.status || '').toLowerCase();
-      const isRemovedTeamMember = profile.tipo_usuario === 'corretor_membro'
+      const isRemovedTeamMember = (profile.tipo_usuario === 'corretor_membro' || profile.tipo_usuario === 'corretor_admin')
         && ['inactive', 'inativo', 'deleted', 'removed'].includes(status);
       return !isRemovedTeamMember;
     });
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
       ? body.foto_url
       : null;
 
-    const allowedRoles: UserRole[] = ['admin', 'gestor_trafego', 'corretor', 'designer', 'account_manager'];
+    const allowedRoles: UserRole[] = ['admin', 'gestor_trafego', 'corretor', 'designer', 'account_manager', 'corretor_admin', 'corretor_membro'];
 
     if (!nome || !role || !allowedRoles.includes(role)) {
       return NextResponse.json({ error: 'Nome e tipo de usuário são obrigatórios.' }, { status: 400 });

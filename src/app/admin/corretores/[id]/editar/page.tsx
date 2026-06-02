@@ -57,12 +57,13 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
     tipo_campanha: 'ambos' as TipoCampanha,
     observacoes: '',
     time_operacional: [] as OrionTeamMember[],
+    nome_empresa: '',
   });
 
   async function fetchData() {
     setLoading(true);
     try {
-      const [corretorRes, gestoresRes] = await Promise.all([
+      const [corretorRes, gestoresRes, profileRes] = await Promise.all([
         supabase
           .from('corretores')
           .select('*')
@@ -72,7 +73,13 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
           .from('profiles')
           .select('*')
           .in('tipo_usuario', ['gestor_trafego', 'designer', 'account_manager', 'admin'])
-          .in('status', ['active', 'ativo', 'Ativo'])
+          .in('status', ['active', 'ativo', 'Ativo']),
+        supabase
+          .from('profiles')
+          .select('nome_empresa')
+          .eq('corretor_id', id)
+          .eq('tipo_usuario', 'corretor')
+          .maybeSingle()
       ]);
 
       if (corretorRes.error) throw corretorRes.error;
@@ -88,6 +95,7 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
           tipo_campanha: data.tipo_campanha || 'ambos',
           observacoes: data.observacoes || '',
           time_operacional: Array.isArray(data.time_operacional) ? data.time_operacional : [],
+          nome_empresa: profileRes?.data?.nome_empresa || '',
         });
       }
 
@@ -170,6 +178,16 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
 
       if (updateError) throw updateError;
 
+      const { error: profileUpdateError } = await supabase
+        .from('profiles')
+        .update({
+          nome_empresa: formData.nome_empresa || null
+        })
+        .eq('corretor_id', id)
+        .eq('tipo_usuario', 'corretor');
+
+      if (profileUpdateError) throw profileUpdateError;
+
       setSuccess(true);
       setTimeout(() => {
         router.push('/admin/corretores');
@@ -232,6 +250,20 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
                     required
                     value={formData.nome}
                     onChange={e => setFormData({...formData, nome: e.target.value})}
+                    className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 group">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nome da Corretora</label>
+                <div className="relative">
+                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
+                  <input 
+                    type="text" 
+                    value={formData.nome_empresa}
+                    onChange={e => setFormData({...formData, nome_empresa: e.target.value})}
+                    placeholder="Ex: Aliança Seguros"
                     className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium"
                   />
                 </div>

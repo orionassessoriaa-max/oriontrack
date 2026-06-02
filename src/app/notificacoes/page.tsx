@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { Bell, Loader2, RefreshCw, ShieldAlert, HelpCircle, Send } from 'lucide-react';
+import { Bell, Loader2, RefreshCw, ShieldAlert, HelpCircle, Send, Settings, Save, Sparkles, TrendingUp, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -31,6 +31,13 @@ export default function NotificacoesPage() {
   });
   const [tema, setTema] = useState<string>('noturno');
 
+  // Apolo dynamic thresholds states
+  const [corretores, setCorretores] = useState<any[]>([]);
+  const [loadingCorretores, setLoadingCorretores] = useState(false);
+  const [savingCorretorId, setSavingCorretorId] = useState<string | null>(null);
+  const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
+  const [thresholds, setThresholds] = useState<Record<string, { cpl: string; saldo: string }>>({});
+
   useEffect(() => {
     const handleThemeChange = () => {
       setTema(window.localStorage.getItem('orion:tema_sistema') || 'noturno');
@@ -42,9 +49,38 @@ export default function NotificacoesPage() {
 
   const isDark = tema === 'noturno';
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [profile?.id, profile?.tipo_usuario]);
+  const fetchCorretores = async () => {
+    if (!profile?.id || !['admin', 'gestor_trafego'].includes(profile.tipo_usuario)) return;
+    setLoadingCorretores(true);
+    try {
+      let query = supabase
+        .from('corretores')
+        .select('id, nome, meta_ad_account_id, meta_ad_account_name, operadoras_info')
+        .not('meta_ad_account_id', 'is', null);
+
+      if (profile.tipo_usuario === 'gestor_trafego') {
+        query = query.eq('gestor_trafego_id', profile.id);
+      }
+
+      const { data, error: fetchError } = await query;
+      if (fetchError) throw fetchError;
+
+      setCorretores(data || []);
+      
+      const initial: Record<string, { cpl: string; saldo: string }> = {};
+      (data || []).forEach((c: any) => {
+        initial[c.id] = {
+          cpl: String(c.operadoras_info?.alerta_limite_cpl ?? 25),
+          saldo: String(c.operadoras_info?.alerta_limite_saldo ?? 100)
+        };
+      });
+      setThresholds(initial);
+    } catch (err) {
+      console.error('Error fetching corretores:', err);
+    } finally {
+      setLoadingCorretores(false);
+    }
+  };
 
   const fetchNotifications = async () => {
     if (!profile?.id) {
@@ -75,6 +111,11 @@ export default function NotificacoesPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchNotifications();
+    fetchCorretores();
+  }, [profile?.id, profile?.tipo_usuario]);
 
   const markAsRead = async (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, lida: true } : n));
@@ -107,22 +148,56 @@ export default function NotificacoesPage() {
     }
   };
 
+  const saveThresholds = async (corretorId: string) => {
+    setSavingCorretorId(corretorId);
+    setSavedSuccessId(null);
+    try {
+      const corr = corretores.find(c => c.id === corretorId);
+      if (!corr) return;
+
+      const currentCpl = parseFloat(thresholds[corretorId]?.cpl || '25');
+      const currentSaldo = parseFloat(thresholds[corretorId]?.saldo || '100');
+
+      const updatedOperadorasInfo = {
+        ...(corr.operadoras_info || {}),
+        alerta_limite_cpl: isNaN(currentCpl) ? 25 : currentCpl,
+        alerta_limite_saldo: isNaN(currentSaldo) ? 100 : currentSaldo
+      };
+
+      const { error: updateError } = await supabase
+        .from('corretores')
+        .update({ operadoras_info: updatedOperadorasInfo })
+        .eq('id', corretorId);
+
+      if (updateError) throw updateError;
+
+      setCorretores(prev => prev.map(c => c.id === corretorId ? { ...c, operadoras_info: updatedOperadorasInfo } : c));
+      setSavedSuccessId(corretorId);
+      setTimeout(() => setSavedSuccessId(null), 3000);
+    } catch (err) {
+      console.error('Error saving thresholds:', err);
+      alert('Erro ao salvar limites.');
+    } finally {
+      setSavingCorretorId(null);
+    }
+  };
+
   return (
     <InternalLayout>
       <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Notificações</h1>
-          <p className={`font-medium text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Avisos enviados pelo admin para corretores e gestores.</p>
+          <p className={`font-medium text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Avisos e configurações globais do assistente Apolo AI.</p>
         </div>
         <button
-          onClick={fetchNotifications}
+          onClick={() => { fetchNotifications(); fetchCorretores(); }}
           className={`flex w-fit items-center gap-2 rounded-2xl border px-5 py-3 font-black transition-all ${
             isDark 
               ? 'border-white/5 bg-[#090e1a] text-slate-300 hover:bg-white/5 shadow-md' 
               : 'border-gray-100 bg-white text-gray-700 shadow-sm hover:bg-gray-50'
           }`}
         >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Atualizar
+          <RefreshCw size={16} className={loading || loadingCorretores ? 'animate-spin' : ''} /> Atualizar
         </button>
       </div>
 
@@ -154,6 +229,127 @@ export default function NotificacoesPage() {
           Abrir Chamado <Send size={12} />
         </a>
       </div>
+
+      {/* CONFIGURAÇÕES DE LIMITES APOLO (Meta Ads Monitor) - Visible only to admin and gestor_trafego */}
+      {(profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'gestor_trafego') && (
+        <div className={`mb-8 rounded-[2rem] border p-6 transition-all duration-300 ${
+          isDark 
+            ? 'border-white/5 bg-[#090e1a]/70 backdrop-blur-md shadow-2xl' 
+            : 'border-gray-100 bg-white shadow-sm'
+        }`}>
+          <div className="flex items-center gap-3 border-b border-slate-100 dark:border-white/5 pb-4 mb-6">
+            <div className={`p-2 rounded-xl ${isDark ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-cyan-400' : 'bg-blue-50 text-blue-600'}`}>
+              <Settings size={20} />
+            </div>
+            <div>
+              <h3 className={`text-base font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>Alertas do Apolo AI • Configuração de Limites</h3>
+              <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
+                Monitore o tráfego do Meta Ads. Defina o limite de CPL e saldo baixo para envio automático de avisos via WhatsApp.
+              </p>
+            </div>
+          </div>
+
+          {loadingCorretores ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="animate-spin text-blue-600" size={24} />
+            </div>
+          ) : corretores.length === 0 ? (
+            <p className={`text-xs font-bold text-center py-4 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+              Nenhuma conta vinculada do Meta Ads encontrada sob sua gestão.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {corretores.map((corretor) => (
+                <div 
+                  key={corretor.id} 
+                  className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
+                    isDark 
+                      ? 'border-white/5 bg-white/[0.01] hover:bg-white/[0.02]' 
+                      : 'border-gray-100 bg-slate-50 hover:bg-slate-100/50'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className={`font-black text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>{corretor.nome}</p>
+                    <p className={`text-[10px] font-bold truncate mt-1 ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
+                      Conta Meta: <strong className={isDark ? 'text-cyan-400' : 'text-blue-600'}>{corretor.meta_ad_account_name || corretor.meta_ad_account_id}</strong>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-4">
+                    {/* CPL Limit Input */}
+                    <div className="space-y-1">
+                      <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                        <TrendingUp size={10} /> CPL Máximo
+                      </span>
+                      <div className="relative flex items-center">
+                        <span className={`absolute left-3.5 text-xs font-bold ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>R$</span>
+                        <input
+                          type="number"
+                          placeholder="25"
+                          value={thresholds[corretor.id]?.cpl || ''}
+                          onChange={(e) => setThresholds({
+                            ...thresholds,
+                            [corretor.id]: { ...thresholds[corretor.id], cpl: e.target.value }
+                          })}
+                          className={`w-28 rounded-xl border-none pl-9 pr-3 py-2 text-xs font-bold text-right focus:ring-2 focus:ring-blue-500 ${
+                            isDark ? 'bg-black/40 text-white' : 'bg-white text-gray-800'
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Balance Limit Input */}
+                    <div className="space-y-1">
+                      <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                        <DollarSign size={10} /> Saldo Mínimo
+                      </span>
+                      <div className="relative flex items-center">
+                        <span className={`absolute left-3.5 text-xs font-bold ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>R$</span>
+                        <input
+                          type="number"
+                          placeholder="100"
+                          value={thresholds[corretor.id]?.saldo || ''}
+                          onChange={(e) => setThresholds({
+                            ...thresholds,
+                            [corretor.id]: { ...thresholds[corretor.id], saldo: e.target.value }
+                          })}
+                          className={`w-28 rounded-xl border-none pl-9 pr-3 py-2 text-xs font-bold text-right focus:ring-2 focus:ring-blue-500 ${
+                            isDark ? 'bg-black/40 text-white' : 'bg-white text-gray-800'
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="pt-3.5 md:pt-0 self-end md:self-center">
+                      <button
+                        onClick={() => saveThresholds(corretor.id)}
+                        disabled={savingCorretorId === corretor.id}
+                        className={`flex h-9 items-center justify-center gap-1.5 rounded-xl px-4 text-xs font-black transition-all cursor-pointer shadow-md ${
+                          savedSuccessId === corretor.id 
+                            ? 'bg-emerald-600 text-white' 
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {savingCorretorId === corretor.id ? (
+                          <Loader2 className="animate-spin" size={14} />
+                        ) : savedSuccessId === corretor.id ? (
+                          <>Salvo! ✓</>
+                        ) : (
+                          <>
+                            <Save size={13} />
+                            <span>Salvar</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {profile?.tipo_usuario === 'admin' && (
         <form onSubmit={sendNotification} className={`mb-8 rounded-[2rem] border p-6 transition-all duration-300 ${

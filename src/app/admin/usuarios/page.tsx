@@ -145,7 +145,7 @@ export default function AdminUsuariosPage() {
 
   useEffect(() => {
     const requestedRole = new URLSearchParams(window.location.search).get('tipo') as UserRole | null;
-    if (requestedRole && ['admin', 'corretor', 'gestor_trafego', 'designer', 'account_manager'].includes(requestedRole)) {
+    if (requestedRole && ['admin', 'corretor', 'gestor_trafego', 'designer', 'account_manager', 'corretor_admin', 'corretor_membro'].includes(requestedRole)) {
       setForm((current) => ({
         ...current,
         tipo_usuario: requestedRole,
