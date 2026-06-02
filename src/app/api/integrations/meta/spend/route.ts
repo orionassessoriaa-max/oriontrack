@@ -20,7 +20,7 @@ async function requireTrafficAccess(request: Request) {
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!profile || !['admin', 'gestor_trafego', 'account_manager', 'corretor'].includes(profile.tipo_usuario)) {
+  if (!profile || !['admin', 'gestor_trafego', 'account_manager', 'corretor', 'corretor_admin'].includes(profile.tipo_usuario)) {
     return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
   }
 
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Este corretor nao esta vinculado ao seu gestor.' }, { status: 403 });
     }
 
-    if (guard.profile.tipo_usuario === 'corretor') {
+    if (guard.profile.tipo_usuario === 'corretor' || guard.profile.tipo_usuario === 'corretor_admin') {
       const { data: requester } = await supabaseAdmin
         .from('profiles')
         .select('corretor_id')
