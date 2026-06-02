@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const limited = rateLimit(request, 'inbox:evolution:connect', { limit: 12, windowMs: 10 * 60_000 });
     if (limited) return limited;
 
-    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_membro', 'account_manager']);
+    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 
     const body = await request.json().catch(() => ({}));
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
         .from('profiles')
         .select('id, email, email_real, nome, tipo_usuario, corretor_id, status')
         .eq('id', viewingProfileId)
-        .in('tipo_usuario', ['corretor', 'corretor_membro', 'account_manager'])
+        .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'])
         .maybeSingle();
       if (data) targetProfile = { ...data, is_admin_master: false, equipe_orion: null } as typeof targetProfile;
     }
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
     const limited = rateLimit(request, 'inbox:evolution:status', { limit: 30, windowMs: 1 * 60_000 });
     if (limited) return limited;
 
-    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_membro', 'account_manager']);
+    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 
     let targetProfile = guard.profile;
@@ -105,7 +105,7 @@ export async function GET(request: Request) {
         .from('profiles')
         .select('id, email, email_real, nome, tipo_usuario, corretor_id, status')
         .eq('id', viewingProfileId)
-        .in('tipo_usuario', ['corretor', 'corretor_membro', 'account_manager'])
+        .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'])
         .maybeSingle();
       if (data) targetProfile = { ...data, is_admin_master: false, equipe_orion: null } as typeof targetProfile;
     }
@@ -140,7 +140,7 @@ export async function DELETE(request: Request) {
     const limited = rateLimit(request, 'inbox:evolution:disconnect', { limit: 12, windowMs: 10 * 60_000 });
     if (limited) return limited;
 
-    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_membro', 'account_manager']);
+    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 
     let targetProfile = guard.profile;
@@ -150,7 +150,7 @@ export async function DELETE(request: Request) {
         .from('profiles')
         .select('id, email, email_real, nome, tipo_usuario, corretor_id, status')
         .eq('id', viewingProfileId)
-        .in('tipo_usuario', ['corretor', 'corretor_membro', 'account_manager'])
+        .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'])
         .maybeSingle();
       if (data) targetProfile = { ...data, is_admin_master: false, equipe_orion: null } as typeof targetProfile;
     }
@@ -193,4 +193,3 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: error.message || 'Erro ao desconectar WhatsApp' }, { status: 500 });
   }
 }
-

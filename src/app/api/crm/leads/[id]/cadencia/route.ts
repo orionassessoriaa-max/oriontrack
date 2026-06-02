@@ -15,7 +15,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const limited = rateLimit(request, 'crm:lead-cadencia:update', { limit: 120, windowMs: 60_000 });
     if (limited) return limited;
 
-    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_membro']);
+    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro']);
     if ('error' in guard) return guard.error;
 
     const { id } = await context.params;
@@ -35,7 +35,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     if (!lead) return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
 
-    if (guard.profile.tipo_usuario === 'corretor' && lead.corretor_id !== guard.profile.corretor_id) {
+    if ((guard.profile.tipo_usuario === 'corretor' || guard.profile.tipo_usuario === 'corretor_admin') && lead.corretor_id !== guard.profile.corretor_id) {
       return NextResponse.json({ error: 'Lead fora do seu corretor.' }, { status: 403 });
     }
 

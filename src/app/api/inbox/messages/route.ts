@@ -3,7 +3,7 @@ import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { evolutionFetch, evolutionInstanceName, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
-const INBOX_ROLES = ['admin', 'corretor', 'corretor_membro', 'account_manager'] as const;
+const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 
 async function getConversation(id: string) {
   const { data, error } = await supabaseAdmin

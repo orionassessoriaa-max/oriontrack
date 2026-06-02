@@ -55,7 +55,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, corretor_id')
+    .select('id, corretor_id, responsavel_profile_id')
     .eq('id', leadId)
     .maybeSingle();
 
@@ -63,11 +63,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
   }
 
-  if (guard.profile.tipo_usuario === 'corretor' && lead.corretor_id !== guard.profile.corretor_id) {
+  if ((guard.profile.tipo_usuario === 'corretor' || guard.profile.tipo_usuario === 'corretor_admin') && lead.corretor_id !== guard.profile.corretor_id) {
     return NextResponse.json({ error: 'Acesso negado para este lead.' }, { status: 403 });
   }
 
-  if (!['admin', 'corretor'].includes(guard.profile.tipo_usuario)) {
+  if (guard.profile.tipo_usuario === 'corretor_membro' && lead.responsavel_profile_id !== guard.profile.id) {
+    return NextResponse.json({ error: 'Acesso negado para este lead.' }, { status: 403 });
+  }
+
+  if (!['admin', 'corretor', 'corretor_admin', 'corretor_membro'].includes(guard.profile.tipo_usuario)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
 
