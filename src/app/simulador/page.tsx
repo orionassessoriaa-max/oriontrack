@@ -265,6 +265,7 @@ export default function SimuladorPage() {
   // Estados para comparação lado a lado
   const [comparedPlanIds, setComparedPlanIds] = useState<string[]>([]);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
 
   // Quantidade de vidas por faixa etária
   const [vidas, setVidas] = useState<{ [key: string]: number }>({
@@ -452,6 +453,32 @@ Payload: {
       '54_58': 0,
       '59_mais': 0
     });
+    setComparedPlanIds([]);
+    setExpandedResultId(null);
+  };
+
+  const aplicarPerfilRapido = (preset: 'familia' | 'casal' | 'empresa') => {
+    const presets = {
+      familia: { '0_18': 2, '19_23': 0, '24_28': 0, '29_33': 1, '34_38': 1, '39_43': 0, '44_48': 0, '49_53': 0, '54_58': 0, '59_mais': 0 },
+      casal: { '0_18': 0, '19_23': 0, '24_28': 1, '29_33': 1, '34_38': 0, '39_43': 0, '44_48': 0, '49_53': 0, '54_58': 0, '59_mais': 0 },
+      empresa: { '0_18': 0, '19_23': 2, '24_28': 3, '29_33': 3, '34_38': 2, '39_43': 1, '44_48': 1, '49_53': 0, '54_58': 0, '59_mais': 0 },
+    };
+
+    setVidas(presets[preset]);
+    setTipoContrato(preset === 'casal' ? 'PF' : 'PME');
+    setComparedPlanIds([]);
+    setExpandedResultId(null);
+  };
+
+  const togglePlanoComparacao = (planId: string) => {
+    setComparedPlanIds((current) => {
+      if (current.includes(planId)) return current.filter((id) => id !== planId);
+      if (current.length >= 4) {
+        alert('Voce pode comparar no maximo 4 planos simultaneamente.');
+        return current;
+      }
+      return [...current, planId];
+    });
   };
 
   // Filtragem e Cálculo dos Planos Elegíveis
@@ -491,6 +518,12 @@ Payload: {
       };
     })
     .sort((a, b) => a.custoTotal - b.custoTotal);
+
+  const melhorPlano = planosCalculados[0];
+  const segundoPlano = planosCalculados[1];
+  const economiaMelhorPlano = melhorPlano && segundoPlano ? Math.max(0, segundoPlano.custoTotal - melhorPlano.custoTotal) : 0;
+  const planosComparados = planosCalculados.filter((plano) => comparedPlanIds.includes(plano.id));
+  const faixasAtivas = FAIXAS_ETARIAS.filter((faixa) => (vidas[faixa.key] || 0) > 0);
 
   // Iniciar Edição Inline
   const startEditing = (plano: Plano) => {
@@ -949,6 +982,52 @@ Payload: {
                 </div>
               </div>
 
+              <div className="orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-5 backdrop-blur-md shadow-2xl">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-300">
+                      <Sparkles size={16} className="text-cyan-400" />
+                      <span>Perfis rapidos</span>
+                    </h3>
+                    <p className="mt-1 text-[10px] font-bold text-slate-500">
+                      Monte uma cotacao em um clique e ajuste as vidas depois.
+                    </p>
+                  </div>
+                  {faixasAtivas.length > 0 && (
+                    <span className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-cyan-400">
+                      {faixasAtivas.length} faixas ativas
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => aplicarPerfilRapido('familia')}
+                    className="rounded-2xl border border-white/5 bg-white/5 p-4 text-left transition-all hover:border-cyan-500/30 hover:bg-cyan-500/10"
+                  >
+                    <p className="text-xs font-black uppercase tracking-widest text-white">Familia</p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-500">2 criancas + 2 adultos</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => aplicarPerfilRapido('casal')}
+                    className="rounded-2xl border border-white/5 bg-white/5 p-4 text-left transition-all hover:border-cyan-500/30 hover:bg-cyan-500/10"
+                  >
+                    <p className="text-xs font-black uppercase tracking-widest text-white">Casal PF</p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-500">2 vidas individuais</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => aplicarPerfilRapido('empresa')}
+                    className="rounded-2xl border border-white/5 bg-white/5 p-4 text-left transition-all hover:border-cyan-500/30 hover:bg-cyan-500/10"
+                  >
+                    <p className="text-xs font-black uppercase tracking-widest text-white">Empresa</p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-500">12 vidas PME</p>
+                  </button>
+                </div>
+              </div>
+
               {/* Seletor de População por Faixa Etária */}
               <div className="orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-5 backdrop-blur-md shadow-2xl">
                 <div className="flex items-center justify-between">
@@ -1029,6 +1108,42 @@ Payload: {
                 </div>
               </div>
 
+              {totalVidas > 0 && (
+                <div className="orion-panel rounded-[2rem] border border-white/5 bg-[#0f172a]/40 p-5 backdrop-blur-md shadow-2xl">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Melhor custo</p>
+                      <h3 className="mt-1 truncate text-sm font-black text-white" title={melhorPlano?.nome}>
+                        {melhorPlano?.nome || 'Sem plano'}
+                      </h3>
+                      <p className="mt-2 text-2xl font-black text-cyan-400">
+                        {melhorPlano ? `R$ ${melhorPlano.custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00'}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Economia vs proximo</p>
+                      <p className="mt-1 text-sm font-bold text-slate-400">Diferença mensal estimada</p>
+                      <p className="mt-2 text-2xl font-black text-emerald-400">
+                        R$ {economiaMelhorPlano.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">Comparacao ativa</p>
+                      <p className="mt-1 text-sm font-bold text-slate-400">{planosComparados.length} de 4 planos selecionados</p>
+                      <button
+                        type="button"
+                        onClick={() => setIsCompareModalOpen(true)}
+                        disabled={planosComparados.length < 2}
+                        className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Eye size={12} />
+                        Abrir comparativo
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {totalVidas === 0 ? (
                 <div className="orion-panel flex flex-col items-center justify-center rounded-[2rem] border border-white/5 bg-[#0f172a]/20 p-12 text-center backdrop-blur-md shadow-inner">
                   <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-600/10 text-blue-400 border border-blue-500/10 mb-4 animate-bounce overflow-hidden p-3 bg-white shadow-md">
@@ -1084,18 +1199,7 @@ Payload: {
                           <div className="flex items-center gap-4 self-end sm:self-center">
                             <button
                               type="button"
-                              onClick={() => {
-                                const isCompared = comparedPlanIds.includes(plano.id);
-                                if (isCompared) {
-                                  setComparedPlanIds(prev => prev.filter(id => id !== plano.id));
-                                } else {
-                                  if (comparedPlanIds.length >= 4) {
-                                    alert('Você pode comparar no máximo 4 planos simultaneamente.');
-                                    return;
-                                  }
-                                  setComparedPlanIds(prev => [...prev, plano.id]);
-                                }
-                              }}
+                              onClick={() => togglePlanoComparacao(plano.id)}
                               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border cursor-pointer shrink-0 ${
                                 comparedPlanIds.includes(plano.id)
                                   ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-300'
@@ -1154,12 +1258,10 @@ Payload: {
                         {/* Ações Rápidas */}
                         <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-4">
                           <button
-                            onClick={() => {
-                              alert(`Preços Unitários por idade para o plano ${plano.nome}:\n` + plano.detalheVidas.filter(v => v.count > 0).map(v => `${v.count}x ${v.label} - R$ ${v.precoUnitario} (Subtotal: R$ ${v.subtotal})`).join('\n'));
-                            }}
+                            onClick={() => setExpandedResultId(expandedResultId === plano.id ? null : plano.id)}
                             className="text-2xs font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors cursor-pointer"
                           >
-                            Ver detalhes do cálculo
+                            {expandedResultId === plano.id ? 'Ocultar detalhes' : 'Ver detalhes do cálculo'}
                           </button>
 
                           <button
@@ -1175,6 +1277,28 @@ Payload: {
                             <ArrowRight size={12} />
                           </button>
                         </div>
+
+                        {expandedResultId === plano.id && (
+                          <div className="mt-4 rounded-2xl border border-white/5 bg-white/3 p-4 animate-in fade-in-50 slide-in-from-top-2 duration-200">
+                            <div className="flex items-center gap-2">
+                              <Info size={14} className="text-cyan-400" />
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Composição do cálculo</p>
+                            </div>
+                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                              {plano.detalheVidas.filter(v => v.count > 0).map((item) => (
+                                <div key={item.label} className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/30 px-3 py-2">
+                                  <div>
+                                    <p className="text-xs font-black text-white">{item.count}x {item.label}</p>
+                                    <p className="text-[9px] font-bold text-slate-500">R$ {item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} por vida</p>
+                                  </div>
+                                  <p className="text-xs font-black text-cyan-400">
+                                    R$ {item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
