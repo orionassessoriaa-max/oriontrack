@@ -43,18 +43,16 @@ function parseDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
 }
 
-function getLeadCount(actions: any[]) {
-  const leadActions = new Set([
-    'lead',
-    'onsite_conversion.lead_grouped',
-    'offsite_conversion.fb_pixel_lead',
-    'onsite_conversion.messaging_conversation_started_7d',
-    'onsite_conversion.lead',
-  ]);
+function currentMonthRange() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  const local = new Date(now.getTime() - offset);
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  return (actions || []).reduce((total, action) => {
-    return leadActions.has(action.action_type) ? total + Number(action.value || 0) : total;
-  }, 0);
+  return {
+    since: new Date(firstDay.getTime() - offset).toISOString().slice(0, 10),
+    until: local.toISOString().slice(0, 10),
+  };
 }
 
 function parseMoneyFromMetaText(value?: string | null) {
@@ -70,10 +68,25 @@ function parseMoneyFromMetaText(value?: string | null) {
   return Number.isFinite(amount) ? amount : null;
 }
 
+async function fetchSheetLeadCount(corretorId: string, since: string, until: string) {
+  const start = `${since}T00:00:00.000-03:00`;
+  const end = `${until}T23:59:59.999-03:00`;
+
+  const { count, error } = await supabaseAdmin
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .eq('corretor_id', corretorId)
+    .gte('data_entrada', start)
+    .lte('data_entrada', end);
+
+  if (error) throw new Error(`Erro ao contar leads da planilha: ${error.message}`);
+  return count || 0;
+}
+
 async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
   const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
   const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
-  insightsUrl.searchParams.set('fields', 'spend,ctr,actions');
+  insightsUrl.searchParams.set('fields', 'spend,ctr');
   insightsUrl.searchParams.set('level', 'account');
   insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
   insightsUrl.searchParams.set('access_token', accessToken);
@@ -82,9 +95,10 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   accountUrl.searchParams.set('fields', 'balance,currency,amount_spent,funding_source_details');
   accountUrl.searchParams.set('access_token', accessToken);
 
-  const [insightsResponse, accountResponse] = await Promise.all([
+  const [insightsResponse, accountResponse, sheetLeads] = await Promise.all([
     fetch(insightsUrl.toString(), { next: { revalidate: 900 } }),
     fetch(accountUrl.toString(), { next: { revalidate: 900 } }),
+    fetchSheetLeadCount(corretor.id, since, until),
   ]);
 
   const [insightsPayload, accountPayload] = await Promise.all([
@@ -98,7 +112,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
 
   const row = insightsPayload.data?.[0] || {};
   const spend = Number(row.spend || 0);
-  const leads = getLeadCount(row.actions || []);
+  const leads = sheetLeads;
   const cpl = leads > 0 ? spend / leads : null;
   const ctr = Number(row.ctr || 0);
   const rawBalance = accountPayload?.balance;
@@ -143,9 +157,9 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const today = new Date().toISOString().slice(0, 10);
-    const since = parseDate(String(body.data_inicio || '')) || today;
-    const until = parseDate(String(body.data_fim || '')) || today;
+    const defaultRange = currentMonthRange();
+    const since = parseDate(String(body.data_inicio || '')) || defaultRange.since;
+    const until = parseDate(String(body.data_fim || '')) || defaultRange.until;
     const search = String(body.nome || '').trim().toLowerCase();
 
     const query = supabaseAdmin

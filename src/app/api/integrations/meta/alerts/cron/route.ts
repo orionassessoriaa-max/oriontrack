@@ -15,20 +15,6 @@ function normalizeAccountId(accountId: string) {
   return accountId.replace(/^act_/, '');
 }
 
-function getLeadCount(actions: any[]) {
-  const leadActions = new Set([
-    'lead',
-    'onsite_conversion.lead_grouped',
-    'offsite_conversion.fb_pixel_lead',
-    'onsite_conversion.messaging_conversation_started_7d',
-    'onsite_conversion.lead',
-  ]);
-
-  return (actions || []).reduce((total, action) => {
-    return leadActions.has(action.action_type) ? total + Number(action.value || 0) : total;
-  }, 0);
-}
-
 function parseMoneyFromMetaText(value?: string | null) {
   const text = String(value || '');
   const match = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})|\d+(?:\.\d{2})?)/);
@@ -42,10 +28,37 @@ function parseMoneyFromMetaText(value?: string | null) {
   return Number.isFinite(amount) ? amount : null;
 }
 
+function currentMonthRange() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  const local = new Date(now.getTime() - offset);
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  return {
+    since: new Date(firstDay.getTime() - offset).toISOString().slice(0, 10),
+    until: local.toISOString().slice(0, 10),
+  };
+}
+
+async function fetchSheetLeadCount(corretorId: string, since: string, until: string) {
+  const start = `${since}T00:00:00.000-03:00`;
+  const end = `${until}T23:59:59.999-03:00`;
+
+  const { count, error } = await supabaseAdmin
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .eq('corretor_id', corretorId)
+    .gte('data_entrada', start)
+    .lte('data_entrada', end);
+
+  if (error) throw new Error(`Erro ao contar leads da planilha: ${error.message}`);
+  return count || 0;
+}
+
 async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
   const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
   const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
-  insightsUrl.searchParams.set('fields', 'spend,ctr,actions');
+  insightsUrl.searchParams.set('fields', 'spend,ctr');
   insightsUrl.searchParams.set('level', 'account');
   insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
   insightsUrl.searchParams.set('access_token', accessToken);
@@ -54,9 +67,10 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   accountUrl.searchParams.set('fields', 'balance,currency,amount_spent,funding_source_details');
   accountUrl.searchParams.set('access_token', accessToken);
 
-  const [insightsResponse, accountResponse] = await Promise.all([
+  const [insightsResponse, accountResponse, sheetLeads] = await Promise.all([
     fetch(insightsUrl.toString(), { cache: 'no-store' }),
     fetch(accountUrl.toString(), { cache: 'no-store' }),
+    fetchSheetLeadCount(corretor.id, since, until),
   ]);
 
   const [insightsPayload, accountPayload] = await Promise.all([
@@ -70,7 +84,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
 
   const row = insightsPayload.data?.[0] || {};
   const spend = Number(row.spend || 0);
-  const leads = getLeadCount(row.actions || []);
+  const leads = sheetLeads;
   const cpl = leads > 0 ? spend / leads : null;
   const ctr = Number(row.ctr || 0);
   const rawBalance = accountPayload?.balance;
@@ -135,12 +149,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: 'Nenhuma conta vinculada encontrada.' });
     }
 
-    // 3. Buscar métricas do Meta Ads para as últimas 24 horas (dia de hoje)
-    const today = new Date().toISOString().slice(0, 10);
+    // 3. Buscar gasto mensal do Meta Ads e dividir pelos leads importados no Orion no mesmo mes.
+    const { since, until } = currentMonthRange();
     const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
 
     const settled = await Promise.allSettled(
-      corretores.map((c) => fetchAccountMetrics(c, today, today, accessToken, graphVersion))
+      corretores.map((c) => fetchAccountMetrics(c, since, until, accessToken, graphVersion))
     );
 
     const accountsWithMetrics = settled.map((result, index) => {

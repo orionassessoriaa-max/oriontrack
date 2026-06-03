@@ -46,6 +46,13 @@ function dateDaysAgo(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function currentMonthStart() {
+  const date = new Date();
+  const offset = date.getTimezoneOffset() * 60000;
+  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+  return new Date(firstDay.getTime() - offset).toISOString().slice(0, 10);
+}
+
 export default function TrafficMetaAlertsPage() {
   const [rows, setRows] = useState<MetaAlertRow[]>([]);
   const [search, setSearch] = useState('');
@@ -95,8 +102,9 @@ export default function TrafficMetaAlertsPage() {
 
   useEffect(() => {
     const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    setDateStart('2025-01-01');
+    setDateStart(currentMonthStart());
     setDateEnd(todayStr);
+    setPresetLabel('Este mes');
   }, []);
 
   useEffect(() => {
@@ -146,7 +154,7 @@ export default function TrafficMetaAlertsPage() {
       <div className="mb-6 grid gap-4 md:grid-cols-4">
         <Counter tone="red" label="CPL alto" value={String(counters.highCpl)} />
         <Counter tone="amber" label="Saldo baixo" value={String(counters.lowBalance)} />
-        <Counter tone="emerald" label="Leads Meta" value={String(counters.totalLeads)} />
+        <Counter tone="emerald" label="Leads Orion" value={String(counters.totalLeads)} />
         <Counter tone="slate" label="CPL medio" value={formatCurrency(counters.averageCpl)} />
       </div>
 
