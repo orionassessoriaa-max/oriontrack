@@ -375,8 +375,8 @@ export default function AdminLeadsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden mb-10">
-        <div className="p-8 border-b border-gray-50 bg-slate-50/30">
+      <div className="orion-admin-leads-filters bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden mb-10">
+        <div className="orion-admin-leads-filters-inner p-8 border-b border-gray-50 bg-slate-50/30">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
             <div className="space-y-2 group">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Buscar</label>
