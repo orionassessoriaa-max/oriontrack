@@ -27,6 +27,20 @@ async function requireTrafficAccess(request: Request) {
   return { user, profile };
 }
 
+function getMetaCompatibleRange(since: string, until: string) {
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(until) ? until : today;
+  const endDate = new Date(`${end}T00:00:00`);
+  const minDate = new Date(endDate.getFullYear(), endDate.getMonth() - 36, 1);
+  const minSince = minDate.toISOString().slice(0, 10);
+  const validSince = /^\d{4}-\d{2}-\d{2}$/.test(since) ? since : minSince;
+
+  return {
+    since: validSince > minSince ? validSince : minSince,
+    until: end,
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'meta:spend', { limit: 60, windowMs: 5 * 60_000 });
@@ -80,10 +94,11 @@ export async function POST(request: Request) {
     }
 
     const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
+    const metaRange = getMetaCompatibleRange(since, until);
     const accountId = String(corretor.meta_ad_account_id).replace(/^act_/, '');
     const url = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
     url.searchParams.set('fields', 'spend');
-    url.searchParams.set('time_range', JSON.stringify({ since, until }));
+    url.searchParams.set('time_range', JSON.stringify({ since: metaRange.since, until: metaRange.until }));
     url.searchParams.set('access_token', accessToken);
 
     const response = await fetch(url.toString(), { next: { revalidate: 300 } });

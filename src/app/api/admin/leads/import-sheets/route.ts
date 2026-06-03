@@ -220,7 +220,7 @@ function parseDate(value: string) {
   if (/[+-]\d{5,}-/.test(trimmed) || /^\d{5,}-/.test(trimmed)) return fallback;
 
   const safeIso = (year: number, month: number, day: number, hour: number, minute: number, second: number) => {
-    if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+    if (year < 2024 || year > 2200 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
       return fallback;
     }
 

@@ -55,6 +55,20 @@ function currentMonthRange() {
   };
 }
 
+function getMetaCompatibleRange(since: string, until: string) {
+  const defaultRange = currentMonthRange();
+  const end = parseDate(until) || defaultRange.until;
+  const endDate = new Date(`${end}T00:00:00`);
+  const minDate = new Date(endDate.getFullYear(), endDate.getMonth() - 36, 1);
+  const minSince = minDate.toISOString().slice(0, 10);
+  const validSince = parseDate(since) || defaultRange.since;
+
+  return {
+    since: validSince > minSince ? validSince : minSince,
+    until: end,
+  };
+}
+
 function parseMoneyFromMetaText(value?: string | null) {
   const text = String(value || '');
   const match = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})|\d+(?:\.\d{2})?)/);
@@ -158,8 +172,9 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const defaultRange = currentMonthRange();
-    const since = parseDate(String(body.data_inicio || '')) || defaultRange.since;
-    const until = parseDate(String(body.data_fim || '')) || defaultRange.until;
+    const requestedSince = parseDate(String(body.data_inicio || '')) || defaultRange.since;
+    const requestedUntil = parseDate(String(body.data_fim || '')) || defaultRange.until;
+    const { since, until } = getMetaCompatibleRange(requestedSince, requestedUntil);
     const search = String(body.nome || '').trim().toLowerCase();
 
     const query = supabaseAdmin

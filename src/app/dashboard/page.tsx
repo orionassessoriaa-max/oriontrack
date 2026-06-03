@@ -97,6 +97,18 @@ function monthRange(key: string) {
   };
 }
 
+function getMetaCompatibleRange(since: string, until: string) {
+  const end = until || new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const endDate = new Date(`${end}T00:00:00`);
+  const minDate = new Date(endDate.getFullYear(), endDate.getMonth() - 36, 1);
+  const minSince = minDate.toISOString().slice(0, 10);
+
+  return {
+    since: since && since > minSince ? since : minSince,
+    until: end,
+  };
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 }
@@ -153,7 +165,7 @@ function getBrokerMetaStatus(account: any) {
     return {
       status: 'cpl_alto',
       title: 'CPL Elevado',
-      detail: `CPL de R$ ${Number(account.cpl).toFixed(2).replace('.', ',')} está acima do ideal de R$ 25,00.`,
+      detail: `CPL do mês de R$ ${Number(account.cpl).toFixed(2).replace('.', ',')} está acima do ideal de R$ 25,00.`,
       tone: 'red',
     };
   }
@@ -500,6 +512,7 @@ export default function DashboardPage() {
         let currentPeriodSpend = 0;
         if (accessToken && profile.corretor_id && dataInicio && dataFim) {
           try {
+            const metaRange = getMetaCompatibleRange(dataInicio, dataFim);
             const spendResponse = await fetch('/api/integrations/meta/spend', {
               method: 'POST',
               headers: {
@@ -508,8 +521,8 @@ export default function DashboardPage() {
               },
               body: JSON.stringify({
                 corretor_id: profile.corretor_id,
-                data_inicio: dataInicio,
-                data_fim: dataFim,
+                data_inicio: metaRange.since,
+                data_fim: metaRange.until,
               }),
             });
 
@@ -633,10 +646,7 @@ export default function DashboardPage() {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({
-                data_inicio: dataInicio,
-                data_fim: dataFim,
-              }),
+              body: JSON.stringify({}),
             });
             if (response.ok) {
               const payload = await response.json();
@@ -1034,7 +1044,7 @@ export default function DashboardPage() {
             </div>
             <div className="grid min-w-[180px] shrink-0 grid-cols-1 gap-3 border-t border-white/5 pt-3 text-left sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 sm:text-right">
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">CPL Meta Ads</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">CPL do Mês</p>
                 <p className="mt-1 text-xl font-black text-white">
                   {metaAccount.cpl === null || metaAccount.cpl === undefined
                     ? 'N/A'
