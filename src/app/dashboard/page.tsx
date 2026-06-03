@@ -1032,14 +1032,24 @@ export default function DashboardPage() {
                 <p className="mt-2 text-sm font-bold text-slate-200">{metaStatus.detail}</p>
               </div>
             </div>
-            {!isCard && metaAccount.saldo !== null && (
-              <div className="text-left sm:text-right shrink-0 border-t sm:border-t-0 sm:border-l border-white/5 pt-3 sm:pt-0 sm:pl-6">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo da Conta</p>
-                <p className="text-xl font-black text-white mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(metaAccount.saldo)}
+            <div className="grid min-w-[180px] shrink-0 grid-cols-1 gap-3 border-t border-white/5 pt-3 text-left sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 sm:text-right">
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">CPL Meta Ads</p>
+                <p className="mt-1 text-xl font-black text-white">
+                  {metaAccount.cpl === null || metaAccount.cpl === undefined
+                    ? 'N/A'
+                    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(metaAccount.cpl)}
                 </p>
               </div>
-            )}
+              {!isCard && metaAccount.saldo !== null && (
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo da Conta</p>
+                  <p className="mt-1 text-xl font-black text-white">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(metaAccount.saldo)}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         );
       })()}
