@@ -180,7 +180,16 @@ export default function AdminCentralPage() {
 
   // Computations
   const noBalanceList = useMemo(() => {
-    const rawNoBalance = alertsList.filter(a => a.saldo !== null && Number(a.saldo) <= 0);
+    const rawNoBalance = alertsList.filter(a => {
+      const paymentText = String(a.forma_pagamento || '').toLowerCase();
+      const isCard = paymentText.includes('cartao')
+        || paymentText.includes('cartão')
+        || paymentText.includes('card')
+        || paymentText.includes('visa')
+        || paymentText.includes('mastercard');
+
+      return !isCard && a.saldo !== null && Number(a.saldo) <= 0;
+    });
     return rawNoBalance.map(a => {
       const cObj = corretoresList.find(c => c.id === a.corretor_id);
       const gestorId = cObj ? inferGestorIdFromTeam(cObj, gestoresList) : null;

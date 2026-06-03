@@ -159,7 +159,7 @@ function getBrokerMetaStatus(account: any) {
   }
 
   // 2. Erro no Pagamento (Cartão)
-  if (isCard && (hasPaymentError || (account.saldo !== null && account.saldo <= 0))) {
+  if (isCard && hasPaymentError) {
     return {
       status: 'erro_pagamento',
       title: 'Erro no Pagamento',
@@ -201,7 +201,7 @@ function getBrokerMetaStatus(account: any) {
   // 6. Com Saldo (Normal)
   return {
     status: 'com_saldo',
-    title: 'Com Saldo',
+    title: isCard ? 'Cartao Ativo' : 'Com Saldo',
     detail: isCard ? 'Seu cartão está ativo para cobrança automática.' : 'Saldo suficiente para veiculação de anúncios.',
     tone: 'emerald',
   };
@@ -1032,7 +1032,7 @@ export default function DashboardPage() {
                 <p className="mt-2 text-sm font-bold text-slate-200">{metaStatus.detail}</p>
               </div>
             </div>
-            {metaAccount.saldo !== null && (
+            {!isCard && metaAccount.saldo !== null && (
               <div className="text-left sm:text-right shrink-0 border-t sm:border-t-0 sm:border-l border-white/5 pt-3 sm:pt-0 sm:pl-6">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo da Conta</p>
                 <p className="text-xl font-black text-white mt-1">

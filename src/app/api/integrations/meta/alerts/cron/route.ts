@@ -98,7 +98,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     leads,
     cpl,
     ctr,
-    saldo: effectiveBalance,
+    saldo: isCard ? null : effectiveBalance,
     currency: accountPayload?.currency || 'BRL',
     forma_pagamento: formaPagamento,
     alerta_cpl_alto: cpl !== null && cpl > cplLimit,
@@ -189,7 +189,7 @@ export async function POST(request: Request) {
 
       if (acc.cpl !== null && acc.cpl > cplLimit) {
         alertMessage = `🔴 CPL ALTO: R$ ${acc.cpl.toFixed(2).replace('.', ',')} (Meta de R$ ${cplLimit.toFixed(2).replace('.', ',')})`;
-      } else if (isCard && (hasPaymentError || (acc.saldo !== null && acc.saldo <= 0))) {
+      } else if (isCard && hasPaymentError) {
         alertMessage = `🔴 ERRO NO PAGAMENTO: Cobrança falhou no cartão de crédito.`;
       } else if (!isCard && acc.saldo !== null && acc.saldo <= 0) {
         alertMessage = `🔴 SEM SALDO: Conta zerada, campanhas pausadas.`;

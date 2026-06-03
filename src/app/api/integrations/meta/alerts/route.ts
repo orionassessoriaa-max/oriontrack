@@ -121,7 +121,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     leads,
     cpl,
     ctr,
-    saldo: effectiveBalance,
+    saldo: isCard ? null : effectiveBalance,
       currency: accountPayload?.currency || 'BRL',
       forma_pagamento: formaPagamento,
       alerta_cpl_alto: cpl !== null && cpl > 25,

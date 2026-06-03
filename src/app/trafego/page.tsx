@@ -142,7 +142,7 @@ export default function GestorDashboardPage() {
               
               const isCriticalCpl = acc.cpl !== null && acc.cpl > 25;
               const isCriticalBalance = !isCard && acc.saldo !== null && acc.saldo < 100;
-              const isCardError = isCard && (hasPaymentError || (acc.saldo !== null && acc.saldo <= 0));
+              const isCardError = isCard && hasPaymentError;
               const hasGeneralError = acc.error && !isCard;
 
               return isCriticalCpl || isCriticalBalance || isCardError || hasGeneralError;
@@ -307,7 +307,7 @@ export default function GestorDashboardPage() {
                     badgeText = 'CPL Alto';
                     badgeTone = 'red';
                     detailText = `CPL de R$ ${Number(acc.cpl).toFixed(2).replace('.', ',')} acima do limite.`;
-                  } else if (isCard && (hasPaymentError || (acc.saldo !== null && acc.saldo <= 0))) {
+                  } else if (isCard && hasPaymentError) {
                     badgeText = 'Erro Pagamento';
                     badgeTone = 'red';
                     detailText = 'Falha de processamento no cartão de crédito.';
