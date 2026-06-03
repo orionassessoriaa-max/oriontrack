@@ -587,7 +587,7 @@ export default function BrokerInboxPage() {
 
   return (
     <InternalLayout>
-      <div className="space-y-6 h-[calc(100vh-120px)] flex flex-col">
+      <div className="orion-inbox-shell space-y-6 h-[calc(100vh-120px)] flex flex-col">
         
         {/* Connection status header bar if disconnected */}
         {!isWhatsAppConnected && (
@@ -626,10 +626,10 @@ export default function BrokerInboxPage() {
         )}
 
         {/* MAIN 3-COLUMN LAYOUT PANEL */}
-        <div className="flex-1 min-h-0 bg-slate-950/20 border border-white/5 rounded-3xl overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_1fr_300px]">
+        <div className="orion-inbox-panel flex-1 min-h-0 bg-slate-950/20 border border-white/5 rounded-3xl overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_1fr_300px]">
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
-          <div className="border-r border-white/5 flex flex-col bg-slate-900/20">
+          <div className="orion-inbox-list border-r border-white/5 flex flex-col bg-slate-900/20">
             {/* Counts Filter Header */}
             <div className="p-4 border-b border-white/5 space-y-3.5">
               <div className="flex items-center justify-between bg-white/5 p-1 rounded-2xl gap-0.5 shadow-inner">
@@ -722,11 +722,11 @@ export default function BrokerInboxPage() {
           </div>
 
           {/* COLUMN 2: MIDDLE CHAT CONVERSATION WINDOW */}
-          <div className="flex flex-col bg-slate-900/10 border-r border-white/5">
+          <div className="orion-inbox-chat flex flex-col bg-slate-900/10 border-r border-white/5">
             {selectedConversation ? (
               <>
                 {/* Header do chat */}
-                <div className="p-4 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/30 shrink-0">
+                <div className="orion-inbox-chat-header p-4 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/30 shrink-0">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <h2 className="text-sm font-black text-white">{selectedConversation.nome_contato || selectedConversation.telefone}</h2>
@@ -801,7 +801,7 @@ export default function BrokerInboxPage() {
                 </div>
 
                 {/* Mensagens list */}
-                <div className="flex-1 overflow-y-auto bg-slate-950/20 p-5 space-y-4 max-h-[420px]">
+                <div className="orion-inbox-messages flex-1 overflow-y-auto bg-slate-950/20 p-5 space-y-4 max-h-[420px]">
                   {loadingMessages ? (
                     <div className="flex h-full items-center justify-center">
                       <Loader2 className="animate-spin text-cyan-400" size={24} />
@@ -855,7 +855,7 @@ export default function BrokerInboxPage() {
                 </div>
 
                 {/* Rodapé de envio de mensagens */}
-                <div className="p-4 border-t border-white/5 bg-slate-900/30 shrink-0">
+                <div className="orion-inbox-composer p-4 border-t border-white/5 bg-slate-900/30 shrink-0">
                   
                   {/* Visualizadores de Anexos */}
                   {filePreview && (
@@ -1004,7 +1004,7 @@ export default function BrokerInboxPage() {
           </div>
 
           {/* COLUMN 3: RIGHT SIDEBAR - LEAD DETAILS PANEL */}
-          <div className="bg-slate-900/20 flex flex-col p-5 space-y-6 overflow-y-auto">
+          <div className="orion-inbox-details bg-slate-900/20 flex flex-col p-5 space-y-6 overflow-y-auto">
             {selectedConversation ? (
               <>
                 {/* Convert Opportunity Button */}

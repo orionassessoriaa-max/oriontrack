@@ -1794,6 +1794,210 @@ body.theme-claro {
   color: #07152a !important;
 }
 
+/* =========================================================================
+   INBOX LIGHT THEME: CLEAN SERVICE DESK LIKE THE REFERENCE
+   ========================================================================= */
+
+.theme-claro .orion-inbox-shell {
+  height: calc(100vh - 118px);
+  gap: 0 !important;
+  padding: 0 !important;
+  color: #243243 !important;
+}
+
+.theme-claro .orion-inbox-panel {
+  grid-template-columns: 312px minmax(0, 1fr) !important;
+  gap: 24px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.theme-claro .orion-inbox-list {
+  overflow: hidden;
+  border: 1px solid #e6edf5 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06) !important;
+}
+
+.theme-claro .orion-inbox-chat {
+  overflow: hidden;
+  border: 1px solid #e6edf5 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04) !important;
+}
+
+.theme-claro .orion-inbox-details {
+  display: none !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child {
+  background: #ffffff !important;
+  border-bottom: 1px solid #edf2f7 !important;
+  padding: 12px !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child {
+  background: #f0f3fb !important;
+  border: 0 !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child button {
+  min-height: 32px;
+  border-radius: 2px !important;
+  color: #5f6f83 !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child button.bg-cyan-600,
+.theme-claro .orion-inbox-list > div:first-child > div:first-child button[class*="bg-cyan"] {
+  background: #e8e9ff !important;
+  color: #3d45ff !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.theme-claro .orion-inbox-list input {
+  min-height: 40px !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: #edf3f8 !important;
+  color: #5f6f83 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-list input::placeholder,
+.theme-claro .orion-inbox-composer textarea::placeholder {
+  color: #8796a8 !important;
+  -webkit-text-fill-color: #8796a8 !important;
+}
+
+.theme-claro .orion-inbox-list .divide-y > button,
+.theme-claro .orion-inbox-list button.w-full {
+  margin: 8px 12px !important;
+  width: calc(100% - 24px) !important;
+  border: 0 !important;
+  border-left: 0 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-list button.w-full[class*="bg-cyan"],
+.theme-claro .orion-inbox-list button.w-full:hover {
+  background: #eaf1f8 !important;
+}
+
+.theme-claro .orion-inbox-list button.w-full .rounded-full {
+  background: linear-gradient(180deg, #e4e7eb, #c9ced4) !important;
+  border: 6px solid #eef1f4 !important;
+  color: transparent !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-chat-header {
+  min-height: 110px;
+  background: #ffffff !important;
+  border-bottom: 1px dashed #d7e0e9 !important;
+}
+
+.theme-claro .orion-inbox-chat-header h2 {
+  color: #2f3a49 !important;
+}
+
+.theme-claro .orion-inbox-chat-header button {
+  border: 1px solid #243243 !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: #1f2d3d !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-chat-header button:last-child,
+.theme-claro .orion-inbox-chat-header button[class*="rose"] {
+  border-color: #ff4f6d !important;
+  color: #ff4f6d !important;
+}
+
+.theme-claro .orion-inbox-chat-header .border-l {
+  border-left: 0 !important;
+}
+
+.theme-claro .orion-inbox-chat-header .border-l button {
+  border: 0 !important;
+  color: #607286 !important;
+  padding: 6px !important;
+}
+
+.theme-claro .orion-inbox-messages {
+  max-height: none !important;
+  background: #ffffff !important;
+  border: 0 !important;
+}
+
+.theme-claro .orion-inbox-messages::before,
+.theme-claro .orion-inbox-messages::after {
+  content: '';
+  display: block;
+  margin-inline: auto;
+  width: min(100%, 360px);
+  border-left: 12px solid #edf3f8;
+  border-right: 36px solid #edf3f8;
+  min-height: 1px;
+}
+
+.theme-claro .orion-inbox-messages::before {
+  height: 248px;
+}
+
+.theme-claro .orion-inbox-messages::after {
+  height: 70px;
+}
+
+.theme-claro .orion-inbox-messages [class*="bg-slate-900"],
+.theme-claro .orion-inbox-messages [class*="bg-slate-950"] {
+  background: #f5f8fb !important;
+  border-color: #e2e9f1 !important;
+  color: #344256 !important;
+}
+
+.theme-claro .orion-inbox-composer {
+  background: #edf3f8 !important;
+  border-top: 1px solid #dce6ef !important;
+  padding: 24px 32px !important;
+}
+
+.theme-claro .orion-inbox-composer label,
+.theme-claro .orion-inbox-composer button:not([class*="bg-cyan"]) {
+  border: 0 !important;
+  background: transparent !important;
+  color: #66788d !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-composer textarea {
+  min-height: 38px !important;
+  max-height: 38px !important;
+  border: 1px solid #cfd9e3 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  color: #4d5d70 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-composer button[class*="bg-cyan"] {
+  border-radius: 4px !important;
+  background: #00c99a !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 20px rgba(0, 201, 154, 0.18) !important;
+}
+
 
 
 
