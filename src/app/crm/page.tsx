@@ -28,7 +28,15 @@ import {
   Target,
   Upload,
   Users,
-  X
+  X,
+  Bot,
+  Timer,
+  ArrowLeft,
+  Sparkles,
+  Activity,
+  History,
+  UserCheck,
+  MessageCircle
 } from 'lucide-react';
 import OrionMark from '@/components/ui/OrionMark';
 
@@ -40,6 +48,8 @@ type WhatsAppConversa = {
   nome_contato: string | null;
   status: string;
   ultima_mensagem_at: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type MetricFilter = 'todos' | 'sem_resposta' | 'tarefas' | 'hoje' | 'fit_icp';
@@ -152,6 +162,26 @@ function formatDuration(seconds: number): string {
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
+function normalizeConversationStatus(status?: string | null) {
+  const normalized = String(status || '').toLowerCase();
+  if (['aguardando', 'espera', 'waiting'].includes(normalized)) return 'waiting';
+  if (['resolvida', 'fechado', 'fechada', 'closed', 'resolved'].includes(normalized)) return 'closed';
+  if (['pausada', 'pausado', 'paused'].includes(normalized)) return 'paused';
+  return 'open';
+}
+
+function isConversationInRange(conversation: WhatsAppConversa, startDate: string, endDate: string) {
+  const referenceDate = conversation.ultima_mensagem_at || conversation.created_at || conversation.updated_at;
+  if (!referenceDate) return false;
+
+  const referenceTime = new Date(referenceDate).getTime();
+  const startTime = new Date(`${startDate}T00:00:00.000-03:00`).getTime();
+  const endTime = new Date(`${endDate}T23:59:59.999-03:00`).getTime();
+
+  if (!Number.isFinite(referenceTime)) return false;
+  return referenceTime >= startTime && referenceTime <= endTime;
+}
+
 export default function CrmPage() {
   const { profile } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -206,6 +236,7 @@ export default function CrmPage() {
 
   // Metrics Dashboard States
   const [crmView, setCrmView] = useState<'board' | 'analytics'>('board');
+  const [metricsSubTab, setMetricsSubTab] = useState<'geral' | 'detalhes'>('geral');
   const [metricsStartDate, setMetricsStartDate] = useState('2026-05-26');
   const [metricsEndDate, setMetricsEndDate] = useState('2026-06-02');
   const [metricsChannel, setMetricsChannel] = useState('todos');
@@ -453,43 +484,31 @@ export default function CrmPage() {
   }
 
   const dashboardMetrics = useMemo(() => {
-    const seed = `${metricsStartDate}-${metricsEndDate}-${metricsChannel}-${metricsDepartment}-${metricsAgent}`;
-    const getSeeded = (key: string, min: number, max: number) => {
-      return getSeededValue(seed + key, min, max);
-    };
+    const periodConversations = conversas.filter((conversation) => {
+      if (!isConversationInRange(conversation, metricsStartDate, metricsEndDate)) return false;
+      if (metricsChannel !== 'todos') return false;
+      if (metricsDepartment !== 'todos') return false;
+      if (metricsAgent !== 'todos' && conversation.corretor_id !== metricsAgent) return false;
+      return true;
+    });
 
-    // Duration times in seconds:
-    // TMF baseline: 01:09:55 (4195s)
-    const tmfSec = Math.round(getSeeded('tmf', 3600, 4800));
-    // TME baseline: 09:58:21 (35901s)
-    const tmeSec = Math.round(getSeeded('tme', 32000, 38000));
-    // TMA baseline: 74:16:42 (267402s)
-    const tmaSec = Math.round(getSeeded('tma', 250000, 280000));
-    const tmtaSec = tmfSec + tmeSec + tmaSec;
-
-    // Chat states
-    const activeDbCount = conversas.filter(c => c.status === 'conversando').length;
-    const waitingDbCount = conversas.filter(c => c.status === 'espera').length;
-    const closedDbCount = conversas.filter(c => c.status === 'fechado').length;
-
-    const inProgress = conversas.length > 0 ? activeDbCount : Math.round(getSeeded('inprogress', 220, 260));
-    const paused = Math.round(getSeeded('paused', 0, 1));
-    const waiting = conversas.length > 0 ? waitingDbCount : Math.round(getSeeded('waiting', 1, 4));
-    const completed = conversas.length > 0 ? closedDbCount : Math.round(getSeeded('completed', 10, 25));
-
-    // Summary counts
-    const totalContacts = leads.length > 0 ? leads.length : 10487;
-    const totalAgents = teamMembers.length > 0 ? teamMembers.length + 1 : 15;
-    const onlineAgents = teamMembers.length > 0 
-      ? Math.max(1, Math.min(totalAgents, Math.floor(totalAgents * 0.25))) 
-      : 2;
+    const inProgress = periodConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'open').length;
+    const paused = periodConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'paused').length;
+    const waiting = periodConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'waiting').length;
+    const completed = periodConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'closed').length;
+    const totalContacts = periodConversations.length;
+    const totalAgents = teamMembers.length + (profile?.id ? 1 : 0);
+    const onlineAgents = totalContacts > 0 ? Math.min(totalAgents, 1) : 0;
     const rating = '0.00';
 
     return {
-      tmf: formatDuration(tmfSec),
-      tme: formatDuration(tmeSec),
-      tma: formatDuration(tmaSec),
-      tmta: formatDuration(tmtaSec),
+      tmf: formatDuration(0),
+      tme: formatDuration(0),
+      tma: formatDuration(0),
+      tmta: formatDuration(0),
+      tfb: formatDuration(0),
+      trh: formatDuration(0),
+      tmr: formatDuration(0),
       inProgress,
       paused,
       waiting,
@@ -499,7 +518,73 @@ export default function CrmPage() {
       totalAgents,
       rating
     };
-  }, [leads, conversas, teamMembers, metricsStartDate, metricsEndDate, metricsChannel, metricsDepartment, metricsAgent]);
+  }, [profile?.id, conversas, teamMembers, metricsStartDate, metricsEndDate, metricsChannel, metricsDepartment, metricsAgent]);
+
+  const activeBrokersList = useMemo(() => {
+    const periodConversations = conversas.filter((conversation) =>
+      isConversationInRange(conversation, metricsStartDate, metricsEndDate)
+    );
+    const getBrokerStats = (brokerId?: string | null) => {
+      const brokerConversations = periodConversations.filter((conversation) => conversation.corretor_id === brokerId);
+      return {
+        active: brokerConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'open').length,
+        closed: brokerConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'closed').length,
+      };
+    };
+
+    const currentStats = getBrokerStats(profile?.corretor_id || profile?.id);
+    const currentAgent = {
+      id: profile?.id || 'current',
+      nome: profile?.nome || 'Você',
+      email: profile?.email || '',
+      role: profile?.tipo_usuario === 'corretor_admin' ? 'Administrador' : 'Corretor',
+      online: currentStats.active > 0,
+      tme: formatDuration(0),
+      tma: formatDuration(0),
+      conversasAtivas: currentStats.active,
+      conversasFechadas: currentStats.closed
+    };
+
+    const teamBrokers = teamMembers.map((member) => {
+      const memberStats = getBrokerStats(member.id);
+      return {
+        id: member.id,
+        nome: member.nome,
+        email: member.email,
+        role: 'Corretor',
+        online: memberStats.active > 0,
+        tme: formatDuration(0),
+        tma: formatDuration(0),
+        conversasAtivas: memberStats.active,
+        conversasFechadas: memberStats.closed
+      };
+    });
+
+    return [currentAgent, ...teamBrokers];
+  }, [profile, teamMembers, conversas, metricsStartDate, metricsEndDate]);
+
+  const activeChatsList = useMemo(() => {
+    const dbConversas = conversas.filter((conversation) => {
+      if (!isConversationInRange(conversation, metricsStartDate, metricsEndDate)) return false;
+      const status = normalizeConversationStatus(conversation.status);
+      return status === 'open' || status === 'waiting';
+    }).map((c) => {
+      const lead = leads.find((l) => l.id === c.lead_id);
+      const status = normalizeConversationStatus(c.status);
+      return {
+        id: c.id,
+        leadId: c.lead_id,
+        nome: c.nome_contato || lead?.nome || c.telefone,
+        telefone: c.telefone,
+        corretor: activeBrokersList.find(b => b.id === c.corretor_id)?.nome || 'Sem corretor',
+        canal: 'WhatsApp',
+        tempoEspera: '-',
+        status: status === 'waiting' ? 'Aguardando Atendente' : 'Em Conversa'
+      };
+    });
+
+    return dbConversas;
+  }, [conversas, leads, activeBrokersList, metricsStartDate, metricsEndDate]);
 
   const staleLeadIds = useMemo(() => new Set(leads.filter(isStale).map((lead) => lead.id)), [leads]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente').map((task) => task.lead_id)), [tarefas]);
@@ -1503,67 +1588,317 @@ export default function CrmPage() {
         </>
       ) : (
         <div className="space-y-6 animate-fadeIn">
-          {/* Row 1 - Average Durations */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.tmf}</p>
-              <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TMF</p>
-              <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo Médio de Fila</p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.tme}</p>
-              <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TME</p>
-              <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo Médio de Espera</p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.tma}</p>
-              <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TMA</p>
-              <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo Médio de Atendimento</p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.tmta}</p>
-              <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TMTA</p>
-              <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo Médio Total de Atendimento</p>
-            </div>
+          {/* Sub-tab Navigation */}
+          <div className="flex gap-4 border-b border-slate-200/50 pb-3">
+            <button
+              onClick={() => setMetricsSubTab('geral')}
+              className={`pb-2 text-sm font-black uppercase tracking-wider transition-all duration-200 border-b-2 cursor-pointer ${
+                metricsSubTab === 'geral'
+                  ? 'border-blue-600 text-blue-600 font-extrabold'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Visão Geral
+            </button>
+            <button
+              onClick={() => setMetricsSubTab('detalhes')}
+              className={`pb-2 text-sm font-black uppercase tracking-wider transition-all duration-200 border-b-2 cursor-pointer ${
+                metricsSubTab === 'detalhes'
+                  ? 'border-blue-600 text-blue-600 font-extrabold'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Detalhamento de Atendimento
+            </button>
           </div>
 
-          {/* Row 2 - Active Chats Status Counts */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.inProgress}</p>
-              <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Atendimentos em andamento</p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.paused}</p>
-              <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Atendimentos pausados</p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.waiting}</p>
-              <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Atendimentos em aguardando</p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.completed}</p>
-              <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Atendimentos concluídos</p>
-            </div>
-          </div>
+          {metricsSubTab === 'geral' ? (
+            <div className="space-y-6">
+              {/* Row 1 - Average Durations */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <button
+                  onClick={() => setMetricsSubTab('detalhes')}
+                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                >
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.tmf}</p>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TMF</p>
+                  <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo Médio de Fila</p>
+                </button>
+                <button
+                  onClick={() => setMetricsSubTab('detalhes')}
+                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                >
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.tme}</p>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TME</p>
+                  <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo Médio de Espera</p>
+                </button>
+                <button
+                  onClick={() => setMetricsSubTab('detalhes')}
+                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                >
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.tma}</p>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TMA</p>
+                  <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo Médio de Atendimento</p>
+                </button>
+                <button
+                  onClick={() => setMetricsSubTab('detalhes')}
+                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                >
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.tmta}</p>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TMTA</p>
+                  <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo Médio Total de Atendimento</p>
+                </button>
+              </div>
 
-          {/* Row 3 - Summary / High-level Stats */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.totalContacts}</p>
-              <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Total de Contatos</p>
+              {/* Row 1.5 - Apolo Bot & Call Center Metrics */}
+              <div className="rounded-3xl border border-cyan-100/70 bg-gradient-to-br from-cyan-50/40 via-white to-sky-50/20 p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-cyan-600 text-white shadow-md shadow-cyan-600/10 animate-pulse">
+                    <Bot size={14} />
+                  </div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Métricas de Automação (Apolo Bot)</h3>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <button
+                    onClick={() => setMetricsSubTab('detalhes')}
+                    className="group rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-cyan-200 hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                  >
+                    <div className="flex justify-between items-start">
+                      <p className="text-3xl font-black tracking-tight text-slate-800 group-hover:text-cyan-600 transition-colors">{dashboardMetrics.tfb}</p>
+                      <Timer size={16} className="text-cyan-500" />
+                    </div>
+                    <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TFB</p>
+                    <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo de Fila do Bot</p>
+                  </button>
+                  <button
+                    onClick={() => setMetricsSubTab('detalhes')}
+                    className="group rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-cyan-200 hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                  >
+                    <div className="flex justify-between items-start">
+                      <p className="text-3xl font-black tracking-tight text-slate-800 group-hover:text-cyan-600 transition-colors">{dashboardMetrics.trh}</p>
+                      <UserCheck size={16} className="text-cyan-500" />
+                    </div>
+                    <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TRH</p>
+                    <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo de Resposta Humana</p>
+                  </button>
+                  <button
+                    onClick={() => setMetricsSubTab('detalhes')}
+                    className="group rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-cyan-200 hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                  >
+                    <div className="flex justify-between items-start">
+                      <p className="text-3xl font-black tracking-tight text-slate-800 group-hover:text-cyan-600 transition-colors">{dashboardMetrics.tmr}</p>
+                      <History size={16} className="text-cyan-500" />
+                    </div>
+                    <p className="mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">TMR</p>
+                    <p className="text-[10px] font-medium text-slate-400/80 mt-1">Tempo Médio de Resolução</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Row 2 - Active Chats Status Counts */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <button
+                  onClick={() => setMetricsSubTab('detalhes')}
+                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10 animate-in fade-in duration-300"
+                >
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.inProgress}</p>
+                  <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Atendimentos em andamento</p>
+                </button>
+                <button
+                  onClick={() => setMetricsSubTab('detalhes')}
+                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10 animate-in fade-in duration-300"
+                >
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.paused}</p>
+                  <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Atendimentos pausados</p>
+                </button>
+                <button
+                  onClick={() => setMetricsSubTab('detalhes')}
+                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10 animate-in fade-in duration-300"
+                >
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.waiting}</p>
+                  <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Atendimentos em aguardando</p>
+                </button>
+                <button
+                  onClick={() => setMetricsSubTab('detalhes')}
+                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10 animate-in fade-in duration-300"
+                >
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.completed}</p>
+                  <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Atendimentos concluídos</p>
+                </button>
+              </div>
+
+              {/* Row 3 - Summary / High-level Stats */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.totalContacts}</p>
+                  <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Total de Contatos</p>
+                </div>
+                <button
+                  onClick={() => setMetricsSubTab('detalhes')}
+                  className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+                >
+                  <p className="text-3xl font-black tracking-tight text-slate-800">
+                    {dashboardMetrics.onlineAgents} / {dashboardMetrics.totalAgents}
+                  </p>
+                  <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Online / Total de Atendentes</p>
+                </button>
+                <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
+                  <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.rating}</p>
+                  <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Avaliação de Atendimentos (Nota Geral)</p>
+                </div>
+              </div>
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">
-                {dashboardMetrics.onlineAgents} / {dashboardMetrics.totalAgents}
-              </p>
-              <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Online / Total de Atendentes</p>
+          ) : (
+            <div className="space-y-6">
+              {/* Back & Title Header */}
+              <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 animate-in slide-in-from-top-3 duration-200">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setMetricsSubTab('geral')}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/65 shadow-sm transition cursor-pointer"
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Monitor de Atendimento</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">Visão operacional em tempo real</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-xs font-bold text-slate-500">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{activeBrokersList.filter(b => b.online).length} Corretores Online</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 border-l border-slate-200 pl-4">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                    <span>{activeChatsList.length} Conversas Ativas</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Inline Call Center Summary Card Grid */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7 animate-in fade-in duration-300">
+                {[
+                  { label: 'TFB (Bot)', value: dashboardMetrics.tfb, color: 'text-cyan-600' },
+                  { label: 'TRH (Takeover)', value: dashboardMetrics.trh, color: 'text-indigo-600' },
+                  { label: 'TMR (Resolução)', value: dashboardMetrics.tmr, color: 'text-violet-600' },
+                  { label: 'TMF (Fila)', value: dashboardMetrics.tmf, color: 'text-slate-700' },
+                  { label: 'TME (Espera)', value: dashboardMetrics.tme, color: 'text-slate-700' },
+                  { label: 'TMA (Atend.)', value: dashboardMetrics.tma, color: 'text-slate-700' },
+                  { label: 'Total Chats', value: dashboardMetrics.completed + dashboardMetrics.inProgress, color: 'text-emerald-700' },
+                ].map((stat, idx) => (
+                  <div key={idx} className="rounded-xl border border-slate-100 bg-white p-3.5 shadow-sm">
+                    <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">{stat.label}</p>
+                    <p className={`text-sm font-black mt-1 ${stat.color}`}>{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2 animate-in fade-in duration-300">
+                {/* Painel de Atendentes */}
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                      <Users size={16} className="text-blue-500" />
+                      <span>Painel de Corretores</span>
+                    </h4>
+                    <span className="rounded-full bg-slate-50 border border-slate-100 px-2.5 py-0.5 text-[9px] font-black text-slate-600 uppercase tracking-widest">
+                      {activeBrokersList.length} Atendentes
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                    {activeBrokersList.map((broker) => {
+                      const initials = broker.nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                      return (
+                        <div key={broker.id} className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/50 transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-black text-white shadow-inner uppercase">
+                              {initials}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-black text-slate-800">{broker.nome}</p>
+                                <span className={`h-2 w-2 rounded-full ${
+                                  broker.online 
+                                    ? broker.conversasAtivas > 0 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500' 
+                                    : 'bg-slate-300'
+                                }`} />
+                              </div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{broker.role} • {broker.online ? (broker.conversasAtivas > 0 ? 'Em Atendimento' : 'Livre') : 'Offline'}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 text-right">
+                            <div className="hidden sm:block">
+                              <p className="text-[9px] font-extrabold uppercase text-slate-400">TMA / TME</p>
+                              <p className="text-[10px] font-black text-slate-600 mt-0.5">{broker.tma} / {broker.tme}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-extrabold uppercase text-slate-400">Ativas / Fechadas</p>
+                              <p className="text-xs font-black text-slate-800 mt-0.5">{broker.conversasAtivas} / {broker.conversasFechadas}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Painel de Conversas Ativas */}
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-5 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                      <MessageCircle size={16} className="text-emerald-500" />
+                      <span>Conversas Ativas no Canal</span>
+                    </h4>
+                    <span className="rounded-full bg-slate-50 border border-slate-100 px-2.5 py-0.5 text-[9px] font-black text-slate-600 uppercase tracking-widest">
+                      {activeChatsList.length} Ativas
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                    {activeChatsList.map((chat) => (
+                      <div key={chat.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/50 transition-all gap-3 animate-in fade-in duration-200">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-black text-slate-800">{chat.nome}</p>
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                              chat.status === 'Aguardando Atendente'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-100 animate-pulse'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            }`}>
+                              {chat.status}
+                            </span>
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                            Canal: {chat.canal} • Corretor: {chat.corretor}
+                          </p>
+                          {chat.tempoEspera !== '-' && (
+                            <p className="text-[9px] font-extrabold text-red-500 uppercase mt-0.5">
+                              Fila de Espera: {chat.tempoEspera}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-end shrink-0">
+                          <button
+                            onClick={() => {
+                              window.location.href = `/inbox?lead=${chat.leadId || ''}&telefone=${cleanPhone(chat.telefone)}&nome=${encodeURIComponent(chat.nome)}`;
+                            }}
+                            className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-emerald-600/10"
+                          >
+                            <MessageSquare size={12} />
+                            <span>Chamar Inbox</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-              <p className="text-3xl font-black tracking-tight text-slate-800">{dashboardMetrics.rating}</p>
-              <p className="mt-2 text-xs font-bold text-slate-400 leading-snug">Avaliação de Atendimentos (Nota Geral)</p>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
