@@ -619,6 +619,18 @@ body.theme-noturno main :is(input, select, textarea):disabled,
   border-color: rgba(255, 255, 255, 0.06) !important;
 }
 
+.theme-noturno .orion-clear-filters-button,
+.theme-noturno .orion-clear-filters-button svg {
+  color: #17233a !important;
+  -webkit-text-fill-color: #17233a !important;
+}
+
+.theme-noturno .orion-clear-filters-button:hover,
+.theme-noturno .orion-clear-filters-button:hover svg {
+  color: #020617 !important;
+  -webkit-text-fill-color: #020617 !important;
+}
+
 /* Sidebar Elite Dark Theme Overrides */
 .theme-noturno div.fixed.left-0.top-0.z-50 {
   background-color: #020617 !important;

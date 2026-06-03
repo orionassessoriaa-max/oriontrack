@@ -455,7 +455,7 @@ export default function AdminLeadsPage() {
             <div className="flex items-end">
               <button 
                 onClick={clearFilters}
-                className="w-full bg-slate-200 text-slate-600 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-300 transition-all flex items-center justify-center gap-2"
+                className="orion-clear-filters-button w-full bg-slate-200 text-slate-700 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-300 transition-all flex items-center justify-center gap-2"
               >
                 <X size={14} /> Limpar Filtros
               </button>
