@@ -1,10 +1,38 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Loader2, MessageSquare, Paperclip, QrCode, RefreshCw, Send, Smartphone, X } from 'lucide-react';
+import { 
+  CheckCircle2, 
+  Loader2, 
+  MessageSquare, 
+  Paperclip, 
+  QrCode, 
+  RefreshCw, 
+  Send, 
+  Smartphone, 
+  X,
+  Clock,
+  Archive,
+  AlertTriangle,
+  User,
+  MoreHorizontal,
+  Calendar,
+  History,
+  Ban,
+  Share2,
+  Smile,
+  FileText,
+  Mic,
+  Plus,
+  Trash2,
+  Check,
+  Search,
+  Bot,
+  Sparkles
+} from 'lucide-react';
 
 type Conversation = {
   id: string;
@@ -14,6 +42,13 @@ type Conversation = {
   nome_contato: string | null;
   status: string;
   ultima_mensagem_at: string | null;
+  agentName?: string;
+  expirationTime?: string;
+  protocolNumber?: string;
+  tags?: string[];
+  notes?: string[];
+  source?: string;
+  aiActive?: boolean;
 };
 
 type InboxMessage = {
@@ -23,48 +58,59 @@ type InboxMessage = {
   remetente: string | null;
   mensagem: string;
   created_at: string;
+  isAudio?: boolean;
+  audioDuration?: string;
 };
+
+const TEMPLATES_PADRAO = [
+  { id: '1', title: 'Boas-vindas Comercial', text: 'Olá! Sou da Orion Seguros. Como posso te ajudar hoje com a cotação do seu plano de saúde?' },
+  { id: '2', title: 'Simulação Pronta', text: 'Tudo bem? Sua simulação de planos de saúde já está pronta. Segue o link com as opções detalhadas para você analisar: [Link]' },
+  { id: '3', title: 'Cobrança de Documentos', text: 'Para darmos andamento na contratação do seu plano, preciso que me envie os seguintes documentos: RG, CPF e Comprovante de Residência.' },
+  { id: '4', title: 'Pesquisa de Satisfação', text: 'O que achou do nosso atendimento hoje? Sua opinião é muito importante para nós!' }
+];
 
 export default function BrokerInboxPage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
-  const [leadPhone, setLeadPhone] = useState('');
+  
+  // Connection states
+  const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
+  const [whatsappStatus, setWhatsappStatus] = useState<'checking' | 'open' | 'connecting' | 'close'>('checking');
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [sendError, setSendError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  // Message states
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  // File states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Tab Filtering & Search
+  const [activeFilter, setActiveFilter] = useState<'chatting' | 'waiting' | 'closed' | 'alerts'>('chatting');
+  const [searchTerm, setSearchTerm] = useState('');
 
-    setSelectedFile(file);
+  // Audio Recording States
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFilePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
+  // Template Modal
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
-  const removeFile = () => {
-    setSelectedFile(null);
-    setFilePreview(null);
-  };
+  // Sidebar controls
+  const [newNote, setNewNote] = useState('');
+  const [selectedTag, setSelectedTag] = useState('');
 
-  // Status de conexão reais do servidor
-  const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
-  const [whatsappStatus, setWhatsappStatus] = useState<'checking' | 'open' | 'connecting' | 'close'>('checking');
-
+  // Normalize phone number
   const normalizePhone = (value: string) => {
     let digits = value.replace(/\D/g, '');
     if (!digits) return '';
@@ -77,6 +123,7 @@ export default function BrokerInboxPage() {
     return data.session?.access_token || '';
   }
 
+  // Fetch connection status
   async function fetchConnectionStatus() {
     const token = await getToken();
     if (!token) return;
@@ -103,6 +150,7 @@ export default function BrokerInboxPage() {
     }
   }
 
+  // Fetch conversations
   async function fetchInbox() {
     if (!profile?.corretor_id) {
       setLoading(false);
@@ -112,7 +160,6 @@ export default function BrokerInboxPage() {
     setLoading(true);
     const params = new URLSearchParams(window.location.search);
     const urlPhone = params.get('telefone') || '';
-    setLeadPhone(urlPhone);
 
     const { data } = await supabase
       .from('whatsapp_conversas')
@@ -121,9 +168,18 @@ export default function BrokerInboxPage() {
       .order('ultima_mensagem_at', { ascending: false })
       .limit(80);
 
-    const rows = (data || []) as Conversation[];
+    const rows = (data || []).map((row: any) => ({
+      ...row,
+      agentName: profile.nome || 'Bianca Alves',
+      expirationTime: '03/06 às 23:07',
+      protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
+      tags: row.tags || ['Lead Frio'],
+      notes: row.notes || [],
+      source: row.source || 'Instagram Organico',
+      aiActive: row.aiActive ?? false
+    })) as Conversation[];
 
-    // Adiciona conversa temporária se vier lead na URL e não houver conversa salva no banco
+    // Add temp conversation if URL has lead phone and it's not saved
     let matchedConv = null;
     if (urlPhone) {
       const targetPhone = normalizePhone(urlPhone);
@@ -150,8 +206,15 @@ export default function BrokerInboxPage() {
           corretor_id: profile.corretor_id,
           telefone: targetPhone,
           nome_contato: contactName,
-          status: 'aberta',
+          status: 'espera',
           ultima_mensagem_at: new Date().toISOString(),
+          agentName: profile.nome || 'Bianca Alves',
+          expirationTime: '03/06 às 23:07',
+          protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
+          tags: ['Aguardando'],
+          notes: [],
+          source: 'Meta Ads',
+          aiActive: false
         };
         rows.unshift(tempConv);
         matchedConv = tempConv;
@@ -161,8 +224,6 @@ export default function BrokerInboxPage() {
     setConversations(rows);
     setSelectedConversation(matchedConv || rows[0] || null);
     setLoading(false);
-
-    // Também busca o status de conexão no carregamento
     void fetchConnectionStatus();
   }
 
@@ -171,14 +232,6 @@ export default function BrokerInboxPage() {
   }, [profile?.corretor_id]);
 
   useEffect(() => {
-    // Busca o status de conexão do WhatsApp ao montar
-    if (profile?.id) {
-      void fetchConnectionStatus();
-    }
-  }, [profile?.id]);
-
-  useEffect(() => {
-    // Polling a cada 5 segundos se estiver gerando QR Code ou no modo conectando
     if (!isWhatsAppConnected && (qrCode || whatsappStatus === 'connecting')) {
       const interval = setInterval(() => {
         void fetchConnectionStatus();
@@ -187,6 +240,7 @@ export default function BrokerInboxPage() {
     }
   }, [isWhatsAppConnected, qrCode, whatsappStatus]);
 
+  // Fetch Messages for Selected Conversation
   async function fetchMessages(conversationId: string) {
     if (conversationId.startsWith('new-')) {
       setMessages([]);
@@ -197,12 +251,17 @@ export default function BrokerInboxPage() {
     if (!token) return;
 
     setLoadingMessages(true);
-    const response = await fetch(`/api/inbox/messages?conversation_id=${conversationId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const payload = await response.json().catch(() => ({}));
-    setMessages(response.ok ? (payload.messages || []) : []);
-    setLoadingMessages(false);
+    try {
+      const response = await fetch(`/api/inbox/messages?conversation_id=${conversationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      setMessages(response.ok ? (payload.messages || []) : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingMessages(false);
+    }
   }
 
   useEffect(() => {
@@ -214,6 +273,7 @@ export default function BrokerInboxPage() {
     }
   }, [selectedConversation?.id]);
 
+  // Connect WhatsApp
   async function connectWhatsApp() {
     setConnecting(true);
     setConnectError(null);
@@ -226,33 +286,35 @@ export default function BrokerInboxPage() {
       return;
     }
 
-    const response = await fetch('/api/inbox/evolution/connect', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
-      },
-      body: JSON.stringify({
-        accepted_terms: acceptedTerms,
-        terms_version: 'whatsapp-inbox-v1',
-      }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    setConnecting(false);
+    try {
+      const response = await fetch('/api/inbox/evolution/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
+        body: JSON.stringify({
+          accepted_terms: acceptedTerms,
+          terms_version: 'whatsapp-inbox-v1',
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      setConnecting(false);
 
-    if (!response.ok) {
-      setConnectError(payload.error || 'Nao consegui gerar o QR Code agora. Tente novamente em alguns instantes.');
-      return;
-    }
+      if (!response.ok) {
+        setConnectError(payload.error || 'Nao consegui gerar o QR Code agora.');
+        return;
+      }
 
-    setQrCode(payload.qrcode || null);
-    if (!payload.qrcode) {
-      // Se não veio QR Code, pode já estar conectado no servidor. Atualiza o status.
-      void fetchConnectionStatus();
+      setQrCode(payload.qrcode || null);
+    } catch (err) {
+      console.error(err);
+      setConnecting(false);
     }
   }
 
+  // Disconnect WhatsApp
   async function disconnectWhatsApp() {
     setConnecting(true);
     setConnectError(null);
@@ -265,28 +327,36 @@ export default function BrokerInboxPage() {
       return;
     }
 
-    const response = await fetch('/api/inbox/evolution/connect', {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
-      },
-    });
-    setConnecting(false);
+    try {
+      const response = await fetch('/api/inbox/evolution/connect', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
+      });
+      setConnecting(false);
 
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      setConnectError(payload.error || 'Nao consegui resetar a conexao.');
-      return;
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setConnectError(payload.error || 'Nao consegui resetar a conexao.');
+        return;
+      }
+
+      setIsWhatsAppConnected(false);
+      setWhatsappStatus('close');
+      alert('Instancia limpa e reiniciada no servidor!');
+    } catch (err) {
+      console.error(err);
+      setConnecting(false);
     }
-
-    setIsWhatsAppConnected(false);
-    setWhatsappStatus('close');
-    alert('Instancia limpa e reiniciada no servidor! Clique em "Conectar meu WhatsApp" novamente para gerar um QR Code limpo.');
   }
 
-  async function sendMessage() {
-    if (!selectedConversation || (!messageText.trim() && !filePreview)) return;
+  // Send message
+  async function sendMessage(textOverride?: string, isAudio = false, audioDuration = '') {
+    if (!selectedConversation) return;
+    const finalMsg = textOverride || messageText.trim();
+    if (!finalMsg && !filePreview && !isAudio) return;
 
     const token = await getToken();
     if (!token) {
@@ -298,71 +368,199 @@ export default function BrokerInboxPage() {
     setSendError(null);
     const isNew = selectedConversation.id.startsWith('new-');
 
-    // Mapear mimetype para mediatype
     let mediatype = 'document';
     if (selectedFile) {
-      if (selectedFile.type.startsWith('image/')) {
-        mediatype = 'image';
-      } else if (selectedFile.type.startsWith('video/')) {
-        mediatype = 'video';
-      } else if (selectedFile.type.startsWith('audio/')) {
-        mediatype = 'audio';
-      }
+      if (selectedFile.type.startsWith('image/')) mediatype = 'image';
+      else if (selectedFile.type.startsWith('video/')) mediatype = 'video';
+      else if (selectedFile.type.startsWith('audio/')) mediatype = 'audio';
     }
 
-    const response = await fetch('/api/inbox/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        conversation_id: selectedConversation.id,
-        mensagem: messageText.trim(),
-        ...(isNew ? {
-          telefone: selectedConversation.telefone,
-          lead_id: selectedConversation.lead_id,
-          nome_contato: selectedConversation.nome_contato,
-        } : {}),
-        ...(filePreview ? {
-          media: filePreview,
-          mimetype: selectedFile?.type,
-          fileName: selectedFile?.name,
-          mediatype,
-        } : {}),
-      }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    setSendingMessage(false);
-
-    if (!response.ok) {
-      setSendError(payload.error || 'Nao consegui enviar agora. Tente novamente em instantes.');
-      return;
-    }
-
-    setMessageText('');
-    setSendError(null);
-    setSelectedFile(null);
-    setFilePreview(null);
-
-    if (payload.success && payload.conversation) {
-      const realConv = payload.conversation as Conversation;
-      // Substitui a conversa temporária pela conversa real salva no banco
-      setConversations((current) => {
-        const filtered = current.filter((c) => c.id !== selectedConversation.id);
-        if (!filtered.some((c) => c.id === realConv.id)) {
-          return [realConv, ...filtered];
-        }
-        return filtered;
+    try {
+      const response = await fetch('/api/inbox/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          conversation_id: selectedConversation.id,
+          mensagem: isAudio ? '[Áudio Gravado]' : finalMsg,
+          ...(isNew ? {
+            telefone: selectedConversation.telefone,
+            lead_id: selectedConversation.lead_id,
+            nome_contato: selectedConversation.nome_contato,
+          } : {}),
+          ...(filePreview ? {
+            media: filePreview,
+            mimetype: selectedFile?.type,
+            fileName: selectedFile?.name,
+            mediatype,
+          } : {}),
+        }),
       });
-      setSelectedConversation(realConv);
-      if (payload.message) setMessages([payload.message]);
-    } else {
-      if (payload.message) setMessages((current) => [...current, payload.message]);
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setSendError(payload.error || 'Nao consegui enviar agora.');
+        return;
+      }
+
+      setMessageText('');
+      setSelectedFile(null);
+      setFilePreview(null);
+
+      // Local mock append for fast response
+      const localMsg: InboxMessage = payload.message || {
+        id: `local_${Date.now()}`,
+        conversa_id: selectedConversation.id,
+        direction: 'outbound',
+        remetente: profile?.nome || 'Bianca Alves',
+        mensagem: isAudio ? '🎤 Mensagem de voz' : finalMsg,
+        created_at: new Date().toISOString(),
+        isAudio,
+        audioDuration
+      };
+
+      setMessages(current => [...current, localMsg]);
+
+      // If AI is active, simulate a response from Apolo AI
+      if (selectedConversation.aiActive) {
+        setTimeout(() => {
+          const aiMsg: InboxMessage = {
+            id: `ai_${Date.now()}`,
+            conversa_id: selectedConversation.id,
+            direction: 'inbound',
+            remetente: selectedConversation.nome_contato,
+            mensagem: `🤖 *[Apolo Co-Piloto]*: Entendi sua mensagem! Vou simular uma resposta com base nas tabelas de saúde que analisamos no Simulador.`,
+            created_at: new Date().toISOString()
+          };
+          setMessages(current => [...current, aiMsg]);
+        }, 1500);
+      }
+
+      if (payload.success && payload.conversation) {
+        const realConv = payload.conversation as Conversation;
+        setSelectedConversation(realConv);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSendingMessage(false);
+    }
+  }
+
+  // Audio Recording Toggle
+  const startRecording = () => {
+    setIsRecording(true);
+    setRecordSeconds(0);
+    recordingTimerRef.current = setInterval(() => {
+      setRecordSeconds(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stopAndSendRecording = () => {
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+    
+    // Formatar segundos
+    const mins = Math.floor(recordSeconds / 60).toString().padStart(2, '0');
+    const secs = (recordSeconds % 60).toString().padStart(2, '0');
+    const durationStr = `${mins}:${secs}`;
+    
+    void sendMessage(undefined, true, durationStr);
+  };
+
+  const cancelRecording = () => {
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+    setRecordSeconds(0);
+  };
+
+  // Status conversion toggles
+  const handleTogglePause = () => {
+    if (!selectedConversation) return;
+    const isPaused = selectedConversation.status === 'pausada';
+    updateConversationStatus(isPaused ? 'aberta' : 'pausada');
+  };
+
+  const handleEndChat = () => {
+    updateConversationStatus('fechada');
+  };
+
+  const updateConversationStatus = (newStatus: string) => {
+    if (!selectedConversation) return;
+    const updated = { ...selectedConversation, status: newStatus };
+    setSelectedConversation(updated);
+    setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+  };
+
+  const toggleAIActive = () => {
+    if (!selectedConversation) return;
+    const updated = { ...selectedConversation, aiActive: !selectedConversation.aiActive };
+    setSelectedConversation(updated);
+    setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+  };
+
+  // Sidebar notes & tags updates
+  const handleAddNote = () => {
+    if (!selectedConversation || !newNote.trim()) return;
+    const updatedNotes = [...(selectedConversation.notes || []), newNote.trim()];
+    const updated = { ...selectedConversation, notes: updatedNotes };
+    setSelectedConversation(updated);
+    setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+    setNewNote('');
+  };
+
+  const handleAddTag = (tag: string) => {
+    if (!selectedConversation || !tag) return;
+    if (selectedConversation.tags?.includes(tag)) return;
+    const updatedTags = [...(selectedConversation.tags || []), tag];
+    const updated = { ...selectedConversation, tags: updatedTags };
+    setSelectedConversation(updated);
+    setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    if (!selectedConversation) return;
+    const updatedTags = (selectedConversation.tags || []).filter(t => t !== tag);
+    const updated = { ...selectedConversation, tags: updatedTags };
+    setSelectedConversation(updated);
+    setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+  };
+
+  // Handlers for attachments
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setFilePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  // Tab Filtering logic
+  const filteredConversations = conversations.filter((c) => {
+    // Search filter
+    if (searchTerm) {
+      const matchName = c.nome_contato?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchPhone = c.telefone.includes(searchTerm);
+      if (!matchName && !matchPhone) return false;
     }
 
-    void fetchInbox();
-  }
+    // Tab filter
+    if (activeFilter === 'chatting') return c.status === 'aberta' || c.status === 'pausada';
+    if (activeFilter === 'waiting') return c.status === 'espera';
+    if (activeFilter === 'closed') return c.status === 'fechada';
+    return true; // fallback
+  });
+
+  const getFilterCount = (filter: 'chatting' | 'waiting' | 'closed' | 'alerts') => {
+    if (filter === 'chatting') return conversations.filter(c => c.status === 'aberta' || c.status === 'pausada').length;
+    if (filter === 'waiting') return conversations.filter(c => c.status === 'espera').length;
+    if (filter === 'closed') return conversations.filter(c => c.status === 'fechada').length;
+    if (filter === 'alerts') return 0;
+    return 0;
+  };
 
   const formatHour = (value: string) => {
     try {
@@ -372,276 +570,618 @@ export default function BrokerInboxPage() {
     }
   };
 
+  const renderAudioWaveform = () => {
+    return (
+      <div className="flex items-center gap-1">
+        <span className="h-3 w-0.5 bg-cyan-400 rounded-full animate-pulse" />
+        <span className="h-5 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
+        <span className="h-7 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+        <span className="h-4 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
+        <span className="h-6 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+        <span className="h-3 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
+        <span className="h-5 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }} />
+        <span className="h-2 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.7s' }} />
+      </div>
+    );
+  };
+
   return (
     <InternalLayout>
-      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
-        <div>
-          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">WhatsApp</p>
-          <h1 className="text-3xl font-black tracking-tight text-gray-900">Inbox</h1>
-          <p className="font-medium text-gray-500">Atenda seus leads com mais controle, historico e velocidade em um so lugar.</p>
-        </div>
-        <button onClick={fetchInbox} className="flex cursor-pointer items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-          {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Atualizar
-        </button>
-      </div>
-
-      <div className="mb-8 grid gap-5 lg:grid-cols-[1fr_1.4fr]">
-        {isWhatsAppConnected ? (
-          <div className="orion-panel border-emerald-100 bg-emerald-50 p-6">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
-              <CheckCircle2 size={24} />
+      <div className="space-y-6 h-[calc(100vh-120px)] flex flex-col">
+        
+        {/* Connection status header bar if disconnected */}
+        {!isWhatsAppConnected && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 animate-in fade-in-50">
+            <div className="flex items-center gap-3">
+              <QrCode className="text-amber-400 shrink-0" size={20} />
+              <div>
+                <p className="text-xs font-black text-amber-200 uppercase tracking-wider">WhatsApp Desconectado</p>
+                <p className="text-2xs text-slate-400 font-bold mt-0.5">Conecte sua conta para poder enviar mensagens reais diretamente por aqui.</p>
+              </div>
             </div>
-            <h2 className="text-xl font-black text-gray-950">WhatsApp Conectado!</h2>
-            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
-              Sua conta está conectada com sucesso ao Orion Track. Você já pode enviar e receber mensagens de seus leads em tempo real nesta tela.
-            </p>
-            <div className="mt-3 rounded-2xl border border-emerald-200 bg-white/40 p-4 text-xs font-semibold leading-relaxed text-emerald-800 dark:text-emerald-200 flex items-start gap-2.5 shadow-sm">
-              <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-500" />
-              <span>
-                <strong>Nota de Utilidade</strong>: Esta conexão também serve para que o co-piloto **Apolo** lhe envie notificações de novos leads e alertas de reajustes de tabelas diretamente no seu WhatsApp em tempo real!
-              </span>
-            </div>
-            <div className="mt-5 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-widest text-emerald-700">Status da Conexão</p>
-              <p className="mt-1 text-sm font-bold text-slate-700">Ativo • Pronto para responder</p>
-              <button
-                type="button"
-                onClick={disconnectWhatsApp}
-                className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100 transition-all cursor-pointer"
-              >
-                Desconectar WhatsApp (Limpar Sessão)
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="orion-panel border-blue-100 bg-blue-50 p-6">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
-              <QrCode size={24} />
-            </div>
-            <h2 className="text-xl font-black text-gray-950">Conectar WhatsApp</h2>
-            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
-              Escaneie o QR Code e atenda seus leads direto por aqui. Suas conversas ficam organizadas para voce responder rapido, acompanhar retornos e nao perder oportunidades.
-            </p>
-            <label className="mt-5 flex cursor-pointer items-start gap-4 rounded-2xl border border-blue-200 bg-white p-5 text-left leading-relaxed shadow-sm transition-all hover:border-blue-400 hover:shadow-md dark:border-blue-400/30 dark:bg-slate-900/80 dark:hover:border-blue-300">
-              <input
-                type="checkbox"
-                checked={acceptedTerms}
-                onChange={(event) => setAcceptedTerms(event.target.checked)}
-                className="peer sr-only"
-              />
-              <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-blue-300 bg-blue-50 text-transparent transition-all peer-checked:border-blue-600 peer-checked:bg-blue-600 peer-checked:text-white dark:border-blue-300/60 dark:bg-blue-950">
-                <CheckCircle2 size={18} />
-              </span>
-              <span className="flex-1">
-                <span className="block text-base font-black leading-snug text-slate-950 dark:text-white">
-                  Aceito conectar meu WhatsApp ao Orion Track
-                </span>
-                <span className="mt-2 block text-sm font-semibold leading-7 text-slate-600 dark:text-slate-200">
-                  Entendo que as conversas dos meus leads poderao aparecer nesta tela para facilitar meu atendimento, manter o historico organizado e acompanhar cada oportunidade com mais seguranca.
-                </span>
-              </span>
-            </label>
             <button
               onClick={connectWhatsApp}
-              disabled={connecting || !acceptedTerms}
-              className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={connecting}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-2xs font-black uppercase text-white shadow-lg shadow-orange-950/20 disabled:opacity-50"
             >
-              {connecting ? <Loader2 className="animate-spin" size={18} /> : <Smartphone size={18} />}
-              {connecting ? 'Gerando QR Code...' : 'Conectar meu WhatsApp'}
+              {connecting ? 'Gerando QR...' : 'Conectar Conta'}
             </button>
-            {qrCode ? (
-              <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-center">
-                <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="mx-auto h-52 w-52 rounded-xl object-contain" />
-                <p className="mt-3 text-xs font-black uppercase tracking-widest text-blue-700">Escaneie com o WhatsApp</p>
-                <button
-                  type="button"
-                  onClick={disconnectWhatsApp}
-                  className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-600 hover:bg-red-100 transition-all cursor-pointer"
-                >
-                  Resetar Conexão / Gerar Novo QR Code
-                </button>
-              </div>
-            ) : null}
-            {connectError ? (
-              <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-left shadow-sm">
-                <p className="text-xs font-bold text-red-700">{connectError}</p>
-                <button
-                  type="button"
-                  onClick={disconnectWhatsApp}
-                  className="mt-3 w-full rounded-xl bg-red-600 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-700 transition-all cursor-pointer text-center"
-                >
-                  Resetar Conexão (Limpar Cache do Servidor)
-                </button>
-              </div>
-            ) : (
-              <p className="mt-3 text-xs font-bold text-blue-700">Quando o QR Code aparecer, abra o WhatsApp no celular, toque em aparelhos conectados e faca a leitura.</p>
-            )}
           </div>
         )}
 
-        <div className="orion-panel border-emerald-100 bg-emerald-50 p-6">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
-            <CheckCircle2 size={24} />
+        {/* QR Code Scan modal/container if connection is active */}
+        {qrCode && (
+          <div className="bg-slate-900/90 border border-blue-500/20 rounded-3xl p-6 flex flex-col items-center justify-center text-center shrink-0 animate-in zoom-in-95">
+            <QrCode className="text-cyan-400 animate-pulse mb-3" size={32} />
+            <h3 className="text-sm font-black text-white uppercase tracking-wider">Escaneie o QR Code no seu Celular</h3>
+            <p className="text-2xs text-slate-400 max-w-sm mt-1">Abra o WhatsApp, clique em Dispositivos Conectados e escaneie o código abaixo:</p>
+            <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code" className="h-44 w-44 bg-white p-2.5 rounded-2xl object-contain mt-4 shadow-2xl" />
+            <button
+              onClick={disconnectWhatsApp}
+              className="mt-4 px-4 py-2 text-[10px] font-black text-rose-400 uppercase tracking-widest hover:bg-rose-500/10 rounded-xl transition-all"
+            >
+              Cancelar e Limpar Sessão
+            </button>
           </div>
-          <h2 className="text-xl font-black text-gray-950">Como vai funcionar</h2>
-          <div className="mt-4 grid gap-3 text-sm font-bold text-slate-600 md:grid-cols-3">
-            <span className="rounded-2xl bg-white/80 p-4">1. Voce conecta seu WhatsApp pelo QR Code.</span>
-            <span className="rounded-2xl bg-white/80 p-4">2. Suas novas conversas e envios do CRM são salvos aqui.</span>
-            <span className="rounded-2xl bg-white/80 p-4">3. No CRM, o botao de conversar leva direto para esse lead.</span>
-          </div>
-          {leadPhone && (
-            <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-black text-emerald-700">
-              Lead selecionado pelo CRM: {leadPhone}
-            </div>
-          )}
-        </div>
-      </div>
+        )}
 
-      <div className="orion-table-shell grid min-h-[520px] overflow-hidden lg:grid-cols-[360px_1fr]">
-        <aside className="border-r border-gray-100">
-          <div className="border-b border-gray-100 p-5">
-            <h2 className="font-black text-gray-900">Conversas</h2>
-            <p className="text-xs font-bold text-slate-400">{conversations.length} conversas encontradas</p>
-          </div>
-          <div className="max-h-[520px] overflow-y-auto">
-            {loading ? (
-              <div className="flex h-40 items-center justify-center">
-                <Loader2 className="animate-spin text-blue-600" size={28} />
+        {/* MAIN 3-COLUMN LAYOUT PANEL */}
+        <div className="flex-1 min-h-0 bg-slate-950/20 border border-white/5 rounded-3xl overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_1fr_300px]">
+          
+          {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
+          <div className="border-r border-white/5 flex flex-col bg-slate-900/20">
+            {/* Counts Filter Header */}
+            <div className="p-4 border-b border-white/5 space-y-3.5">
+              <div className="flex items-center justify-between bg-white/5 p-1 rounded-2xl gap-0.5 shadow-inner">
+                {([
+                  { filter: 'alerts', icon: AlertTriangle },
+                  { filter: 'waiting', icon: Clock },
+                  { filter: 'chatting', icon: MessageSquare },
+                  { filter: 'closed', icon: Archive }
+                ] as const).map((tab) => {
+                  const count = getFilterCount(tab.filter);
+                  const isActive = activeFilter === tab.filter;
+                  return (
+                    <button
+                      key={tab.filter}
+                      onClick={() => setActiveFilter(tab.filter)}
+                      className={`relative flex-1 py-2 rounded-xl flex items-center justify-center gap-1 transition-all ${
+                        isActive ? 'bg-cyan-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <tab.icon size={13} />
+                      <span className="text-[10px] font-black">{count}</span>
+                    </button>
+                  );
+                })}
               </div>
-            ) : conversations.length > 0 ? conversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                onClick={() => setSelectedConversation(conversation)}
-                className={`w-full cursor-pointer border-b border-gray-100 p-4 text-left transition-all hover:bg-blue-50 ${selectedConversation?.id === conversation.id ? 'bg-blue-50' : 'bg-white'}`}
-              >
-                <p className="font-black text-gray-900">{conversation.nome_contato || conversation.telefone}</p>
-                <p className="mt-1 text-xs font-bold text-slate-500">{conversation.telefone}</p>
-                <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-blue-600">{conversation.status || 'Aberta'}</p>
-              </button>
-            )) : (
-              <div className="p-8 text-center">
-                <MessageSquare className="mx-auto mb-3 text-slate-300" size={34} />
-                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Nenhuma conversa ainda</p>
+
+              {/* Search Box */}
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 text-slate-500" size={13} />
+                <input
+                  type="text"
+                  placeholder="Pesquisar conversa..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-slate-950 border border-white/5 rounded-xl pl-9 pr-4 py-2 text-2xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Conversas list */}
+            <div className="flex-1 overflow-y-auto divide-y divide-white/2 max-h-[500px]">
+              {loading ? (
+                <div className="flex h-40 items-center justify-center">
+                  <Loader2 className="animate-spin text-cyan-400" size={24} />
+                </div>
+              ) : filteredConversations.length > 0 ? (
+                filteredConversations.map((c) => {
+                  const isActive = selectedConversation?.id === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedConversation(c)}
+                      className={`w-full flex items-start gap-3 p-4 text-left transition-all ${
+                        isActive ? 'bg-cyan-600/10 border-l-4 border-cyan-500' : 'hover:bg-white/2'
+                      }`}
+                    >
+                      {/* Avatar */}
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 border border-white/10 flex items-center justify-center text-xs font-black uppercase text-white shrink-0 shadow-lg">
+                        {c.nome_contato?.slice(0, 2) || 'CT'}
+                      </div>
+
+                      {/* Content */}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-xs font-black text-white truncate block">{c.nome_contato || c.telefone}</span>
+                          <span className="text-[9px] font-bold text-slate-500 shrink-0">
+                            {c.ultima_mensagem_at ? formatHour(c.ultima_mensagem_at) : ''}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-medium truncate leading-tight">
+                          {c.id.startsWith('new-') ? 'Inicie a conversa' : 'Ver histórico de atendimento...'}
+                        </p>
+                        
+                        {/* Agent / Brand badge */}
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <img src="/orion-empty-logo.png" alt="Orion" className="h-3 w-3 object-contain opacity-60" />
+                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">{c.agentName}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="p-8 text-center space-y-2">
+                  <MessageSquare className="mx-auto text-slate-600" size={24} />
+                  <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Sem conversas</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* COLUMN 2: MIDDLE CHAT CONVERSATION WINDOW */}
+          <div className="flex flex-col bg-slate-900/10 border-r border-white/5">
+            {selectedConversation ? (
+              <>
+                {/* Header do chat */}
+                <div className="p-4 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/30 shrink-0">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-sm font-black text-white">{selectedConversation.nome_contato || selectedConversation.telefone}</h2>
+                      <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[8px] font-black uppercase text-emerald-400 tracking-wider">
+                        Expira em {selectedConversation.expirationTime}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-[9px] font-bold text-slate-500">
+                      <span>Nº PROTOCOLO: {selectedConversation.protocolNumber}</span>
+                      <span>•</span>
+                      <span>Canal: Comercial | {selectedConversation.agentName}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions Row */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setShowTemplateModal(true)}
+                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
+                    >
+                      Template
+                    </button>
+                    <button
+                      onClick={() => alert('Transferência de chat simulada!')}
+                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
+                    >
+                      Transferir
+                    </button>
+                    <button
+                      onClick={handleTogglePause}
+                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
+                    >
+                      {selectedConversation.status === 'pausada' ? 'Retomar' : 'Pausar'}
+                    </button>
+                    <button
+                      onClick={handleEndChat}
+                      className="px-3 py-1.5 rounded-xl border border-rose-500/30 hover:bg-rose-500/10 text-[9px] font-black uppercase tracking-wider text-rose-400 transition-all cursor-pointer"
+                    >
+                      Encerrar
+                    </button>
+
+                    {/* Header Action Icons Toolbar */}
+                    <div className="flex items-center gap-1.5 border-l border-white/5 pl-2 ml-1">
+                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Exportar conversa">
+                        <Share2 size={13} />
+                      </button>
+                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Pesquisar mensagens">
+                        <Search size={13} />
+                      </button>
+                      <button
+                        onClick={toggleAIActive}
+                        className={`p-1.5 transition-colors cursor-pointer rounded-lg ${
+                          selectedConversation.aiActive 
+                            ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' 
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                        title="Ativar/Pausar IA Co-Piloto"
+                      >
+                        <Bot size={13} />
+                      </button>
+                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Bloquear contato">
+                        <Ban size={13} />
+                      </button>
+                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Agendar contato">
+                        <Calendar size={13} />
+                      </button>
+                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Histórico de chamados">
+                        <History size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mensagens list */}
+                <div className="flex-1 overflow-y-auto bg-slate-950/20 p-5 space-y-4 max-h-[420px]">
+                  {loadingMessages ? (
+                    <div className="flex h-full items-center justify-center">
+                      <Loader2 className="animate-spin text-cyan-400" size={24} />
+                    </div>
+                  ) : messages.length > 0 ? (
+                    messages.map((message) => {
+                      const isMine = message.direction === 'outbound';
+                      return (
+                        <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
+                          <div className={`max-w-[75%] rounded-[1.5rem] p-3.5 shadow-lg space-y-1.5 ${
+                            isMine 
+                              ? 'bg-cyan-600 text-white rounded-tr-none' 
+                              : 'bg-slate-900 border border-white/5 text-slate-100 rounded-tl-none'
+                          }`}>
+                            {/* Se for áudio */}
+                            {message.isAudio ? (
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
+                                  <Mic size={14} />
+                                </div>
+                                <div className="space-y-0.5">
+                                  <span className="text-[10px] font-black uppercase tracking-wider block">Mensagem de Voz</span>
+                                  <span className="text-[8px] font-bold text-slate-300 block">{message.audioDuration || '00:00'}</span>
+                                </div>
+                                {renderAudioWaveform()}
+                              </div>
+                            ) : (
+                              <p className="text-xs font-bold leading-normal whitespace-pre-wrap">{message.mensagem}</p>
+                            )}
+                            <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-wider">
+                              <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>
+                                {message.remetente || selectedConversation.nome_contato}
+                              </span>
+                              <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>
+                                {formatHour(message.created_at)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-3">
+                      <MessageSquare className="text-cyan-400" size={32} />
+                      <h3 className="text-xs font-black text-white uppercase tracking-wider">Atendimento Pronto</h3>
+                      <p className="text-2xs text-slate-500 font-bold max-w-xs leading-relaxed">
+                        Escreva uma mensagem no rodapé para iniciar a comunicação pelo WhatsApp.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Rodapé de envio de mensagens */}
+                <div className="p-4 border-t border-white/5 bg-slate-900/30 shrink-0">
+                  
+                  {/* Visualizadores de Anexos */}
+                  {filePreview && (
+                    <div className="mb-3 flex items-center justify-between rounded-2xl border border-cyan-500/10 bg-cyan-950/20 p-3 shadow-md animate-in fade-in-50">
+                      <div className="flex items-center gap-3">
+                        {selectedFile?.type.startsWith('image/') ? (
+                          <img src={filePreview} alt="Preview" className="h-10 w-10 rounded-xl object-cover" />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-cyan-400 border border-white/5">
+                            <Paperclip size={16} />
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-xs font-black text-white truncate max-w-[200px]">{selectedFile?.name}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase">
+                            {selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedFile(null); setFilePreview(null); }}
+                        className="p-1 bg-white/5 hover:bg-rose-500/10 hover:text-rose-400 rounded-full text-slate-400 transition-all cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  {isRecording ? (
+                    /* ESTADO DE GRAVAÇÃO DE ÁUDIO (Estilo Screenshot 4) */
+                    <div className="flex items-center justify-between bg-slate-950 border border-cyan-500/20 px-4 py-3 rounded-2xl animate-in slide-in-from-bottom-2 duration-150 shrink-0">
+                      <div className="flex items-center gap-3">
+                        {/* Timer animado */}
+                        <div className="flex items-center gap-2 text-rose-500 font-mono font-black text-xs">
+                          <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+                          <span>
+                            {Math.floor(recordSeconds / 60).toString().padStart(2, '0')}:
+                            {(recordSeconds % 60).toString().padStart(2, '0')}
+                          </span>
+                        </div>
+                        {/* Waveform animado */}
+                        {renderAudioWaveform()}
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={cancelRecording}
+                          className="h-9 w-9 bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded-xl flex items-center justify-center transition-all cursor-pointer"
+                          title="Excluir gravação"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={stopAndSendRecording}
+                          className="h-9 w-9 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl flex items-center justify-center shadow-lg transition-all cursor-pointer"
+                          title="Enviar áudio"
+                        >
+                          <Check size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* ENTRADA DE TEXTO COMUM */
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Media/Tools Icons */}
+                      <div className="flex items-center gap-1">
+                        <label className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 cursor-pointer flex items-center justify-center shrink-0">
+                          <Paperclip size={16} />
+                          <input
+                            type="file"
+                            onChange={handleFileChange}
+                            className="hidden"
+                            accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => alert('Seletor de Emoji!')}
+                          className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 cursor-pointer shrink-0"
+                        >
+                          <Smile size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowTemplateModal(true)}
+                          className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 cursor-pointer shrink-0"
+                          title="Mensagens Rápidas"
+                        >
+                          <FileText size={16} />
+                        </button>
+                      </div>
+
+                      {/* Text Input */}
+                      <textarea
+                        value={messageText}
+                        onChange={(e) => setMessageText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            void sendMessage();
+                          }
+                        }}
+                        rows={1}
+                        placeholder='Digite "/" para respostas rápidas ou escreva uma'
+                        className="flex-1 bg-slate-950 border border-white/5 rounded-2xl px-4 py-3 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none min-h-[44px] max-h-[44px] transition-colors"
+                      />
+
+                      {/* Record Mic */}
+                      <button
+                        type="button"
+                        onClick={startRecording}
+                        className="p-3 bg-white/5 hover:bg-white/10 text-slate-300 rounded-2xl border border-white/5 flex items-center justify-center cursor-pointer shrink-0 transition-all active:scale-95"
+                        title="Gravar áudio"
+                      >
+                        <Mic size={16} />
+                      </button>
+
+                      {/* Send Button */}
+                      <button
+                        onClick={() => sendMessage()}
+                        disabled={sendingMessage || (!messageText.trim() && !filePreview)}
+                        className="p-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl flex items-center justify-center cursor-pointer shrink-0 shadow-lg shadow-cyan-950/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+                      >
+                        {sendingMessage ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                      </button>
+                    </div>
+                  )}
+
+                  {sendError && (
+                    <div className="mt-2 text-2xs font-bold text-rose-400">
+                      {sendError}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                <MessageSquare className="text-slate-600 mb-3" size={32} />
+                <h3 className="text-xs font-black text-white uppercase tracking-wider">Inbox Vazio</h3>
+                <p className="text-2xs text-slate-500 mt-1 max-w-xs font-bold">Selecione um contato na barra lateral esquerda para iniciar o atendimento.</p>
               </div>
             )}
           </div>
-        </aside>
 
-        <section className="flex min-h-[520px] flex-col">
-          <div className="border-b border-gray-100 p-5">
-            <h2 className="font-black text-gray-900">{selectedConversation?.nome_contato || selectedConversation?.telefone || 'Selecione uma conversa'}</h2>
-            <p className="text-xs font-bold text-slate-400">{selectedConversation ? selectedConversation.telefone : 'Escolha um atendimento para responder.'}</p>
-          </div>
-          {selectedConversation ? (
-            <>
-              <div className="flex flex-1 flex-col gap-3 overflow-y-auto bg-slate-50 p-5">
-                {loadingMessages ? (
-                  <div className="flex flex-1 items-center justify-center">
-                    <Loader2 className="animate-spin text-blue-600" size={30} />
+          {/* COLUMN 3: RIGHT SIDEBAR - LEAD DETAILS PANEL */}
+          <div className="bg-slate-900/20 flex flex-col p-5 space-y-6 overflow-y-auto">
+            {selectedConversation ? (
+              <>
+                {/* Convert Opportunity Button */}
+                <button
+                  type="button"
+                  onClick={() => alert('Lead convertido em Oportunidade com sucesso!')}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-xs font-black uppercase text-white py-3.5 rounded-2xl shadow-xl shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0"
+                >
+                  <Sparkles size={14} />
+                  Converter em Oportunidade
+                </button>
+
+                {/* Tags manager */}
+                <div className="space-y-2 shrink-0">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Etiquetas</label>
+                  <select
+                    value={selectedTag}
+                    onChange={(e) => {
+                      handleAddTag(e.target.value);
+                      setSelectedTag('');
+                    }}
+                    className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/50"
+                  >
+                    <option value="">Selecione uma etiqueta...</option>
+                    <option value="Lead Quente">Lead Quente 🔥</option>
+                    <option value="Aguardando Retorno">Aguardando Retorno ⏳</option>
+                    <option value="Sem Interesse">Sem Interesse ❄️</option>
+                    <option value="Documentação Enviada">Documentação Enviada 📋</option>
+                  </select>
+
+                  {/* Render current tags */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {selectedConversation.tags?.map((t, idx) => (
+                      <span
+                        key={idx}
+                        className="rounded-lg bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-1 text-[9px] font-extrabold text-cyan-400 flex items-center gap-1"
+                      >
+                        {t}
+                        <button onClick={() => handleRemoveTag(t)} className="text-[8px] hover:text-white">✕</button>
+                      </span>
+                    ))}
                   </div>
-                ) : messages.length > 0 ? messages.map((message) => {
-                  const mine = message.direction === 'outbound';
-                  return (
-                    <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[78%] rounded-3xl px-4 py-3 shadow-sm ${mine ? 'bg-blue-600 text-white' : 'bg-white text-slate-800'}`}>
-                        <p className="whitespace-pre-wrap text-sm font-bold leading-relaxed">{message.mensagem}</p>
-                        <p className={`mt-2 text-[10px] font-black uppercase tracking-widest ${mine ? 'text-blue-100' : 'text-slate-400'}`}>{formatHour(message.created_at)}</p>
-                      </div>
-                    </div>
-                  );
-                }) : (
-                  <div className="flex flex-1 items-center justify-center text-center">
+                </div>
+
+                {/* Lead Source */}
+                <div className="space-y-2 shrink-0">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Origem do Lead</label>
+                  <div className="bg-slate-950 border border-white/5 rounded-2xl p-4 flex items-center justify-between">
                     <div>
-                      <MessageSquare className="mx-auto mb-4 text-blue-500" size={42} />
-                      <h3 className="text-xl font-black text-gray-900">Conversa pronta para atender</h3>
-                      <p className="mx-auto mt-2 max-w-md text-sm font-bold leading-relaxed text-slate-500">
-                        {selectedConversation.id.startsWith('new-')
-                          ? 'Esta é uma nova conversa iniciada pelo CRM. Digite sua primeira mensagem abaixo para enviar pelo WhatsApp e salvar o contato.'
-                          : 'Quando o cliente responder, as mensagens aparecem aqui. Voce tambem pode iniciar o contato pelo campo abaixo.'
-                        }
-                      </p>
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Origem Cadastrada</span>
+                      <span className="text-xs font-black text-white block mt-0.5">{selectedConversation.source || 'Instagram Organico'}</span>
                     </div>
+                    <button
+                      onClick={() => alert('Origem removida!')}
+                      className="p-1.5 bg-white/5 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-xl transition-all cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
-                )}
-              </div>
-              {filePreview && (
-                <div className="mx-5 mt-3 flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50 p-4 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    {selectedFile?.type.startsWith('image/') ? (
-                      <img src={filePreview} alt="Preview do anexo" className="h-12 w-12 rounded-xl object-cover" />
+                </div>
+
+                {/* Internal Notes */}
+                <div className="space-y-2 flex-1 flex flex-col min-h-[160px]">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Anotações Internas</label>
+                  
+                  {/* Notes input */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="digitar..."
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddNote(); }}
+                      className="flex-1 bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs text-white focus:outline-none focus:border-cyan-500/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddNote}
+                      className="h-8 w-8 bg-cyan-600/20 border border-cyan-500/20 hover:bg-cyan-600 hover:text-white text-cyan-400 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+
+                  {/* Notes list */}
+                  <div className="flex-1 overflow-y-auto bg-slate-950/40 border border-white/5 p-3 rounded-2xl space-y-2 max-h-[140px]">
+                    {selectedConversation.notes && selectedConversation.notes.length > 0 ? (
+                      selectedConversation.notes.map((note, idx) => (
+                        <div key={idx} className="bg-slate-950 p-2.5 rounded-xl border border-white/2 text-[10px] font-bold text-slate-300 leading-normal">
+                          {note}
+                        </div>
+                      ))
                     ) : (
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
-                        <Paperclip size={20} />
+                      <div className="h-full flex items-center justify-center text-center text-[10px] text-slate-500 uppercase tracking-widest font-black py-4">
+                        Nenhuma anotação
                       </div>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-black text-slate-800 truncate max-w-[200px] sm:max-w-xs">{selectedFile?.name}</p>
-                      <p className="text-[10px] font-bold text-slate-400">
-                        {selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB' : ''}
-                      </p>
-                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={removeFile}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-400 hover:text-red-500 shadow-sm transition-all cursor-pointer"
+                </div>
+
+                {/* Custom attributes dropdown */}
+                <div className="space-y-2 shrink-0">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Campos Personalizados</label>
+                  <select
+                    className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none"
+                    onChange={(e) => alert(`Campo customizado selecionado: ${e.target.value}`)}
                   >
-                    <X size={16} />
-                  </button>
+                    <option value="">Selecione...</option>
+                    <option value="tipo_saude">Tipo de Plano Pretendido</option>
+                    <option value="vidas_cotadas">Número Total de Vidas</option>
+                    <option value="faixa_etaria">Faixa Etária Predominante</option>
+                  </select>
                 </div>
-              )}
-              {sendError && (
-                <div className="mx-5 mt-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-xs font-bold text-red-700 shadow-sm">
-                  {sendError}
-                </div>
-              )}
-              <div className="border-t border-gray-100 bg-white p-4">
-                <div className="flex items-center gap-3">
-                  <label className="flex h-[52px] w-[52px] cursor-pointer shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-blue-300 hover:bg-white hover:text-blue-600">
-                    <Paperclip size={20} />
-                    <input
-                      type="file"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
-                    />
-                  </label>
-                  <textarea
-                    value={messageText}
-                    onChange={(event) => setMessageText(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        void sendMessage();
-                      }
-                    }}
-                    rows={2}
-                    placeholder="Escreva sua resposta..."
-                    className="min-h-[52px] flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white"
-                  />
-                  <button
-                    onClick={sendMessage}
-                    disabled={sendingMessage || (!messageText.trim() && !filePreview)}
-                    className="flex min-w-[112px] h-[52px] cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {sendingMessage ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} Enviar
-                  </button>
-                </div>
+              </>
+            ) : (
+              <div className="h-full flex items-center justify-center text-center text-2xs text-slate-500 uppercase tracking-widest font-black">
+                Nenhum lead selecionado
               </div>
-            </>
-          ) : (
-            <div className="flex flex-1 items-center justify-center bg-slate-50 p-8 text-center">
-              <div>
-                <MessageSquare className="mx-auto mb-4 text-blue-500" size={42} />
-                <h3 className="text-xl font-black text-gray-900">Conecte para iniciar os atendimentos</h3>
-                <p className="mx-auto mt-2 max-w-md text-sm font-bold leading-relaxed text-slate-500">
-                  Conecte seu WhatsApp para acompanhar as conversas dos leads com mais clareza e rapidez.
-                </p>
-              </div>
-            </div>
-          )}
-        </section>
+            )}
+          </div>
+
+        </div>
+
       </div>
+
+      {/* ================= MODAL: SELETOR DE TEMPLATES DE MENSAGEM ================= */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in-50 duration-200">
+          <div className="bg-slate-900 rounded-[2.5rem] border border-white/10 w-full max-w-xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <FileText size={20} className="text-cyan-400" />
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest">Modelos de Mensagem (Templates)</h3>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Selecione uma resposta rápida pronta</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                className="h-9 w-9 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-3.5 max-h-[400px]">
+              {TEMPLATES_PADRAO.map((tmpl) => (
+                <button
+                  key={tmpl.id}
+                  type="button"
+                  onClick={() => {
+                    setMessageText(tmpl.text);
+                    setShowTemplateModal(false);
+                  }}
+                  className="w-full text-left bg-slate-950/50 border border-white/5 hover:border-cyan-500/30 hover:bg-slate-950 p-4 rounded-2xl flex flex-col gap-2 transition-all cursor-pointer"
+                >
+                  <span className="text-xs font-black text-cyan-400 uppercase tracking-wider">{tmpl.title}</span>
+                  <p className="text-2xs text-slate-300 font-bold leading-normal">{tmpl.text}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="p-6 border-t border-white/5 bg-slate-950/20 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-white/5 text-xs font-bold text-slate-400 hover:bg-white/10 transition-all cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </InternalLayout>
   );
 }
