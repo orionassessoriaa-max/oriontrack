@@ -646,12 +646,15 @@ export default function DashboardPage() {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({}),
+              body: JSON.stringify({
+                corretor_id: profile.corretor_id
+              }),
             });
             if (response.ok) {
               const payload = await response.json();
               if (payload.accounts && payload.accounts.length > 0) {
-                setMetaAccount(payload.accounts[0]);
+                const matchingAcc = payload.accounts.find((acc: any) => acc.corretor_id === profile.corretor_id);
+                setMetaAccount(matchingAcc || null);
               } else {
                 setMetaAccount(null);
               }

@@ -176,6 +176,7 @@ export async function POST(request: Request) {
     const requestedUntil = parseDate(String(body.data_fim || '')) || defaultRange.until;
     const { since, until } = getMetaCompatibleRange(requestedSince, requestedUntil);
     const search = String(body.nome || '').trim().toLowerCase();
+    const corretorId = body.corretor_id ? String(body.corretor_id) : null;
 
     const query = supabaseAdmin
       .from('corretores')
@@ -185,11 +186,18 @@ export async function POST(request: Request) {
 
     if (guard.profile.tipo_usuario === 'gestor_trafego') {
       query.eq('gestor_trafego_id', guard.user.id);
+      if (corretorId) {
+        query.eq('id', corretorId);
+      }
     } else if (['corretor', 'corretor_admin', 'corretor_membro'].includes(guard.profile.tipo_usuario)) {
       if (!guard.profile.corretor_id) {
         return NextResponse.json({ success: true, accounts: [] });
       }
       query.eq('id', guard.profile.corretor_id);
+    } else if (guard.profile.tipo_usuario === 'admin') {
+      if (corretorId) {
+        query.eq('id', corretorId);
+      }
     }
 
     const { data: corretores, error } = await query;
