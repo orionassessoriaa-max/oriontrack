@@ -22,6 +22,7 @@ export const ORION_TEAM_MEMBERS: OrionTeamMember[] = [
 const TEAM_PHOTOS: Record<string, string> = {
   ewertton: '/fotos/EWERTTON DEVOPS.png',
   geovana: '/fotos/GEOVANNA GESTORA.png',
+  geovanna: '/fotos/GEOVANNA GESTORA.png',
   lucas: '/fotos/LUCAS ACOOUNT.png',
   patrick: '/fotos/PATRICK ADMIN.png',
   nataline: '/fotos/NATALINE DESIGNER.png',
@@ -51,7 +52,7 @@ export function getTeamMemberPhoto(name?: string | null) {
 
 export function isTrafficManagerMember(member: OrionTeamMember) {
   if (member.tipo_usuario === 'gestor_trafego') return true;
-  return member.cargo.toLowerCase().includes('tráfego') || ['ewertton', 'geovana'].includes(normalizeTeamMemberName(member.nome));
+  return member.cargo.toLowerCase().includes('tráfego') || ['ewertton', 'geovana', 'geovanna'].includes(normalizeTeamMemberName(member.nome));
 }
 
 export function getTeamMemberAvatar(member: OrionTeamMember) {

@@ -320,7 +320,7 @@ function resolveLeadDate(row: CsvRow) {
     if (parsed) return parsed;
   }
 
-  return new Date().toISOString();
+  return null;
 }
 
 function statusFromSheet(value: string) {
@@ -538,8 +538,14 @@ export async function POST(request: Request) {
       const sheetName = source.name || await resolveSheetName(editUrl, source.gid);
 
       rows.forEach((row) => {
-          const rawNome = pick(row, ['nome', 'name', 'cliente', 'nome completo']) || findNameFallback(row);
-          const rawTelefone = pick(row, ['telefone', 'phone', 'celular', 'whatsapp', 'fone']) || findPhoneFallback(row);
+          const rawNome = (pick(row, ['nome', 'name', 'cliente', 'nome completo']) || findNameFallback(row)).trim();
+          const rawTelefone = (pick(row, ['telefone', 'phone', 'celular', 'whatsapp', 'fone']) || findPhoneFallback(row)).trim();
+
+          // Skip completely empty/blank rows
+          if (!rawNome && !rawTelefone) {
+            return;
+          }
+
           const warnings = [
             !rawNome ? 'Nome ausente na planilha' : '',
             !rawTelefone ? 'Telefone ausente na planilha' : '',

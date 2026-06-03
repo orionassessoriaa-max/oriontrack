@@ -20,12 +20,14 @@ import {
   Loader2,
   LogOut,
   MessageSquare,
+  Moon,
   Palette,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
   Settings,
   Shield,
+  Sun,
   TrendingUp,
   Trophy,
   User,
@@ -437,6 +439,23 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
               </button>
             </div>
           )}
+
+          {/* Theme Toggle Button */}
+          <button
+            onClick={() => {
+              const newTheme = tema === 'noturno' ? 'claro' : 'noturno';
+              window.localStorage.setItem('orion:tema_sistema', newTheme);
+              window.dispatchEvent(new Event('orion:theme_changed'));
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/5 bg-white/5 text-slate-400 hover:text-white transition-all cursor-pointer"
+            title={tema === 'noturno' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+          >
+            {tema === 'noturno' ? (
+              <Sun size={16} className="text-amber-400 animate-pulse" />
+            ) : (
+              <Moon size={16} className="text-slate-400" />
+            )}
+          </button>
 
           <div className="flex items-center gap-3 border border-white/5 bg-white/5 p-1.5 rounded-2xl">
             <Link href="/perfil" className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-200" title="Ver meu Perfil">

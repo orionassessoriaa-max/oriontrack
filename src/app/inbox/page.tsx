@@ -31,7 +31,8 @@ import {
   Check,
   Search,
   Bot,
-  Sparkles
+  Sparkles,
+  Settings
 } from 'lucide-react';
 
 type Conversation = {
@@ -49,6 +50,7 @@ type Conversation = {
   notes?: string[];
   source?: string;
   aiActive?: boolean;
+  customFields?: Array<{ key: string; value: string }>;
 };
 
 type InboxMessage = {
@@ -110,6 +112,27 @@ export default function BrokerInboxPage() {
   const [newNote, setNewNote] = useState('');
   const [selectedTag, setSelectedTag] = useState('');
 
+  // Custom Fields & CRM Status States
+  const [customFieldName, setCustomFieldName] = useState('');
+  const [customFieldValue, setCustomFieldValue] = useState('');
+  const [leadStatus, setLeadStatus] = useState<string>('Aguardando atendimento');
+  const [loadingLead, setLoadingLead] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // Apolo Bot & Close Reason Modal States
+  const [showBotConfigModal, setShowBotConfigModal] = useState(false);
+  const [showCloseReasonModal, setShowCloseReasonModal] = useState(false);
+  const [botName, setBotName] = useState('Apolo Bot');
+  const [welcomeMessage, setWelcomeMessage] = useState('Olá! Seja bem-vindo à Orion Seguros. 😊 Sou o seu assistente virtual Apolo Bot. Como posso te ajudar hoje?');
+  const [flowSteps, setFlowSteps] = useState([
+    { id: 'step_welcome', label: 'Mensagem Inicial', text: 'Olá! Seja bem-vindo à Orion Seguros. 😊 Sou o seu assistente virtual Apolo Bot. Como posso te ajudar hoje?', buttons: ['Fazer uma simulação', 'Falar com atendente', 'Outros assuntos'] },
+    { id: 'step_simulate', label: 'Simulação Selecionada', text: 'Excelente! Para fazermos a cotação ideal para você, quantas vidas serão incluídas no plano?', buttons: ['Apenas eu', 'Eu e minha família', 'Minha empresa'] },
+    { id: 'step_agent', label: 'Falar com Atendente', text: 'Perfeito. Estou repassando sua conversa para um de nossos especialistas. Aguarde um minutinho!', buttons: [] },
+    { id: 'step_others', label: 'Outros Assuntos', text: 'Por favor, descreva em uma mensagem o que você precisa para que possamos te direcionar melhor.', buttons: [] }
+  ]);
+  const [selectedFlowStepId, setSelectedFlowStepId] = useState('step_welcome');
+  const [closeReason, setCloseReason] = useState('');
+
   // Normalize phone number
   const normalizePhone = (value: string) => {
     let digits = value.replace(/\D/g, '');
@@ -170,13 +193,14 @@ export default function BrokerInboxPage() {
 
     const rows = (data || []).map((row: any) => ({
       ...row,
-      agentName: profile.nome || 'Bianca Alves',
+      agentName: profile?.nome || 'Bianca Alves',
       expirationTime: '03/06 às 23:07',
       protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
       tags: row.tags || ['Lead Frio'],
       notes: row.notes || [],
       source: row.source || 'Instagram Organico',
-      aiActive: row.aiActive ?? false
+      aiActive: row.aiActive ?? false,
+      customFields: row.customFields || []
     })) as Conversation[];
 
     // Add temp conversation if URL has lead phone and it's not saved
@@ -203,18 +227,19 @@ export default function BrokerInboxPage() {
         const tempConv: Conversation = {
           id: 'new-' + targetPhone,
           lead_id: leadId || null,
-          corretor_id: profile.corretor_id,
+          corretor_id: profile?.corretor_id || null,
           telefone: targetPhone,
           nome_contato: contactName,
           status: 'espera',
           ultima_mensagem_at: new Date().toISOString(),
-          agentName: profile.nome || 'Bianca Alves',
+          agentName: profile?.nome || 'Bianca Alves',
           expirationTime: '03/06 às 23:07',
           protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
           tags: ['Aguardando'],
           notes: [],
           source: 'Meta Ads',
-          aiActive: false
+          aiActive: false,
+          customFields: []
         };
         rows.unshift(tempConv);
         matchedConv = tempConv;
@@ -272,6 +297,58 @@ export default function BrokerInboxPage() {
       setMessages([]);
     }
   }, [selectedConversation?.id]);
+
+  useEffect(() => {
+    if (selectedConversation?.lead_id) {
+      void fetchLeadDetails(selectedConversation.lead_id);
+    } else {
+      setLeadStatus('Aguardando atendimento');
+    }
+  }, [selectedConversation?.id]);
+
+  const fetchLeadDetails = async (leadId: string) => {
+    setLoadingLead(true);
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('status')
+        .eq('id', leadId)
+        .single();
+      if (error) throw error;
+      if (data) {
+        setLeadStatus(data.status || 'Aguardando atendimento');
+      }
+    } catch (err) {
+      console.error('Erro ao buscar status do lead:', err);
+    } finally {
+      setLoadingLead(false);
+    }
+  };
+
+  const handleUpdateLeadStatus = async (newStatus: string) => {
+    if (!selectedConversation?.lead_id) {
+      alert('Esta conversa não possui um Lead associado.');
+      return;
+    }
+    
+    setUpdatingStatus(true);
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({ status: newStatus })
+        .eq('id', selectedConversation.lead_id);
+        
+      if (error) throw error;
+      
+      setLeadStatus(newStatus);
+      alert('Status do Lead atualizado com sucesso no CRM!');
+    } catch (err) {
+      console.error('Erro ao atualizar status do lead:', err);
+      alert('Erro ao atualizar status no Supabase.');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   // Connect WhatsApp
   async function connectWhatsApp() {
@@ -484,7 +561,8 @@ export default function BrokerInboxPage() {
   };
 
   const handleEndChat = () => {
-    updateConversationStatus('fechada');
+    setCloseReason('');
+    setShowCloseReasonModal(true);
   };
 
   const updateConversationStatus = (newStatus: string) => {
@@ -499,6 +577,10 @@ export default function BrokerInboxPage() {
     const updated = { ...selectedConversation, aiActive: !selectedConversation.aiActive };
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+  };
+
+  const handleSaveStepText = (stepId: string, newText: string) => {
+    setFlowSteps(current => current.map(step => step.id === stepId ? { ...step, text: newText } : step));
   };
 
   // Sidebar notes & tags updates
@@ -524,6 +606,35 @@ export default function BrokerInboxPage() {
     if (!selectedConversation) return;
     const updatedTags = (selectedConversation.tags || []).filter(t => t !== tag);
     const updated = { ...selectedConversation, tags: updatedTags };
+    setSelectedConversation(updated);
+    setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+  };
+
+  const handleAddCustomField = () => {
+    if (!selectedConversation || !customFieldName.trim() || !customFieldValue.trim()) return;
+    
+    const currentFields = selectedConversation.customFields || [];
+    const newField = { key: customFieldName.trim(), value: customFieldValue.trim() };
+    
+    let updatedFields;
+    if (currentFields.some(f => f.key.toLowerCase() === newField.key.toLowerCase())) {
+      updatedFields = currentFields.map(f => f.key.toLowerCase() === newField.key.toLowerCase() ? newField : f);
+    } else {
+      updatedFields = [...currentFields, newField];
+    }
+    
+    const updated = { ...selectedConversation, customFields: updatedFields };
+    setSelectedConversation(updated);
+    setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+    
+    setCustomFieldName('');
+    setCustomFieldValue('');
+  };
+
+  const handleRemoveCustomField = (key: string) => {
+    if (!selectedConversation) return;
+    const updatedFields = (selectedConversation.customFields || []).filter(f => f.key !== key);
+    const updated = { ...selectedConversation, customFields: updatedFields };
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
   };
@@ -787,6 +898,13 @@ export default function BrokerInboxPage() {
                       >
                         <Bot size={13} />
                       </button>
+                      <button
+                        onClick={() => setShowBotConfigModal(true)}
+                        className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer rounded-lg hover:bg-white/5"
+                        title="Configurar Fluxos do Apolo Bot"
+                      >
+                        <Settings size={13} />
+                      </button>
                       <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Bloquear contato">
                         <Ban size={13} />
                       </button>
@@ -1007,15 +1125,34 @@ export default function BrokerInboxPage() {
           <div className="orion-inbox-details bg-slate-900/20 flex flex-col p-5 space-y-6 overflow-y-auto">
             {selectedConversation ? (
               <>
-                {/* Convert Opportunity Button */}
-                <button
-                  type="button"
-                  onClick={() => alert('Lead convertido em Oportunidade com sucesso!')}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-xs font-black uppercase text-white py-3.5 rounded-2xl shadow-xl shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0"
-                >
-                  <Sparkles size={14} />
-                  Converter em Oportunidade
-                </button>
+                {/* Status do Lead no CRM */}
+                <div className="space-y-2 shrink-0 border-b border-white/5 pb-4">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Status no CRM / Leads</label>
+                  {loadingLead ? (
+                    <div className="flex items-center gap-2 text-2xs text-slate-500">
+                      <Loader2 size={12} className="animate-spin text-cyan-400" />
+                      <span>Carregando status do CRM...</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={leadStatus}
+                      onChange={(e) => handleUpdateLeadStatus(e.target.value)}
+                      className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white font-black uppercase tracking-wider focus:outline-none focus:border-cyan-500/50"
+                    >
+                      <option value="Aguardando atendimento">Oportunidade (Aguardando)</option>
+                      <option value="Contato feito">Contato Feito</option>
+                      <option value="Cotação enviada">Cotação Enviada</option>
+                      <option value="Em negociação">Em Negociação</option>
+                      <option value="Não tive retorno">Sem Retorno</option>
+                      <option value="Venda realizada">Venda Realizada (Ganho)</option>
+                      <option value="Sem interesse">Sem Interesse (Perdido)</option>
+                      <option value="Região sem comercialização">Região Sem Comercialização</option>
+                      <option value="Chamou duas vezes">Chamou Duas Vezes</option>
+                      <option value="Telefone não existe">Telefone Não Existe</option>
+                    </select>
+                  )}
+                </div>
+
 
                 {/* Tags manager */}
                 <div className="space-y-2 shrink-0">
@@ -1105,18 +1242,60 @@ export default function BrokerInboxPage() {
                   </div>
                 </div>
 
-                {/* Custom attributes dropdown */}
-                <div className="space-y-2 shrink-0">
+                {/* Custom attributes editable section */}
+                <div className="space-y-3.5 shrink-0 border-t border-white/5 pt-4">
                   <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Campos Personalizados</label>
-                  <select
-                    className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none"
-                    onChange={(e) => alert(`Campo customizado selecionado: ${e.target.value}`)}
-                  >
-                    <option value="">Selecione...</option>
-                    <option value="tipo_saude">Tipo de Plano Pretendido</option>
-                    <option value="vidas_cotadas">Número Total de Vidas</option>
-                    <option value="faixa_etaria">Faixa Etária Predominante</option>
-                  </select>
+                  
+                  {/* Inputs for custom key-value addition */}
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Nome do campo (Ex: Profissão)"
+                      value={customFieldName}
+                      onChange={(e) => setCustomFieldName(e.target.value)}
+                      className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs text-white focus:outline-none focus:border-cyan-500/50"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Valor do campo (Ex: Médico)"
+                        value={customFieldValue}
+                        onChange={(e) => setCustomFieldValue(e.target.value)}
+                        className="flex-1 bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs text-white focus:outline-none focus:border-cyan-500/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomField}
+                        className="h-8 w-8 bg-cyan-600/20 border border-cyan-500/20 hover:bg-cyan-600 hover:text-white text-cyan-400 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Custom fields list */}
+                  <div className="space-y-2 mt-2">
+                    {selectedConversation.customFields && selectedConversation.customFields.length > 0 ? (
+                      selectedConversation.customFields.map((field, idx) => (
+                        <div key={idx} className="bg-slate-950 border border-white/5 rounded-xl p-3 flex items-center justify-between">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">{field.key}</span>
+                            <span className="text-xs font-black text-white block mt-0.5 truncate">{field.value}</span>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveCustomField(field.key)}
+                            className="p-1 bg-white/5 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-xl transition-all cursor-pointer"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center text-[10px] text-slate-500 uppercase tracking-widest font-black py-2">
+                        Nenhum campo personalizado
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             ) : (
@@ -1175,6 +1354,328 @@ export default function BrokerInboxPage() {
                 className="px-5 py-2.5 rounded-xl bg-white/5 text-xs font-bold text-slate-400 hover:bg-white/10 transition-all cursor-pointer"
               >
                 Fechar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: CONFIGURAÇÃO DO APOLO BOT (MANYCHAT STYLE) ================= */}
+      {showBotConfigModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in-50 duration-200">
+          <div className="bg-slate-900 rounded-[2.5rem] border border-white/10 w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 text-white">
+            
+            {/* Header */}
+            <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <Bot size={22} className="text-cyan-400 animate-pulse" />
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-white">Configurações do Apolo Bot</h3>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Construa fluxos automáticos de primeiro contato e respostas rápidas</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBotConfigModal(false)}
+                className="h-9 w-9 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Content Area */}
+            <div className="flex-1 flex overflow-hidden">
+              {/* Left Sidebar: Configurations */}
+              <div className="w-[320px] border-r border-white/5 p-6 space-y-6 overflow-y-auto shrink-0 bg-slate-950/20">
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Nome do Assistente (Bot)</span>
+                  <input
+                    type="text"
+                    value={botName}
+                    onChange={(e) => setBotName(e.target.value)}
+                    className="w-full rounded-xl bg-slate-850 border border-white/5 px-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-500 transition"
+                    placeholder="Ex: Apolo Bot"
+                  />
+                </div>
+
+                <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400">Primeiro Contato Ativo</span>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 leading-normal">
+                    Se ativado, assim que um novo lead entrar na fila "Aguardando", o bot iniciará o fluxo abaixo instantaneamente.
+                  </p>
+                  <label className="flex items-center gap-2 cursor-pointer pt-1">
+                    <input type="checkbox" defaultChecked className="h-4.5 w-4.5 rounded border-white/10 bg-slate-800 text-cyan-600 focus:ring-cyan-500" />
+                    <span className="text-2xs font-extrabold uppercase text-slate-300">Autocomparador Ligado</span>
+                  </label>
+                </div>
+
+                <div className="rounded-2xl border border-dashed border-white/5 p-4 space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Dica ManyChat</span>
+                  <p className="text-3xs font-medium text-slate-500 leading-relaxed uppercase">
+                    Utilize botões de múltipla escolha para direcionar o cliente comercialmente. Fluxos com opções têm 92% mais conversão que textos abertos longos.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Panel: Interactive Visual Builder */}
+              <div className="flex-1 p-6 overflow-auto bg-slate-950/40 flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-4 block">Visual Flow Builder (Estilo ManyChat)</span>
+                
+                {/* Node Flowchart Rendering */}
+                <div className="flex-1 flex flex-col items-center gap-6 select-none relative">
+                  
+                  {/* Step 1 Card: Welcome message */}
+                  <div className={`w-[480px] rounded-3xl border p-5 transition-all shadow-xl ${
+                    selectedFlowStepId === 'step_welcome' 
+                      ? 'border-cyan-500 bg-slate-900 ring-4 ring-cyan-500/10' 
+                      : 'border-white/5 bg-slate-950/60'
+                  }`}>
+                    <div className="flex items-center justify-between gap-3 mb-3 border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-cyan-500"></span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400">Passo 1: Mensagem Inicial</span>
+                      </div>
+                      <button 
+                        onClick={() => setSelectedFlowStepId('step_welcome')}
+                        className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                      >
+                        Editar
+                      </button>
+                    </div>
+
+                    <textarea
+                      value={flowSteps.find(s => s.id === 'step_welcome')?.text || ''}
+                      onChange={(e) => handleSaveStepText('step_welcome', e.target.value)}
+                      rows={3}
+                      className="w-full resize-none rounded-xl border-none bg-slate-950/50 p-3 text-2xs font-semibold leading-relaxed text-slate-100 focus:ring-1 focus:ring-cyan-500 outline-none"
+                    />
+
+                    {/* Quick Replies Buttons */}
+                    <div className="mt-3 space-y-1.5">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 block">Botões de Ação (Respostas Rápidas)</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        {flowSteps.find(s => s.id === 'step_welcome')?.buttons.map((btn, idx) => (
+                          <div 
+                            key={idx}
+                            onClick={() => {
+                              if (idx === 0) setSelectedFlowStepId('step_simulate');
+                              else if (idx === 1) setSelectedFlowStepId('step_agent');
+                              else setSelectedFlowStepId('step_others');
+                            }}
+                            className="bg-cyan-600/10 border border-cyan-500/20 hover:bg-cyan-600/20 text-cyan-400 rounded-lg p-2 text-center text-3xs font-black uppercase tracking-wide cursor-pointer transition"
+                          >
+                            {btn}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Visual Connector lines */}
+                  <div className="h-6 w-0.5 bg-gradient-to-b from-cyan-500 to-slate-700 shrink-0"></div>
+
+                  {/* Step 2 Card: Children flow preview */}
+                  <div className="flex gap-4">
+                    {/* Flow card for Simulation Option */}
+                    <div className={`w-[260px] rounded-2xl border p-4 transition-all shadow-lg ${
+                      selectedFlowStepId === 'step_simulate' 
+                        ? 'border-cyan-500 bg-slate-900 ring-4 ring-cyan-500/10' 
+                        : 'border-white/5 bg-slate-950/60'
+                    }`}>
+                      <div className="flex items-center justify-between gap-3 mb-2.5 border-b border-white/5 pb-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">Ramo: Cotação</span>
+                        <button 
+                          onClick={() => setSelectedFlowStepId('step_simulate')}
+                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                      <textarea
+                        value={flowSteps.find(s => s.id === 'step_simulate')?.text || ''}
+                        onChange={(e) => handleSaveStepText('step_simulate', e.target.value)}
+                        rows={2}
+                        className="w-full resize-none rounded-lg border-none bg-slate-950/50 p-2.5 text-3xs font-bold leading-normal text-slate-100 focus:ring-1 focus:ring-cyan-500 outline-none"
+                      />
+                      <div className="mt-2.5 space-y-1">
+                        {flowSteps.find(s => s.id === 'step_simulate')?.buttons.map((btn, bidx) => (
+                          <div key={bidx} className="bg-slate-950 border border-white/5 text-slate-400 rounded-md p-1 text-center text-[8px] font-extrabold uppercase">
+                            {btn}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Flow card for Human Agent Option */}
+                    <div className={`w-[260px] rounded-2xl border p-4 transition-all shadow-lg ${
+                      selectedFlowStepId === 'step_agent' 
+                        ? 'border-cyan-500 bg-slate-900 ring-4 ring-cyan-500/10' 
+                        : 'border-white/5 bg-slate-950/60'
+                    }`}>
+                      <div className="flex items-center justify-between gap-3 mb-2.5 border-b border-white/5 pb-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">Ramo: Atendente</span>
+                        <button 
+                          onClick={() => setSelectedFlowStepId('step_agent')}
+                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                      <textarea
+                        value={flowSteps.find(s => s.id === 'step_agent')?.text || ''}
+                        onChange={(e) => handleSaveStepText('step_agent', e.target.value)}
+                        rows={2}
+                        className="w-full resize-none rounded-lg border-none bg-slate-950/50 p-2.5 text-3xs font-bold leading-normal text-slate-100 focus:ring-1 focus:ring-cyan-500 outline-none"
+                      />
+                      <div className="mt-2.5 text-center text-[7px] font-bold text-slate-500 uppercase tracking-widest p-1 border border-dashed border-white/5 rounded">
+                        Fim de Automação
+                      </div>
+                    </div>
+
+                    {/* Flow card for Others Option */}
+                    <div className={`w-[260px] rounded-2xl border p-4 transition-all shadow-lg ${
+                      selectedFlowStepId === 'step_others' 
+                        ? 'border-cyan-500 bg-slate-900 ring-4 ring-cyan-500/10' 
+                        : 'border-white/5 bg-slate-950/60'
+                    }`}>
+                      <div className="flex items-center justify-between gap-3 mb-2.5 border-b border-white/5 pb-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">Ramo: Outros</span>
+                        <button 
+                          onClick={() => setSelectedFlowStepId('step_others')}
+                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                      <textarea
+                        value={flowSteps.find(s => s.id === 'step_others')?.text || ''}
+                        onChange={(e) => handleSaveStepText('step_others', e.target.value)}
+                        rows={2}
+                        className="w-full resize-none rounded-lg border-none bg-slate-950/50 p-2.5 text-3xs font-bold leading-normal text-slate-100 focus:ring-1 focus:ring-cyan-500 outline-none"
+                      />
+                      <div className="mt-2.5 text-center text-[7px] font-bold text-slate-500 uppercase tracking-widest p-1 border border-dashed border-white/5 rounded">
+                        Fim de Automação
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-white/5 bg-slate-950/20 flex justify-between shrink-0">
+              <span className="text-3xs font-bold text-slate-500 uppercase tracking-widest flex items-center">Apolo Bot Flow Builder v1.0.0</span>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBotConfigModal(false)}
+                  className="px-5 py-2.5 rounded-xl bg-white/5 text-xs font-black uppercase tracking-wider text-slate-400 hover:bg-white/10 transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.setItem('orion:apolo_bot_config', JSON.stringify({ botName, flowSteps }));
+                    alert('Fluxo do Apolo Bot salvo com sucesso!');
+                    setShowBotConfigModal(false);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-cyan-600 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-600/10 hover:-translate-y-0.5 transition-all cursor-pointer"
+                >
+                  Salvar Configuração
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: MOTIVO DE ENCERRAMENTO OBRIGATÓRIO ================= */}
+      {showCloseReasonModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in-50 duration-200">
+          <div className="bg-slate-900 rounded-[2.5rem] border border-white/10 w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 text-white">
+            
+            <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <AlertTriangle size={20} className="text-amber-500 animate-pulse" />
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest">Encerrar Atendimento</h3>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Informe o motivo da finalização do chat</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <span className="text-2xs font-extrabold uppercase text-slate-400 block tracking-wider">Selecione o motivo:</span>
+              <div className="grid gap-2">
+                {[
+                  'Venda realizada',
+                  'Sem interesse / Descartado',
+                  'Não atendeu as tentativas',
+                  'Fora da área de comercialização',
+                  'Outro motivo'
+                ].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setCloseReason(reason)}
+                    className={`w-full text-left p-3.5 rounded-xl border text-xs font-black transition-all cursor-pointer ${
+                      closeReason === reason 
+                        ? 'bg-cyan-600/10 border-cyan-500 text-cyan-400' 
+                        : 'bg-slate-950/30 border-white/5 text-slate-300 hover:border-white/10'
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-white/5 bg-slate-950/20 flex gap-3 justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCloseReasonModal(false);
+                  setCloseReason('');
+                }}
+                className="px-5 py-2.5 rounded-xl bg-white/5 text-xs font-black uppercase tracking-wider text-slate-400 hover:bg-white/10 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!closeReason}
+                onClick={async () => {
+                  if (!selectedConversation || !closeReason) return;
+                  
+                  // Log event in database activities timeline
+                  if (selectedConversation.lead_id) {
+                    await supabase.from('lead_atividades').insert([{
+                      lead_id: selectedConversation.lead_id,
+                      profile_id: profile?.id,
+                      tipo: 'sistema',
+                      titulo: 'Conversa encerrada',
+                      descricao: `Finalizada pelo atendente. Motivo: ${closeReason}`
+                    }]);
+                  }
+                  
+                  // Update status to fechada
+                  updateConversationStatus('fechada');
+                  setShowCloseReasonModal(false);
+                  setCloseReason('');
+                  alert('Conversa encerrada e registrada!');
+                }}
+                className="px-5 py-2.5 rounded-xl bg-cyan-600 disabled:opacity-50 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-600/10 hover:-translate-y-0.5 transition-all cursor-pointer"
+              >
+                Confirmar e Encerrar
               </button>
             </div>
 
