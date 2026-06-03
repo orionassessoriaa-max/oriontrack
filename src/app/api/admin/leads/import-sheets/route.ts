@@ -235,6 +235,9 @@ function parseDate(value: string) {
       ) {
         return fallback;
       }
+      if (date.getTime() > Date.now() + 86_400_000) {
+        return fallback;
+      }
 
       return date.toISOString();
     } catch {
@@ -317,7 +320,7 @@ function resolveLeadDate(row: CsvRow) {
     if (parsed) return parsed;
   }
 
-  return null;
+  return new Date().toISOString();
 }
 
 function statusFromSheet(value: string) {
