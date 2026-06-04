@@ -39,6 +39,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 import OrionMark from '@/components/ui/OrionMark';
+import SaleFinanceRedirect from '@/components/ui/SaleFinanceRedirect';
 
 type WhatsAppConversa = {
   id: string;
@@ -232,6 +233,7 @@ export default function CrmPage() {
   const [boardClientWidth, setBoardClientWidth] = useState(0);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
+  const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
 
   // Metrics Dashboard States
@@ -772,6 +774,10 @@ export default function CrmPage() {
     if (payload.lead) {
       setLeads((prev) => prev.map((lead) => lead.id === leadId ? { ...lead, ...payload.lead } : lead));
       setSelectedLead((current) => current?.id === leadId ? { ...current, ...payload.lead } : current);
+    }
+
+    if (status === 'Venda realizada') {
+      setFinanceRedirect({ leadId, leadName: currentLead.nome });
     }
 
     if (selectedLead?.id === leadId) await fetchTimeline(leadId);
@@ -2023,6 +2029,14 @@ export default function CrmPage() {
             </div>
           </form>
         </div>
+      )}
+
+      {financeRedirect && (
+        <SaleFinanceRedirect
+          leadId={financeRedirect.leadId}
+          leadName={financeRedirect.leadName}
+          onCancel={() => setFinanceRedirect(null)}
+        />
       )}
     </InternalLayout>
   );

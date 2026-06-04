@@ -23,6 +23,11 @@ function calculateCommission(value: unknown) {
   return numeric === null ? null : numeric * 2.5;
 }
 
+function monthStart() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 3)).toISOString().slice(0, 10);
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const limited = rateLimit(request, 'crm:lead-status:update', { limit: 120, windowMs: 60_000 });
@@ -82,6 +87,31 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    if (status === 'Venda realizada') {
+      const saleValue = numericOrNull(updated.valor_negociacao) || numericOrNull(updated.valor_comissao) || 0;
+      if (saleValue > 0) {
+        const { data: existingFinance } = await supabaseAdmin
+          .from('financeiro_receitas')
+          .select('id')
+          .eq('lead_id', leadId)
+          .limit(1);
+
+        if (!existingFinance?.length) {
+          await supabaseAdmin.from('financeiro_receitas').insert([{
+            corretor_id: lead.corretor_id,
+            lead_id: leadId,
+            parcela_numero: 1,
+            total_parcelas: 1,
+            valor_total: saleValue,
+            valor_parcela: saleValue,
+            vencimento: monthStart(),
+            status: 'pendente',
+            created_by: guard.profile.id,
+          }]);
+        }
+      }
     }
 
     const activityDescription = status === 'Sem interesse'

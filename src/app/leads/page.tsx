@@ -28,6 +28,7 @@ import { ptBR } from 'date-fns/locale';
 import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 import { cleanLeadObservationText, getLeadImportWarnings } from '@/lib/leadWarnings';
 import PhoneAction from '@/components/ui/PhoneAction';
+import SaleFinanceRedirect from '@/components/ui/SaleFinanceRedirect';
 
 function normalizeText(value?: string | null) {
   return String(value || '')
@@ -188,6 +189,7 @@ export default function BrokerLeadsPage() {
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [commercialModal, setCommercialModal] = useState<CommercialModalState>(null);
   const [commercialModalError, setCommercialModalError] = useState<string | null>(null);
+  const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
@@ -423,6 +425,9 @@ export default function BrokerLeadsPage() {
       fetchLeads(0, false);
     } else if (payload.lead) {
       setLeads(prev => prev.map(lead => lead.id === leadId ? { ...lead, ...payload.lead } : lead));
+    }
+    if (response.ok && status === 'Venda realizada') {
+      setFinanceRedirect({ leadId, leadName: currentLead.nome });
     }
     setSavingStatusId(null);
   };
@@ -1190,6 +1195,13 @@ export default function BrokerLeadsPage() {
             </div>
           </form>
         </div>
+      )}
+      {financeRedirect && (
+        <SaleFinanceRedirect
+          leadId={financeRedirect.leadId}
+          leadName={financeRedirect.leadName}
+          onCancel={() => setFinanceRedirect(null)}
+        />
       )}
     </InternalLayout>
   );

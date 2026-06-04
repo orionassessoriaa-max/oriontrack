@@ -34,6 +34,7 @@ import {
   UserCog,
   UserPlus,
   Users,
+  WalletCards,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -225,6 +226,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const corretorMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
+    { icon: WalletCards, label: 'Financeiro', href: '/financeiro' },
     { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Users, label: 'Leads', href: '/leads' },
@@ -239,6 +241,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const corretorMemberMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
+    { icon: WalletCards, label: 'Financeiro', href: '/financeiro' },
     { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
