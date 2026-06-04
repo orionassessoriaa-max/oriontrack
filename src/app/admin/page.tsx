@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { 
   Users, 
@@ -80,6 +81,11 @@ export default function AdminCentralPage() {
   const [showPendingOnboardingModal, setShowPendingOnboardingModal] = useState(false);
   const [showNoBrokerageModal, setShowNoBrokerageModal] = useState(false);
   const [showNoMetaModal, setShowNoMetaModal] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     fetchStats();
@@ -634,8 +640,8 @@ export default function AdminCentralPage() {
       </div>
 
       {/* Modal: Corretores Sem Saldo */}
-      {showNoBalanceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+      {mounted && showNoBalanceModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-[#090e1a]/95 border border-red-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
             <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> Corretores Sem Saldo
@@ -668,12 +674,13 @@ export default function AdminCentralPage() {
               Fechar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Entradas Pendentes */}
-      {showPendingOnboardingModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+      {mounted && showPendingOnboardingModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-[#090e1a]/95 border border-indigo-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
             <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" /> Entradas Pendentes
@@ -705,18 +712,19 @@ export default function AdminCentralPage() {
               Fechar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Corretores Sem Meta Ads */}
-      {showNoMetaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+      {mounted && showNoMetaModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-[#090e1a]/95 border border-cyan-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
             <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse" /> Corretores Sem Meta Ads
             </h3>
             <p className="text-xs font-semibold text-slate-500 mb-6">Corretores ativos sem conta de anuncio vinculada no Meta.</p>
-
+ 
             <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
               {noMetaList.length === 0 ? (
                 <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhum corretor sem Meta Ads.</p>
@@ -738,7 +746,7 @@ export default function AdminCentralPage() {
                 ))
               )}
             </div>
-
+ 
             <button
               onClick={() => setShowNoMetaModal(false)}
               className="mt-6 w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all"
@@ -746,18 +754,19 @@ export default function AdminCentralPage() {
               Fechar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Corretores Sem Corretora */}
-      {showNoBrokerageModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+      {mounted && showNoBrokerageModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-[#090e1a]/95 border border-amber-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
             <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" /> Corretores Sem Corretora
             </h3>
             <p className="text-xs font-semibold text-slate-500 mb-6">Corretores ativos que ainda nao foram vinculados a uma corretora.</p>
-
+ 
             <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
               {noBrokerageList.length === 0 ? (
                 <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhum corretor sem corretora.</p>
@@ -778,7 +787,7 @@ export default function AdminCentralPage() {
                 ))
               )}
             </div>
-
+ 
             <button
               onClick={() => setShowNoBrokerageModal(false)}
               className="mt-6 w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all"
@@ -786,7 +795,8 @@ export default function AdminCentralPage() {
               Fechar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Footer Decoration */}
