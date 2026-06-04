@@ -39,6 +39,7 @@ import { normalizeLeadStatus } from '@/lib/leadStatus';
 type CorretorDashboardData = {
   id: string;
   nome: string;
+  nome_empresa?: string | null;
   email: string;
   telefone: string;
   link_pagina: string | null;
@@ -417,7 +418,7 @@ export default function DashboardPage() {
         // 1. Buscar dados do Corretor (Time e Configurações)
         const { data, error: corretorError } = await supabase
           .from("corretores")
-          .select("id, nome, email, telefone, link_pagina, gestor_trafego_id, time_operacional")
+          .select("id, nome, nome_empresa, email, telefone, link_pagina, gestor_trafego_id, time_operacional")
           .eq("id", profile.corretor_id)
           .maybeSingle();
 
@@ -1271,6 +1272,11 @@ export default function DashboardPage() {
             <div className="mt-8 rounded-2xl bg-[#0b1324] border border-white/5 p-4 text-left">
               <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">Corretor Conectado</p>
               <p className="text-sm font-black text-white">{corretorData?.nome || profile?.nome || '-'}</p>
+              {(corretorData?.nome_empresa || profile?.nome_empresa) && (
+                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-cyan-300">
+                  {corretorData?.nome_empresa || profile?.nome_empresa}
+                </p>
+              )}
               <p className="mt-1 text-xs font-bold text-slate-400">{corretorData?.email || profile?.email || '-'}</p>
             </div>
           </div>

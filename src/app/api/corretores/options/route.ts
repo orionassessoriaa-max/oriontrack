@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   let query = supabaseAdmin
     .from('corretores')
-    .select('id, nome, email, telefone, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name, operadoras_info, status')
+    .select('id, nome, nome_empresa, email, telefone, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name, operadoras_info, status')
     .order('nome', { ascending: true });
 
   if (guard.profile.tipo_usuario === 'gestor_trafego') {

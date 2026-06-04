@@ -99,7 +99,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const fetchCorretorViewProfile = async (corretorId: string, adminUserId: string) => {
     const { data, error } = await supabase
       .from('corretores')
-      .select('id, nome, email, status, created_at')
+      .select('id, nome, email, nome_empresa, status, created_at')
       .eq('id', corretorId)
       .maybeSingle();
 
@@ -111,6 +111,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       id: adminUserId,
       email: data.email,
       nome: data.nome,
+      nome_empresa: data.nome_empresa || null,
       tipo_usuario: 'corretor',
       corretor_id: data.id,
       status: data.status === 'inativo' || data.status === 'inactive' ? 'inactive' : 'active',

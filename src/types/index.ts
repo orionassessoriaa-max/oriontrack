@@ -24,6 +24,7 @@ export interface Corretor {
   nome: string;
   email: string;
   telefone: string;
+  nome_empresa?: string | null;
   slug_pagina?: string;
   link_pagina?: string;
   status: 'active' | 'inactive' | 'ativo' | 'inativo' | 'Ativo' | 'Inativo';

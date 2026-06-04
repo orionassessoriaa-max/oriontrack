@@ -40,6 +40,7 @@ export default function ProfilePage() {
   
   // Estados para dados editáveis
   const [nome, setNome] = useState('');
+  const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [telefone, setTelefone] = useState('');
   
   // Estados de controle
@@ -106,6 +107,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (profile) {
       setNome(profile.nome || '');
+      setNomeEmpresa(profile.nome_empresa || '');
       setTelefone(formatarTelefone(profile.telefone || ''));
     }
   }, [profile]);
@@ -129,6 +131,7 @@ export default function ProfilePage() {
         .from('profiles')
         .update({
           nome: nome.trim(),
+          nome_empresa: profile.tipo_usuario === 'corretor' ? nomeEmpresa.trim() || null : profile.nome_empresa || null,
           telefone: telefone.trim()
         })
         .eq('id', profile.id);
@@ -360,6 +363,22 @@ export default function ProfilePage() {
                   />
                 </div>
               </div>
+
+              {profile?.tipo_usuario === 'corretor' && (
+                <div className="space-y-2">
+                  <label className="ml-1 text-xs font-bold uppercase tracking-widest text-gray-400">Nome da corretora</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={nomeEmpresa}
+                      onChange={(e) => setNomeEmpresa(e.target.value)}
+                      placeholder="Ex: HAVS Corretora"
+                      className="w-full border-none py-4 pl-12 pr-4 font-medium transition-all focus:ring-2 focus:ring-blue-500 rounded-xl bg-gray-50 text-gray-900"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Cargo / Tipo de Acesso */}
               <div className="space-y-2 opacity-80">

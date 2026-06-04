@@ -137,6 +137,7 @@ function CorretoresContent() {
   const filteredCorretores = corretores.filter(c => {
     const matchesSearch = 
       (c.nome?.toLowerCase() || '').includes(search.toLowerCase()) || 
+      (c.nome_empresa?.toLowerCase() || '').includes(search.toLowerCase()) ||
       (c.email?.toLowerCase() || '').includes(search.toLowerCase()) ||
       (c.telefone || '').includes(search);
 
@@ -299,6 +300,11 @@ function CorretoresContent() {
                           >
                             {c.nome}
                           </button>
+                          {c.nome_empresa && (
+                            <p className="mt-0.5 max-w-[260px] truncate text-[10px] font-black uppercase tracking-widest text-blue-600">
+                              {c.nome_empresa}
+                            </p>
+                          )}
                           <p className="max-w-[260px] truncate text-[10px] font-bold uppercase tracking-tighter text-gray-400">{c.email}</p>
                           <p className="mt-1 max-w-[260px] truncate rounded-lg bg-slate-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
                             ID n8n: <span className="normal-case tracking-normal text-slate-700">{c.id}</span>

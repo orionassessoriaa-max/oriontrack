@@ -39,6 +39,7 @@ type AdminProfile = Profile & {
 
 const initialForm = {
   nome: '',
+  nome_empresa: '',
   email_real: '',
   tipo_usuario: 'corretor' as UserRole,
   telefone: '',
@@ -88,6 +89,7 @@ export default function AdminUsuariosPage() {
     setError(null);
     setForm({
       nome: profile.nome || '',
+      nome_empresa: corretor?.nome_empresa || profile.nome_empresa || '',
       email_real: profile.email_real || '',
       tipo_usuario: profile.tipo_usuario,
       telefone: corretor?.telefone || '',
@@ -309,7 +311,9 @@ export default function AdminUsuariosPage() {
   }
 
   const filteredProfiles = profiles.filter((profile) => {
-    const target = `${profile.nome} ${profile.email} ${profile.email_real || ''} ${profile.tipo_usuario}`.toLowerCase();
+    const corretor = corretores.find((item) => item.id === profile.corretor_id);
+    const brokerName = corretor?.nome_empresa || profile.nome_empresa || '';
+    const target = `${profile.nome} ${brokerName} ${profile.email} ${profile.email_real || ''} ${profile.tipo_usuario}`.toLowerCase();
     return target.includes(search.toLowerCase());
   });
 
@@ -510,6 +514,16 @@ export default function AdminUsuariosPage() {
             {form.tipo_usuario === 'corretor' && (
               <>
                 <div>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome da corretora</label>
+                  <input
+                    value={form.nome_empresa}
+                    onChange={(event) => setForm((current) => ({ ...current, nome_empresa: event.target.value }))}
+                    placeholder="Ex: HAVS Corretora"
+                    className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Time Orion</label>
                   <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {teamMembers.map((member) => {
@@ -664,6 +678,7 @@ export default function AdminUsuariosPage() {
             <div className="divide-y divide-gray-100">
               {filteredProfiles.map((profile) => {
                 const corretor = corretores.find((item) => item.id === profile.corretor_id);
+                const brokerCompanyName = corretor?.nome_empresa || profile.nome_empresa || '';
                 const operadoras = corretor?.operadoras_info?.selecionadas;
                 const isOwnAccess = profile.id === user?.id;
                 const isMasterAccess = Boolean(profile.is_admin_master) || [profile.email, profile.email_real]
@@ -704,6 +719,11 @@ export default function AdminUsuariosPage() {
                             </span>
                           )}
                         </div>
+                        {profile.tipo_usuario === 'corretor' && brokerCompanyName && (
+                          <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-600">
+                            Corretora: {brokerCompanyName}
+                          </p>
+                        )}
                         <p className="mt-1 break-all text-sm font-bold text-slate-500">{profile.email}</p>
                         {profile.email_real && <p className="break-all text-xs font-medium text-slate-400">Real: {profile.email_real}</p>}
                         {Array.isArray(operadoras) && operadoras.length > 0 && (

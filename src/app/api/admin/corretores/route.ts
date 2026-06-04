@@ -136,6 +136,7 @@ export async function POST(request: Request) {
           email,
           telefone,
           link_pagina: link_pagina || null,
+          nome_empresa: nome_empresa || null,
           status: (status || 'ativo').toLowerCase(),
           tipo_campanha: tipo_campanha || 'ambos',
           observacoes: observacoes || null,

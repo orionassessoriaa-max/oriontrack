@@ -95,7 +95,7 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
           tipo_campanha: data.tipo_campanha || 'ambos',
           observacoes: data.observacoes || '',
           time_operacional: Array.isArray(data.time_operacional) ? data.time_operacional : [],
-          nome_empresa: profileRes?.data?.nome_empresa || '',
+          nome_empresa: data.nome_empresa || profileRes?.data?.nome_empresa || '',
         });
       }
 
@@ -167,6 +167,7 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
           nome: formData.nome,
           email: formData.email,
           telefone: formData.telefone,
+          nome_empresa: formData.nome_empresa || null,
           link_pagina: formData.link_pagina,
           status: formData.status,
           tipo_campanha: formData.tipo_campanha,
