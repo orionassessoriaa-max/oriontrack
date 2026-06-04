@@ -95,6 +95,16 @@ async function ensureTeam(corretorId: string, nome = 'Time comercial') {
   return data;
 }
 
+async function getCorretorIdentity(corretorId: string) {
+  const { data } = await supabaseAdmin
+    .from('corretores')
+    .select('id, nome, nome_empresa')
+    .eq('id', corretorId)
+    .maybeSingle();
+
+  return data;
+}
+
 async function getOwnerProfile(corretorId: string) {
   const { data } = await supabaseAdmin
     .from('profiles')
@@ -117,19 +127,26 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
     }
 
-    const { data: team, error: teamError } = await supabaseAdmin
-      .from('corretor_times')
-      .select('*')
-      .eq('corretor_id', corretorId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const [teamRes, corretorIdentity] = await Promise.all([
+      supabaseAdmin
+        .from('corretor_times')
+        .select('*')
+        .eq('corretor_id', corretorId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      getCorretorIdentity(corretorId)
+    ]);
+
+    const { data: team, error: teamError } = teamRes;
+    const brokerageName = String(corretorIdentity?.nome_empresa || '').trim();
 
     if (teamError) throw teamError;
 
     if (!team) {
       return NextResponse.json({
         team: null,
+        brokerage_name: brokerageName || null,
         membros: [],
         leads: [],
         settings: {
@@ -184,6 +201,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       team,
+      brokerage_name: brokerageName || team.nome || null,
       membros: membrosWithPhoto,
       leads,
       settings: {
@@ -208,18 +226,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
     }
 
-    const { data: corretor } = await supabaseAdmin
-      .from('corretores')
-      .select('id, nome')
-      .eq('id', corretorId)
-      .maybeSingle();
+    const corretor = await getCorretorIdentity(corretorId);
 
     if (!corretor) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
     }
 
     if (action === 'create_team') {
-      const nome = String(body.nome || '').trim();
+      const brokerageName = String(corretor.nome_empresa || '').trim();
+      const nome = brokerageName || String(body.nome || '').trim();
       if (!nome) return NextResponse.json({ error: 'Informe o nome do time.' }, { status: 400 });
 
       const team = await ensureTeam(corretorId, nome);
@@ -231,7 +246,7 @@ export async function POST(request: Request) {
         metadata: { corretor_id: corretorId, nome },
       });
 
-      return NextResponse.json({ success: true, team });
+      return NextResponse.json({ success: true, team, brokerage_name: brokerageName || team.nome || null });
     }
 
     if (action === 'delete_team') {
@@ -313,7 +328,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true });
     }
 
-    const team = await ensureTeam(corretorId, String(body.nome_time || 'Time comercial'));
+    const brokerageName = String(corretor.nome_empresa || '').trim();
+    const team = await ensureTeam(corretorId, String(body.nome_time || brokerageName || 'Time comercial'));
 
     if (action === 'update_team_name') {
       const nome = String(body.nome || '').trim();

@@ -70,6 +70,14 @@ export default function AdminUsuariosPage() {
 
   const accessEmail = useMemo(() => editingProfile?.email || generateOrionEmail(form.nome), [editingProfile?.email, form.nome]);
   const teamMembers = useMemo(() => buildOperationalTeamMembers(profiles), [profiles]);
+  const brokerageOptions = useMemo(() => {
+    const names = new Map<string, string>();
+    corretores.forEach((corretor) => {
+      const name = String(corretor.nome_empresa || '').trim();
+      if (name) names.set(name.toLowerCase(), name);
+    });
+    return Array.from(names.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [corretores]);
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
@@ -516,11 +524,20 @@ export default function AdminUsuariosPage() {
                 <div>
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome da corretora</label>
                   <input
+                    list="admin-brokerage-options"
                     value={form.nome_empresa}
                     onChange={(event) => setForm((current) => ({ ...current, nome_empresa: event.target.value }))}
-                    placeholder="Ex: HAVS Corretora"
+                    placeholder="Digite ou selecione uma corretora"
                     className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                   />
+                  <datalist id="admin-brokerage-options">
+                    {brokerageOptions.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                  <p className="mt-2 text-[10px] font-bold text-slate-400">
+                    Use o mesmo nome para agrupar socios da mesma corretora.
+                  </p>
                 </div>
 
                 <div>

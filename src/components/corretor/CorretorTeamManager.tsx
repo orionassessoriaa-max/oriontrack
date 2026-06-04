@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Save, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
@@ -92,7 +92,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [team, setTeam] = useState<Team | null>(null);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [leads, setLeads] = useState<AssignableLead[]>([]);
-  const [nomeTime, setNomeTime] = useState('Time comercial');
+  const [brokerageName, setBrokerageName] = useState('');
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [selectedLeadId, setSelectedLeadId] = useState('');
@@ -109,9 +109,9 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   });
   const [error, setError] = useState<string | null>(null);
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
-  const [nomeTimeInput, setNomeTimeInput] = useState('');
   const [memberRole, setMemberRole] = useState<'corretor_membro' | 'corretor_admin'>('corretor_membro');
   const canAssignLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
+  const displayTeamName = brokerageName || team?.nome || 'Time comercial';
 
   const memberStats = useMemo<MemberStats[]>(() => {
     return membros.map((member) => {
@@ -192,7 +192,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     }
 
     setTeam(payload.team);
-    setNomeTime(payload.team?.nome || 'Time comercial');
+    setBrokerageName(payload.brokerage_name || payload.team?.nome || '');
     setMembros(payload.membros || []);
     setLeads(payload.leads || []);
     setSettings(payload.settings || { owner_in_distribution: false, owner_profile: null });
@@ -220,26 +220,13 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     return payload;
   }
 
-  async function createTeam(name: string) {
+  async function createTeam() {
     setSaving(true);
     setError(null);
     try {
-      const payload = await postTeam({ action: 'create_team', nome: name });
+      const payload = await postTeam({ action: 'create_team', nome: displayTeamName });
       setTeam(payload.team);
-      setNomeTime(payload.team.nome);
-      await fetchTeam();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveTeamName() {
-    setSaving(true);
-    setError(null);
-    try {
-      await postTeam({ action: 'update_team_name', nome: nomeTime });
+      setBrokerageName(payload.brokerage_name || payload.team.nome || '');
       await fetchTeam();
     } catch (err: any) {
       setError(err.message);
@@ -265,8 +252,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       await postTeam({ action: 'delete_team' });
       setTeam(null);
       setMembros([]);
-      setNomeTime('Time comercial');
-      setNomeTimeInput('');
+      setBrokerageName('');
       alert('Time excluído com sucesso.');
     } catch (err: any) {
       setError(err.message);
@@ -450,20 +436,20 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               <div className="space-y-3">
                 <input
                   type="text"
-                  value={nomeTimeInput}
-                  onChange={(e) => setNomeTimeInput(e.target.value)}
+                  value={displayTeamName}
+                  readOnly
                   placeholder="Ex: Elite Orion, Dream Team..."
                   className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-black text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all text-center"
                 />
                 
                 <button
                   type="button"
-                  onClick={() => createTeam(nomeTimeInput)}
-                  disabled={saving || !nomeTimeInput.trim()}
+                  onClick={createTeam}
+                  disabled={saving}
                   className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 py-4 text-sm font-black text-white transition-all hover:scale-[1.02] shadow-lg shadow-blue-500/20 disabled:opacity-40 cursor-pointer"
                 >
                   {saving ? <Loader2 className="animate-spin" size={18} /> : <ArrowRight size={18} />}
-                  Criar meu Time Comercial
+                  Criar Time da Corretora
                 </button>
               </div>
             </div>
@@ -510,7 +496,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           <div className="flex justify-between items-center pb-6 border-b border-white/5">
             <div>
               <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Onboarding: Etapa 2 de 2</span>
-              <h2 className="text-2xl font-black text-white mt-1">🚀 Seu time "{team.nome}" está pronto!</h2>
+              <h2 className="text-2xl font-black text-white mt-1">Seu time "{displayTeamName}" esta pronto!</h2>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-black">✓</div>
@@ -537,29 +523,13 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black">✓</div>
-                    <span className="text-sm font-bold text-slate-300">Time comercial: <strong className="text-emerald-400">{team.nome}</strong></span>
+                    <span className="text-sm font-bold text-slate-300">Corretora: <strong className="text-emerald-400">{displayTeamName}</strong></span>
                   </div>
                   
-                  {/* Inline Renaming Form */}
-                  <div className="flex flex-col gap-2 pl-9 bg-white/[0.02] border border-white/5 p-3 rounded-xl mt-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Alterar nome do time:</span>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={nomeTime}
-                        onChange={(e) => setNomeTime(e.target.value)}
-                        placeholder="Ex: Dream Team, Elite Orion..."
-                        className="flex-1 rounded-xl border border-white/5 bg-[#070b13] px-3.5 py-2 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-blue-500/30 focus:border-blue-500/50"
-                      />
-                      <button
-                        type="button"
-                        onClick={saveTeamName}
-                        disabled={saving || !nomeTime.trim() || nomeTime === team.nome}
-                        className="rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs font-black text-white transition-all shadow-md disabled:opacity-40 cursor-pointer shrink-0"
-                      >
-                        {saving ? 'Gravando...' : 'Salvar'}
-                      </button>
-                    </div>
+                  <div className="pl-9">
+                    <p className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-[10px] font-bold text-slate-400">
+                      O nome do time acompanha a corretora vinculada no cadastro do admin.
+                    </p>
                   </div>
                 </div>
 
@@ -674,7 +644,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           </div>
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Painel do Time Comercial</p>
-            <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">{team.nome}</h1>
+            <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">{displayTeamName}</h1>
             <p className="text-xs font-bold text-slate-400 mt-1">Lidere sua força de vendas, gerencie a automação de atendimento e analise a performance comercial.</p>
           </div>
         </div>
@@ -858,29 +828,17 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               </div>
               <div>
                 <h2 className="text-xl font-black text-white">Configurações e Equipe</h2>
-                <p className="text-xs font-bold text-slate-400">Configure a escala de atendimento e o nome de guerra da sua equipe.</p>
+                <p className="text-xs font-bold text-slate-400">Configure a escala de atendimento da corretora.</p>
               </div>
             </div>
 
-            {/* Nome do Time Input */}
+            {/* Nome da corretora */}
             <div className="mb-4">
-              <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nome do Time</span>
-                <input
-                  value={nomeTime}
-                  onChange={(event) => setNomeTime(event.target.value)}
-                  className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-black text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={saveTeamName}
-                disabled={saving}
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3.5 text-xs font-black text-white transition-all hover:bg-blue-700 disabled:opacity-50 cursor-pointer shadow-lg shadow-blue-600/15"
-              >
-                {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                Salvar nome do time
-              </button>
+              <div className="rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4">
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Corretora do time</span>
+                <p className="text-sm font-black text-white">{displayTeamName}</p>
+                <p className="mt-1 text-[10px] font-bold text-slate-500">Alteracoes de nome devem ser feitas no cadastro do corretor pelo admin.</p>
+              </div>
             </div>
 
             {/* Configurações do Time Expandable Section */}

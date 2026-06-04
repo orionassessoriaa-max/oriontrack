@@ -45,6 +45,7 @@ export default function NovoCorretorPage() {
   const [success, setSuccess] = useState(false);
   const [gestoresProfiles, setGestoresProfiles] = useState<Profile[]>([]);
   const [teamMembers, setTeamMembers] = useState<OrionTeamMember[]>(ORION_TEAM_MEMBERS);
+  const [brokerageOptions, setBrokerageOptions] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -61,15 +62,30 @@ export default function NovoCorretorPage() {
 
   async function fetchGestores() {
     try {
-      const { data, error: gestoresError } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('tipo_usuario', ['gestor_trafego', 'designer', 'account_manager', 'admin'])
-        .in('status', ['active', 'ativo', 'Ativo']);
+      const [gestoresRes, brokeragesRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('*')
+          .in('tipo_usuario', ['gestor_trafego', 'designer', 'account_manager', 'admin'])
+          .in('status', ['active', 'ativo', 'Ativo']),
+        supabase
+          .from('corretores')
+          .select('nome_empresa')
+          .not('nome_empresa', 'is', null)
+      ]);
 
-      if (gestoresError) throw gestoresError;
-      setGestoresProfiles((data || []).filter((profile) => profile.tipo_usuario === 'gestor_trafego'));
-      setTeamMembers(buildOperationalTeamMembers(data || []));
+      if (gestoresRes.error) throw gestoresRes.error;
+      if (brokeragesRes.error) throw brokeragesRes.error;
+
+      const brokerageNames = new Map<string, string>();
+      (brokeragesRes.data || []).forEach((item) => {
+        const name = String(item.nome_empresa || '').trim();
+        if (name) brokerageNames.set(name.toLowerCase(), name);
+      });
+
+      setBrokerageOptions(Array.from(brokerageNames.values()).sort((a, b) => a.localeCompare(b, 'pt-BR')));
+      setGestoresProfiles((gestoresRes.data || []).filter((profile) => profile.tipo_usuario === 'gestor_trafego'));
+      setTeamMembers(buildOperationalTeamMembers(gestoresRes.data || []));
     } catch (err: unknown) {
       console.error('Erro ao buscar gestores:', err);
     }
@@ -223,12 +239,19 @@ export default function NovoCorretorPage() {
                   <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                   <input 
                     type="text" 
+                    list="brokerage-options"
                     value={formData.nome_empresa}
                     onChange={e => setFormData({...formData, nome_empresa: e.target.value})}
-                    placeholder="Ex: Aliança Seguros"
+                    placeholder="Digite ou selecione uma corretora"
                     className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium"
                   />
+                  <datalist id="brokerage-options">
+                    {brokerageOptions.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
                 </div>
+                <p className="text-[10px] font-bold text-gray-400">Selecione uma corretora existente para agrupar socios no mesmo painel.</p>
               </div>
 
               <div className="space-y-2 group">

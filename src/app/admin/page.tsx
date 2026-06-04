@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { 
   Users, 
+  Building2,
   Target, 
   Clock, 
   TrendingUp, 
@@ -60,6 +61,7 @@ export default function AdminCentralPage() {
   const { profile } = useAuth();
   const [stats, setStats] = useState({
     totalCorretores: 0,
+    totalCorretoras: 0,
     totalGestores: 0,
     totalAccounts: 0,
     totalDesigners: 0,
@@ -67,6 +69,7 @@ export default function AdminCentralPage() {
   });
   const [gestoresStats, setGestoresStats] = useState<any[]>([]);
   const [corretoresSemGestor, setCorretoresSemGestor] = useState(0);
+  const [corretoresSemCorretora, setCorretoresSemCorretora] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Advanced Alerts State
@@ -75,6 +78,7 @@ export default function AdminCentralPage() {
   const [alertsList, setAlertsList] = useState<any[]>([]);
   const [showNoBalanceModal, setShowNoBalanceModal] = useState(false);
   const [showPendingOnboardingModal, setShowPendingOnboardingModal] = useState(false);
+  const [showNoBrokerageModal, setShowNoBrokerageModal] = useState(false);
 
   useEffect(() => {
     fetchStats();
@@ -122,7 +126,7 @@ export default function AdminCentralPage() {
           .in('status', ['active', 'ativo', 'Ativo']),
         supabase
           .from('corretores')
-          .select('id, nome, gestor_trafego_id, time_operacional, onboarding_status, status')
+          .select('id, nome, gestor_trafego_id, time_operacional, onboarding_status, status, nome_empresa')
       ]);
 
       const gestores = profilesRes.data || [];
@@ -139,10 +143,19 @@ export default function AdminCentralPage() {
         return { ...g, count };
       });
 
-      const semGestor = corretores.filter(c => !c.gestor_resolvido_id).length;
+      const activeCorretores = corretores.filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''));
+      const corretorasAtivas = new Set(
+        activeCorretores
+          .map(c => String(c.nome_empresa || '').trim())
+          .filter(Boolean)
+          .map(nome => normalizeText(nome))
+      );
+      const semGestor = activeCorretores.filter(c => !c.gestor_resolvido_id).length;
+      const semCorretora = activeCorretores.filter(c => !String(c.nome_empresa || '').trim()).length;
 
       setStats({
         totalCorretores: countCorretores || 0,
+        totalCorretoras: corretorasAtivas.size,
         totalGestores: countGestores || 0,
         totalAccounts: countAccounts || 0,
         totalDesigners: countDesigners || 0,
@@ -150,6 +163,7 @@ export default function AdminCentralPage() {
       });
       setGestoresStats(statsPorGestor);
       setCorretoresSemGestor(semGestor);
+      setCorretoresSemCorretora(semCorretora);
 
       // Fetch Meta spend/balance alerts
       const sessionRes = await supabase.auth.getSession();
@@ -217,6 +231,20 @@ export default function AdminCentralPage() {
         gestor_nome: gestorNome
       };
     });
+  }, [corretoresList, gestoresList]);
+
+  const noBrokerageList = useMemo(() => {
+    return corretoresList
+      .filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || '') && !String(c.nome_empresa || '').trim())
+      .map(c => {
+        const gestorId = inferGestorIdFromTeam(c, gestoresList);
+        const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
+        return {
+          corretor_id: c.id,
+          corretor_nome: c.nome,
+          gestor_nome: gestorNome
+        };
+      });
   }, [corretoresList, gestoresList]);
 
   const quickActions = [
@@ -296,7 +324,7 @@ export default function AdminCentralPage() {
       </div>
 
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
         <Link href="/admin/corretores">
           <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-blue-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
@@ -311,6 +339,23 @@ export default function AdminCentralPage() {
               <p className="text-3xl font-black text-white group-hover:text-blue-400 transition-colors">{stats.totalCorretores}</p>
             )}
             <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500/0 via-blue-500/40 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </Link>
+
+        <Link href="/admin/corretores">
+          <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-cyan-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(6,182,212,0.15)] transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Corretoras Ativas</p>
+              <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 group-hover:scale-110 transition-transform">
+                <Building2 size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-cyan-400 transition-colors">{stats.totalCorretoras}</p>
+            )}
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-cyan-500/0 via-cyan-500/40 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
         </Link>
 
@@ -373,7 +418,7 @@ export default function AdminCentralPage() {
           <div className="h-px flex-1 bg-white/5" />
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Card: Corretores Sem Saldo */}
           <div 
             onClick={() => setShowNoBalanceModal(true)}
@@ -396,6 +441,30 @@ export default function AdminCentralPage() {
               Clique para detalhar os gestores responsáveis <ArrowRight size={10} />
             </p>
             <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-red-500/0 via-red-500/40 to-red-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+
+          {/* Card: Corretores Sem Corretora */}
+          <div
+            onClick={() => setShowNoBrokerageModal(true)}
+            className="group relative bg-[#090e1a]/85 border border-amber-500/10 hover:border-amber-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(245,158,11,0.1)] transition-all duration-300 cursor-pointer"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sem Corretora</p>
+              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 group-hover:scale-110 transition-transform">
+                <Building2 size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-amber-400 transition-colors">
+                {corretoresSemCorretora}
+              </p>
+            )}
+            <p className="text-[10px] font-semibold text-slate-500 mt-2 flex items-center gap-1 group-hover:text-slate-400 transition-colors">
+              Clique para ver quem precisa ser vinculado <ArrowRight size={10} />
+            </p>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-amber-500/0 via-amber-500/40 to-amber-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
 
           {/* Card: Entradas Pendentes */}
@@ -591,6 +660,46 @@ export default function AdminCentralPage() {
             
             <button
               onClick={() => setShowPendingOnboardingModal(false)}
+              className="mt-6 w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Corretores Sem Corretora */}
+      {showNoBrokerageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-[#090e1a]/95 border border-amber-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
+            <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" /> Corretores Sem Corretora
+            </h3>
+            <p className="text-xs font-semibold text-slate-500 mb-6">Corretores ativos que ainda nao foram vinculados a uma corretora.</p>
+
+            <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
+              {noBrokerageList.length === 0 ? (
+                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhum corretor sem corretora.</p>
+              ) : (
+                noBrokerageList.map((item) => (
+                  <div key={item.corretor_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-extrabold text-white">{item.corretor_nome}</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Gestor: {item.gestor_nome}</p>
+                    </div>
+                    <Link
+                      href={`/admin/corretores/${item.corretor_id}/editar`}
+                      className="text-[9px] font-black text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider hover:bg-amber-500/20"
+                    >
+                      Vincular
+                    </Link>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowNoBrokerageModal(false)}
               className="mt-6 w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all"
             >
               Fechar
