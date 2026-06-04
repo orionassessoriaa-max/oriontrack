@@ -138,9 +138,10 @@ function dayKey(date: Date) {
 }
 
 function getLastDays(total = 7) {
-  const now = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
   return Array.from({ length: total }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (total - 1 - index));
+    const date = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() - (total - 1 - index));
     return {
       key: dayKey(date),
       label: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
@@ -320,7 +321,7 @@ export default function DashboardPage() {
         
         setOldestDate(firstLeadDate);
         setDataInicio(firstLeadDate);
-        setDataFim(toLocalDateString(new Date()));
+        setDataFim(toLocalDateString(getYesterday()));
       } catch (err) {
         console.error('Error fetching oldest lead date:', err);
       }
@@ -350,7 +351,7 @@ export default function DashboardPage() {
   const applyPreset = (preset: string) => {
     if (preset === 'todo_periodo') {
       setDataInicio(oldestDate || '2026-01-01');
-      setDataFim(toLocalDateString(new Date()));
+      setDataFim(toLocalDateString(getYesterday()));
       setPresetLabel('Todo o período');
       setShowDatePicker(false);
       return;
@@ -370,18 +371,18 @@ export default function DashboardPage() {
         setPresetLabel('Ontem');
         break;
       case '7dias':
-        end = new Date();
+        end = getYesterday();
         start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 6);
         setPresetLabel('Últimos 7 dias');
         break;
       case '30dias':
-        end = new Date();
+        end = getYesterday();
         start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29);
         setPresetLabel('Últimos 30 dias');
         break;
       case 'este_mes':
         start = new Date(d.getFullYear(), d.getMonth(), 1);
-        end = new Date();
+        end = getYesterday();
         setPresetLabel('Este mês');
         break;
       case 'mes_passado':
@@ -488,6 +489,7 @@ export default function DashboardPage() {
         const monthMap = new Map(months.map((month) => [month.key, { ...month }]));
         allLeads.forEach((lead) => {
           if (!lead.data_entrada) return;
+          if (dataFim && lead.data_entrada.slice(0, 10) > dataFim) return;
           const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
           if (current) current.leads += 1;
         });
@@ -497,6 +499,7 @@ export default function DashboardPage() {
         const dayMap = new Map(days.map((day) => [day.key, { ...day }]));
         allLeads.forEach((lead) => {
           if (!lead.data_entrada) return;
+          if (dataFim && lead.data_entrada.slice(0, 10) > dataFim) return;
           const current = dayMap.get(dayKey(new Date(lead.data_entrada)));
           if (current) current.leads += 1;
         });
