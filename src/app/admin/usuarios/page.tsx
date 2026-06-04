@@ -702,6 +702,8 @@ export default function AdminUsuariosPage() {
                   .filter(Boolean)
                   .map((email) => String(email).toLowerCase())
                   .includes(MASTER_ADMIN_EMAIL);
+                const isBrokerAccess = ['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario);
+                const displayPhoto = profile.foto_url || (!isBrokerAccess ? getTeamMemberPhoto(profile.nome) : null);
 
                 return (
                   <div key={profile.id} className="grid gap-5 p-5 sm:p-6 2xl:grid-cols-[minmax(460px,1fr)_minmax(420px,auto)] 2xl:items-center">
@@ -711,9 +713,9 @@ export default function AdminUsuariosPage() {
                       className="grid min-w-[280px] grid-cols-[64px_minmax(220px,1fr)] items-center gap-5 text-left"
                       title={`Abrir painel de ${profile.nome}`}
                     >
-                      {profile.foto_url || getTeamMemberPhoto(profile.nome) ? (
+                      {displayPhoto ? (
                         <img
-                          src={profile.foto_url || getTeamMemberPhoto(profile.nome) || ''}
+                          src={displayPhoto}
                           alt={profile.nome}
                           className="h-14 w-14 rounded-xl object-cover object-top shadow-sm ring-1 ring-slate-200"
                         />
