@@ -7,6 +7,43 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor, MetaAdAccount } from '@/types';
 import { AlertTriangle, CheckCircle2, Link2, Loader2, RefreshCw, Search, ShieldCheck, Unlink, Zap } from 'lucide-react';
 
+interface CorretoraGroup {
+  id: string; // First corretor's ID
+  nome: string; // Empresa name if set, otherwise corretor's name
+  is_empresa: boolean;
+  corretores: Corretor[];
+  meta_ad_account_id?: string | null;
+  meta_ad_account_name?: string | null;
+}
+
+function groupCorretoresToCorretoras(corretoresList: Corretor[]): CorretoraGroup[] {
+  const groups: { [key: string]: CorretoraGroup } = {};
+
+  corretoresList.forEach((c) => {
+    const key = c.nome_empresa ? `empresa:${c.nome_empresa.trim().toLowerCase()}` : `individual:${c.id}`;
+    const name = c.nome_empresa ? c.nome_empresa.trim() : c.nome;
+
+    if (!groups[key]) {
+      groups[key] = {
+        id: c.id,
+        nome: name,
+        is_empresa: !!c.nome_empresa,
+        corretores: [],
+        meta_ad_account_id: c.meta_ad_account_id,
+        meta_ad_account_name: c.meta_ad_account_name,
+      };
+    }
+
+    groups[key].corretores.push(c);
+    if (c.meta_ad_account_id && !groups[key].meta_ad_account_id) {
+      groups[key].meta_ad_account_id = c.meta_ad_account_id;
+      groups[key].meta_ad_account_name = c.meta_ad_account_name;
+    }
+  });
+
+  return Object.values(groups).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
 export default function AdminMetaPage() {
   const { actualProfile } = useAuth();
   const [accounts, setAccounts] = useState<MetaAdAccount[]>([]);
@@ -48,16 +85,23 @@ export default function AdminMetaPage() {
     void fetchData();
   }, [isAdmin]);
 
-  const filteredCorretores = useMemo(() => {
-    const term = search.toLowerCase();
-    return corretores.filter((corretor) =>
-      `${corretor.nome} ${corretor.email} ${corretor.meta_ad_account_name || ''}`.toLowerCase().includes(term)
-    );
-  }, [corretores, search]);
+  const corretoras = useMemo(() => {
+    return groupCorretoresToCorretoras(corretores);
+  }, [corretores]);
 
-  const linkedCorretores = filteredCorretores.filter((corretor) => corretor.meta_ad_account_id);
-  const unlinkedCorretores = filteredCorretores.filter((corretor) => !corretor.meta_ad_account_id);
-  const linkedAccountIds = new Set(corretores.map((corretor) => corretor.meta_ad_account_id).filter(Boolean));
+  const filteredCorretoras = useMemo(() => {
+    const term = search.toLowerCase();
+    return corretoras.filter((c) => {
+      const brokerNames = c.corretores.map(b => b.nome).join(' ');
+      const brokerEmails = c.corretores.map(b => b.email).join(' ');
+      return `${c.nome} ${brokerNames} ${brokerEmails} ${c.meta_ad_account_name || ''}`.toLowerCase().includes(term);
+    });
+  }, [corretoras, search]);
+
+  const linkedCorretoras = filteredCorretoras.filter((c) => c.meta_ad_account_id);
+  const unlinkedCorretoras = filteredCorretoras.filter((c) => !c.meta_ad_account_id);
+  
+  const linkedAccountIds = new Set(corretores.map((c) => c.meta_ad_account_id).filter(Boolean));
   const unlinkedAccounts = accounts.filter((account) => !linkedAccountIds.has(account.meta_account_id));
 
   async function syncMetaAccounts() {
@@ -89,23 +133,28 @@ export default function AdminMetaPage() {
     await fetchData();
   }
 
-  async function bindAccount(corretor: Corretor, accountId: string) {
+  async function bindAccount(corretora: CorretoraGroup, accountId: string) {
     const account = accounts.find((item) => item.meta_account_id === accountId);
 
-    const { error: updateError } = await supabase
-      .from('corretores')
-      .update({
-        meta_ad_account_id: account?.meta_account_id || null,
-        meta_ad_account_name: account?.nome || null,
-      })
-      .eq('id', corretor.id);
+    let query = supabase.from('corretores').update({
+      meta_ad_account_id: account?.meta_account_id || null,
+      meta_ad_account_name: account?.nome || null,
+    });
+
+    if (corretora.is_empresa) {
+      query = query.eq('nome_empresa', corretora.nome);
+    } else {
+      query = query.eq('id', corretora.id);
+    }
+
+    const { error: updateError } = await query;
 
     if (updateError) {
       setError(updateError.message);
       return;
     }
 
-    setSuccess(account ? `${corretor.nome} vinculado a ${account.nome}.` : `Conta removida de ${corretor.nome}.`);
+    setSuccess(account ? `Corretora ${corretora.nome} vinculada a ${account.nome}.` : `Conta removida de ${corretora.nome}.`);
     await fetchData();
   }
 
@@ -129,7 +178,7 @@ export default function AdminMetaPage() {
         <div>
           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Admin Orion</p>
           <h1 className="text-3xl font-black tracking-tight text-gray-900">Contas Meta</h1>
-          <p className="font-medium text-gray-500">Controle quais contas de anuncio estao vinculadas aos corretores.</p>
+          <p className="font-medium text-gray-500">Controle quais contas de anuncio estao vinculadas às corretoras.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button
@@ -153,8 +202,8 @@ export default function AdminMetaPage() {
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <Counter label="Contas sincronizadas" value={accounts.length} tone="blue" />
-        <Counter label="Corretores vinculados" value={corretores.filter((corretor) => corretor.meta_ad_account_id).length} tone="emerald" />
-        <Counter label="Corretores sem conta" value={corretores.filter((corretor) => !corretor.meta_ad_account_id).length} tone="amber" />
+        <Counter label="Corretoras vinculadas" value={corretoras.filter((c) => c.meta_ad_account_id).length} tone="emerald" />
+        <Counter label="Corretoras sem conta" value={corretoras.filter((c) => !c.meta_ad_account_id).length} tone="amber" />
       </div>
 
       <div className="mb-6 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm">
@@ -163,7 +212,7 @@ export default function AdminMetaPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar corretor ou conta..."
+            placeholder="Buscar corretora ou conta..."
             className="w-full rounded-2xl border-none bg-slate-50 py-4 pl-11 pr-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
@@ -178,14 +227,14 @@ export default function AdminMetaPage() {
           <section className="rounded-[2rem] border border-emerald-100 bg-white shadow-sm">
             <div className="border-b border-gray-50 p-5">
               <h2 className="flex items-center gap-2 text-lg font-black text-gray-900">
-                <CheckCircle2 size={18} className="text-emerald-600" /> Vinculados
+                <CheckCircle2 size={18} className="text-emerald-600" /> Vinculadas
               </h2>
             </div>
             <div className="divide-y divide-gray-50">
-              {linkedCorretores.map((corretor) => (
-                <AccountRow key={corretor.id} corretor={corretor} accounts={accounts} onChange={bindAccount} />
+              {linkedCorretoras.map((c) => (
+                <AccountRow key={c.id} corretora={c} accounts={accounts} onChange={bindAccount} />
               ))}
-              {linkedCorretores.length === 0 && <Empty text="Nenhum corretor vinculado ainda." />}
+              {linkedCorretoras.length === 0 && <Empty text="Nenhuma corretora vinculada ainda." />}
             </div>
           </section>
 
@@ -196,16 +245,16 @@ export default function AdminMetaPage() {
               </h2>
             </div>
             <div className="divide-y divide-gray-50">
-              {unlinkedCorretores.map((corretor) => (
-                <AccountRow key={corretor.id} corretor={corretor} accounts={accounts} onChange={bindAccount} />
+              {unlinkedCorretoras.map((c) => (
+                <AccountRow key={c.id} corretora={c} accounts={accounts} onChange={bindAccount} />
               ))}
-              {unlinkedCorretores.length === 0 && <Empty text="Todos os corretores filtrados estao vinculados." />}
+              {unlinkedCorretoras.length === 0 && <Empty text="Todas as corretoras filtradas estao vinculadas." />}
             </div>
           </section>
 
           <section className="rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm xl:col-span-2">
             <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-gray-900">
-              <Unlink size={18} className="text-slate-500" /> Contas Meta ainda sem corretor
+              <Unlink size={18} className="text-slate-500" /> Contas Meta ainda sem corretora
             </h2>
             <div className="grid gap-3 md:grid-cols-3">
               {unlinkedAccounts.map((account) => (
@@ -214,7 +263,7 @@ export default function AdminMetaPage() {
                   <p className="mt-1 text-xs font-bold text-slate-500">act_{account.meta_account_id}</p>
                 </div>
               ))}
-              {unlinkedAccounts.length === 0 && <p className="text-sm font-bold text-slate-400">Nenhuma conta sobrando sem corretor.</p>}
+              {unlinkedAccounts.length === 0 && <p className="text-sm font-bold text-slate-400">Nenhuma conta sobrando sem corretora.</p>}
             </div>
           </section>
         </div>
@@ -223,21 +272,25 @@ export default function AdminMetaPage() {
   );
 }
 
-function AccountRow({ corretor, accounts, onChange }: { corretor: Corretor; accounts: MetaAdAccount[]; onChange: (corretor: Corretor, accountId: string) => void }) {
+function AccountRow({ corretora, accounts, onChange }: { corretora: CorretoraGroup; accounts: MetaAdAccount[]; onChange: (corretora: CorretoraGroup, accountId: string) => void }) {
+  const brokersText = corretora.corretores.map(c => c.nome).join(', ');
+  
   return (
     <div className="grid gap-4 p-5 lg:grid-cols-[1fr_280px] lg:items-center">
       <div>
-        <p className="font-black text-gray-900">{corretor.nome}</p>
-        <p className="text-sm font-bold text-slate-500">{corretor.email}</p>
-        {corretor.meta_ad_account_name && (
+        <p className="font-black text-gray-900">{corretora.nome}</p>
+        <p className="text-xs font-bold text-slate-400">
+          {corretora.is_empresa ? `Corretores: ${brokersText}` : `Corretor individual`}
+        </p>
+        {corretora.meta_ad_account_name && (
           <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-emerald-700">
-            <Link2 size={12} /> {corretor.meta_ad_account_name}
+            <Link2 size={12} /> {corretora.meta_ad_account_name}
           </p>
         )}
       </div>
       <select
-        value={corretor.meta_ad_account_id || ''}
-        onChange={(event) => onChange(corretor, event.target.value)}
+        value={corretora.meta_ad_account_id || ''}
+        onChange={(event) => onChange(corretora, event.target.value)}
         className="w-full rounded-2xl border-none bg-slate-50 px-4 py-4 text-sm font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20"
       >
         <option value="">Sem conta vinculada</option>

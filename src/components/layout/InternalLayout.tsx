@@ -47,7 +47,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         // 2. Traffic Manager Access: Traffic routes + Broker List (to select for reports)
         // But NO /admin dashboard or system settings
         else if (isTrafficManager) {
-          if (isAdminRoute && !pathname.startsWith('/admin/corretores')) {
+          if (isAdminRoute && !pathname.startsWith('/admin/corretores') && !pathname.startsWith('/admin/corretoras')) {
              router.push('/trafego');
           } else if (isBrokerRoute || isDesignerRoute || isAccountRoute) {
              router.push('/trafego');

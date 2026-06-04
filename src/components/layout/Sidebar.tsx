@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import {
   AlertTriangle,
   Bell,
+  Building2,
   Calculator,
   ChevronDown,
   ClipboardList,
@@ -173,6 +174,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const adminMenu = [
     { icon: Home, label: 'Visao Geral', href: '/admin' },
     { icon: Shield, label: 'Usuarios', href: '/admin/usuarios' },
+    { icon: Building2, label: 'Corretoras', href: '/admin/corretoras' },
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
     { icon: UserCog, label: 'Gestores de Trafego', href: '/admin/gestores' },
     { icon: Palette, label: 'Designer', href: '/admin/designers' },
