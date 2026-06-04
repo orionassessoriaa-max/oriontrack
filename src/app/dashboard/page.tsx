@@ -148,7 +148,7 @@ function getLastDays(total = 7) {
   });
 }
 
-function getBrokerMetaStatus(account: any) {
+function getBrokerMetaStatus(account: any, cplPeriodo: number | null, periodLabelText: string) {
   if (!account) return null;
   const isCard = String(account.forma_pagamento || '').toLowerCase().includes('cartao') || 
                  String(account.forma_pagamento || '').toLowerCase().includes('cartão') ||
@@ -161,11 +161,11 @@ function getBrokerMetaStatus(account: any) {
   );
 
   // 1. CPL alto
-  if (account.cpl !== null && account.cpl > 25) {
+  if (cplPeriodo !== null && cplPeriodo > 25) {
     return {
       status: 'cpl_alto',
       title: 'CPL Elevado',
-      detail: `CPL do mês de R$ ${Number(account.cpl).toFixed(2).replace('.', ',')} está acima do ideal de R$ 25,00.`,
+      detail: `CPL ${periodLabelText} de R$ ${Number(cplPeriodo).toFixed(2).replace('.', ',')} esta acima do ideal de R$ 25,00.`,
       tone: 'red',
     };
   }
@@ -767,6 +767,7 @@ export default function DashboardPage() {
       : presetLabel === 'Mês passado'
         ? 'do mês passado'
         : `de ${presetLabel.toLowerCase()}`;
+  const displayPeriodCpl = stats.total > 0 ? periodCpl : null;
 
   const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
   const allTimeSalesConversionRate = allTimeStats.total > 0 ? (allTimeStats.sold / allTimeStats.total) * 100 : 0;
@@ -1001,7 +1002,7 @@ export default function DashboardPage() {
 
       {/* Meta Ads Account Financial Status Bar */}
       {metaAccount && (() => {
-        const metaStatus = getBrokerMetaStatus(metaAccount);
+        const metaStatus = getBrokerMetaStatus(metaAccount, displayPeriodCpl, periodLabelText);
         if (!metaStatus) return null;
 
         const isCard = String(metaAccount.forma_pagamento || '').toLowerCase().includes('cartao') || 
@@ -1054,11 +1055,11 @@ export default function DashboardPage() {
             </div>
             <div className="grid min-w-[180px] shrink-0 grid-cols-1 gap-3 border-t border-white/5 pt-3 text-left sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 sm:text-right">
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">CPL do Mês</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">CPL {periodLabelText}</p>
                 <p className="mt-1 text-xl font-black text-white">
-                  {metaAccount.cpl === null || metaAccount.cpl === undefined
+                  {displayPeriodCpl === null
                     ? 'N/A'
-                    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(metaAccount.cpl)}
+                    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(displayPeriodCpl)}
                 </p>
               </div>
               {!isCard && metaAccount.saldo !== null && (
@@ -1261,7 +1262,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
                 <MiniMetric icon={DollarSign} label={`Investido ${periodLabelText}`} value={formatCurrency(periodSpend)} />
-                <MiniMetric icon={Target} label={`CPL ${periodLabelText}`} value={formatCurrency(periodCpl)} />
+                <MiniMetric icon={Target} label={`CPL ${periodLabelText}`} value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
                 <MiniMetric icon={TrendingUp} label={`Conversão ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
                 <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
                 <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
