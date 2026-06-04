@@ -320,7 +320,7 @@ export default function DashboardPage() {
         
         setOldestDate(firstLeadDate);
         setDataInicio(firstLeadDate);
-        setDataFim(toLocalDateString(getYesterday()));
+        setDataFim(toLocalDateString(new Date()));
       } catch (err) {
         console.error('Error fetching oldest lead date:', err);
       }
@@ -350,7 +350,7 @@ export default function DashboardPage() {
   const applyPreset = (preset: string) => {
     if (preset === 'todo_periodo') {
       setDataInicio(oldestDate || '2026-01-01');
-      setDataFim(toLocalDateString(getYesterday()));
+      setDataFim(toLocalDateString(new Date()));
       setPresetLabel('Todo o período');
       setShowDatePicker(false);
       return;
@@ -370,18 +370,18 @@ export default function DashboardPage() {
         setPresetLabel('Ontem');
         break;
       case '7dias':
-        end = getYesterday();
+        end = new Date();
         start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 6);
         setPresetLabel('Últimos 7 dias');
         break;
       case '30dias':
-        end = getYesterday();
+        end = new Date();
         start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29);
         setPresetLabel('Últimos 30 dias');
         break;
       case 'este_mes':
         start = new Date(d.getFullYear(), d.getMonth(), 1);
-        end = getYesterday();
+        end = new Date();
         setPresetLabel('Este mês');
         break;
       case 'mes_passado':
@@ -618,7 +618,7 @@ export default function DashboardPage() {
         
         const inProgressLeads = statsRes.filter(l => {
           const s = normalizeLeadStatus(l.status);
-          return s === 'Em negociação' || s === 'Contato feito' || s === 'Chamou duas vezes';
+          return s === 'Em negociação' || s === 'Chamou duas vezes';
         });
         
         const quotedLeads = statsRes.filter(l => {
@@ -785,7 +785,7 @@ export default function DashboardPage() {
   const weeklyTotal = weeklyLeads.reduce((sum, day) => sum + day.leads, 0);
   const bestWeeklyDay = weeklyLeads.reduce((best, day) => day.leads > best.leads ? day : best, weeklyLeads[0] || { label: '-', leads: 0 });
   const maxCityLeads = Math.max(...topCities.map((city) => city.leads), 1);
-  const activePipeline = stats.waiting + stats.inProgress + stats.quoted + stats.sold;
+  const activePipeline = stats.contactMade + stats.inProgress + stats.quoted + stats.sold;
   const funnelMax = Math.max(stats.total, activePipeline, stats.quoted + stats.sold, stats.sold, 1);
   const funnelSteps = [
     {
@@ -803,7 +803,7 @@ export default function DashboardPage() {
       name: 'Atendimento',
       value: activePipeline,
       detail: 'em atendimento',
-      href: '/leads?status=Aguardando%20atendimento',
+      href: '/leads?status=Contato%20feito',
       path: 'M112 232 C176 254 344 254 408 232 C392 285 371 337 341 386 C291 403 229 403 179 386 C149 337 128 285 112 232Z',
       labelY: 284,
       valueY: 322,
@@ -829,7 +829,7 @@ export default function DashboardPage() {
       name: 'Atendimento',
       value: activePipeline,
       detail: 'em atendimento',
-      href: '/leads?status=Aguardando%20atendimento',
+      href: '/leads?status=Contato%20feito',
       path: 'M112 232 C176 254 344 254 408 232 C392 285 371 337 341 386 C291 403 229 403 179 386 C149 337 128 285 112 232Z',
       labelY: 284,
       valueY: 322,
@@ -1148,7 +1148,7 @@ export default function DashboardPage() {
             <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-2.5 text-right shrink-0">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Total Geral</p>
               <p className="mt-1.5 text-lg font-black text-white leading-none">
-                {stats.contactMade + stats.inProgress + stats.quoted + stats.sold + stats.lost}
+                {stats.waiting + stats.contactMade + stats.inProgress + stats.quoted + stats.sold + stats.lost}
               </p>
             </div>
           </div>
@@ -1157,7 +1157,8 @@ export default function DashboardPage() {
               <Loader2 className="animate-spin text-purple-500" size={32} />
             ) : (
               <CustomDonutPizzaChart
-                waiting={stats.contactMade}
+                oportunidade={stats.waiting}
+                contactMade={stats.contactMade}
                 inProgress={stats.inProgress}
                 quoted={stats.quoted}
                 sold={stats.sold}
@@ -1843,13 +1844,15 @@ function CustomGrowthAreaChart({
 }
 
 function CustomDonutPizzaChart({
-  waiting,
+  oportunidade,
+  contactMade,
   inProgress,
   quoted,
   sold,
   lost
 }: {
-  waiting: number;
+  oportunidade: number;
+  contactMade: number;
   inProgress: number;
   quoted: number;
   sold: number;
@@ -1857,9 +1860,10 @@ function CustomDonutPizzaChart({
 }) {
   const [animatedTotal, setAnimatedTotal] = useState(0);
 
-  const total = (waiting + inProgress + quoted + sold + lost) || 0;
+  const total = (oportunidade + contactMade + inProgress + quoted + sold + lost) || 0;
   const slices = [
-    { label: 'Contato feito', value: waiting, color: '#a78bfa' },
+    { label: 'Oportunidade', value: oportunidade, color: '#3b82f6' },
+    { label: 'Contato feito', value: contactMade, color: '#a78bfa' },
     { label: 'Negociação', value: inProgress, color: '#f59e0b' },
     { label: 'Proposta', value: quoted, color: '#38bdf8' },
     { label: 'Vendas', value: sold, color: '#10b981' },
@@ -1868,6 +1872,7 @@ function CustomDonutPizzaChart({
 
   // Default values if all are zero
   const displaySlices = slices.length > 0 ? slices : [
+    { label: 'Oportunidade', value: 0, color: '#3b82f6' },
     { label: 'Contato feito', value: 0, color: '#a78bfa' },
     { label: 'Negociação', value: 0, color: '#f59e0b' },
     { label: 'Proposta', value: 0, color: '#38bdf8' }
