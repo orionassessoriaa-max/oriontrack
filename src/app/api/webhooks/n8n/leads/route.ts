@@ -15,6 +15,8 @@ function normalizeBooleanLabel(value: unknown) {
 }
 
 async function resolveCorretorId(body: any) {
+  let resolvedId: string | null = null;
+
   const corretorId = normalizeText(body.corretor_id);
   if (corretorId) {
     const { data } = await supabaseAdmin
@@ -22,27 +24,72 @@ async function resolveCorretorId(body: any) {
       .select('id')
       .eq('id', corretorId)
       .maybeSingle();
-    if (data?.id) return data.id;
+    if (data?.id) resolvedId = data.id;
   }
 
-  const corretorEmail = normalizeText(body.corretor_email || body.email_corretor).toLowerCase();
-  if (corretorEmail) {
-    const { data } = await supabaseAdmin
-      .from('corretores')
-      .select('id')
-      .eq('email', corretorEmail)
-      .maybeSingle();
-    if (data?.id) return data.id;
+  if (!resolvedId) {
+    const corretorEmail = normalizeText(body.corretor_email || body.email_corretor).toLowerCase();
+    if (corretorEmail) {
+      const { data: broker } = await supabaseAdmin
+        .from('corretores')
+        .select('id')
+        .eq('email', corretorEmail)
+        .maybeSingle();
+      if (broker?.id) {
+        resolvedId = broker.id;
+      } else {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('corretor_id')
+          .eq('email', corretorEmail)
+          .maybeSingle();
+        if (prof?.corretor_id) resolvedId = prof.corretor_id;
+      }
+    }
   }
 
-  const corretorNome = normalizeText(body.corretor_nome || body.nome_corretor);
-  if (corretorNome) {
-    const { data } = await supabaseAdmin
+  if (!resolvedId) {
+    const corretorNome = normalizeText(body.corretor_nome || body.nome_corretor);
+    if (corretorNome) {
+      const { data: broker } = await supabaseAdmin
+        .from('corretores')
+        .select('id')
+        .ilike('nome', corretorNome)
+        .maybeSingle();
+      if (broker?.id) {
+        resolvedId = broker.id;
+      } else {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('corretor_id')
+          .ilike('nome', corretorNome)
+          .maybeSingle();
+        if (prof?.corretor_id) resolvedId = prof.corretor_id;
+      }
+    }
+  }
+
+  if (resolvedId) {
+    const { data: broker } = await supabaseAdmin
       .from('corretores')
-      .select('id')
-      .ilike('nome', corretorNome)
+      .select('nome_empresa')
+      .eq('id', resolvedId)
       .maybeSingle();
-    if (data?.id) return data.id;
+
+    if (broker?.nome_empresa) {
+      const { data: primaryBroker } = await supabaseAdmin
+        .from('corretores')
+        .select('id')
+        .eq('nome_empresa', broker.nome_empresa)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (primaryBroker?.id) {
+        return primaryBroker.id;
+      }
+    }
+    return resolvedId;
   }
 
   return null;

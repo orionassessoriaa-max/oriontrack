@@ -268,6 +268,32 @@ export default function CrmPage() {
     try {
       const simulatedId = typeof window !== 'undefined' ? window.sessionStorage.getItem('orion:viewing_corretor_id') : null;
       const corretorScopeId = simulatedId || (['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario) ? profile.corretor_id : null);
+      
+      let corretorIds = corretorScopeId ? [corretorScopeId] : [];
+      let companyName = profile.nome_empresa || null;
+
+      if (corretorScopeId) {
+        const { data: brokerRow } = await supabase
+          .from('corretores')
+          .select('nome_empresa')
+          .eq('id', corretorScopeId)
+          .maybeSingle();
+        
+        if (brokerRow?.nome_empresa) {
+          companyName = brokerRow.nome_empresa;
+        }
+
+        if (companyName) {
+          const { data: siblings } = await supabase
+            .from('corretores')
+            .select('id')
+            .eq('nome_empresa', companyName);
+          if (siblings && siblings.length > 0) {
+            corretorIds = siblings.map((s) => s.id);
+          }
+        }
+      }
+
       let tarefasQuery = supabase
         .from('lead_tarefas')
         .select('*')
@@ -280,12 +306,12 @@ export default function CrmPage() {
         .order('ultima_mensagem_at', { ascending: false })
         .limit(50);
 
-      if (corretorScopeId) {
-        tarefasQuery = tarefasQuery.eq('corretor_id', corretorScopeId);
-        conversasQuery = conversasQuery.eq('corretor_id', corretorScopeId);
+      if (corretorIds.length > 0) {
+        tarefasQuery = tarefasQuery.in('corretor_id', corretorIds);
+        conversasQuery = conversasQuery.in('corretor_id', corretorIds);
       }
 
-      if (profile.tipo_usuario === 'corretor_membro') {
+      if (!companyName && profile.tipo_usuario === 'corretor_membro') {
         tarefasQuery = tarefasQuery.eq('responsavel_profile_id', profile.id);
       }
 
@@ -311,10 +337,10 @@ export default function CrmPage() {
           .order('data_entrada', { ascending: false, nullsFirst: false })
           .range(from, to);
 
-        if (corretorScopeId) {
-          query = query.eq('corretor_id', corretorScopeId);
+        if (corretorIds.length > 0) {
+          query = query.in('corretor_id', corretorIds);
         }
-        if (profile.tipo_usuario === 'corretor_membro') {
+        if (!companyName && profile.tipo_usuario === 'corretor_membro') {
           query = query.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
         }
 

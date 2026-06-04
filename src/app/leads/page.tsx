@@ -206,7 +206,7 @@ export default function BrokerLeadsPage() {
       fetchCrmConfig();
       fetchTeamMembers();
     }
-  }, [profile?.corretor_id]);
+  }, [profile?.corretor_id, profile?.nome_empresa]);
 
   const fetchLeads = async (page = 0, append = false) => {
     if (!profile?.corretor_id) {
@@ -223,14 +223,26 @@ export default function BrokerLeadsPage() {
     try {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
+
+      let idsToFetch = [profile.corretor_id];
+      if (profile.nome_empresa) {
+        const { data: siblings } = await supabase
+          .from('corretores')
+          .select('id')
+          .eq('nome_empresa', profile.nome_empresa);
+        if (siblings && siblings.length > 0) {
+          idsToFetch = siblings.map((s) => s.id);
+        }
+      }
+
       let leadsQuery = supabase
         .from('leads')
         .select('*, responsavel_membro:responsavel_membro_id(nome,email)', { count: 'exact' })
-        .eq('corretor_id', profile.corretor_id)
+        .in('corretor_id', idsToFetch)
         .order('data_entrada', { ascending: false, nullsFirst: false })
         .range(from, to);
 
-      if (profile.tipo_usuario === 'corretor_membro') {
+      if (!profile.nome_empresa && profile.tipo_usuario === 'corretor_membro') {
         leadsQuery = leadsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
       }
 

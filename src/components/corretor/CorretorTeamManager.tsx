@@ -110,6 +110,8 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [error, setError] = useState<string | null>(null);
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
   const [memberRole, setMemberRole] = useState<'corretor_membro' | 'corretor_admin'>('corretor_membro');
+  const [skipOnboarding, setSkipOnboarding] = useState(false);
+  const [showAddMemberForm, setShowAddMemberForm] = useState(false);
   const canAssignLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
   const displayTeamName = brokerageName || team?.nome || 'Time comercial';
 
@@ -459,7 +461,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     );
   }
 
-  if (membros.length === 0) {
+  if (membros.length === 0 && !skipOnboarding) {
     return (
       <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {error && (
@@ -509,12 +511,12 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             {/* Left Column: Context copy */}
             <div className="space-y-6 justify-center flex flex-col">
               <div className="space-y-4">
-                <h3 className="text-xl font-black text-white">Adicione o primeiro integrante do time</h3>
+                <h3 className="text-xl font-black text-white">Adicione o seu primeiro vendedor ao time</h3>
                 <p className="text-sm font-medium text-slate-400 leading-relaxed">
-                  Para liberar seu dashboard comercial, você precisa cadastrar pelo menos um vendedor (integrante) na equipe.
+                  Adicione integrantes se quiser delegar acessos de vendedor. Eles receberão login exclusivo para gerenciar o CRM.
                 </p>
                 <p className="text-sm font-medium text-slate-400 leading-relaxed">
-                  Após o cadastro, o OrionTrack criará uma conta exclusiva e uma senha provisória de acesso para ele gerenciar o CRM e receber leads.
+                  Você também pode pular esta etapa e gerenciar/adicionar integrantes a qualquer momento diretamente pelo painel.
                 </p>
               </div>
 
@@ -535,7 +537,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
 
                 <div className="flex items-center gap-3 border-t border-white/5 pt-3.5">
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/5 border border-dashed border-white/10 text-slate-500 text-xs font-black">2</div>
-                  <span className="text-sm font-bold text-slate-400">Adicionar integrante e ativar painel</span>
+                  <span className="text-sm font-bold text-slate-400">Adicionar integrante (opcional)</span>
                 </div>
               </div>
 
@@ -551,56 +553,101 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               </button>
             </div>
 
-            {/* Right Column: Creation Form */}
-            <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
-              <form onSubmit={createMember} className="space-y-4">
-                <div className="mb-4">
-                  <h4 className="font-black text-white text-base">Novo Integrante</h4>
-                  <p className="text-xs text-slate-400 font-bold mt-1">Preencha os dados do seu primeiro vendedor.</p>
+            {/* Right Column: Creation Form or Question */}
+            <div className="bg-white/5 p-6 rounded-3xl border border-white/10 flex flex-col justify-center min-h-[300px]">
+              {!showAddMemberForm ? (
+                <div className="space-y-6 text-center">
+                  <div className="space-y-2">
+                    <h4 className="font-black text-white text-lg">Deseja adicionar uma pessoa ao time agora?</h4>
+                    <p className="text-xs text-slate-400 font-bold">
+                      Você pode cadastrar um corretor para trabalhar em equipe ou ir direto para o painel.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMemberForm(true)}
+                      className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-500 py-4 text-sm font-black text-white transition-all hover:scale-[1.02] shadow-lg shadow-emerald-500/20 cursor-pointer"
+                    >
+                      <Plus size={18} />
+                      Sim, adicionar integrante
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSkipOnboarding(true)}
+                      className="w-full flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 py-4 text-xs font-black text-slate-300 transition-all hover:bg-white/10 cursor-pointer"
+                    >
+                      Não, ir para o painel
+                    </button>
+                  </div>
                 </div>
-                
-                <label className="block">
-                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nome do Integrante</span>
-                  <input
-                    required
-                    value={nome}
-                    onChange={(event) => setNome(event.target.value)}
-                    placeholder="Nome completo do vendedor"
-                    className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
-                  />
-                </label>
-                
-                <label className="block">
-                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Email Comercial/Real</span>
-                  <input
-                    required
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="exemplo@vendedor.com"
-                    className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nível de Permissão</span>
-                  <select
-                    value={memberRole}
-                    onChange={(e) => setMemberRole(e.target.value as any)}
-                    className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all cursor-pointer"
-                  >
-                    <option value="corretor_membro" className="bg-[#070b13]">Corretor (Acesso Padrão)</option>
-                    <option value="corretor_admin" className="bg-[#070b13]">Corretor Admin (Acesso Completo)</option>
-                  </select>
-                </label>
+              ) : (
+                <form onSubmit={createMember} className="space-y-4">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <h4 className="font-black text-white text-base">Novo Integrante</h4>
+                      <p className="text-xs text-slate-400 font-bold mt-1">Preencha os dados do seu primeiro vendedor.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMemberForm(false)}
+                      className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:underline"
+                    >
+                      Voltar
+                    </button>
+                  </div>
+                  
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nome do Integrante</span>
+                    <input
+                      required
+                      value={nome}
+                      onChange={(event) => setNome(event.target.value)}
+                      placeholder="Nome completo do vendedor"
+                      className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
+                    />
+                  </label>
+                  
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Email Comercial/Real</span>
+                    <input
+                      required
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="exemplo@vendedor.com"
+                      className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Nível de Permissão</span>
+                    <select
+                      value={memberRole}
+                      onChange={(e) => setMemberRole(e.target.value as any)}
+                      className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all cursor-pointer"
+                    >
+                      <option value="corretor_membro" className="bg-[#070b13]">Corretor (Acesso Padrão)</option>
+                      <option value="corretor_admin" className="bg-[#070b13]">Corretor Admin (Acesso Completo)</option>
+                    </select>
+                  </label>
 
-                <button
-                  disabled={saving || !nome.trim() || !email.trim()}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-500 py-4 text-sm font-black text-white transition-all hover:scale-[1.02] shadow-lg shadow-emerald-500/20 disabled:opacity-40 cursor-pointer"
-                >
-                  {saving ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
-                  Criar Acesso e Ativar Painel
-                </button>
-              </form>
+                  <button
+                    disabled={saving || !nome.trim() || !email.trim()}
+                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-500 py-4 text-sm font-black text-white transition-all hover:scale-[1.02] shadow-lg shadow-emerald-500/20 disabled:opacity-40 cursor-pointer"
+                  >
+                    {saving ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
+                    Criar Acesso e Ativar Painel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSkipOnboarding(true)}
+                    className="w-full mt-2 flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 py-4 text-xs font-black text-slate-300 transition-all hover:bg-white/10 cursor-pointer"
+                  >
+                    Pular e ir para o painel
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>

@@ -184,10 +184,21 @@ export default function BrokerInboxPage() {
     const params = new URLSearchParams(window.location.search);
     const urlPhone = params.get('telefone') || '';
 
+    let idsToFetch = [profile.corretor_id];
+    if (profile.nome_empresa) {
+      const { data: siblings } = await supabase
+        .from('corretores')
+        .select('id')
+        .eq('nome_empresa', profile.nome_empresa);
+      if (siblings && siblings.length > 0) {
+        idsToFetch = siblings.map((s) => s.id);
+      }
+    }
+
     const { data } = await supabase
       .from('whatsapp_conversas')
       .select('*')
-      .eq('corretor_id', profile.corretor_id)
+      .in('corretor_id', idsToFetch)
       .order('ultima_mensagem_at', { ascending: false })
       .limit(80);
 
@@ -254,7 +265,7 @@ export default function BrokerInboxPage() {
 
   useEffect(() => {
     void fetchInbox();
-  }, [profile?.corretor_id]);
+  }, [profile?.corretor_id, profile?.nome_empresa]);
 
   useEffect(() => {
     if (!isWhatsAppConnected && (qrCode || whatsappStatus === 'connecting')) {

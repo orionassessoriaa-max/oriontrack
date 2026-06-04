@@ -16,10 +16,24 @@ async function getConversation(id: string) {
   return data;
 }
 
-function canAccessConversation(profile: any, conversation: any) {
+async function canAccessConversation(profile: any, conversation: any) {
   if (!conversation) return false;
   if (profile.tipo_usuario === 'admin' || profile.tipo_usuario === 'account_manager') return true;
-  return Boolean(profile.corretor_id && profile.corretor_id === conversation.corretor_id);
+  if (!profile.corretor_id) return false;
+  if (profile.corretor_id === conversation.corretor_id) return true;
+
+  if (profile.nome_empresa && conversation.corretor_id) {
+    const { data: convBroker } = await supabaseAdmin
+      .from('corretores')
+      .select('nome_empresa')
+      .eq('id', conversation.corretor_id)
+      .maybeSingle();
+
+    if (convBroker?.nome_empresa && convBroker.nome_empresa.trim().toLowerCase() === profile.nome_empresa.trim().toLowerCase()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export async function GET(request: Request) {
@@ -37,7 +51,7 @@ export async function GET(request: Request) {
     }
 
     const conversation = await getConversation(conversationId);
-    if (!canAccessConversation(guard.profile, conversation)) {
+    if (!(await canAccessConversation(guard.profile, conversation))) {
       return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
     }
 
@@ -84,7 +98,7 @@ export async function POST(request: Request) {
 
     if (conversationId && !conversationId.startsWith('new-')) {
       conversation = await getConversation(conversationId);
-      if (!canAccessConversation(guard.profile, conversation)) {
+      if (!(await canAccessConversation(guard.profile, conversation))) {
         return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
       }
     } else {

@@ -499,12 +499,27 @@ export async function POST(request: Request) {
 
     const { data: corretor } = await supabaseAdmin
       .from('corretores')
-      .select('id, nome')
+      .select('id, nome, nome_empresa')
       .eq('id', corretorId)
       .maybeSingle();
 
     if (!corretor) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
+    }
+
+    let targetCorretorId = corretorId;
+    if (corretor.nome_empresa) {
+      const { data: primaryBroker } = await supabaseAdmin
+        .from('corretores')
+        .select('id')
+        .eq('nome_empresa', corretor.nome_empresa)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (primaryBroker?.id) {
+        targetCorretorId = primaryBroker.id;
+      }
     }
 
     const { csvUrl, editUrl, gid, spreadsheetId, isDirectCsv } = parseSheetLink(sheetUrl);
@@ -554,7 +569,7 @@ export async function POST(request: Request) {
           if (warnings.length > 0) incomplete += 1;
 
           leads.push({
-            corretor_id: corretorId,
+            corretor_id: targetCorretorId,
             data_entrada: resolveLeadDate(row),
             nome: rawNome || 'Lead sem nome',
             telefone: rawTelefone || 'Telefone nao informado',

@@ -143,7 +143,9 @@ export default function FinanceiroPage() {
       <div className="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">Controle financeiro</p>
-          <h1 className="text-4xl font-black tracking-tight text-white">Financeiro do corretor</h1>
+          <h1 className="text-4xl font-black tracking-tight text-white">
+            Financeiro {profile?.nome_empresa ? `da ${profile.nome_empresa}` : 'do corretor'}
+          </h1>
           <p className="mt-2 max-w-2xl text-sm font-bold text-slate-400">
             Acompanhe quanto vendeu, quanto entra neste mes e quanto fica previsto para o mes que vem.
           </p>

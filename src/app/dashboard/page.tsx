@@ -306,10 +306,21 @@ export default function DashboardPage() {
       if (!profile.corretor_id) return;
       
       try {
+        let idsToFetch = [profile.corretor_id];
+        if (profile.nome_empresa) {
+          const { data: siblings } = await supabase
+            .from('corretores')
+            .select('id')
+            .eq('nome_empresa', profile.nome_empresa);
+          if (siblings && siblings.length > 0) {
+            idsToFetch = siblings.map((s) => s.id);
+          }
+        }
+
         const { data: oldestLeadData } = await supabase
           .from('leads')
           .select('data_entrada')
-          .eq('corretor_id', profile.corretor_id)
+          .in('corretor_id', idsToFetch)
           .order('data_entrada', { ascending: true })
           .limit(1)
           .maybeSingle();
@@ -328,7 +339,7 @@ export default function DashboardPage() {
     }
 
     initializeDefaultDates();
-  }, [profile?.id, profile?.corretor_id]);
+  }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [presetLabel, setPresetLabel] = useState('Todo o período');
@@ -440,16 +451,28 @@ export default function DashboardPage() {
         const limitNum = 1000;
         let keepFetching = true;
 
+        const companyName = data?.nome_empresa || profile.nome_empresa;
+        let idsToFetch = [profile.corretor_id];
+        if (companyName) {
+          const { data: siblings } = await supabase
+            .from('corretores')
+            .select('id')
+            .eq('nome_empresa', companyName);
+          if (siblings && siblings.length > 0) {
+            idsToFetch = siblings.map((s) => s.id);
+          }
+        }
+
         while (keepFetching) {
           const from = pageNum * limitNum;
           const to = from + limitNum - 1;
           let statsRequest = supabase
             .from('leads')
             .select('status, data_entrada, cidade, valor_negociacao, valor_comissao, responsavel_profile_id')
-            .eq('corretor_id', profile.corretor_id)
+            .in('corretor_id', idsToFetch)
             .range(from, to);
 
-          if (profile.tipo_usuario === 'corretor_membro') {
+          if (!companyName && profile.tipo_usuario === 'corretor_membro') {
             statsRequest = statsRequest.eq('responsavel_profile_id', profile.id);
           }
 
@@ -885,6 +908,11 @@ export default function DashboardPage() {
             ) : (
               <>
                 <span>Olá, {firstName}</span>
+                {profile?.nome_empresa && (
+                  <span className="text-sm font-black uppercase tracking-widest bg-blue-600/10 text-blue-400 border border-blue-500/20 px-3.5 py-1.5 rounded-2xl ml-2">
+                    {profile.nome_empresa}
+                  </span>
+                )}
               </>
             )}
           </h1>
