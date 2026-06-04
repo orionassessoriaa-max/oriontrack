@@ -142,6 +142,8 @@ type TeamMember = {
   id: string;
   nome: string;
   email: string;
+  profile_id?: string | null;
+  tipo_usuario?: string | null;
 };
 
 const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
@@ -241,8 +243,8 @@ export default function CrmPage() {
   const [metricsSubTab, setMetricsSubTab] = useState<'geral' | 'detalhes'>('geral');
   const [metricsStartDate, setMetricsStartDate] = useState('2026-05-26');
   const [metricsEndDate, setMetricsEndDate] = useState('2026-06-02');
-  const [metricsChannel, setMetricsChannel] = useState('todos');
-  const [metricsDepartment, setMetricsDepartment] = useState('todos');
+  const [metricsChannel, setMetricsChannel] = useState('meta');
+  const [metricsDepartment, setMetricsDepartment] = useState('comercial');
   const [metricsAgent, setMetricsAgent] = useState('todos');
   const [showCalendarRange, setShowCalendarRange] = useState(false);
 
@@ -485,14 +487,24 @@ export default function CrmPage() {
     });
   }
 
+  function getConversationLead(conversation: WhatsAppConversa) {
+    return conversation.lead_id ? leads.find((lead) => lead.id === conversation.lead_id) : null;
+  }
+
+  function matchesMetricsFilters(conversation: WhatsAppConversa) {
+    if (!isConversationInRange(conversation, metricsStartDate, metricsEndDate)) return false;
+    if (!['todos', 'meta'].includes(metricsChannel)) return false;
+    if (!['todos', 'comercial'].includes(metricsDepartment)) return false;
+    if (metricsAgent === 'todos') return true;
+
+    const lead = getConversationLead(conversation);
+    return conversation.corretor_id === metricsAgent
+      || lead?.responsavel_membro_id === metricsAgent
+      || lead?.responsavel_profile_id === metricsAgent;
+  }
+
   const dashboardMetrics = useMemo(() => {
-    const periodConversations = conversas.filter((conversation) => {
-      if (!isConversationInRange(conversation, metricsStartDate, metricsEndDate)) return false;
-      if (metricsChannel !== 'todos') return false;
-      if (metricsDepartment !== 'todos') return false;
-      if (metricsAgent !== 'todos' && conversation.corretor_id !== metricsAgent) return false;
-      return true;
-    });
+    const periodConversations = conversas.filter(matchesMetricsFilters);
 
     const inProgress = periodConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'open').length;
     const paused = periodConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'paused').length;
@@ -520,23 +532,29 @@ export default function CrmPage() {
       totalAgents,
       rating
     };
-  }, [profile?.id, conversas, teamMembers, metricsStartDate, metricsEndDate, metricsChannel, metricsDepartment, metricsAgent]);
+  }, [profile?.id, conversas, leads, teamMembers, metricsStartDate, metricsEndDate, metricsChannel, metricsDepartment, metricsAgent]);
 
   const activeBrokersList = useMemo(() => {
     const periodConversations = conversas.filter((conversation) =>
       isConversationInRange(conversation, metricsStartDate, metricsEndDate)
     );
-    const getBrokerStats = (brokerId?: string | null) => {
-      const brokerConversations = periodConversations.filter((conversation) => conversation.corretor_id === brokerId);
+    const getBrokerStats = (brokerIds: Array<string | null | undefined>) => {
+      const ids = brokerIds.filter(Boolean).map(String);
+      const brokerConversations = periodConversations.filter((conversation) => {
+        const lead = getConversationLead(conversation);
+        return ids.includes(String(conversation.corretor_id || ''))
+          || ids.includes(String(lead?.responsavel_membro_id || ''))
+          || ids.includes(String(lead?.responsavel_profile_id || ''));
+      });
       return {
         active: brokerConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'open').length,
         closed: brokerConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'closed').length,
       };
     };
 
-    const currentStats = getBrokerStats(profile?.corretor_id || profile?.id);
+    const currentStats = getBrokerStats([profile?.corretor_id, profile?.id]);
     const currentAgent = {
-      id: profile?.id || 'current',
+      id: profile?.corretor_id || profile?.id || 'current',
       nome: profile?.nome || 'Você',
       email: profile?.email || '',
       role: profile?.tipo_usuario === 'corretor_admin' ? 'Administrador' : 'Corretor',
@@ -548,12 +566,12 @@ export default function CrmPage() {
     };
 
     const teamBrokers = teamMembers.map((member) => {
-      const memberStats = getBrokerStats(member.id);
+      const memberStats = getBrokerStats([member.id, member.profile_id]);
       return {
         id: member.id,
         nome: member.nome,
         email: member.email,
-        role: 'Corretor',
+        role: member.tipo_usuario === 'corretor_admin' ? 'Administrador' : 'Corretor',
         online: memberStats.active > 0,
         tme: formatDuration(0),
         tma: formatDuration(0),
@@ -563,11 +581,11 @@ export default function CrmPage() {
     });
 
     return [currentAgent, ...teamBrokers];
-  }, [profile, teamMembers, conversas, metricsStartDate, metricsEndDate]);
+  }, [profile, teamMembers, conversas, leads, metricsStartDate, metricsEndDate]);
 
   const activeChatsList = useMemo(() => {
     const dbConversas = conversas.filter((conversation) => {
-      if (!isConversationInRange(conversation, metricsStartDate, metricsEndDate)) return false;
+      if (!matchesMetricsFilters(conversation)) return false;
       const status = normalizeConversationStatus(conversation.status);
       return status === 'open' || status === 'waiting';
     }).map((c) => {
@@ -586,7 +604,7 @@ export default function CrmPage() {
     });
 
     return dbConversas;
-  }, [conversas, leads, activeBrokersList, metricsStartDate, metricsEndDate]);
+  }, [conversas, leads, activeBrokersList, metricsStartDate, metricsEndDate, metricsChannel, metricsDepartment, metricsAgent]);
 
   const staleLeadIds = useMemo(() => new Set(leads.filter(isStale).map((lead) => lead.id)), [leads]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente').map((task) => task.lead_id)), [tarefas]);
@@ -1083,11 +1101,7 @@ export default function CrmPage() {
               onChange={(e) => setMetricsChannel(e.target.value)}
               className="w-full lg:w-auto rounded-xl border-none bg-blue-600 hover:bg-blue-700 px-5 py-3 text-sm font-black text-white shadow-sm transition-all outline-none cursor-pointer appearance-none text-center"
             >
-              <option value="todos">Canais</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="web">Web / Formulário</option>
-              <option value="instagram">Instagram</option>
-              <option value="facebook">Facebook</option>
+              <option value="meta">Meta</option>
             </select>
 
             <select
@@ -1095,11 +1109,7 @@ export default function CrmPage() {
               onChange={(e) => setMetricsDepartment(e.target.value)}
               className="w-full lg:w-auto rounded-xl border-none bg-blue-600 hover:bg-blue-700 px-5 py-3 text-sm font-black text-white shadow-sm transition-all outline-none cursor-pointer appearance-none text-center"
             >
-              <option value="todos">Departamentos</option>
               <option value="comercial">Comercial</option>
-              <option value="prevendas">Pré-vendas</option>
-              <option value="suporte">Suporte</option>
-              <option value="financeiro">Financeiro</option>
             </select>
 
             <select
@@ -1108,7 +1118,7 @@ export default function CrmPage() {
               className="w-full lg:w-auto rounded-xl border-none bg-blue-600 hover:bg-blue-700 px-5 py-3 text-sm font-black text-white shadow-sm transition-all outline-none cursor-pointer appearance-none text-center"
             >
               <option value="todos">Atendentes</option>
-              {teamMembers.map((member) => (
+              {activeBrokersList.map((member) => (
                 <option key={member.id} value={member.id}>{member.nome}</option>
               ))}
             </select>
