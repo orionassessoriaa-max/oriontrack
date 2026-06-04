@@ -311,7 +311,6 @@ export default function DashboardPage() {
           .limit(1)
           .maybeSingle();
 
-        const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
         let firstLeadDate = '2026-01-01';
         if (oldestLeadData?.data_entrada) {
           firstLeadDate = oldestLeadData.data_entrada.slice(0, 10);
@@ -319,7 +318,7 @@ export default function DashboardPage() {
         
         setOldestDate(firstLeadDate);
         setDataInicio(firstLeadDate);
-        setDataFim(todayStr);
+        setDataFim(toLocalDateString(getYesterday()));
       } catch (err) {
         console.error('Error fetching oldest lead date:', err);
       }
@@ -338,11 +337,18 @@ export default function DashboardPage() {
     return `${sDay}/${sMonth}/${sYear} a ${eDay}/${eMonth}/${eYear}`;
   };
 
+  const toLocalDateString = (date: Date) =>
+    new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+  const getYesterday = () => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  };
+
   const applyPreset = (preset: string) => {
     if (preset === 'todo_periodo') {
-      const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
       setDataInicio(oldestDate || '2026-01-01');
-      setDataFim(todayStr);
+      setDataFim(toLocalDateString(getYesterday()));
       setPresetLabel('Todo o período');
       setShowDatePicker(false);
       return;
@@ -351,7 +357,6 @@ export default function DashboardPage() {
     const d = new Date();
     let start = new Date();
     let end = new Date();
-    const tzOffset = d.getTimezoneOffset() * 60000;
 
     switch (preset) {
       case 'hoje':
@@ -363,16 +368,18 @@ export default function DashboardPage() {
         setPresetLabel('Ontem');
         break;
       case '7dias':
-        start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 6);
+        end = getYesterday();
+        start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 6);
         setPresetLabel('Últimos 7 dias');
         break;
       case '30dias':
-        start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 29);
+        end = getYesterday();
+        start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29);
         setPresetLabel('Últimos 30 dias');
         break;
       case 'este_mes':
         start = new Date(d.getFullYear(), d.getMonth(), 1);
-        end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        end = getYesterday();
         setPresetLabel('Este mês');
         break;
       case 'mes_passado':
@@ -384,8 +391,8 @@ export default function DashboardPage() {
         break;
     }
 
-    const startStr = new Date(start.getTime() - tzOffset).toISOString().slice(0, 10);
-    const endStr = new Date(end.getTime() - tzOffset).toISOString().slice(0, 10);
+    const startStr = toLocalDateString(start);
+    const endStr = toLocalDateString(end);
     
     setDataInicio(startStr);
     setDataFim(endStr);

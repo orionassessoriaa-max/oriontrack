@@ -47,12 +47,18 @@ export default function MetaDatePicker({
     return `${day}/${month}/${year}`;
   };
 
+  const toLocalDateString = (date: Date) =>
+    new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+  const getYesterday = () => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  };
+
   const applyPreset = (presetName: string) => {
     if (presetName === 'todo_periodo') {
-      const d = new Date();
-      const tzOffset = d.getTimezoneOffset() * 60000;
       const startStr = '2025-01-01'; // Default system start
-      const endStr = new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
+      const endStr = toLocalDateString(getYesterday());
       
       setTempStart(startStr);
       setTempEnd(endStr);
@@ -65,7 +71,6 @@ export default function MetaDatePicker({
     const d = new Date();
     let start = new Date();
     let end = new Date();
-    const tzOffset = d.getTimezoneOffset() * 60000;
 
     let label = 'Este mês';
 
@@ -79,16 +84,18 @@ export default function MetaDatePicker({
         label = 'Ontem';
         break;
       case '7dias':
-        start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 6);
+        end = getYesterday();
+        start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 6);
         label = 'Últimos 7 dias';
         break;
       case '30dias':
-        start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 29);
+        end = getYesterday();
+        start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29);
         label = 'Últimos 30 dias';
         break;
       case 'este_mes':
         start = new Date(d.getFullYear(), d.getMonth(), 1);
-        end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        end = getYesterday();
         label = 'Este mês';
         break;
       case 'mes_passado':
@@ -100,8 +107,8 @@ export default function MetaDatePicker({
         break;
     }
 
-    const startStr = new Date(start.getTime() - tzOffset).toISOString().slice(0, 10);
-    const endStr = new Date(end.getTime() - tzOffset).toISOString().slice(0, 10);
+    const startStr = toLocalDateString(start);
+    const endStr = toLocalDateString(end);
 
     setTempStart(startStr);
     setTempEnd(endStr);
