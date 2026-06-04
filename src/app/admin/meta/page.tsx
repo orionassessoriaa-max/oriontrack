@@ -7,15 +7,6 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor, MetaAdAccount } from '@/types';
 import { AlertTriangle, CheckCircle2, Link2, Loader2, RefreshCw, Search, ShieldCheck, Unlink, Zap } from 'lucide-react';
 
-function isMaster(profile?: { email?: string | null; email_real?: string | null; is_admin_master?: boolean | null } | null) {
-  if (!profile) return false;
-  if (profile.is_admin_master) return true;
-  return [profile.email, profile.email_real]
-    .filter(Boolean)
-    .map((email) => String(email).toLowerCase())
-    .includes('ewerttonherculano@gmail.com');
-}
-
 export default function AdminMetaPage() {
   const { actualProfile } = useAuth();
   const [accounts, setAccounts] = useState<MetaAdAccount[]>([]);
@@ -26,10 +17,10 @@ export default function AdminMetaPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const masterAdmin = isMaster(actualProfile);
+  const isAdmin = actualProfile?.tipo_usuario === 'admin';
 
   async function fetchData() {
-    if (!masterAdmin) {
+    if (!isAdmin) {
       setLoading(false);
       return;
     }
@@ -55,7 +46,7 @@ export default function AdminMetaPage() {
 
   useEffect(() => {
     void fetchData();
-  }, [masterAdmin]);
+  }, [isAdmin]);
 
   const filteredCorretores = useMemo(() => {
     const term = search.toLowerCase();
@@ -118,7 +109,7 @@ export default function AdminMetaPage() {
     await fetchData();
   }
 
-  if (!masterAdmin) {
+  if (!isAdmin) {
     return (
       <InternalLayout>
         <div className="rounded-[2rem] border border-amber-100 bg-amber-50 p-8">
@@ -126,7 +117,7 @@ export default function AdminMetaPage() {
             <ShieldCheck size={26} />
           </div>
           <h1 className="text-2xl font-black text-amber-950">Acesso restrito</h1>
-          <p className="mt-2 text-sm font-bold text-amber-800">A tela de contas Meta fica disponivel apenas para o DevOps Manager.</p>
+          <p className="mt-2 text-sm font-bold text-amber-800">A tela de contas Meta fica disponivel apenas para administradores.</p>
         </div>
       </InternalLayout>
     );
@@ -136,7 +127,7 @@ export default function AdminMetaPage() {
     <InternalLayout>
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">DevOps Manager</p>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Admin Orion</p>
           <h1 className="text-3xl font-black tracking-tight text-gray-900">Contas Meta</h1>
           <p className="font-medium text-gray-500">Controle quais contas de anuncio estao vinculadas aos corretores.</p>
         </div>

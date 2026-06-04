@@ -65,7 +65,6 @@ export default function AdminUsuariosPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
-  const [isMasterAdmin, setIsMasterAdmin] = useState(false);
   const [editingProfile, setEditingProfile] = useState<AdminProfile | null>(null);
 
   const accessEmail = useMemo(() => editingProfile?.email || generateOrionEmail(form.nome), [editingProfile?.email, form.nome]);
@@ -134,7 +133,6 @@ export default function AdminUsuariosPage() {
     const nextCorretores = payload.corretores || [];
     setProfiles(nextProfiles);
     setCorretores(nextCorretores);
-    setIsMasterAdmin(Boolean(payload.isMasterAdmin));
     const editId = new URLSearchParams(window.location.search).get('edit');
     if (editId) {
       const profileToEdit = nextProfiles.find((profile: AdminProfile) => profile.id === editId);
@@ -449,7 +447,7 @@ export default function AdminUsuariosPage() {
                 <option value="gestor_trafego">Gestor de tráfego</option>
                 <option value="designer">Designer</option>
                 <option value="account_manager">Account manager</option>
-                {isMasterAdmin && <option value="admin">Admin / Diretor</option>}
+                <option value="admin">Admin / Diretor</option>
               </select>
             </div>
 
@@ -742,7 +740,7 @@ export default function AdminUsuariosPage() {
                       </button>
                       {isOwnAccess || isMasterAccess ? (
                         <span className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-blue-700">
-                          DevOps Manager
+                          {isMasterAccess ? 'DevOps Manager' : 'Seu acesso'}
                         </span>
                       ) : (
                         <>

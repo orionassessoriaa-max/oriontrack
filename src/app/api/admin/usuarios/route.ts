@@ -152,10 +152,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Nome e tipo de usuário são obrigatórios.' }, { status: 400 });
     }
 
-    if (role === 'admin' && !isMasterAdmin(guard.profile)) {
-      return NextResponse.json({ error: 'Apenas o DevOps Manager pode criar outros admins.' }, { status: 403 });
-    }
-
     if (role === 'corretor' && !telefone) {
       return NextResponse.json({ error: 'Telefone é obrigatório para corretor.' }, { status: 400 });
     }
@@ -312,12 +308,8 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Para transformar acesso em corretor ou tirar de corretor, crie um novo acesso. A edicao segura permite ajustar dados do perfil atual.' }, { status: 400 });
       }
 
-      if (targetProfile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
-        return NextResponse.json({ error: 'Apenas o DevOps Manager pode editar outro admin.' }, { status: 403 });
-      }
-
-      if (nextRole === 'admin' && !isMasterAdmin(guard.profile)) {
-        return NextResponse.json({ error: 'Apenas o DevOps Manager pode definir outro admin.' }, { status: 403 });
+      if (isMasterAdmin(targetProfile) && targetProfile.id !== guard.user.id) {
+        return NextResponse.json({ error: 'O acesso do DevOps Manager nao pode ser editado por outro admin.' }, { status: 403 });
       }
 
       const roleToSave = nextRole || targetProfile.tipo_usuario;
@@ -391,10 +383,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'A senha do DevOps Manager nao pode ser redefinida por aqui.' }, { status: 403 });
     }
 
-    if (targetProfile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
-      return NextResponse.json({ error: 'Apenas o DevOps Manager pode redefinir senha de outro admin.' }, { status: 403 });
-    }
-
     const senhaProvisoria = generateStrongPassword();
     const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(id, {
       password: senhaProvisoria
@@ -461,10 +449,6 @@ export async function DELETE(request: Request) {
 
     if (isMasterAdmin(profile)) {
       return NextResponse.json({ error: 'O DevOps Manager não pode ser removido.' }, { status: 403 });
-    }
-
-    if (profile.tipo_usuario === 'admin' && !isMasterAdmin(guard.profile)) {
-      return NextResponse.json({ error: 'Apenas o admin mestre pode remover outro admin.' }, { status: 403 });
     }
 
     if (profile.corretor_id) {
