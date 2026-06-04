@@ -268,6 +268,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({
     total: 0,
     waiting: 0,
+    contactMade: 0,
     inProgress: 0,
     quoted: 0,
     sold: 0,
@@ -609,6 +610,11 @@ export default function DashboardPage() {
           const s = normalizeLeadStatus(l.status);
           return s === 'Aguardando atendimento';
         });
+
+        const contactMadeLeads = statsRes.filter(l => {
+          const s = normalizeLeadStatus(l.status);
+          return s === 'Contato feito';
+        });
         
         const inProgressLeads = statsRes.filter(l => {
           const s = normalizeLeadStatus(l.status);
@@ -622,12 +628,13 @@ export default function DashboardPage() {
         
         const lostLeads = statsRes.filter(l => {
           const s = normalizeLeadStatus(l.status);
-          return s === 'Sem interesse' || s === 'Não tive retorno' || s === 'Região sem comercialização' || s === 'Telefone não existe';
+          return s === 'Sem interesse';
         });
         
         setStats({
           total: statsRes.length,
           waiting: waitingLeads.length,
+          contactMade: contactMadeLeads.length,
           inProgress: inProgressLeads.length,
           quoted: quotedLeads.length,
           sold: soldLeads.length,
@@ -720,6 +727,7 @@ export default function DashboardPage() {
   const staleOpportunityCount = stats.stale;
   const maxCurrentMonthMetric = Math.max(
     stats.waiting,
+    stats.contactMade,
     stats.inProgress,
     stats.quoted,
     stats.sold,
@@ -728,8 +736,8 @@ export default function DashboardPage() {
 
   const performanceBars = [
     { 
-      label: 'Aguardando', 
-      value: stats.waiting, 
+      label: 'Contato feito', 
+      value: stats.contactMade, 
       gradient: 'from-purple-500 via-pink-500 to-indigo-500', 
       glowColor: 'rgba(168, 85, 247, 0.4)' 
     },
@@ -1078,12 +1086,12 @@ export default function DashboardPage() {
 
       {/* 🚀 STEP 1: KEY NUMBERS AT THE VERY TOP (Swapped General Performance StatCards here!) */}
       <div className="mb-10">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <Link href="/leads">
             <StatCard title="Leads recebidos" value={stats.total} icon={Users} color="blue" loading={isDataLoading} />
           </Link>
-          <Link href="/leads?status=Aguardando atendimento">
-            <StatCard title="Aguardando" value={stats.waiting} icon={Target} color="purple" loading={isDataLoading} />
+          <Link href="/leads?status=Contato feito">
+            <StatCard title="Contato feito" value={stats.contactMade} icon={Target} color="purple" loading={isDataLoading} />
           </Link>
           <Link href="/leads?status=Em negociação">
             <StatCard title="Em negociação" value={stats.inProgress} icon={Clock} color="orange" loading={isDataLoading} />
@@ -1093,6 +1101,9 @@ export default function DashboardPage() {
           </Link>
           <Link href="/leads?status=Venda realizada">
             <StatCard title="Vendas realizadas" value={stats.sold} icon={TrendingUp} color="green" loading={isDataLoading} />
+          </Link>
+          <Link href="/leads?status=Sem interesse">
+            <StatCard title="Vendas perdidas" value={stats.lost} icon={ShieldAlert} color="red" loading={isDataLoading} />
           </Link>
         </div>
       </div>
@@ -1137,7 +1148,7 @@ export default function DashboardPage() {
             <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-2.5 text-right shrink-0">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Total Geral</p>
               <p className="mt-1.5 text-lg font-black text-white leading-none">
-                {stats.waiting + stats.inProgress + stats.quoted + stats.sold + stats.lost}
+                {stats.contactMade + stats.inProgress + stats.quoted + stats.sold + stats.lost}
               </p>
             </div>
           </div>
@@ -1146,7 +1157,7 @@ export default function DashboardPage() {
               <Loader2 className="animate-spin text-purple-500" size={32} />
             ) : (
               <CustomDonutPizzaChart
-                waiting={stats.waiting}
+                waiting={stats.contactMade}
                 inProgress={stats.inProgress}
                 quoted={stats.quoted}
                 sold={stats.sold}
@@ -1848,16 +1859,16 @@ function CustomDonutPizzaChart({
 
   const total = (waiting + inProgress + quoted + sold + lost) || 0;
   const slices = [
-    { label: 'Aguardando', value: waiting, color: '#a78bfa' },
+    { label: 'Contato feito', value: waiting, color: '#a78bfa' },
     { label: 'Negociação', value: inProgress, color: '#f59e0b' },
     { label: 'Proposta', value: quoted, color: '#38bdf8' },
     { label: 'Vendas', value: sold, color: '#10b981' },
-    { label: 'Sem interesse', value: lost, color: '#64748b' }
+    { label: 'Vendas perdidas', value: lost, color: '#64748b' }
   ].filter(s => s.value > 0);
 
   // Default values if all are zero
   const displaySlices = slices.length > 0 ? slices : [
-    { label: 'Aguardando', value: 0, color: '#a78bfa' },
+    { label: 'Contato feito', value: 0, color: '#a78bfa' },
     { label: 'Negociação', value: 0, color: '#f59e0b' },
     { label: 'Proposta', value: 0, color: '#38bdf8' }
   ];
