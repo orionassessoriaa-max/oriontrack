@@ -20,10 +20,15 @@ export function profileIdFromEvolutionInstance(instance?: string | null) {
 export function extractEvolutionQrCode(payload: any): string | null {
   const candidates = [
     payload?.base64,
+    payload?.data?.base64,
     payload?.qrcode?.base64,
+    payload?.data?.qrcode?.base64,
     payload?.qrcode?.code,
+    payload?.data?.qrcode?.code,
     payload?.qrcode,
+    payload?.data?.qrcode,
     payload?.code,
+    payload?.data?.code,
   ];
 
   for (const candidate of candidates) {

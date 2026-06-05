@@ -83,7 +83,6 @@ export default function BrokerInboxPage() {
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // Message states
   const [messages, setMessages] = useState<InboxMessage[]>([]);
@@ -383,7 +382,7 @@ export default function BrokerInboxPage() {
           ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
         },
         body: JSON.stringify({
-          accepted_terms: acceptedTerms,
+          accepted_terms: true,
           terms_version: 'whatsapp-inbox-v1',
         }),
       });
@@ -395,9 +394,16 @@ export default function BrokerInboxPage() {
         return;
       }
 
-      setQrCode(payload.qrcode || null);
+      if (!payload.qrcode) {
+        setConnectError('A conexao respondeu, mas ainda nao trouxe o QR Code. Tente novamente em alguns segundos.');
+        return;
+      }
+
+      setQrCode(payload.qrcode);
+      setWhatsappStatus('connecting');
     } catch (err) {
       console.error(err);
+      setConnectError('Erro de conexao ao gerar o QR Code.');
       setConnecting(false);
     }
   }
@@ -719,6 +725,9 @@ export default function BrokerInboxPage() {
               <div>
                 <p className="text-xs font-black text-amber-200 uppercase tracking-wider">WhatsApp Desconectado</p>
                 <p className="text-2xs text-slate-400 font-bold mt-0.5">Conecte sua conta para poder enviar mensagens reais diretamente por aqui.</p>
+                {connectError && (
+                  <p className="mt-2 text-[10px] font-black text-rose-300">{connectError}</p>
+                )}
               </div>
             </div>
             <button
