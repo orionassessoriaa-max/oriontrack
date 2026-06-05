@@ -255,15 +255,31 @@ export default function AdminCentralPage() {
   }, [corretoresList, gestoresList]);
 
   const noMetaList = useMemo(() => {
-    return corretoresList
-      .filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || '') && !String(c.meta_ad_account_id || '').trim())
-      .map(c => {
-        const gestorId = inferGestorIdFromTeam(c, gestoresList);
+    const groups = new Map<string, any[]>();
+
+    corretoresList
+      .filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''))
+      .forEach(c => {
+        const corretoraNome = String(c.nome_empresa || '').trim();
+        const key = corretoraNome ? `empresa:${normalizeText(corretoraNome)}` : `corretor:${c.id}`;
+        groups.set(key, [...(groups.get(key) || []), c]);
+      });
+
+    return Array.from(groups.values())
+      .filter(group => !group.some(c => String(c.meta_ad_account_id || '').trim()))
+      .map(group => {
+        const primary = group[0];
+        const corretoraNome = String(primary.nome_empresa || '').trim();
+        const gestorId = group
+          .map(c => inferGestorIdFromTeam(c, gestoresList))
+          .find(Boolean);
         const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
         return {
-          corretor_id: c.id,
-          corretor_nome: c.nome,
-          corretora_nome: String(c.nome_empresa || '').trim() || 'Sem corretora',
+          corretor_id: primary.id,
+          corretora_nome: corretoraNome || primary.nome,
+          corretores_nomes: group.map(c => c.nome).filter(Boolean).join(', '),
+          corretores_total: group.length,
+          is_corretora: Boolean(corretoraNome),
           gestor_nome: gestorNome
         };
       });
@@ -716,25 +732,27 @@ export default function AdminCentralPage() {
         document.body
       )}
 
-      {/* Modal: Corretores Sem Meta Ads */}
+      {/* Modal: Corretoras Sem Meta Ads */}
       {mounted && showNoMetaModal && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-[#090e1a]/95 border border-cyan-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
             <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse" /> Corretores Sem Meta Ads
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse" /> Corretoras Sem Meta Ads
             </h3>
-            <p className="text-xs font-semibold text-slate-500 mb-6">Corretores ativos sem conta de anuncio vinculada no Meta.</p>
+            <p className="text-xs font-semibold text-slate-500 mb-6">Corretoras ativas sem conta de anuncio vinculada no Meta.</p>
  
             <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
               {noMetaList.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhum corretor sem Meta Ads.</p>
+                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhuma corretora sem Meta Ads.</p>
               ) : (
                 noMetaList.map((item) => (
                   <div key={item.corretor_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
                     <div>
-                      <p className="font-extrabold text-white">{item.corretor_nome}</p>
+                      <p className="font-extrabold text-white">{item.corretora_nome}</p>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Gestor: {item.gestor_nome}</p>
-                      <p className="text-[9px] font-semibold text-slate-600 mt-1">Corretora: {item.corretora_nome}</p>
+                      <p className="text-[9px] font-semibold text-slate-600 mt-1">
+                        {item.is_corretora ? `${item.corretores_total} corretor(es): ${item.corretores_nomes}` : 'Corretor sem corretora'}
+                      </p>
                     </div>
                     <Link
                       href={`/admin/corretores/${item.corretor_id}/editar`}

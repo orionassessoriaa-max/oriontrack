@@ -6,6 +6,7 @@ type CorretorMeta = {
   id: string;
   nome: string;
   gestor_trafego_id: string | null;
+  nome_empresa: string | null;
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
 };
@@ -82,14 +83,27 @@ function parseMoneyFromMetaText(value?: string | null) {
   return Number.isFinite(amount) ? amount : null;
 }
 
-async function fetchSheetLeadCount(corretorId: string, since: string, until: string) {
+async function fetchSheetLeadCount(corretor: CorretorMeta, since: string, until: string) {
   const start = `${since}T00:00:00.000-03:00`;
   const end = `${until}T23:59:59.999-03:00`;
+  let corretorIds = [corretor.id];
+
+  const corretoraNome = String(corretor.nome_empresa || '').trim();
+  if (corretoraNome) {
+    const { data: groupCorretores, error: groupError } = await supabaseAdmin
+      .from('corretores')
+      .select('id')
+      .eq('nome_empresa', corretoraNome);
+
+    if (groupError) throw new Error(`Erro ao buscar corretores da corretora: ${groupError.message}`);
+    const groupIds = (groupCorretores || []).map((item) => item.id).filter(Boolean);
+    if (groupIds.length > 0) corretorIds = groupIds;
+  }
 
   const { count, error } = await supabaseAdmin
     .from('leads')
     .select('id', { count: 'exact', head: true })
-    .eq('corretor_id', corretorId)
+    .in('corretor_id', corretorIds)
     .gte('data_entrada', start)
     .lte('data_entrada', end);
 
@@ -112,7 +126,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   const [insightsResponse, accountResponse, sheetLeads] = await Promise.all([
     fetch(insightsUrl.toString(), { next: { revalidate: 900 } }),
     fetch(accountUrl.toString(), { next: { revalidate: 900 } }),
-    fetchSheetLeadCount(corretor.id, since, until),
+    fetchSheetLeadCount(corretor, since, until),
   ]);
 
   const [insightsPayload, accountPayload] = await Promise.all([
@@ -157,6 +171,28 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     };
 }
 
+async function resolveBrokerageMetaAccount(corretor: CorretorMeta) {
+  if (String(corretor.meta_ad_account_id || '').trim()) {
+    return corretor;
+  }
+
+  const corretoraNome = String(corretor.nome_empresa || '').trim();
+  if (!corretoraNome) {
+    return corretor;
+  }
+
+  const { data: metaOwner } = await supabaseAdmin
+    .from('corretores')
+    .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name')
+    .eq('nome_empresa', corretoraNome)
+    .not('meta_ad_account_id', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return (metaOwner as CorretorMeta | null) || corretor;
+}
+
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'meta:alerts', { limit: 30, windowMs: 5 * 60_000 });
@@ -180,14 +216,15 @@ export async function POST(request: Request) {
 
     const query = supabaseAdmin
       .from('corretores')
-      .select('id, nome, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name')
-      .not('meta_ad_account_id', 'is', null)
+      .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name')
       .order('nome', { ascending: true });
 
     if (guard.profile.tipo_usuario === 'gestor_trafego') {
       query.eq('gestor_trafego_id', guard.user.id);
       if (corretorId) {
         query.eq('id', corretorId);
+      } else {
+        query.not('meta_ad_account_id', 'is', null);
       }
     } else if (['corretor', 'corretor_admin', 'corretor_membro'].includes(guard.profile.tipo_usuario)) {
       if (!guard.profile.corretor_id) {
@@ -197,6 +234,8 @@ export async function POST(request: Request) {
     } else if (guard.profile.tipo_usuario === 'admin') {
       if (corretorId) {
         query.eq('id', corretorId);
+      } else {
+        query.not('meta_ad_account_id', 'is', null);
       }
     }
 
@@ -205,9 +244,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const filtered = ((corretores || []) as CorretorMeta[]).filter((corretor) => {
+    const resolvedCorretores = await Promise.all(
+      ((corretores || []) as CorretorMeta[]).map((corretor) => resolveBrokerageMetaAccount(corretor))
+    );
+
+    const uniqueByAccount = new Map<string, CorretorMeta>();
+    resolvedCorretores.forEach((corretor) => {
+      const accountId = String(corretor.meta_ad_account_id || '').trim();
+      if (!accountId) return;
+      if (!uniqueByAccount.has(accountId)) uniqueByAccount.set(accountId, corretor);
+    });
+
+    const filtered = Array.from(uniqueByAccount.values()).filter((corretor) => {
       if (!search) return true;
-      return `${corretor.nome} ${corretor.meta_ad_account_name || ''}`.toLowerCase().includes(search);
+      return `${corretor.nome} ${corretor.nome_empresa || ''} ${corretor.meta_ad_account_name || ''}`.toLowerCase().includes(search);
     });
 
     const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';

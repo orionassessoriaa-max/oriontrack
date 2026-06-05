@@ -41,6 +41,28 @@ function getMetaCompatibleRange(since: string, until: string) {
   };
 }
 
+async function resolveBrokerageMetaAccount(corretor: any) {
+  if (String(corretor.meta_ad_account_id || '').trim()) {
+    return corretor;
+  }
+
+  const corretoraNome = String(corretor.nome_empresa || '').trim();
+  if (!corretoraNome) {
+    return corretor;
+  }
+
+  const { data: metaOwner } = await supabaseAdmin
+    .from('corretores')
+    .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name')
+    .eq('nome_empresa', corretoraNome)
+    .not('meta_ad_account_id', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return metaOwner || corretor;
+}
+
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'meta:spend', { limit: 60, windowMs: 5 * 60_000 });
@@ -65,7 +87,7 @@ export async function POST(request: Request) {
 
     const { data: corretor, error: corretorError } = await supabaseAdmin
       .from('corretores')
-      .select('id, nome, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name')
+      .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name')
       .eq('id', corretorId)
       .maybeSingle();
 
@@ -89,13 +111,15 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!corretor.meta_ad_account_id) {
-      return NextResponse.json({ error: 'Este corretor ainda nao tem conta Meta vinculada.' }, { status: 400 });
+    const metaAccount = await resolveBrokerageMetaAccount(corretor);
+
+    if (!metaAccount.meta_ad_account_id) {
+      return NextResponse.json({ error: 'Esta corretora ainda nao tem conta Meta vinculada.' }, { status: 400 });
     }
 
     const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
     const metaRange = getMetaCompatibleRange(since, until);
-    const accountId = String(corretor.meta_ad_account_id).replace(/^act_/, '');
+    const accountId = String(metaAccount.meta_ad_account_id).replace(/^act_/, '');
     const url = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
     url.searchParams.set('fields', 'spend');
     url.searchParams.set('time_range', JSON.stringify({ since: metaRange.since, until: metaRange.until }));
@@ -113,8 +137,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       corretor_id: corretor.id,
-      meta_ad_account_id: corretor.meta_ad_account_id,
-      meta_ad_account_name: corretor.meta_ad_account_name,
+      meta_ad_account_id: metaAccount.meta_ad_account_id,
+      meta_ad_account_name: metaAccount.meta_ad_account_name,
       spend
     });
   } catch (error: any) {
