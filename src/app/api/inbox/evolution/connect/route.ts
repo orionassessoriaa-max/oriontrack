@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { configureEvolutionWebhook, evolutionFetch, evolutionInstanceName, getEvolutionInstanceApiKey } from '@/lib/evolution';
+import { configureEvolutionWebhook, evolutionFetch, evolutionInstanceName, extractEvolutionQrCode, getEvolutionInstanceApiKey } from '@/lib/evolution';
 
 export async function POST(request: Request) {
   try {
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     await configureEvolutionWebhook(instance, instanceApiKey);
 
     const payload = await evolutionFetch(`/instance/connect/${instance}`, { method: 'GET' }, instanceApiKey);
-    const qrcode = payload?.base64 || payload?.qrcode?.base64 || payload?.qrcode || payload?.code || null;
+    const qrcode = extractEvolutionQrCode(payload);
 
     await writeAuditLog(request, guard.profile, {
       action: 'whatsapp.connect.request',

@@ -17,6 +17,24 @@ export function profileIdFromEvolutionInstance(instance?: string | null) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+export function extractEvolutionQrCode(payload: any): string | null {
+  const candidates = [
+    payload?.base64,
+    payload?.qrcode?.base64,
+    payload?.qrcode?.code,
+    payload?.qrcode,
+    payload?.code,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
 function readInstanceToken(payload: any, instanceName: string): string | null {
   const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [payload];
   const match = rows.find((row: any) => {

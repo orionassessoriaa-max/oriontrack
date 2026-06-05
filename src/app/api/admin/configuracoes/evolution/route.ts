@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { configureEvolutionWebhook, evolutionFetch, getEvolutionInstanceApiKey } from '@/lib/evolution';
+import { configureEvolutionWebhook, evolutionFetch, extractEvolutionQrCode, getEvolutionInstanceApiKey } from '@/lib/evolution';
 
 const MASTER_INSTANCE = 'apolo_master_sender';
 
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     await configureEvolutionWebhook(MASTER_INSTANCE, instanceApiKey);
 
     const payload = await evolutionFetch(`/instance/connect/${MASTER_INSTANCE}`, { method: 'GET' }, instanceApiKey);
-    const qrcode = payload?.base64 || payload?.qrcode?.base64 || payload?.qrcode || payload?.code || null;
+    const qrcode = extractEvolutionQrCode(payload);
 
     await writeAuditLog(request, guard.profile, {
       action: 'admin.whatsapp.master.connect.request',

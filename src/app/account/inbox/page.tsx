@@ -169,7 +169,14 @@ export default function AccountInboxPage() {
 
     const response = await fetch('/api/inbox/evolution/connect', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        accepted_terms: true,
+        terms_version: 'whatsapp-account-inbox-v1',
+      }),
     });
     const payload = await response.json().catch(() => ({}));
 
