@@ -157,7 +157,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   const startViewingAsCorretor = async (corretorId: string) => {
-    if (!user || actualProfile?.tipo_usuario !== 'admin') return;
+    if (!user || !actualProfile || !['admin', 'gestor_trafego', 'account_manager'].includes(actualProfile.tipo_usuario)) return;
 
     const brokerProfile = await fetchCorretorViewProfile(corretorId, user.id);
     setViewingProfile(brokerProfile);
@@ -197,9 +197,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   const stopViewingAsCorretor = () => {
+    const redirectByRole = actualProfile?.tipo_usuario === 'gestor_trafego'
+      ? '/trafego/corretores'
+      : actualProfile?.tipo_usuario === 'account_manager'
+        ? '/account/corretores'
+        : '/admin';
     setViewingProfile(null);
     clearViewingStorage();
-    router.push('/admin');
+    router.push(redirectByRole);
   };
 
   useEffect(() => {
@@ -251,7 +256,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     async function restoreCorretorView() {
-      if (!user || actualProfile?.tipo_usuario !== 'admin' || viewingProfile) return;
+      if (!user || !actualProfile || !['admin', 'gestor_trafego', 'account_manager'].includes(actualProfile.tipo_usuario) || viewingProfile) return;
 
       const savedCorretorId = window.sessionStorage.getItem('orion:viewing_corretor_id');
       const savedGestorId = window.sessionStorage.getItem('orion:viewing_gestor_id');
@@ -295,11 +300,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     router.replace('/login');
   };
 
-  const profile = actualProfile?.tipo_usuario === 'admin' && viewingProfile
+  const profile = ['admin', 'gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario)) && viewingProfile
     ? viewingProfile
     : actualProfile;
 
-  const isViewingAsCorretor = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'corretor');
+  const isViewingAsCorretor = Boolean(['admin', 'gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario)) && viewingProfile?.tipo_usuario === 'corretor');
   const isViewingAsGestor = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'gestor_trafego');
   const isViewingAsDesigner = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'designer');
   const isViewingAsAccount = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'account_manager');

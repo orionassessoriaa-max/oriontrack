@@ -10,7 +10,8 @@ import {
   AlertCircle,
   RefreshCw,
   Copy,
-  ShieldAlert
+  ShieldAlert,
+  Eye
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Corretor } from '@/types';
@@ -19,7 +20,7 @@ import { useRouter } from 'next/navigation';
 import { getOnboardingStatus } from '@/lib/onboarding';
 
 export default function TrafficCorretoresPage() {
-  const { profile } = useAuth();
+  const { profile, startViewingAsCorretor } = useAuth();
   const router = useRouter();
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,18 +173,28 @@ export default function TrafficCorretoresPage() {
                       </span>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      {c.link_pagina && (
-                        <button 
-                          onClick={() => {
-                            navigator.clipboard.writeText(c.link_pagina!);
-                            alert('Link copiado!');
-                          }}
-                          className="p-3 text-slate-400 hover:bg-slate-100 rounded-xl transition-all"
-                          title="Copiar Link"
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startViewingAsCorretor(c.id)}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-cyan-500 transition hover:bg-cyan-500/20"
+                          title="Visualizar painel do corretor"
                         >
-                          <Copy size={18} />
+                          <Eye size={14} /> Visualizar
                         </button>
-                      )}
+                        {c.link_pagina && (
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(c.link_pagina!);
+                              alert('Link copiado!');
+                            }}
+                            className="p-3 text-slate-400 hover:bg-slate-100 rounded-xl transition-all"
+                            title="Copiar Link"
+                          >
+                            <Copy size={18} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                         </>
                       );

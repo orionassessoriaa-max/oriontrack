@@ -62,7 +62,7 @@ export default function NovoCorretorPage() {
 
   async function fetchGestores() {
     try {
-      const [gestoresRes, brokeragesRes] = await Promise.all([
+      const [gestoresRes, brokeragesRes, corretorasRes] = await Promise.all([
         supabase
           .from('profiles')
           .select('*')
@@ -71,7 +71,11 @@ export default function NovoCorretorPage() {
         supabase
           .from('corretores')
           .select('nome_empresa')
-          .not('nome_empresa', 'is', null)
+          .not('nome_empresa', 'is', null),
+        supabase
+          .from('corretoras')
+          .select('nome')
+          .order('nome')
       ]);
 
       if (gestoresRes.error) throw gestoresRes.error;
@@ -82,6 +86,12 @@ export default function NovoCorretorPage() {
         const name = String(item.nome_empresa || '').trim();
         if (name) brokerageNames.set(name.toLowerCase(), name);
       });
+      if (!corretorasRes.error) {
+        (corretorasRes.data || []).forEach((item) => {
+          const name = String(item.nome || '').trim();
+          if (name) brokerageNames.set(name.toLowerCase(), name);
+        });
+      }
 
       setBrokerageOptions(Array.from(brokerageNames.values()).sort((a, b) => a.localeCompare(b, 'pt-BR')));
       setGestoresProfiles((gestoresRes.data || []).filter((profile) => profile.tipo_usuario === 'gestor_trafego'));
@@ -93,6 +103,14 @@ export default function NovoCorretorPage() {
 
   useEffect(() => {
     void Promise.resolve().then(fetchGestores);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const corretora = String(params.get('corretora') || '').trim();
+    if (corretora) {
+      setFormData((current) => ({ ...current, nome_empresa: current.nome_empresa || corretora }));
+    }
   }, []);
 
   const calcularGestorTrafegoId = (timeOperacional: OrionTeamMember[]) => {

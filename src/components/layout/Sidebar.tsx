@@ -217,6 +217,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const accountMenu = [
     { icon: Home, label: 'Account', href: '/account' },
+    { icon: Users, label: 'Corretores', href: '/account/corretores' },
     { icon: MessageSquare, label: 'Inbox', href: '/account/inbox' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
     { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
@@ -252,6 +253,20 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   ];
 
   const getMenu = () => {
+    if (isViewingAsCorretor && ['gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario))) {
+      const base = corretorMenu.filter((item) => item.href !== '/financeiro');
+      if (actualProfile?.tipo_usuario === 'account_manager') {
+        return [
+          ...base,
+          { icon: MessageSquare, label: 'Inbox Account', href: '/account/inbox' },
+          { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
+        ];
+      }
+      return [
+        ...base,
+        { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
+      ];
+    }
     if (profile?.tipo_usuario === 'admin') return adminMenu;
     if (profile?.tipo_usuario === 'gestor_trafego') return trafficMenu;
     if (profile?.tipo_usuario === 'designer') return designerMenu;

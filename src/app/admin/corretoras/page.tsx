@@ -17,7 +17,9 @@ import {
   ChevronDown,
   ChevronUp,
   UserPlus,
-  Edit2
+  Edit2,
+  Plus,
+  X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile } from '@/types';
@@ -33,6 +35,15 @@ interface CorretoraGroup {
   meta_ad_account_name?: string | null;
   meta_ad_account_id?: string | null;
   status: string;
+  empty?: boolean;
+  corretora_id?: string | null;
+}
+
+interface CorretoraRecord {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  status?: string | null;
 }
 
 type CorretoraMember = {
@@ -99,8 +110,26 @@ function getCorretoraMembers(group: CorretoraGroup): CorretoraMember[] {
   return members.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 }
 
-function groupData(corretoresList: Corretor[], profilesList: Profile[]): CorretoraGroup[] {
+function groupData(corretoresList: Corretor[], profilesList: Profile[], corretorasList: CorretoraRecord[] = []): CorretoraGroup[] {
   const groups: { [key: string]: CorretoraGroup } = {};
+
+  corretorasList.forEach((corretora) => {
+    const name = String(corretora.nome || '').trim();
+    if (!name) return;
+    const key = `empresa:${name.toLowerCase()}`;
+    groups[key] = {
+      id: corretora.id,
+      nome: name,
+      is_empresa: true,
+      corretoresRows: [],
+      profiles: [],
+      meta_ad_account_name: null,
+      meta_ad_account_id: null,
+      status: corretora.status || 'ativo',
+      empty: true,
+      corretora_id: corretora.id,
+    };
+  });
 
   // Initialize from corretores table
   corretoresList.forEach((c) => {
@@ -116,10 +145,13 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[]): Correto
         profiles: [],
         meta_ad_account_name: c.meta_ad_account_name,
         meta_ad_account_id: c.meta_ad_account_id,
-        status: c.status || 'ativo'
+        status: c.status || 'ativo',
+        empty: false,
+        corretora_id: null,
       };
     }
 
+    groups[key].empty = false;
     groups[key].corretoresRows.push(c);
     if (c.meta_ad_account_name && !groups[key].meta_ad_account_name) {
       groups[key].meta_ad_account_name = c.meta_ad_account_name;
@@ -153,10 +185,13 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[]): Correto
         profiles: [],
         meta_ad_account_name: null,
         meta_ad_account_id: null,
-        status: p.status || 'active'
+        status: p.status || 'active',
+        empty: false,
+        corretora_id: null,
       };
     }
 
+    groups[key].empty = false;
     // Avoid duplicate profiles in the same brokerage group
     if (!groups[key].profiles.some((existing) => existing.id === p.id)) {
       groups[key].profiles.push(p);
@@ -172,18 +207,26 @@ function CorretorasContent() {
 
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [corretorasCadastradas, setCorretorasCadastradas] = useState<CorretoraRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all'); // all, empresa, individual
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [creatingBrokerage, setCreatingBrokerage] = useState(false);
+  const [newBrokerage, setNewBrokerage] = useState({ nome: '', descricao: '' });
+  const [migrationPending, setMigrationPending] = useState(false);
 
   async function fetchData() {
     setLoading(true);
     setError(null);
     try {
-      const [corretoresRes, profilesRes] = await Promise.all([
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const [corretoresRes, profilesRes, corretorasRes] = await Promise.all([
         supabase
           .from('corretores')
           .select('*')
@@ -192,11 +235,24 @@ function CorretorasContent() {
           .from('profiles')
           .select('*')
           .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
-          .order('nome')
+          .order('nome'),
+        token ? fetch('/api/admin/corretoras', {
+          headers: { Authorization: `Bearer ${token}` }
+        }) : Promise.resolve(null)
       ]);
 
       if (corretoresRes.error) throw corretoresRes.error;
       if (profilesRes.error) throw profilesRes.error;
+
+      if (corretorasRes) {
+        const payload = await corretorasRes.json().catch(() => ({}));
+        if (corretorasRes.ok) {
+          setCorretorasCadastradas(payload.corretoras || []);
+          setMigrationPending(Boolean(payload.migration_pending));
+        } else if (payload.migration_pending) {
+          setMigrationPending(true);
+        }
+      }
 
       setCorretores(corretoresRes.data || []);
       setProfiles(profilesRes.data || []);
@@ -222,8 +278,8 @@ function CorretorasContent() {
   }, [profile]);
 
   const corretoras = useMemo(() => {
-    return groupData(corretores, profiles);
-  }, [corretores, profiles]);
+    return groupData(corretores, profiles, corretorasCadastradas);
+  }, [corretores, profiles, corretorasCadastradas]);
 
   const filteredCorretoras = useMemo(() => {
     return corretoras.filter((c) => {
@@ -255,6 +311,44 @@ function CorretorasContent() {
     alert('ID copiado com sucesso!');
   };
 
+  const createBrokerage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setCreatingBrokerage(true);
+    setError(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
+
+      const response = await fetch('/api/admin/corretoras', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(newBrokerage),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (payload.migration_pending) setMigrationPending(true);
+        throw new Error(payload.error || 'Erro ao criar corretora.');
+      }
+
+      setNewBrokerage({ nome: '', descricao: '' });
+      setCreateModalOpen(false);
+      await fetchData();
+    } catch (err: any) {
+      setError(err.message || 'Erro ao criar corretora.');
+    } finally {
+      setCreatingBrokerage(false);
+    }
+  };
+
+  const newCorretorHref = (nomeEmpresa?: string) => {
+    const params = nomeEmpresa ? `?corretora=${encodeURIComponent(nomeEmpresa)}` : '';
+    return `/admin/corretores/novo${params}`;
+  };
+
   return (
     <InternalLayout>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
@@ -264,13 +358,75 @@ function CorretorasContent() {
           </h1>
           <p className="text-gray-500 font-medium">Visualização agrupada de imobiliárias e corretores associados.</p>
         </div>
-        <Link 
-          href="/admin/usuarios?tipo=corretor"
-          className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
-        >
-          <UserPlus size={20} /> Novo Corretor
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            type="button"
+            onClick={() => setCreateModalOpen(true)}
+            className="bg-cyan-500 text-slate-950 px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-cyan-400 transition-all shadow-xl shadow-cyan-500/20"
+          >
+            <Plus size={20} /> Nova Corretora
+          </button>
+          <Link
+            href="/admin/usuarios?tipo=corretor"
+            className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
+          >
+            <UserPlus size={20} /> Novo Corretor
+          </Link>
+        </div>
       </div>
+
+      {migrationPending && (
+        <div className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm font-bold text-amber-300">
+          A tabela de corretoras ainda precisa da migration no Supabase. A listagem antiga continua funcionando, mas corretoras vazias so aparecem apos aplicar a migration.
+        </div>
+      )}
+
+      {createModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md">
+          <form onSubmit={createBrokerage} className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-[#090e1a] p-6 shadow-2xl">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Cadastro de corretora</p>
+                <h2 className="mt-1 text-2xl font-black text-white">Nova corretora</h2>
+                <p className="mt-1 text-xs font-bold text-slate-400">Crie a corretora primeiro e depois adicione corretores dentro dela.</p>
+              </div>
+              <button type="button" onClick={() => setCreateModalOpen(false)} className="rounded-xl bg-white/5 p-2 text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome da corretora</label>
+                <input
+                  value={newBrokerage.nome}
+                  onChange={(event) => setNewBrokerage((current) => ({ ...current, nome: event.target.value }))}
+                  required
+                  placeholder="Ex: B2L Corretora"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-5 py-4 text-sm font-bold text-white outline-none focus:border-cyan-400"
+                />
+              </div>
+              <div>
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Observacao interna</label>
+                <textarea
+                  value={newBrokerage.descricao}
+                  onChange={(event) => setNewBrokerage((current) => ({ ...current, descricao: event.target.value }))}
+                  rows={3}
+                  placeholder="Opcional"
+                  className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-5 py-4 text-sm font-bold text-white outline-none focus:border-cyan-400"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setCreateModalOpen(false)} className="rounded-2xl border border-white/10 px-6 py-3 text-xs font-black text-slate-300">
+                Cancelar
+              </button>
+              <button type="submit" disabled={creatingBrokerage} className="flex items-center gap-2 rounded-2xl bg-cyan-500 px-6 py-3 text-xs font-black text-slate-950 disabled:opacity-60">
+                {creatingBrokerage ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Criar corretora
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -390,6 +546,14 @@ function CorretorasContent() {
                   </div>
 
                   <div className="flex items-center gap-4 flex-wrap md:flex-nowrap justify-between md:justify-end">
+                    <Link
+                      href={newCorretorHref(c.nome)}
+                      onClick={(event) => event.stopPropagation()}
+                      className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3.5 py-1.5 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-500"
+                    >
+                      <UserPlus size={13} /> Adicionar corretor
+                    </Link>
+
                     {/* Conta Meta Vinculada */}
                     {c.meta_ad_account_name ? (
                       <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3.5 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700 border border-emerald-100">

@@ -8,7 +8,7 @@ import { AlertCircle, Loader2, LogOut, RefreshCw } from 'lucide-react';
 import ApoloAiWidget from '@/components/ui/ApoloAiWidget';
 
 export default function InternalLayout({ children }: { children: React.ReactNode }) {
-  const { profile, loading, user, signOut, refreshProfile } = useAuth();
+  const { profile, actualProfile, loading, user, signOut, refreshProfile, isViewingAsCorretor } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -33,6 +33,17 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isTeamRoute = pathname.startsWith('/equipe');
         const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/simulador') || pathname.startsWith('/apolo-one') || pathname.startsWith('/ajuda');
         const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/financeiro', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
+        const isOperationalViewingBroker = isViewingAsCorretor && ['gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario));
+
+        if (isOperationalViewingBroker) {
+          if (pathname.startsWith('/financeiro')) {
+            router.push('/dashboard');
+            return;
+          }
+          if (isBrokerRoute || isSharedRoute || pathname.startsWith('/trafego/relatorios') || pathname.startsWith('/account/inbox')) {
+            return;
+          }
+        }
 
         if (isSharedRoute) return;
 
@@ -47,6 +58,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         // 2. Traffic Manager Access: Traffic routes + Broker List (to select for reports)
         // But NO /admin dashboard or system settings
         else if (isTrafficManager) {
+          if (isViewingAsCorretor && isBrokerRoute && !pathname.startsWith('/financeiro')) return;
           if (isAdminRoute && !pathname.startsWith('/admin/corretores') && !pathname.startsWith('/admin/corretoras')) {
              router.push('/trafego');
           } else if (isBrokerRoute || isDesignerRoute || isAccountRoute) {
@@ -59,6 +71,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
           }
         }
         else if (isAccountManager) {
+          if (isViewingAsCorretor && isBrokerRoute && !pathname.startsWith('/financeiro')) return;
           if (!isAccountRoute && !isCreativeRoute && !isTeamRoute && !pathname.startsWith('/trafego/relatorios') && pathname !== '/perfil' && pathname !== '/notificacoes') {
             router.push('/account');
           }
