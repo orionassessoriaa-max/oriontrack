@@ -348,28 +348,59 @@ export async function PATCH(request: Request) {
       if (targetProfile.tipo_usuario === 'corretor') {
         const { data: profileWithCorretor } = await supabaseAdmin
           .from('profiles')
-          .select('corretor_id')
+          .select('id, email, corretor_id')
           .eq('id', id)
           .maybeSingle();
 
+        const timeOperacional = Array.isArray(body.time_operacional) ? body.time_operacional : [];
+        const operadoras = Array.isArray(body.operadoras) ? body.operadoras : [];
+        const gestorTrafegoId = await resolveGestorTrafegoId(body.gestor_trafego_id, timeOperacional);
+        const telefone = String(body.telefone || '').trim() || 'Sem telefone';
+
         if (profileWithCorretor?.corretor_id) {
-          const timeOperacional = Array.isArray(body.time_operacional) ? body.time_operacional : [];
-          const operadoras = Array.isArray(body.operadoras) ? body.operadoras : [];
-          const gestorTrafegoId = await resolveGestorTrafegoId(body.gestor_trafego_id, timeOperacional);
           await supabaseAdmin
             .from('corretores')
             .update({
               nome,
               email_real: emailReal,
-              telefone: String(body.telefone || '').trim(),
+              telefone,
               nome_empresa: body.nome_empresa || null,
               tipo_campanha: body.tipo_campanha || 'ambos',
               time_operacional: timeOperacional,
               gestor_trafego_id: gestorTrafegoId,
-              foto_url: fotoUrl,
               operadoras_info: { selecionadas: operadoras },
             })
             .eq('id', profileWithCorretor.corretor_id);
+        } else {
+          const { data: existingCorretor } = await supabaseAdmin
+            .from('corretores')
+            .select('id')
+            .eq('email', profileWithCorretor?.email || targetProfile.email)
+            .maybeSingle();
+
+          const corretorId = existingCorretor?.id || null;
+          const finalCorretorId = corretorId || (await supabaseAdmin
+            .from('corretores')
+            .insert([{
+              nome,
+              email: profileWithCorretor?.email || targetProfile.email,
+              telefone,
+              nome_empresa: body.nome_empresa || null,
+              status: 'active',
+              tipo_campanha: body.tipo_campanha || 'ambos',
+              time_operacional: timeOperacional,
+              gestor_trafego_id: gestorTrafegoId,
+              operadoras_info: { selecionadas: operadoras },
+            }])
+            .select('id')
+            .single()).data?.id;
+
+          if (finalCorretorId) {
+            await supabaseAdmin
+              .from('profiles')
+              .update({ corretor_id: finalCorretorId })
+              .eq('id', id);
+          }
         }
       }
 
