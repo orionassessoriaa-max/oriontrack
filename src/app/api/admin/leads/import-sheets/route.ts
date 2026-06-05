@@ -526,7 +526,7 @@ export async function POST(request: Request) {
       );
 
       if (guard.profile.corretor_id !== corretorId && !sameBrokerage) {
-        return NextResponse.json({ error: 'Voce so pode importar leads para sua propria corretora.' }, { status: 403 });
+        return NextResponse.json({ error: 'Voce so pode importar leads para sua propria concessionaria.' }, { status: 403 });
       }
     }
 

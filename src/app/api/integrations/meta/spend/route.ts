@@ -114,7 +114,7 @@ export async function POST(request: Request) {
     const metaAccount = await resolveBrokerageMetaAccount(corretor);
 
     if (!metaAccount.meta_ad_account_id) {
-      return NextResponse.json({ error: 'Esta corretora ainda nao tem conta Meta vinculada.' }, { status: 400 });
+      return NextResponse.json({ error: 'Esta concessionaria ainda nao tem conta Meta vinculada.' }, { status: 400 });
     }
 
     const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';

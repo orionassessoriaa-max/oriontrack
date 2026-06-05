@@ -95,7 +95,7 @@ async function fetchSheetLeadCount(corretor: CorretorMeta, since: string, until:
       .select('id')
       .eq('nome_empresa', corretoraNome);
 
-    if (groupError) throw new Error(`Erro ao buscar corretores da corretora: ${groupError.message}`);
+    if (groupError) throw new Error(`Erro ao buscar corretores da concessionaria: ${groupError.message}`);
     const groupIds = (groupCorretores || []).map((item) => item.id).filter(Boolean);
     if (groupIds.length > 0) corretorIds = groupIds;
   }

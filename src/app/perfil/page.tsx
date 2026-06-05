@@ -366,14 +366,14 @@ export default function ProfilePage() {
 
               {profile?.tipo_usuario === 'corretor' && (
                 <div className="space-y-2">
-                  <label className="ml-1 text-xs font-bold uppercase tracking-widest text-gray-400">Nome da corretora</label>
+                  <label className="ml-1 text-xs font-bold uppercase tracking-widest text-gray-400">Nome da concessionaria</label>
                   <div className="relative">
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
                       type="text"
                       value={nomeEmpresa}
                       onChange={(e) => setNomeEmpresa(e.target.value)}
-                      placeholder="Ex: HAVS Corretora"
+                      placeholder="Ex: HAVS Concessionaria"
                       className="w-full border-none py-4 pl-12 pr-4 font-medium transition-all focus:ring-2 focus:ring-blue-500 rounded-xl bg-gray-50 text-gray-900"
                     />
                   </div>

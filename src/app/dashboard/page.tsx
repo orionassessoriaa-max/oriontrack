@@ -1539,7 +1539,7 @@ export default function DashboardPage() {
         <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-2xl font-black text-white tracking-tight mb-2">Seu time Orion</h2>
-            <p className="text-slate-400 font-medium">Por trás de toda corretora campeã, existe um time jogando junto.</p>
+            <p className="text-slate-400 font-medium">Por tras de toda concessionaria campea, existe um time jogando junto.</p>
           </div>
         </div>
 

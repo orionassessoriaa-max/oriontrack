@@ -223,7 +223,7 @@ export default function LoginPage() {
                     >
                       <div className="mb-6 text-center space-y-3">
                         <h2 className="text-lg md:text-xl font-black text-white leading-tight tracking-tight uppercase">
-                          A gestão que coloca sua corretora no <span className="text-cyan-400 font-extrabold animate-pulse">ataque</span>.
+                          A gestao que coloca sua concessionaria no <span className="text-cyan-400 font-extrabold animate-pulse">ataque</span>.
                         </h2>
                         <p className="text-slate-400 font-bold text-3xs uppercase tracking-wider leading-relaxed">
                           Um CRM criado para corretores de planos de saúde venderem com mais controle, velocidade e previsibilidade.

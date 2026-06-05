@@ -383,7 +383,7 @@ export default function AdminCentralPage() {
         <Link href="/admin/corretores">
           <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-cyan-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(6,182,212,0.15)] transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Corretoras Ativas</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Concessionarias Ativas</p>
               <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 group-hover:scale-110 transition-transform">
                 <Building2 size={18} />
               </div>
@@ -505,13 +505,13 @@ export default function AdminCentralPage() {
             <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-cyan-500/0 via-cyan-500/40 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
 
-          {/* Card: Corretores Sem Corretora */}
+          {/* Card: Corretores Sem Concessionaria */}
           <div
             onClick={() => setShowNoBrokerageModal(true)}
             className="group relative bg-[#090e1a]/85 border border-amber-500/10 hover:border-amber-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(245,158,11,0.1)] transition-all duration-300 cursor-pointer"
           >
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sem Corretora</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sem Concessionaria</p>
               <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 group-hover:scale-110 transition-transform">
                 <Building2 size={18} />
               </div>
@@ -732,18 +732,18 @@ export default function AdminCentralPage() {
         document.body
       )}
 
-      {/* Modal: Corretoras Sem Meta Ads */}
+      {/* Modal: Concessionarias Sem Meta Ads */}
       {mounted && showNoMetaModal && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-[#090e1a]/95 border border-cyan-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
             <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse" /> Corretoras Sem Meta Ads
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse" /> Concessionarias Sem Meta Ads
             </h3>
-            <p className="text-xs font-semibold text-slate-500 mb-6">Corretoras ativas sem conta de anuncio vinculada no Meta.</p>
+            <p className="text-xs font-semibold text-slate-500 mb-6">Concessionarias ativas sem conta de anuncio vinculada no Meta.</p>
  
             <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
               {noMetaList.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhuma corretora sem Meta Ads.</p>
+                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhuma concessionaria sem Meta Ads.</p>
               ) : (
                 noMetaList.map((item) => (
                   <div key={item.corretor_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
@@ -751,7 +751,7 @@ export default function AdminCentralPage() {
                       <p className="font-extrabold text-white">{item.corretora_nome}</p>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Gestor: {item.gestor_nome}</p>
                       <p className="text-[9px] font-semibold text-slate-600 mt-1">
-                        {item.is_corretora ? `${item.corretores_total} corretor(es): ${item.corretores_nomes}` : 'Corretor sem corretora'}
+                        {item.is_corretora ? `${item.corretores_total} corretor(es): ${item.corretores_nomes}` : 'Corretor sem concessionaria'}
                       </p>
                     </div>
                     <Link
@@ -776,18 +776,18 @@ export default function AdminCentralPage() {
         document.body
       )}
 
-      {/* Modal: Corretores Sem Corretora */}
+      {/* Modal: Corretores Sem Concessionaria */}
       {mounted && showNoBrokerageModal && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-[#090e1a]/95 border border-amber-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
             <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" /> Corretores Sem Corretora
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" /> Corretores Sem Concessionaria
             </h3>
-            <p className="text-xs font-semibold text-slate-500 mb-6">Corretores ativos que ainda nao foram vinculados a uma corretora.</p>
+            <p className="text-xs font-semibold text-slate-500 mb-6">Corretores ativos que ainda nao foram vinculados a uma concessionaria.</p>
  
             <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
               {noBrokerageList.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhum corretor sem corretora.</p>
+                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhum corretor sem concessionaria.</p>
               ) : (
                 noBrokerageList.map((item) => (
                   <div key={item.corretor_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">

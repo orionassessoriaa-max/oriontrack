@@ -41,7 +41,7 @@ export default function AccountCorretoresPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar corretor ou corretora..."
+            placeholder="Buscar corretor ou concessionaria..."
             className="w-full rounded-2xl border border-white/10 bg-black/30 py-4 pl-12 pr-4 text-sm font-bold text-white outline-none focus:border-cyan-400"
           />
         </div>

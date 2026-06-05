@@ -269,7 +269,7 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
               </div>
 
               <div className="space-y-2 group">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nome da Corretora</label>
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nome da Concessionaria</label>
                 <div className="relative">
                   <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                   <input 
@@ -277,7 +277,7 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
                     list="brokerage-options"
                     value={formData.nome_empresa}
                     onChange={e => setFormData({...formData, nome_empresa: e.target.value})}
-                    placeholder="Digite ou selecione uma corretora"
+                    placeholder="Digite ou selecione uma concessionaria"
                     className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium"
                   />
                   <datalist id="brokerage-options">
@@ -286,7 +286,7 @@ export default function EditarCorretorPage({ params }: { params: Promise<{ id: s
                     ))}
                   </datalist>
                 </div>
-                <p className="text-[10px] font-bold text-gray-400">Use o mesmo nome para manter socios na mesma corretora.</p>
+                <p className="text-[10px] font-bold text-gray-400">Use o mesmo nome para manter socios na mesma concessionaria.</p>
               </div>
 
               <div className="space-y-2 group">

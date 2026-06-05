@@ -554,13 +554,13 @@ export default function AdminUsuariosPage() {
             {form.tipo_usuario === 'corretor' && (
               <>
                 <div>
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome da corretora</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome da concessionaria</label>
                   <input
                     value={form.nome_empresa}
                     onChange={(event) => setForm((current) => ({ ...current, nome_empresa: event.target.value }))}
                     onFocus={() => setShowBrokerageOptions(true)}
                     onBlur={() => window.setTimeout(() => setShowBrokerageOptions(false), 150)}
-                    placeholder="Digite ou selecione uma corretora"
+                    placeholder="Digite ou selecione uma concessionaria"
                     className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                   />
                   {showBrokerageOptions && (
@@ -582,12 +582,12 @@ export default function AdminUsuariosPage() {
                           </button>
                         ))
                       ) : (
-                        <div className="px-4 py-3 text-xs font-bold text-slate-400">Nenhuma corretora cadastrada.</div>
+                        <div className="px-4 py-3 text-xs font-bold text-slate-400">Nenhuma concessionaria cadastrada.</div>
                       )}
                     </div>
                   )}
                   <p className="mt-2 text-[10px] font-bold text-slate-400">
-                    Use o mesmo nome para agrupar socios da mesma corretora.
+                    Use o mesmo nome para agrupar socios da mesma concessionaria.
                   </p>
                 </div>
 
@@ -819,7 +819,7 @@ export default function AdminUsuariosPage() {
                         </div>
                         {profile.tipo_usuario === 'corretor' && brokerCompanyName && (
                           <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-600">
-                            Corretora: {brokerCompanyName}
+                            Concessionaria: {brokerCompanyName}
                           </p>
                         )}
                         <p className="mt-1 break-all text-sm font-bold text-slate-500">{profile.email}</p>

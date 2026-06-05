@@ -334,7 +334,7 @@ function CorretorasContent() {
     try {
       const nome = newBrokerage.nome.trim().replace(/\s+/g, ' ');
       const descricao = newBrokerage.descricao.trim() || null;
-      if (!nome) throw new Error('Informe o nome da corretora.');
+      if (!nome) throw new Error('Informe o nome da concessionaria.');
 
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
@@ -368,7 +368,7 @@ function CorretorasContent() {
             .select('*')
             .single();
 
-          if (fallbackError) throw new Error(payload.error || fallbackError.message || 'Erro ao criar corretora.');
+          if (fallbackError) throw new Error(payload.error || fallbackError.message || 'Erro ao criar concessionaria.');
           createdCorretora = fallbackData;
         }
       }
@@ -384,7 +384,7 @@ function CorretorasContent() {
       setCreateModalOpen(false);
       await fetchData();
     } catch (err: any) {
-      setCreateBrokerageError(err.message || 'Erro ao criar corretora.');
+      setCreateBrokerageError(err.message || 'Erro ao criar concessionaria.');
     } finally {
       setCreatingBrokerage(false);
     }
@@ -401,9 +401,9 @@ function CorretorasContent() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-            <Building2 className="text-blue-600" size={32} /> Corretoras
+            <Building2 className="text-blue-600" size={32} /> Concessionarias
           </h1>
-          <p className="text-gray-500 font-medium">Visualização agrupada de imobiliárias e corretores associados.</p>
+          <p className="text-gray-500 font-medium">Visualizacao agrupada de concessionarias e corretores associados.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <button
@@ -411,7 +411,7 @@ function CorretorasContent() {
             onClick={() => setCreateModalOpen(true)}
             className="bg-cyan-500 text-slate-950 px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-cyan-400 transition-all shadow-xl shadow-cyan-500/20"
           >
-            <Plus size={20} /> Nova Corretora
+            <Plus size={20} /> Nova Concessionaria
           </button>
           <Link
             href="/admin/usuarios?tipo=corretor"
@@ -424,7 +424,7 @@ function CorretorasContent() {
 
       {migrationPending && (
         <div className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm font-bold text-amber-300">
-          A tabela de corretoras ainda precisa da migration no Supabase. A listagem antiga continua funcionando, mas corretoras vazias so aparecem apos aplicar a migration.
+          O cadastro de concessionarias ainda precisa da migration no Supabase. A listagem antiga continua funcionando, mas concessionarias vazias so aparecem apos aplicar a migration.
         </div>
       )}
 
@@ -433,9 +433,9 @@ function CorretorasContent() {
           <form onSubmit={createBrokerage} className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-[#090e1a] p-6 shadow-2xl">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Cadastro de corretora</p>
-                <h2 className="mt-1 text-2xl font-black text-white">Nova corretora</h2>
-                <p className="mt-1 text-xs font-bold text-slate-400">Crie a corretora primeiro e depois adicione corretores dentro dela.</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Cadastro de concessionaria</p>
+                <h2 className="mt-1 text-2xl font-black text-white">Nova concessionaria</h2>
+                <p className="mt-1 text-xs font-bold text-slate-400">Crie a concessionaria primeiro e depois adicione corretores dentro dela.</p>
               </div>
               <button type="button" onClick={() => setCreateModalOpen(false)} className="rounded-xl bg-white/5 p-2 text-slate-400 hover:text-white">
                 <X size={18} />
@@ -448,12 +448,12 @@ function CorretorasContent() {
                 </div>
               )}
               <div>
-                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome da corretora</label>
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome da concessionaria</label>
                 <input
                   value={newBrokerage.nome}
                   onChange={(event) => setNewBrokerage((current) => ({ ...current, nome: event.target.value }))}
                   required
-                  placeholder="Ex: B2L Corretora"
+                  placeholder="Ex: B2L Concessionaria"
                   className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-5 py-4 text-sm font-bold text-white outline-none focus:border-cyan-400"
                 />
               </div>
@@ -473,7 +473,7 @@ function CorretorasContent() {
                 Cancelar
               </button>
               <button type="submit" disabled={creatingBrokerage} className="flex items-center gap-2 rounded-2xl bg-cyan-500 px-6 py-3 text-xs font-black text-slate-950 disabled:opacity-60">
-                {creatingBrokerage ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Criar corretora
+                {creatingBrokerage ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Criar concessionaria
               </button>
             </div>
           </form>
@@ -483,7 +483,7 @@ function CorretorasContent() {
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="orion-panel p-6 bg-gradient-to-br from-blue-50 to-white dark:from-slate-900/50 dark:to-slate-900/10 border-blue-100/50">
-          <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-1">Total de Corretoras</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-1">Total de Concessionarias</p>
           <p className="text-3xl font-black text-gray-900">{corretoras.length}</p>
         </div>
         <div className="orion-panel p-6 bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900/50 dark:to-slate-900/10 border-emerald-100/50">
@@ -503,7 +503,7 @@ function CorretorasContent() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
             <input 
               type="text"
-              placeholder="Buscar por imobiliária, conta Meta ou corretor..."
+              placeholder="Buscar por concessionaria, conta Meta ou corretor..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="orion-control w-full py-4 pl-12 pr-4 font-medium"
@@ -549,8 +549,8 @@ function CorretorasContent() {
             <div className="w-20 h-20 bg-slate-50 rounded-[2rem] flex items-center justify-center mx-auto mb-6 text-slate-300">
               <Building2 size={40} />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-1">Nenhuma corretora encontrada</h3>
-            <p className="text-gray-500 font-medium">Ajuste os filtros ou crie um novo corretor com uma imobiliária definida.</p>
+            <h3 className="text-xl font-bold text-gray-900 mb-1">Nenhuma concessionaria encontrada</h3>
+            <p className="text-gray-500 font-medium">Ajuste os filtros ou crie uma nova concessionaria.</p>
           </div>
         ) : (
           filteredCorretoras.map((c) => {
@@ -561,7 +561,7 @@ function CorretorasContent() {
                 key={c.id} 
                 className="orion-panel overflow-hidden border border-gray-100/80 bg-white transition-all shadow-sm duration-200"
               >
-                {/* Cabeçalho da Corretora */}
+                {/* Cabecalho da concessionaria */}
                 <div 
                   onClick={() => toggleExpand(c.id)}
                   className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/50 transition-colors select-none"

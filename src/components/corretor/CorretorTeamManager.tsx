@@ -464,7 +464,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                   className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 py-4 text-sm font-black text-white transition-all hover:scale-[1.02] shadow-lg shadow-blue-500/20 disabled:opacity-40 cursor-pointer"
                 >
                   {saving ? <Loader2 className="animate-spin" size={18} /> : <ArrowRight size={18} />}
-                  Criar Time da Corretora
+                  Criar Time da Concessionaria
                 </button>
               </div>
             </div>
@@ -538,12 +538,12 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black">✓</div>
-                    <span className="text-sm font-bold text-slate-300">Corretora: <strong className="text-emerald-400">{displayTeamName}</strong></span>
+                    <span className="text-sm font-bold text-slate-300">Concessionaria: <strong className="text-emerald-400">{displayTeamName}</strong></span>
                   </div>
                   
                   <div className="pl-9">
                     <p className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-[10px] font-bold text-slate-400">
-                      O nome do time acompanha a corretora vinculada no cadastro do admin.
+                      O nome do time acompanha a concessionaria vinculada no cadastro do admin.
                     </p>
                   </div>
                 </div>
@@ -888,14 +888,14 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               </div>
               <div>
                 <h2 className="text-xl font-black text-white">Configurações e Equipe</h2>
-                <p className="text-xs font-bold text-slate-400">Configure a escala de atendimento da corretora.</p>
+                <p className="text-xs font-bold text-slate-400">Configure a escala de atendimento da concessionaria.</p>
               </div>
             </div>
 
-            {/* Nome da corretora */}
+            {/* Nome da concessionaria */}
             <div className="mb-4">
               <div className="rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Corretora do time</span>
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Concessionaria do time</span>
                 <p className="text-sm font-black text-white">{displayTeamName}</p>
                 <p className="mt-1 text-[10px] font-bold text-slate-500">Alteracoes de nome devem ser feitas no cadastro do corretor pelo admin.</p>
               </div>

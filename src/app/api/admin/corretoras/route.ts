@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ corretoras: data || [] });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao listar corretoras.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Erro ao listar concessionarias.' }, { status: 500 });
   }
 }
 
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     const descricao = normalizeName(body.descricao) || null;
 
     if (!nome) {
-      return NextResponse.json({ error: 'Informe o nome da corretora.' }, { status: 400 });
+      return NextResponse.json({ error: 'Informe o nome da concessionaria.' }, { status: 400 });
     }
 
     const { data: existing } = await supabaseAdmin
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     if (error) {
       if (isMissingCorretorasTable(error)) {
         return NextResponse.json({
-          error: 'A migration de corretoras ainda nao foi aplicada no Supabase.',
+          error: 'A migration de concessionarias ainda nao foi aplicada no Supabase.',
           migration_pending: true,
         }, { status: 500 });
       }
@@ -89,6 +89,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, corretora: data });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao criar corretora.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Erro ao criar concessionaria.' }, { status: 500 });
   }
 }

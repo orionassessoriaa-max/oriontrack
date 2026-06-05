@@ -154,7 +154,7 @@ export default function AdminMetaPage() {
       return;
     }
 
-    setSuccess(account ? `Corretora ${corretora.nome} vinculada a ${account.nome}.` : `Conta removida de ${corretora.nome}.`);
+    setSuccess(account ? `Concessionaria ${corretora.nome} vinculada a ${account.nome}.` : `Conta removida de ${corretora.nome}.`);
     await fetchData();
   }
 
@@ -178,7 +178,7 @@ export default function AdminMetaPage() {
         <div>
           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Admin Orion</p>
           <h1 className="text-3xl font-black tracking-tight text-gray-900">Contas Meta</h1>
-          <p className="font-medium text-gray-500">Controle quais contas de anuncio estao vinculadas às corretoras.</p>
+          <p className="font-medium text-gray-500">Controle quais contas de anuncio estao vinculadas as concessionarias.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button
@@ -202,8 +202,8 @@ export default function AdminMetaPage() {
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <Counter label="Contas sincronizadas" value={accounts.length} tone="blue" />
-        <Counter label="Corretoras vinculadas" value={corretoras.filter((c) => c.meta_ad_account_id).length} tone="emerald" />
-        <Counter label="Corretoras sem conta" value={corretoras.filter((c) => !c.meta_ad_account_id).length} tone="amber" />
+        <Counter label="Concessionarias vinculadas" value={corretoras.filter((c) => c.meta_ad_account_id).length} tone="emerald" />
+        <Counter label="Concessionarias sem conta" value={corretoras.filter((c) => !c.meta_ad_account_id).length} tone="amber" />
       </div>
 
       <div className="mb-6 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm">
@@ -212,7 +212,7 @@ export default function AdminMetaPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar corretora ou conta..."
+            placeholder="Buscar concessionaria ou conta..."
             className="w-full rounded-2xl border-none bg-slate-50 py-4 pl-11 pr-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
@@ -234,7 +234,7 @@ export default function AdminMetaPage() {
               {linkedCorretoras.map((c) => (
                 <AccountRow key={c.id} corretora={c} accounts={accounts} onChange={bindAccount} />
               ))}
-              {linkedCorretoras.length === 0 && <Empty text="Nenhuma corretora vinculada ainda." />}
+              {linkedCorretoras.length === 0 && <Empty text="Nenhuma concessionaria vinculada ainda." />}
             </div>
           </section>
 
@@ -248,13 +248,13 @@ export default function AdminMetaPage() {
               {unlinkedCorretoras.map((c) => (
                 <AccountRow key={c.id} corretora={c} accounts={accounts} onChange={bindAccount} />
               ))}
-              {unlinkedCorretoras.length === 0 && <Empty text="Todas as corretoras filtradas estao vinculadas." />}
+              {unlinkedCorretoras.length === 0 && <Empty text="Todas as concessionarias filtradas estao vinculadas." />}
             </div>
           </section>
 
           <section className="rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm xl:col-span-2">
             <h2 className="mb-4 flex items-center gap-2 text-lg font-black text-gray-900">
-              <Unlink size={18} className="text-slate-500" /> Contas Meta ainda sem corretora
+              <Unlink size={18} className="text-slate-500" /> Contas Meta ainda sem concessionaria
             </h2>
             <div className="grid gap-3 md:grid-cols-3">
               {unlinkedAccounts.map((account) => (
@@ -263,7 +263,7 @@ export default function AdminMetaPage() {
                   <p className="mt-1 text-xs font-bold text-slate-500">act_{account.meta_account_id}</p>
                 </div>
               ))}
-              {unlinkedAccounts.length === 0 && <p className="text-sm font-bold text-slate-400">Nenhuma conta sobrando sem corretora.</p>}
+              {unlinkedAccounts.length === 0 && <p className="text-sm font-bold text-slate-400">Nenhuma conta sobrando sem concessionaria.</p>}
             </div>
           </section>
         </div>
