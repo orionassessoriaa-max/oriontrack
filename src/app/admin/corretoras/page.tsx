@@ -217,6 +217,7 @@ function CorretorasContent() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [creatingBrokerage, setCreatingBrokerage] = useState(false);
   const [newBrokerage, setNewBrokerage] = useState({ nome: '', descricao: '' });
+  const [createBrokerageError, setCreateBrokerageError] = useState<string | null>(null);
   const [migrationPending, setMigrationPending] = useState(false);
 
   async function fetchData() {
@@ -315,7 +316,12 @@ function CorretorasContent() {
     event.preventDefault();
     setCreatingBrokerage(true);
     setError(null);
+    setCreateBrokerageError(null);
     try {
+      const nome = newBrokerage.nome.trim().replace(/\s+/g, ' ');
+      const descricao = newBrokerage.descricao.trim() || null;
+      if (!nome) throw new Error('Informe o nome da corretora.');
+
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
       if (!token) throw new Error('Sessao expirada.');
@@ -326,19 +332,32 @@ function CorretorasContent() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(newBrokerage),
+        body: JSON.stringify({ nome, descricao }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (payload.migration_pending) setMigrationPending(true);
-        throw new Error(payload.error || 'Erro ao criar corretora.');
+
+        const { data: existing } = await supabase
+          .from('corretoras')
+          .select('*')
+          .ilike('nome', nome)
+          .maybeSingle();
+
+        if (!existing) {
+          const { error: fallbackError } = await supabase
+            .from('corretoras')
+            .insert([{ nome, descricao, status: 'ativo' }]);
+
+          if (fallbackError) throw new Error(payload.error || fallbackError.message || 'Erro ao criar corretora.');
+        }
       }
 
       setNewBrokerage({ nome: '', descricao: '' });
       setCreateModalOpen(false);
       await fetchData();
     } catch (err: any) {
-      setError(err.message || 'Erro ao criar corretora.');
+      setCreateBrokerageError(err.message || 'Erro ao criar corretora.');
     } finally {
       setCreatingBrokerage(false);
     }
@@ -395,6 +414,11 @@ function CorretorasContent() {
               </button>
             </div>
             <div className="space-y-4">
+              {createBrokerageError && (
+                <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-xs font-bold text-rose-300">
+                  {createBrokerageError}
+                </div>
+              )}
               <div>
                 <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome da corretora</label>
                 <input
