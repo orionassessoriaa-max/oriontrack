@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 import { buildLeadImportWarningNote } from '@/lib/leadWarnings';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
 
 type CsvRow = Record<string, string>;
 type LeadInsert = {
@@ -554,8 +555,10 @@ export async function POST(request: Request) {
         }));
 
     let skipped = 0;
+    let duplicated = 0;
     let incomplete = 0;
     const leads: LeadInsert[] = [];
+    const incomingKeys = new Set<string>();
 
     for (const source of sources) {
       const response = await fetch(source.csvUrl, { cache: 'no-store' });
@@ -590,7 +593,7 @@ export async function POST(request: Request) {
 
           if (warnings.length > 0) incomplete += 1;
 
-          leads.push({
+          const lead = {
             corretor_id: targetCorretorId,
             data_entrada: resolveLeadDate(row),
             nome: rawNome || 'Lead sem nome',
@@ -610,7 +613,15 @@ export async function POST(request: Request) {
             utm_content: pick(row, ['utm_content', 'anuncio', 'ad', 'criativo']),
             status: statusFromSheet(pick(row, ['status']) || 'Aguardando atendimento'),
             observacoes: mergeNotes(buildLeadImportWarningNote(warnings), buildNotes(row)),
-          });
+          };
+
+          const key = buildLeadDuplicateKey(lead);
+          if (incomingKeys.has(key)) {
+            duplicated += 1;
+            return;
+          }
+          incomingKeys.add(key);
+          leads.push(lead);
       });
     }
 
@@ -618,9 +629,54 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Nenhuma linha encontrada para importar. Verifique se a planilha esta compartilhada corretamente.' }, { status: 400 });
     }
 
+    const existingKeys = new Set<string>();
+    let existingPage = 0;
+    const existingLimit = 1000;
+    let fetchExisting = true;
+
+    while (fetchExisting) {
+      const from = existingPage * existingLimit;
+      const to = from + existingLimit - 1;
+      const { data: existingLeads, error: existingError } = await supabaseAdmin
+        .from('leads')
+        .select('corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
+        .eq('corretor_id', targetCorretorId)
+        .range(from, to);
+
+      if (existingError) {
+        return NextResponse.json({ error: existingError.message }, { status: 500 });
+      }
+
+      (existingLeads || []).forEach((lead) => existingKeys.add(buildLeadDuplicateKey(lead)));
+      if (!existingLeads || existingLeads.length < existingLimit) {
+        fetchExisting = false;
+      } else {
+        existingPage += 1;
+      }
+    }
+
+    const uniqueLeads = leads.filter((lead) => {
+      const key = buildLeadDuplicateKey(lead);
+      if (existingKeys.has(key)) {
+        duplicated += 1;
+        return false;
+      }
+      existingKeys.add(key);
+      return true;
+    });
+
+    if (uniqueLeads.length === 0) {
+      return NextResponse.json({
+        error: 'Todos os leads da planilha ja existem no CRM.',
+        duplicated,
+        skipped,
+        incomplete,
+      }, { status: 409 });
+    }
+
     const { data, error } = await supabaseAdmin
       .from('leads')
-      .insert(leads)
+      .insert(uniqueLeads)
       .select('id');
 
     if (error) {
@@ -633,17 +689,19 @@ export async function POST(request: Request) {
       entity_id: corretorId,
       metadata: {
         corretor_nome: corretor.nome,
-        imported: data?.length || leads.length,
+        imported: data?.length || uniqueLeads.length,
         incomplete,
         skipped,
+        duplicated,
         paginas: sources.length,
       },
     });
 
     return NextResponse.json({
       success: true,
-      imported: data?.length || leads.length,
+      imported: data?.length || uniqueLeads.length,
       skipped,
+      duplicated,
       incomplete,
       paginas: sources.length,
       corretor: corretor.nome,

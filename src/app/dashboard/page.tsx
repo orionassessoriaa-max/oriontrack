@@ -276,6 +276,8 @@ export default function DashboardPage() {
     soldThisMonth: 0,
     stale: 0,
     lost: 0,
+    invalid: 0,
+    unavailableRegion: 0,
     revenueRealized: 0,
     salesRealized: 0,
     salesPotential: 0
@@ -671,6 +673,16 @@ export default function DashboardPage() {
           const s = normalizeLeadStatus(l.status);
           return s === 'Sem interesse';
         });
+
+        const invalidPhoneLeads = statsRes.filter(l => {
+          const s = String(normalizeLeadStatus(l.status)).toLowerCase();
+          return s.includes('telefone');
+        });
+
+        const unavailableRegionLeads = statsRes.filter(l => {
+          const s = String(normalizeLeadStatus(l.status)).toLowerCase();
+          return s.includes('regi') && s.includes('comercializa');
+        });
         
         setStats({
           total: statsRes.length,
@@ -685,6 +697,8 @@ export default function DashboardPage() {
             return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;
           }).length,
           lost: lostLeads.length,
+          invalid: invalidPhoneLeads.length,
+          unavailableRegion: unavailableRegionLeads.length,
           revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
           salesRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
           salesPotential: statsRes
@@ -1209,6 +1223,8 @@ export default function DashboardPage() {
                 quoted={stats.quoted}
                 sold={stats.sold}
                 lost={stats.lost}
+                invalid={stats.invalid}
+                unavailableRegion={stats.unavailableRegion}
               />
             )}
           </div>
@@ -1895,7 +1911,9 @@ function CustomDonutPizzaChart({
   inProgress,
   quoted,
   sold,
-  lost
+  lost,
+  invalid,
+  unavailableRegion
 }: {
   oportunidade: number;
   contactMade: number;
@@ -1903,17 +1921,21 @@ function CustomDonutPizzaChart({
   quoted: number;
   sold: number;
   lost: number;
+  invalid: number;
+  unavailableRegion: number;
 }) {
   const [animatedTotal, setAnimatedTotal] = useState(0);
 
-  const total = (oportunidade + contactMade + inProgress + quoted + sold + lost) || 0;
+  const total = (oportunidade + contactMade + inProgress + quoted + sold + lost + invalid + unavailableRegion) || 0;
   const slices = [
     { label: 'Oportunidade', value: oportunidade, color: '#3b82f6' },
     { label: 'Contato feito', value: contactMade, color: '#a78bfa' },
     { label: 'Negociação', value: inProgress, color: '#f59e0b' },
     { label: 'Proposta', value: quoted, color: '#38bdf8' },
     { label: 'Vendas', value: sold, color: '#10b981' },
-    { label: 'Vendas perdidas', value: lost, color: '#64748b' }
+    { label: 'Vendas perdidas', value: lost, color: '#64748b' },
+    { label: 'Telefone invalido', value: invalid, color: '#ef4444' },
+    { label: 'Regiao indisponivel', value: unavailableRegion, color: '#94a3b8' }
   ].filter(s => s.value > 0);
 
   // Default values if all are zero

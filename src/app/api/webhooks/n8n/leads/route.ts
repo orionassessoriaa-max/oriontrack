@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeLeadStatus } from '@/lib/leadStatus';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
+import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
 
 function normalizeText(value: unknown, fallback = '') {
   return String(value ?? fallback).trim();
@@ -200,6 +201,41 @@ export async function POST(request: Request) {
       observacoes: normalizeText(body.observacoes || body.obs) || null,
       updated_at: new Date().toISOString()
     };
+
+    const duplicateKey = buildLeadDuplicateKey(leadPayload);
+    let existingPage = 0;
+    const existingLimit = 1000;
+    let fetchExisting = true;
+
+    while (fetchExisting) {
+      const from = existingPage * existingLimit;
+      const to = from + existingLimit - 1;
+      const { data: existingLeads, error: existingError } = await supabaseAdmin
+        .from('leads')
+        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
+        .eq('corretor_id', corretorId)
+        .range(from, to);
+
+      if (existingError) {
+        return NextResponse.json({ error: existingError.message }, { status: 500 });
+      }
+
+      const duplicate = (existingLeads || []).find((lead) => buildLeadDuplicateKey(lead) === duplicateKey);
+      if (duplicate) {
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          lead: duplicate,
+          message: 'Lead duplicado ignorado.',
+        });
+      }
+
+      if (!existingLeads || existingLeads.length < existingLimit) {
+        fetchExisting = false;
+      } else {
+        existingPage += 1;
+      }
+    }
 
     const { data, error } = await supabaseAdmin
       .from('leads')
