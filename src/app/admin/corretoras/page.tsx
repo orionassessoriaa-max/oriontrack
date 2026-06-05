@@ -245,16 +245,30 @@ function CorretorasContent() {
       if (corretoresRes.error) throw corretoresRes.error;
       if (profilesRes.error) throw profilesRes.error;
 
+      let loadedCorretoras: CorretoraRecord[] = [];
       if (corretorasRes) {
         const payload = await corretorasRes.json().catch(() => ({}));
         if (corretorasRes.ok) {
-          setCorretorasCadastradas(payload.corretoras || []);
+          loadedCorretoras = payload.corretoras || [];
           setMigrationPending(Boolean(payload.migration_pending));
         } else if (payload.migration_pending) {
           setMigrationPending(true);
         }
       }
 
+      if (loadedCorretoras.length === 0) {
+        const { data: directCorretoras, error: directCorretorasError } = await supabase
+          .from('corretoras')
+          .select('*')
+          .order('nome');
+
+        if (!directCorretorasError) {
+          loadedCorretoras = directCorretoras || [];
+          setMigrationPending(false);
+        }
+      }
+
+      setCorretorasCadastradas(loadedCorretoras);
       setCorretores(corretoresRes.data || []);
       setProfiles(profilesRes.data || []);
     } catch (err: unknown) {
@@ -335,6 +349,7 @@ function CorretorasContent() {
         body: JSON.stringify({ nome, descricao }),
       });
       const payload = await response.json().catch(() => ({}));
+      let createdCorretora: CorretoraRecord | null = response.ok ? payload.corretora : null;
       if (!response.ok) {
         if (payload.migration_pending) setMigrationPending(true);
 
@@ -344,13 +359,25 @@ function CorretorasContent() {
           .ilike('nome', nome)
           .maybeSingle();
 
-        if (!existing) {
-          const { error: fallbackError } = await supabase
+        if (existing) {
+          createdCorretora = existing;
+        } else {
+          const { data: fallbackData, error: fallbackError } = await supabase
             .from('corretoras')
-            .insert([{ nome, descricao, status: 'ativo' }]);
+            .insert([{ nome, descricao, status: 'ativo' }])
+            .select('*')
+            .single();
 
           if (fallbackError) throw new Error(payload.error || fallbackError.message || 'Erro ao criar corretora.');
+          createdCorretora = fallbackData;
         }
+      }
+
+      if (createdCorretora) {
+        setCorretorasCadastradas((current) => {
+          const withoutDuplicate = current.filter((item) => item.nome.trim().toLowerCase() !== createdCorretora!.nome.trim().toLowerCase());
+          return [...withoutDuplicate, createdCorretora!].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+        });
       }
 
       setNewBrokerage({ nome: '', descricao: '' });
