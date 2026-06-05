@@ -391,8 +391,9 @@ function CorretorasContent() {
   };
 
   const newCorretorHref = (nomeEmpresa?: string) => {
-    const params = nomeEmpresa ? `?corretora=${encodeURIComponent(nomeEmpresa)}` : '';
-    return `/admin/corretores/novo${params}`;
+    const params = new URLSearchParams({ tipo: 'corretor' });
+    if (nomeEmpresa) params.set('corretora', nomeEmpresa);
+    return `/admin/usuarios?${params.toString()}`;
   };
 
   return (

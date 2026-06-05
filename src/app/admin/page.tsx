@@ -289,7 +289,7 @@ export default function AdminCentralPage() {
     { 
       title: 'Novo Corretor', 
       desc: 'Registrar parceiro e acesso', 
-      href: '/admin/corretores/novo', 
+      href: '/admin/usuarios?tipo=corretor',
       icon: UserPlus, 
       color: 'from-blue-600 to-indigo-600', 
       borderColor: 'border-blue-500/20 hover:border-blue-500/50',

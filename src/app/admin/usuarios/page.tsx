@@ -152,13 +152,22 @@ export default function AdminUsuariosPage() {
   }
 
   useEffect(() => {
-    const requestedRole = new URLSearchParams(window.location.search).get('tipo') as UserRole | null;
+    const params = new URLSearchParams(window.location.search);
+    const requestedRole = params.get('tipo') as UserRole | null;
+    const requestedBrokerage = String(params.get('corretora') || '').trim();
     if (requestedRole && ['admin', 'corretor', 'gestor_trafego', 'designer', 'account_manager', 'corretor_admin', 'corretor_membro'].includes(requestedRole)) {
       setForm((current) => ({
         ...current,
         tipo_usuario: requestedRole,
+        nome_empresa: requestedRole === 'corretor' && requestedBrokerage ? requestedBrokerage : current.nome_empresa,
         time_operacional: requestedRole === 'corretor' ? current.time_operacional : [],
         operadoras: requestedRole === 'corretor' ? current.operadoras : []
+      }));
+    } else if (requestedBrokerage) {
+      setForm((current) => ({
+        ...current,
+        tipo_usuario: 'corretor',
+        nome_empresa: requestedBrokerage,
       }));
     }
     void fetchUsers();
