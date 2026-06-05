@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { Bell, Loader2, RefreshCw, ShieldAlert, HelpCircle, Send, Settings, Save, Sparkles, TrendingUp, DollarSign } from 'lucide-react';
+import { Bell, Loader2, RefreshCw, ShieldAlert, HelpCircle, Send, Settings, Save, Sparkles, TrendingUp, DollarSign, Smartphone } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -37,6 +37,20 @@ export default function NotificacoesPage() {
   const [savingCorretorId, setSavingCorretorId] = useState<string | null>(null);
   const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
   const [thresholds, setThresholds] = useState<Record<string, { cpl: string; saldo: string }>>({});
+  const [preferences, setPreferences] = useState({
+    whatsapp_enabled: false,
+    telefone: '',
+    tipos: {
+      saldo_baixo: true,
+      cpl_alto: true,
+      notificacao: true,
+      novo_lead: true,
+      suporte: true,
+      demandas: true,
+    } as Record<string, boolean>,
+  });
+  const [savingPreferences, setSavingPreferences] = useState(false);
+  const [preferencesSaved, setPreferencesSaved] = useState(false);
 
   useEffect(() => {
     const handleThemeChange = () => {
@@ -112,9 +126,36 @@ export default function NotificacoesPage() {
     }
   };
 
+  const fetchPreferences = async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    const response = await fetch('/api/notificacoes/preferencias', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok && payload.preferences) {
+      setPreferences({
+        whatsapp_enabled: Boolean(payload.preferences.whatsapp_enabled),
+        telefone: payload.preferences.telefone || profile?.telefone || '',
+        tipos: {
+          saldo_baixo: true,
+          cpl_alto: true,
+          notificacao: true,
+          novo_lead: true,
+          suporte: true,
+          demandas: true,
+          ...(payload.preferences.tipos || {}),
+        },
+      });
+    }
+  };
+
   useEffect(() => {
     fetchNotifications();
     fetchCorretores();
+    fetchPreferences();
   }, [profile?.id, profile?.tipo_usuario]);
 
   const markAsRead = async (id: string) => {
@@ -129,22 +170,51 @@ export default function NotificacoesPage() {
     setSending(true);
     setError(null);
     try {
-      const { error: insertError } = await supabase.from('notificacoes').insert([{
-        titulo: formData.titulo,
-        mensagem: formData.mensagem,
-        destinatario_tipo: formData.destinatario_tipo,
-        remetente_profile_id: profile.id,
-        lida: false
-      }]);
-
-      if (insertError) throw insertError;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const response = await fetch('/api/notificacoes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel enviar notificacao.');
       setFormData({ destinatario_tipo: 'todos', titulo: '', mensagem: '' });
       fetchNotifications();
     } catch (err: any) {
       console.error('Error sending notification:', err);
-      setError('Nao foi possivel enviar notificacao. Confira se a migration notificacoes foi aplicada.');
+      setError(err.message || 'Nao foi possivel enviar notificacao. Confira se a migration notificacoes foi aplicada.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const savePreferences = async () => {
+    setSavingPreferences(true);
+    setPreferencesSaved(false);
+    setError(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const response = await fetch('/api/notificacoes/preferencias', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(preferences),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Erro ao salvar preferencias.');
+      setPreferencesSaved(true);
+      setTimeout(() => setPreferencesSaved(false), 2500);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao salvar preferencias.');
+    } finally {
+      setSavingPreferences(false);
     }
   };
 
@@ -228,6 +298,86 @@ export default function NotificacoesPage() {
         >
           Abrir Chamado <Send size={12} />
         </a>
+      </div>
+
+      <div className={`mb-8 rounded-[2rem] border p-6 transition-all duration-300 ${
+        isDark
+          ? 'border-white/5 bg-[#090e1a]/70 backdrop-blur-md shadow-2xl'
+          : 'border-gray-100 bg-white shadow-sm'
+      }`}>
+        <div className="mb-6 flex flex-col gap-4 border-b border-slate-100 pb-5 dark:border-white/5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3">
+            <div className={`p-2 rounded-xl ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+              <Smartphone size={20} />
+            </div>
+            <div>
+              <h3 className={`text-base font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>Receber notificacoes pelo WhatsApp</h3>
+              <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
+                O Apolo Notificador usa o WhatsApp oficial configurado pelo Dev. Informe o numero que vai receber os avisos.
+              </p>
+            </div>
+          </div>
+          <label className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-xs font-black text-emerald-400">
+            <input
+              type="checkbox"
+              checked={preferences.whatsapp_enabled}
+              onChange={(event) => setPreferences((current) => ({ ...current, whatsapp_enabled: event.target.checked }))}
+              className="h-4 w-4 rounded border-emerald-500/30 bg-transparent text-emerald-500 focus:ring-emerald-500"
+            />
+            Ativar WhatsApp
+          </label>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)_160px] lg:items-end">
+          <div className="space-y-2">
+            <label className={`ml-1 text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Telefone receptor</label>
+            <input
+              value={preferences.telefone}
+              onChange={(event) => setPreferences((current) => ({ ...current, telefone: event.target.value }))}
+              placeholder="Ex: 5561999999999"
+              className={`w-full rounded-2xl border-none px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500 ${
+                isDark ? 'bg-black/40 text-white placeholder-slate-600' : 'bg-slate-50 text-gray-900'
+              }`}
+            />
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              ['notificacao', 'Avisos gerais'],
+              ['saldo_baixo', 'Saldo baixo'],
+              ['cpl_alto', 'CPL alto'],
+              ['novo_lead', 'Novos leads'],
+              ['suporte', 'Suporte'],
+              ['demandas', 'Demandas'],
+            ].map(([key, label]) => (
+              <label key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${
+                isDark ? 'border-white/5 bg-white/[0.02] text-slate-300' : 'border-gray-100 bg-slate-50 text-gray-600'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(preferences.tipos[key])}
+                  onChange={(event) => setPreferences((current) => ({
+                    ...current,
+                    tipos: { ...current.tipos, [key]: event.target.checked },
+                  }))}
+                  className="h-3.5 w-3.5 rounded border-slate-400 text-blue-600 focus:ring-blue-500"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={savePreferences}
+            disabled={savingPreferences}
+            className={`flex h-12 items-center justify-center gap-2 rounded-2xl px-5 text-xs font-black text-white transition-all ${
+              preferencesSaved ? 'bg-emerald-600' : 'bg-blue-600 hover:bg-blue-700'
+            } disabled:opacity-60`}
+          >
+            {savingPreferences ? <Loader2 className="animate-spin" size={16} /> : preferencesSaved ? 'Salvo' : 'Salvar'}
+          </button>
+        </div>
       </div>
 
       {/* CONFIGURAÇÕES DE LIMITES APOLO (Meta Ads Monitor) - Visible only to admin and gestor_trafego */}

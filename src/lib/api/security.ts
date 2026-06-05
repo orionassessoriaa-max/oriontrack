@@ -9,6 +9,7 @@ export type ApiProfile = {
   nome: string | null;
   tipo_usuario: UserRole;
   corretor_id: string | null;
+  telefone?: string | null;
   status: string | null;
   is_admin_master?: boolean | null;
   equipe_orion?: 'apollo' | 'kripto_hunters' | null;
@@ -37,14 +38,14 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
 
   let { data: profile, error: profileError } = await supabaseAdmin
     .from('profiles')
-    .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, is_admin_master, equipe_orion')
+    .select('id, email, email_real, nome, tipo_usuario, corretor_id, telefone, status, is_admin_master, equipe_orion')
     .eq('id', user.id)
     .maybeSingle();
 
   if (profileError && String(profileError.message || '').includes('equipe_orion')) {
     const fallback = await supabaseAdmin
       .from('profiles')
-      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, is_admin_master')
+      .select('id, email, email_real, nome, tipo_usuario, corretor_id, telefone, status, is_admin_master')
       .eq('id', user.id)
       .maybeSingle();
     profile = fallback.data ? { ...fallback.data, equipe_orion: null } : null;
@@ -56,7 +57,7 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
     if (email) {
       const byAccessEmail = await supabaseAdmin
         .from('profiles')
-        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, is_admin_master')
+        .select('id, email, email_real, nome, tipo_usuario, corretor_id, telefone, status, is_admin_master')
         .or(`email.eq.${email},email_real.eq.${email}`)
         .maybeSingle();
       if (byAccessEmail.data) {

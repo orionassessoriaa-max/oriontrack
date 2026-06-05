@@ -353,7 +353,7 @@ export default function AdminConfiguracoesPage() {
                 {qrCode && (
                   <div className="flex flex-col md:flex-row items-center gap-8 p-6 rounded-2xl border border-white/5 bg-white/2">
                     <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl shrink-0 shadow-xl">
-                      <img src={qrCode} alt="WhatsApp QR Code" className="h-44 w-44 object-contain" />
+                      <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="WhatsApp QR Code" className="h-44 w-44 object-contain" />
                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-3 animate-pulse">Aguardando leitura...</span>
                     </div>
 

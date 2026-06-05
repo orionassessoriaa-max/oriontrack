@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export async function POST(request: Request) {
   try {
@@ -55,6 +56,18 @@ export async function POST(request: Request) {
           lida: false
         }))
       );
+
+      const { data: adminProfiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id, nome, telefone, tipo_usuario')
+        .in('id', admins.map((admin) => admin.id));
+
+      await sendApoloWhatsApp({
+        type: 'suporte',
+        title: 'Nova solicitacao de suporte',
+        message: `${profile.nome} abriu um chamado de ${categoria}: ${mensagem}`,
+        profiles: adminProfiles || [],
+      });
     }
 
     await writeAuditLog(request, profile, {

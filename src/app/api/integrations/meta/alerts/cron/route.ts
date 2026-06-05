@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
+import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 type CorretorMeta = {
   id: string;
@@ -181,7 +182,15 @@ export async function POST(request: Request) {
     });
 
     // 4. Agrupar os alertas críticos por Gestor de Tráfego
+    const { data: allProfiles, error: profilesError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nome, telefone, corretor_id, tipo_usuario')
+      .in('status', ['active', 'ativo', 'Ativo']);
+
+    if (profilesError) throw profilesError;
+
     const alertsByGestor: Record<string, string[]> = {};
+    const balanceAlertsByCorretor: Record<string, string[]> = {};
 
     accountsWithMetrics.forEach((acc) => {
       if (!acc.gestor_trafego_id) return;
@@ -220,13 +229,23 @@ export async function POST(request: Request) {
         }
         alertsByGestor[acc.gestor_trafego_id].push(formattedAlert);
       }
+
+      const hasBalanceAlert = !isCard && (
+        (acc.saldo !== null && acc.saldo < balanceLimit) ||
+        Boolean(acc.error)
+      );
+      if (hasBalanceAlert) {
+        const balanceText = alertMessage || `Revise o saldo da conta ${acc.meta_ad_account_name || acc.meta_ad_account_id}.`;
+        if (!balanceAlertsByCorretor[acc.corretor_id]) balanceAlertsByCorretor[acc.corretor_id] = [];
+        balanceAlertsByCorretor[acc.corretor_id].push(balanceText);
+      }
     });
 
     // 5. Enviar as mensagens para cada gestor via WhatsApp
     const sendResults: any[] = [];
     const gestorIds = Object.keys(alertsByGestor);
 
-    if (gestorIds.length > 0) {
+    if (false && gestorIds.length > 0) {
       // Carregar os perfis dos gestores para obter os telefones
       const { data: gestores, error: gError } = await supabaseAdmin
         .from('profiles')
@@ -272,6 +291,43 @@ _Por favor, acesse o painel Orion Track em https://oriontrack.com.br/trafego/avi
           sendResults.push({ gestor_id: gestor.id, status: 'failed', reason: err.message || 'Erro Evolution API' });
         }
       }
+    }
+
+    if (gestorIds.length > 0) {
+      const gestores = (allProfiles || []).filter((profile: any) => gestorIds.includes(profile.id));
+
+      for (const gestor of gestores) {
+        const alertsList = alertsByGestor[gestor.id];
+        const messageText =
+`Identificamos contas vinculadas sob sua gestao que necessitam de atencao imediata:
+
+${alertsList.join('\n\n')}
+
+Acesse o painel Orion Track em https://oriontrack.com.br/trafego/avisos-meta para mais detalhes.`;
+
+        const result = await sendApoloWhatsApp({
+          type: 'cpl_alto',
+          title: 'Orion Track - Monitoramento Meta Ads',
+          message: messageText,
+          profiles: [gestor],
+        });
+        sendResults.push({ gestor_id: gestor.id, results: result });
+      }
+    }
+
+    for (const corretorId of Object.keys(balanceAlertsByCorretor)) {
+      const targets = (allProfiles || []).filter((profile: any) =>
+        profile.corretor_id === corretorId &&
+        ['corretor', 'corretor_admin'].includes(profile.tipo_usuario)
+      );
+
+      const result = await sendApoloWhatsApp({
+        type: 'saldo_baixo',
+        title: 'Orion Track - Alerta de saldo Meta Ads',
+        message: balanceAlertsByCorretor[corretorId].join('\n\n'),
+        profiles: targets,
+      });
+      sendResults.push({ corretor_id: corretorId, results: result });
     }
 
     return NextResponse.json({
