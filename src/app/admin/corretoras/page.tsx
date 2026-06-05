@@ -35,6 +35,70 @@ interface CorretoraGroup {
   status: string;
 }
 
+type CorretoraMember = {
+  key: string;
+  nome: string;
+  email: string;
+  email_real?: string | null;
+  telefone?: string | null;
+  status?: string | null;
+  tipo_usuario?: string | null;
+  foto_url?: string | null;
+  profile_id?: string | null;
+  corretor_id?: string | null;
+  has_profile: boolean;
+};
+
+function getCorretoraMembers(group: CorretoraGroup): CorretoraMember[] {
+  const members: CorretoraMember[] = [];
+  const usedCorretorIds = new Set<string>();
+  const usedEmails = new Set<string>();
+
+  group.profiles.forEach((profile) => {
+    const corretorRow = group.corretoresRows.find((row) => row.id === profile.corretor_id);
+    const email = profile.email_real || profile.email || corretorRow?.email || '';
+    members.push({
+      key: `profile:${profile.id}`,
+      nome: profile.nome,
+      email,
+      email_real: profile.email_real,
+      telefone: corretorRow?.telefone || profile.telefone,
+      status: profile.status,
+      tipo_usuario: profile.tipo_usuario,
+      foto_url: profile.foto_url,
+      profile_id: profile.id,
+      corretor_id: profile.corretor_id,
+      has_profile: true,
+    });
+
+    if (profile.corretor_id) usedCorretorIds.add(profile.corretor_id);
+    if (email) usedEmails.add(email.trim().toLowerCase());
+  });
+
+  group.corretoresRows.forEach((corretor) => {
+    const email = corretor.email || '';
+    const normalizedEmail = email.trim().toLowerCase();
+    if (usedCorretorIds.has(corretor.id) || (normalizedEmail && usedEmails.has(normalizedEmail))) {
+      return;
+    }
+
+    members.push({
+      key: `corretor:${corretor.id}`,
+      nome: corretor.nome,
+      email,
+      telefone: corretor.telefone,
+      status: corretor.status,
+      tipo_usuario: null,
+      foto_url: null,
+      profile_id: null,
+      corretor_id: corretor.id,
+      has_profile: false,
+    });
+  });
+
+  return members.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
 function groupData(corretoresList: Corretor[], profilesList: Profile[]): CorretoraGroup[] {
   const groups: { [key: string]: CorretoraGroup } = {};
 
@@ -164,10 +228,11 @@ function CorretorasContent() {
   const filteredCorretoras = useMemo(() => {
     return corretoras.filter((c) => {
       const term = search.toLowerCase();
+      const members = getCorretoraMembers(c);
       const matchesSearch = 
         c.nome.toLowerCase().includes(term) ||
         (c.meta_ad_account_name || '').toLowerCase().includes(term) ||
-        c.profiles.some((p) => p.nome.toLowerCase().includes(term) || p.email.toLowerCase().includes(term));
+        members.some((member) => member.nome.toLowerCase().includes(term) || member.email.toLowerCase().includes(term));
 
       const matchesType = 
         typeFilter === 'all' || 
@@ -282,6 +347,7 @@ function CorretorasContent() {
         ) : (
           filteredCorretoras.map((c) => {
             const isExpanded = !!expandedGroups[c.id];
+            const members = getCorretoraMembers(c);
             return (
               <div 
                 key={c.id} 
@@ -313,8 +379,13 @@ function CorretorasContent() {
                       </div>
                       <p className="text-xs font-medium text-slate-400 mt-1 flex items-center gap-1.5">
                         <Users size={13} className="text-slate-300" />
-                        {c.profiles.length} {c.profiles.length === 1 ? 'corretor' : 'corretores'}
+                        {members.length} {members.length === 1 ? 'corretor' : 'corretores'}
                       </p>
+                      {members.length > 0 && (
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mt-2 truncate max-w-[420px]">
+                          Corretores: {members.map((member) => member.nome).join(', ')}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -351,60 +422,61 @@ function CorretorasContent() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100/10">
-                          {c.profiles.map((p) => {
-                            const corretorRow = c.corretoresRows.find((row) => row.id === p.corretor_id);
-                            const phone = corretorRow?.telefone || p.telefone || 'Sem telefone';
+                          {members.map((member) => {
+                            const phone = member.telefone || 'Sem telefone';
                             return (
-                              <tr key={p.id} className="hover:bg-slate-950/[0.02] dark:hover:bg-slate-900/30 transition-colors">
+                              <tr key={member.key} className="hover:bg-slate-950/[0.02] dark:hover:bg-slate-900/30 transition-colors">
                                 <td className="py-4">
                                   <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center font-bold text-white text-sm shrink-0 overflow-hidden">
-                                      {p.foto_url ? (
-                                        <img src={p.foto_url} alt={p.nome} className="h-full w-full object-cover object-top" />
+                                      {member.foto_url ? (
+                                        <img src={member.foto_url} alt={member.nome} className="h-full w-full object-cover object-top" />
                                       ) : (
-                                        p.nome[0].toUpperCase()
+                                        member.nome[0].toUpperCase()
                                       )}
                                     </div>
                                     <div>
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="font-bold text-gray-900 text-sm">{p.nome}</p>
+                                        <p className="font-bold text-gray-900 text-sm">{member.nome}</p>
                                         <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border ${
-                                          p.tipo_usuario === 'corretor' 
+                                          member.tipo_usuario === 'corretor' 
                                             ? 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' 
-                                            : p.tipo_usuario === 'corretor_admin'
+                                            : member.tipo_usuario === 'corretor_admin'
                                             ? 'bg-cyan-50 text-cyan-700 border-cyan-100 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20'
                                             : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                                         }`}>
-                                          {p.tipo_usuario === 'corretor' 
+                                          {member.tipo_usuario === 'corretor' 
                                             ? 'Corretor Principal' 
-                                            : p.tipo_usuario === 'corretor_admin' 
+                                            : member.tipo_usuario === 'corretor_admin' 
                                             ? 'Admin do Time' 
-                                            : 'Integrante do Time'}
+                                            : member.has_profile
+                                            ? 'Integrante do Time'
+                                            : 'Cadastro sem acesso'}
                                         </span>
                                       </div>
-                                      {p.email_real && (
-                                        <p className="text-[10px] text-gray-400 font-medium mt-0.5">Real: {p.email_real}</p>
+                                      {member.email_real && (
+                                        <p className="text-[10px] text-gray-400 font-medium mt-0.5">Real: {member.email_real}</p>
                                       )}
                                     </div>
                                   </div>
                                 </td>
-                                <td className="py-4 text-xs font-semibold text-slate-600">{p.email}</td>
+                                <td className="py-4 text-xs font-semibold text-slate-600">{member.email || 'Sem e-mail'}</td>
                                 <td className="py-4 text-xs font-semibold text-slate-600">{phone}</td>
                                 <td className="py-4 text-center">
                                   <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                                    (p.status?.toLowerCase() === 'active' || p.status?.toLowerCase() === 'ativo')
+                                    (member.status?.toLowerCase() === 'active' || member.status?.toLowerCase() === 'ativo')
                                       ? "bg-green-50 text-green-600 border-green-100" 
                                       : "bg-red-50 text-red-600 border-red-100"
                                   }`}>
-                                    {(p.status?.toLowerCase() === 'active' || p.status?.toLowerCase() === 'ativo') ? 'Ativo' : 'Inativo'}
+                                    {(member.status?.toLowerCase() === 'active' || member.status?.toLowerCase() === 'ativo') ? 'Ativo' : 'Inativo'}
                                   </span>
                                 </td>
                                 <td className="py-4 text-right">
                                   <div className="flex items-center justify-end gap-1">
-                                    {p.corretor_id && (
+                                    {member.corretor_id && (
                                       <button
                                         type="button"
-                                        onClick={() => startViewingAsCorretor(p.corretor_id!)}
+                                        onClick={() => startViewingAsCorretor(member.corretor_id!)}
                                         className="cursor-pointer p-2.5 text-slate-400 transition-all hover:bg-emerald-50 hover:text-emerald-600 rounded-lg"
                                         title="Entrar como corretor"
                                       >
@@ -412,7 +484,7 @@ function CorretorasContent() {
                                       </button>
                                     )}
                                     <Link 
-                                      href={`/admin/usuarios?edit=${p.id}`}
+                                      href={member.profile_id ? `/admin/usuarios?edit=${member.profile_id}` : `/admin/corretores/${member.corretor_id}/editar`}
                                       className="cursor-pointer p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600 rounded-lg"
                                       title="Editar Usuário"
                                     >
@@ -420,7 +492,7 @@ function CorretorasContent() {
                                     </Link>
                                     <button
                                       type="button"
-                                      onClick={() => copyId(p.corretor_id || p.id)}
+                                      onClick={() => copyId(member.corretor_id || member.profile_id || member.key)}
                                       className="cursor-pointer p-2.5 text-slate-400 transition-all hover:bg-slate-100 rounded-lg"
                                       title="Copiar ID"
                                     >
