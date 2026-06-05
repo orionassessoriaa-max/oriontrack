@@ -48,11 +48,26 @@ export default function MetaDatePicker({
   };
 
   const toLocalDateString = (date: Date) =>
-    new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+  const addDays = (date: Date, days: number) =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+
+  const getSaoPauloToday = () => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const year = Number(parts.find((part) => part.type === 'year')?.value);
+    const month = Number(parts.find((part) => part.type === 'month')?.value);
+    const day = Number(parts.find((part) => part.type === 'day')?.value);
+    return new Date(year, month - 1, day);
+  };
 
   const getYesterday = () => {
-    const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    return addDays(getSaoPauloToday(), -1);
   };
 
   const applyPreset = (presetName: string) => {
@@ -68,9 +83,9 @@ export default function MetaDatePicker({
       return;
     }
 
-    const d = new Date();
-    let start = new Date();
-    let end = new Date();
+    const d = getSaoPauloToday();
+    let start = new Date(d);
+    let end = new Date(d);
 
     let label = 'Este mês';
 
@@ -85,12 +100,12 @@ export default function MetaDatePicker({
         break;
       case '7dias':
         end = getYesterday();
-        start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 6);
+        start = addDays(end, -6);
         label = 'Últimos 7 dias';
         break;
       case '30dias':
         end = getYesterday();
-        start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29);
+        start = addDays(end, -29);
         label = 'Últimos 30 dias';
         break;
       case 'este_mes':
