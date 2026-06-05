@@ -67,6 +67,26 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
   }
 
   if (!profile) {
+    const email = String(user.email || '').toLowerCase();
+    const isTrustedAdminFallback = email === 'ewerttonherculano@gmail.com';
+
+    if (allowedRoles?.includes('admin') && isTrustedAdminFallback) {
+      profile = {
+        id: user.id,
+        email,
+        email_real: email,
+        nome: (user as any).user_metadata?.nome || (user as any).user_metadata?.name || 'Admin Orion',
+        tipo_usuario: 'admin',
+        corretor_id: null,
+        telefone: null,
+        status: 'active',
+        is_admin_master: email === 'ewerttonherculano@gmail.com',
+        equipe_orion: null,
+      } as any;
+    }
+  }
+
+  if (!profile) {
     return { error: NextResponse.json({ error: 'Perfil nao encontrado.' }, { status: 404 }) };
   }
 

@@ -59,7 +59,9 @@ export default function AdminUsuariosPage() {
   const router = useRouter();
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [corretores, setCorretores] = useState<Corretor[]>([]);
+  const [corretoras, setCorretoras] = useState<Array<{ id: string; nome: string }>>([]);
   const [form, setForm] = useState(initialForm);
+  const [showBrokerageOptions, setShowBrokerageOptions] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -72,12 +74,22 @@ export default function AdminUsuariosPage() {
   const teamMembers = useMemo(() => buildOperationalTeamMembers(profiles), [profiles]);
   const brokerageOptions = useMemo(() => {
     const names = new Map<string, string>();
+    corretoras.forEach((corretora) => {
+      const name = String(corretora.nome || '').trim();
+      if (name) names.set(name.toLowerCase(), name);
+    });
     corretores.forEach((corretor) => {
       const name = String(corretor.nome_empresa || '').trim();
       if (name) names.set(name.toLowerCase(), name);
     });
     return Array.from(names.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [corretores]);
+  }, [corretores, corretoras]);
+
+  const visibleBrokerageOptions = useMemo(() => {
+    const term = form.nome_empresa.trim().toLowerCase();
+    if (!term) return brokerageOptions;
+    return brokerageOptions.filter((name) => name.toLowerCase().includes(term));
+  }, [brokerageOptions, form.nome_empresa]);
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
@@ -143,6 +155,13 @@ export default function AdminUsuariosPage() {
     const nextCorretores = payload.corretores || [];
     setProfiles(nextProfiles);
     setCorretores(nextCorretores);
+
+    const { data: corretorasData } = await supabase
+      .from('corretoras')
+      .select('id, nome')
+      .order('nome');
+    setCorretoras(corretorasData || []);
+
     const editId = new URLSearchParams(window.location.search).get('edit');
     if (editId) {
       const profileToEdit = nextProfiles.find((profile: AdminProfile) => profile.id === editId);
@@ -533,17 +552,36 @@ export default function AdminUsuariosPage() {
                 <div>
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome da corretora</label>
                   <input
-                    list="admin-brokerage-options"
                     value={form.nome_empresa}
                     onChange={(event) => setForm((current) => ({ ...current, nome_empresa: event.target.value }))}
+                    onFocus={() => setShowBrokerageOptions(true)}
+                    onBlur={() => window.setTimeout(() => setShowBrokerageOptions(false), 150)}
                     placeholder="Digite ou selecione uma corretora"
                     className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                   />
-                  <datalist id="admin-brokerage-options">
-                    {brokerageOptions.map((name) => (
-                      <option key={name} value={name} />
-                    ))}
-                  </datalist>
+                  {showBrokerageOptions && (
+                    <div className="mt-2 max-h-56 overflow-y-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-xl">
+                      {visibleBrokerageOptions.length > 0 ? (
+                        visibleBrokerageOptions.map((name) => (
+                          <button
+                            key={name}
+                            type="button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              setForm((current) => ({ ...current, nome_empresa: name }));
+                              setShowBrokerageOptions(false);
+                            }}
+                            className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-xs font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
+                          >
+                            {name}
+                            <span className="text-[9px] uppercase tracking-widest text-slate-400">Selecionar</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-xs font-bold text-slate-400">Nenhuma corretora cadastrada.</div>
+                      )}
+                    </div>
+                  )}
                   <p className="mt-2 text-[10px] font-bold text-slate-400">
                     Use o mesmo nome para agrupar socios da mesma corretora.
                   </p>

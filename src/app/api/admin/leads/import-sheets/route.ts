@@ -27,8 +27,8 @@ type LeadInsert = {
   observacoes: string;
 };
 
-async function requireAdmin(request: Request) {
-  return requireApiUser(request, ['admin']);
+async function requireImporter(request: Request) {
+  return requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro']);
 }
 
 function parseSheetLink(input: string) {
@@ -486,7 +486,7 @@ export async function POST(request: Request) {
     const limited = rateLimit(request, 'admin:leads:import-sheets', { limit: 6, windowMs: 10 * 60_000 });
     if (limited) return limited;
 
-    const guard = await requireAdmin(request);
+    const guard = await requireImporter(request);
     if ('error' in guard) return guard.error;
 
     const body = await request.json();
@@ -505,6 +505,28 @@ export async function POST(request: Request) {
 
     if (!corretor) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
+    }
+
+    if (guard.profile.tipo_usuario !== 'admin') {
+      if (!guard.profile.corretor_id) {
+        return NextResponse.json({ error: 'Perfil sem corretor vinculado.' }, { status: 403 });
+      }
+
+      const { data: requesterCorretor } = await supabaseAdmin
+        .from('corretores')
+        .select('id, nome_empresa')
+        .eq('id', guard.profile.corretor_id)
+        .maybeSingle();
+
+      const sameBrokerage = Boolean(
+        requesterCorretor?.nome_empresa
+          && corretor.nome_empresa
+          && requesterCorretor.nome_empresa === corretor.nome_empresa
+      );
+
+      if (guard.profile.corretor_id !== corretorId && !sameBrokerage) {
+        return NextResponse.json({ error: 'Voce so pode importar leads para sua propria corretora.' }, { status: 403 });
+      }
     }
 
     let targetCorretorId = corretorId;
