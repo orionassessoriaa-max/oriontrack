@@ -43,6 +43,12 @@ type TeamSettings = {
     email: string;
     email_real?: string | null;
   } | null;
+  owner_profiles?: {
+    id: string;
+    nome: string;
+    email: string;
+    email_real?: string | null;
+  }[];
 };
 
 type AssignableLead = {
@@ -89,6 +95,11 @@ function normalizeStatus(value?: string | null) {
 export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerProps) {
   const { profile } = useAuth();
   const { confirmDialog } = useDialog();
+  const isOwner = (profileId: string | null) => {
+    if (!profileId) return false;
+    if (settings.owner_profile?.id === profileId) return true;
+    return !!settings.owner_profiles?.some((op) => op.id === profileId);
+  };
   const [team, setTeam] = useState<Team | null>(null);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [leads, setLeads] = useState<AssignableLead[]>([]);
@@ -106,6 +117,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [settings, setSettings] = useState<TeamSettings>({
     owner_in_distribution: false,
     owner_profile: null,
+    owner_profiles: [],
   });
   const [error, setError] = useState<string | null>(null);
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
@@ -197,7 +209,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     setBrokerageName(payload.brokerage_name || payload.team?.nome || '');
     setMembros(payload.membros || []);
     setLeads(payload.leads || []);
-    setSettings(payload.settings || { owner_in_distribution: false, owner_profile: null });
+    setSettings(payload.settings || { owner_in_distribution: false, owner_profile: null, owner_profiles: [] });
     setLoading(false);
   }
 
@@ -912,11 +924,15 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       <p className="mt-1 text-[11px] font-bold leading-relaxed text-slate-400">
                         Ative se você também quiser entrar na escala de rodízio de clientes e disputar vendas com o seu time.
                       </p>
-                      {settings.owner_profile && (
+                      {settings.owner_profiles && settings.owner_profiles.length > 0 ? (
+                        <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-cyan-400">
+                          Perfis: {settings.owner_profiles.map(p => p.nome).join(', ')}
+                        </p>
+                      ) : settings.owner_profile ? (
                         <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-cyan-400">
                           Perfil: {settings.owner_profile.nome}
                         </p>
-                      )}
+                      ) : null}
                     </div>
                     <label className="relative inline-flex cursor-pointer items-center shrink-0">
                       <input
@@ -1114,7 +1130,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                             Posição: #{index + 1} {member.ultimo_lead_at ? `| último atendimento em ${new Date(member.ultimo_lead_at).toLocaleDateString('pt-BR')}` : ''}
                           </p>
                           <div className="flex flex-wrap gap-2 mt-2">
-                            {member.profile_id === settings.owner_profile?.id && (
+                            {isOwner(member.profile_id) && (
                               <span className="inline-flex rounded-full bg-blue-500/15 border border-blue-500/20 px-2.5 py-1 text-[8px] font-black uppercase tracking-widest text-cyan-400 leading-none">
                                 Dono do time
                               </span>
@@ -1131,9 +1147,9 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       <button
                         type="button"
                         onClick={() => removeMember(member)}
-                        disabled={member.profile_id === settings.owner_profile?.id}
+                        disabled={isOwner(member.profile_id)}
                         className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-500/10 bg-red-500/5 px-3 py-2.5 text-xs font-black text-red-400 transition-all hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30 cursor-pointer shrink-0 self-start"
-                        title={member.profile_id === settings.owner_profile?.id ? 'Desative em Configurações do time.' : 'Remover integrante'}
+                        title={isOwner(member.profile_id) ? 'Desative em Configurações do time.' : 'Remover integrante'}
                       >
                         <Trash2 size={13} /> <span className="hidden sm:inline">Remover</span>
                       </button>

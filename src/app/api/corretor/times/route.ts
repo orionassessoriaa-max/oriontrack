@@ -105,16 +105,15 @@ async function getCorretorIdentity(corretorId: string) {
   return data;
 }
 
-async function getOwnerProfile(corretorId: string) {
+async function getOwnerProfiles(corretorId: string) {
   const { data } = await supabaseAdmin
     .from('profiles')
     .select('id, nome, email, email_real')
     .eq('tipo_usuario', 'corretor')
     .eq('corretor_id', corretorId)
-    .eq('status', 'active')
-    .maybeSingle();
+    .eq('status', 'active');
 
-  return data;
+  return data || [];
 }
 
 export async function GET(request: Request) {
@@ -178,8 +177,10 @@ export async function GET(request: Request) {
       leads = leadsData || [];
     }
 
-    const ownerProfile = await getOwnerProfile(corretorId);
-    const ownerMember = (membros || []).find((member: any) => member.profile_id === ownerProfile?.id);
+    const ownerProfiles = await getOwnerProfiles(corretorId);
+    const ownerInDistribution = ownerProfiles.length > 0 && ownerProfiles.every((op) => 
+      membros.some((m: any) => m.profile_id === op.id)
+    );
 
     const membrosWithPhoto = (membros || []).map((m: any) => {
       const joinedProfile = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
@@ -205,8 +206,9 @@ export async function GET(request: Request) {
       membros: membrosWithPhoto,
       leads,
       settings: {
-        owner_in_distribution: Boolean(ownerMember),
-        owner_profile: ownerProfile || null,
+        owner_in_distribution: ownerInDistribution,
+        owner_profiles: ownerProfiles,
+        owner_profile: ownerProfiles[0] || null,
       },
     });
   } catch (error: any) {
@@ -382,19 +384,23 @@ export async function POST(request: Request) {
       }
 
       const includeOwner = Boolean(body.include_owner);
-      const ownerProfile = await getOwnerProfile(corretorId);
-      if (!ownerProfile?.id) {
+      const ownerProfiles = await getOwnerProfiles(corretorId);
+      if (ownerProfiles.length === 0) {
         return NextResponse.json({ error: 'Nao encontrei o acesso principal desse corretor.' }, { status: 404 });
       }
 
-      const { data: existingOwnerMember } = await supabaseAdmin
+      // Fetch existing owner members of this team
+      const ownerProfileIds = ownerProfiles.map((op) => op.id);
+      const { data: existingOwnerMembers } = await supabaseAdmin
         .from('corretor_time_membros')
-        .select('id')
+        .select('id, profile_id')
         .eq('time_id', team.id)
-        .eq('profile_id', ownerProfile.id)
-        .maybeSingle();
+        .in('profile_id', ownerProfileIds);
 
-      if (includeOwner && !existingOwnerMember) {
+      const existingMap = new Map((existingOwnerMembers || []).map((m) => [m.profile_id, m.id]));
+
+      if (includeOwner) {
+        // Get the last order number
         const { data: lastMember } = await supabaseAdmin
           .from('corretor_time_membros')
           .select('ordem')
@@ -403,33 +409,48 @@ export async function POST(request: Request) {
           .limit(1)
           .maybeSingle();
 
-        const { error: insertError } = await supabaseAdmin
-          .from('corretor_time_membros')
-          .insert([{
-            time_id: team.id,
-            corretor_id: corretorId,
-            profile_id: ownerProfile.id,
-            nome: ownerProfile.nome || corretor.nome,
-            email: ownerProfile.email_real || ownerProfile.email,
-            ordem: Number(lastMember?.ordem || 0) + 1,
-          }]);
+        let currentOrdem = Number(lastMember?.ordem || 0);
+        const inserts = [];
 
-        if (insertError) throw insertError;
-      }
+        for (const op of ownerProfiles) {
+          if (!existingMap.has(op.id)) {
+            currentOrdem += 1;
+            inserts.push({
+              time_id: team.id,
+              corretor_id: corretorId,
+              profile_id: op.id,
+              nome: op.nome || corretor.nome,
+              email: op.email_real || op.email,
+              ordem: currentOrdem,
+            });
+          }
+        }
 
-      if (!includeOwner && existingOwnerMember?.id) {
-        await supabaseAdmin
-          .from('leads')
-          .update({ responsavel_membro_id: null, responsavel_profile_id: null })
-          .eq('corretor_id', corretorId)
-          .eq('responsavel_membro_id', existingOwnerMember.id);
+        if (inserts.length > 0) {
+          const { error: insertError } = await supabaseAdmin
+            .from('corretor_time_membros')
+            .insert(inserts);
 
-        const { error: deleteError } = await supabaseAdmin
-          .from('corretor_time_membros')
-          .delete()
-          .eq('id', existingOwnerMember.id);
+          if (insertError) throw insertError;
+        }
+      } else {
+        // Remove all owners from distribution
+        const idsToRemove = Array.from(existingMap.values());
+        if (idsToRemove.length > 0) {
+          // Unassign leads from these members first
+          await supabaseAdmin
+            .from('leads')
+            .update({ responsavel_membro_id: null, responsavel_profile_id: null })
+            .eq('corretor_id', corretorId)
+            .in('responsavel_membro_id', idsToRemove);
 
-        if (deleteError) throw deleteError;
+          const { error: deleteError } = await supabaseAdmin
+            .from('corretor_time_membros')
+            .delete()
+            .in('id', idsToRemove);
+
+          if (deleteError) throw deleteError;
+        }
       }
 
       await writeAuditLog(request, guard.profile, {
@@ -664,6 +685,7 @@ export async function POST(request: Request) {
     }
 
     const role = body.tipo_usuario === 'corretor_admin' ? 'corretor_admin' : 'corretor_membro';
+    const memberBrokerageName = String(corretor.nome_empresa || '').trim();
     const senhaProvisoria = generateStrongPassword();
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -673,6 +695,7 @@ export async function POST(request: Request) {
         nome,
         tipo_usuario: role,
         corretor_id: corretorId,
+        nome_empresa: memberBrokerageName || null,
         email_real: email,
       }
     });
@@ -701,6 +724,7 @@ export async function POST(request: Request) {
           nome,
           tipo_usuario: role,
           corretor_id: corretorId,
+          nome_empresa: memberBrokerageName || null,
           status: 'active',
           precisa_trocar_senha: true,
         }]);

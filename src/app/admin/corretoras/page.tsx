@@ -127,7 +127,7 @@ function CorretorasContent() {
         supabase
           .from('profiles')
           .select('*')
-          .eq('tipo_usuario', 'corretor')
+          .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
           .order('nome')
       ]);
 
@@ -338,11 +338,11 @@ function CorretorasContent() {
 
                 {/* Lista de Corretores (Expandida) */}
                 {isExpanded && (
-                  <div className="border-t border-gray-50 bg-slate-50/20 px-6 py-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="border-t border-gray-100/10 bg-slate-950/[0.03] dark:bg-slate-950/40 px-6 py-4 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[700px] text-left border-collapse">
                         <thead>
-                          <tr className="border-b border-gray-100">
+                          <tr className="border-b border-gray-100/10">
                             <th className="py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Nome do Corretor</th>
                             <th className="py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">E-mail Orion</th>
                             <th className="py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Telefone</th>
@@ -350,12 +350,12 @@ function CorretorasContent() {
                             <th className="py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-100/10">
                           {c.profiles.map((p) => {
                             const corretorRow = c.corretoresRows.find((row) => row.id === p.corretor_id);
                             const phone = corretorRow?.telefone || p.telefone || 'Sem telefone';
                             return (
-                              <tr key={p.id} className="hover:bg-slate-50/30 transition-colors">
+                              <tr key={p.id} className="hover:bg-slate-950/[0.02] dark:hover:bg-slate-900/30 transition-colors">
                                 <td className="py-4">
                                   <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center font-bold text-white text-sm shrink-0 overflow-hidden">
@@ -366,9 +366,24 @@ function CorretorasContent() {
                                       )}
                                     </div>
                                     <div>
-                                      <p className="font-bold text-gray-900 text-sm">{p.nome}</p>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="font-bold text-gray-900 text-sm">{p.nome}</p>
+                                        <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border ${
+                                          p.tipo_usuario === 'corretor' 
+                                            ? 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' 
+                                            : p.tipo_usuario === 'corretor_admin'
+                                            ? 'bg-cyan-50 text-cyan-700 border-cyan-100 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20'
+                                            : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                                        }`}>
+                                          {p.tipo_usuario === 'corretor' 
+                                            ? 'Corretor Principal' 
+                                            : p.tipo_usuario === 'corretor_admin' 
+                                            ? 'Admin do Time' 
+                                            : 'Integrante do Time'}
+                                        </span>
+                                      </div>
                                       {p.email_real && (
-                                        <p className="text-[10px] text-gray-400 font-medium">Real: {p.email_real}</p>
+                                        <p className="text-[10px] text-gray-400 font-medium mt-0.5">Real: {p.email_real}</p>
                                       )}
                                     </div>
                                   </div>
