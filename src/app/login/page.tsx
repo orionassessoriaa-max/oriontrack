@@ -84,7 +84,7 @@ export default function LoginPage() {
       }
 
       // Define a rota de destino baseada no perfil
-      let destination = '/dashboard';
+      let destination = '/leads';
       if (profile.tipo_usuario === 'admin') {
         destination = '/admin';
       } else if (profile.tipo_usuario === 'gestor_trafego') {

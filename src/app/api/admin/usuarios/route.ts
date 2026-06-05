@@ -93,6 +93,12 @@ function isMissingTeamColumn(error?: { message?: string | null } | null) {
   return String(error?.message || '').includes('equipe_orion');
 }
 
+function parseCommissionPercent(value: unknown) {
+  const parsed = Number(String(value ?? '2.5').replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed < 0) return 2.5;
+  return Math.min(parsed, 100);
+}
+
 export async function GET(request: Request) {
   try {
     const guard = await requireAdmin(request);
@@ -195,6 +201,8 @@ export async function POST(request: Request) {
             operadoras_info: { selecionadas: Array.isArray(body.operadoras) ? body.operadoras : [] },
             time_operacional: timeOperacional,
             gestor_trafego_id: gestorTrafegoId,
+            comissao_percentual: parseCommissionPercent(body.comissao_percentual),
+            rodizio_ativo: body.rodizio_ativo !== false,
             observacoes: body.observacoes || null,
           }])
           .select()
@@ -368,6 +376,8 @@ export async function PATCH(request: Request) {
               tipo_campanha: body.tipo_campanha || 'ambos',
               time_operacional: timeOperacional,
               gestor_trafego_id: gestorTrafegoId,
+              comissao_percentual: parseCommissionPercent(body.comissao_percentual),
+              rodizio_ativo: body.rodizio_ativo !== false,
               operadoras_info: { selecionadas: operadoras },
             })
             .eq('id', profileWithCorretor.corretor_id);
@@ -390,6 +400,8 @@ export async function PATCH(request: Request) {
               tipo_campanha: body.tipo_campanha || 'ambos',
               time_operacional: timeOperacional,
               gestor_trafego_id: gestorTrafegoId,
+              comissao_percentual: parseCommissionPercent(body.comissao_percentual),
+              rodizio_ativo: body.rodizio_ativo !== false,
               operadoras_info: { selecionadas: operadoras },
             }])
             .select('id')

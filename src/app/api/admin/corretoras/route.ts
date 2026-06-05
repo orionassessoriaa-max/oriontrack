@@ -12,7 +12,7 @@ function isMissingCorretorasTable(error?: { message?: string | null } | null) {
 
 export async function GET(request: Request) {
   try {
-    const guard = await requireApiUser(request, ['admin']);
+    const guard = await requireApiUser(request, ['admin', 'gestor_trafego']);
     if ('error' in guard) return guard.error;
 
     const { data, error } = await supabaseAdmin

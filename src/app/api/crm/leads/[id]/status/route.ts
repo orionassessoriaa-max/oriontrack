@@ -18,9 +18,11 @@ function boolOrNull(value: unknown) {
   return ['true', 'sim', '1', 'yes'].includes(String(value).toLowerCase());
 }
 
-function calculateCommission(value: unknown) {
+function calculateCommission(value: unknown, percent: unknown) {
   const numeric = numericOrNull(value);
-  return numeric === null ? null : numeric * 2.5;
+  const rate = Number(percent);
+  const safeRate = Number.isFinite(rate) && rate >= 0 ? rate : 2.5;
+  return numeric === null ? null : numeric * safeRate;
 }
 
 function monthStart() {
@@ -47,7 +49,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const { data: lead } = await supabaseAdmin
       .from('leads')
-      .select('id, corretor_id, responsavel_profile_id')
+      .select('id, corretor_id, responsavel_profile_id, corretores:corretor_id(comissao_percentual)')
       .eq('id', leadId)
       .maybeSingle();
 
@@ -75,7 +77,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if ('sem_interesse_fez_cotacao' in body) updatePayload.sem_interesse_fez_cotacao = boolOrNull(body.sem_interesse_fez_cotacao);
 
     if (status !== 'Sem interesse' && 'valor_negociacao' in body) {
-      updatePayload.valor_comissao = calculateCommission(body.valor_negociacao);
+      const corretor = Array.isArray((lead as any).corretores) ? (lead as any).corretores[0] : (lead as any).corretores;
+      updatePayload.valor_comissao = calculateCommission(body.valor_negociacao, corretor?.comissao_percentual);
     }
 
     const { data: updated, error: updateError } = await supabaseAdmin

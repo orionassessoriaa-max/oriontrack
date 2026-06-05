@@ -97,6 +97,14 @@ async function resolveCorretorId(body: any) {
 }
 
 async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
+  const { data: broker } = await supabaseAdmin
+    .from('corretores')
+    .select('rodizio_ativo')
+    .eq('id', corretorId)
+    .maybeSingle();
+
+  if (broker?.rodizio_ativo === false) return null;
+
   const { data: team } = await supabaseAdmin
     .from('corretor_times')
     .select('id, proximo_indice')

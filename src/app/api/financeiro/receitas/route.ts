@@ -76,7 +76,7 @@ export async function GET(request: Request) {
     const limited = rateLimit(request, 'financeiro:receitas:read', { limit: 120, windowMs: 60_000 });
     if (limited) return limited;
 
-    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro']);
+    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin']);
     if ('error' in guard) return guard.error;
 
     const url = new URL(request.url);
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     const limited = rateLimit(request, 'financeiro:receitas:write', { limit: 60, windowMs: 60_000 });
     if (limited) return limited;
 
-    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro']);
+    const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin']);
     if ('error' in guard) return guard.error;
 
     const body = await request.json();

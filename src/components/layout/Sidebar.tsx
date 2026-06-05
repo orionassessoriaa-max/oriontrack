@@ -227,26 +227,18 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   ];
 
   const corretorMenu = [
-    { icon: Home, label: 'Inicio', href: '/dashboard' },
-    { icon: Inbox, label: 'CRM', href: '/crm' },
-    { icon: WalletCards, label: 'Financeiro', href: '/financeiro' },
-    { icon: Calculator, label: 'Simulador', href: '/simulador' },
-    { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Users, label: 'Leads', href: '/leads' },
-    { icon: UserPlus, label: 'Meu time', href: '/time' },
-    { icon: Palette, label: 'Criativos', href: '/criativos' },
-    { icon: Globe, label: 'Minha Pagina', href: '/minha-pagina' },
+    { icon: Calculator, label: 'Simulador', href: '/simulador' },
+    { icon: Inbox, label: 'CRM', href: '/crm' },
+    { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
-    { icon: HelpCircle, label: 'Ajuda Orion', href: '/ajuda' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
   const corretorMemberMenu = [
-    { icon: Home, label: 'Inicio', href: '/dashboard' },
-    { icon: Inbox, label: 'CRM', href: '/crm' },
-    { icon: WalletCards, label: 'Financeiro', href: '/financeiro' },
-    { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: Users, label: 'Leads', href: '/leads' },
+    { icon: Calculator, label: 'Simulador', href: '/simulador' },
+    { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
@@ -267,8 +259,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
         { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
       ];
     }
+    if (profile?.tipo_usuario === 'gestor_trafego') return adminMenu.filter((item) => item.href !== '/admin/configuracoes' && item.href !== '/admin/usuarios');
     if (profile?.tipo_usuario === 'admin') return adminMenu;
-    if (profile?.tipo_usuario === 'gestor_trafego') return trafficMenu;
     if (profile?.tipo_usuario === 'designer') return designerMenu;
     if (profile?.tipo_usuario === 'account_manager') return accountMenu;
     if (profile?.tipo_usuario === 'corretor_membro') return corretorMemberMenu;

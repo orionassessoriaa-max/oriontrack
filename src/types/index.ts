@@ -35,6 +35,8 @@ export interface Corretor {
     cargo: string;
   }>;
   gestor_trafego_id?: string | null;
+  comissao_percentual?: number | string | null;
+  rodizio_ativo?: boolean | null;
   crm_api_url?: string | null;
   facebook_login?: string | null;
   facebook_senha?: string | null;

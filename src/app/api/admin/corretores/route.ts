@@ -34,6 +34,12 @@ async function resolveGestorTrafegoId(explicitId: unknown, timeOperacional: any[
   return (profiles || []).find((profile) => normalizeText(profile.nome) === memberName)?.id || null;
 }
 
+function parseCommissionPercent(value: unknown) {
+  const parsed = Number(String(value ?? '2.5').replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed < 0) return 2.5;
+  return Math.min(parsed, 100);
+}
+
 export async function POST(request: Request) {
   try {
     // 1. Validar Variáveis de Ambiente
@@ -141,7 +147,9 @@ export async function POST(request: Request) {
           tipo_campanha: tipo_campanha || 'ambos',
           observacoes: observacoes || null,
           time_operacional: teamMembers,
-          gestor_trafego_id: resolvedGestorTrafegoId
+          gestor_trafego_id: resolvedGestorTrafegoId,
+          comissao_percentual: parseCommissionPercent(body.comissao_percentual),
+          rodizio_ativo: body.rodizio_ativo !== false
         }])
         .select()
         .single();

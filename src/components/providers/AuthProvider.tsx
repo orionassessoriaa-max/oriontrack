@@ -163,7 +163,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setViewingProfile(brokerProfile);
     clearViewingStorage();
     window.sessionStorage.setItem('orion:viewing_corretor_id', corretorId);
-    router.push('/dashboard');
+    router.push('/leads');
   };
 
   const startViewingAsGestor = async (gestorId: string) => {

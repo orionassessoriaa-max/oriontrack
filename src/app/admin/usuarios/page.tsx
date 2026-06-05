@@ -46,6 +46,8 @@ const initialForm = {
   tipo_campanha: 'ambos' as TipoCampanha,
   operadoras: [] as string[],
   time_operacional: [] as OrionTeamMember[],
+  comissao_percentual: '2.5',
+  rodizio_ativo: true,
   foto_url: '',
   operadora_outros: '',
   equipe_orion: '' as '' | 'apollo' | 'kripto_hunters',
@@ -116,6 +118,8 @@ export default function AdminUsuariosPage() {
       tipo_campanha: (corretor?.tipo_campanha as TipoCampanha) || 'ambos',
       operadoras: customOperadora ? [...knownOperadoras.filter((item) => item !== 'Outros'), 'Outros'] : knownOperadoras,
       time_operacional: Array.isArray(corretor?.time_operacional) ? corretor.time_operacional as OrionTeamMember[] : [],
+      comissao_percentual: String(corretor?.comissao_percentual ?? '2.5'),
+      rodizio_ativo: corretor?.rodizio_ativo !== false,
       foto_url: profile.foto_url || '',
       operadora_outros: customOperadora || '',
       equipe_orion: profile.tipo_usuario === 'corretor' ? '' : (profile.equipe_orion || ''),
@@ -690,6 +694,34 @@ export default function AdminUsuariosPage() {
                     <option value="ambos">Ambos</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">% comissao</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={form.comissao_percentual}
+                    onChange={(event) => setForm((current) => ({ ...current, comissao_percentual: event.target.value }))}
+                    placeholder="2.5"
+                    className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <p className="mt-2 text-[10px] font-bold text-slate-400">Usado para calcular automaticamente a comissao quando virar venda.</p>
+                </div>
+
+                <label className="mt-7 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-5 py-4">
+                  <span>
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400">Rodizio automatico</span>
+                    <span className="mt-1 block text-xs font-bold text-slate-400">Desative para a admin principal distribuir manualmente.</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={form.rodizio_ativo}
+                    onChange={(event) => setForm((current) => ({ ...current, rodizio_ativo: event.target.checked }))}
+                    className="h-5 w-5"
+                  />
+                </label>
               </>
             )}
           </div>

@@ -115,7 +115,7 @@ export async function GET(request: Request) {
         .eq('id', user.id)
         .single();
   
-      if (profile?.tipo_usuario !== 'admin') {
+      if (!['admin', 'gestor_trafego'].includes(profile?.tipo_usuario)) {
         return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
       }
   

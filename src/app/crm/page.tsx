@@ -100,8 +100,8 @@ function formatCurrencyValue(value?: string | number | null) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseCurrencyInput(value));
 }
 
-function calculateCommissionFromSale(value?: string | number | null) {
-  return parseCurrencyInput(value) * 2.5;
+function calculateCommissionFromSale(value?: string | number | null, percent = 2.5) {
+  return parseCurrencyInput(value) * percent;
 }
 
 function requiresCommercialData(status: LeadStatus) {
@@ -193,6 +193,7 @@ export default function CrmPage() {
   const [conversas, setConversas] = useState<WhatsAppConversa[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [tipoCampanha, setTipoCampanha] = useState<TipoCampanha | null>('ambos');
+  const [commissionPercent, setCommissionPercent] = useState(2.5);
   const [search, setSearch] = useState('');
   const [pageFilter, setPageFilter] = useState('todas');
   const [metricFilter, setMetricFilter] = useState<MetricFilter>('todos');
@@ -237,6 +238,7 @@ export default function CrmPage() {
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
+  const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
 
   // Metrics Dashboard States
   const [crmView, setCrmView] = useState<'board' | 'analytics'>('board');
@@ -373,11 +375,12 @@ export default function CrmPage() {
       if (['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario) && profile.corretor_id) {
         const { data: corretor } = await supabase
           .from('corretores')
-          .select('tipo_campanha')
+          .select('tipo_campanha, comissao_percentual')
           .eq('id', profile.corretor_id)
           .maybeSingle();
 
         setTipoCampanha((corretor?.tipo_campanha as TipoCampanha | null) || 'ambos');
+        setCommissionPercent(Number(corretor?.comissao_percentual ?? 2.5) || 2.5);
       }
 
       if (profile.tipo_usuario === 'corretor' || profile.tipo_usuario === 'corretor_admin') {
@@ -766,7 +769,7 @@ export default function CrmPage() {
 
     const payload = {
       valor_negociacao: parseCurrencyInput(commercialModal.valor_negociacao),
-      valor_comissao: calculateCommissionFromSale(commercialModal.valor_negociacao),
+      valor_comissao: calculateCommissionFromSale(commercialModal.valor_negociacao, commissionPercent),
     };
 
     if (!payload.valor_negociacao) {
@@ -992,7 +995,7 @@ export default function CrmPage() {
         operadora: editForm.operadora || null,
         valor_negociacao: editForm.valor_negociacao ? parseCurrencyInput(editForm.valor_negociacao) : null,
         operadora_negociacao: editForm.operadora_negociacao || null,
-        valor_comissao: editForm.valor_negociacao ? calculateCommissionFromSale(editForm.valor_negociacao) : null,
+        valor_comissao: editForm.valor_negociacao ? calculateCommissionFromSale(editForm.valor_negociacao, commissionPercent) : null,
         etiqueta: editForm.etiqueta || null,
         observacoes: editForm.observacoes || null,
         status: editForm.status,
@@ -1278,7 +1281,7 @@ export default function CrmPage() {
                                   {requiresCommercialData(normalizeLeadStatus(lead.status)) && (
                                     <>
                                       <span>Negociação: {formatCurrencyValue(lead.valor_negociacao)}</span>
-                                      <span>Comissão: {formatCurrencyValue(lead.valor_comissao)}</span>
+                                      {canViewCommission && <span>Comissão: {formatCurrencyValue(lead.valor_comissao)}</span>}
                                     </>
                                   )}
                                 </div>
@@ -1455,7 +1458,7 @@ export default function CrmPage() {
                       }} />
                       <EditField label="Valor negociação" value={editForm.valor_negociacao} onChange={(value) => setEditForm((prev) => ({ ...prev, valor_negociacao: value }))} />
                       <EditField label="Operadora venda" value={editForm.operadora_negociacao} onChange={(value) => setEditForm((prev) => ({ ...prev, operadora_negociacao: value }))} />
-                      <InfoCard label="Comissão automática" value={formatCurrencyValue(calculateCommissionFromSale(editForm.valor_negociacao))} />
+                      {canViewCommission && <InfoCard label="Comissão automática" value={formatCurrencyValue(calculateCommissionFromSale(editForm.valor_negociacao, commissionPercent))} />}
                     </div>
                     <label className="mt-3 block">
                       <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400">Observações internas</span>
@@ -1477,7 +1480,7 @@ export default function CrmPage() {
                     <InfoCard label="Etiqueta" value={selectedLead.etiqueta || '-'} />
                     <InfoCard label="Valor negociação" value={selectedLead.valor_negociacao ? formatCurrencyValue(selectedLead.valor_negociacao) : '-'} />
                     <InfoCard label="Operadora venda" value={selectedLead.operadora_negociacao || '-'} />
-                    <InfoCard label="Comissão" value={selectedLead.valor_comissao ? formatCurrencyValue(selectedLead.valor_comissao) : '-'} />
+                    {canViewCommission && <InfoCard label="Comissão" value={selectedLead.valor_comissao ? formatCurrencyValue(selectedLead.valor_comissao) : '-'} />}
                     {selectedLead.sem_interesse_motivo && (
                       <InfoCard label="Motivo sem interesse" value={selectedLead.sem_interesse_motivo} />
                     )}
@@ -2040,11 +2043,13 @@ export default function CrmPage() {
                   />
                 </label>
 
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
-                  <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-emerald-700">Comissão calculada automaticamente</span>
-                  <p className="text-lg font-black text-emerald-800">{formatCurrencyValue(calculateCommissionFromSale(commercialModal.valor_negociacao))}</p>
-                  <p className="mt-1 text-xs font-bold text-emerald-700">250% sobre o valor da negociação.</p>
-                </div>
+                {canViewCommission && (
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                    <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-emerald-700">Comissão calculada automaticamente</span>
+                    <p className="text-lg font-black text-emerald-800">{formatCurrencyValue(calculateCommissionFromSale(commercialModal.valor_negociacao, commissionPercent))}</p>
+                    <p className="mt-1 text-xs font-bold text-emerald-700">{commissionPercent}% sobre o valor da negociação.</p>
+                  </div>
+                )}
               </div>
             )}
 

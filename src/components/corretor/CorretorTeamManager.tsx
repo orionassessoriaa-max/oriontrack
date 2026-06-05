@@ -125,6 +125,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [skipOnboarding, setSkipOnboarding] = useState(false);
   const [showAddMemberForm, setShowAddMemberForm] = useState(false);
   const canAssignLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
+  const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const displayTeamName = brokerageName || team?.nome || 'Time comercial';
 
   const memberStats = useMemo<MemberStats[]>(() => {
@@ -781,7 +782,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           { label: 'Leads do time', value: teamSummary.total, detail: `${teamSummary.assigned} atribuídos`, icon: Users, tone: 'blue' },
           { label: 'Sem resposta', value: teamSummary.semResposta, detail: 'precisam de atenção', icon: Target, tone: 'amber' },
           { label: 'Vendas', value: teamSummary.sales, detail: `${teamSummary.conversion}% conversão`, icon: TrendingUp, tone: 'emerald' },
-          { label: 'Comissão', value: currency(teamSummary.comissao), detail: `${currency(teamSummary.receita)} em vendas`, icon: BarChart3, tone: 'slate' },
+          ...(canViewCommission ? [{ label: 'Comissão', value: currency(teamSummary.comissao), detail: `${currency(teamSummary.receita)} em vendas`, icon: BarChart3, tone: 'slate' }] : []),
         ].map((card) => {
           const Icon = card.icon;
           const tone = {
@@ -829,7 +830,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-white group-hover:text-cyan-400 transition-colors">{member.nome}</p>
                       <p className="text-xs font-bold text-slate-400 mt-1">
-                        {member.totalLeads} leads | {member.vendas} vendas | {currency(member.comissao)} comissão
+                        {member.totalLeads} leads | {member.vendas} vendas{canViewCommission ? ` | ${currency(member.comissao)} comissão` : ''}
                       </p>
                     </div>
                     <span className="text-lg font-black text-cyan-400">{width}%</span>
@@ -1156,7 +1157,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                     </div>
 
                     {/* Bottom Row: 4 metrics side-by-side, fully responsive */}
-                    <div className="grid grid-cols-4 gap-2 sm:gap-3 mt-1 border-t border-white/5 pt-4">
+                    <div className={`grid ${canViewCommission ? 'grid-cols-4' : 'grid-cols-3'} gap-2 sm:gap-3 mt-1 border-t border-white/5 pt-4`}>
                       <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
                         <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider">Leads</p>
                         <p className="text-sm font-black text-white mt-0.5">{member.totalLeads}</p>
@@ -1169,10 +1170,12 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                         <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Vendas</p>
                         <p className="text-sm font-black text-white mt-0.5">{member.vendas}</p>
                       </div>
-                      <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
-                        <p className="text-[9px] font-bold text-purple-400 uppercase tracking-wider">Comissão</p>
-                        <p className="text-xs font-black text-white mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{currency(member.comissao)}</p>
-                      </div>
+                      {canViewCommission && (
+                        <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
+                          <p className="text-[9px] font-bold text-purple-400 uppercase tracking-wider">Comissão</p>
+                          <p className="text-xs font-black text-white mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{currency(member.comissao)}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
