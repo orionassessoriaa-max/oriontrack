@@ -229,6 +229,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   ];
 
   const corretorMenu = [
+    { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
@@ -238,6 +239,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   ];
 
   const corretorMemberMenu = [
+    { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
