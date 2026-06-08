@@ -85,6 +85,7 @@ export interface Lead {
   tipo_plano?: string | null;
   valor_venda?: number | string | null;
   valor_comissao?: number | string | null;
+  comissao_percentual?: number | string | null;
   sem_interesse_motivo?: string | null;
   sem_interesse_fez_cotacao?: boolean | null;
   cadencia_ativa?: boolean | null;

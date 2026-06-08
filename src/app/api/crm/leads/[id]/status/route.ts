@@ -8,7 +8,7 @@ const ALLOWED_STATUSES = LEAD_STATUSES;
 
 function numericOrNull(value: unknown) {
   if (value === null || value === undefined || value === '') return null;
-  const parsed = Number(value);
+  const parsed = Number(String(value).replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -22,7 +22,7 @@ function calculateCommission(value: unknown, percent: unknown) {
   const numeric = numericOrNull(value);
   const rate = Number(percent);
   const safeRate = Number.isFinite(rate) && rate >= 0 ? rate : 2.5;
-  return numeric === null ? null : numeric * safeRate;
+  return numeric === null ? null : numeric * (safeRate / 100);
 }
 
 function monthStart() {
@@ -49,7 +49,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const { data: lead } = await supabaseAdmin
       .from('leads')
-      .select('id, corretor_id, responsavel_profile_id, corretores:corretor_id(comissao_percentual)')
+      .select('id, corretor_id, responsavel_profile_id, comissao_percentual, corretores:corretor_id(comissao_percentual)')
       .eq('id', leadId)
       .maybeSingle();
 
@@ -73,19 +73,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if ('valor_negociacao' in body) updatePayload.valor_negociacao = numericOrNull(body.valor_negociacao);
     if ('operadora_negociacao' in body) updatePayload.operadora_negociacao = body.operadora_negociacao ? String(body.operadora_negociacao).trim() : null;
     if ('valor_comissao' in body) updatePayload.valor_comissao = numericOrNull(body.valor_comissao);
+    if ('comissao_percentual' in body) updatePayload.comissao_percentual = numericOrNull(body.comissao_percentual);
     if ('sem_interesse_motivo' in body) updatePayload.sem_interesse_motivo = body.sem_interesse_motivo ? String(body.sem_interesse_motivo).trim() : null;
     if ('sem_interesse_fez_cotacao' in body) updatePayload.sem_interesse_fez_cotacao = boolOrNull(body.sem_interesse_fez_cotacao);
 
     if (status !== 'Sem interesse' && 'valor_negociacao' in body) {
       const corretor = Array.isArray((lead as any).corretores) ? (lead as any).corretores[0] : (lead as any).corretores;
-      updatePayload.valor_comissao = calculateCommission(body.valor_negociacao, corretor?.comissao_percentual);
+      const commissionPercent = numericOrNull(body.comissao_percentual) ?? numericOrNull((lead as any).comissao_percentual) ?? numericOrNull(corretor?.comissao_percentual) ?? 2.5;
+      updatePayload.comissao_percentual = commissionPercent;
+      updatePayload.valor_comissao = calculateCommission(body.valor_negociacao, commissionPercent);
     }
 
     const { data: updated, error: updateError } = await supabaseAdmin
       .from('leads')
       .update(updatePayload)
       .eq('id', leadId)
-      .select('id, status, valor_negociacao, operadora_negociacao, valor_comissao, sem_interesse_motivo, sem_interesse_fez_cotacao')
+      .select('id, status, valor_negociacao, operadora_negociacao, valor_comissao, comissao_percentual, sem_interesse_motivo, sem_interesse_fez_cotacao')
       .single();
 
     if (updateError) {

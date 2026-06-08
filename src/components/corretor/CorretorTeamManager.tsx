@@ -37,6 +37,7 @@ type Credentials = {
 
 type TeamSettings = {
   owner_in_distribution: boolean;
+  rodizio_ativo: boolean;
   owner_profile: {
     id: string;
     nome: string;
@@ -116,6 +117,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<TeamSettings>({
     owner_in_distribution: false,
+    rodizio_ativo: true,
     owner_profile: null,
     owner_profiles: [],
   });
@@ -210,7 +212,12 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     setBrokerageName(payload.brokerage_name || payload.team?.nome || '');
     setMembros(payload.membros || []);
     setLeads(payload.leads || []);
-    setSettings(payload.settings || { owner_in_distribution: false, owner_profile: null, owner_profiles: [] });
+    setSettings({
+      owner_in_distribution: Boolean(payload.settings?.owner_in_distribution),
+      rodizio_ativo: payload.settings?.rodizio_ativo !== false,
+      owner_profile: payload.settings?.owner_profile || null,
+      owner_profiles: payload.settings?.owner_profiles || [],
+    });
     setLoading(false);
   }
 
@@ -362,6 +369,8 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
 
     try {
       await postTeam({ action: 'toggle_distribution', active });
+      setSettings((current) => ({ ...current, rodizio_ativo: active }));
+      setTeam((current) => current ? { ...current, ativo: active } : current);
       await fetchTeam();
     } catch (err: any) {
       setError(err.message);
@@ -965,8 +974,8 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       <input
                         type="checkbox"
                         className="peer sr-only"
-                        checked={team?.ativo ?? true}
-                        disabled={settingsSaving || !team}
+                        checked={settings.rodizio_ativo}
+                        disabled={settingsSaving}
                         onChange={(event) => toggleTeamDistribution(event.target.checked)}
                       />
                       <span className="h-6 w-11 rounded-full bg-white/10 transition peer-checked:bg-cyan-500 peer-disabled:opacity-50" />

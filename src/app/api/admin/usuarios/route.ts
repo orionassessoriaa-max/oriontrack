@@ -364,22 +364,27 @@ export async function PATCH(request: Request) {
         const operadoras = Array.isArray(body.operadoras) ? body.operadoras : [];
         const gestorTrafegoId = await resolveGestorTrafegoId(body.gestor_trafego_id, timeOperacional);
         const telefone = String(body.telefone || '').trim() || 'Sem telefone';
+        const corretorUpdatePayload: Record<string, unknown> = {
+          nome,
+          email_real: emailReal,
+          telefone,
+          nome_empresa: body.nome_empresa || null,
+          tipo_campanha: body.tipo_campanha || 'ambos',
+          time_operacional: timeOperacional,
+          gestor_trafego_id: gestorTrafegoId,
+          operadoras_info: { selecionadas: operadoras },
+        };
+        if (Object.prototype.hasOwnProperty.call(body, 'comissao_percentual')) {
+          corretorUpdatePayload.comissao_percentual = parseCommissionPercent(body.comissao_percentual);
+        }
+        if (Object.prototype.hasOwnProperty.call(body, 'rodizio_ativo')) {
+          corretorUpdatePayload.rodizio_ativo = body.rodizio_ativo !== false;
+        }
 
         if (profileWithCorretor?.corretor_id) {
           await supabaseAdmin
             .from('corretores')
-            .update({
-              nome,
-              email_real: emailReal,
-              telefone,
-              nome_empresa: body.nome_empresa || null,
-              tipo_campanha: body.tipo_campanha || 'ambos',
-              time_operacional: timeOperacional,
-              gestor_trafego_id: gestorTrafegoId,
-              comissao_percentual: parseCommissionPercent(body.comissao_percentual),
-              rodizio_ativo: body.rodizio_ativo !== false,
-              operadoras_info: { selecionadas: operadoras },
-            })
+            .update(corretorUpdatePayload)
             .eq('id', profileWithCorretor.corretor_id);
         } else {
           const { data: existingCorretor } = await supabaseAdmin

@@ -219,6 +219,14 @@ export default function AdminUsuariosPage() {
       : form.operadoras;
 
     const isEditing = Boolean(editingProfile);
+    const userPayload = {
+      ...form,
+      operadoras,
+      gestor_trafego_id: gestorTrafegoId,
+    };
+    delete (userPayload as Partial<typeof form>).comissao_percentual;
+    delete (userPayload as Partial<typeof form>).rodizio_ativo;
+
     const response = await fetch('/api/admin/usuarios', {
       method: isEditing ? 'PATCH' : 'POST',
       headers: {
@@ -226,8 +234,8 @@ export default function AdminUsuariosPage() {
         Authorization: `Bearer ${token}`
       },
       body: JSON.stringify(isEditing
-        ? { ...form, id: editingProfile?.id, action: 'update_profile', operadoras, gestor_trafego_id: gestorTrafegoId }
-        : { ...form, operadoras, email: accessEmail, gestor_trafego_id: gestorTrafegoId }
+        ? { ...userPayload, id: editingProfile?.id, action: 'update_profile' }
+        : { ...userPayload, email: accessEmail }
       )
     });
     const payload = await response.json();
@@ -695,33 +703,6 @@ export default function AdminUsuariosPage() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">% comissao</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    value={form.comissao_percentual}
-                    onChange={(event) => setForm((current) => ({ ...current, comissao_percentual: event.target.value }))}
-                    placeholder="2.5"
-                    className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
-                  />
-                  <p className="mt-2 text-[10px] font-bold text-slate-400">Usado para calcular automaticamente a comissao quando virar venda.</p>
-                </div>
-
-                <label className="mt-7 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-5 py-4">
-                  <span>
-                    <span className="block text-[10px] font-black uppercase tracking-widest text-gray-400">Rodizio automatico</span>
-                    <span className="mt-1 block text-xs font-bold text-slate-400">Desative para a admin principal distribuir manualmente.</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={form.rodizio_ativo}
-                    onChange={(event) => setForm((current) => ({ ...current, rodizio_ativo: event.target.checked }))}
-                    className="h-5 w-5"
-                  />
-                </label>
               </>
             )}
           </div>

@@ -98,7 +98,7 @@ async function ensureTeam(corretorId: string, nome = 'Time comercial') {
 async function getCorretorIdentity(corretorId: string) {
   const { data } = await supabaseAdmin
     .from('corretores')
-    .select('id, nome, nome_empresa')
+    .select('id, nome, nome_empresa, rodizio_ativo')
     .eq('id', corretorId)
     .maybeSingle();
 
@@ -151,6 +151,7 @@ export async function GET(request: Request) {
         settings: {
           owner_in_distribution: false,
           owner_profile: null,
+          rodizio_ativo: corretorIdentity?.rodizio_ativo !== false,
         },
       });
     }
@@ -209,6 +210,7 @@ export async function GET(request: Request) {
         owner_in_distribution: ownerInDistribution,
         owner_profiles: ownerProfiles,
         owner_profile: ownerProfiles[0] || null,
+        rodizio_ativo: corretorIdentity?.rodizio_ativo !== false,
       },
     });
   } catch (error: any) {
@@ -368,6 +370,13 @@ export async function POST(request: Request) {
 
       if (error) throw error;
 
+      const { error: brokerRotationError } = await supabaseAdmin
+        .from('corretores')
+        .update({ rodizio_ativo: active })
+        .eq('id', corretorId);
+
+      if (brokerRotationError) throw brokerRotationError;
+
       await writeAuditLog(request, guard.profile, {
         action: 'team.distribution.toggle',
         entity_type: 'corretor_times',
@@ -375,7 +384,7 @@ export async function POST(request: Request) {
         metadata: { corretor_id: corretorId, active },
       });
 
-      return NextResponse.json({ success: true, team: data });
+      return NextResponse.json({ success: true, team: data, settings: { rodizio_ativo: active } });
     }
 
     if (action === 'toggle_owner_member') {
