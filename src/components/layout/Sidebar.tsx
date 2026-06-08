@@ -231,9 +231,12 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const corretorMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
-    { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
+    { icon: WalletCards, label: 'Financeiro', href: '/financeiro' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
+    { icon: ClipboardList, label: 'Kanban', href: '/kanban' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
+    { icon: Globe, label: 'Minha Pagina', href: '/minha-pagina' },
+    { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Trophy, label: 'Meu time', href: '/time' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
@@ -242,9 +245,9 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const corretorMemberMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
-    { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
+    { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
