@@ -44,6 +44,8 @@ interface CorretoraRecord {
   nome: string;
   descricao?: string | null;
   status?: string | null;
+  meta_ad_account_id?: string | null;
+  meta_ad_account_name?: string | null;
 }
 
 type CorretoraMember = {
@@ -123,8 +125,8 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
       is_empresa: true,
       corretoresRows: [],
       profiles: [],
-      meta_ad_account_name: null,
-      meta_ad_account_id: null,
+      meta_ad_account_id: corretora.meta_ad_account_id || null,
+      meta_ad_account_name: corretora.meta_ad_account_name || null,
       status: corretora.status || 'ativo',
       empty: true,
       corretora_id: corretora.id,

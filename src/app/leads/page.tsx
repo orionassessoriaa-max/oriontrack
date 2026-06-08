@@ -326,12 +326,17 @@ export default function BrokerLeadsPage() {
       return;
     }
 
-    const member = teamMembers.find((item) => item.id === memberId);
+    const assignedMember = payload.member || null;
+    const member = teamMembers.find((item) => item.id === memberId) || assignedMember;
+    const nextMemberId = assignedMember?.id || memberId;
     setLeads((current) => current.map((lead) => lead.id === leadId ? {
       ...lead,
-      responsavel_membro_id: memberId && memberId !== 'unassigned' ? memberId : null,
+      responsavel_membro_id: nextMemberId && nextMemberId !== 'unassigned' ? nextMemberId : null,
       responsavel_membro: member ? { nome: member.nome, email: member.email } : null,
     } : lead));
+    if (assignedMember && !teamMembers.some((item) => item.id === assignedMember.id)) {
+      setTeamMembers((current) => [...current.filter((item) => item.id !== memberId), assignedMember]);
+    }
     setSavingStatusId(null);
   };
 
@@ -834,7 +839,7 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Comissão</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
-                  <th className="min-w-[180px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">ResponsÃ¡vel</th>
+                  <th className="min-w-[180px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Responsavel</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Campanha</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Conjunto</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Anuncio</th>
@@ -936,7 +941,7 @@ export default function BrokerLeadsPage() {
                           onChange={(event) => assignLeadToMember(lead.id, event.target.value)}
                           className="w-full min-w-[170px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500/20"
                         >
-                          <option value="unassigned">Sem responsável (Liberado)</option>
+                          <option value="unassigned">Sem responsavel (liberado)</option>
                           {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
                         </select>
                       ) : (

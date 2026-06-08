@@ -346,9 +346,19 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
               <Loader2 className="animate-spin text-blue-500" size={16} />
             ) : (() => {
               const menuItems = getMenu();
+              const pinnedSettings = profile?.tipo_usuario === 'admin'
+                ? menuItems.find((item) => item.href === '/admin/configuracoes' && item.label === 'Configurações')
+                : undefined;
+              const menuWithoutPinned = pinnedSettings
+                ? menuItems.filter((item) => item !== pinnedSettings)
+                : menuItems;
               const hasMore = menuItems.length > 5;
-              const directItems = hasMore ? menuItems.slice(0, 4) : menuItems;
-              const dropdownItems = hasMore ? menuItems.slice(4) : [];
+              const directItems = hasMore
+                ? [...menuWithoutPinned.slice(0, pinnedSettings ? 3 : 4), ...(pinnedSettings ? [pinnedSettings] : [])]
+                : menuItems;
+              const dropdownItems = hasMore
+                ? menuWithoutPinned.slice(pinnedSettings ? 3 : 4)
+                : [];
               
               return (
                 <>

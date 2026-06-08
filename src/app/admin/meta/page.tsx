@@ -14,10 +14,33 @@ interface CorretoraGroup {
   corretores: Corretor[];
   meta_ad_account_id?: string | null;
   meta_ad_account_name?: string | null;
+  corretora_id?: string | null;
 }
 
-function groupCorretoresToCorretoras(corretoresList: Corretor[]): CorretoraGroup[] {
+type CorretoraRecord = {
+  id: string;
+  nome: string;
+  meta_ad_account_id?: string | null;
+  meta_ad_account_name?: string | null;
+};
+
+function groupCorretoresToCorretoras(corretoresList: Corretor[], corretorasList: CorretoraRecord[] = []): CorretoraGroup[] {
   const groups: { [key: string]: CorretoraGroup } = {};
+
+  corretorasList.forEach((corretora) => {
+    const name = String(corretora.nome || '').trim();
+    if (!name) return;
+    const key = `empresa:${name.toLowerCase()}`;
+    groups[key] = {
+      id: corretora.id,
+      nome: name,
+      is_empresa: true,
+      corretores: [],
+      meta_ad_account_id: corretora.meta_ad_account_id || null,
+      meta_ad_account_name: corretora.meta_ad_account_name || null,
+      corretora_id: corretora.id,
+    };
+  });
 
   corretoresList.forEach((c) => {
     const key = c.nome_empresa ? `empresa:${c.nome_empresa.trim().toLowerCase()}` : `individual:${c.id}`;
@@ -31,6 +54,7 @@ function groupCorretoresToCorretoras(corretoresList: Corretor[]): CorretoraGroup
         corretores: [],
         meta_ad_account_id: c.meta_ad_account_id,
         meta_ad_account_name: c.meta_ad_account_name,
+        corretora_id: null,
       };
     }
 
@@ -48,6 +72,7 @@ export default function AdminMetaPage() {
   const { actualProfile } = useAuth();
   const [accounts, setAccounts] = useState<MetaAdAccount[]>([]);
   const [corretores, setCorretores] = useState<Corretor[]>([]);
+  const [corretorasCadastradas, setCorretorasCadastradas] = useState<CorretoraRecord[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -65,9 +90,10 @@ export default function AdminMetaPage() {
     setLoading(true);
     setError(null);
 
-    const [accountsRes, corretoresRes] = await Promise.all([
+    const [accountsRes, corretoresRes, corretorasRes] = await Promise.all([
       supabase.from('meta_ad_accounts').select('*').order('nome'),
       supabase.from('corretores').select('*').order('nome'),
+      supabase.from('corretoras').select('*').order('nome'),
     ]);
 
     const firstError = accountsRes.error || corretoresRes.error;
@@ -76,6 +102,7 @@ export default function AdminMetaPage() {
     } else {
       setAccounts((accountsRes.data || []) as MetaAdAccount[]);
       setCorretores((corretoresRes.data || []) as Corretor[]);
+      setCorretorasCadastradas((corretorasRes.error ? [] : (corretorasRes.data || [])) as CorretoraRecord[]);
     }
 
     setLoading(false);
@@ -86,8 +113,8 @@ export default function AdminMetaPage() {
   }, [isAdmin]);
 
   const corretoras = useMemo(() => {
-    return groupCorretoresToCorretoras(corretores);
-  }, [corretores]);
+    return groupCorretoresToCorretoras(corretores, corretorasCadastradas);
+  }, [corretores, corretorasCadastradas]);
 
   const filteredCorretoras = useMemo(() => {
     const term = search.toLowerCase();
@@ -149,8 +176,16 @@ export default function AdminMetaPage() {
 
     const { error: updateError } = await query;
 
-    if (updateError) {
-      setError(updateError.message);
+    const { error: brokerageUpdateError } = await supabase
+      .from('corretoras')
+      .update({
+        meta_ad_account_id: account?.meta_account_id || null,
+        meta_ad_account_name: account?.nome || null,
+      })
+      .ilike('nome', corretora.nome);
+
+    if (updateError || brokerageUpdateError) {
+      setError(updateError?.message || brokerageUpdateError?.message || 'Erro ao vincular conta Meta.');
       return;
     }
 

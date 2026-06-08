@@ -116,6 +116,17 @@ async function getOwnerProfiles(corretorId: string) {
   return data || [];
 }
 
+async function getAssignableProfiles(corretorId: string) {
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome, email, email_real, tipo_usuario')
+    .eq('corretor_id', corretorId)
+    .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
+    .eq('status', 'active');
+
+  return data || [];
+}
+
 export async function GET(request: Request) {
   try {
     const guard = await requireUser(request);
@@ -178,7 +189,10 @@ export async function GET(request: Request) {
       leads = leadsData || [];
     }
 
-    const ownerProfiles = await getOwnerProfiles(corretorId);
+    const [ownerProfiles, assignableProfiles] = await Promise.all([
+      getOwnerProfiles(corretorId),
+      getAssignableProfiles(corretorId),
+    ]);
     const ownerInDistribution = ownerProfiles.length > 0 && ownerProfiles.every((op) => 
       membros.some((m: any) => m.profile_id === op.id)
     );
@@ -199,6 +213,25 @@ export async function GET(request: Request) {
         foto_url: joinedProfile?.foto_url || null,
         tipo_usuario: joinedProfile?.tipo_usuario || 'corretor_membro',
       };
+    });
+
+    const knownProfileIds = new Set(membrosWithPhoto.map((member: any) => member.profile_id).filter(Boolean));
+    assignableProfiles.forEach((profile: any) => {
+      if (knownProfileIds.has(profile.id)) return;
+      membrosWithPhoto.push({
+        id: `profile:${profile.id}`,
+        time_id: team.id,
+        corretor_id: corretorId,
+        profile_id: profile.id,
+        nome: profile.nome,
+        email: profile.email_real || profile.email,
+        status: 'ativo',
+        ordem: 9999,
+        ultimo_lead_at: null,
+        created_at: null,
+        foto_url: null,
+        tipo_usuario: profile.tipo_usuario,
+      });
     });
 
     return NextResponse.json({
@@ -628,10 +661,62 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, unassigned: true });
       }
 
+      let resolvedMemberId = memberId;
+
+      if (memberId.startsWith('profile:')) {
+        const profileId = memberId.replace('profile:', '').trim();
+        const { data: assignableProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('id, nome, email, email_real')
+          .eq('id', profileId)
+          .eq('corretor_id', corretorId)
+          .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (!assignableProfile) return NextResponse.json({ error: 'Responsavel nao encontrado nesta conta.' }, { status: 404 });
+
+        const { data: existingMember } = await supabaseAdmin
+          .from('corretor_time_membros')
+          .select('id')
+          .eq('time_id', team.id)
+          .eq('profile_id', profileId)
+          .maybeSingle();
+
+        if (existingMember?.id) {
+          resolvedMemberId = existingMember.id;
+        } else {
+          const { data: lastMember } = await supabaseAdmin
+            .from('corretor_time_membros')
+            .select('ordem')
+            .eq('time_id', team.id)
+            .order('ordem', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          const { data: createdMember, error: createMemberError } = await supabaseAdmin
+            .from('corretor_time_membros')
+            .insert([{
+              time_id: team.id,
+              corretor_id: corretorId,
+              profile_id: profileId,
+              nome: assignableProfile.nome,
+              email: assignableProfile.email_real || assignableProfile.email,
+              status: 'ativo',
+              ordem: Number(lastMember?.ordem || 0) + 1,
+            }])
+            .select('id')
+            .single();
+
+          if (createMemberError) throw createMemberError;
+          resolvedMemberId = createdMember.id;
+        }
+      }
+
       const { data: member } = await supabaseAdmin
         .from('corretor_time_membros')
-        .select('id, profile_id')
-        .eq('id', memberId)
+        .select('id, profile_id, nome, email')
+        .eq('id', resolvedMemberId)
         .eq('corretor_id', corretorId)
         .in('status', ['active', 'ativo'])
         .maybeSingle();

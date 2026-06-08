@@ -440,13 +440,18 @@ export default function CrmPage() {
       return;
     }
 
-    const member = teamMembers.find((item) => item.id === memberId);
+    const assignedMember = payload.member || null;
+    const member = teamMembers.find((item) => item.id === memberId) || assignedMember;
+    const nextMemberId = assignedMember?.id || memberId;
     const assignedPayload = {
-      responsavel_membro_id: memberId && memberId !== 'unassigned' ? memberId : null,
+      responsavel_membro_id: nextMemberId && nextMemberId !== 'unassigned' ? nextMemberId : null,
       responsavel_membro: member ? { nome: member.nome, email: member.email } : null,
     };
     setLeads((current) => current.map((lead) => lead.id === leadId ? { ...lead, ...assignedPayload } : lead));
     setSelectedLead((current) => current?.id === leadId ? { ...current, ...assignedPayload } : current);
+    if (assignedMember && !teamMembers.some((item) => item.id === assignedMember.id)) {
+      setTeamMembers((current) => [...current.filter((item) => item.id !== memberId), assignedMember]);
+    }
     setAssigningLeadId(null);
   }
 
@@ -1436,7 +1441,7 @@ export default function CrmPage() {
                       onChange={(event) => assignLeadToMember(selectedLead.id, event.target.value)}
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20"
                     >
-                      <option value="unassigned">Sem responsável (Liberado para todos)</option>
+                      <option value="unassigned">Sem responsavel (liberado para todos)</option>
                       {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
                     </select>
                     {assigningLeadId === selectedLead.id && (
