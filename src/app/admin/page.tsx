@@ -76,6 +76,7 @@ export default function AdminCentralPage() {
 
   // Advanced Alerts State
   const [corretoresList, setCorretoresList] = useState<any[]>([]);
+  const [corretorasList, setCorretorasList] = useState<any[]>([]);
   const [gestoresList, setGestoresList] = useState<any[]>([]);
   const [alertsList, setAlertsList] = useState<any[]>([]);
   const [showNoBalanceModal, setShowNoBalanceModal] = useState(false);
@@ -128,7 +129,7 @@ export default function AdminCentralPage() {
         .eq('status', 'nova');
 
       // 5. Gestores e corretores
-      const [profilesRes, corretoresRes] = await Promise.all([
+      const [profilesRes, corretoresRes, corretorasRes] = await Promise.all([
         supabase
           .from('profiles')
           .select('id, nome, email')
@@ -136,10 +137,14 @@ export default function AdminCentralPage() {
           .in('status', ['active', 'ativo', 'Ativo']),
         supabase
           .from('corretores')
-          .select('id, nome, gestor_trafego_id, time_operacional, onboarding_status, status, nome_empresa, meta_ad_account_id, meta_ad_account_name')
+          .select('id, nome, gestor_trafego_id, time_operacional, onboarding_status, status, nome_empresa, meta_ad_account_id, meta_ad_account_name'),
+        supabase
+          .from('corretoras')
+          .select('id, nome, status, meta_ad_account_id, meta_ad_account_name')
       ]);
 
       const gestores = profilesRes.data || [];
+      const corretorasCadastradas = corretorasRes.error ? [] : (corretorasRes.data || []);
       const corretores = (corretoresRes.data || []).map((corretor) => ({
         ...corretor,
         gestor_resolvido_id: inferGestorIdFromTeam(corretor, gestores),
@@ -147,6 +152,7 @@ export default function AdminCentralPage() {
 
       setGestoresList(gestores);
       setCorretoresList(corretores);
+      setCorretorasList(corretorasCadastradas);
 
       const statsPorGestor = gestores.map(g => {
         const count = corretores.filter(c => c.gestor_resolvido_id === g.id).length;
@@ -155,11 +161,17 @@ export default function AdminCentralPage() {
 
       const activeCorretores = corretores.filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''));
       const corretorasAtivas = new Set(
-        activeCorretores
-          .map(c => String(c.nome_empresa || '').trim())
+        corretorasCadastradas
+          .filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''))
+          .map(c => String(c.nome || '').trim())
           .filter(Boolean)
           .map(nome => normalizeText(nome))
       );
+      activeCorretores
+        .map(c => String(c.nome_empresa || '').trim())
+        .filter(Boolean)
+        .map(nome => normalizeText(nome))
+        .forEach(nome => corretorasAtivas.add(nome));
       const semGestor = activeCorretores.filter(c => !c.gestor_resolvido_id).length;
       const semCorretora = activeCorretores.filter(c => !String(c.nome_empresa || '').trim()).length;
 
@@ -174,7 +186,6 @@ export default function AdminCentralPage() {
       setGestoresStats(statsPorGestor);
       setCorretoresSemGestor(semGestor);
       setCorretoresSemCorretora(semCorretora);
-
       // Fetch Meta spend/balance alerts
       const sessionRes = await supabase.auth.getSession();
       const token = sessionRes.data.session?.access_token;
@@ -270,35 +281,81 @@ export default function AdminCentralPage() {
   }, [corretoresList, gestoresList]);
 
   const noMetaList = useMemo(() => {
-    const groups = new Map<string, any[]>();
+    const groups = new Map<string, {
+      key: string;
+      id: string;
+      nome: string;
+      status: string;
+      meta_ad_account_id?: string | null;
+      meta_ad_account_name?: string | null;
+      corretores: any[];
+    }>();
+
+    corretorasList
+      .filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''))
+      .forEach(c => {
+        const nome = String(c.nome || '').trim();
+        if (!nome) return;
+        const key = `empresa:${normalizeText(nome)}`;
+        groups.set(key, {
+          key,
+          id: c.id,
+          nome,
+          status: c.status,
+          meta_ad_account_id: c.meta_ad_account_id,
+          meta_ad_account_name: c.meta_ad_account_name,
+          corretores: [],
+        });
+      });
 
     corretoresList
       .filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''))
       .forEach(c => {
         const corretoraNome = String(c.nome_empresa || '').trim();
         const key = corretoraNome ? `empresa:${normalizeText(corretoraNome)}` : `corretor:${c.id}`;
-        groups.set(key, [...(groups.get(key) || []), c]);
+        const existing = groups.get(key);
+
+        if (existing) {
+          existing.corretores.push(c);
+          if (c.meta_ad_account_id && !existing.meta_ad_account_id) {
+            existing.meta_ad_account_id = c.meta_ad_account_id;
+            existing.meta_ad_account_name = c.meta_ad_account_name;
+          }
+          return;
+        }
+
+        groups.set(key, {
+          key,
+          id: c.id,
+          nome: corretoraNome || c.nome,
+          status: c.status,
+          meta_ad_account_id: c.meta_ad_account_id,
+          meta_ad_account_name: c.meta_ad_account_name,
+          corretores: [c],
+        });
       });
 
     return Array.from(groups.values())
-      .filter(group => !group.some(c => String(c.meta_ad_account_id || '').trim()))
+      .filter(group => !String(group.meta_ad_account_id || '').trim())
       .map(group => {
-        const primary = group[0];
-        const corretoraNome = String(primary.nome_empresa || '').trim();
+        const primary = group.corretores[0];
         const gestorId = group
+          .corretores
           .map(c => inferGestorIdFromTeam(c, gestoresList))
           .find(Boolean);
         const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
         return {
-          corretor_id: primary.id,
-          corretora_nome: corretoraNome || primary.nome,
-          corretores_nomes: group.map(c => c.nome).filter(Boolean).join(', '),
-          corretores_total: group.length,
-          is_corretora: Boolean(corretoraNome),
+          id: group.id,
+          corretor_id: primary?.id || null,
+          corretora_nome: group.nome,
+          corretores_nomes: group.corretores.map(c => c.nome).filter(Boolean).join(', '),
+          corretores_total: group.corretores.length,
+          is_corretora: group.key.startsWith('empresa:'),
           gestor_nome: gestorNome
         };
-      });
-  }, [corretoresList, gestoresList]);
+      })
+      .sort((a, b) => a.corretora_nome.localeCompare(b.corretora_nome, 'pt-BR'));
+  }, [corretorasList, corretoresList, gestoresList]);
 
   const quickActions = [
     { 
@@ -534,7 +591,7 @@ export default function AdminCentralPage() {
             <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-red-500/0 via-red-500/40 to-red-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
 
-          {/* Card: Corretores Sem Meta Ads */}
+          {/* Card: Concessionarias Sem Meta Ads */}
           <div
             onClick={() => setShowNoMetaModal(true)}
             className="group relative bg-[#090e1a]/85 border border-cyan-500/10 hover:border-cyan-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(6,182,212,0.1)] transition-all duration-300 cursor-pointer"
@@ -808,7 +865,7 @@ export default function AdminCentralPage() {
                       </p>
                     </div>
                     <Link
-                      href={`/admin/corretores/${item.corretor_id}/editar`}
+                      href={item.corretor_id ? `/admin/corretores/${item.corretor_id}/editar` : '/admin/meta'}
                       className="text-[9px] font-black text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider hover:bg-cyan-500/20"
                     >
                       Vincular
