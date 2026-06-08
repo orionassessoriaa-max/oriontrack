@@ -234,6 +234,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
+    { icon: Trophy, label: 'Meu time', href: '/time' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
