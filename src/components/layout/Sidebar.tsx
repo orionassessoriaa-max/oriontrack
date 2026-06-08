@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import {
   AlertTriangle,
   Bell,
+  Bot,
   Building2,
   Calculator,
   ChevronDown,
@@ -184,6 +185,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: Globe, label: 'Paginas', href: '/admin/paginas' },
     { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
+    { icon: Bot, label: 'Apolo WhatsApp', href: '/admin/configuracoes' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
     { icon: ClipboardList, label: 'Historico', href: '/admin/historico' },
@@ -228,7 +230,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const corretorMenu = [
     { icon: Users, label: 'Leads', href: '/leads' },
-    { icon: Calculator, label: 'Simulador', href: '/simulador' },
+    { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
@@ -237,7 +239,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const corretorMemberMenu = [
     { icon: Users, label: 'Leads', href: '/leads' },
-    { icon: Calculator, label: 'Simulador', href: '/simulador' },
+    { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },

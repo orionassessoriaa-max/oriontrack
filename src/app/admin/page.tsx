@@ -23,7 +23,8 @@ import {
   UserCog,
   LayoutDashboard,
   Sparkles,
-  AlertTriangle
+  AlertTriangle,
+  Bot
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -82,6 +83,8 @@ export default function AdminCentralPage() {
   const [showNoBrokerageModal, setShowNoBrokerageModal] = useState(false);
   const [showNoMetaModal, setShowNoMetaModal] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [apoloConnected, setApoloConnected] = useState(false);
+  const [apoloStatus, setApoloStatus] = useState('checking');
 
   useEffect(() => {
     setMounted(true);
@@ -176,6 +179,18 @@ export default function AdminCentralPage() {
       const sessionRes = await supabase.auth.getSession();
       const token = sessionRes.data.session?.access_token;
       if (token) {
+        const evolutionResponse = await fetch('/api/admin/configuracoes/evolution', {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        if (evolutionResponse.ok) {
+          const evolutionPayload = await evolutionResponse.json().catch(() => ({}));
+          setApoloConnected(Boolean(evolutionPayload.connected));
+          setApoloStatus(String(evolutionPayload.state || 'close'));
+        }
+
         const response = await fetch('/api/integrations/meta/alerts', {
           method: 'POST',
           headers: {
@@ -322,6 +337,15 @@ export default function AdminCentralPage() {
       borderColor: 'border-emerald-500/20 hover:border-emerald-500/50',
       glowColor: 'shadow-emerald-500/10'
     },
+    {
+      title: 'Apolo WhatsApp',
+      desc: apoloConnected ? 'Apolo conectado para notificacoes' : 'Conectar QR Code do Apolo',
+      href: '/admin/configuracoes',
+      icon: Bot,
+      color: apoloConnected ? 'from-emerald-600 to-teal-600' : 'from-cyan-600 to-blue-600',
+      borderColor: apoloConnected ? 'border-emerald-500/20 hover:border-emerald-500/50' : 'border-cyan-500/20 hover:border-cyan-500/50',
+      glowColor: apoloConnected ? 'shadow-emerald-500/10' : 'shadow-cyan-500/10'
+    },
     { 
       title: 'Suporte', 
       desc: 'Acompanhar solicitações', 
@@ -360,6 +384,35 @@ export default function AdminCentralPage() {
           </div>
         </div>
       </div>
+
+      <Link
+        href="/admin/configuracoes"
+        className={`mb-8 flex flex-col gap-4 rounded-2xl border p-5 transition hover:-translate-y-0.5 sm:flex-row sm:items-center sm:justify-between ${
+          apoloConnected
+            ? 'border-emerald-400/20 bg-emerald-400/10 hover:border-emerald-300/40'
+            : 'border-amber-400/20 bg-amber-400/10 hover:border-amber-300/40'
+        }`}
+      >
+        <div className="flex items-center gap-4">
+          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${apoloConnected ? 'bg-emerald-400/15 text-emerald-300' : 'bg-amber-400/15 text-amber-300'}`}>
+            <Bot size={24} />
+          </div>
+          <div>
+            <p className={`text-[10px] font-black uppercase tracking-widest ${apoloConnected ? 'text-emerald-300' : 'text-amber-300'}`}>
+              {apoloConnected ? 'Apolo conectado' : 'Apolo aguardando conexao'}
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-300">
+              {apoloConnected
+                ? 'WhatsApp master ativo para notificacoes dos corretores, gestores e admins.'
+                : 'Conecte o QR Code do WhatsApp master para liberar as notificacoes automaticas.'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-white">
+          Status: {apoloStatus}
+          <ChevronRight size={16} />
+        </div>
+      </Link>
 
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">

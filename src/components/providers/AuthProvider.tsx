@@ -225,6 +225,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           setActualProfile(null);
           setViewingProfile(null);
           clearViewingStorage();
+          window.sessionStorage.removeItem('orion:selected_team');
 
           const currentPath = window.location.pathname;
           const publicPaths = ['/login', '/primeiro-acesso', '/resetar-senha'];
@@ -297,6 +298,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setActualProfile(null);
     setViewingProfile(null);
     clearViewingStorage();
+    window.sessionStorage.removeItem('orion:selected_team');
     router.replace('/login');
   };
 

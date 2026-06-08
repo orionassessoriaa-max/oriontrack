@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import { AlertCircle, Loader2, LogOut, RefreshCw } from 'lucide-react';
 import ApoloAiWidget from '@/components/ui/ApoloAiWidget';
+import { canSelectOperationalTeam, TEAM_SELECTION_STORAGE_KEY } from '@/lib/teamSelection';
 
 export default function InternalLayout({ children }: { children: React.ReactNode }) {
   const { profile, actualProfile, loading, user, signOut, refreshProfile, isViewingAsCorretor } = useAuth();
@@ -18,6 +19,19 @@ export default function InternalLayout({ children }: { children: React.ReactNode
       if (!user) {
         router.push('/login');
       } else if (profile) {
+        const isTeamSelectionRoute = pathname.startsWith('/selecionar-time');
+        const needsTeamSelection = canSelectOperationalTeam(actualProfile)
+          && !isTeamSelectionRoute
+          && !isViewingAsCorretor
+          && !window.sessionStorage.getItem(TEAM_SELECTION_STORAGE_KEY);
+
+        if (needsTeamSelection) {
+          router.push('/selecionar-time');
+          return;
+        }
+
+        if (isTeamSelectionRoute) return;
+
         const isAdmin = profile.tipo_usuario === 'admin';
         const isTrafficManager = profile.tipo_usuario === 'gestor_trafego';
         const isCorretor = profile.tipo_usuario === 'corretor' || profile.tipo_usuario === 'corretor_admin';
@@ -90,7 +104,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         }
       }
     }
-  }, [loading, user, profile, pathname, router]);
+  }, [actualProfile, isViewingAsCorretor, loading, user, profile, pathname, router]);
 
   const [tema, setTema] = useState<string>('noturno');
 

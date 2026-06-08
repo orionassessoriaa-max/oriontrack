@@ -240,6 +240,7 @@ function copyTextToClipboard(text: string) {
 export default function SimuladorPage() {
   const { profile } = useAuth();
   const isAdmin = profile?.tipo_usuario === 'admin';
+  const isBrokerAccess = ['corretor', 'corretor_admin', 'corretor_membro'].includes(String(profile?.tipo_usuario || ''));
 
   // Estados dos dados
   const [operadoras, setOperadoras] = useState<Operadora[]>(OPERADORAS_PADRAO);
@@ -805,6 +806,33 @@ Payload: {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (isBrokerAccess) {
+    return (
+      <InternalLayout>
+        <div className="flex min-h-[calc(100vh-9rem)] items-center justify-center px-4">
+          <div className="max-w-xl rounded-[2rem] border border-cyan-400/15 bg-[#08111f] p-8 text-center shadow-2xl shadow-cyan-500/5">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
+              <Calculator size={30} />
+            </div>
+            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.25em] text-cyan-300">Modulo em desenvolvimento</p>
+            <h1 className="text-2xl font-black text-white">Simulador em desenvolvimento</h1>
+            <p className="mt-3 text-sm font-bold leading-relaxed text-slate-400">
+              Esta area ainda esta em teste pelo time Orion. Por enquanto, use Leads, CRM e Inbox para operar seus atendimentos.
+            </p>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <a href="/leads" className="rounded-2xl bg-blue-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-500">
+                Ir para leads
+              </a>
+              <a href="/crm" className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-200 transition hover:bg-white/10">
+                Abrir CRM
+              </a>
+            </div>
+          </div>
+        </div>
+      </InternalLayout>
+    );
+  }
 
   return (
     <InternalLayout>

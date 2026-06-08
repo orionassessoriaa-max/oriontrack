@@ -86,7 +86,8 @@ export default function LoginPage() {
       // Define a rota de destino baseada no perfil
       let destination = '/leads';
       if (profile.tipo_usuario === 'admin') {
-        destination = '/admin';
+        window.sessionStorage.removeItem('orion:selected_team');
+        destination = '/selecionar-time';
       } else if (profile.tipo_usuario === 'gestor_trafego') {
         destination = '/trafego';
       } else if (profile.tipo_usuario === 'designer') {
