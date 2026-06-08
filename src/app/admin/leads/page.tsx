@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { 
   Search, 
@@ -25,15 +25,40 @@ import { ptBR } from 'date-fns/locale';
 import Link from 'next/link';
 import PhoneAction from '@/components/ui/PhoneAction';
 
+type BrokerOption = {
+  id: string;
+  nome: string;
+  nome_empresa?: string | null;
+};
+
+type LeadWithBroker = Lead & {
+  corretores: {
+    nome: string;
+    nome_empresa?: string | null;
+  } | null;
+};
+
+type ConcessionariaOption = {
+  key: string;
+  nome: string;
+  brokerIds: string[];
+  primaryId: string;
+  brokers: string[];
+};
+
+function getConcessionariaName(corretor?: Pick<BrokerOption, 'nome' | 'nome_empresa'> | null) {
+  return String(corretor?.nome_empresa || corretor?.nome || 'Sem concessionaria').trim();
+}
+
 export default function AdminLeadsPage() {
-  const [leads, setLeads] = useState<(Lead & { corretores: { nome: string } })[]>([]);
-  const [corretores, setCorretores] = useState<any[]>([]);
+  const [leads, setLeads] = useState<LeadWithBroker[]>([]);
+  const [corretores, setCorretores] = useState<BrokerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterCorretor, setFilterCorretor] = useState('');
+  const [filterConcessionaria, setFilterConcessionaria] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCidade, setFilterCidade] = useState('');
   const [filterDataInicio, setFilterDataInicio] = useState('');
@@ -74,7 +99,35 @@ export default function AdminLeadsPage() {
   useEffect(() => {
     if (!showDeleteAll) return;
     void fetchDeleteScopeCount();
-  }, [showDeleteAll, filterCorretor]);
+  }, [showDeleteAll, filterConcessionaria]);
+
+  const concessionarias = useMemo<ConcessionariaOption[]>(() => {
+    const groups = new Map<string, ConcessionariaOption>();
+
+    corretores.forEach((corretor) => {
+      const nome = getConcessionariaName(corretor);
+      const key = nome.toLowerCase();
+      const existing = groups.get(key);
+
+      if (existing) {
+        existing.brokerIds.push(corretor.id);
+        existing.brokers.push(corretor.nome);
+        return;
+      }
+
+      groups.set(key, {
+        key,
+        nome,
+        brokerIds: [corretor.id],
+        primaryId: corretor.id,
+        brokers: [corretor.nome],
+      });
+    });
+
+    return Array.from(groups.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [corretores]);
+
+  const selectedConcessionaria = concessionarias.find((item) => item.key === filterConcessionaria) || null;
 
   const fetchData = async () => {
     setLoading(true);
@@ -83,11 +136,11 @@ export default function AdminLeadsPage() {
       const [leadsRes, corretoresRes] = await Promise.all([
         supabase
           .from('leads')
-          .select('*, corretores(nome)')
+          .select('*, corretores(nome, nome_empresa)')
           .order('data_entrada', { ascending: false, nullsFirst: false }),
         supabase
           .from('corretores')
-          .select('id, nome')
+          .select('id, nome, nome_empresa')
           .order('nome')
       ]);
       
@@ -113,7 +166,7 @@ export default function AdminLeadsPage() {
 
   const clearFilters = () => {
     setSearchTerm('');
-    setFilterCorretor('');
+    setFilterConcessionaria('');
     setFilterStatus('');
     setFilterCidade('');
     setFilterDataInicio('');
@@ -128,7 +181,7 @@ export default function AdminLeadsPage() {
       .from('leads')
       .select('id', { count: 'exact', head: true });
 
-    if (filterCorretor) query = query.eq('corretor_id', filterCorretor);
+    if (selectedConcessionaria) query = query.in('corretor_id', selectedConcessionaria.brokerIds);
 
     const { count, error: countError } = await query;
 
@@ -143,7 +196,7 @@ export default function AdminLeadsPage() {
 
   const importSheet = async () => {
     if (!sheetUrl.trim() || !sheetCorretorId) {
-      setImportMessage('Selecione o corretor e cole o link da planilha.');
+      setImportMessage('Selecione a concessionaria e cole o link da planilha.');
       return;
     }
 
@@ -203,7 +256,11 @@ export default function AdminLeadsPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ confirm: 'DELETE_ALL_LEADS', corretor_id: filterCorretor || null }),
+      body: JSON.stringify({
+        confirm: 'DELETE_ALL_LEADS',
+        corretor_ids: selectedConcessionaria?.brokerIds || null,
+        concessionaria: selectedConcessionaria?.nome || null,
+      }),
     });
     const payload = await response.json().catch(() => ({}));
 
@@ -213,7 +270,7 @@ export default function AdminLeadsPage() {
       return;
     }
 
-    setDeleteMessage(`${payload.deleted || 0} lead(s) removidos com sucesso${payload.corretor ? ` de ${payload.corretor}` : ''}.`);
+    setDeleteMessage(`${payload.deleted || 0} lead(s) removidos com sucesso${payload.concessionaria ? ` de ${payload.concessionaria}` : ''}.`);
     setShowDeleteAll(false);
     await fetchData();
   };
@@ -223,7 +280,9 @@ export default function AdminLeadsPage() {
       (lead.nome?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
       (lead.telefone || '').includes(searchTerm);
     
-    const matchesCorretor = !filterCorretor || lead.corretor_id === filterCorretor;
+    const matchesConcessionaria = !selectedConcessionaria
+      || selectedConcessionaria.brokerIds.includes(String(lead.corretor_id || ''))
+      || getConcessionariaName(lead.corretores).toLowerCase() === selectedConcessionaria.key;
     const matchesStatus = !filterStatus || lead.status === filterStatus;
     const matchesCidade = !filterCidade || (lead.cidade?.toLowerCase() || '').includes(filterCidade.toLowerCase());
     
@@ -238,22 +297,21 @@ export default function AdminLeadsPage() {
       matchesDate = matchesDate && new Date(lead.data_entrada) <= endDate;
     }
 
-    return matchesSearch && matchesCorretor && matchesStatus && matchesCidade && matchesDate;
+    return matchesSearch && matchesConcessionaria && matchesStatus && matchesCidade && matchesDate;
   });
 
-  const selectedCorretor = corretores.find((corretor) => corretor.id === filterCorretor) || null;
-  const loadedDeleteScopeLeadsCount = selectedCorretor
-    ? leads.filter((lead) => lead.corretor_id === selectedCorretor.id).length
+  const loadedDeleteScopeLeadsCount = selectedConcessionaria
+    ? leads.filter((lead) => selectedConcessionaria.brokerIds.includes(String(lead.corretor_id || ''))).length
     : leads.length;
   const deleteScopeLeadsCount = deleteScopeCount ?? loadedDeleteScopeLeadsCount;
-  const deleteButtonLabel = selectedCorretor ? `Remover leads de ${selectedCorretor.nome}` : 'Remover todos';
+  const deleteButtonLabel = selectedConcessionaria ? `Remover leads de ${selectedConcessionaria.nome}` : 'Remover todos';
 
   return (
     <InternalLayout>
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Todos os Leads</h1>
-          <p className="text-gray-500 font-medium">Audite, filtre e gerencie os leads dos corretores.</p>
+          <p className="text-gray-500 font-medium">Audite, filtre e gerencie os leads por concessionaria.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button
@@ -296,18 +354,18 @@ export default function AdminLeadsPage() {
             <div className="border-b border-red-100 bg-red-50 p-6">
               <p className="text-[10px] font-black uppercase tracking-widest text-red-600">Acao irreversivel</p>
               <h2 className="mt-2 text-2xl font-black text-slate-950">
-                {selectedCorretor ? `Remover leads de ${selectedCorretor.nome}?` : 'Remover todos os leads?'}
+                {selectedConcessionaria ? `Remover leads de ${selectedConcessionaria.nome}?` : 'Remover todos os leads?'}
               </h2>
               <p className="mt-2 text-sm font-bold leading-6 text-red-700">
-                {selectedCorretor
-                  ? `Isso apaga apenas os leads vinculados ao corretor ${selectedCorretor.nome}.`
-                  : 'Isso apaga todos os leads de todos os corretores. Use apenas antes de uma nova importacao geral.'}
+                {selectedConcessionaria
+                  ? `Isso apaga apenas os leads vinculados a concessionaria ${selectedConcessionaria.nome}.`
+                  : 'Isso apaga todos os leads de todas as concessionarias. Use apenas antes de uma nova importacao geral.'}
               </p>
             </div>
             <div className="p-6">
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  {selectedCorretor ? 'Leads deste corretor' : 'Leads no banco'}
+                  {selectedConcessionaria ? 'Leads desta concessionaria' : 'Leads no banco'}
                 </p>
                 <p className="mt-1 text-3xl font-black text-slate-950">
                   {loadingDeleteScopeCount ? <Loader2 className="animate-spin text-red-600" size={30} /> : deleteScopeLeadsCount}
@@ -327,7 +385,7 @@ export default function AdminLeadsPage() {
                   className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-6 py-4 text-sm font-black uppercase tracking-widest text-white shadow-xl shadow-red-600/20 transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {deletingAll ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
-                  {selectedCorretor ? `Confirmar e apagar leads de ${selectedCorretor.nome}` : 'Confirmar e apagar todos os leads'}
+                  {selectedConcessionaria ? `Confirmar e apagar leads de ${selectedConcessionaria.nome}` : 'Confirmar e apagar todos os leads'}
                 </button>
               )}
               <button
@@ -345,7 +403,7 @@ export default function AdminLeadsPage() {
       {showImportBox && (
         <div className="mb-8 rounded-[2rem] border border-emerald-100 bg-emerald-50 p-5">
           <h2 className="mb-2 text-lg font-black text-emerald-950">Importar leads por planilha</h2>
-          <p className="mb-4 text-sm font-bold text-emerald-800">Selecione o corretor, cole o link do Google Sheets e importe os leads. A planilha precisa estar compartilhada para visualizacao por link.</p>
+          <p className="mb-4 text-sm font-bold text-emerald-800">Selecione a concessionaria, cole o link do Google Sheets e importe os leads. A planilha precisa estar compartilhada para visualizacao por link.</p>
           {importMessage && <div className="mb-4 rounded-2xl bg-white p-4 text-sm font-black text-emerald-800">{importMessage}</div>}
           <div className="grid gap-3 md:grid-cols-[260px_1fr_auto]">
             <select
@@ -353,9 +411,11 @@ export default function AdminLeadsPage() {
               onChange={(event) => setSheetCorretorId(event.target.value)}
               className="rounded-2xl border-none bg-white px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
             >
-              <option value="">Selecione o corretor</option>
-              {corretores.map((corretor) => (
-                <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>
+              <option value="">Selecione a concessionaria</option>
+              {concessionarias.map((concessionaria) => (
+                <option key={concessionaria.key} value={concessionaria.primaryId}>
+                  {concessionaria.nome}{concessionaria.brokers.length > 1 ? ` (${concessionaria.brokers.length} corretores)` : ''}
+                </option>
               ))}
             </select>
             <input
@@ -393,14 +453,14 @@ export default function AdminLeadsPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Corretor</label>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Concessionaria</label>
               <select 
-                value={filterCorretor}
-                onChange={(e) => setFilterCorretor(e.target.value)}
+                value={filterConcessionaria}
+                onChange={(e) => setFilterConcessionaria(e.target.value)}
                 className="w-full bg-white border-none px-4 py-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 transition-all font-bold shadow-sm appearance-none"
               >
-                <option value="">Todos Corretores</option>
-                {corretores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                <option value="">Todas Concessionarias</option>
+                {concessionarias.map(c => <option key={c.key} value={c.key}>{c.nome}</option>)}
               </select>
             </div>
 
@@ -493,7 +553,7 @@ export default function AdminLeadsPage() {
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cidade</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Página / Operadora</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Corretor</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Concessionaria</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">UTMs / Observacoes</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
                 </tr>
@@ -533,7 +593,14 @@ export default function AdminLeadsPage() {
                     </td>
                     <td className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-500">{lead.operadora || '-'}</td>
                     <td className="px-6 py-5">
-                      <span className="text-xs font-bold text-slate-400">{lead.corretores?.nome}</span>
+                      <div className="space-y-1">
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-600">
+                          {getConcessionariaName(lead.corretores)}
+                        </p>
+                        {lead.corretores?.nome && lead.corretores.nome !== getConcessionariaName(lead.corretores) && (
+                          <p className="text-[10px] font-bold text-slate-400">Corretor: {lead.corretores.nome}</p>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-5 text-xs font-bold leading-relaxed text-slate-500">
                       <div className="max-w-[360px] whitespace-normal">{lead.observacoes || '-'}</div>

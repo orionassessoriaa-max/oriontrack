@@ -128,7 +128,7 @@ export default function AdminMetaPage() {
   const linkedCorretoras = filteredCorretoras.filter((c) => c.meta_ad_account_id);
   const unlinkedCorretoras = filteredCorretoras.filter((c) => !c.meta_ad_account_id);
   
-  const linkedAccountIds = new Set(corretores.map((c) => c.meta_ad_account_id).filter(Boolean));
+  const linkedAccountIds = new Set(corretoras.map((c) => c.meta_ad_account_id).filter(Boolean));
   const unlinkedAccounts = accounts.filter((account) => !linkedAccountIds.has(account.meta_account_id));
 
   async function syncMetaAccounts() {

@@ -110,31 +110,35 @@ export async function DELETE(request: Request) {
     }
 
     const corretorId = String(body.corretor_id || '').trim();
-    let corretorNome = '';
+    const requestedCorretorIds = Array.isArray(body.corretor_ids)
+      ? body.corretor_ids.map((id: unknown) => String(id || '').trim()).filter(Boolean)
+      : [];
+    const corretorIds = Array.from(new Set(corretorId ? [corretorId] : requestedCorretorIds));
+    const concessionariaNome = String(body.concessionaria || '').trim();
+    let scopeNome = concessionariaNome;
 
-    if (corretorId) {
-      const { data: corretor, error: corretorError } = await supabaseAdmin
+    if (corretorIds.length > 0) {
+      const { data: corretores, error: corretorError } = await supabaseAdmin
         .from('corretores')
-        .select('id, nome')
-        .eq('id', corretorId)
-        .maybeSingle();
+        .select('id, nome, nome_empresa')
+        .in('id', corretorIds);
 
       if (corretorError) {
         return NextResponse.json({ error: corretorError.message }, { status: 500 });
       }
 
-      if (!corretor) {
-        return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
+      if (!corretores || corretores.length !== corretorIds.length) {
+        return NextResponse.json({ error: 'Concessionaria nao encontrada.' }, { status: 404 });
       }
 
-      corretorNome = corretor.nome || '';
+      scopeNome = scopeNome || corretores[0]?.nome_empresa || corretores[0]?.nome || '';
     }
 
     let countQuery = supabaseAdmin
       .from('leads')
       .select('id', { count: 'exact', head: true });
 
-    if (corretorId) countQuery = countQuery.eq('corretor_id', corretorId);
+    if (corretorIds.length > 0) countQuery = countQuery.in('corretor_id', corretorIds);
 
     const { count, error: countError } = await countQuery;
 
@@ -147,7 +151,7 @@ export async function DELETE(request: Request) {
       .delete()
       .not('id', 'is', null);
 
-    if (corretorId) deleteQuery = deleteQuery.eq('corretor_id', corretorId);
+    if (corretorIds.length > 0) deleteQuery = deleteQuery.in('corretor_id', corretorIds);
 
     const { error } = await deleteQuery;
 
@@ -156,13 +160,17 @@ export async function DELETE(request: Request) {
     }
 
     await writeAuditLog(request, guard.profile as any, {
-      action: corretorId ? 'lead.bulk_delete_by_corretor' : 'lead.bulk_delete_all',
+      action: corretorIds.length > 0 ? 'lead.bulk_delete_by_concessionaria' : 'lead.bulk_delete_all',
       entity_type: 'leads',
-      entity_id: corretorId || 'all',
-      metadata: { deleted_count: count || 0, corretor_id: corretorId || null, corretor_nome: corretorNome || null },
+      entity_id: corretorIds.length > 0 ? corretorIds.join(',') : 'all',
+      metadata: {
+        deleted_count: count || 0,
+        corretor_ids: corretorIds,
+        concessionaria: scopeNome || null,
+      },
     });
 
-    return NextResponse.json({ success: true, deleted: count || 0, corretor: corretorNome || null });
+    return NextResponse.json({ success: true, deleted: count || 0, concessionaria: scopeNome || null });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Erro ao remover todos os leads.' }, { status: 500 });
   }

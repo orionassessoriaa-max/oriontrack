@@ -346,18 +346,25 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
               <Loader2 className="animate-spin text-blue-500" size={16} />
             ) : (() => {
               const menuItems = getMenu();
-              const pinnedSettings = profile?.tipo_usuario === 'admin'
-                ? menuItems.find((item) => item.href === '/admin/configuracoes' && item.label === 'Configurações')
+              const pinnedMeta = profile?.tipo_usuario === 'admin'
+                ? menuItems.find((item) => item.href === '/admin/meta')
                 : undefined;
-              const menuWithoutPinned = pinnedSettings
-                ? menuItems.filter((item) => item !== pinnedSettings)
+              const pinnedSettings = profile?.tipo_usuario === 'admin'
+                ? menuItems.find((item) => item.href === '/admin/configuracoes')
+                : undefined;
+              const pinnedItems = [pinnedMeta, pinnedSettings].filter(
+                (item): item is NonNullable<typeof item> => Boolean(item)
+              );
+              const menuWithoutPinned = pinnedItems.length
+                ? menuItems.filter((item) => !pinnedItems.includes(item))
                 : menuItems;
               const hasMore = menuItems.length > 5;
+              const visibleBaseCount = pinnedItems.length ? Math.max(1, 5 - pinnedItems.length) : 4;
               const directItems = hasMore
-                ? [...menuWithoutPinned.slice(0, pinnedSettings ? 3 : 4), ...(pinnedSettings ? [pinnedSettings] : [])]
+                ? [...menuWithoutPinned.slice(0, visibleBaseCount), ...pinnedItems]
                 : menuItems;
               const dropdownItems = hasMore
-                ? menuWithoutPinned.slice(pinnedSettings ? 3 : 4)
+                ? menuWithoutPinned.slice(visibleBaseCount)
                 : [];
               
               return (
