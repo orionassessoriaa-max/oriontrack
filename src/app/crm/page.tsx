@@ -53,7 +53,7 @@ type WhatsAppConversa = {
   updated_at?: string | null;
 };
 
-type MetricFilter = 'todos' | 'sem_resposta' | 'tarefas' | 'hoje' | 'fit_icp';
+type MetricFilter = 'todos' | 'sem_resposta' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
 
 const columns: { id: LeadStatus; label: string; desc: string }[] = [
   { id: 'Aguardando atendimento', label: 'Oportunidade', desc: 'Entrou e precisa de primeiro contato' },
@@ -243,6 +243,13 @@ export default function CrmPage() {
   const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
   const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
+
+  useEffect(() => {
+    const requestedFilter = new URLSearchParams(window.location.search).get('filtro') as MetricFilter | null;
+    if (requestedFilter && ['todos', 'sem_resposta', 'tarefas', 'hoje', 'cadencia', 'fit_icp'].includes(requestedFilter)) {
+      setMetricFilter(requestedFilter);
+    }
+  }, []);
 
   // Metrics Dashboard States
   const [crmView, setCrmView] = useState<'board' | 'analytics'>('board');
@@ -647,6 +654,7 @@ export default function CrmPage() {
 
   const staleLeadIds = useMemo(() => new Set(leads.filter(isStale).map((lead) => lead.id)), [leads]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente').map((task) => task.lead_id)), [tarefas]);
+  const cadenceLeadIds = useMemo(() => new Set(leads.filter((lead) => lead.cadencia_inicio).map((lead) => lead.id)), [leads]);
   const todayTaskLeadIds = useMemo(() => {
     const today = new Date().toDateString();
     return new Set(
@@ -663,7 +671,7 @@ export default function CrmPage() {
 
   const filteredLeads = useMemo(() => {
     const term = search.toLowerCase();
-    return leads.filter((lead) => {
+    const nextLeads = leads.filter((lead) => {
       const leadPage = lead.operadora || '';
       const searchMatch = `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.status} ${lead.operadora || ''} ${lead.observacoes || ''}`.toLowerCase().includes(term);
       const pageMatch = pageFilter === 'todas' || (pageFilter === '__sem_pagina__' ? !leadPage : leadPage === pageFilter);
@@ -672,11 +680,18 @@ export default function CrmPage() {
         (metricFilter === 'sem_resposta' && staleLeadIds.has(lead.id)) ||
         (metricFilter === 'tarefas' && openTaskLeadIds.has(lead.id)) ||
         (metricFilter === 'hoje' && todayTaskLeadIds.has(lead.id)) ||
+        (metricFilter === 'cadencia' && cadenceLeadIds.has(lead.id)) ||
         (metricFilter === 'fit_icp' && fitLeadIds.has(lead.id));
 
       return searchMatch && pageMatch && metricMatch;
     });
-  }, [leads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
+
+    if (metricFilter === 'cadencia') {
+      return [...nextLeads].sort((a, b) => getCadenceDays(b) - getCadenceDays(a));
+    }
+
+    return nextLeads;
+  }, [leads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, cadenceLeadIds, fitLeadIds]);
 
   useEffect(() => {
     const board = boardScrollRef.current;
@@ -707,6 +722,7 @@ export default function CrmPage() {
   const staleCount = staleLeadIds.size;
   const openTasks = tarefas.filter((task) => task.status === 'pendente').length;
   const todayTasks = tarefas.filter((task) => task.status === 'pendente' && task.vencimento && new Date(task.vencimento).toDateString() === new Date().toDateString()).length;
+  const cadenceCount = cadenceLeadIds.size;
   const fitStats = leads.reduce(
     (acc, lead) => {
       const qualification = getLeadQualification(lead, tipoCampanha);
@@ -886,6 +902,7 @@ export default function CrmPage() {
     sem_resposta: 'Sem resposta',
     tarefas: 'Tarefas abertas',
     hoje: 'Tarefas de hoje',
+    cadencia: 'Cadencia',
     fit_icp: 'Dentro do perfil',
   };
 
@@ -1170,11 +1187,12 @@ export default function CrmPage() {
 
       {crmView === 'board' ? (
         <>
-          <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-5">
+          <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
             <Stat label="Leads" value={leads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="border-gray-100 bg-white text-slate-600" />
             <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} active={metricFilter === 'sem_resposta'} onClick={() => setMetricFilter('sem_resposta')} className="border-amber-100 bg-amber-50 text-amber-700" />
             <Stat label="Tarefas" value={openTasks} icon={Clock} active={metricFilter === 'tarefas'} onClick={() => setMetricFilter('tarefas')} className="border-blue-100 bg-blue-50 text-blue-700" />
             <Stat label="Hoje" value={todayTasks} icon={CheckCircle2} active={metricFilter === 'hoje'} onClick={() => setMetricFilter('hoje')} className="border-emerald-100 bg-emerald-50 text-emerald-700" />
+            <Stat label="Cadencia" value={cadenceCount} icon={Clock} active={metricFilter === 'cadencia'} onClick={() => setMetricFilter('cadencia')} className="border-fuchsia-100 bg-fuchsia-50 text-fuchsia-700" />
             <Stat label="Fit ICP" value={`${fitStats.good}/${fitStats.warning}`} icon={OrionMark} active={metricFilter === 'fit_icp'} onClick={() => setMetricFilter('fit_icp')} className="border-violet-100 bg-violet-50 text-violet-700" />
           </div>
 
@@ -1285,7 +1303,7 @@ export default function CrmPage() {
                                     <span className="col-span-2 rounded-xl bg-emerald-50 px-2 py-1 text-emerald-700">Responsavel: {lead.responsavel_membro.nome}</span>
                                   )}
                                   {lead.cadencia_inicio && (
-                                    <span className={`col-span-2 rounded-xl px-2 py-1 ${lead.cadencia_ativa ? 'bg-violet-50 text-violet-700' : 'bg-slate-50 text-slate-500'}`}>
+                                    <span className={`col-span-2 rounded-xl border px-2 py-1 font-black ${lead.cadencia_ativa ? 'border-fuchsia-200 bg-fuchsia-100 text-fuchsia-800 shadow-[0_0_14px_rgba(217,70,239,0.25)]' : 'border-violet-200 bg-violet-100 text-violet-800'}`}>
                                       Cadencia: {lead.cadencia_ativa ? `dia ${getCadenceDays(lead)}` : `${getCadenceDays(lead)} dia(s) encerrada`}
                                     </span>
                                   )}
@@ -1411,8 +1429,8 @@ export default function CrmPage() {
                     </div>
                     <Clock className="text-violet-500" size={22} />
                   </div>
-                  <p className="mb-3 text-xs font-semibold leading-relaxed text-violet-900/70">
-                    Use quando o lead nao responder. O Orion conta os dias em cadencia e registra o inicio e a parada na timeline do cliente.
+                  <p className="mb-3 text-xs font-black leading-relaxed text-fuchsia-900">
+                    Use quando o lead nao responder. O sistema conta os dias em cadencia e registra o inicio e a parada na timeline do cliente.
                   </p>
                   <button
                     type="button"
@@ -1496,6 +1514,7 @@ export default function CrmPage() {
                     <InfoCard label="Cidade" value={selectedLead.cidade || '-'} />
                     <InfoCard label="Pagina" value={selectedLead.operadora || '-'} />
                     <InfoCard label="Etiqueta" value={selectedLead.etiqueta || '-'} />
+                    <InfoCard label="Responsavel" value={selectedLead.responsavel_membro?.nome || 'Liberado'} />
                     <InfoCard label="Valor negociação" value={selectedLead.valor_negociacao ? formatCurrencyValue(selectedLead.valor_negociacao) : '-'} />
                     <InfoCard label="Operadora venda" value={selectedLead.operadora_negociacao || '-'} />
                     {canViewCommission && <InfoCard label="Comissao" value={selectedLead.valor_comissao ? `${formatCurrencyValue(selectedLead.valor_comissao)} (${selectedLead.comissao_percentual || commissionPercent}%)` : '-'} />}

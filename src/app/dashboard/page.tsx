@@ -57,6 +57,9 @@ type LeadMetricRow = {
   valor_negociacao?: string | number | null;
   valor_comissao?: string | number | null;
   responsavel_profile_id?: string | null;
+  cadencia_ativa?: boolean | null;
+  cadencia_inicio?: string | null;
+  cadencia_fim?: string | null;
 };
 
 type MonthlyPerformance = {
@@ -278,6 +281,9 @@ export default function DashboardPage() {
     lost: 0,
     invalid: 0,
     unavailableRegion: 0,
+    cadence: 0,
+    tasksOpen: 0,
+    tasksToday: 0,
     revenueRealized: 0,
     salesRealized: 0,
     salesPotential: 0
@@ -485,7 +491,7 @@ export default function DashboardPage() {
           const to = from + limitNum - 1;
           let statsRequest = supabase
             .from('leads')
-            .select('status, data_entrada, cidade, valor_negociacao, valor_comissao, responsavel_profile_id')
+            .select('status, data_entrada, cidade, valor_negociacao, valor_comissao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim')
             .in('corretor_id', idsToFetch)
             .range(from, to);
 
@@ -647,6 +653,24 @@ export default function DashboardPage() {
         }
 
         const soldLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
+        let pendingTasks: Array<{ id: string; vencimento: string | null }> = [];
+        if (idsToFetch.length > 0) {
+          let tasksRequest = supabase
+            .from('lead_tarefas')
+            .select('id, vencimento')
+            .in('corretor_id', idsToFetch)
+            .eq('status', 'pendente');
+
+          if (!companyName && profile.tipo_usuario === 'corretor_membro') {
+            tasksRequest = tasksRequest.eq('responsavel_profile_id', profile.id);
+          }
+
+          const tasksResult = await tasksRequest;
+          if (!tasksResult.error) {
+            pendingTasks = tasksResult.data || [];
+          }
+        }
+        const todayDate = new Date().toDateString();
         
         // Categorizar os status secundários nas 5 categorias primárias do painel
         const waitingLeads = statsRes.filter(l => {
@@ -699,6 +723,9 @@ export default function DashboardPage() {
           lost: lostLeads.length,
           invalid: invalidPhoneLeads.length,
           unavailableRegion: unavailableRegionLeads.length,
+          cadence: statsRes.filter((lead) => Boolean(lead.cadencia_inicio)).length,
+          tasksOpen: pendingTasks.length,
+          tasksToday: pendingTasks.filter((task) => task.vencimento && new Date(task.vencimento).toDateString() === todayDate).length,
           revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
           salesRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
           salesPotential: statsRes
@@ -1146,7 +1173,7 @@ export default function DashboardPage() {
 
       {/* 🚀 STEP 1: KEY NUMBERS AT THE VERY TOP (Swapped General Performance StatCards here!) */}
       <div className="mb-10">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4">
           <Link href="/leads">
             <StatCard title="Leads recebidos" value={stats.total} icon={Users} color="blue" loading={isDataLoading} />
           </Link>
@@ -1164,6 +1191,12 @@ export default function DashboardPage() {
           </Link>
           <Link href="/leads?status=Sem interesse">
             <StatCard title="Vendas perdidas" value={stats.lost} icon={ShieldAlert} color="red" loading={isDataLoading} />
+          </Link>
+          <Link href="/crm?filtro=cadencia">
+            <StatCard title="Em cadencia" value={stats.cadence} icon={Clock} color="indigo" loading={isDataLoading} />
+          </Link>
+          <Link href="/crm?filtro=tarefas">
+            <StatCard title="Follow up" value={stats.tasksOpen} icon={CalendarDays} color="blue" loading={isDataLoading} />
           </Link>
         </div>
       </div>

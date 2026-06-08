@@ -65,7 +65,7 @@ type InboxMessage = {
 };
 
 const TEMPLATES_PADRAO = [
-  { id: '1', title: 'Boas-vindas Comercial', text: 'Olá! Sou da Orion Seguros. Como posso te ajudar hoje com a cotação do seu plano de saúde?' },
+  { id: '1', title: 'Boas-vindas Comercial', text: 'Ola! Tudo bem? Como posso te ajudar hoje com a cotacao do seu plano de saude?' },
   { id: '2', title: 'Simulação Pronta', text: 'Tudo bem? Sua simulação de planos de saúde já está pronta. Segue o link com as opções detalhadas para você analisar: [Link]' },
   { id: '3', title: 'Cobrança de Documentos', text: 'Para darmos andamento na contratação do seu plano, preciso que me envie os seguintes documentos: RG, CPF e Comprovante de Residência.' },
   { id: '4', title: 'Pesquisa de Satisfação', text: 'O que achou do nosso atendimento hoje? Sua opinião é muito importante para nós!' }
@@ -122,9 +122,9 @@ export default function BrokerInboxPage() {
   const [showBotConfigModal, setShowBotConfigModal] = useState(false);
   const [showCloseReasonModal, setShowCloseReasonModal] = useState(false);
   const [botName, setBotName] = useState('Apolo Bot');
-  const [welcomeMessage, setWelcomeMessage] = useState('Olá! Seja bem-vindo à Orion Seguros. 😊 Sou o seu assistente virtual Apolo Bot. Como posso te ajudar hoje?');
+  const [welcomeMessage, setWelcomeMessage] = useState('Ola! Seja bem-vindo. Sou o seu assistente virtual. Como posso te ajudar hoje?');
   const [flowSteps, setFlowSteps] = useState([
-    { id: 'step_welcome', label: 'Mensagem Inicial', text: 'Olá! Seja bem-vindo à Orion Seguros. 😊 Sou o seu assistente virtual Apolo Bot. Como posso te ajudar hoje?', buttons: ['Fazer uma simulação', 'Falar com atendente', 'Outros assuntos'] },
+    { id: 'step_welcome', label: 'Mensagem Inicial', text: 'Ola! Seja bem-vindo. Sou o seu assistente virtual. Como posso te ajudar hoje?', buttons: ['Fazer uma simulação', 'Falar com atendente', 'Outros assuntos'] },
     { id: 'step_simulate', label: 'Simulação Selecionada', text: 'Excelente! Para fazermos a cotação ideal para você, quantas vidas serão incluídas no plano?', buttons: ['Apenas eu', 'Eu e minha família', 'Minha empresa'] },
     { id: 'step_agent', label: 'Falar com Atendente', text: 'Perfeito. Estou repassando sua conversa para um de nossos especialistas. Aguarde um minutinho!', buttons: [] },
     { id: 'step_others', label: 'Outros Assuntos', text: 'Por favor, descreva em uma mensagem o que você precisa para que possamos te direcionar melhor.', buttons: [] }
