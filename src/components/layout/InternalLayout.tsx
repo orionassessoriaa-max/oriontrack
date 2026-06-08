@@ -47,7 +47,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isTeamRoute = pathname.startsWith('/equipe');
         const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/simulador') || pathname.startsWith('/apolo-one') || pathname.startsWith('/ajuda');
         const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/financeiro', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
-        const isLimitedBrokerRoute = ['/crm', '/leads', '/simulador', '/inbox', '/time', '/perfil', '/notificacoes', '/apolo-one', '/ajuda'].some(p => pathname.startsWith(p));
+        const isLimitedBrokerRoute = ['/dashboard', '/crm', '/leads', '/simulador', '/inbox', '/time', '/perfil', '/notificacoes', '/apolo-one', '/ajuda'].some(p => pathname.startsWith(p));
         const isOperationalViewingBroker = isViewingAsCorretor && ['gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario));
 
         if (isOperationalViewingBroker) {
@@ -67,7 +67,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
           if (!isLimitedBrokerRoute) router.push('/leads');
         }
         else if (isCorretorMember) {
-          const isMemberRoute = ['/crm', '/leads', '/simulador', '/inbox', '/perfil', '/notificacoes', '/apolo-one', '/ajuda'].some(p => pathname.startsWith(p));
+          const isMemberRoute = ['/dashboard', '/crm', '/leads', '/simulador', '/inbox', '/perfil', '/notificacoes', '/apolo-one', '/ajuda'].some(p => pathname.startsWith(p));
           if (!isMemberRoute) router.push('/crm');
         }
         // 2. Traffic Manager Access: Traffic routes + Broker List (to select for reports)
