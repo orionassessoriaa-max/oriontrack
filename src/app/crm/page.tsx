@@ -710,7 +710,17 @@ export default function CrmPage() {
       });
     });
 
-    return options;
+    const uniqueOptions: typeof options = [];
+    const seen = new Set<string>();
+    options.forEach((opt) => {
+      const key = opt.label.trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueOptions.push(opt);
+      }
+    });
+
+    return uniqueOptions;
   }, [canUseDealershipViews, dealershipBrokers, profile?.corretor_id, profile?.id, teamMembers]);
 
   useEffect(() => {
