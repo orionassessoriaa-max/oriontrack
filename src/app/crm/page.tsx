@@ -54,7 +54,7 @@ type WhatsAppConversa = {
 };
 
 type MetricFilter = 'todos' | 'sem_resposta' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
-type CrmScopeView = 'meus' | 'todos_concessionaria' | 'sem_responsavel' | `member:${string}`;
+type CrmScopeView = 'meus' | 'todos_concessionaria' | 'sem_responsavel' | `member:${string}` | `broker:${string}`;
 
 const columns: { id: LeadStatus; label: string; desc: string }[] = [
   { id: 'Aguardando atendimento', label: 'Oportunidade', desc: 'Entrou e precisa de primeiro contato' },
@@ -150,6 +150,12 @@ type TeamMember = {
   tipo_usuario?: string | null;
 };
 
+type DealershipBroker = {
+  id: string;
+  nome: string;
+  email?: string | null;
+};
+
 const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
 
 function getSeededValue(seed: string, min: number, max: number) {
@@ -241,11 +247,14 @@ export default function CrmPage() {
   const [boardScrollWidth, setBoardScrollWidth] = useState(0);
   const [boardClientWidth, setBoardClientWidth] = useState(0);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [dealershipBrokers, setDealershipBrokers] = useState<DealershipBroker[]>([]);
+  const [simulatedCorretorId, setSimulatedCorretorId] = useState<string | null>(null);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
   const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
-  const canUseDealershipViews = profile?.tipo_usuario === 'corretor_admin' || (canAssignTeamLeads && teamMembers.length > 0);
+  const isViewingBrokerAsAdmin = Boolean(simulatedCorretorId) && !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile?.tipo_usuario || '');
+  const canUseDealershipViews = profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin || (canAssignTeamLeads && teamMembers.length > 0);
 
   useEffect(() => {
     const requestedFilter = new URLSearchParams(window.location.search).get('filtro') as MetricFilter | null;
@@ -255,8 +264,8 @@ export default function CrmPage() {
   }, []);
 
   useEffect(() => {
-    setCrmScopeView(profile?.tipo_usuario === 'corretor_admin' ? 'todos_concessionaria' : 'meus');
-  }, [profile?.id, profile?.tipo_usuario]);
+    setCrmScopeView(profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
+  }, [profile?.id, profile?.tipo_usuario, isViewingBrokerAsAdmin]);
 
   // Metrics Dashboard States
   const [crmView, setCrmView] = useState<'board' | 'analytics'>('board');
@@ -287,32 +296,39 @@ export default function CrmPage() {
 
     try {
       const simulatedId = typeof window !== 'undefined' ? window.sessionStorage.getItem('orion:viewing_corretor_id') : null;
+      setSimulatedCorretorId(simulatedId);
       const corretorScopeId = simulatedId || (['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario) ? profile.corretor_id : null);
       
       let corretorIds = corretorScopeId ? [corretorScopeId] : [];
       let companyName = profile.nome_empresa || null;
+      let scopedBrokers: DealershipBroker[] = [];
 
       if (corretorScopeId) {
         const { data: brokerRow } = await supabase
           .from('corretores')
-          .select('nome_empresa')
+          .select('id,nome,email,nome_empresa')
           .eq('id', corretorScopeId)
           .maybeSingle();
         
         if (brokerRow?.nome_empresa) {
           companyName = brokerRow.nome_empresa;
         }
+        if (brokerRow?.id) {
+          scopedBrokers = [{ id: brokerRow.id, nome: brokerRow.nome || 'Corretor', email: brokerRow.email || null }];
+        }
 
         if (companyName) {
           const { data: siblings } = await supabase
             .from('corretores')
-            .select('id')
+            .select('id,nome,email')
             .eq('nome_empresa', companyName);
           if (siblings && siblings.length > 0) {
             corretorIds = siblings.map((s) => s.id);
+            scopedBrokers = siblings.map((s) => ({ id: s.id, nome: s.nome || 'Corretor', email: s.email || null }));
           }
         }
       }
+      setDealershipBrokers(scopedBrokers);
 
       let tarefasQuery = supabase
         .from('lead_tarefas')
@@ -679,8 +695,17 @@ export default function CrmPage() {
       });
     });
 
+    dealershipBrokers.forEach((broker) => {
+      if (profile?.corretor_id === broker.id && teamMembers.some((member) => member.profile_id === profile.id)) return;
+      options.push({
+        value: `broker:${broker.id}`,
+        label: broker.nome,
+        desc: 'Conta da concessionaria',
+      });
+    });
+
     return options;
-  }, [canUseDealershipViews, teamMembers]);
+  }, [canUseDealershipViews, dealershipBrokers, profile?.corretor_id, profile?.id, teamMembers]);
 
   useEffect(() => {
     if (crmScopeOptions.some((option) => option.value === crmScopeView)) return;
@@ -700,6 +725,10 @@ export default function CrmPage() {
         const memberId = crmScopeView.replace('member:', '');
         const member = teamMembers.find((item) => item.id === memberId);
         return lead.responsavel_membro_id === memberId || (!!member?.profile_id && lead.responsavel_profile_id === member.profile_id);
+      }
+      if (crmScopeView.startsWith('broker:')) {
+        const brokerId = crmScopeView.replace('broker:', '');
+        return lead.corretor_id === brokerId;
       }
 
       const assignedToMe = (!!currentProfileId && lead.responsavel_profile_id === currentProfileId)
