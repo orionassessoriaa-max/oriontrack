@@ -62,10 +62,12 @@ function parseCurrencyValue(value: unknown) {
 function normalizeBooleanLabel(value: unknown) {
   const text = normalizeText(value).toLowerCase();
   if (['sim', 's', 'true', '1', 'yes'].includes(text)) return 'Sim';
-  if (['nao', 'não', 'n', 'false', '0', 'no'].includes(text)) return 'Não';
-  return normalizeText(value, 'Não informado') || 'Não informado';
+  if (['nao', 'n?o', 'n', 'false', '0', 'no'].includes(text)) return 'Nao';
+  const key = normalizeKey(text);
+  if (key.includes('nao_tenho') || key.includes('nao_possui')) return 'Nao';
+  if (key.includes('tenho') || key.includes('possui')) return 'Sim';
+  return normalizeText(value, 'Nao informado') || 'Nao informado';
 }
-
 async function resolveCorretorId(body: any) {
   let resolvedId: string | null = null;
 
@@ -262,7 +264,7 @@ export async function POST(request: Request) {
       telefone,
       idades: normalizeText(field(body, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas', 'age_group'])),
       possui_cnpj: normalizeBooleanLabel(field(body, ['possui_cnpj', 'possui cnpj', 'cnpj', 'tem cnpj'])),
-      tem_plano_ativo: normalizeBooleanLabel(field(body, ['tem_plano_ativo', 'tem plano ativo', 'plano ativo', 'possui plano', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano'])),
+      tem_plano_ativo: normalizeBooleanLabel(field(body, ['tem_plano_ativo', 'tem plano ativo', 'plano ativo', 'planoativo', 'possui plano', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano'])),
       plano_atual: normalizeText(field(body, ['plano_atual', 'plano atual', 'operadora atual', 'convenio atual', 'convênio atual', 'seguradora atual', 'plano'])) || null,
       custo_plano_atual: normalizeText(field(body, ['custo_plano_atual', 'custo plano atual', 'custo atual', 'valor plano atual', 'valor do plano atual', 'mensalidade atual', 'valor_atual'])) || null,
       investimento: normalizeText(field(body, ['investimento', 'investimento pretendido', 'investimento_pretendido', 'pretensao investimento', 'valor_pretendido', 'budget', 'orcamento'])),

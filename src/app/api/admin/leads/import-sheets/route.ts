@@ -128,6 +128,7 @@ function toRows(csv: string): CsvRow[] {
     'tem_cnpj',
     'tem_plano_ativo',
     'plano_ativo',
+    'planoativo',
     'plano_atual',
     'convenio_atual',
     'operadora_atual',
@@ -196,6 +197,72 @@ function parseCurrencyValue(value: string) {
     .replace(',', '.');
   const parsed = Number(numeric);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizePlanActiveLabel(value: string) {
+  const text = String(value || '').trim();
+  const normalized = normalizeHeader(text);
+  if (!normalized) return '';
+  if (normalized.includes('nao_tenho') || normalized.includes('nao_possui') || normalized === 'nao' || normalized === 'n') return 'Nao';
+  if (normalized.includes('tenho') || normalized.includes('possui') || normalized === 'sim' || normalized === 's') return 'Sim';
+  return text;
+}
+
+function normalizePhoneKey(value: string) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function normalizeDateKey(value: string | null) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function buildLeadIdentityKey(lead: Pick<LeadInsert, 'corretor_id' | 'data_entrada' | 'nome' | 'telefone'>) {
+  return [
+    lead.corretor_id || '',
+    normalizeDateKey(lead.data_entrada),
+    normalizeHeader(lead.nome || ''),
+    normalizePhoneKey(lead.telefone || ''),
+  ].join('|');
+}
+
+function isBlankStored(value: unknown) {
+  const text = String(value ?? '').trim();
+  if (!text || text === '-') return true;
+  return ['nao informado', 'não informado', 'sem aba'].includes(text.toLowerCase());
+}
+
+function buildEnrichmentUpdate(existing: any, incoming: LeadInsert) {
+  const update: Record<string, string | number | null> = {};
+  const fields: Array<keyof LeadInsert> = [
+    'idades',
+    'possui_cnpj',
+    'tem_plano_ativo',
+    'plano_atual',
+    'custo_plano_atual',
+    'investimento',
+    'cidade',
+    'operadora',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_term',
+    'utm_content',
+    'valor_negociacao',
+    'operadora_negociacao',
+  ];
+
+  fields.forEach((field) => {
+    const value = incoming[field];
+    if (value === undefined || value === null || value === '') return;
+    if (isBlankStored(existing[field])) {
+      update[field] = value;
+    }
+  });
+
+  return update;
 }
 
 function orderedCells(row: CsvRow) {
@@ -636,7 +703,7 @@ export async function POST(request: Request) {
             telefone: rawTelefone || 'Telefone nao informado',
             idades: pick(row, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas']),
             possui_cnpj: pick(row, ['possui cnpj', 'cnpj', 'tem cnpj']) || 'Nao informado',
-            tem_plano_ativo: pick(row, ['tem plano ativo', 'plano ativo', 'possui plano', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano']) || 'Nao informado',
+            tem_plano_ativo: normalizePlanActiveLabel(pick(row, ['tem plano ativo', 'plano ativo', 'planoativo', 'possui plano', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano'])) || 'Nao informado',
             plano_atual: pick(row, ['plano atual', 'operadora atual', 'convenio atual', 'convênio atual', 'seguradora atual', 'plano']),
             custo_plano_atual: pick(row, ['custo plano atual', 'custo atual', 'valor plano atual', 'custo do plano', 'custo do plano atual', 'valor do plano atual', 'mensalidade atual']),
             investimento: pick(row, ['investimento', 'investimento pretendido', 'pretensao investimento', 'quer investir quanto', 'quanto pretende investir', 'orcamento']),
@@ -649,7 +716,7 @@ export async function POST(request: Request) {
             utm_content: pick(row, ['utm_content', 'content', 'anuncio', 'anúncio', 'ad', 'criativo']),
             valor_negociacao: parseCurrencyValue(pick(row, ['valor negociacao', 'valor negociação', 'valor da negociacao', 'valor da negociação', 'valor cotacao', 'valor cotação', 'valor da cotacao', 'valor da cotação', 'valor proposta', 'valor da proposta', 'valor venda', 'valor fechado', 'receita'])),
             operadora_negociacao: pick(row, ['operadora venda', 'operadora da venda', 'operadora negociacao', 'operadora negociação', 'operadora escolhida']),
-            status: statusFromSheet(pick(row, ['status']) || 'Aguardando atendimento'),
+            status: statusFromSheet(pick(row, ['status', 'negocio etapa', 'negocio - etapa']) || 'Aguardando atendimento'),
             observacoes: mergeNotes(buildLeadImportWarningNote(warnings), buildNotes(row)),
           };
 
@@ -668,6 +735,7 @@ export async function POST(request: Request) {
     }
 
     const existingKeys = new Set<string>();
+    const existingIdentity = new Map<string, any>();
     let existingPage = 0;
     const existingLimit = 1000;
     let fetchExisting = true;
@@ -677,7 +745,7 @@ export async function POST(request: Request) {
       const to = from + existingLimit - 1;
       const { data: existingLeads, error: existingError } = await supabaseAdmin
         .from('leads')
-        .select('corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
+        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, valor_negociacao, operadora_negociacao, status')
         .eq('corretor_id', targetCorretorId)
         .range(from, to);
 
@@ -685,7 +753,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: existingError.message }, { status: 500 });
       }
 
-      (existingLeads || []).forEach((lead) => existingKeys.add(buildLeadDuplicateKey(lead)));
+      (existingLeads || []).forEach((lead) => {
+        existingKeys.add(buildLeadDuplicateKey(lead));
+        existingIdentity.set(buildLeadIdentityKey(lead), lead);
+      });
       if (!existingLeads || existingLeads.length < existingLimit) {
         fetchExisting = false;
       } else {
@@ -693,23 +764,50 @@ export async function POST(request: Request) {
       }
     }
 
+    const enrichmentUpdates: Array<{ id: string; update: Record<string, string | number | null> }> = [];
     const uniqueLeads = leads.filter((lead) => {
       const key = buildLeadDuplicateKey(lead);
-      if (existingKeys.has(key)) {
+      const identityKey = buildLeadIdentityKey(lead);
+      const existing = existingIdentity.get(identityKey);
+      if (existingKeys.has(key) || existing) {
+        if (existing?.id) {
+          const update = buildEnrichmentUpdate(existing, lead);
+          if (Object.keys(update).length > 0) {
+            enrichmentUpdates.push({ id: existing.id, update });
+            Object.assign(existing, update);
+          }
+        }
         duplicated += 1;
         return false;
       }
       existingKeys.add(key);
+      existingIdentity.set(identityKey, lead);
       return true;
     });
 
+    let enriched = 0;
+    for (const item of enrichmentUpdates) {
+      const { error: updateError } = await supabaseAdmin
+        .from('leads')
+        .update({ ...item.update, updated_at: new Date().toISOString() })
+        .eq('id', item.id);
+
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+      enriched += 1;
+    }
+
     if (uniqueLeads.length === 0) {
       return NextResponse.json({
-        error: 'Todos os leads da planilha ja existem no CRM.',
+        success: enriched > 0,
+        error: enriched > 0 ? undefined : 'Todos os leads da planilha ja existem no CRM.',
+        imported: 0,
+        enriched,
         duplicated,
         skipped,
         incomplete,
-      }, { status: 409 });
+      }, { status: enriched > 0 ? 200 : 409 });
     }
 
     const { data, error } = await supabaseAdmin
@@ -728,6 +826,7 @@ export async function POST(request: Request) {
       metadata: {
         corretor_nome: corretor.nome,
         imported: data?.length || uniqueLeads.length,
+        enriched,
         incomplete,
         skipped,
         duplicated,
@@ -738,6 +837,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       imported: data?.length || uniqueLeads.length,
+      enriched,
       skipped,
       duplicated,
       incomplete,
