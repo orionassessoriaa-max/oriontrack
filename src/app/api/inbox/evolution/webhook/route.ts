@@ -81,7 +81,6 @@ export async function POST(request: Request) {
     }
 
     const lead = await findLead(profile.corretor_id, phone);
-    const contactName = data?.pushName || data?.senderName || data?.name || lead?.nome || phone;
 
     const { data: currentConversation } = await supabaseAdmin
       .from('whatsapp_conversas')
@@ -90,6 +89,14 @@ export async function POST(request: Request) {
       .eq('telefone', phone)
       .limit(1)
       .maybeSingle();
+
+    // Ignorar mensagens de contatos pessoais (que não sejam leads no CRM e não tenham conversa com lead_id ativa)
+    if (!lead && (!currentConversation || !currentConversation.lead_id)) {
+      console.log(`[evolution_webhook] Ignorando contato pessoal: ${phone} (corretor: ${profile.corretor_id})`);
+      return NextResponse.json({ ok: true, ignored: true, reason: 'Not a CRM lead' });
+    }
+
+    const contactName = data?.pushName || data?.senderName || data?.name || lead?.nome || phone;
 
     let conversation = currentConversation;
     if (!conversation) {

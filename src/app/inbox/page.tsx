@@ -103,6 +103,8 @@ export default function BrokerInboxPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const selectedConversationRef = useRef<Conversation | null>(null);
 
   // Template Modal
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -232,13 +234,15 @@ export default function BrokerInboxPage() {
 
 
   // Fetch conversations
-  async function fetchInbox() {
+  async function fetchInbox(isSilent = false) {
     if (!profile?.corretor_id) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!isSilent) {
+      setLoading(true);
+    }
     const params = new URLSearchParams(window.location.search);
     const urlPhone = params.get('telefone') || '';
 
@@ -317,7 +321,13 @@ export default function BrokerInboxPage() {
     }
 
     setConversations(rows);
-    setSelectedConversation(matchedConv || rows[0] || null);
+    setSelectedConversation(prev => {
+      if (prev) {
+        const updated = rows.find(r => r.id === prev.id);
+        return updated || prev;
+      }
+      return matchedConv || rows[0] || null;
+    });
     setLoading(false);
     void fetchConnectionStatus();
   }
@@ -327,12 +337,16 @@ export default function BrokerInboxPage() {
   }, [profile?.corretor_id, profile?.nome_empresa]);
 
   useEffect(() => {
-    if (!isWhatsAppConnected && (qrCode || whatsappStatus === 'connecting')) {
-      const interval = setInterval(() => {
-        void fetchConnectionStatus();
-      }, 5000);
-      return () => clearInterval(interval);
+    if (!isWhatsAppConnected && !qrCode && whatsappStatus !== 'connecting') {
+      return;
     }
+
+    const intervalTime = isWhatsAppConnected ? 30000 : 5000;
+    const interval = setInterval(() => {
+      void fetchConnectionStatus();
+    }, intervalTime);
+
+    return () => clearInterval(interval);
   }, [isWhatsAppConnected, qrCode, whatsappStatus]);
 
   // Fetch team members when forwarding modal opens
@@ -341,6 +355,58 @@ export default function BrokerInboxPage() {
       void fetchTeamMembers();
     }
   }, [showForwardModal]);
+
+  // Maintain selectedConversationRef pointing to current selected conversation
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation;
+  }, [selectedConversation]);
+
+  // Setup Supabase Realtime subscription for messages and conversation events
+  useEffect(() => {
+    if (!profile?.corretor_id) return;
+
+    const channel = supabase
+      .channel('realtime:inbox_sync')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
+        (payload) => {
+          const newMsg = payload.new as InboxMessage;
+          const currentSelected = selectedConversationRef.current;
+
+          // If the message is for the currently selected conversation, append it
+          if (currentSelected && newMsg.conversa_id === currentSelected.id) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) {
+                return prev;
+              }
+              return [...prev, newMsg];
+            });
+          }
+
+          // Trigger a silent inbox refresh to update the sidebar order/preview
+          void fetchInbox(true);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'whatsapp_conversas' },
+        () => {
+          // Trigger a silent inbox refresh to update the sidebar when any conversation changes
+          void fetchInbox(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.corretor_id]);
+
+  // Scroll to bottom when messages list changes
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
 
   // Fetch Messages for Selected Conversation
@@ -1041,13 +1107,22 @@ export default function BrokerInboxPage() {
                 )}
               </div>
             </div>
-            <button
-              onClick={connectWhatsApp}
-              disabled={connecting}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-2xs font-black uppercase text-white shadow-lg shadow-orange-950/20 disabled:opacity-50 cursor-pointer"
-            >
-              {connecting ? 'Gerando QR...' : 'Conectar Conta'}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={disconnectWhatsApp}
+                disabled={connecting}
+                className="px-4 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/40 border border-rose-500/30 text-rose-400 text-2xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {connecting ? 'Limpando...' : 'Forçar Desconexão'}
+              </button>
+              <button
+                onClick={connectWhatsApp}
+                disabled={connecting}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-2xs font-black uppercase text-white shadow-lg shadow-orange-950/20 disabled:opacity-50 cursor-pointer"
+              >
+                {connecting ? 'Gerando QR...' : 'Conectar Conta'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -1347,6 +1422,7 @@ export default function BrokerInboxPage() {
                       </p>
                     </div>
                   )}
+                  <div ref={messagesEndRef} />
                 </div>
 
                 {/* Rodapé de envio de mensagens */}
