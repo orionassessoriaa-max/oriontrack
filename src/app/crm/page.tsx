@@ -654,7 +654,7 @@ export default function CrmPage() {
 
   const staleLeadIds = useMemo(() => new Set(leads.filter(isStale).map((lead) => lead.id)), [leads]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente').map((task) => task.lead_id)), [tarefas]);
-  const cadenceLeadIds = useMemo(() => new Set(leads.filter((lead) => lead.cadencia_inicio).map((lead) => lead.id)), [leads]);
+  const cadenceLeadIds = useMemo(() => new Set(leads.filter((lead) => lead.cadencia_ativa === true).map((lead) => lead.id)), [leads]);
   const todayTaskLeadIds = useMemo(() => {
     const today = new Date().toDateString();
     return new Set(
