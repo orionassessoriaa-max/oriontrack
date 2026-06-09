@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
@@ -26,6 +26,7 @@ type Membro = {
   status: string;
   ordem: number;
   ultimo_lead_at: string | null;
+  participa_rodizio?: boolean;
   tipo_usuario?: string;
 };
 
@@ -75,6 +76,8 @@ type MemberStats = Membro & {
   cotacoes: number;
   receita: number;
   comissao: number;
+  parados24h: number;
+  tempoMedioHoras: number;
   ultimoLead?: string | null;
 };
 
@@ -91,6 +94,20 @@ function toNumber(value: unknown) {
 
 function normalizeStatus(value?: string | null) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function hoursBetween(start?: string | null, end?: string | null) {
+  if (!start || !end) return 0;
+  const diff = new Date(end).getTime() - new Date(start).getTime();
+  if (!Number.isFinite(diff) || diff <= 0) return 0;
+  return Math.round(diff / 36_000) / 100;
+}
+
+function hoursSince(value?: string | null) {
+  if (!value) return 0;
+  const diff = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(diff) || diff <= 0) return 0;
+  return Math.floor(diff / 36_000) / 100;
 }
 
 export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerProps) {
@@ -126,7 +143,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [memberRole, setMemberRole] = useState<'corretor_membro' | 'corretor_admin'>('corretor_membro');
   const [skipOnboarding, setSkipOnboarding] = useState(false);
   const [showAddMemberForm, setShowAddMemberForm] = useState(false);
-  const canAssignLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
+  const canAssignLeads = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
   const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const displayTeamName = brokerageName || team?.nome || 'Time comercial';
 
@@ -136,23 +153,30 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       const stats = memberLeads.reduce((acc, lead) => {
         const status = normalizeStatus(lead.status);
         const isSale = status.includes('venda');
+        const isLost = status.includes('sem interesse') || status.includes('nao tive retorno') || status.includes('telefone nao existe');
         const isNegotiation = status.includes('negoci');
         const isQuote = status.includes('cotacao') || status.includes('cota');
         const noReply = status.includes('retorno') || status.includes('resposta') || status.includes('aguardando') || status.includes('contato feito');
+        const lastMovement = lead.updated_at || lead.data_entrada;
+        const isStalled = !isSale && !isLost && hoursSince(lastMovement) >= 24;
 
         acc.semResposta += noReply ? 1 : 0;
         acc.negociacao += isNegotiation ? 1 : 0;
         acc.cotacoes += isQuote ? 1 : 0;
         acc.vendas += isSale ? 1 : 0;
+        acc.parados24h += isStalled ? 1 : 0;
+        acc.tempoTotalHoras += hoursBetween(lead.data_entrada, lead.updated_at);
+        acc.leadsComTempo += lead.data_entrada && lead.updated_at ? 1 : 0;
         acc.receita += toNumber(lead.valor_venda) || (isSale ? toNumber(lead.valor_negociacao) : 0);
         acc.comissao += toNumber(lead.valor_comissao);
         return acc;
-      }, { semResposta: 0, negociacao: 0, cotacoes: 0, vendas: 0, receita: 0, comissao: 0 });
+      }, { semResposta: 0, negociacao: 0, cotacoes: 0, vendas: 0, receita: 0, comissao: 0, parados24h: 0, tempoTotalHoras: 0, leadsComTempo: 0 });
 
       return {
         ...member,
         totalLeads: memberLeads.length,
         ultimoLead: memberLeads[0]?.data_entrada || member.ultimo_lead_at,
+        tempoMedioHoras: stats.leadsComTempo ? Math.round((stats.tempoTotalHoras / stats.leadsComTempo) * 10) / 10 : 0,
         ...stats,
       };
     });
@@ -164,12 +188,19 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     const semResposta = memberStats.reduce((sum, member) => sum + member.semResposta, 0);
     const comissao = memberStats.reduce((sum, member) => sum + member.comissao, 0);
     const receita = memberStats.reduce((sum, member) => sum + member.receita, 0);
+    const parados24h = memberStats.reduce((sum, member) => sum + member.parados24h, 0);
+    const participantesRodizio = membros.filter((member) => member.participa_rodizio !== false && ['active', 'ativo', 'Ativo'].includes(member.status || '')).length;
+    const tempoTotal = memberStats.reduce((sum, member) => sum + (member.tempoMedioHoras * member.totalLeads), 0);
+    const totalComTempo = memberStats.reduce((sum, member) => sum + (member.tempoMedioHoras ? member.totalLeads : 0), 0);
     return {
       total: leads.length,
       assigned,
       unassigned: Math.max(leads.length - assigned, 0),
+      participantesRodizio,
       sales,
       semResposta,
+      parados24h,
+      tempoMedioHoras: totalComTempo ? Math.round((tempoTotal / totalComTempo) * 10) / 10 : 0,
       comissao,
       receita,
       conversion: leads.length ? Math.round((sales / leads.length) * 100) : 0,
@@ -371,6 +402,21 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       await postTeam({ action: 'toggle_distribution', active });
       setSettings((current) => ({ ...current, rodizio_ativo: active }));
       setTeam((current) => current ? { ...current, ativo: active } : current);
+      await fetchTeam();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
+  async function toggleMemberDistribution(member: Membro, active: boolean) {
+    setSettingsSaving(true);
+    setError(null);
+
+    try {
+      await postTeam({ action: 'toggle_member_distribution', member_id: member.id, participa_rodizio: active });
+      setMembros((current) => current.map((item) => item.id === member.id ? { ...item, participa_rodizio: active } : item));
       await fetchTeam();
     } catch (err: any) {
       setError(err.message);
@@ -777,7 +823,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                   <h4 className="text-xs font-black">Direcionamento Manual</h4>
                 </div>
                 <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                  Como líder, você tem total controle! Pode direcionar ou transferir qualquer cliente da sua própria carteira diretamente para um corretor específico a qualquer momento.
+                  Como líder, você tem total controle! Pode direcionar ou transferir qualquer cliente da concessionaria diretamente para um socio ou corretor especifico a qualquer momento.
                 </p>
               </div>
             </div>
@@ -786,12 +832,14 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       </div>
 
       {/* Stats Section */}
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
-          { label: 'Leads do time', value: teamSummary.total, detail: `${teamSummary.assigned} atribuídos`, icon: Users, tone: 'blue' },
-          { label: 'Sem resposta', value: teamSummary.semResposta, detail: 'precisam de atenção', icon: Target, tone: 'amber' },
-          { label: 'Vendas', value: teamSummary.sales, detail: `${teamSummary.conversion}% conversão`, icon: TrendingUp, tone: 'emerald' },
-          ...(canViewCommission ? [{ label: 'Comissão', value: currency(teamSummary.comissao), detail: `${currency(teamSummary.receita)} em vendas`, icon: BarChart3, tone: 'slate' }] : []),
+          { label: 'Leads do time', value: teamSummary.total, detail: `${teamSummary.assigned} atribuidos`, icon: Users, tone: 'blue' },
+          { label: 'No rodizio', value: teamSummary.participantesRodizio, detail: 'recebem leads novos', icon: Send, tone: 'blue' },
+          { label: 'Sem resposta', value: teamSummary.semResposta, detail: 'precisam de atencao', icon: Target, tone: 'amber' },
+          { label: 'Parados +24h', value: teamSummary.parados24h, detail: `${teamSummary.tempoMedioHoras}h media mov.`, icon: Clock, tone: 'amber' },
+          { label: 'Vendas', value: teamSummary.sales, detail: `${teamSummary.conversion}% conversao`, icon: TrendingUp, tone: 'emerald' },
+          ...(canViewCommission ? [{ label: 'Comissao', value: currency(teamSummary.comissao), detail: `${currency(teamSummary.receita)} em vendas`, icon: BarChart3, tone: 'slate' }] : []),
         ].map((card) => {
           const Icon = card.icon;
           const tone = {
@@ -839,10 +887,15 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-white group-hover:text-cyan-400 transition-colors">{member.nome}</p>
                       <p className="text-xs font-bold text-slate-400 mt-1">
-                        {member.totalLeads} leads | {member.vendas} vendas{canViewCommission ? ` | ${currency(member.comissao)} comissão` : ''}
+                        {member.totalLeads} leads | {member.vendas} vendas | {member.parados24h} parados{canViewCommission ? ` | ${currency(member.comissao)} comissao` : ''}
                       </p>
                     </div>
-                    <span className="text-lg font-black text-cyan-400">{width}%</span>
+                    <div className="text-right">
+                      <span className="block text-lg font-black text-cyan-400">{width}%</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                        {member.participa_rodizio !== false ? 'no rodizio' : 'fora'}
+                      </span>
+                    </div>
                   </div>
                   <div className="h-3 overflow-hidden rounded-full bg-[#090f1d] border border-white/5">
                     <div className="h-full rounded-full bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400 transition-all duration-700" style={{ width: `${width}%` }} />
@@ -981,6 +1034,40 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       <span className="h-6 w-11 rounded-full bg-white/10 transition peer-checked:bg-cyan-500 peer-disabled:opacity-50" />
                       <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
                     </label>
+                  </div>
+
+                  <div className="h-px bg-white/5" />
+
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-black text-white text-sm">Rodizio da concessionaria</p>
+                      <p className="mt-1 text-[11px] font-bold leading-relaxed text-slate-400">
+                        Escolha quem participa da contagem. Admins podem ver tudo mesmo quando estiverem fora do rodizio.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {memberStats.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-[#070b13] px-4 py-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-black text-white">{member.nome}</p>
+                            <p className="text-[10px] font-bold text-slate-500">
+                              {member.tipo_usuario === 'corretor_admin' ? 'Socio/Admin' : 'Corretor'} | {member.totalLeads} leads recebidos
+                            </p>
+                          </div>
+                          <label className="relative inline-flex cursor-pointer items-center shrink-0">
+                            <input
+                              type="checkbox"
+                              className="peer sr-only"
+                              checked={member.participa_rodizio !== false}
+                              disabled={settingsSaving || member.id.startsWith('profile:')}
+                              onChange={(event) => toggleMemberDistribution(member, event.target.checked)}
+                            />
+                            <span className="h-6 w-11 rounded-full bg-white/10 transition peer-checked:bg-emerald-500 peer-disabled:opacity-50" />
+                            <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="h-px bg-white/5" />
@@ -1150,6 +1237,9 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                                 Admin do Time
                               </span>
                             )}
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-[8px] font-black uppercase tracking-widest leading-none ${member.participa_rodizio !== false ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300' : 'border-slate-500/20 bg-slate-500/10 text-slate-400'}`}>
+                              {member.participa_rodizio !== false ? 'Participa do rodizio' : 'Fora do rodizio'}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -1166,7 +1256,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                     </div>
 
                     {/* Bottom Row: 4 metrics side-by-side, fully responsive */}
-                    <div className={`grid ${canViewCommission ? 'grid-cols-4' : 'grid-cols-3'} gap-2 sm:gap-3 mt-1 border-t border-white/5 pt-4`}>
+                    <div className={`grid grid-cols-2 sm:grid-cols-3 ${canViewCommission ? 'xl:grid-cols-6' : 'xl:grid-cols-5'} gap-2 sm:gap-3 mt-1 border-t border-white/5 pt-4`}>
                       <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
                         <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider">Leads</p>
                         <p className="text-sm font-black text-white mt-0.5">{member.totalLeads}</p>
@@ -1178,6 +1268,14 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
                         <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Vendas</p>
                         <p className="text-sm font-black text-white mt-0.5">{member.vendas}</p>
+                      </div>
+                      <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
+                        <p className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Parados</p>
+                        <p className="text-sm font-black text-white mt-0.5">{member.parados24h}</p>
+                      </div>
+                      <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
+                        <p className="text-[9px] font-bold text-cyan-400 uppercase tracking-wider">Media</p>
+                        <p className="text-sm font-black text-white mt-0.5">{member.tempoMedioHoras}h</p>
                       </div>
                       {canViewCommission && (
                         <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">

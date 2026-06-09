@@ -98,29 +98,57 @@ async function ensureTeam(corretorId: string, nome = 'Time comercial') {
 async function getCorretorIdentity(corretorId: string) {
   const { data } = await supabaseAdmin
     .from('corretores')
-    .select('id, nome, nome_empresa, rodizio_ativo')
+    .select('id, nome, nome_empresa, rodizio_ativo, created_at')
     .eq('id', corretorId)
     .maybeSingle();
 
   return data;
 }
 
-async function getOwnerProfiles(corretorId: string) {
+async function getCorretorScope(corretor: any) {
+  const brokerageName = String(corretor?.nome_empresa || '').trim();
+  if (!brokerageName) {
+    return {
+      primaryCorretorId: corretor.id,
+      corretorIds: [corretor.id],
+      brokerageName: '',
+      primaryCorretor: corretor,
+    };
+  }
+
+  const { data: brokerageCorretores } = await supabaseAdmin
+    .from('corretores')
+    .select('id, nome, nome_empresa, rodizio_ativo, created_at')
+    .eq('nome_empresa', brokerageName)
+    .order('created_at', { ascending: true });
+
+  const corretores = brokerageCorretores && brokerageCorretores.length > 0 ? brokerageCorretores : [corretor];
+  const primaryCorretor = corretores[0] || corretor;
+
+  return {
+    primaryCorretorId: primaryCorretor.id,
+    corretorIds: corretores.map((item) => item.id),
+    brokerageName,
+    primaryCorretor,
+  };
+}
+
+async function getOwnerProfiles(corretorIds: string[]) {
   const { data } = await supabaseAdmin
     .from('profiles')
     .select('id, nome, email, email_real')
-    .eq('tipo_usuario', 'corretor')
-    .eq('corretor_id', corretorId)
+    .in('tipo_usuario', ['corretor', 'corretor_admin'])
+    .in('corretor_id', corretorIds)
     .eq('status', 'active');
 
   return data || [];
 }
 
-async function getAssignableProfiles(corretorId: string) {
+async function getAssignableProfiles(corretorIds: string[]) {
   const { data } = await supabaseAdmin
     .from('profiles')
     .select('id, nome, email, email_real, tipo_usuario')
-    .eq('corretor_id', corretorId)
+    .in('corretor_id', corretorIds)
     .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
     .eq('status', 'active');
 
@@ -132,24 +160,32 @@ export async function GET(request: Request) {
     const guard = await requireUser(request);
     if ('error' in guard) return guard.error;
 
-    const corretorId = await getRequestedCorretorId(request, guard.profile);
-    if (!corretorId) {
+    const requestedCorretorId = await getRequestedCorretorId(request, guard.profile);
+    if (!requestedCorretorId) {
       return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
     }
 
-    const [teamRes, corretorIdentity] = await Promise.all([
+    const requestedIdentity = await getCorretorIdentity(requestedCorretorId);
+    if (!requestedIdentity) {
+      return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
+    }
+
+    const scope = await getCorretorScope(requestedIdentity);
+    const corretorId = scope.primaryCorretorId;
+    const corretorIdentity = scope.primaryCorretor;
+
+    const [teamRes] = await Promise.all([
       supabaseAdmin
         .from('corretor_times')
         .select('*')
         .eq('corretor_id', corretorId)
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle(),
-      getCorretorIdentity(corretorId)
+        .maybeSingle()
     ]);
 
     const { data: team, error: teamError } = teamRes;
-    const brokerageName = String(corretorIdentity?.nome_empresa || '').trim();
+    const brokerageName = scope.brokerageName;
 
     if (teamError) throw teamError;
 
@@ -169,7 +205,7 @@ export async function GET(request: Request) {
 
     const { data: membros, error: membersError } = await supabaseAdmin
       .from('corretor_time_membros')
-      .select('id, time_id, corretor_id, profile_id, nome, email, status, ordem, ultimo_lead_at, created_at, profiles:profile_id(foto_url, tipo_usuario)')
+      .select('id, time_id, corretor_id, profile_id, nome, email, status, ordem, ultimo_lead_at, participa_rodizio, created_at, profiles:profile_id(foto_url, tipo_usuario)')
       .eq('time_id', team.id)
       .order('ordem', { ascending: true })
       .order('created_at', { ascending: true });
@@ -181,7 +217,7 @@ export async function GET(request: Request) {
       const { data: leadsData, error: leadsError } = await supabaseAdmin
         .from('leads')
         .select('id, nome, telefone, status, cidade, investimento, valor_negociacao, valor_venda, valor_comissao, responsavel_membro_id, data_entrada, updated_at')
-        .eq('corretor_id', corretorId)
+        .in('corretor_id', scope.corretorIds)
         .order('data_entrada', { ascending: false, nullsFirst: false })
         .limit(1000);
 
@@ -190,8 +226,8 @@ export async function GET(request: Request) {
     }
 
     const [ownerProfiles, assignableProfiles] = await Promise.all([
-      getOwnerProfiles(corretorId),
-      getAssignableProfiles(corretorId),
+      getOwnerProfiles(scope.corretorIds),
+      getAssignableProfiles(scope.corretorIds),
     ]);
     const ownerInDistribution = ownerProfiles.length > 0 && ownerProfiles.every((op) => 
       membros.some((m: any) => m.profile_id === op.id)
@@ -209,6 +245,7 @@ export async function GET(request: Request) {
         status: m.status,
         ordem: m.ordem,
         ultimo_lead_at: m.ultimo_lead_at,
+        participa_rodizio: m.participa_rodizio !== false,
         created_at: m.created_at,
         foto_url: joinedProfile?.foto_url || null,
         tipo_usuario: joinedProfile?.tipo_usuario || 'corretor_membro',
@@ -228,6 +265,7 @@ export async function GET(request: Request) {
         status: 'ativo',
         ordem: 9999,
         ultimo_lead_at: null,
+        participa_rodizio: false,
         created_at: null,
         foto_url: null,
         tipo_usuario: profile.tipo_usuario,
@@ -258,16 +296,20 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const action = String(body.action || 'create_member');
-    const corretorId = await getRequestedCorretorId(request, guard.profile, body);
-    if (!corretorId) {
+    const requestedCorretorId = await getRequestedCorretorId(request, guard.profile, body);
+    if (!requestedCorretorId) {
       return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
     }
 
-    const corretor = await getCorretorIdentity(corretorId);
+    const requestedCorretor = await getCorretorIdentity(requestedCorretorId);
 
-    if (!corretor) {
+    if (!requestedCorretor) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
     }
+
+    const scope = await getCorretorScope(requestedCorretor);
+    const corretorId = scope.primaryCorretorId;
+    const corretor = scope.primaryCorretor;
 
     if (action === 'create_team') {
       const brokerageName = String(corretor.nome_empresa || '').trim();
@@ -426,7 +468,7 @@ export async function POST(request: Request) {
       }
 
       const includeOwner = Boolean(body.include_owner);
-      const ownerProfiles = await getOwnerProfiles(corretorId);
+      const ownerProfiles = await getOwnerProfiles(scope.corretorIds);
       if (ownerProfiles.length === 0) {
         return NextResponse.json({ error: 'Nao encontrei o acesso principal desse corretor.' }, { status: 404 });
       }
@@ -463,6 +505,7 @@ export async function POST(request: Request) {
               profile_id: op.id,
               nome: op.nome || corretor.nome,
               email: op.email_real || op.email,
+              participa_rodizio: true,
               ordem: currentOrdem,
             });
           }
@@ -571,6 +614,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true });
     }
 
+    if (action === 'toggle_member_distribution') {
+      if (!['admin', 'corretor', 'corretor_admin'].includes(guard.profile.tipo_usuario)) {
+        return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+      }
+
+      const memberId = String(body.member_id || '').trim();
+      const participaRodizio = Boolean(body.participa_rodizio);
+      if (!memberId) return NextResponse.json({ error: 'Membro nao informado.' }, { status: 400 });
+
+      if (memberId.startsWith('profile:')) {
+        return NextResponse.json({ error: 'Salve este perfil no time antes de alterar o rodizio.' }, { status: 400 });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .update({ participa_rodizio: participaRodizio })
+        .eq('id', memberId)
+        .eq('corretor_id', corretorId)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.member.rotation.toggle',
+        entity_type: 'corretor_time_membro',
+        entity_id: memberId,
+        metadata: { corretor_id: corretorId, participa_rodizio: participaRodizio },
+      });
+
+      return NextResponse.json({ success: true, membro: data });
+    }
+
     if (action === 'update_member') {
       const memberId = String(body.member_id || '').trim();
       const nome = String(body.nome || '').trim();
@@ -627,8 +703,8 @@ export async function POST(request: Request) {
     }
 
     if (action === 'assign_lead') {
-      if (guard.profile.tipo_usuario !== 'corretor') {
-        return NextResponse.json({ error: 'Apenas o corretor dono do time pode enviar leads.' }, { status: 403 });
+      if (!['admin', 'corretor', 'corretor_admin'].includes(guard.profile.tipo_usuario)) {
+        return NextResponse.json({ error: 'Apenas admins do time podem enviar leads.' }, { status: 403 });
       }
 
       const leadId = String(body.lead_id || '').trim();
@@ -647,7 +723,7 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq('id', leadId)
-          .eq('corretor_id', corretorId);
+          .in('corretor_id', scope.corretorIds);
 
         if (updateError) throw updateError;
 
@@ -669,7 +745,7 @@ export async function POST(request: Request) {
           .from('profiles')
           .select('id, nome, email, email_real')
           .eq('id', profileId)
-          .eq('corretor_id', corretorId)
+          .in('corretor_id', scope.corretorIds)
           .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
           .eq('status', 'active')
           .maybeSingle();
@@ -703,6 +779,7 @@ export async function POST(request: Request) {
               nome: assignableProfile.nome,
               email: assignableProfile.email_real || assignableProfile.email,
               status: 'ativo',
+              participa_rodizio: true,
               ordem: Number(lastMember?.ordem || 0) + 1,
             }])
             .select('id')
@@ -727,7 +804,7 @@ export async function POST(request: Request) {
         .from('leads')
         .select('id')
         .eq('id', leadId)
-        .eq('corretor_id', corretorId)
+        .in('corretor_id', scope.corretorIds)
         .maybeSingle();
 
       if (!lead) return NextResponse.json({ error: 'Lead nao encontrado para este corretor.' }, { status: 404 });
@@ -740,7 +817,7 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', leadId)
-        .eq('corretor_id', corretorId);
+        .in('corretor_id', scope.corretorIds);
 
       if (updateError) throw updateError;
 
@@ -834,6 +911,7 @@ export async function POST(request: Request) {
           nome,
           email,
           ordem,
+          participa_rodizio: true,
         }])
         .select('*')
         .single();
