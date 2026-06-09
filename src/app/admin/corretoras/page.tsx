@@ -37,6 +37,7 @@ interface CorretoraGroup {
   status: string;
   empty?: boolean;
   corretora_id?: string | null;
+  modo_operacao?: OperationMode;
 }
 
 interface CorretoraRecord {
@@ -46,6 +47,19 @@ interface CorretoraRecord {
   status?: string | null;
   meta_ad_account_id?: string | null;
   meta_ad_account_name?: string | null;
+  modo_operacao?: OperationMode | null;
+}
+
+type OperationMode = 'individual' | 'grupo_rodizio' | 'grupo_rodizio_admin';
+
+const operationModeLabels: Record<OperationMode, string> = {
+  individual: 'Individual',
+  grupo_rodizio: 'Grupo com rodizio',
+  grupo_rodizio_admin: 'Grupo com rodizio + visao geral admin',
+};
+
+function normalizeOperationMode(value: unknown): OperationMode {
+  return value === 'grupo_rodizio' || value === 'grupo_rodizio_admin' ? value : 'individual';
 }
 
 type CorretoraMember = {
@@ -130,6 +144,7 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
       status: corretora.status || 'ativo',
       empty: true,
       corretora_id: corretora.id,
+      modo_operacao: normalizeOperationMode(corretora.modo_operacao),
     };
   });
 
@@ -150,6 +165,7 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
         status: c.status || 'ativo',
         empty: false,
         corretora_id: null,
+        modo_operacao: 'individual',
       };
     }
 
@@ -190,6 +206,7 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
         status: p.status || 'active',
         empty: false,
         corretora_id: null,
+        modo_operacao: 'individual',
       };
     }
 
@@ -221,6 +238,7 @@ function CorretorasContent() {
   const [newBrokerage, setNewBrokerage] = useState({ nome: '', descricao: '' });
   const [createBrokerageError, setCreateBrokerageError] = useState<string | null>(null);
   const [migrationPending, setMigrationPending] = useState(false);
+  const [savingOperationMode, setSavingOperationMode] = useState<string | null>(null);
 
   async function fetchData() {
     setLoading(true);
@@ -328,6 +346,40 @@ function CorretorasContent() {
     alert('ID copiado com sucesso!');
   };
 
+  const updateOperationMode = async (group: CorretoraGroup, modoOperacao: OperationMode) => {
+    const corretoraId = group.corretora_id || (group.empty ? group.id : null);
+    if (!corretoraId) {
+      alert('Crie a concessionaria no cadastro antes de alterar o modo de operacao.');
+      return;
+    }
+
+    setSavingOperationMode(group.id);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
+
+      const response = await fetch('/api/admin/corretoras', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id: corretoraId, modo_operacao: modoOperacao }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Erro ao atualizar modo de operacao.');
+
+      setCorretorasCadastradas((current) => current.map((item) =>
+        item.id === corretoraId ? { ...item, modo_operacao: modoOperacao } : item
+      ));
+    } catch (err: any) {
+      alert(err.message || 'Erro ao atualizar modo de operacao.');
+    } finally {
+      setSavingOperationMode(null);
+    }
+  };
+
   const createBrokerage = async (event: React.FormEvent) => {
     event.preventDefault();
     setCreatingBrokerage(true);
@@ -348,7 +400,7 @@ function CorretorasContent() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ nome, descricao }),
+        body: JSON.stringify({ nome, descricao, modo_operacao: 'individual' }),
       });
       const payload = await response.json().catch(() => ({}));
       let createdCorretora: CorretoraRecord | null = response.ok ? payload.corretora : null;
@@ -366,7 +418,7 @@ function CorretorasContent() {
         } else {
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('corretoras')
-            .insert([{ nome, descricao, status: 'ativo' }])
+            .insert([{ nome, descricao, status: 'ativo', modo_operacao: 'individual' }])
             .select('*')
             .single();
 
@@ -600,6 +652,23 @@ function CorretorasContent() {
                   </div>
 
                   <div className="flex items-center gap-4 flex-wrap md:flex-nowrap justify-between md:justify-end">
+                    <div
+                      onClick={(event) => event.stopPropagation()}
+                      className="flex min-w-[230px] flex-col gap-1"
+                    >
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Modo de operacao</span>
+                      <select
+                        value={normalizeOperationMode(c.modo_operacao)}
+                        disabled={savingOperationMode === c.id || !c.corretora_id}
+                        onChange={(event) => updateOperationMode(c, event.target.value as OperationMode)}
+                        className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-700 outline-none transition focus:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300"
+                      >
+                        {Object.entries(operationModeLabels).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+
                     <Link
                       href={newCorretorHref(c.nome)}
                       onClick={(event) => event.stopPropagation()}

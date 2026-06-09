@@ -54,6 +54,7 @@ type WhatsAppConversa = {
 };
 
 type MetricFilter = 'todos' | 'sem_resposta' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
+type CrmScopeView = 'meus' | 'todos_concessionaria' | 'sem_responsavel' | `member:${string}`;
 
 const columns: { id: LeadStatus; label: string; desc: string }[] = [
   { id: 'Aguardando atendimento', label: 'Oportunidade', desc: 'Entrou e precisa de primeiro contato' },
@@ -200,6 +201,7 @@ export default function CrmPage() {
   const [search, setSearch] = useState('');
   const [pageFilter, setPageFilter] = useState('todas');
   const [metricFilter, setMetricFilter] = useState<MetricFilter>('todos');
+  const [crmScopeView, setCrmScopeView] = useState<CrmScopeView>('meus');
   const [visibleLimits, setVisibleLimits] = useState<Record<string, number>>({});
   const [note, setNote] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
@@ -243,6 +245,7 @@ export default function CrmPage() {
   const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
   const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
+  const canUseDealershipViews = profile?.tipo_usuario === 'corretor_admin' || (canAssignTeamLeads && teamMembers.length > 0);
 
   useEffect(() => {
     const requestedFilter = new URLSearchParams(window.location.search).get('filtro') as MetricFilter | null;
@@ -250,6 +253,10 @@ export default function CrmPage() {
       setMetricFilter(requestedFilter);
     }
   }, []);
+
+  useEffect(() => {
+    setCrmScopeView(profile?.tipo_usuario === 'corretor_admin' ? 'todos_concessionaria' : 'meus');
+  }, [profile?.id, profile?.tipo_usuario]);
 
   // Metrics Dashboard States
   const [crmView, setCrmView] = useState<'board' | 'analytics'>('board');
@@ -652,26 +659,76 @@ export default function CrmPage() {
     return dbConversas;
   }, [conversas, leads, activeBrokersList, metricsStartDate, metricsEndDate, metricsChannel, metricsDepartment, metricsAgent]);
 
-  const staleLeadIds = useMemo(() => new Set(leads.filter(isStale).map((lead) => lead.id)), [leads]);
-  const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente').map((task) => task.lead_id)), [tarefas]);
-  const cadenceLeadIds = useMemo(() => new Set(leads.filter((lead) => lead.cadencia_ativa === true).map((lead) => lead.id)), [leads]);
+  const crmScopeOptions = useMemo(() => {
+    const options: Array<{ value: CrmScopeView; label: string; desc: string }> = [
+      { value: 'meus', label: 'Meus leads', desc: 'Somente leads sob minha responsabilidade' },
+    ];
+
+    if (canUseDealershipViews) {
+      options.push(
+        { value: 'todos_concessionaria', label: 'Todos da concessionaria', desc: 'CRM geral do grupo' },
+        { value: 'sem_responsavel', label: 'Sem responsavel', desc: 'Leads ainda liberados para distribuicao' }
+      );
+    }
+
+    teamMembers.forEach((member) => {
+      options.push({
+        value: `member:${member.id}`,
+        label: member.nome,
+        desc: member.tipo_usuario === 'corretor_admin' ? 'Admin da concessionaria' : 'Responsavel do time',
+      });
+    });
+
+    return options;
+  }, [canUseDealershipViews, teamMembers]);
+
+  useEffect(() => {
+    if (crmScopeOptions.some((option) => option.value === crmScopeView)) return;
+    setCrmScopeView(profile?.tipo_usuario === 'corretor_admin' ? 'todos_concessionaria' : 'meus');
+  }, [crmScopeOptions, crmScopeView, profile?.tipo_usuario]);
+
+  const viewScopedLeads = useMemo(() => {
+    const currentProfileId = profile?.id || null;
+    const currentCorretorId = profile?.corretor_id || null;
+
+    return leads.filter((lead) => {
+      if (crmScopeView === 'todos_concessionaria' && canUseDealershipViews) return true;
+      if (crmScopeView === 'sem_responsavel') {
+        return !lead.responsavel_membro_id && !lead.responsavel_profile_id;
+      }
+      if (crmScopeView.startsWith('member:')) {
+        const memberId = crmScopeView.replace('member:', '');
+        const member = teamMembers.find((item) => item.id === memberId);
+        return lead.responsavel_membro_id === memberId || (!!member?.profile_id && lead.responsavel_profile_id === member.profile_id);
+      }
+
+      const assignedToMe = (!!currentProfileId && lead.responsavel_profile_id === currentProfileId)
+        || (!!currentCorretorId && lead.corretor_id === currentCorretorId && !lead.responsavel_membro_id && !lead.responsavel_profile_id);
+      return assignedToMe;
+    });
+  }, [leads, crmScopeView, canUseDealershipViews, teamMembers, profile?.id, profile?.corretor_id]);
+
+  const scopedLeadIds = useMemo(() => new Set(viewScopedLeads.map((lead) => lead.id)), [viewScopedLeads]);
+  const staleLeadIds = useMemo(() => new Set(viewScopedLeads.filter(isStale).map((lead) => lead.id)), [viewScopedLeads]);
+  const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id)).map((task) => task.lead_id)), [tarefas, scopedLeadIds]);
+  const cadenceLeadIds = useMemo(() => new Set(viewScopedLeads.filter((lead) => lead.cadencia_ativa === true).map((lead) => lead.id)), [viewScopedLeads]);
   const todayTaskLeadIds = useMemo(() => {
     const today = new Date().toDateString();
     return new Set(
       tarefas
-        .filter((task) => task.status === 'pendente' && task.vencimento && new Date(task.vencimento).toDateString() === today)
+        .filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id) && task.vencimento && new Date(task.vencimento).toDateString() === today)
         .map((task) => task.lead_id)
     );
-  }, [tarefas]);
+  }, [tarefas, scopedLeadIds]);
   const fitLeadIds = useMemo(() => new Set(
-    leads
+    viewScopedLeads
       .filter((lead) => getLeadQualification(lead, tipoCampanha).tone === 'good')
       .map((lead) => lead.id)
-  ), [leads, tipoCampanha]);
+  ), [viewScopedLeads, tipoCampanha]);
 
   const filteredLeads = useMemo(() => {
     const term = search.toLowerCase();
-    const nextLeads = leads.filter((lead) => {
+    const nextLeads = viewScopedLeads.filter((lead) => {
       const leadPage = lead.operadora || '';
       const searchMatch = `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.status} ${lead.operadora || ''} ${lead.observacoes || ''}`.toLowerCase().includes(term);
       const pageMatch = pageFilter === 'todas' || (pageFilter === '__sem_pagina__' ? !leadPage : leadPage === pageFilter);
@@ -691,7 +748,7 @@ export default function CrmPage() {
     }
 
     return nextLeads;
-  }, [leads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, cadenceLeadIds, fitLeadIds]);
+  }, [viewScopedLeads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, cadenceLeadIds, fitLeadIds]);
 
   useEffect(() => {
     const board = boardScrollRef.current;
@@ -715,15 +772,15 @@ export default function CrmPage() {
   }, [filteredLeads.length, selectedLead?.id, loading]);
 
   const pageOptions = useMemo(() => {
-    const pages = leads.map((lead) => lead.operadora || '').filter(Boolean);
+    const pages = viewScopedLeads.map((lead) => lead.operadora || '').filter(Boolean);
     return Array.from(new Set(pages)).sort((a, b) => a.localeCompare(b));
-  }, [leads]);
+  }, [viewScopedLeads]);
 
   const staleCount = staleLeadIds.size;
-  const openTasks = tarefas.filter((task) => task.status === 'pendente').length;
-  const todayTasks = tarefas.filter((task) => task.status === 'pendente' && task.vencimento && new Date(task.vencimento).toDateString() === new Date().toDateString()).length;
+  const openTasks = tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id)).length;
+  const todayTasks = tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id) && task.vencimento && new Date(task.vencimento).toDateString() === new Date().toDateString()).length;
   const cadenceCount = cadenceLeadIds.size;
-  const fitStats = leads.reduce(
+  const fitStats = viewScopedLeads.reduce(
     (acc, lead) => {
       const qualification = getLeadQualification(lead, tipoCampanha);
       if (qualification.tone === 'good') acc.good += 1;
@@ -1101,6 +1158,22 @@ export default function CrmPage() {
               {pageOptions.map((page) => <option key={page} value={page}>{page}</option>)}
               <option value="__sem_pagina__">Sem pagina</option>
             </select>
+            {crmScopeOptions.length > 1 && (
+              <select
+                value={crmScopeView}
+                onChange={(event) => {
+                  setCrmScopeView(event.target.value as CrmScopeView);
+                  setMetricFilter('todos');
+                  setVisibleLimits({});
+                }}
+                className="w-full rounded-2xl border-none bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500/20 lg:w-[260px] lg:min-w-[260px]"
+                title="Visualizacao"
+              >
+                {crmScopeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            )}
             <button onClick={fetchCrm} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md lg:w-[170px]">
               {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Atualizar
             </button>
@@ -1188,7 +1261,7 @@ export default function CrmPage() {
       {crmView === 'board' ? (
         <>
           <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
-            <Stat label="Leads" value={leads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="border-gray-100 bg-white text-slate-600" />
+            <Stat label="Leads" value={viewScopedLeads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="border-gray-100 bg-white text-slate-600" />
             <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} active={metricFilter === 'sem_resposta'} onClick={() => setMetricFilter('sem_resposta')} className="border-amber-100 bg-amber-50 text-amber-700" />
             <Stat label="Tarefas" value={openTasks} icon={Clock} active={metricFilter === 'tarefas'} onClick={() => setMetricFilter('tarefas')} className="border-blue-100 bg-blue-50 text-blue-700" />
             <Stat label="Hoje" value={todayTasks} icon={CheckCircle2} active={metricFilter === 'hoje'} onClick={() => setMetricFilter('hoje')} className="border-emerald-100 bg-emerald-50 text-emerald-700" />
@@ -1206,6 +1279,22 @@ export default function CrmPage() {
               >
                 Limpar
               </button>
+            </div>
+          )}
+
+          {crmScopeOptions.length > 1 && (
+            <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-cyan-100 bg-cyan-50 px-5 py-4 text-sm font-bold text-cyan-800">
+              <UserCheck size={16} />
+              <span>Visualizacao: {crmScopeOptions.find((option) => option.value === crmScopeView)?.label || 'Meus leads'} ({viewScopedLeads.length})</span>
+              {crmScopeView !== 'todos_concessionaria' && (
+                <button
+                  type="button"
+                  onClick={() => setCrmScopeView('todos_concessionaria')}
+                  className="rounded-xl bg-white px-3 py-2 text-[11px] font-black uppercase tracking-widest text-cyan-700 shadow-sm"
+                >
+                  Ver CRM geral
+                </button>
+              )}
             </div>
           )}
 
