@@ -139,6 +139,8 @@ type TeamMember = {
   id: string;
   nome: string;
   email: string;
+  profile_id?: string | null;
+  tipo_usuario?: string | null;
 };
 
 function noteValue(lead: Lead, key: string) {
@@ -329,9 +331,11 @@ export default function BrokerLeadsPage() {
     const assignedMember = payload.member || null;
     const member = teamMembers.find((item) => item.id === memberId) || assignedMember;
     const nextMemberId = assignedMember?.id || memberId;
+    const nextProfileId = assignedMember?.profile_id || member?.profile_id || null;
     setLeads((current) => current.map((lead) => lead.id === leadId ? {
       ...lead,
       responsavel_membro_id: nextMemberId && nextMemberId !== 'unassigned' ? nextMemberId : null,
+      responsavel_profile_id: nextMemberId && nextMemberId !== 'unassigned' ? nextProfileId : null,
       responsavel_membro: member ? { nome: member.nome, email: member.email } : null,
     } : lead));
     if (assignedMember && !teamMembers.some((item) => item.id === assignedMember.id)) {

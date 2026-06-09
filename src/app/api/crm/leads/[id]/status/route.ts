@@ -30,6 +30,23 @@ function monthStart() {
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 3)).toISOString().slice(0, 10);
 }
 
+async function canAccessLead(profile: any, lead: any) {
+  if (profile.tipo_usuario === 'admin') return true;
+  if (profile.tipo_usuario === 'corretor_membro') return lead.responsavel_profile_id === profile.id;
+  if (profile.tipo_usuario === 'corretor') return lead.corretor_id === profile.corretor_id;
+  if (profile.tipo_usuario !== 'corretor_admin') return false;
+  if (lead.corretor_id === profile.corretor_id) return true;
+
+  const { data: rows } = await supabaseAdmin
+    .from('corretores')
+    .select('id, nome_empresa')
+    .in('id', [profile.corretor_id, lead.corretor_id].filter(Boolean));
+
+  const own = rows?.find((row) => row.id === profile.corretor_id);
+  const target = rows?.find((row) => row.id === lead.corretor_id);
+  return Boolean(own?.nome_empresa && own.nome_empresa === target?.nome_empresa);
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const limited = rateLimit(request, 'crm:lead-status:update', { limit: 120, windowMs: 60_000 });
@@ -57,12 +74,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
     }
 
-    if ((guard.profile.tipo_usuario === 'corretor' || guard.profile.tipo_usuario === 'corretor_admin') && lead.corretor_id !== guard.profile.corretor_id) {
+    if (!(await canAccessLead(guard.profile, lead))) {
       return NextResponse.json({ error: 'Lead fora do seu corretor.' }, { status: 403 });
-    }
-
-    if (guard.profile.tipo_usuario === 'corretor_membro' && lead.responsavel_profile_id !== guard.profile.id) {
-      return NextResponse.json({ error: 'Lead fora da sua fila.' }, { status: 403 });
     }
 
     const updatePayload: Record<string, unknown> = {
