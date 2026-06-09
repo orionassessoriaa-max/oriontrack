@@ -132,6 +132,43 @@ export default function BrokerInboxPage() {
   const [selectedFlowStepId, setSelectedFlowStepId] = useState('step_welcome');
   const [closeReason, setCloseReason] = useState('');
 
+  // Local message search state
+  const [showSearchChat, setShowSearchChat] = useState(false);
+  const [searchChatQuery, setSearchChatQuery] = useState('');
+
+  // Task scheduling states
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDue, setTaskDue] = useState('');
+  const [taskPriority, setTaskPriority] = useState('normal');
+  const [savingTask, setSavingTask] = useState(false);
+
+  // History states
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyActivities, setHistoryActivities] = useState<any[]>([]);
+  const [historyConversations, setHistoryConversations] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Team forwarding states
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [forwarding, setForwarding] = useState(false);
+
+  // Load configuration from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('orion:apolo_bot_config');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.botName) setBotName(parsed.botName);
+        if (parsed.flowSteps) setFlowSteps(parsed.flowSteps);
+      } catch (err) {
+        console.error('Erro ao carregar configuracao do bot:', err);
+      }
+    }
+  }, []);
+
   // Normalize phone number
   const normalizePhone = (value: string) => {
     let digits = value.replace(/\D/g, '');
@@ -196,14 +233,15 @@ export default function BrokerInboxPage() {
 
     const { data } = await supabase
       .from('whatsapp_conversas')
-      .select('*')
+      .select('*, leads(id, nome, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))')
       .in('corretor_id', idsToFetch)
       .order('ultima_mensagem_at', { ascending: false })
       .limit(80);
 
     const rows = (data || []).map((row: any) => ({
       ...row,
-      agentName: profile?.nome || 'Bianca Alves',
+      status: row.status === 'aguardando' ? 'espera' : row.status === 'resolvida' ? 'fechada' : row.status,
+      agentName: (row.leads as any)?.responsavel_membro?.nome || profile?.nome || 'Fila Geral',
       expirationTime: '03/06 às 23:07',
       protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
       tags: row.tags || ['Lead Frio'],
@@ -288,7 +326,10 @@ export default function BrokerInboxPage() {
     setLoadingMessages(true);
     try {
       const response = await fetch(`/api/inbox/messages?conversation_id=${conversationId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
       });
       const payload = await response.json().catch(() => ({}));
       setMessages(response.ok ? (payload.messages || []) : []);
@@ -475,6 +516,7 @@ export default function BrokerInboxPage() {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
         },
         body: JSON.stringify({
           conversation_id: selectedConversation.id,
@@ -582,11 +624,224 @@ export default function BrokerInboxPage() {
     setShowCloseReasonModal(true);
   };
 
-  const updateConversationStatus = (newStatus: string) => {
+  const updateConversationStatus = async (newStatus: string) => {
     if (!selectedConversation) return;
+    
+    // UI state updates optimistically
     const updated = { ...selectedConversation, status: newStatus };
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+
+    if (selectedConversation.id.startsWith('new-')) return;
+
+    // Map UI statuses ('espera', 'fechada', 'pausada') to DB statuses ('aguardando', 'resolvida', 'aberta')
+    const dbStatus = newStatus === 'espera' ? 'aguardando' : newStatus === 'fechada' ? 'resolvida' : newStatus === 'pausada' ? 'aberta' : newStatus;
+
+    try {
+      const { error } = await supabase
+        .from('whatsapp_conversas')
+        .update({ status: dbStatus, updated_at: new Date().toISOString() })
+        .eq('id', selectedConversation.id);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Erro ao salvar status da conversa no Supabase:', err);
+    }
+  };
+
+  const handleShare = () => {
+    if (!selectedConversation) return;
+    const shareUrl = `${window.location.origin}/inbox?telefone=${selectedConversation.telefone}`;
+    navigator.clipboard.writeText(shareUrl)
+      .then(() => alert('Link de atendimento copiado para a área de transferência!'))
+      .catch(() => alert('Não foi possível copiar o link.'));
+  };
+
+  const handleBlockContact = async () => {
+    if (!selectedConversation) return;
+    const confirmBlock = window.confirm('Deseja realmente bloquear este contato? Isso irá encerrar o atendimento e marcar o lead como "Sem interesse" no CRM.');
+    if (!confirmBlock) return;
+
+    try {
+      // 1. Update lead status if exists
+      if (selectedConversation.lead_id) {
+        const { error: leadErr } = await supabase
+          .from('leads')
+          .update({ status: 'Sem interesse' })
+          .eq('id', selectedConversation.lead_id);
+        if (leadErr) throw leadErr;
+
+        // Log block activity
+        await supabase.from('lead_atividades').insert([{
+          lead_id: selectedConversation.lead_id,
+          profile_id: profile?.id,
+          tipo: 'sistema',
+          titulo: 'Contato bloqueado',
+          descricao: 'Conversa encerrada e contato marcado como Sem interesse.'
+        }]);
+      }
+
+      // 2. Add "Bloqueado" tag
+      let currentTags = selectedConversation.tags || [];
+      if (!currentTags.includes('Bloqueado')) {
+        currentTags = [...currentTags, 'Bloqueado'];
+      }
+
+      // 3. Update conversation in DB
+      if (!selectedConversation.id.startsWith('new-')) {
+        const { error: convErr } = await supabase
+          .from('whatsapp_conversas')
+          .update({ 
+            status: 'resolvida', // DB status for closed
+            tags: currentTags,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', selectedConversation.id);
+        if (convErr) throw convErr;
+      }
+
+      // Update local state
+      const updated = { 
+        ...selectedConversation, 
+        status: 'fechada', 
+        tags: currentTags 
+      };
+      setSelectedConversation(updated);
+      setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+
+      alert('Contato bloqueado com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao bloquear contato:', err);
+      alert('Erro ao bloquear contato: ' + err.message);
+    }
+  };
+
+  const handleScheduleTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedConversation?.lead_id) {
+      alert('Esta conversa não possui um Lead associado no CRM.');
+      return;
+    }
+    if (!taskTitle.trim()) {
+      alert('Por favor, informe o título da tarefa.');
+      return;
+    }
+    setSavingTask(true);
+    try {
+      const { error } = await supabase.from('lead_tarefas').insert([{
+        lead_id: selectedConversation.lead_id,
+        corretor_id: selectedConversation.corretor_id,
+        responsavel_profile_id: profile?.id,
+        titulo: taskTitle.trim(),
+        vencimento: taskDue ? new Date(taskDue).toISOString() : null,
+        prioridade: taskPriority,
+        status: 'pendente'
+      }]);
+      if (error) throw error;
+      alert('Tarefa agendada com sucesso!');
+      setShowTaskModal(false);
+      setTaskTitle('');
+      setTaskDue('');
+      setTaskPriority('normal');
+    } catch (err: any) {
+      console.error('Erro ao agendar tarefa:', err);
+      alert('Erro ao agendar tarefa: ' + err.message);
+    } finally {
+      setSavingTask(false);
+    }
+  };
+
+  const loadHistory = async () => {
+    if (!selectedConversation) return;
+    setLoadingHistory(true);
+    try {
+      if (selectedConversation.lead_id) {
+        const { data: activities } = await supabase
+          .from('lead_atividades')
+          .select('*')
+          .eq('lead_id', selectedConversation.lead_id)
+          .order('created_at', { ascending: false });
+        setHistoryActivities(activities || []);
+      } else {
+        setHistoryActivities([]);
+      }
+
+      const { data: pastConvs } = await supabase
+        .from('whatsapp_conversas')
+        .select('*')
+        .eq('telefone', selectedConversation.telefone)
+        .order('ultima_mensagem_at', { ascending: false });
+      setHistoryConversations(pastConvs || []);
+    } catch (err) {
+      console.error('Erro ao buscar histórico:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleForwardLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedConversation?.lead_id) {
+      alert('Esta conversa não possui um Lead associado.');
+      return;
+    }
+    if (!selectedMemberId) {
+      alert('Selecione um membro responsável.');
+      return;
+    }
+    setForwarding(true);
+    const token = await getToken();
+    if (!token) {
+      alert('Sessão expirada. Faça login novamente.');
+      setForwarding(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/corretor/times', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ 
+          action: 'assign_lead', 
+          lead_id: selectedConversation.lead_id, 
+          member_id: selectedMemberId, 
+          corretor_id: profile?.corretor_id 
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Erro ao reatribuir lead.');
+      }
+
+      // Log assignment activity in CRM timeline
+      const member = teamMembers.find((item) => item.id === selectedMemberId);
+      await supabase.from('lead_atividades').insert([{
+        lead_id: selectedConversation.lead_id,
+        profile_id: profile?.id,
+        tipo: 'sistema',
+        titulo: 'Responsável alterado',
+        descricao: member ? `Encaminhado para o responsável: ${member.nome}` : 'Encaminhado para um novo responsável.'
+      }]);
+
+      // Update local conversation agentName
+      if (member) {
+        const updated = { ...selectedConversation, agentName: member.nome };
+        setSelectedConversation(updated);
+        setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+      }
+
+      alert('Lead encaminhado com sucesso!');
+      setShowForwardModal(false);
+      setSelectedMemberId('');
+    } catch (err: any) {
+      console.error('Erro ao encaminhar lead:', err);
+      alert('Erro ao encaminhar lead: ' + err.message);
+    } finally {
+      setForwarding(false);
+    }
   };
 
   const toggleAIActive = () => {
@@ -712,6 +967,11 @@ export default function BrokerInboxPage() {
       </div>
     );
   };
+
+  const filteredChatMessages = messages.filter(m => 
+    !searchChatQuery.trim() || 
+    m.mensagem.toLowerCase().includes(searchChatQuery.toLowerCase().trim())
+  );
 
   return (
     <InternalLayout>
@@ -871,8 +1131,6 @@ export default function BrokerInboxPage() {
                       <span>Canal: Comercial | {selectedConversation.agentName}</span>
                     </div>
                   </div>
-
-                  {/* Actions Row */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
                       onClick={() => setShowTemplateModal(true)}
@@ -881,10 +1139,16 @@ export default function BrokerInboxPage() {
                       Template
                     </button>
                     <button
-                      onClick={() => alert('Transferência de chat simulada!')}
-                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
+                      onClick={() => {
+                        if (!selectedConversation?.lead_id) {
+                          alert('Esta conversa não possui um Lead associado.');
+                          return;
+                        }
+                        setShowForwardModal(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 border border-cyan-500/10 text-[9px] font-black uppercase tracking-wider text-white transition-all cursor-pointer"
                     >
-                      Transferir
+                      Encaminhar para Responsável
                     </button>
                     <button
                       onClick={handleTogglePause}
@@ -898,45 +1162,87 @@ export default function BrokerInboxPage() {
                     >
                       Encerrar
                     </button>
-
+ 
                     {/* Header Action Icons Toolbar */}
                     <div className="flex items-center gap-1.5 border-l border-white/5 pl-2 ml-1">
-                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Exportar conversa">
+                      <button onClick={handleShare} className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Compartilhar conversa">
                         <Share2 size={13} />
                       </button>
-                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Pesquisar mensagens">
+                      <button 
+                        onClick={() => {
+                          setShowSearchChat(!showSearchChat);
+                          if (showSearchChat) setSearchChatQuery('');
+                        }} 
+                        className={`p-1.5 transition-colors cursor-pointer rounded-lg ${showSearchChat ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' : 'text-slate-400 hover:text-white'}`}
+                        title="Pesquisar mensagens"
+                      >
                         <Search size={13} />
                       </button>
-                      <button
-                        onClick={toggleAIActive}
-                        className={`p-1.5 transition-colors cursor-pointer rounded-lg ${
-                          selectedConversation.aiActive 
-                            ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' 
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                        title="Ativar/Pausar IA Co-Piloto"
-                      >
-                        <Bot size={13} />
-                      </button>
-                      <button
-                        onClick={() => setShowBotConfigModal(true)}
-                        className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer rounded-lg hover:bg-white/5"
-                        title="Configurar Fluxos do Apolo Bot"
-                      >
-                        <Settings size={13} />
-                      </button>
-                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Bloquear contato">
+                      
+                      {(profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor_admin') && (
+                        <>
+                          <button
+                            onClick={toggleAIActive}
+                            className={`p-1.5 transition-colors cursor-pointer rounded-lg ${
+                              selectedConversation.aiActive 
+                                ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' 
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                            title="Ativar/Pausar IA Co-Piloto"
+                          >
+                            <Bot size={13} />
+                          </button>
+                          <button
+                            onClick={() => setShowBotConfigModal(true)}
+                            className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer rounded-lg hover:bg-white/5"
+                            title="Configurar Fluxos do Apolo Bot"
+                          >
+                            <Settings size={13} />
+                          </button>
+                        </>
+                      )}
+
+                      <button onClick={handleBlockContact} className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer" title="Bloquear contato">
                         <Ban size={13} />
                       </button>
-                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Agendar contato">
+                      <button 
+                        onClick={() => {
+                          if (!selectedConversation?.lead_id) {
+                            alert('Esta conversa não possui um Lead associado no CRM.');
+                          } else {
+                            setShowTaskModal(true);
+                          }
+                        }} 
+                        className={`p-1.5 transition-colors cursor-pointer rounded-lg ${showTaskModal ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' : 'text-slate-400 hover:text-white'}`}
+                        title="Agendar contato"
+                      >
                         <Calendar size={13} />
                       </button>
-                      <button className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Histórico de chamados">
+                      <button onClick={() => setShowHistoryModal(true)} className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Histórico de chamados">
                         <History size={13} />
                       </button>
                     </div>
                   </div>
                 </div>
+
+                {/* Local search bar if toggled */}
+                {showSearchChat && (
+                  <div className="bg-slate-900/40 border-b border-white/5 px-4 py-2.5 flex items-center gap-2 animate-in slide-in-from-top-1 duration-100 shrink-0">
+                    <Search size={13} className="text-slate-500 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar nas mensagens deste chat..."
+                      value={searchChatQuery}
+                      onChange={(e) => setSearchChatQuery(e.target.value)}
+                      className="flex-1 bg-transparent border-none text-2xs font-bold text-white placeholder-slate-500 focus:outline-none"
+                    />
+                    {searchChatQuery && (
+                      <button onClick={() => setSearchChatQuery('')} className="text-[10px] text-slate-500 hover:text-white font-bold uppercase tracking-wider">
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Mensagens list */}
                 <div className="orion-inbox-messages flex-1 overflow-y-auto bg-slate-950/20 p-5 space-y-4 max-h-[420px]">
@@ -944,8 +1250,8 @@ export default function BrokerInboxPage() {
                     <div className="flex h-full items-center justify-center">
                       <Loader2 className="animate-spin text-cyan-400" size={24} />
                     </div>
-                  ) : messages.length > 0 ? (
-                    messages.map((message) => {
+                  ) : filteredChatMessages.length > 0 ? (
+                    filteredChatMessages.map((message) => {
                       const isMine = message.direction === 'outbound';
                       return (
                         <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
@@ -1444,151 +1750,176 @@ export default function BrokerInboxPage() {
               </div>
 
               {/* Right Panel: Interactive Visual Builder */}
-              <div className="flex-1 p-6 overflow-auto bg-slate-950/40 flex flex-col">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-4 block">Visual Flow Builder (Estilo ManyChat)</span>
+              <div className="flex-1 p-6 overflow-auto bg-slate-950 bg-[radial-gradient(#ffffff08_1px,transparent_1px)] [background-size:16px_16px] flex flex-col border-l border-white/5 relative">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-4 block">Visual Flow Canvas (Estilo ManyChat)</span>
                 
                 {/* Node Flowchart Rendering */}
-                <div className="flex-1 flex flex-col items-center gap-6 select-none relative">
+                <div className="flex-1 flex flex-col items-center gap-6 select-none relative py-6">
                   
                   {/* Step 1 Card: Welcome message */}
-                  <div className={`w-[480px] rounded-3xl border p-5 transition-all shadow-xl ${
+                  <div className={`w-[480px] rounded-3xl border p-5 transition-all shadow-xl backdrop-blur-md ${
                     selectedFlowStepId === 'step_welcome' 
-                      ? 'border-cyan-500 bg-slate-900 ring-4 ring-cyan-500/10' 
-                      : 'border-white/5 bg-slate-950/60'
+                      ? 'border-cyan-500 bg-slate-900/90 ring-4 ring-cyan-500/10' 
+                      : 'border-white/5 bg-slate-950/80 hover:border-white/10'
                   }`}>
                     <div className="flex items-center justify-between gap-3 mb-3 border-b border-white/5 pb-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-cyan-500"></span>
+                        <span className="h-2.5 w-2.5 rounded-full bg-cyan-500 animate-pulse"></span>
                         <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400">Passo 1: Mensagem Inicial</span>
                       </div>
                       <button 
+                        type="button"
                         onClick={() => setSelectedFlowStepId('step_welcome')}
-                        className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                        className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
                       >
-                        Editar
+                        Selecionar
                       </button>
                     </div>
-
+ 
                     <textarea
                       value={flowSteps.find(s => s.id === 'step_welcome')?.text || ''}
                       onChange={(e) => handleSaveStepText('step_welcome', e.target.value)}
                       rows={3}
-                      className="w-full resize-none rounded-xl border-none bg-slate-950/50 p-3 text-2xs font-semibold leading-relaxed text-slate-100 focus:ring-1 focus:ring-cyan-500 outline-none"
+                      className="w-full resize-none rounded-xl border border-white/5 bg-slate-950 p-3 text-2xs font-semibold leading-relaxed text-slate-100 focus:border-cyan-500 focus:outline-none focus:ring-0 transition-colors"
                     />
-
+ 
                     {/* Quick Replies Buttons */}
                     <div className="mt-3 space-y-1.5">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 block">Botões de Ação (Respostas Rápidas)</span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 block">Botões do Menu (Editar Opções)</span>
                       <div className="grid grid-cols-3 gap-2">
-                        {flowSteps.find(s => s.id === 'step_welcome')?.buttons.map((btn, idx) => (
-                          <div 
-                            key={idx}
-                            onClick={() => {
-                              if (idx === 0) setSelectedFlowStepId('step_simulate');
-                              else if (idx === 1) setSelectedFlowStepId('step_agent');
-                              else setSelectedFlowStepId('step_others');
-                            }}
-                            className="bg-cyan-600/10 border border-cyan-500/20 hover:bg-cyan-600/20 text-cyan-400 rounded-lg p-2 text-center text-3xs font-black uppercase tracking-wide cursor-pointer transition"
-                          >
-                            {btn}
+                        {(flowSteps.find(s => s.id === 'step_welcome')?.buttons || []).map((btn, idx) => (
+                          <div key={idx} className="space-y-1 bg-slate-950/60 p-1.5 rounded-xl border border-white/5">
+                            <input
+                              type="text"
+                              value={btn}
+                              onChange={(e) => {
+                                const newButtons = [...(flowSteps.find(s => s.id === 'step_welcome')?.buttons || [])];
+                                newButtons[idx] = e.target.value;
+                                setFlowSteps(current => current.map(step => step.id === 'step_welcome' ? { ...step, buttons: newButtons } : step));
+                              }}
+                              className="w-full bg-slate-950 border border-white/10 rounded px-1.5 py-0.5 text-center text-[8px] font-black text-white focus:border-cyan-500 focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (idx === 0) setSelectedFlowStepId('step_simulate');
+                                else if (idx === 1) setSelectedFlowStepId('step_agent');
+                                else setSelectedFlowStepId('step_others');
+                              }}
+                              className="w-full block bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/20 text-cyan-400 rounded py-0.5 text-center text-[7px] font-black uppercase tracking-wide transition cursor-pointer"
+                            >
+                              Ver Ramo
+                            </button>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
-
+ 
                   {/* Visual Connector lines */}
                   <div className="h-6 w-0.5 bg-gradient-to-b from-cyan-500 to-slate-700 shrink-0"></div>
-
+ 
                   {/* Step 2 Card: Children flow preview */}
-                  <div className="flex gap-4">
+                  <div className="flex gap-4 flex-wrap justify-center">
                     {/* Flow card for Simulation Option */}
-                    <div className={`w-[260px] rounded-2xl border p-4 transition-all shadow-lg ${
+                    <div className={`w-[250px] rounded-2xl border p-4 transition-all shadow-lg backdrop-blur-md ${
                       selectedFlowStepId === 'step_simulate' 
-                        ? 'border-cyan-500 bg-slate-900 ring-4 ring-cyan-500/10' 
-                        : 'border-white/5 bg-slate-950/60'
+                        ? 'border-cyan-500 bg-slate-900/90 ring-4 ring-cyan-500/10' 
+                        : 'border-white/5 bg-slate-950/80 hover:border-white/10'
                     }`}>
                       <div className="flex items-center justify-between gap-3 mb-2.5 border-b border-white/5 pb-1.5">
                         <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">Ramo: Cotação</span>
                         <button 
+                          type="button"
                           onClick={() => setSelectedFlowStepId('step_simulate')}
-                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
                         >
-                          Editar
+                          Selecionar
                         </button>
                       </div>
                       <textarea
                         value={flowSteps.find(s => s.id === 'step_simulate')?.text || ''}
                         onChange={(e) => handleSaveStepText('step_simulate', e.target.value)}
                         rows={2}
-                        className="w-full resize-none rounded-lg border-none bg-slate-950/50 p-2.5 text-3xs font-bold leading-normal text-slate-100 focus:ring-1 focus:ring-cyan-500 outline-none"
+                        className="w-full resize-none rounded-lg border border-white/5 bg-slate-950 p-2.5 text-3xs font-bold leading-normal text-slate-100 focus:border-cyan-500 focus:outline-none focus:ring-0 transition-colors"
                       />
                       <div className="mt-2.5 space-y-1">
-                        {flowSteps.find(s => s.id === 'step_simulate')?.buttons.map((btn, bidx) => (
-                          <div key={bidx} className="bg-slate-950 border border-white/5 text-slate-400 rounded-md p-1 text-center text-[8px] font-extrabold uppercase">
-                            {btn}
-                          </div>
+                        <span className="text-[7px] font-black uppercase tracking-widest text-slate-500 block">Opções Internas</span>
+                        {(flowSteps.find(s => s.id === 'step_simulate')?.buttons || []).map((btn, bidx) => (
+                          <input
+                            key={bidx}
+                            type="text"
+                            value={btn}
+                            onChange={(e) => {
+                              const newButtons = [...(flowSteps.find(s => s.id === 'step_simulate')?.buttons || [])];
+                              newButtons[bidx] = e.target.value;
+                              setFlowSteps(current => current.map(step => step.id === 'step_simulate' ? { ...step, buttons: newButtons } : step));
+                            }}
+                            className="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-center text-[8px] font-bold text-slate-400 focus:border-cyan-500 focus:outline-none"
+                          />
                         ))}
                       </div>
                     </div>
-
+ 
                     {/* Flow card for Human Agent Option */}
-                    <div className={`w-[260px] rounded-2xl border p-4 transition-all shadow-lg ${
+                    <div className={`w-[250px] rounded-2xl border p-4 transition-all shadow-lg backdrop-blur-md ${
                       selectedFlowStepId === 'step_agent' 
-                        ? 'border-cyan-500 bg-slate-900 ring-4 ring-cyan-500/10' 
-                        : 'border-white/5 bg-slate-950/60'
+                        ? 'border-cyan-500 bg-slate-900/90 ring-4 ring-cyan-500/10' 
+                        : 'border-white/5 bg-slate-950/80 hover:border-white/10'
                     }`}>
                       <div className="flex items-center justify-between gap-3 mb-2.5 border-b border-white/5 pb-1.5">
                         <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">Ramo: Atendente</span>
                         <button 
+                          type="button"
                           onClick={() => setSelectedFlowStepId('step_agent')}
-                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
                         >
-                          Editar
+                          Selecionar
                         </button>
                       </div>
                       <textarea
                         value={flowSteps.find(s => s.id === 'step_agent')?.text || ''}
                         onChange={(e) => handleSaveStepText('step_agent', e.target.value)}
                         rows={2}
-                        className="w-full resize-none rounded-lg border-none bg-slate-950/50 p-2.5 text-3xs font-bold leading-normal text-slate-100 focus:ring-1 focus:ring-cyan-500 outline-none"
+                        className="w-full resize-none rounded-lg border border-white/5 bg-slate-950 p-2.5 text-3xs font-bold leading-normal text-slate-100 focus:border-cyan-500 focus:outline-none focus:ring-0 transition-colors"
                       />
                       <div className="mt-2.5 text-center text-[7px] font-bold text-slate-500 uppercase tracking-widest p-1 border border-dashed border-white/5 rounded">
                         Fim de Automação
                       </div>
                     </div>
-
+ 
                     {/* Flow card for Others Option */}
-                    <div className={`w-[260px] rounded-2xl border p-4 transition-all shadow-lg ${
+                    <div className={`w-[250px] rounded-2xl border p-4 transition-all shadow-lg backdrop-blur-md ${
                       selectedFlowStepId === 'step_others' 
-                        ? 'border-cyan-500 bg-slate-900 ring-4 ring-cyan-500/10' 
-                        : 'border-white/5 bg-slate-950/60'
+                        ? 'border-cyan-500 bg-slate-900/90 ring-4 ring-cyan-500/10' 
+                        : 'border-white/5 bg-slate-950/80 hover:border-white/10'
                     }`}>
                       <div className="flex items-center justify-between gap-3 mb-2.5 border-b border-white/5 pb-1.5">
                         <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">Ramo: Outros</span>
                         <button 
+                          type="button"
                           onClick={() => setSelectedFlowStepId('step_others')}
-                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
                         >
-                          Editar
+                          Selecionar
                         </button>
                       </div>
                       <textarea
                         value={flowSteps.find(s => s.id === 'step_others')?.text || ''}
                         onChange={(e) => handleSaveStepText('step_others', e.target.value)}
                         rows={2}
-                        className="w-full resize-none rounded-lg border-none bg-slate-950/50 p-2.5 text-3xs font-bold leading-normal text-slate-100 focus:ring-1 focus:ring-cyan-500 outline-none"
+                        className="w-full resize-none rounded-lg border border-white/5 bg-slate-950 p-2.5 text-3xs font-bold leading-normal text-slate-100 focus:border-cyan-500 focus:outline-none focus:ring-0 transition-colors"
                       />
                       <div className="mt-2.5 text-center text-[7px] font-bold text-slate-500 uppercase tracking-widest p-1 border border-dashed border-white/5 rounded">
                         Fim de Automação
                       </div>
                     </div>
                   </div>
-
+ 
                 </div>
               </div>
             </div>
-
+ 
             {/* Footer */}
             <div className="p-6 border-t border-white/5 bg-slate-950/20 flex justify-between shrink-0">
               <span className="text-3xs font-bold text-slate-500 uppercase tracking-widest flex items-center">Apolo Bot Flow Builder v1.0.0</span>
@@ -1600,22 +1931,22 @@ export default function BrokerInboxPage() {
                 >
                   Cancelar
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    localStorage.setItem('orion:apolo_bot_config', JSON.stringify({ botName, flowSteps }));
-                    alert('Fluxo do Apolo Bot salvo com sucesso!');
-                    setShowBotConfigModal(false);
-                  }}
-                  className="px-5 py-2.5 rounded-xl bg-cyan-600 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-600/10 hover:-translate-y-0.5 transition-all cursor-pointer"
-                >
-                  Salvar Configuração
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('orion:apolo_bot_config', JSON.stringify({ botName, flowSteps }));
+                  alert('Fluxo do Apolo Bot salvo com sucesso!');
+                  setShowBotConfigModal(false);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-cyan-600 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-600/10 hover:-translate-y-0.5 transition-all cursor-pointer"
+              >
+                Salvar Configuração
+              </button>
             </div>
-
           </div>
+
         </div>
+      </div>
       )}
 
       {/* ================= MODAL: MOTIVO DE ENCERRAMENTO OBRIGATÓRIO ================= */}
@@ -1700,6 +2031,243 @@ export default function BrokerInboxPage() {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: AGENDAR TAREFA (CALENDÁRIO) ================= */}
+      {showTaskModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in-50 duration-200">
+          <form onSubmit={handleScheduleTask} className="bg-slate-900 rounded-[2.5rem] border border-white/10 w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 text-white">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <Calendar size={20} className="text-cyan-400" />
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest">Agendar Tarefa / Contato</h3>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Defina um lembrete para este lead no CRM</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTaskModal(false)}
+                className="h-9 w-9 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Título da Tarefa</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Retornar cotação de PME"
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Data de Vencimento</label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={taskDue}
+                  onChange={(e) => setTaskDue(e.target.value)}
+                  className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Prioridade</label>
+                <select
+                  value={taskPriority}
+                  onChange={(e) => setTaskPriority(e.target.value)}
+                  className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                >
+                  <option value="normal">Normal 🟢</option>
+                  <option value="alta">Alta 🔴</option>
+                  <option value="baixa">Baixa ⚪</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-white/5 bg-slate-950/20 flex gap-3 justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowTaskModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-white/5 text-xs font-black uppercase tracking-wider text-slate-400 hover:bg-white/10 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={savingTask}
+                className="px-5 py-2.5 rounded-xl bg-cyan-600 disabled:opacity-50 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-600/10 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center gap-2"
+              >
+                {savingTask && <Loader2 size={12} className="animate-spin" />}
+                Agendar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ================= MODAL: HISTÓRICO DE CHAMADOS & PROTOCOLOS ================= */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in-50 duration-200">
+          <div className="bg-slate-900 rounded-[2.5rem] border border-white/10 w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 text-white">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <History size={20} className="text-cyan-400" />
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest">Histórico de Atendimentos</h3>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Logs de atividade e atendimentos anteriores</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="h-9 w-9 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {loadingHistory ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="animate-spin text-cyan-400" size={24} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Col 1: CRM Timeline */}
+                  <div className="space-y-3">
+                    <h4 className="text-2xs font-black uppercase text-slate-400 tracking-wider border-b border-white/5 pb-2">Linha do Tempo CRM</h4>
+                    <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                      {historyActivities.length > 0 ? (
+                        historyActivities.map((act) => (
+                          <div key={act.id} className="bg-slate-950/50 border border-white/5 p-3 rounded-2xl space-y-1">
+                            <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">{act.titulo}</span>
+                            <p className="text-3xs text-slate-300 font-bold leading-normal">{act.descricao}</p>
+                            <span className="text-[8px] font-semibold text-slate-500 block uppercase pt-0.5">
+                              {new Date(act.created_at).toLocaleString('pt-BR')}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-3xs text-slate-500 font-black uppercase py-4">Nenhuma atividade registrada.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Col 2: Closed protocols */}
+                  <div className="space-y-3">
+                    <h4 className="text-2xs font-black uppercase text-slate-400 tracking-wider border-b border-white/5 pb-2">Atendimentos WhatsApp</h4>
+                    <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                      {historyConversations.length > 0 ? (
+                        historyConversations.map((conv) => (
+                          <div key={conv.id} className="bg-slate-950/50 border border-white/5 p-3 rounded-2xl space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">Protocolo</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                                conv.status === 'resolvida' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                              }`}>
+                                {conv.status === 'resolvida' ? 'Finalizado' : 'Ativo'}
+                              </span>
+                            </div>
+                            <span className="text-2xs font-bold text-white block mt-1">Contato: {conv.nome_contato || conv.telefone}</span>
+                            <span className="text-[8px] font-semibold text-slate-500 block uppercase pt-0.5">
+                              Última Mensagem: {conv.ultima_mensagem_at ? new Date(conv.ultima_mensagem_at).toLocaleString('pt-BR') : 'Sem mensagens'}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-3xs text-slate-500 font-black uppercase py-4">Nenhum atendimento anterior.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-white/5 bg-slate-950/20 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowHistoryModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-white/5 text-xs font-black uppercase tracking-wider text-slate-400 hover:bg-white/10 transition-all cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: ENCAMINHAR PARA RESPONSÁVEL ================= */}
+      {showForwardModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in-50 duration-200">
+          <form onSubmit={handleForwardLead} className="bg-slate-900 rounded-[2.5rem] border border-white/10 w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 text-white">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <User size={20} className="text-cyan-400" />
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest">Encaminhar Lead</h3>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Selecione o corretor responsável por este lead</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForwardModal(false)}
+                className="h-9 w-9 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Selecione o Integrante do Time</label>
+                {teamMembers.length > 0 ? (
+                  <select
+                    value={selectedMemberId}
+                    onChange={(e) => setSelectedMemberId(e.target.value)}
+                    required
+                    className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-3.5 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                  >
+                    <option value="">Selecione um corretor...</option>
+                    {teamMembers.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.nome} ({member.email})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="bg-rose-500/10 border border-rose-500/20 text-rose-300 px-4 py-3 rounded-2xl text-2xs font-bold uppercase tracking-wider">
+                    Não existem integrantes disponíveis para encaminhamento no seu time.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-white/5 bg-slate-950/20 flex gap-3 justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowForwardModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-white/5 text-xs font-black uppercase tracking-wider text-slate-400 hover:bg-white/10 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={forwarding || !selectedMemberId}
+                className="px-5 py-2.5 rounded-xl bg-cyan-600 disabled:opacity-50 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-600/10 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center gap-2"
+              >
+                {forwarding && <Loader2 size={12} className="animate-spin" />}
+                Encaminhar
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

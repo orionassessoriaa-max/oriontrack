@@ -55,7 +55,32 @@ export async function POST(request: Request) {
       });
     } catch (error: any) {
       const message = String(error.message || '').toLowerCase();
-      if (!message.includes('already') && !message.includes('existe') && !message.includes('exist')) {
+      const isAlreadyExists = error.message === 'Instance already exists' || message.includes('already') || message.includes('existe');
+      if (isAlreadyExists) {
+        console.log(`[POST /api/inbox/evolution/connect] Instance ${instance} already exists. Deleting it for self-healing...`);
+        const instanceApiKey = await getEvolutionInstanceApiKey(instance).catch(() => null);
+        try {
+          await evolutionFetch(`/instance/logout/${instance}`, { method: 'DELETE' }, instanceApiKey);
+        } catch (e) {
+          console.warn(`[POST /api/inbox/evolution/connect] Logout failed during self-healing:`, e);
+        }
+        try {
+          await evolutionFetch(`/instance/delete/${instance}`, { method: 'DELETE' }, instanceApiKey);
+        } catch (e) {
+          console.warn(`[POST /api/inbox/evolution/connect] Delete failed during self-healing:`, e);
+        }
+        
+        // Retry creating instance
+        console.log(`[POST /api/inbox/evolution/connect] Re-creating instance ${instance}...`);
+        createPayload = await evolutionFetch('/instance/create', {
+          method: 'POST',
+          body: JSON.stringify({
+            instanceName: instance,
+            qrcode: true,
+            integration: 'WHATSAPP-BAILEYS',
+          }),
+        });
+      } else {
         throw error;
       }
     }

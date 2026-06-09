@@ -174,7 +174,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Telefone do contato invalido.' }, { status: 400 });
     }
 
-    const instance = evolutionInstanceName(guard.profile.id);
+    let senderProfileId = guard.profile.id;
+    const viewingProfileId = request.headers.get('x-orion-view-profile-id');
+    if (guard.profile.tipo_usuario === 'admin' && viewingProfileId) {
+      const { data } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('id', viewingProfileId)
+        .maybeSingle();
+      if (data) senderProfileId = data.id;
+    }
+
+    const instance = evolutionInstanceName(senderProfileId);
     const instanceApiKey = await getEvolutionInstanceApiKey(instance);
     
     let payload: any = null;

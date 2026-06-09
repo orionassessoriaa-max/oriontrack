@@ -83,7 +83,12 @@ export async function evolutionFetch(path: string, init: RequestInit = {}, apiKe
       headers: response.headers
     });
     const payloadStr = JSON.stringify(payload).toLowerCase();
-    if (payloadStr.includes('already') || payloadStr.includes('existe') || payloadStr.includes('exist')) {
+    if (
+      payloadStr.includes('already') ||
+      payloadStr.includes('já existe') ||
+      payloadStr.includes('ja existe') ||
+      (payloadStr.includes('exist') && !payloadStr.includes('not exist') && !payloadStr.includes('no exist') && !payloadStr.includes('não exist') && !payloadStr.includes('nao exist'))
+    ) {
       throw new Error('Instance already exists');
     }
 
