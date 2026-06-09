@@ -297,6 +297,9 @@ export default function CrmPage() {
     try {
       const simulatedId = typeof window !== 'undefined' ? window.sessionStorage.getItem('orion:viewing_corretor_id') : null;
       setSimulatedCorretorId(simulatedId);
+      if (simulatedId && !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario)) {
+        setCrmScopeView('todos_concessionaria');
+      }
       const corretorScopeId = simulatedId || (['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario) ? profile.corretor_id : null);
       
       let corretorIds = corretorScopeId ? [corretorScopeId] : [];
@@ -709,12 +712,12 @@ export default function CrmPage() {
 
   useEffect(() => {
     if (crmScopeOptions.some((option) => option.value === crmScopeView)) return;
-    setCrmScopeView(profile?.tipo_usuario === 'corretor_admin' ? 'todos_concessionaria' : 'meus');
-  }, [crmScopeOptions, crmScopeView, profile?.tipo_usuario]);
+    setCrmScopeView(profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
+  }, [crmScopeOptions, crmScopeView, profile?.tipo_usuario, isViewingBrokerAsAdmin]);
 
   const viewScopedLeads = useMemo(() => {
     const currentProfileId = profile?.id || null;
-    const currentCorretorId = profile?.corretor_id || null;
+    const currentCorretorId = simulatedCorretorId || profile?.corretor_id || null;
 
     return leads.filter((lead) => {
       if (crmScopeView === 'todos_concessionaria' && canUseDealershipViews) return true;
@@ -735,7 +738,7 @@ export default function CrmPage() {
         || (!!currentCorretorId && lead.corretor_id === currentCorretorId && !lead.responsavel_membro_id && !lead.responsavel_profile_id);
       return assignedToMe;
     });
-  }, [leads, crmScopeView, canUseDealershipViews, teamMembers, profile?.id, profile?.corretor_id]);
+  }, [leads, crmScopeView, canUseDealershipViews, teamMembers, profile?.id, profile?.corretor_id, simulatedCorretorId]);
 
   const scopedLeadIds = useMemo(() => new Set(viewScopedLeads.map((lead) => lead.id)), [viewScopedLeads]);
   const staleLeadIds = useMemo(() => new Set(viewScopedLeads.filter(isStale).map((lead) => lead.id)), [viewScopedLeads]);
