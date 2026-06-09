@@ -16,7 +16,6 @@ export type LeadDuplicateInput = {
   utm_campaign?: string | null;
   utm_term?: string | null;
   utm_content?: string | null;
-  status?: string | null;
 };
 
 function normalizeTextKey(value?: string | null) {
@@ -53,6 +52,5 @@ export function buildLeadDuplicateKey(lead: LeadDuplicateInput) {
     normalizeTextKey(lead.utm_campaign),
     normalizeTextKey(lead.utm_term),
     normalizeTextKey(lead.utm_content),
-    normalizeTextKey(lead.status),
   ].join('|');
 }

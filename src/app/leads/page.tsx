@@ -106,7 +106,7 @@ function formatCurrencyValue(value?: string | number | null) {
 }
 
 function calculateCommissionFromSale(value?: string | number | null) {
-  return parseCurrencyInput(value) * 2.5;
+  return parseCurrencyInput(value) * 0.025;
 }
 
 function requiresCommercialData(status: LeadStatus) {
@@ -452,6 +452,35 @@ export default function BrokerLeadsPage() {
     }
     if (response.ok && status === 'Venda realizada') {
       setFinanceRedirect({ leadId, leadName: currentLead.nome });
+    }
+    setSavingStatusId(null);
+  };
+
+  const updateLeadNegotiationValue = async (lead: Lead, rawValue: string) => {
+    const value = parseCurrencyInput(rawValue);
+    const valorNegociacao = value > 0 ? value : null;
+    const valorComissao = valorNegociacao ? calculateCommissionFromSale(valorNegociacao) : null;
+
+    setSavingStatusId(lead.id);
+    setLeads((current) => current.map((item) => item.id === lead.id ? {
+      ...item,
+      valor_negociacao: valorNegociacao,
+      valor_comissao: valorComissao,
+    } : item));
+
+    const { error } = await supabase
+      .from('leads')
+      .update({
+        valor_negociacao: valorNegociacao,
+        valor_comissao: valorComissao,
+        comissao_percentual: valorNegociacao ? 2.5 : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', lead.id);
+
+    if (error) {
+      alert('Erro ao atualizar valor de negociacao: ' + error.message);
+      await fetchLeads(0, false);
     }
     setSavingStatusId(null);
   };
@@ -907,7 +936,17 @@ export default function BrokerLeadsPage() {
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-500">{lead.plano_atual || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.investimento || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3 font-medium text-slate-500">{lead.cidade || '-'}</td>
-                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.valor_negociacao ? formatCurrencyValue(lead.valor_negociacao) : '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3">
+                      <input
+                        defaultValue={lead.valor_negociacao ? formatCurrencyValue(lead.valor_negociacao) : ''}
+                        onBlur={(event) => updateLeadNegotiationValue(lead, event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') event.currentTarget.blur();
+                        }}
+                        placeholder="R$ 0,00"
+                        className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </td>
                     <td className="border border-slate-100 px-3 py-3">
                       <select
                         value={lead.etiqueta || ''}
