@@ -147,7 +147,7 @@ async function getOwnerProfiles(corretorIds: string[]) {
 async function getAssignableProfiles(corretorIds: string[]) {
   const { data } = await supabaseAdmin
     .from('profiles')
-    .select('id, nome, email, email_real, tipo_usuario')
+    .select('id, nome, email, email_real, tipo_usuario, corretor_id')
     .in('corretor_id', corretorIds)
     .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
     .eq('status', 'active');
@@ -190,14 +190,35 @@ export async function GET(request: Request) {
     if (teamError) throw teamError;
 
     if (!team) {
+      const [ownerProfiles, assignableProfiles] = await Promise.all([
+        getOwnerProfiles(scope.corretorIds),
+        getAssignableProfiles(scope.corretorIds),
+      ]);
+      const membros = assignableProfiles.map((profile: any, index: number) => ({
+        id: `profile:${profile.id}`,
+        time_id: null,
+        corretor_id: profile.corretor_id || corretorId,
+        profile_id: profile.id,
+        nome: profile.nome,
+        email: profile.email_real || profile.email,
+        status: 'ativo',
+        ordem: index + 1,
+        ultimo_lead_at: null,
+        participa_rodizio: false,
+        created_at: null,
+        foto_url: null,
+        tipo_usuario: profile.tipo_usuario,
+      }));
+
       return NextResponse.json({
         team: null,
         brokerage_name: brokerageName || null,
-        membros: [],
+        membros,
         leads: [],
         settings: {
           owner_in_distribution: false,
-          owner_profile: null,
+          owner_profiles: ownerProfiles,
+          owner_profile: ownerProfiles[0] || null,
           rodizio_ativo: corretorIdentity?.rodizio_ativo !== false,
         },
       });

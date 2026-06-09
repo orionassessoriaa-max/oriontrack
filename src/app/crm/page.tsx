@@ -441,7 +441,7 @@ export default function CrmPage() {
     const token = await getToken();
     if (!token) return;
 
-    const response = await fetch('/api/corretor/times', {
+    const response = await fetch(`/api/corretor/times?corretor_id=${encodeURIComponent(profile.corretor_id)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const payload = await response.json().catch(() => ({}));
@@ -464,7 +464,7 @@ export default function CrmPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId || 'unassigned' }),
+      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId || 'unassigned', corretor_id: profile?.corretor_id }),
     });
     const payload = await response.json().catch(() => ({}));
 

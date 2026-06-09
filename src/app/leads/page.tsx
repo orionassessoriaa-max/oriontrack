@@ -295,7 +295,7 @@ export default function BrokerLeadsPage() {
     const token = data.session?.access_token;
     if (!token) return;
 
-    const response = await fetch('/api/corretor/times', {
+    const response = await fetch(`/api/corretor/times?corretor_id=${encodeURIComponent(profile.corretor_id)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const payload = await response.json().catch(() => ({}));
@@ -305,6 +305,8 @@ export default function BrokerLeadsPage() {
   };
 
   const assignLeadToMember = async (leadId: string, memberId: string) => {
+    if (!profile?.corretor_id) return;
+
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) {
@@ -319,7 +321,7 @@ export default function BrokerLeadsPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId || 'unassigned' }),
+      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId || 'unassigned', corretor_id: profile.corretor_id }),
     });
     const payload = await response.json().catch(() => ({}));
 
