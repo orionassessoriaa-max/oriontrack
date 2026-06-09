@@ -703,7 +703,7 @@ export async function POST(request: Request) {
     }
 
     if (action === 'assign_lead') {
-      if (!['admin', 'corretor', 'corretor_admin'].includes(guard.profile.tipo_usuario)) {
+      if (!['admin', 'corretor_admin'].includes(guard.profile.tipo_usuario)) {
         return NextResponse.json({ error: 'Apenas admins do time podem enviar leads.' }, { status: 403 });
       }
 

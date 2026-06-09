@@ -196,6 +196,7 @@ export default function BrokerLeadsPage() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
+  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor_admin';
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');
@@ -939,7 +940,7 @@ export default function BrokerLeadsPage() {
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{leadTab}</td>
                     <td className="border border-slate-100 px-3 py-3">
-                      {canAssignTeamLeads && teamMembers.length > 0 ? (
+                      {canManageLeadResponsible && teamMembers.length > 0 ? (
                         <select
                           value={lead.responsavel_membro_id || 'unassigned'}
                           onChange={(event) => assignLeadToMember(lead.id, event.target.value)}

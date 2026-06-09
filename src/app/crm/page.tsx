@@ -252,6 +252,7 @@ export default function CrmPage() {
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
+  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor_admin';
   const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const isViewingBrokerAsAdmin = Boolean(simulatedCorretorId) && !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile?.tipo_usuario || '');
   const canUseDealershipViews = profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin || (canAssignTeamLeads && teamMembers.length > 0);
@@ -476,8 +477,10 @@ export default function CrmPage() {
     const assignedMember = payload.member || null;
     const member = teamMembers.find((item) => item.id === memberId) || assignedMember;
     const nextMemberId = assignedMember?.id || memberId;
+    const nextProfileId = assignedMember?.profile_id || member?.profile_id || null;
     const assignedPayload = {
       responsavel_membro_id: nextMemberId && nextMemberId !== 'unassigned' ? nextMemberId : null,
+      responsavel_profile_id: nextMemberId && nextMemberId !== 'unassigned' ? nextProfileId : null,
       responsavel_membro: member ? { nome: member.nome, email: member.email } : null,
     };
     setLeads((current) => current.map((lead) => lead.id === leadId ? { ...lead, ...assignedPayload } : lead));
@@ -1571,33 +1574,6 @@ export default function CrmPage() {
                   </button>
                 </div>
 
-                {canAssignTeamLeads && teamMembers.length > 0 && (
-                  <div className="mb-5 rounded-[1.5rem] border border-slate-100 bg-white p-4 shadow-sm">
-                    <div className="mb-3 flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                        <Users size={18} />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Enviar lead</p>
-                        <h3 className="text-sm font-black text-slate-950">Atribuir para integrante do time</h3>
-                      </div>
-                    </div>
-                    <select
-                      value={selectedLead.responsavel_membro_id || 'unassigned'}
-                      onChange={(event) => assignLeadToMember(selectedLead.id, event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="unassigned">Sem responsavel (liberado para todos)</option>
-                      {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
-                    </select>
-                    {assigningLeadId === selectedLead.id && (
-                      <p className="mt-2 flex items-center gap-2 text-xs font-black text-blue-600">
-                        <Loader2 className="animate-spin" size={14} /> Enviando lead...
-                      </p>
-                    )}
-                  </div>
-                )}
-
                 {editing ? (
                   <form onSubmit={saveLeadDetails} className="mb-5 rounded-[1.5rem] border border-gray-100 p-4">
                     <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-gray-900">Editar ficha</h3>
@@ -1642,7 +1618,21 @@ export default function CrmPage() {
                     <InfoCard label="Cidade" value={selectedLead.cidade || '-'} />
                     <InfoCard label="Pagina" value={selectedLead.operadora || '-'} />
                     <InfoCard label="Etiqueta" value={selectedLead.etiqueta || '-'} />
-                    <InfoCard label="Responsavel" value={selectedLead.responsavel_membro?.nome || 'Liberado'} />
+                    {canManageLeadResponsible && teamMembers.length > 0 ? (
+                      <div className="rounded-[1.25rem] border border-slate-100 bg-white p-4">
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Responsavel</p>
+                        <select
+                          value={selectedLead.responsavel_membro_id || 'unassigned'}
+                          onChange={(event) => assignLeadToMember(selectedLead.id, event.target.value)}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="unassigned">Sem responsavel</option>
+                          {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
+                        </select>
+                      </div>
+                    ) : (
+                      <InfoCard label="Responsavel" value={selectedLead.responsavel_membro?.nome || 'Liberado'} />
+                    )}
                     <InfoCard label="Valor negociação" value={selectedLead.valor_negociacao ? formatCurrencyValue(selectedLead.valor_negociacao) : '-'} />
                     <InfoCard label="Operadora venda" value={selectedLead.operadora_negociacao || '-'} />
                     {canViewCommission && <InfoCard label="Comissao" value={selectedLead.valor_comissao ? `${formatCurrencyValue(selectedLead.valor_comissao)} (${selectedLead.comissao_percentual || commissionPercent}%)` : '-'} />}
