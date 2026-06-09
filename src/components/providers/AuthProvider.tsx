@@ -97,6 +97,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   const fetchCorretorViewProfile = async (corretorId: string, adminUserId: string) => {
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+      .eq('corretor_id', corretorId)
+      .in('tipo_usuario', ['corretor_admin', 'corretor'])
+      .eq('status', 'active')
+      .order('tipo_usuario', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (profileError) throw profileError;
+    if (profileData) return profileData as Profile;
+
     const { data, error } = await supabase
       .from('corretores')
       .select('id, nome, email, nome_empresa, status, created_at')
@@ -306,7 +319,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     ? viewingProfile
     : actualProfile;
 
-  const isViewingAsCorretor = Boolean(['admin', 'gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario)) && viewingProfile?.tipo_usuario === 'corretor');
+  const isViewingAsCorretor = Boolean(['admin', 'gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario)) && ['corretor', 'corretor_admin'].includes(String(viewingProfile?.tipo_usuario)));
   const isViewingAsGestor = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'gestor_trafego');
   const isViewingAsDesigner = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'designer');
   const isViewingAsAccount = Boolean(actualProfile?.tipo_usuario === 'admin' && viewingProfile?.tipo_usuario === 'account_manager');

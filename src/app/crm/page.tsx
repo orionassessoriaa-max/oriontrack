@@ -740,6 +740,13 @@ export default function CrmPage() {
     });
   }, [leads, crmScopeView, canUseDealershipViews, teamMembers, profile?.id, profile?.corretor_id, simulatedCorretorId]);
 
+  useEffect(() => {
+    if (!canUseDealershipViews || crmScopeView !== 'meus' || loading) return;
+    if (leads.length > 0 && viewScopedLeads.length === 0) {
+      setCrmScopeView('todos_concessionaria');
+    }
+  }, [canUseDealershipViews, crmScopeView, leads.length, loading, viewScopedLeads.length]);
+
   const scopedLeadIds = useMemo(() => new Set(viewScopedLeads.map((lead) => lead.id)), [viewScopedLeads]);
   const staleLeadIds = useMemo(() => new Set(viewScopedLeads.filter(isStale).map((lead) => lead.id)), [viewScopedLeads]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id)).map((task) => task.lead_id)), [tarefas, scopedLeadIds]);
