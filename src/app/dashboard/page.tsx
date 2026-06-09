@@ -723,7 +723,7 @@ export default function DashboardPage() {
           lost: lostLeads.length,
           invalid: invalidPhoneLeads.length,
           unavailableRegion: unavailableRegionLeads.length,
-          cadence: statsRes.filter((lead) => Boolean(lead.cadencia_inicio)).length,
+          cadence: statsRes.filter((lead) => lead.cadencia_ativa === true).length,
           tasksOpen: pendingTasks.length,
           tasksToday: pendingTasks.filter((task) => task.vencimento && new Date(task.vencimento).toDateString() === todayDate).length,
           revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
