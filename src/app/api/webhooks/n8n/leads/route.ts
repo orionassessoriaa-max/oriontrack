@@ -8,6 +8,57 @@ function normalizeText(value: unknown, fallback = '') {
   return String(value ?? fallback).trim();
 }
 
+function normalizeKey(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function flattenPayload(input: any) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const nested = [
+    source.body,
+    source.data,
+    source.lead,
+    source.payload,
+    source.json,
+    source.respondent?.answers,
+    source.answers,
+  ].filter((item) => item && typeof item === 'object' && !Array.isArray(item));
+
+  return Object.assign({}, source, ...nested);
+}
+
+function field(body: Record<string, any>, aliases: string[]) {
+  const normalized = new Map<string, unknown>();
+  Object.entries(body || {}).forEach(([key, value]) => {
+    normalized.set(normalizeKey(key), value);
+  });
+
+  for (const alias of aliases) {
+    const direct = body[alias];
+    if (direct !== undefined && direct !== null && normalizeText(direct)) return direct;
+    const value = normalized.get(normalizeKey(alias));
+    if (value !== undefined && value !== null && normalizeText(value)) return value;
+  }
+
+  return '';
+}
+
+function parseCurrencyValue(value: unknown) {
+  const raw = normalizeText(value);
+  if (!raw || raw === '-') return null;
+  const numeric = raw
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+    .replace(',', '.');
+  const parsed = Number(numeric);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function normalizeBooleanLabel(value: unknown) {
   const text = normalizeText(value).toLowerCase();
   if (['sim', 's', 'true', '1', 'yes'].includes(text)) return 'Sim';
@@ -18,7 +69,7 @@ function normalizeBooleanLabel(value: unknown) {
 async function resolveCorretorId(body: any) {
   let resolvedId: string | null = null;
 
-  const corretorId = normalizeText(body.corretor_id);
+  const corretorId = normalizeText(field(body, ['corretor_id', 'id_corretor', 'broker_id']));
   if (corretorId) {
     const { data } = await supabaseAdmin
       .from('corretores')
@@ -29,7 +80,7 @@ async function resolveCorretorId(body: any) {
   }
 
   if (!resolvedId) {
-    const corretorEmail = normalizeText(body.corretor_email || body.email_corretor).toLowerCase();
+    const corretorEmail = normalizeText(field(body, ['corretor_email', 'email_corretor', 'email do corretor'])).toLowerCase();
     if (corretorEmail) {
       const { data: broker } = await supabaseAdmin
         .from('corretores')
@@ -50,7 +101,7 @@ async function resolveCorretorId(body: any) {
   }
 
   if (!resolvedId) {
-    const corretorNome = normalizeText(body.corretor_nome || body.nome_corretor);
+    const corretorNome = normalizeText(field(body, ['corretor_nome', 'nome_corretor', 'nome do corretor']));
     if (corretorNome) {
       const { data: broker } = await supabaseAdmin
         .from('corretores')
@@ -167,7 +218,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const body = await request.json();
+    const body = flattenPayload(await request.json());
     const corretorId = await resolveCorretorId(body);
 
     if (!corretorId) {
@@ -176,37 +227,56 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    const nome = normalizeText(body.nome || body.name || body.lead_nome);
-    const telefone = normalizeText(body.telefone || body.phone || body.whatsapp);
+    const nome = normalizeText(field(body, ['nome', 'name', 'lead_nome', 'cliente', 'nome completo']));
+    const telefone = normalizeText(field(body, ['telefone', 'phone', 'whatsapp', 'celular', 'fone']));
 
     if (!nome || !telefone) {
       return NextResponse.json({ error: 'Nome e telefone do lead são obrigatórios.' }, { status: 400 });
     }
 
-    const dataEntrada = body.data_entrada
-      ? new Date(body.data_entrada).toISOString()
+    const rawDate = field(body, ['data_entrada', 'data entrada', 'data', 'created_time', 'timestamp', 'data do lead']);
+    const dataEntrada = rawDate
+      ? new Date(rawDate).toISOString()
       : new Date().toISOString();
+
+    const valorNegociacao = parseCurrencyValue(field(body, [
+      'valor_negociacao',
+      'valor negociacao',
+      'valor negociação',
+      'valor da negociacao',
+      'valor da negociação',
+      'valor cotacao',
+      'valor cotação',
+      'valor da cotacao',
+      'valor da cotação',
+      'valor proposta',
+      'valor venda',
+      'valor fechado',
+      'receita',
+    ]));
 
     const leadPayload = {
       corretor_id: corretorId,
       data_entrada: dataEntrada,
       nome,
       telefone,
-      idades: normalizeText(body.idades || body.vidas || body.age_group),
-      possui_cnpj: normalizeBooleanLabel(body.possui_cnpj || body.cnpj),
-      tem_plano_ativo: normalizeBooleanLabel(body.tem_plano_ativo || body.plano_ativo),
-      plano_atual: normalizeText(body.plano_atual || body.plano) || null,
-      custo_plano_atual: normalizeText(body.custo_plano_atual || body.custo_atual || body.valor_plano_atual || body.valor_atual) || null,
-      investimento: normalizeText(body.investimento || body.investimento_pretendido || body.valor_pretendido || body.budget),
-      cidade: normalizeText(body.cidade || body.city),
-      operadora: normalizeText(body.operadora || body.operator) || null,
-      utm_source: normalizeText(body.utm_source) || null,
-      utm_medium: normalizeText(body.utm_medium) || null,
-      utm_campaign: normalizeText(body.utm_campaign || body.campanha) || null,
-      utm_term: normalizeText(body.utm_term || body.conjunto || body.conjunto_anuncio) || null,
-      utm_content: normalizeText(body.utm_content || body.anuncio || body.criativo) || null,
-      status: normalizeLeadStatus(body.status || 'Aguardando atendimento'),
-      observacoes: normalizeText(body.observacoes || body.obs) || null,
+      idades: normalizeText(field(body, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas', 'age_group'])),
+      possui_cnpj: normalizeBooleanLabel(field(body, ['possui_cnpj', 'possui cnpj', 'cnpj', 'tem cnpj'])),
+      tem_plano_ativo: normalizeBooleanLabel(field(body, ['tem_plano_ativo', 'tem plano ativo', 'plano ativo', 'possui plano', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano'])),
+      plano_atual: normalizeText(field(body, ['plano_atual', 'plano atual', 'operadora atual', 'convenio atual', 'convênio atual', 'seguradora atual', 'plano'])) || null,
+      custo_plano_atual: normalizeText(field(body, ['custo_plano_atual', 'custo plano atual', 'custo atual', 'valor plano atual', 'valor do plano atual', 'mensalidade atual', 'valor_atual'])) || null,
+      investimento: normalizeText(field(body, ['investimento', 'investimento pretendido', 'investimento_pretendido', 'pretensao investimento', 'valor_pretendido', 'budget', 'orcamento'])),
+      cidade: normalizeText(field(body, ['cidade', 'city', 'regiao', 'localidade'])),
+      operadora: normalizeText(field(body, ['operadora', 'pagina', 'página', 'aba', 'operator', 'page', 'source_page'])) || null,
+      utm_source: normalizeText(field(body, ['utm_source', 'source', 'origem', 'utm origem'])) || null,
+      utm_medium: normalizeText(field(body, ['utm_medium', 'medium', 'meio', 'utm meio'])) || null,
+      utm_campaign: normalizeText(field(body, ['utm_campaign', 'campaign', 'campanha', 'nome campanha'])) || null,
+      utm_term: normalizeText(field(body, ['utm_term', 'term', 'conjunto', 'conjunto de anuncio', 'conjunto_anuncio', 'adset', 'ad set'])) || null,
+      utm_content: normalizeText(field(body, ['utm_content', 'content', 'anuncio', 'anúncio', 'ad', 'criativo'])) || null,
+      valor_negociacao: valorNegociacao,
+      operadora_negociacao: normalizeText(field(body, ['operadora_negociacao', 'operadora negociacao', 'operadora negociação', 'operadora venda', 'operadora da venda', 'operadora escolhida'])) || null,
+      status: normalizeLeadStatus(field(body, ['status']) || 'Aguardando atendimento'),
+      observacoes: normalizeText(field(body, ['observacoes', 'observação', 'observacao', 'obs', 'comentarios'])) || null,
       updated_at: new Date().toISOString()
     };
 

@@ -24,6 +24,8 @@ type LeadInsert = {
   utm_campaign: string;
   utm_term: string;
   utm_content: string;
+  valor_negociacao?: number | null;
+  operadora_negociacao?: string | null;
   status: string;
   observacoes: string;
 };
@@ -127,13 +129,36 @@ function toRows(csv: string): CsvRow[] {
     'tem_plano_ativo',
     'plano_ativo',
     'plano_atual',
+    'convenio_atual',
+    'operadora_atual',
+    'investimento',
+    'investimento_pretendido',
+    'valor_negociacao',
+    'valor_da_negociacao',
+    'valor_cotacao',
+    'valor_da_cotacao',
+    'valor_proposta',
+    'operadora',
+    'pagina',
+    'aba',
+    'operadora_venda',
+    'operadora_negociacao',
     'cidade',
     'status',
     'utm_source',
+    'source',
     'utm_medium',
+    'medium',
     'utm_campaign',
+    'campaign',
+    'campanha',
     'utm_term',
+    'adset',
+    'conjunto',
     'utm_content',
+    'ad',
+    'anuncio',
+    'criativo',
   ]);
 
   const headerIndex = parsed.slice(0, 15).reduce((best, row, index) => {
@@ -160,6 +185,17 @@ function pick(row: CsvRow, names: string[]) {
     if (row[key]) return row[key];
   }
   return '';
+}
+
+function parseCurrencyValue(value: string) {
+  const raw = String(value || '').trim();
+  if (!raw || raw === '-') return null;
+  const numeric = raw
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+    .replace(',', '.');
+  const parsed = Number(numeric);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function orderedCells(row: CsvRow) {
@@ -427,7 +463,7 @@ function inferOperadora(row: CsvRow, sheetName: string) {
   if (sheetName) return sheetName;
 
   const raw = [
-    pick(row, ['operadora', 'aba', 'sheet', 'tab']),
+    pick(row, ['operadora', 'pagina', 'página', 'aba', 'sheet', 'tab', 'page', 'source_page']),
     pick(row, ['utm_campaign', 'campanha']),
     pick(row, ['plano atual', 'operadora atual']),
   ].filter(Boolean).join(' ');
@@ -449,16 +485,16 @@ function inferOperadora(row: CsvRow, sheetName: string) {
   ];
 
   const found = operators.find(([key]) => normalized.includes(key));
-  return found?.[1] || pick(row, ['operadora', 'campanha']);
+  return found?.[1] || pick(row, ['operadora', 'pagina', 'página', 'aba', 'campanha']);
 }
 
 function buildNotes(row: CsvRow) {
   const utms = [
-    ['utm_source', pick(row, ['utm_source'])],
-    ['utm_medium', pick(row, ['utm_medium'])],
-    ['utm_campaign', pick(row, ['utm_campaign'])],
-    ['utm_term', pick(row, ['utm_term'])],
-    ['utm_content', pick(row, ['utm_content'])],
+    ['utm_source', pick(row, ['utm_source', 'source', 'origem', 'utm origem'])],
+    ['utm_medium', pick(row, ['utm_medium', 'medium', 'meio', 'utm meio'])],
+    ['utm_campaign', pick(row, ['utm_campaign', 'campaign', 'campanha', 'nome campanha'])],
+    ['utm_term', pick(row, ['utm_term', 'term', 'conjunto', 'conjunto de anuncio', 'adset', 'ad set'])],
+    ['utm_content', pick(row, ['utm_content', 'content', 'anuncio', 'anúncio', 'ad', 'criativo'])],
   ]
     .filter(([, value]) => Boolean(value))
     .map(([label, value]) => `${label}: ${value}`)
@@ -600,17 +636,19 @@ export async function POST(request: Request) {
             telefone: rawTelefone || 'Telefone nao informado',
             idades: pick(row, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas']),
             possui_cnpj: pick(row, ['possui cnpj', 'cnpj', 'tem cnpj']) || 'Nao informado',
-            tem_plano_ativo: pick(row, ['tem plano ativo', 'plano ativo', 'possui plano']) || 'Nao informado',
-            plano_atual: pick(row, ['plano atual', 'operadora atual', 'plano']),
-            custo_plano_atual: pick(row, ['custo plano atual', 'custo atual', 'valor plano atual', 'custo do plano', 'custo do plano atual']),
+            tem_plano_ativo: pick(row, ['tem plano ativo', 'plano ativo', 'possui plano', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano']) || 'Nao informado',
+            plano_atual: pick(row, ['plano atual', 'operadora atual', 'convenio atual', 'convênio atual', 'seguradora atual', 'plano']),
+            custo_plano_atual: pick(row, ['custo plano atual', 'custo atual', 'valor plano atual', 'custo do plano', 'custo do plano atual', 'valor do plano atual', 'mensalidade atual']),
             investimento: pick(row, ['investimento', 'investimento pretendido', 'pretensao investimento', 'quer investir quanto', 'quanto pretende investir', 'orcamento']),
             cidade: pick(row, ['cidade', 'regiao', 'localidade']),
             operadora: inferOperadora(row, sheetName),
-            utm_source: pick(row, ['utm_source']),
-            utm_medium: pick(row, ['utm_medium']),
-            utm_campaign: pick(row, ['utm_campaign', 'campanha']),
-            utm_term: pick(row, ['utm_term', 'conjunto', 'conjunto de anuncio', 'adset']),
-            utm_content: pick(row, ['utm_content', 'anuncio', 'ad', 'criativo']),
+            utm_source: pick(row, ['utm_source', 'source', 'origem', 'utm origem']),
+            utm_medium: pick(row, ['utm_medium', 'medium', 'meio', 'utm meio']),
+            utm_campaign: pick(row, ['utm_campaign', 'campaign', 'campanha', 'nome campanha']),
+            utm_term: pick(row, ['utm_term', 'term', 'conjunto', 'conjunto de anuncio', 'adset', 'ad set']),
+            utm_content: pick(row, ['utm_content', 'content', 'anuncio', 'anúncio', 'ad', 'criativo']),
+            valor_negociacao: parseCurrencyValue(pick(row, ['valor negociacao', 'valor negociação', 'valor da negociacao', 'valor da negociação', 'valor cotacao', 'valor cotação', 'valor da cotacao', 'valor da cotação', 'valor proposta', 'valor da proposta', 'valor venda', 'valor fechado', 'receita'])),
+            operadora_negociacao: pick(row, ['operadora venda', 'operadora da venda', 'operadora negociacao', 'operadora negociação', 'operadora escolhida']),
             status: statusFromSheet(pick(row, ['status']) || 'Aguardando atendimento'),
             observacoes: mergeNotes(buildLeadImportWarningNote(warnings), buildNotes(row)),
           };
