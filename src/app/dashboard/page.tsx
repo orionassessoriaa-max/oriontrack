@@ -1173,7 +1173,7 @@ export default function DashboardPage() {
 
       {/* 🚀 STEP 1: KEY NUMBERS AT THE VERY TOP (Swapped General Performance StatCards here!) */}
       <div className="mb-10">
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-4">
           <Link href="/leads">
             <StatCard title="Leads recebidos" value={stats.total} icon={Users} color="blue" loading={isDataLoading} />
           </Link>
@@ -1191,9 +1191,6 @@ export default function DashboardPage() {
           </Link>
           <Link href="/leads?status=Sem interesse">
             <StatCard title="Vendas perdidas" value={stats.lost} icon={ShieldAlert} color="red" loading={isDataLoading} />
-          </Link>
-          <Link href="/crm?filtro=cadencia">
-            <StatCard title="Em cadencia" value={stats.cadence} icon={Clock} color="indigo" loading={isDataLoading} />
           </Link>
           <Link href="/crm?filtro=tarefas">
             <StatCard title="Follow up" value={stats.tasksOpen} icon={CalendarDays} color="blue" loading={isDataLoading} />

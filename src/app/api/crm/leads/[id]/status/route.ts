@@ -66,7 +66,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const { data: lead } = await supabaseAdmin
       .from('leads')
-      .select('id, corretor_id, responsavel_profile_id, comissao_percentual, corretores:corretor_id(comissao_percentual)')
+      .select('id, status, corretor_id, responsavel_profile_id, comissao_percentual, corretores:corretor_id(comissao_percentual)')
       .eq('id', leadId)
       .maybeSingle();
 
@@ -78,10 +78,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return NextResponse.json({ error: 'Lead fora do seu corretor.' }, { status: 403 });
     }
 
+    const isStatusChanging = lead.status !== status;
     const updatePayload: Record<string, unknown> = {
       status,
       updated_at: new Date().toISOString(),
     };
+
+    if (isStatusChanging) {
+      updatePayload.cadencia_inicio = new Date().toISOString();
+      updatePayload.cadencia_ativa = true;
+      updatePayload.cadencia_fim = null;
+    }
 
     if ('valor_negociacao' in body) updatePayload.valor_negociacao = numericOrNull(body.valor_negociacao);
     if ('operadora_negociacao' in body) updatePayload.operadora_negociacao = body.operadora_negociacao ? String(body.operadora_negociacao).trim() : null;

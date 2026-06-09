@@ -114,10 +114,11 @@ function requiresStatusMoveModal(status: LeadStatus) {
   return requiresCommercialData(status) || status === 'Sem interesse';
 }
 
-function getCadenceDays(lead: Pick<Lead, 'cadencia_inicio' | 'cadencia_fim' | 'cadencia_ativa'>) {
-  if (!lead.cadencia_inicio) return 0;
-  const start = new Date(lead.cadencia_inicio).getTime();
-  const end = lead.cadencia_ativa ? Date.now() : new Date(lead.cadencia_fim || new Date()).getTime();
+function getCadenceDays(lead: Pick<Lead, 'cadencia_inicio' | 'cadencia_fim' | 'cadencia_ativa' | 'created_at' | 'data_entrada'>) {
+  const startStr = lead.cadencia_inicio || lead.data_entrada || lead.created_at;
+  if (!startStr) return 1;
+  const start = new Date(startStr).getTime();
+  const end = Date.now();
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 1;
   return Math.max(1, Math.ceil((end - start) / 86_400_000));
 }
@@ -763,7 +764,6 @@ export default function CrmPage() {
   const scopedLeadIds = useMemo(() => new Set(viewScopedLeads.map((lead) => lead.id)), [viewScopedLeads]);
   const staleLeadIds = useMemo(() => new Set(viewScopedLeads.filter(isStale).map((lead) => lead.id)), [viewScopedLeads]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id)).map((task) => task.lead_id)), [tarefas, scopedLeadIds]);
-  const cadenceLeadIds = useMemo(() => new Set(viewScopedLeads.filter((lead) => lead.cadencia_ativa === true).map((lead) => lead.id)), [viewScopedLeads]);
   const todayTaskLeadIds = useMemo(() => {
     const today = new Date().toDateString();
     return new Set(
@@ -789,18 +789,13 @@ export default function CrmPage() {
         (metricFilter === 'sem_resposta' && staleLeadIds.has(lead.id)) ||
         (metricFilter === 'tarefas' && openTaskLeadIds.has(lead.id)) ||
         (metricFilter === 'hoje' && todayTaskLeadIds.has(lead.id)) ||
-        (metricFilter === 'cadencia' && cadenceLeadIds.has(lead.id)) ||
         (metricFilter === 'fit_icp' && fitLeadIds.has(lead.id));
 
       return searchMatch && pageMatch && metricMatch;
     });
 
-    if (metricFilter === 'cadencia') {
-      return [...nextLeads].sort((a, b) => getCadenceDays(b) - getCadenceDays(a));
-    }
-
     return nextLeads;
-  }, [viewScopedLeads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, cadenceLeadIds, fitLeadIds]);
+  }, [viewScopedLeads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
 
   useEffect(() => {
     const board = boardScrollRef.current;
@@ -831,7 +826,6 @@ export default function CrmPage() {
   const staleCount = staleLeadIds.size;
   const openTasks = tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id)).length;
   const todayTasks = tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id) && task.vencimento && new Date(task.vencimento).toDateString() === new Date().toDateString()).length;
-  const cadenceCount = cadenceLeadIds.size;
   const fitStats = viewScopedLeads.reduce(
     (acc, lead) => {
       const qualification = getLeadQualification(lead, tipoCampanha);
@@ -1312,12 +1306,11 @@ export default function CrmPage() {
 
       {crmView === 'board' ? (
         <>
-          <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-5">
             <Stat label="Leads" value={viewScopedLeads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="border-gray-100 bg-white text-slate-600" />
             <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} active={metricFilter === 'sem_resposta'} onClick={() => setMetricFilter('sem_resposta')} className="border-amber-100 bg-amber-50 text-amber-700" />
             <Stat label="Tarefas" value={openTasks} icon={Clock} active={metricFilter === 'tarefas'} onClick={() => setMetricFilter('tarefas')} className="border-blue-100 bg-blue-50 text-blue-700" />
             <Stat label="Hoje" value={todayTasks} icon={CheckCircle2} active={metricFilter === 'hoje'} onClick={() => setMetricFilter('hoje')} className="border-emerald-100 bg-emerald-50 text-emerald-700" />
-            <Stat label="Cadencia" value={cadenceCount} icon={Clock} active={metricFilter === 'cadencia'} onClick={() => setMetricFilter('cadencia')} className="border-fuchsia-100 bg-fuchsia-50 text-fuchsia-700" />
             <Stat label="Fit ICP" value={`${fitStats.good}/${fitStats.warning}`} icon={OrionMark} active={metricFilter === 'fit_icp'} onClick={() => setMetricFilter('fit_icp')} className="border-violet-100 bg-violet-50 text-violet-700" />
           </div>
 
@@ -1443,11 +1436,9 @@ export default function CrmPage() {
                                   {lead.responsavel_membro?.nome && (
                                     <span className="col-span-2 rounded-xl bg-emerald-50 px-2 py-1 text-emerald-700">Responsavel: {lead.responsavel_membro.nome}</span>
                                   )}
-                                  {lead.cadencia_inicio && (
-                                    <span className={`col-span-2 rounded-xl border px-2 py-1 font-black ${lead.cadencia_ativa ? 'border-fuchsia-200 bg-fuchsia-100 text-fuchsia-800 shadow-[0_0_14px_rgba(217,70,239,0.25)]' : 'border-violet-200 bg-violet-100 text-violet-800'}`}>
-                                      Cadencia: {lead.cadencia_ativa ? `dia ${getCadenceDays(lead)}` : `${getCadenceDays(lead)} dia(s) encerrada`}
-                                    </span>
-                                  )}
+                                  <span className="col-span-2 rounded-xl border border-fuchsia-200 bg-fuchsia-100 text-fuchsia-800 px-2 py-1 font-black shadow-[0_0_14px_rgba(217,70,239,0.15)]">
+                                    Cadencia: dia {getCadenceDays(lead)}
+                                  </span>
                                   <span>{lead.cidade || 'Cidade nao informada'}</span>
                                   <span>{lead.investimento || 'Sem investimento'}</span>
                                   {requiresCommercialData(normalizeLeadStatus(lead.status)) && (
@@ -1556,32 +1547,19 @@ export default function CrmPage() {
                   </select>
                 </div>
 
-                <div className="mb-5 rounded-[1.5rem] border border-violet-100 bg-violet-50 p-4">
-                  <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="mb-5 rounded-[1.5rem] border border-fuchsia-100 bg-fuchsia-50/50 p-4">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-violet-600">Cadencia de atendimento</p>
-                      <p className="mt-1 text-sm font-bold text-violet-950">
-                        {selectedLead.cadencia_ativa
-                          ? `Ativa no dia ${getCadenceDays(selectedLead)}`
-                          : selectedLead.cadencia_inicio
-                            ? `Encerrada apos ${getCadenceDays(selectedLead)} dia(s)`
-                            : 'Ainda nao iniciada'}
+                      <p className="text-[10px] font-black uppercase tracking-widest text-fuchsia-600">Tempo na Etapa Atual</p>
+                      <p className="mt-1 text-sm font-bold text-fuchsia-950">
+                        Dia {getCadenceDays(selectedLead)}
+                      </p>
+                      <p className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        Contando desde {selectedLead.cadencia_inicio ? new Date(selectedLead.cadencia_inicio).toLocaleDateString('pt-BR') : new Date(selectedLead.created_at).toLocaleDateString('pt-BR')}
                       </p>
                     </div>
-                    <Clock className="text-violet-500" size={22} />
+                    <Clock className="text-fuchsia-500 animate-pulse" size={22} />
                   </div>
-                  <p className="mb-3 text-xs font-black leading-relaxed text-fuchsia-900">
-                    Use quando o lead nao responder. O sistema conta os dias em cadencia e registra o inicio e a parada na timeline do cliente.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => toggleCadence(selectedLead, selectedLead.cadencia_ativa ? 'stop' : 'start')}
-                    className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white transition disabled:opacity-50 ${selectedLead.cadencia_ativa ? 'bg-slate-950 hover:bg-slate-800' : 'bg-violet-600 hover:bg-violet-700'}`}
-                  >
-                    {saving ? <Loader2 className="animate-spin" size={16} /> : <Clock size={16} />}
-                    {selectedLead.cadencia_ativa ? 'Parar cadencia' : 'Iniciar cadencia'}
-                  </button>
                 </div>
 
                 {editing ? (
