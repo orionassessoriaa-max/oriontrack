@@ -209,6 +209,28 @@ export default function BrokerInboxPage() {
     }
   }
 
+  // Fetch team members for lead forwarding
+  async function fetchTeamMembers() {
+    const targetCorretorId = profile?.corretor_id || selectedConversation?.corretor_id;
+    if (!targetCorretorId) return;
+
+    const token = await getToken();
+    if (!token) return;
+
+    try {
+      const response = await fetch(`/api/corretor/times?corretor_id=${encodeURIComponent(targetCorretorId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        setTeamMembers(payload.membros || []);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar integrantes do time:', err);
+    }
+  }
+
+
   // Fetch conversations
   async function fetchInbox() {
     if (!profile?.corretor_id) {
@@ -312,6 +334,14 @@ export default function BrokerInboxPage() {
       return () => clearInterval(interval);
     }
   }, [isWhatsAppConnected, qrCode, whatsappStatus]);
+
+  // Fetch team members when forwarding modal opens
+  useEffect(() => {
+    if (showForwardModal) {
+      void fetchTeamMembers();
+    }
+  }, [showForwardModal]);
+
 
   // Fetch Messages for Selected Conversation
   async function fetchMessages(conversationId: string) {
@@ -807,7 +837,7 @@ export default function BrokerInboxPage() {
           action: 'assign_lead', 
           lead_id: selectedConversation.lead_id, 
           member_id: selectedMemberId, 
-          corretor_id: profile?.corretor_id 
+          corretor_id: profile?.corretor_id || selectedConversation?.corretor_id 
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -977,8 +1007,29 @@ export default function BrokerInboxPage() {
     <InternalLayout>
       <div className="orion-inbox-shell space-y-6 h-[calc(100vh-120px)] flex flex-col">
         
-        {/* Connection status header bar if disconnected */}
-        {!isWhatsAppConnected && (
+        {/* Connection status header bar */}
+        {isWhatsAppConnected ? (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 animate-in fade-in-50">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center justify-center shrink-0">
+                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping absolute" />
+                <div className="h-2 w-2 rounded-full bg-emerald-500" />
+              </div>
+              <QrCode className="text-emerald-400 shrink-0" size={20} />
+              <div>
+                <p className="text-xs font-black text-emerald-200 uppercase tracking-wider">WhatsApp Conectado</p>
+                <p className="text-2xs text-slate-400 font-bold mt-0.5">Sua conta está ativa e pronta para enviar e receber mensagens diretamente.</p>
+              </div>
+            </div>
+            <button
+              onClick={disconnectWhatsApp}
+              disabled={connecting}
+              className="px-5 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/40 border border-rose-500/30 text-rose-400 text-2xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {connecting ? 'Desconectando...' : 'Desconectar Conta'}
+            </button>
+          </div>
+        ) : (
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 animate-in fade-in-50">
             <div className="flex items-center gap-3">
               <QrCode className="text-amber-400 shrink-0" size={20} />
@@ -993,7 +1044,7 @@ export default function BrokerInboxPage() {
             <button
               onClick={connectWhatsApp}
               disabled={connecting}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-2xs font-black uppercase text-white shadow-lg shadow-orange-950/20 disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-2xs font-black uppercase text-white shadow-lg shadow-orange-950/20 disabled:opacity-50 cursor-pointer"
             >
               {connecting ? 'Gerando QR...' : 'Conectar Conta'}
             </button>
