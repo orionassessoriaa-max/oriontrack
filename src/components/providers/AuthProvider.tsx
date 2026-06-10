@@ -57,7 +57,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       // Buscamos campos garantidos. Se houver erro de coluna status, o log detalhado avisará.
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
         .eq('id', userId)
         .maybeSingle();
 
@@ -69,7 +69,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           console.warn('Tentando carregar profile sem campos opcionais...');
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('profiles')
-            .select('id, email, email_real, nome, tipo_usuario, corretor_id, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, created_at')
+            .select('id, email, email_real, nome, tipo_usuario, corretor_id, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, created_at, telefone')
             .eq('id', userId)
             .maybeSingle();
           
@@ -99,7 +99,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const fetchCorretorViewProfile = async (corretorId: string, adminUserId: string) => {
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
       .eq('corretor_id', corretorId)
       .in('tipo_usuario', ['corretor_admin', 'corretor'])
       .eq('status', 'active')
@@ -135,7 +135,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const fetchGestorViewProfile = async (gestorId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
       .eq('id', gestorId)
       .eq('tipo_usuario', 'gestor_trafego')
       .maybeSingle();
@@ -150,7 +150,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const fetchProfileViewProfile = async (profileId: string, role: Profile['tipo_usuario'], message: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+      .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
       .eq('id', profileId)
       .eq('tipo_usuario', role)
       .maybeSingle();
@@ -177,7 +177,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     if (profileId) {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
         .eq('id', profileId)
         .maybeSingle();
 
@@ -305,7 +305,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           if (savedProfileId) {
             const { data, error } = await supabase
               .from('profiles')
-              .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+              .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
               .eq('id', savedProfileId)
               .maybeSingle();
 

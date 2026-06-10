@@ -342,7 +342,7 @@ export default function DashboardPage() {
         
         setOldestDate(firstLeadDate);
         setDataInicio(firstLeadDate);
-        setDataFim(toLocalDateString(getYesterday()));
+        setDataFim(toLocalDateString(getSaoPauloToday()));
       } catch (err) {
         console.error('Error fetching oldest lead date:', err);
       }
@@ -387,7 +387,7 @@ export default function DashboardPage() {
   const applyPreset = (preset: string) => {
     if (preset === 'todo_periodo') {
       setDataInicio(oldestDate || '2026-01-01');
-      setDataFim(toLocalDateString(getYesterday()));
+      setDataFim(toLocalDateString(getSaoPauloToday()));
       setPresetLabel('Todo o período');
       setShowDatePicker(false);
       return;
@@ -407,18 +407,18 @@ export default function DashboardPage() {
         setPresetLabel('Ontem');
         break;
       case '7dias':
-        end = getYesterday();
+        end = d;
         start = addDays(end, -6);
         setPresetLabel('Últimos 7 dias');
         break;
       case '30dias':
-        end = getYesterday();
+        end = d;
         start = addDays(end, -29);
         setPresetLabel('Últimos 30 dias');
         break;
       case 'este_mes':
         start = new Date(d.getFullYear(), d.getMonth(), 1);
-        end = getYesterday();
+        end = d;
         setPresetLabel('Este mês');
         break;
       case 'mes_passado':

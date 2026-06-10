@@ -290,11 +290,11 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
         ? 'Designer'
         : profile?.tipo_usuario === 'account_manager'
           ? 'Account manager'
-          : profile?.tipo_usuario === 'corretor_admin'
-            ? 'Corretor Admin'
+          : ['corretor', 'corretor_admin'].includes(profile?.tipo_usuario || '')
+            ? 'Admin'
           : profile?.tipo_usuario === 'corretor_membro'
-            ? 'Equipe comercial'
-          : 'Corretor Parceiro';
+            ? 'Corretor integrante'
+          : 'Corretor integrante';
 
   useEffect(() => {
     onCollapsedChange?.(collapsed);

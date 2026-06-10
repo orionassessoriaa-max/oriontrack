@@ -43,9 +43,9 @@ export function getRoleLabel(role: UserRole) {
   if (role === 'gestor_trafego') return 'Gestor de tráfego';
   if (role === 'designer') return 'Designer';
   if (role === 'account_manager') return 'Account manager';
-  if (role === 'corretor_membro') return 'Equipe do corretor';
-  if (role === 'corretor_admin') return 'Corretor Admin (Acesso Completo)';
-  return 'Corretor';
+  if (role === 'corretor_membro') return 'Corretor integrante';
+  if (role === 'corretor_admin') return 'Admin';
+  return 'Admin';
 }
 
 export function isDevOpsManagerProfile(profile?: {

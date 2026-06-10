@@ -695,8 +695,8 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       onChange={(e) => setMemberRole(e.target.value as any)}
                       className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all cursor-pointer"
                     >
-                      <option value="corretor_membro" className="bg-[#070b13]">Corretor (Acesso Padrão)</option>
-                      <option value="corretor_admin" className="bg-[#070b13]">Corretor Admin (Acesso Completo)</option>
+                      <option value="corretor_membro" className="bg-[#070b13]">Corretor integrante</option>
+                      <option value="corretor_admin" className="bg-[#070b13]">Admin</option>
                     </select>
                   </label>
 
@@ -1128,8 +1128,8 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                 onChange={(e) => setMemberRole(e.target.value as any)}
                 className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all cursor-pointer"
               >
-                <option value="corretor_membro" className="bg-[#090e1a]">Corretor (Acesso Padrão)</option>
-                <option value="corretor_admin" className="bg-[#090e1a]">Corretor Admin (Acesso Completo)</option>
+                <option value="corretor_membro" className="bg-[#090e1a]">Corretor integrante</option>
+                <option value="corretor_admin" className="bg-[#090e1a]">Admin</option>
               </select>
             </label>
             <button
@@ -1201,7 +1201,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                             )}
                             {member.tipo_usuario === 'corretor_admin' && (
                               <span className="inline-flex rounded-full bg-emerald-500/15 border border-emerald-500/20 px-2.5 py-1 text-[8px] font-black uppercase tracking-widest text-emerald-400 leading-none">
-                                Admin do Time
+                                Admin
                               </span>
                             )}
                             <span className={`inline-flex rounded-full border px-2.5 py-1 text-[8px] font-black uppercase tracking-widest leading-none ${member.participa_rodizio !== false ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300' : 'border-slate-500/20 bg-slate-500/10 text-slate-400'}`}>

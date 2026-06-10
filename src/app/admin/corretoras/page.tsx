@@ -733,11 +733,11 @@ function CorretorasContent() {
                                             : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                                         }`}>
                                           {member.tipo_usuario === 'corretor' 
-                                            ? 'Corretor Principal' 
+                                            ? 'Admin' 
                                             : member.tipo_usuario === 'corretor_admin' 
-                                            ? 'Admin do Time' 
+                                            ? 'Admin' 
                                             : member.has_profile
-                                            ? 'Integrante do Time'
+                                            ? 'Corretor integrante'
                                             : 'Cadastro sem acesso'}
                                         </span>
                                       </div>
