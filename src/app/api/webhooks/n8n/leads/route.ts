@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeLeadStatus } from '@/lib/leadStatus';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
+import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 function normalizeText(value: unknown, fallback = '') {
   return String(value ?? fallback).trim();
@@ -328,6 +329,90 @@ export async function POST(request: Request) {
     }
 
     const assignedMemberId = await assignLeadToNextTeamMember(corretorId, data.id);
+
+    // Fetch final lead assignment details to notify the correct users
+    const { data: finalLead } = await supabaseAdmin
+      .from('leads')
+      .select('id, nome, responsavel_profile_id, responsavel_membro:responsavel_membro_id(nome)')
+      .eq('id', data.id)
+      .maybeSingle();
+
+    if (finalLead) {
+      // Find active broker admin profiles for this dealership (corretor)
+      const { data: admins } = await supabaseAdmin
+        .from('profiles')
+        .select('id, nome, email, tipo_usuario, telefone')
+        .eq('corretor_id', corretorId)
+        .in('tipo_usuario', ['corretor', 'corretor_admin'])
+        .in('status', ['active', 'ativo', 'Ativo']);
+
+      // Find assigned team member profile
+      let memberProfile = null;
+      if (finalLead.responsavel_profile_id) {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('id, nome, email, tipo_usuario, telefone')
+          .eq('id', finalLead.responsavel_profile_id)
+          .maybeSingle();
+        memberProfile = prof;
+      }
+
+      const assignedMembroRaw = finalLead.responsavel_membro;
+      const assignedMembroObj = Array.isArray(assignedMembroRaw) ? assignedMembroRaw[0] : (assignedMembroRaw as any);
+      const memberName = assignedMembroObj?.nome || memberProfile?.nome;
+
+      // 1. Notify broker admins
+      if (admins && admins.length > 0) {
+        const adminMsg = memberName
+          ? `O lead "${finalLead.nome}" foi recebido e atribuído a ${memberName}.`
+          : `O lead "${finalLead.nome}" foi recebido (sem atribuição de integrante).`;
+
+        for (const admin of admins) {
+          await supabaseAdmin.from('notificacoes').insert([{
+            titulo: 'Novo lead recebido',
+            mensagem: adminMsg,
+            destinatario_profile_id: admin.id,
+            lida: false,
+          }]);
+        }
+
+        try {
+          await sendApoloWhatsApp({
+            type: 'novo_lead',
+            title: 'Novo lead recebido',
+            message: memberName
+              ? `O lead *${finalLead.nome}* foi recebido e atribuído a ${memberName}.`
+              : `O lead *${finalLead.nome}* foi recebido (sem atribuição de integrante).`,
+            profiles: admins,
+          });
+        } catch (waErr) {
+          console.error('[Webhook n8n] Failed sending admin WA notification:', waErr);
+        }
+      }
+
+      // 2. Notify assigned member broker
+      if (memberProfile) {
+        const memberMsg = `Você recebeu a atribuição do lead "${finalLead.nome}".`;
+
+        await supabaseAdmin.from('notificacoes').insert([{
+          titulo: 'Novo lead atribuído',
+          mensagem: memberMsg,
+          destinatario_profile_id: memberProfile.id,
+          lida: false,
+        }]);
+
+        try {
+          await sendApoloWhatsApp({
+            type: 'novo_lead',
+            title: 'Novo lead atribuído',
+            message: `Você recebeu a atribuição do lead *${finalLead.nome}*.`,
+            profiles: [memberProfile],
+          });
+        } catch (waErr) {
+          console.error('[Webhook n8n] Failed sending member WA notification:', waErr);
+        }
+      }
+    }
 
     await writeAuditLog(request, null, {
       action: 'lead.create_webhook_n8n',
