@@ -763,7 +763,7 @@ function CorretorasContent() {
                                     {member.corretor_id && (
                                       <button
                                         type="button"
-                                        onClick={() => startViewingAsCorretor(member.corretor_id!)}
+                                        onClick={() => startViewingAsCorretor(member.corretor_id!, member.profile_id)}
                                         className="cursor-pointer p-2.5 text-slate-400 transition-all hover:bg-emerald-50 hover:text-emerald-600 rounded-lg"
                                         title="Entrar como corretor"
                                       >

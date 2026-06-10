@@ -384,8 +384,8 @@ export default function AdminUsuariosPage() {
   }
 
   async function openUserPanel(profile: Profile) {
-    if (profile.tipo_usuario === 'corretor') {
-      if (profile.corretor_id) await startViewingAsCorretor(profile.corretor_id);
+    if (['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario)) {
+      if (profile.corretor_id) await startViewingAsCorretor(profile.corretor_id, profile.id);
       return;
     }
 

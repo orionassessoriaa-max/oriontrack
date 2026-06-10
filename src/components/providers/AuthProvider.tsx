@@ -15,7 +15,7 @@ interface AuthContextType {
   isViewingAsGestor: boolean;
   isViewingAsDesigner: boolean;
   isViewingAsAccount: boolean;
-  startViewingAsCorretor: (corretorId: string) => Promise<void>;
+  startViewingAsCorretor: (corretorId: string, profileId?: string | null) => Promise<void>;
   startViewingAsGestor: (gestorId: string) => Promise<void>;
   startViewingAsDesigner: (designerId: string) => Promise<void>;
   startViewingAsAccount: (accountId: string) => Promise<void>;
@@ -164,18 +164,38 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const clearViewingStorage = () => {
     window.sessionStorage.removeItem('orion:viewing_corretor_id');
+    window.sessionStorage.removeItem('orion:viewing_profile_id');
     window.sessionStorage.removeItem('orion:viewing_gestor_id');
     window.sessionStorage.removeItem('orion:viewing_designer_id');
     window.sessionStorage.removeItem('orion:viewing_account_id');
   };
 
-  const startViewingAsCorretor = async (corretorId: string) => {
+  const startViewingAsCorretor = async (corretorId: string, profileId?: string | null) => {
     if (!user || !actualProfile || !['admin', 'gestor_trafego', 'account_manager'].includes(actualProfile.tipo_usuario)) return;
 
-    const brokerProfile = await fetchCorretorViewProfile(corretorId, user.id);
+    let brokerProfile: Profile | null = null;
+    if (profileId) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+        .eq('id', profileId)
+        .maybeSingle();
+
+      if (!error && data) {
+        brokerProfile = data as Profile;
+      }
+    }
+
+    if (!brokerProfile) {
+      brokerProfile = await fetchCorretorViewProfile(corretorId, user.id);
+    }
+
     setViewingProfile(brokerProfile);
     clearViewingStorage();
     window.sessionStorage.setItem('orion:viewing_corretor_id', corretorId);
+    if (profileId) {
+      window.sessionStorage.setItem('orion:viewing_profile_id', profileId);
+    }
     router.push('/leads');
   };
 
@@ -273,6 +293,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       if (!user || !actualProfile || !['admin', 'gestor_trafego', 'account_manager'].includes(actualProfile.tipo_usuario) || viewingProfile) return;
 
       const savedCorretorId = window.sessionStorage.getItem('orion:viewing_corretor_id');
+      const savedProfileId = window.sessionStorage.getItem('orion:viewing_profile_id');
       const savedGestorId = window.sessionStorage.getItem('orion:viewing_gestor_id');
       const savedDesignerId = window.sessionStorage.getItem('orion:viewing_designer_id');
       const savedAccountId = window.sessionStorage.getItem('orion:viewing_account_id');
@@ -280,7 +301,23 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
       try {
         if (savedCorretorId) {
-          const brokerProfile = await fetchCorretorViewProfile(savedCorretorId, user.id);
+          let brokerProfile: Profile | null = null;
+          if (savedProfileId) {
+            const { data, error } = await supabase
+              .from('profiles')
+              .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at')
+              .eq('id', savedProfileId)
+              .maybeSingle();
+
+            if (!error && data) {
+              brokerProfile = data as Profile;
+            }
+          }
+
+          if (!brokerProfile) {
+            brokerProfile = await fetchCorretorViewProfile(savedCorretorId, user.id);
+          }
+
           setViewingProfile(brokerProfile);
         } else if (savedGestorId) {
           const gestorProfile = await fetchGestorViewProfile(savedGestorId);
