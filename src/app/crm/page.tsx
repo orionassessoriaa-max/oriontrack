@@ -352,7 +352,7 @@ export default function CrmPage() {
         conversasQuery = conversasQuery.in('corretor_id', corretorIds);
       }
 
-      if (!companyName && profile.tipo_usuario === 'corretor_membro') {
+      if (profile.tipo_usuario === 'corretor_membro') {
         tarefasQuery = tarefasQuery.eq('responsavel_profile_id', profile.id);
       }
 
@@ -381,8 +381,8 @@ export default function CrmPage() {
         if (corretorIds.length > 0) {
           query = query.in('corretor_id', corretorIds);
         }
-        if (!companyName && profile.tipo_usuario === 'corretor_membro') {
-          query = query.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
+        if (profile.tipo_usuario === 'corretor_membro') {
+          query = query.eq('responsavel_profile_id', profile.id);
         }
 
         const queryRes = await query;

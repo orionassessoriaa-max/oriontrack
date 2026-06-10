@@ -495,7 +495,7 @@ export default function DashboardPage() {
             .in('corretor_id', idsToFetch)
             .range(from, to);
 
-          if (!companyName && profile.tipo_usuario === 'corretor_membro') {
+          if (profile.tipo_usuario === 'corretor_membro') {
             statsRequest = statsRequest.eq('responsavel_profile_id', profile.id);
           }
 
@@ -661,7 +661,7 @@ export default function DashboardPage() {
             .in('corretor_id', idsToFetch)
             .eq('status', 'pendente');
 
-          if (!companyName && profile.tipo_usuario === 'corretor_membro') {
+          if (profile.tipo_usuario === 'corretor_membro') {
             tasksRequest = tasksRequest.eq('responsavel_profile_id', profile.id);
           }
 
@@ -1261,61 +1261,120 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 🚀 STEP 3: FINANCIAL INDICATORS GRID WITH GLOWING ACCENTS */}
-      <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-md hover:-translate-y-1 hover:border-cyan-500/20 transition-all duration-300">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Taxa de Conversão</p>
-            <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl">
-              <Target size={16} />
+      {/* 🚀 STEP 3: FINANCIAL INDICATORS GRID WITH GLOWING ACCENTS OR OPERATIONAL STATS FOR MEMBERS */}
+      {profile?.tipo_usuario === 'corretor_membro' ? (
+        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-[1.5rem] border border-slate-200 dark:border-white/5 bg-white dark:bg-[#090e1a] p-5 shadow-md hover:-translate-y-1 hover:border-blue-500/20 transition-all duration-300">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Leads Atribuídos</p>
+              <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl">
+                <Users size={16} />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-slate-900 dark:text-white">{stats.total}</p>
+            <div className="mt-2.5 text-[10px] font-bold text-slate-400 border-t border-slate-100 dark:border-white/5 pt-2">
+              total de leads no seu projeto
             </div>
           </div>
-          <p className="text-3xl font-black text-white">{allTimeSalesConversionRate.toFixed(1).replace('.', ',')}%</p>
-          <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-400 border-t border-white/5 pt-2">
-            <span>✓ {allTimeStats.sold} vendas</span>
-            <span>{allTimeStats.total} leads</span>
-          </div>
-        </div>
 
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-md hover:-translate-y-1 hover:border-emerald-500/20 transition-all duration-300">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Comissão Vendida</p>
-            <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
-              <DollarSign size={16} />
+          <div className="rounded-[1.5rem] border border-slate-200 dark:border-white/5 bg-white dark:bg-[#090e1a] p-5 shadow-md hover:-translate-y-1 hover:border-amber-500/20 transition-all duration-300">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Aguardando Resposta</p>
+              <div className="p-2 bg-amber-500/10 text-amber-500 rounded-xl">
+                <Clock size={16} />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-slate-900 dark:text-white">{stats.waiting}</p>
+            <div className="mt-2.5 text-[10px] font-bold text-amber-500 border-t border-slate-100 dark:border-white/5 pt-2">
+              leads aguardando primeiro atendimento
             </div>
           </div>
-          <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.revenueRealized)}</p>
-          <div className="mt-2.5 text-[10px] font-bold text-emerald-400 border-t border-white/5 pt-2">
-            comissão das vendas realizadas
-          </div>
-        </div>
 
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-md hover:-translate-y-1 hover:border-purple-500/20 transition-all duration-300">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Venda Prevista</p>
-            <div className="p-2 bg-purple-500/10 text-purple-400 rounded-xl">
-              <TrendingUp size={16} />
+          <div className="rounded-[1.5rem] border border-slate-200 dark:border-white/5 bg-white dark:bg-[#090e1a] p-5 shadow-md hover:-translate-y-1 hover:border-purple-500/20 transition-all duration-300">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Últimos 7 dias</p>
+              <div className="p-2 bg-purple-500/10 text-purple-400 rounded-xl">
+                <CalendarDays size={16} />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-slate-900 dark:text-white">
+              {weeklyLeads.reduce((sum, item) => sum + item.leads, 0)}
+            </p>
+            <div className="mt-2.5 text-[10px] font-bold text-purple-400 border-t border-slate-100 dark:border-white/5 pt-2">
+              novos leads recebidos nesta semana
             </div>
           </div>
-          <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.salesPotential)}</p>
-          <div className="mt-2.5 text-[10px] font-bold text-slate-500 border-t border-white/5 pt-2">
-            valor previsto dos leads ativos
-          </div>
-        </div>
 
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-md hover:-translate-y-1 hover:border-blue-500/20 transition-all duration-300">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Vendido</p>
-            <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl">
-              <BarChart3 size={16} />
+          <div className="rounded-[1.5rem] border border-slate-200 dark:border-white/5 bg-white dark:bg-[#090e1a] p-5 shadow-md hover:-translate-y-1 hover:border-emerald-500/20 transition-all duration-300">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Minhas Tarefas</p>
+              <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-xl">
+                <CheckCircle2 size={16} />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-slate-900 dark:text-white">{stats.tasksOpen}</p>
+            <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-400 border-t border-slate-100 dark:border-white/5 pt-2">
+              <span>{stats.tasksToday} para hoje</span>
+              <span className="text-emerald-500">follow-ups agendados</span>
             </div>
           </div>
-          <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.salesRealized)}</p>
-          <div className="mt-2.5 text-[10px] font-bold text-blue-400 border-t border-white/5 pt-2">
-            soma das vendas realizadas
+        </div>
+      ) : (
+        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-md hover:-translate-y-1 hover:border-cyan-500/20 transition-all duration-300">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Taxa de Conversão</p>
+              <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl">
+                <Target size={16} />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-white">{allTimeSalesConversionRate.toFixed(1).replace('.', ',')}%</p>
+            <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-400 border-t border-white/5 pt-2">
+              <span>✓ {allTimeStats.sold} vendas</span>
+              <span>{allTimeStats.total} leads</span>
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-md hover:-translate-y-1 hover:border-emerald-500/20 transition-all duration-300">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Comissão Vendida</p>
+              <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                <DollarSign size={16} />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.revenueRealized)}</p>
+            <div className="mt-2.5 text-[10px] font-bold text-emerald-400 border-t border-white/5 pt-2">
+              comissão das vendas realizadas
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-md hover:-translate-y-1 hover:border-purple-500/20 transition-all duration-300">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Venda Prevista</p>
+              <div className="p-2 bg-purple-500/10 text-purple-400 rounded-xl">
+                <TrendingUp size={16} />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.salesPotential)}</p>
+            <div className="mt-2.5 text-[10px] font-bold text-slate-500 border-t border-white/5 pt-2">
+              valor previsto dos leads ativos
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-md hover:-translate-y-1 hover:border-blue-500/20 transition-all duration-300">
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Vendido</p>
+              <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl">
+                <BarChart3 size={16} />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.salesRealized)}</p>
+            <div className="mt-2.5 text-[10px] font-bold text-blue-400 border-t border-white/5 pt-2">
+              soma das vendas realizadas
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 🚀 STEP 4: FUNIL COMERCIAL & MONTHLY STATS ROW */}
       <div className="mb-10 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-600/10 dark-dashboard-panel sm:rounded-[2rem]">
@@ -1364,14 +1423,25 @@ export default function DashboardPage() {
                   <BarChart3 size={20} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
-                <MiniMetric icon={DollarSign} label={`Investido ${periodLabelText}`} value={formatCurrency(periodSpend)} />
-                <MiniMetric icon={Target} label={`CPL ${periodLabelText}`} value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
-                <MiniMetric icon={TrendingUp} label={`Conversão ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
-                <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
-                <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
-              </div>
+              {profile?.tipo_usuario === 'corretor_membro' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
+                  <MiniMetric icon={Clock} label="Aguardando Resposta" value={stats.waiting} />
+                  <MiniMetric icon={CalendarDays} label="Follow up" value={stats.tasksOpen} />
+                  <MiniMetric icon={TrendingUp} label={`Conversão ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
+                  <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
+                  <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
+                  <MiniMetric icon={DollarSign} label={`Investido ${periodLabelText}`} value={formatCurrency(periodSpend)} />
+                  <MiniMetric icon={Target} label={`CPL ${periodLabelText}`} value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
+                  <MiniMetric icon={TrendingUp} label={`Conversão ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
+                  <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
+                  <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
+                </div>
+              )}
             </div>
             <div className="mt-8 rounded-2xl bg-[#0b1324] border border-white/5 p-4 text-left">
               <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">Corretor Conectado</p>

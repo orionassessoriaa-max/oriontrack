@@ -164,6 +164,7 @@ function leadAd(lead: Lead) {
 export default function BrokerLeadsPage() {
   const { profile, isViewingAsCorretor } = useAuth();
   const { confirmDialog } = useDialog();
+  const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -245,8 +246,8 @@ export default function BrokerLeadsPage() {
         .order('data_entrada', { ascending: false, nullsFirst: false })
         .range(from, to);
 
-      if (!profile.nome_empresa && profile.tipo_usuario === 'corretor_membro') {
-        leadsQuery = leadsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
+      if (profile.tipo_usuario === 'corretor_membro') {
+        leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
       }
 
       const { data, count, error: supabaseError } = await leadsQuery;
@@ -872,7 +873,7 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Valor negociação</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Etiqueta</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Operadora venda</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Comissão</th>
+                  {canViewCommission && <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Comissão</th>}
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
                   <th className="min-w-[180px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Responsavel</th>
@@ -886,7 +887,7 @@ export default function BrokerLeadsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={isViewingAsCorretor ? 22 : 21} className="py-20 text-center">
+                    <td colSpan={(isViewingAsCorretor ? 22 : 21) - (canViewCommission ? 0 : 1)} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -966,7 +967,7 @@ export default function BrokerLeadsPage() {
                       </select>
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.operadora_negociacao || '-'}</td>
-                    <td className="border border-slate-100 px-3 py-3 font-bold text-blue-700">{lead.valor_comissao ? formatCurrencyValue(lead.valor_comissao) : '-'}</td>
+                    {canViewCommission && <td className="border border-slate-100 px-3 py-3 font-bold text-blue-700">{lead.valor_comissao ? formatCurrencyValue(lead.valor_comissao) : '-'}</td>}
                     <td className="border border-slate-100 px-3 py-3">
                       <div className="flex items-center gap-2">
                         <select
