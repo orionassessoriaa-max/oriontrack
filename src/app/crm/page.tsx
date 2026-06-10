@@ -253,10 +253,10 @@ export default function CrmPage() {
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
-  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor_admin';
+  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
   const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const isViewingBrokerAsAdmin = Boolean(simulatedCorretorId) && !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile?.tipo_usuario || '');
-  const canUseDealershipViews = profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin || (canAssignTeamLeads && teamMembers.length > 0);
+  const canUseDealershipViews = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin || (canAssignTeamLeads && teamMembers.length > 0);
 
   useEffect(() => {
     const requestedFilter = new URLSearchParams(window.location.search).get('filtro') as MetricFilter | null;
@@ -266,7 +266,7 @@ export default function CrmPage() {
   }, []);
 
   useEffect(() => {
-    setCrmScopeView(profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
+    setCrmScopeView(profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
   }, [profile?.id, profile?.tipo_usuario, isViewingBrokerAsAdmin]);
 
   // Metrics Dashboard States

@@ -197,7 +197,7 @@ export default function BrokerLeadsPage() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
   const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
-  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor_admin';
+  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');

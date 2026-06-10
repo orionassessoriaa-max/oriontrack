@@ -1,10 +1,11 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw, Clock } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw, Clock, Table } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
+import Link from 'next/link';
 
 type CorretorTeamManagerProps = {
   corretorId?: string;
@@ -1142,56 +1143,22 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
 
           {/* Atribuir Manualmente Form */}
           {canAssignLeads && (
-            <form onSubmit={assignLead} className="mt-8 border-t border-white/5 pt-6 space-y-4">
+            <div className="mt-8 border-t border-white/5 pt-6 space-y-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Atribuição Manual</p>
                 <h3 className="text-base font-black text-white">Transferir Lead</h3>
-                <p className="text-xs font-bold text-slate-400 mt-1">Mande um lead específico da sua carteira para algum integrante.</p>
+                <p className="text-xs font-bold text-slate-400 mt-1 leading-relaxed">
+                  Para transferir ou definir o responsável por um lead de forma manual, utilize a <strong>Planilha de Leads</strong>. Lá você tem acesso a busca, paginação e filtros rápidos, permitindo definir o atendente diretamente na tabela.
+                </p>
               </div>
-              {assignMessage && (
-                <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-3 text-xs font-black text-emerald-400">
-                  {assignMessage}
-                </div>
-              )}
-              <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Lead</span>
-                <select
-                  required
-                  value={selectedLeadId}
-                  onChange={(event) => setSelectedLeadId(event.target.value)}
-                  className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
-                >
-                  <option value="" className="bg-[#090e1a]">Selecione o lead</option>
-                  {leads.map((lead) => {
-                    const currentMember = membros.find((member) => member.id === lead.responsavel_membro_id);
-                    return (
-                      <option key={lead.id} value={lead.id} className="bg-[#090e1a]">
-                        {lead.nome} {lead.telefone ? `- ${lead.telefone}` : ''} {currentMember ? `(atendente: ${currentMember.nome})` : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Integrante</span>
-                <select
-                  required
-                  value={selectedMemberId}
-                  onChange={(event) => setSelectedMemberId(event.target.value)}
-                  className="w-full rounded-2xl border border-white/5 bg-[#070b13] px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 focus:bg-[#090f1d] transition-all"
-                >
-                  <option value="" className="bg-[#090e1a]">Selecione o responsável</option>
-                  {membros.map((member) => <option key={member.id} value={member.id} className="bg-[#090e1a]">{member.nome}</option>)}
-                </select>
-              </label>
-              <button
-                disabled={assigning || membros.length === 0 || leads.length === 0}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#070b13] border border-white/5 px-5 py-4 text-sm font-black text-slate-300 hover:text-white transition-all hover:bg-white/5 disabled:opacity-50 cursor-pointer"
+              <Link
+                href="/leads"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#070b13] border border-white/5 px-5 py-4 text-sm font-black text-slate-300 hover:text-white transition-all hover:bg-white/5 cursor-pointer shadow-md"
               >
-                {assigning ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
-                Confirmar Transferência
-              </button>
-            </form>
+                <Table size={16} />
+                Acessar Planilha de Leads
+              </Link>
+            </div>
           )}
         </div>
 

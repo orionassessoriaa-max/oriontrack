@@ -1478,7 +1478,7 @@ export default function BrokerInboxPage() {
                         <Search size={13} />
                       </button>
                       
-                      {(profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor_admin') && (
+                      {(profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin') && (
                         <>
                           <button
                             onClick={toggleAIActive}
