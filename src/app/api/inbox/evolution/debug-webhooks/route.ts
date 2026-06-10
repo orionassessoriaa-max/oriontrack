@@ -6,8 +6,6 @@ const ADMIN_ROLES = ['admin', 'corretor_admin'] as const;
 
 export async function GET(request: Request) {
   try {
-    const guard = await requireApiUser(request, [...ADMIN_ROLES]);
-    if ('error' in guard) return guard.error;
 
     console.log('[Debug Webhooks] Buscando instâncias na Evolution API...');
     const instances = await evolutionFetch('/instance/fetchInstances');
