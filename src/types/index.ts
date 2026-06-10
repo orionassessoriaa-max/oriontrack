@@ -51,6 +51,7 @@ export interface Corretor {
 
 export type LeadStatus = 
   | 'Aguardando atendimento' 
+  | 'Inicio' 
   | 'Contato feito' 
   | 'Cotação enviada' 
   | 'Região sem comercialização' 

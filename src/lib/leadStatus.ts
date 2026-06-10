@@ -2,6 +2,7 @@ import { LeadStatus } from '@/types';
 
 export const LEAD_STATUSES: LeadStatus[] = [
   'Aguardando atendimento',
+  'Inicio',
   'Contato feito',
   'Cotação enviada',
   'Em negociação',
@@ -36,11 +37,17 @@ export function getLeadStatusStyle(status: string | null | undefined) {
       dot: 'bg-blue-600',
       column: 'border-blue-100 bg-blue-50/50',
     },
+    'Inicio': {
+      label: 'Inicio',
+      chip: 'orion-status-contact',
+      dot: 'bg-cyan-500',
+      column: 'border-cyan-100 bg-cyan-50/50',
+    },
     'Contato feito': {
       label: 'Contato feito',
-      chip: 'orion-status-contact',
-      dot: 'bg-cyan-600',
-      column: 'border-cyan-100 bg-cyan-50/50',
+      chip: 'orion-status-negotiation',
+      dot: 'bg-purple-600',
+      column: 'border-purple-100 bg-purple-50/50',
     },
     'Cotação enviada': {
       label: 'Cotação enviada',

@@ -19,6 +19,7 @@ import {
   GraduationCap,
   CalendarDays,
   Target,
+  MessageSquare,
   Info,
   AlertTriangle,
   Loader2,
@@ -272,6 +273,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({
     total: 0,
     waiting: 0,
+    inicio: 0,
     contactMade: 0,
     inProgress: 0,
     quoted: 0,
@@ -678,6 +680,11 @@ export default function DashboardPage() {
           return s === 'Aguardando atendimento';
         });
 
+        const inicioLeads = statsRes.filter(l => {
+          const s = normalizeLeadStatus(l.status);
+          return s === 'Inicio';
+        });
+
         const contactMadeLeads = statsRes.filter(l => {
           const s = normalizeLeadStatus(l.status);
           return s === 'Contato feito';
@@ -711,6 +718,7 @@ export default function DashboardPage() {
         setStats({
           total: statsRes.length,
           waiting: waitingLeads.length,
+          inicio: inicioLeads.length,
           contactMade: contactMadeLeads.length,
           inProgress: inProgressLeads.length,
           quoted: quotedLeads.length,
@@ -809,6 +817,7 @@ export default function DashboardPage() {
   const staleOpportunityCount = stats.stale;
   const maxCurrentMonthMetric = Math.max(
     stats.waiting,
+    stats.inicio,
     stats.contactMade,
     stats.inProgress,
     stats.quoted,
@@ -817,6 +826,12 @@ export default function DashboardPage() {
   );
 
   const performanceBars = [
+    { 
+      label: 'Início', 
+      value: stats.inicio, 
+      gradient: 'from-cyan-400 via-sky-400 to-blue-500', 
+      glowColor: 'rgba(34, 211, 238, 0.4)' 
+    },
     { 
       label: 'Contato feito', 
       value: stats.contactMade, 
@@ -867,7 +882,7 @@ export default function DashboardPage() {
   const weeklyTotal = weeklyLeads.reduce((sum, day) => sum + day.leads, 0);
   const bestWeeklyDay = weeklyLeads.reduce((best, day) => day.leads > best.leads ? day : best, weeklyLeads[0] || { label: '-', leads: 0 });
   const maxCityLeads = Math.max(...topCities.map((city) => city.leads), 1);
-  const activePipeline = stats.contactMade + stats.inProgress + stats.quoted + stats.sold;
+  const activePipeline = stats.inicio + stats.contactMade + stats.inProgress + stats.quoted + stats.sold;
   const funnelMax = Math.max(stats.total, activePipeline, stats.quoted + stats.sold, stats.sold, 1);
   const funnelSteps = [
     {
@@ -1173,9 +1188,12 @@ export default function DashboardPage() {
 
       {/* 🚀 STEP 1: KEY NUMBERS AT THE VERY TOP (Swapped General Performance StatCards here!) */}
       <div className="mb-10">
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4">
           <Link href="/leads">
             <StatCard title="Leads recebidos" value={stats.total} icon={Users} color="blue" loading={isDataLoading} />
+          </Link>
+          <Link href="/leads?status=Inicio">
+            <StatCard title="Início" value={stats.inicio} icon={MessageSquare} color="cyan" loading={isDataLoading} />
           </Link>
           <Link href="/leads?status=Contato feito">
             <StatCard title="Contato feito" value={stats.contactMade} icon={Target} color="purple" loading={isDataLoading} />
@@ -1238,7 +1256,7 @@ export default function DashboardPage() {
             <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-2.5 text-right shrink-0">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Total Geral</p>
               <p className="mt-1.5 text-lg font-black text-white leading-none">
-                {stats.waiting + stats.contactMade + stats.inProgress + stats.quoted + stats.sold + stats.lost}
+                {stats.waiting + stats.inicio + stats.contactMade + stats.inProgress + stats.quoted + stats.sold + stats.lost}
               </p>
             </div>
           </div>
@@ -1248,6 +1266,7 @@ export default function DashboardPage() {
             ) : (
               <CustomDonutPizzaChart
                 oportunidade={stats.waiting}
+                inicio={stats.inicio}
                 contactMade={stats.contactMade}
                 inProgress={stats.inProgress}
                 quoted={stats.quoted}
@@ -2007,6 +2026,7 @@ function CustomGrowthAreaChart({
 
 function CustomDonutPizzaChart({
   oportunidade,
+  inicio,
   contactMade,
   inProgress,
   quoted,
@@ -2016,6 +2036,7 @@ function CustomDonutPizzaChart({
   unavailableRegion
 }: {
   oportunidade: number;
+  inicio: number;
   contactMade: number;
   inProgress: number;
   quoted: number;
@@ -2026,9 +2047,10 @@ function CustomDonutPizzaChart({
 }) {
   const [animatedTotal, setAnimatedTotal] = useState(0);
 
-  const total = (oportunidade + contactMade + inProgress + quoted + sold + lost + invalid + unavailableRegion) || 0;
+  const total = (oportunidade + inicio + contactMade + inProgress + quoted + sold + lost + invalid + unavailableRegion) || 0;
   const slices = [
     { label: 'Oportunidade', value: oportunidade, color: '#3b82f6' },
+    { label: 'Início', value: inicio, color: '#06b6d4' },
     { label: 'Contato feito', value: contactMade, color: '#a78bfa' },
     { label: 'Negociação', value: inProgress, color: '#f59e0b' },
     { label: 'Proposta', value: quoted, color: '#38bdf8' },
@@ -2041,6 +2063,7 @@ function CustomDonutPizzaChart({
   // Default values if all are zero
   const displaySlices = slices.length > 0 ? slices : [
     { label: 'Oportunidade', value: 0, color: '#3b82f6' },
+    { label: 'Início', value: 0, color: '#06b6d4' },
     { label: 'Contato feito', value: 0, color: '#a78bfa' },
     { label: 'Negociação', value: 0, color: '#f59e0b' },
     { label: 'Proposta', value: 0, color: '#38bdf8' }

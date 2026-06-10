@@ -13,6 +13,7 @@ interface StatusBadgeProps {
 
 const statusMap: Record<string, { label: string, className: string }> = {
   'Aguardando atendimento': { label: 'Aguardando atendimento', className: 'bg-blue-100 text-blue-700 border-blue-200' },
+  'Inicio': { label: 'Inicio', className: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
   'Contato feito': { label: 'Contato feito', className: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
   'Cotação enviada': { label: 'Cotação enviada', className: 'bg-purple-100 text-purple-700 border-purple-200' },
   'Em negociação': { label: 'Em negociação', className: 'bg-orange-100 text-orange-700 border-orange-200' },
@@ -46,6 +47,7 @@ export function StatCard({ title, value, icon: Icon, color = 'blue', loading = f
     indigo: 'text-indigo-600 bg-indigo-50',
     orange: 'text-orange-600 bg-orange-50',
     red: 'text-red-600 bg-red-50',
+    cyan: 'text-cyan-600 bg-cyan-50',
   };
 
   return (

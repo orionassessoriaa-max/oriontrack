@@ -1783,7 +1783,8 @@ export default function BrokerInboxPage() {
                       className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white font-black uppercase tracking-wider focus:outline-none focus:border-cyan-500/50"
                     >
                       <option value="Aguardando atendimento">Oportunidade (Aguardando)</option>
-                      <option value="Contato feito">Contato Feito</option>
+                      <option value="Inicio">Início (Primeiro Contato)</option>
+                      <option value="Contato feito">Contato Feito (Em Atendimento)</option>
                       <option value="Cotação enviada">Cotação Enviada</option>
                       <option value="Em negociação">Em Negociação</option>
                       <option value="Não tive retorno">Sem Retorno</option>

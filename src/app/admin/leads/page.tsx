@@ -472,8 +472,9 @@ export default function AdminLeadsPage() {
                 className="w-full bg-white border-none px-4 py-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 transition-all font-bold shadow-sm appearance-none"
               >
                 <option value="">Todos Status</option>
-                <option value="Aguardando atendimento">Aguardando</option>
-                <option value="Contato feito">Contato feito</option>
+                <option value="Aguardando atendimento">Oportunidade (Aguardando)</option>
+                <option value="Inicio">Início (Primeiro Contato)</option>
+                <option value="Contato feito">Contato Feito (Em Atendimento)</option>
                 <option value="Cotação enviada">Cotação enviada</option>
                 <option value="Em negociação">Em negociação</option>
                 <option value="Venda realizada">Venda realizada</option>

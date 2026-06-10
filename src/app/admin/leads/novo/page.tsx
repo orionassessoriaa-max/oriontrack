@@ -101,6 +101,7 @@ export default function AdminNovoLeadPage() {
 
   const statusOptions: LeadStatus[] = [
     'Aguardando atendimento',
+    'Inicio',
     'Contato feito',
     'Cotação enviada',
     'Região sem comercialização',
