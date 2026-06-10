@@ -30,6 +30,15 @@ function monthStart() {
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 3)).toISOString().slice(0, 10);
 }
 
+function cadenceDays(startValue?: string | null, endValue?: string | null) {
+  if (!startValue) return 0;
+  const start = new Date(startValue).getTime();
+  const end = endValue ? new Date(endValue).getTime() : Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 1;
+  return Math.max(1, Math.ceil((end - start) / 86_400_000));
+}
+
+
 async function canAccessLead(profile: any, lead: any) {
   if (profile.tipo_usuario === 'admin') return true;
   if (profile.tipo_usuario === 'corretor_membro') return lead.responsavel_profile_id === profile.id;
@@ -65,7 +74,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const { data: lead } = await supabaseAdmin
       .from('leads')
-      .select('id, status, corretor_id, responsavel_profile_id, comissao_percentual, corretores:corretor_id(comissao_percentual)')
+      .select('id, status, corretor_id, responsavel_profile_id, comissao_percentual, created_at, data_entrada, cadencia_inicio, corretores:corretor_id(comissao_percentual)')
       .eq('id', leadId)
       .maybeSingle();
 
@@ -107,7 +116,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       .from('leads')
       .update(updatePayload)
       .eq('id', leadId)
-      .select('id, status, valor_negociacao, operadora_negociacao, valor_comissao, comissao_percentual, sem_interesse_motivo, sem_interesse_fez_cotacao')
+      .select('id, status, valor_negociacao, operadora_negociacao, valor_comissao, comissao_percentual, sem_interesse_motivo, sem_interesse_fez_cotacao, cadencia_inicio, cadencia_fim, cadencia_ativa')
       .single();
 
     if (updateError) {
@@ -139,13 +148,30 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
     }
 
-    const activityDescription = status === 'Sem interesse'
-      ? [
-          'Lead movido para Sem interesse.',
+    const oldStatus = lead.status;
+    let activityDescription = '';
+    if (isStatusChanging) {
+      const daysInPrevStatus = cadenceDays(lead.cadencia_inicio || lead.data_entrada || lead.created_at, new Date().toISOString());
+      if (status === 'Sem interesse') {
+        activityDescription = [
+          `Lead movido de ${oldStatus} para Sem interesse (ficou ${daysInPrevStatus} dia(s) na etapa anterior).`,
           updatePayload.sem_interesse_motivo ? `Motivo: ${updatePayload.sem_interesse_motivo}.` : null,
           updatePayload.sem_interesse_fez_cotacao ? `Teve cotacao de ${updatePayload.valor_negociacao ?? 'valor nao informado'}.` : 'Nao chegou a fazer cotacao.',
-        ].filter(Boolean).join(' ')
-      : `Lead movido para ${status}`;
+        ].filter(Boolean).join(' ');
+      } else {
+        activityDescription = `Lead movido de ${oldStatus} para ${status} (ficou ${daysInPrevStatus} dia(s) na etapa anterior).`;
+      }
+    } else {
+      if (status === 'Sem interesse') {
+        activityDescription = [
+          'Dados do lead atualizados em Sem interesse.',
+          updatePayload.sem_interesse_motivo ? `Motivo: ${updatePayload.sem_interesse_motivo}.` : null,
+          updatePayload.sem_interesse_fez_cotacao ? `Teve cotacao de ${updatePayload.valor_negociacao ?? 'valor nao informado'}.` : 'Nao chegou a fazer cotacao.',
+        ].filter(Boolean).join(' ');
+      } else {
+        activityDescription = `Dados do lead atualizados em ${status}.`;
+      }
+    }
 
     await supabaseAdmin.from('lead_atividades').insert([{
       lead_id: leadId,
