@@ -201,7 +201,7 @@ export async function POST(request: Request) {
           method: 'POST',
           body: JSON.stringify({
             number: phone,
-            audio: base64Data,
+            audio: mediaBase64,
             options: {
               delay: 1200,
               presence: 'recording',

@@ -617,7 +617,7 @@ export default function BrokerInboxPage() {
   }
 
   // Send message
-  async function sendMessage(textOverride?: string, isAudio = false, audioDuration = '', audioBase64Override?: string) {
+  async function sendMessage(textOverride?: string, isAudio = false, audioDuration = '', audioBase64Override?: string, audioMimeType?: string) {
     if (!selectedConversation) return;
     const finalMsg = textOverride || messageText.trim();
     if (!finalMsg && !filePreview && !isAudio) return;
@@ -659,8 +659,8 @@ export default function BrokerInboxPage() {
           } : {}),
           ...((filePreview || hasAudioData) ? {
             media: hasAudioData ? audioBase64Override : filePreview,
-            mimetype: hasAudioData ? 'audio/ogg' : selectedFile?.type,
-            fileName: hasAudioData ? 'audio.ogg' : selectedFile?.name,
+            mimetype: hasAudioData ? (audioMimeType || 'audio/ogg') : selectedFile?.type,
+            fileName: hasAudioData ? (audioMimeType?.includes('ogg') ? 'audio.ogg' : 'audio.webm') : selectedFile?.name,
             mediatype: hasAudioData ? 'audio' : mediatype,
           } : {}),
         }),
@@ -739,7 +739,14 @@ export default function BrokerInboxPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioStreamRef.current = stream;
       
-      const mediaRecorder = new MediaRecorder(stream);
+      let mimeType = 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/ogg; codecs=opus')) {
+        mimeType = 'audio/ogg; codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm; codecs=opus')) {
+        mimeType = 'audio/webm; codecs=opus';
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -770,8 +777,10 @@ export default function BrokerInboxPage() {
     const mediaRecorder = mediaRecorderRef.current;
     if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
 
+    const recordedMimeType = mediaRecorder.mimeType || 'audio/webm';
+
     mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
+      const audioBlob = new Blob(audioChunksRef.current, { type: recordedMimeType });
       
       if (audioStreamRef.current) {
         audioStreamRef.current.getTracks().forEach(track => track.stop());
@@ -786,7 +795,7 @@ export default function BrokerInboxPage() {
         const secs = (recordSeconds % 60).toString().padStart(2, '0');
         const durationStr = `${mins}:${secs}`;
         
-        void sendMessage(undefined, true, durationStr, base64Audio);
+        void sendMessage(undefined, true, durationStr, base64Audio, recordedMimeType);
       };
       reader.readAsDataURL(audioBlob);
     };
