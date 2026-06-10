@@ -162,7 +162,7 @@ function leadAd(lead: Lead) {
 }
 
 export default function BrokerLeadsPage() {
-  const { profile, isViewingAsCorretor } = useAuth();
+  const { profile, actualProfile, isViewingAsCorretor } = useAuth();
   const { confirmDialog } = useDialog();
   const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -197,8 +197,8 @@ export default function BrokerLeadsPage() {
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
-  const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
-  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
+  const canAssignTeamLeads = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || actualProfile?.tipo_usuario === 'admin';
+  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || actualProfile?.tipo_usuario === 'admin';
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');

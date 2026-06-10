@@ -198,7 +198,7 @@ function isConversationInRange(conversation: WhatsAppConversa, startDate: string
 }
 
 export default function CrmPage() {
-  const { profile } = useAuth();
+  const { profile, actualProfile } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tarefas, setTarefas] = useState<LeadTarefa[]>([]);
   const [atividades, setAtividades] = useState<LeadAtividade[]>([]);
@@ -253,8 +253,8 @@ export default function CrmPage() {
   const [simulatedCorretorId, setSimulatedCorretorId] = useState<string | null>(null);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
-  const canAssignTeamLeads = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
-  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
+  const canAssignTeamLeads = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || actualProfile?.tipo_usuario === 'admin';
+  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || actualProfile?.tipo_usuario === 'admin';
   const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const isViewingBrokerAsAdmin = Boolean(simulatedCorretorId) && !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile?.tipo_usuario || '');
   const canUseDealershipViews = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin || (canAssignTeamLeads && teamMembers.length > 0);
