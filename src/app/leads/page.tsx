@@ -184,6 +184,7 @@ export default function BrokerLeadsPage() {
   const [campaignFilter, setCampaignFilter] = useState('todos');
   const [adsetFilter, setAdsetFilter] = useState('todos');
   const [adFilter, setAdFilter] = useState('todos');
+  const [responsavelFilter, setResponsavelFilter] = useState('todos');
   const [showCrmModal, setShowCrmModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [crmApiUrl, setCrmApiUrl] = useState('');
@@ -613,8 +614,11 @@ export default function BrokerLeadsPage() {
       (dateFilterType === 'sem_data' && lead.data_entrada === null);
     const fromMatch = !dateFrom || (leadDate && leadDate >= new Date(dateFrom));
     const toMatch = !dateTo || (leadDate && leadDate <= new Date(dateTo + 'T23:59:59'));
+    const responsavelMatch =
+      responsavelFilter === 'todos' ||
+      (responsavelFilter === 'sem_responsavel' ? !lead.responsavel_membro_id : lead.responsavel_membro_id === responsavelFilter);
 
-    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && campaignMatch && adsetMatch && adMatch && dateTypeMatch && fromMatch && toMatch;
+    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && campaignMatch && adsetMatch && adMatch && dateTypeMatch && fromMatch && toMatch && responsavelMatch;
   });
 
   const filterOptions = (values: string[]) => Array.from(new Set(values.filter((value) => value && value !== '-'))).sort((a, b) => a.localeCompare(b));
@@ -648,7 +652,8 @@ export default function BrokerLeadsPage() {
     operadoraFilter !== 'todas' ||
     campaignFilter !== 'todos' ||
     adsetFilter !== 'todos' ||
-    adFilter !== 'todos'
+    adFilter !== 'todos' ||
+    responsavelFilter !== 'todos'
   );
 
   const clearFilters = () => {
@@ -662,6 +667,7 @@ export default function BrokerLeadsPage() {
     setCampaignFilter('todos');
     setAdsetFilter('todos');
     setAdFilter('todos');
+    setResponsavelFilter('todos');
   };
 
   const teamStats = useMemo(() => {
@@ -820,6 +826,21 @@ export default function BrokerLeadsPage() {
             <option value="todos">Anuncio: todos</option>
             {adOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
+          {teamMembers.length > 0 && (
+            <select
+              value={responsavelFilter}
+              onChange={(e) => setResponsavelFilter(e.target.value)}
+              className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm"
+            >
+              <option value="todos">Responsável: todos</option>
+              <option value="sem_responsavel">Sem responsável</option>
+              {teamMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.nome}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             type="button"
             onClick={clearFilters}
@@ -840,6 +861,11 @@ export default function BrokerLeadsPage() {
           <span className="orion-chip bg-amber-50 text-amber-700">
             CNPJ: {cnpjFilter === 'todos' ? 'todos' : cnpjFilter === 'com' ? 'com CNPJ' : cnpjFilter === 'sem' ? 'sem CNPJ' : 'nao informado'}
           </span>
+          {responsavelFilter !== 'todos' && (
+            <span className="orion-chip bg-indigo-50 text-indigo-700">
+              Responsável: {responsavelFilter === 'sem_responsavel' ? 'sem responsável' : teamMembers.find(m => m.id === responsavelFilter)?.nome || 'carregando...'}
+            </span>
+          )}
         </div>
       </div>
 
