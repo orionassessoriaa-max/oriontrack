@@ -677,7 +677,7 @@ export default function BrokerInboxPage() {
       setFilePreview(null);
 
       // Local mock append for fast response
-      const localMsg: InboxMessage = payload.message || {
+      let localMsg: InboxMessage = payload.message || {
         id: `local_${Date.now()}`,
         conversa_id: selectedConversation.id,
         direction: 'outbound',
@@ -688,7 +688,24 @@ export default function BrokerInboxPage() {
         audioDuration
       };
 
-      setMessages(current => [...current, localMsg]);
+      if (payload.message) {
+        const isMsgAudio = 
+          payload.message.mensagem?.includes('[Áudio Gravado]') || 
+          payload.message.mensagem?.includes('🎤 Mensagem de voz') || 
+          payload.message.mensagem?.includes('🎵 Áudio') || 
+          Boolean(payload.message.metadata?.message?.audioMessage || payload.message.metadata?.audioMessage || payload.message.metadata?.data?.message?.audioMessage);
+        
+        localMsg = {
+          ...payload.message,
+          isAudio: isMsgAudio || isAudio,
+          audioDuration: audioDuration || payload.message.audioDuration
+        };
+      }
+
+      setMessages(current => {
+        if (current.some(m => m.id === localMsg.id)) return current;
+        return [...current, localMsg];
+      });
 
       // If AI is active, simulate a response from Apolo AI
       if (selectedConversation.aiActive) {
@@ -1290,10 +1307,10 @@ export default function BrokerInboxPage() {
         )}
 
         {/* MAIN 3-COLUMN LAYOUT PANEL */}
-        <div className="orion-inbox-panel flex-1 min-h-0 bg-slate-950/20 border border-white/5 rounded-3xl overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_1fr_300px]">
+        <div className="orion-inbox-panel bg-slate-950/20 border border-white/5 rounded-3xl overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_1fr_300px] h-[550px] min-h-[550px]">
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
-          <div className="orion-inbox-list border-r border-white/5 flex flex-col bg-slate-900/20">
+          <div className="orion-inbox-list border-r border-white/5 flex flex-col bg-slate-900/20 h-full overflow-hidden">
             {/* Counts Filter Header */}
             <div className="p-4 border-b border-white/5 space-y-3.5">
               <div className="flex items-center justify-between bg-white/5 p-1 rounded-2xl gap-0.5 shadow-inner">
@@ -1386,7 +1403,7 @@ export default function BrokerInboxPage() {
           </div>
 
           {/* COLUMN 2: MIDDLE CHAT CONVERSATION WINDOW */}
-          <div className="orion-inbox-chat flex flex-col bg-slate-900/10 border-r border-white/5">
+          <div className="orion-inbox-chat flex flex-col bg-slate-900/10 border-r border-white/5 h-full overflow-hidden">
             {selectedConversation ? (
               <>
                 {/* Header do chat */}
@@ -1739,7 +1756,7 @@ export default function BrokerInboxPage() {
           </div>
 
           {/* COLUMN 3: RIGHT SIDEBAR - LEAD DETAILS PANEL */}
-          <div className="orion-inbox-details bg-slate-900/20 flex flex-col p-5 space-y-6 overflow-y-auto">
+          <div className="orion-inbox-details bg-slate-900/20 flex flex-col p-5 space-y-6 overflow-y-auto h-full">
             {selectedConversation ? (
               <>
                 {/* Status do Lead no CRM */}
