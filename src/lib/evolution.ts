@@ -118,21 +118,32 @@ export async function getEvolutionInstanceApiKey(instance: string, createPayload
 
 export async function configureEvolutionWebhook(instance: string, instanceApiKey?: string | null) {
   try {
+    let webhookUrl = process.env.EVOLUTION_WEBHOOK_URL;
+    if (!webhookUrl) {
+      const isInternalDocker = String(process.env.EVOLUTION_API_URL).includes('evolution_evolution_api');
+      if (isInternalDocker) {
+        webhookUrl = 'http://oriontrack_oriontrack:3000/api/inbox/evolution/webhook';
+      } else {
+        webhookUrl = `${PUBLIC_APP_URL}/api/inbox/evolution/webhook`;
+      }
+    }
+
+    console.log(`[configureEvolutionWebhook] Setting webhook for instance ${instance} to URL: ${webhookUrl}`);
+
     await evolutionFetch(`/webhook/set/${instance}`, {
       method: 'POST',
       body: JSON.stringify({
         webhook: {
           enabled: true,
-          url: `${PUBLIC_APP_URL}/api/inbox/evolution/webhook`,
+          url: webhookUrl,
           byEvents: false,
           base64: false,
           events: ['MESSAGES_UPSERT', 'SEND_MESSAGE', 'CONNECTION_UPDATE'],
         },
       }),
     }, instanceApiKey);
-  } catch {
-    // Some Evolution installations use global webhook settings only.
-    // The inbox still works for outbound messages and stored conversations.
+  } catch (err: any) {
+    console.error(`[configureEvolutionWebhook ERROR] Failed to set webhook for ${instance}:`, err.message);
   }
 }
 
