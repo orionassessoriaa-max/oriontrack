@@ -1334,7 +1334,7 @@ export default function BrokerInboxPage() {
             </div>
 
             {/* Conversas list */}
-            <div className="flex-1 overflow-y-auto divide-y divide-white/2 max-h-[500px]">
+            <div className="flex-1 overflow-y-auto divide-y divide-white/2">
               {loading ? (
                 <div className="flex h-40 items-center justify-center">
                   <Loader2 className="animate-spin text-cyan-400" size={24} />
@@ -1518,7 +1518,7 @@ export default function BrokerInboxPage() {
                 )}
 
                 {/* Mensagens list */}
-                <div className="orion-inbox-messages flex-1 overflow-y-auto bg-slate-950/20 p-5 space-y-4 max-h-[420px]">
+                <div className="orion-inbox-messages flex-1 overflow-y-auto bg-slate-950/20 p-5 space-y-4">
                   {loadingMessages ? (
                     <div className="flex h-full items-center justify-center">
                       <Loader2 className="animate-spin text-cyan-400" size={24} />
