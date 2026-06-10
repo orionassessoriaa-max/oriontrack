@@ -13,8 +13,7 @@ function cadenceDays(startValue?: string | null, endValue?: string | null) {
 async function canAccessLead(profile: any, lead: any) {
   if (profile.tipo_usuario === 'admin') return true;
   if (profile.tipo_usuario === 'corretor_membro') return lead.responsavel_profile_id === profile.id;
-  if (profile.tipo_usuario === 'corretor') return lead.corretor_id === profile.corretor_id;
-  if (profile.tipo_usuario !== 'corretor_admin') return false;
+  if (!['corretor', 'corretor_admin'].includes(profile.tipo_usuario)) return false;
   if (lead.corretor_id === profile.corretor_id) return true;
 
   const { data: rows } = await supabaseAdmin

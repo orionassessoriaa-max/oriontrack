@@ -47,6 +47,22 @@ async function ensureBucket() {
   });
 }
 
+async function canAccessLead(profile: any, lead: any) {
+  if (profile.tipo_usuario === 'admin') return true;
+  if (profile.tipo_usuario === 'corretor_membro') return lead.responsavel_profile_id === profile.id;
+  if (!['corretor', 'corretor_admin'].includes(profile.tipo_usuario)) return false;
+  if (lead.corretor_id === profile.corretor_id) return true;
+
+  const { data: rows } = await supabaseAdmin
+    .from('corretores')
+    .select('id, nome_empresa')
+    .in('id', [profile.corretor_id, lead.corretor_id].filter(Boolean));
+
+  const own = rows?.find((row) => row.id === profile.corretor_id);
+  const target = rows?.find((row) => row.id === lead.corretor_id);
+  return Boolean(own?.nome_empresa && own.nome_empresa === target?.nome_empresa);
+}
+
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const guard = await requireUser(request);
   if ('error' in guard) return guard.error;
@@ -63,16 +79,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
   }
 
-  if ((guard.profile.tipo_usuario === 'corretor' || guard.profile.tipo_usuario === 'corretor_admin') && lead.corretor_id !== guard.profile.corretor_id) {
+  if (!(await canAccessLead(guard.profile, lead))) {
     return NextResponse.json({ error: 'Acesso negado para este lead.' }, { status: 403 });
-  }
-
-  if (guard.profile.tipo_usuario === 'corretor_membro' && lead.responsavel_profile_id !== guard.profile.id) {
-    return NextResponse.json({ error: 'Acesso negado para este lead.' }, { status: 403 });
-  }
-
-  if (!['admin', 'corretor', 'corretor_admin', 'corretor_membro'].includes(guard.profile.tipo_usuario)) {
-    return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
 
   const formData = await request.formData();
