@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Loader2, MessageSquare, Palette, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, MessageSquare, Palette, XCircle, Download, Plus } from 'lucide-react';
+import Link from 'next/link';
 
 type CreativeAsset = {
   id: string;
@@ -30,6 +31,15 @@ export default function BrokerCreativesPage() {
   const [loading, setLoading] = useState(true);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [comment, setComment] = useState('');
+  const [expandedAssetUrl, setExpandedAssetUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpandedAssetUrl(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const fetchAssets = async () => {
     if (!profile?.corretor_id) {
@@ -77,6 +87,26 @@ export default function BrokerCreativesPage() {
         .eq('id', asset.demanda_id);
     }
 
+    // Trigger designer notification on status change (approval or revision request)
+    if (status === 'aprovado' || status === 'revisao') {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (token) {
+        await fetch('/api/criativos/notify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            assetId: asset.id,
+            status,
+            comentario: comentario || '',
+          }),
+        }).catch((err) => console.error('Error triggering creative notification:', err));
+      }
+    }
+
     setReviewId(null);
     setComment('');
     await fetchAssets();
@@ -84,12 +114,20 @@ export default function BrokerCreativesPage() {
 
   return (
     <InternalLayout>
-      <div className="mb-8">
-        <p className="text-xs font-black uppercase tracking-widest text-blue-600">Corretor</p>
-        <h1 className="text-3xl font-black text-slate-950">Criativos para aprovar</h1>
-        <p className="mt-2 max-w-3xl text-sm font-bold text-slate-500">
-          Aqui ficam as artes/ofertas entregues pela equipe. Aprove para liberar como criativo rodando ou envie uma revisao com comentario.
-        </p>
+      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-blue-600">Corretor</p>
+          <h1 className="text-3xl font-black text-slate-950">Criativos para aprovar</h1>
+          <p className="mt-2 max-w-3xl text-sm font-bold text-slate-500">
+            Aqui ficam as artes/ofertas entregues pela equipe. Aprove para liberar como criativo rodando ou envie uma revisão com comentário.
+          </p>
+        </div>
+        <Link
+          href="/criativos/demandas"
+          className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-4 font-black text-white hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 md:w-auto text-center"
+        >
+          <Plus size={18} /> Solicitar Criativo
+        </Link>
       </div>
 
       {loading ? (
@@ -100,13 +138,25 @@ export default function BrokerCreativesPage() {
         <div className="border border-dashed border-slate-200 bg-white p-12 text-center">
           <Palette className="mx-auto text-slate-300" size={42} />
           <p className="mt-4 text-sm font-black uppercase tracking-widest text-slate-400">Nenhum criativo enviado ainda</p>
+          <div className="mt-6">
+            <Link
+              href="/criativos/demandas"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-white hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
+            >
+              <Plus size={16} /> Solicitar Criativo
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
           {assets.map((asset) => (
             <div key={asset.id} className="border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex gap-4">
-                <div className="force-white h-32 w-32 shrink-0 overflow-hidden border border-slate-200">
+                <div 
+                  className={`force-white h-32 w-32 shrink-0 overflow-hidden border border-slate-200 ${asset.arquivo_url ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+                  onClick={() => asset.arquivo_url && setExpandedAssetUrl(asset.arquivo_url)}
+                  title={asset.arquivo_url ? 'Clique para expandir' : undefined}
+                >
                   {asset.arquivo_url ? (
                     <img src={asset.arquivo_url} alt={asset.titulo} className="h-full w-full object-cover" />
                   ) : (
@@ -147,18 +197,42 @@ export default function BrokerCreativesPage() {
                     </div>
                   ) : (
                     <div className="mt-5 flex flex-wrap gap-2">
-                      <button onClick={() => updateCreative(asset, 'aprovado')} className="flex items-center gap-2 bg-emerald-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white">
+                      <button onClick={() => updateCreative(asset, 'aprovado')} className="flex items-center gap-2 bg-emerald-600 px-4 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-emerald-700 transition-colors">
                         <CheckCircle2 size={15} /> Aprovar
                       </button>
                       <button onClick={() => { setReviewId(asset.id); setComment(asset.comentario_corretor || ''); }} className="flex items-center gap-2 border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
                         <XCircle size={15} /> Revisar
                       </button>
+                      {asset.arquivo_url && (
+                        <a
+                          href={asset.arquivo_url}
+                          download={asset.titulo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 transition-colors"
+                        >
+                          <Download size={15} /> Baixar
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {expandedAssetUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 p-4" onClick={() => setExpandedAssetUrl(null)}>
+          <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+            <img src={expandedAssetUrl} className="mx-auto max-h-[85vh] max-w-full rounded-lg object-contain shadow-2xl" alt="Criativo em tamanho real" />
+            <button 
+              onClick={() => setExpandedAssetUrl(null)}
+              className="absolute -top-10 right-0 text-xs font-black uppercase tracking-widest text-white hover:text-slate-300 flex items-center gap-1.5"
+            >
+              Fechar ✕
+            </button>
+          </div>
         </div>
       )}
     </InternalLayout>

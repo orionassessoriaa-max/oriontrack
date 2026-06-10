@@ -213,6 +213,73 @@ export default function TrafficLeadsPage() {
     setAdFilter('todos');
   };
 
+  const exportToCsv = () => {
+    if (filteredLeads.length === 0) {
+      alert('Nenhum lead para exportar.');
+      return;
+    }
+
+    const headers = [
+      'Data de Entrada',
+      'Corretor',
+      'Nome',
+      'Telefone',
+      'Idades',
+      'CNPJ',
+      'Plano Ativo',
+      'Plano Atual',
+      'Custo Plano Atual',
+      'Investimento',
+      'Cidade',
+      'Status',
+      'Página/Operadora',
+      'Origem (UTM Source)',
+      'Meio (UTM Medium)',
+      'Campanha (UTM Campaign)',
+      'Termo (UTM Term)',
+      'Conteúdo (UTM Content)',
+      'Observações'
+    ];
+
+    const rows = filteredLeads.map(lead => [
+      lead.data_entrada ? new Date(lead.data_entrada).toLocaleDateString('pt-BR') : '',
+      lead.corretores?.nome || '',
+      lead.nome || '',
+      lead.telefone || '',
+      lead.idades || '',
+      lead.possui_cnpj || '',
+      lead.tem_plano_ativo || '',
+      lead.plano_atual || '',
+      lead.custo_plano_atual || '',
+      lead.investimento || '',
+      lead.cidade || '',
+      lead.status || '',
+      sheetTabLabel(lead.operadora),
+      lead.utm_source || '',
+      lead.utm_medium || '',
+      lead.utm_campaign || '',
+      lead.utm_term || '',
+      lead.utm_content || '',
+      lead.observacoes || ''
+    ]);
+
+    const csvContent = [
+      headers.join(';'),
+      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
+    ].join('\n');
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `leads_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+
   const hasActiveFilters =
     searchTerm !== '' ||
     cnpjFilter !== 'todos' ||
@@ -232,7 +299,10 @@ export default function TrafficLeadsPage() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Planilhas dos Corretores</h1>
           <p className="font-medium text-gray-500">Selecione o corretor e veja a planilha com origem da aba, status e UTMs.</p>
         </div>
-        <button className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-6 py-3 font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50">
+        <button
+          onClick={exportToCsv}
+          className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-6 py-3 font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
+        >
           <Download size={18} /> Exportar
         </button>
       </div>

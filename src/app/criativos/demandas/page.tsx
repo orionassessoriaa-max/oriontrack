@@ -186,7 +186,7 @@ export default function CreativeDemandsPage() {
             <h2 className="text-lg font-black text-slate-950">Nova demanda</h2>
           </div>
           <div className="space-y-4">
-            {profile?.tipo_usuario !== 'corretor' && (
+            {!['corretor', 'corretor_admin', 'corretor_membro'].includes(profile?.tipo_usuario || '') && (
               <select required value={form.corretor_id} onChange={(event) => setForm({ ...form, corretor_id: event.target.value })} className="w-full border border-slate-200 bg-slate-50 p-3 text-sm font-bold outline-none focus:border-blue-500">
                 <option value="">Selecione o corretor</option>
                 {corretores.map((corretor) => <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>)}

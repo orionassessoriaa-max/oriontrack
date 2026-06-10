@@ -57,6 +57,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [toast, setToast] = useState<{ id: string; titulo: string; mensagem: string } | null>(null);
   const [tema, setTema] = useState<string>('noturno');
+  const [hasTeamMembers, setHasTeamMembers] = useState(true);
 
   useEffect(() => {
     const handleThemeChange = () => {
@@ -70,6 +71,28 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const isDark = tema === 'noturno';
 
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, isViewingAsDesigner, isViewingAsAccount, stopViewingAsCorretor } = useAuth();
+
+  useEffect(() => {
+    if (!profile?.corretor_id) return;
+    if (!['corretor', 'corretor_admin'].includes(profile.tipo_usuario || '')) return;
+
+    const checkTeamMembers = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('corretor_time_membros')
+          .select('*', { count: 'exact', head: true })
+          .eq('corretor_id', profile.corretor_id);
+
+        if (!error && count !== null) {
+          setHasTeamMembers(count > 0);
+        }
+      } catch (err) {
+        console.error('Error checking team members:', err);
+      }
+    };
+
+    checkTeamMembers();
+  }, [profile?.corretor_id, profile?.tipo_usuario]);
 
   useEffect(() => {
     if (!toast) return;
@@ -255,27 +278,42 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   ];
 
   const getMenu = () => {
+    let items = [];
     if (isViewingAsCorretor && ['gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario))) {
       const base = corretorMenu.filter((item) => item.href !== '/financeiro');
       if (actualProfile?.tipo_usuario === 'account_manager') {
-        return [
+        items = [
           ...base,
           { icon: MessageSquare, label: 'Inbox Account', href: '/account/inbox' },
           { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
         ];
+      } else {
+        items = [
+          ...base,
+          { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
+        ];
       }
-      return [
-        ...base,
-        { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
-      ];
+    } else if (profile?.tipo_usuario === 'gestor_trafego') {
+      items = adminMenu.filter((item) => item.href !== '/admin/configuracoes' && item.href !== '/admin/usuarios');
+    } else if (profile?.tipo_usuario === 'admin') {
+      items = adminMenu;
+    } else if (profile?.tipo_usuario === 'designer') {
+      items = designerMenu;
+    } else if (profile?.tipo_usuario === 'account_manager') {
+      items = accountMenu;
+    } else if (profile?.tipo_usuario === 'corretor_membro') {
+      items = corretorMemberMenu;
+    } else if (profile?.tipo_usuario === 'corretor_admin') {
+      items = corretorMenu;
+    } else {
+      items = corretorMenu;
     }
-    if (profile?.tipo_usuario === 'gestor_trafego') return adminMenu.filter((item) => item.href !== '/admin/configuracoes' && item.href !== '/admin/usuarios');
-    if (profile?.tipo_usuario === 'admin') return adminMenu;
-    if (profile?.tipo_usuario === 'designer') return designerMenu;
-    if (profile?.tipo_usuario === 'account_manager') return accountMenu;
-    if (profile?.tipo_usuario === 'corretor_membro') return corretorMemberMenu;
-    if (profile?.tipo_usuario === 'corretor_admin') return corretorMenu;
-    return corretorMenu;
+
+    if (!hasTeamMembers && pathname !== '/time') {
+      items = items.filter((item) => item.href !== '/time');
+    }
+
+    return items;
   };
 
   const initials = profile?.nome

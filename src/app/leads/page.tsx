@@ -670,6 +670,71 @@ export default function BrokerLeadsPage() {
     setResponsavelFilter('todos');
   };
 
+  const exportToCsv = () => {
+    if (filteredLeads.length === 0) {
+      alert('Nenhum lead para exportar.');
+      return;
+    }
+
+    const headers = [
+      'Data de Entrada',
+      'Nome',
+      'Telefone',
+      'Idades',
+      'CNPJ',
+      'Plano Ativo',
+      'Plano Atual',
+      'Custo Plano Atual',
+      'Investimento',
+      'Cidade',
+      'Status',
+      'Página/Operadora',
+      'Origem (UTM Source)',
+      'Meio (UTM Medium)',
+      'Campanha (UTM Campaign)',
+      'Termo (UTM Term)',
+      'Conteúdo (UTM Content)',
+      'Observações'
+    ];
+
+    const rows = filteredLeads.map(lead => [
+      lead.data_entrada ? new Date(lead.data_entrada).toLocaleDateString('pt-BR') : '',
+      lead.nome || '',
+      lead.telefone || '',
+      lead.idades || '',
+      lead.possui_cnpj || '',
+      lead.tem_plano_ativo || '',
+      lead.plano_atual || '',
+      lead.custo_plano_atual || '',
+      lead.investimento || '',
+      lead.cidade || '',
+      lead.status || '',
+      lead.operadora || '',
+      lead.utm_source || '',
+      lead.utm_medium || '',
+      lead.utm_campaign || '',
+      lead.utm_term || '',
+      lead.utm_content || '',
+      lead.observacoes || ''
+    ]);
+
+    const csvContent = [
+      headers.join(';'),
+      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
+    ].join('\n');
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `leads_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+
   const teamStats = useMemo(() => {
     return teamMembers.map((member) => {
       const memberLeads = leads.filter((lead) => lead.responsavel_membro_id === member.id);
@@ -709,7 +774,10 @@ export default function BrokerLeadsPage() {
           >
             <Plug size={18} /> Conectar CRM
           </button>
-          <button className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-100 bg-white px-5 py-3 font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50">
+          <button
+            onClick={exportToCsv}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-100 bg-white px-5 py-3 font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
+          >
             <Download size={18} /> Exportar
           </button>
           {isViewingAsCorretor && (

@@ -173,6 +173,73 @@ export default function AdminLeadsPage() {
     setFilterDataFim('');
   };
 
+  const exportToCsv = () => {
+    if (filteredLeads.length === 0) {
+      alert('Nenhum lead para exportar.');
+      return;
+    }
+
+    const headers = [
+      'Data de Entrada',
+      'Nome',
+      'Telefone',
+      'Idades',
+      'CNPJ',
+      'Plano Ativo',
+      'Plano Atual',
+      'Custo Plano Atual',
+      'Investimento',
+      'Cidade',
+      'Status',
+      'Página/Operadora',
+      'Concessionaria',
+      'Origem (UTM Source)',
+      'Meio (UTM Medium)',
+      'Campanha (UTM Campaign)',
+      'Termo (UTM Term)',
+      'Conteúdo (UTM Content)',
+      'Observações'
+    ];
+
+    const rows = filteredLeads.map(lead => [
+      lead.data_entrada ? new Date(lead.data_entrada).toLocaleDateString('pt-BR') : '',
+      lead.nome || '',
+      lead.telefone || '',
+      lead.idades || '',
+      lead.possui_cnpj || '',
+      lead.tem_plano_ativo || '',
+      lead.plano_atual || '',
+      lead.custo_plano_atual || '',
+      lead.investimento || '',
+      lead.cidade || '',
+      lead.status || '',
+      lead.operadora || '',
+      getConcessionariaName(lead.corretores),
+      lead.utm_source || '',
+      lead.utm_medium || '',
+      lead.utm_campaign || '',
+      lead.utm_term || '',
+      lead.utm_content || '',
+      lead.observacoes || ''
+    ]);
+
+    const csvContent = [
+      headers.join(';'),
+      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
+    ].join('\n');
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `leads_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+
   const fetchDeleteScopeCount = async () => {
     setLoadingDeleteScopeCount(true);
     setDeleteScopeCount(null);
@@ -330,7 +397,10 @@ export default function AdminLeadsPage() {
           >
             <Upload size={18} /> Importar Planilha
           </button>
-          <button className="bg-white text-gray-700 px-6 py-4 rounded-2xl font-black border border-gray-100 shadow-sm flex items-center gap-2 hover:bg-gray-50 transition-all">
+          <button
+            onClick={exportToCsv}
+            className="bg-white text-gray-700 px-6 py-4 rounded-2xl font-black border border-gray-100 shadow-sm flex items-center gap-2 hover:bg-gray-50 transition-all"
+          >
             <Download size={18} /> Exportar
           </button>
           <Link 
