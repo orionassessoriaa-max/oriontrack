@@ -9,23 +9,28 @@ on public.corretores
 for select
 to authenticated
 using (
-  public.is_admin()
-  or (
-    public.current_profile_role() in ('corretor', 'corretor_admin', 'corretor_membro')
-    and (
-      id = public.current_profile_corretor_id()
-      or (
-        exists (
-          select 1
-          from public.profiles p
-          where p.id = auth.uid()
-            and nullif(trim(p.nome_empresa), '') is not null
-            and p.nome_empresa = corretores.nome_empresa
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and (
+        p.tipo_usuario = 'admin'
+        or (
+          p.tipo_usuario in ('corretor', 'corretor_admin', 'corretor_membro')
+          and (
+            corretores.id = p.corretor_id
+            or (
+              nullif(trim(p.nome_empresa), '') is not null
+              and p.nome_empresa = corretores.nome_empresa
+            )
+          )
+        )
+        or (
+          p.tipo_usuario = 'gestor_trafego'
+          and corretores.gestor_trafego_id = p.id
         )
       )
-    )
   )
-  or (public.is_gestor_trafego() and gestor_trafego_id = auth.uid())
 );
 
 -- 2. Fix RLS on public.leads (Select) to allow both 'corretor' and 'corretor_admin' to read shared brokerage leads
