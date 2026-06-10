@@ -103,6 +103,9 @@ export default function BrokerInboxPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const selectedConversationRef = useRef<Conversation | null>(null);
 
@@ -584,7 +587,7 @@ export default function BrokerInboxPage() {
   }
 
   // Send message
-  async function sendMessage(textOverride?: string, isAudio = false, audioDuration = '') {
+  async function sendMessage(textOverride?: string, isAudio = false, audioDuration = '', audioBase64Override?: string) {
     if (!selectedConversation) return;
     const finalMsg = textOverride || messageText.trim();
     if (!finalMsg && !filePreview && !isAudio) return;
@@ -606,6 +609,8 @@ export default function BrokerInboxPage() {
       else if (selectedFile.type.startsWith('audio/')) mediatype = 'audio';
     }
 
+    const hasAudioData = isAudio && audioBase64Override;
+
     try {
       const response = await fetch('/api/inbox/messages', {
         method: 'POST',
@@ -622,11 +627,11 @@ export default function BrokerInboxPage() {
             lead_id: selectedConversation.lead_id,
             nome_contato: selectedConversation.nome_contato,
           } : {}),
-          ...(filePreview ? {
-            media: filePreview,
-            mimetype: selectedFile?.type,
-            fileName: selectedFile?.name,
-            mediatype,
+          ...((filePreview || hasAudioData) ? {
+            media: hasAudioData ? audioBase64Override : filePreview,
+            mimetype: hasAudioData ? 'audio/ogg' : selectedFile?.type,
+            fileName: hasAudioData ? 'audio.ogg' : selectedFile?.name,
+            mediatype: hasAudioData ? 'audio' : mediatype,
           } : {}),
         }),
       });
@@ -682,30 +687,80 @@ export default function BrokerInboxPage() {
   }
 
   // Audio Recording Toggle
-  const startRecording = () => {
-    setIsRecording(true);
-    setRecordSeconds(0);
-    recordingTimerRef.current = setInterval(() => {
-      setRecordSeconds(prev => prev + 1);
-    }, 1000);
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordSeconds(0);
+      
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordSeconds(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Erro ao acessar microfone:', err);
+      alert('Não consegui acessar o microfone. Verifique as permissões do seu navegador.');
+    }
   };
 
   const stopAndSendRecording = () => {
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     setIsRecording(false);
-    
-    // Formatar segundos
-    const mins = Math.floor(recordSeconds / 60).toString().padStart(2, '0');
-    const secs = (recordSeconds % 60).toString().padStart(2, '0');
-    const durationStr = `${mins}:${secs}`;
-    
-    void sendMessage(undefined, true, durationStr);
+
+    const mediaRecorder = mediaRecorderRef.current;
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+
+    mediaRecorder.onstop = () => {
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
+      
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => track.stop());
+        audioStreamRef.current = null;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Audio = reader.result as string;
+        
+        const mins = Math.floor(recordSeconds / 60).toString().padStart(2, '0');
+        const secs = (recordSeconds % 60).toString().padStart(2, '0');
+        const durationStr = `${mins}:${secs}`;
+        
+        void sendMessage(undefined, true, durationStr, base64Audio);
+      };
+      reader.readAsDataURL(audioBlob);
+    };
+
+    mediaRecorder.stop();
   };
 
   const cancelRecording = () => {
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     setIsRecording(false);
     setRecordSeconds(0);
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = () => {};
+      mediaRecorderRef.current.stop();
+    }
+
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop());
+      audioStreamRef.current = null;
+    }
   };
 
   // Status conversion toggles

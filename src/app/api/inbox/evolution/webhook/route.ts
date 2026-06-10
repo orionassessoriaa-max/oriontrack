@@ -27,14 +27,17 @@ function readRemoteJid(data: any) {
 }
 
 async function findLead(corretorId: string, phone: string) {
-  const last8 = phone.slice(-8);
-  if (!last8) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8) return null;
+
+  const last8 = digits.slice(-8);
+  const last8WithHyphen = `${last8.slice(0, 4)}-${last8.slice(4)}`;
 
   const { data } = await supabaseAdmin
     .from('leads')
     .select('id, nome, telefone')
     .eq('corretor_id', corretorId)
-    .ilike('telefone', `%${last8}%`)
+    .or(`telefone.ilike.%${last8}%,telefone.ilike.%${last8WithHyphen}%`)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -90,8 +93,8 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle();
 
-    // Ignorar mensagens de contatos pessoais (que não sejam leads no CRM e não tenham conversa com lead_id ativa)
-    if (!lead && (!currentConversation || !currentConversation.lead_id)) {
+    // Ignorar mensagens de contatos pessoais (que não sejam leads no CRM e não possuam conversa já criada no banco)
+    if (!lead && !currentConversation) {
       console.log(`[evolution_webhook] Ignorando contato pessoal: ${phone} (corretor: ${profile.corretor_id})`);
       return NextResponse.json({ ok: true, ignored: true, reason: 'Not a CRM lead' });
     }
