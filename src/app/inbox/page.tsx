@@ -32,7 +32,9 @@ import {
   Search,
   Bot,
   Sparkles,
-  Settings
+  Settings,
+  Play,
+  Pause
 } from 'lucide-react';
 
 type Conversation = {
@@ -62,6 +64,8 @@ type InboxMessage = {
   created_at: string;
   isAudio?: boolean;
   audioDuration?: string;
+  provider_message_id?: string | null;
+  metadata?: any;
 };
 
 const TEMPLATES_PADRAO = [
@@ -108,6 +112,12 @@ export default function BrokerInboxPage() {
   const audioStreamRef = useRef<MediaStream | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const selectedConversationRef = useRef<Conversation | null>(null);
+
+  // Audio Playback States
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [audioUrls, setAudioUrls] = useState<Record<string, string>>({});
+  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Template Modal
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -379,11 +389,20 @@ export default function BrokerInboxPage() {
 
           // If the message is for the currently selected conversation, append it
           if (currentSelected && newMsg.conversa_id === currentSelected.id) {
+            const isAudio = 
+              newMsg.mensagem?.includes('[Áudio Gravado]') || 
+              newMsg.mensagem?.includes('🎤 Mensagem de voz') || 
+              newMsg.mensagem?.includes('🎵 Áudio') || 
+              Boolean(newMsg.metadata?.message?.audioMessage || newMsg.metadata?.audioMessage || newMsg.metadata?.data?.message?.audioMessage);
+            const mappedMsg = {
+              ...newMsg,
+              isAudio,
+            };
             setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) {
+              if (prev.some((m) => m.id === mappedMsg.id)) {
                 return prev;
               }
-              return [...prev, newMsg];
+              return [...prev, mappedMsg];
             });
           }
 
@@ -431,7 +450,18 @@ export default function BrokerInboxPage() {
         },
       });
       const payload = await response.json().catch(() => ({}));
-      setMessages(response.ok ? (payload.messages || []) : []);
+      const mapped = (payload.messages || []).map((m: any) => {
+        const isAudio = 
+          m.mensagem?.includes('[Áudio Gravado]') || 
+          m.mensagem?.includes('🎤 Mensagem de voz') || 
+          m.mensagem?.includes('🎵 Áudio') || 
+          Boolean(m.metadata?.message?.audioMessage || m.metadata?.audioMessage || m.metadata?.data?.message?.audioMessage);
+        return {
+          ...m,
+          isAudio,
+        };
+      });
+      setMessages(response.ok ? mapped : []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -763,6 +793,68 @@ export default function BrokerInboxPage() {
     }
   };
 
+  const playUrl = (url: string, messageId: string) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.play().catch(e => console.error('Erro ao tocar áudio:', e));
+    setPlayingAudioId(messageId);
+    audio.onended = () => {
+      setPlayingAudioId(null);
+    };
+  };
+
+  const handlePlayAudio = async (messageId: string) => {
+    if (playingAudioId === messageId) {
+      audioRef.current?.pause();
+      setPlayingAudioId(null);
+      return;
+    }
+
+    if (audioUrls[messageId]) {
+      playUrl(audioUrls[messageId], messageId);
+      return;
+    }
+
+    setLoadingAudioId(messageId);
+    try {
+      const token = await getToken();
+      const response = await fetch(`/api/inbox/messages/media?message_id=${messageId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        }
+      });
+      const data = await response.json();
+      if (data.base64) {
+        const base64Data = data.base64.includes(';base64,') ? data.base64.split(';base64,')[1] : data.base64;
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'audio/ogg' });
+        const url = URL.createObjectURL(blob);
+        
+        setAudioUrls(prev => ({ ...prev, [messageId]: url }));
+        playUrl(url, messageId);
+      } else if (data.url) {
+        setAudioUrls(prev => ({ ...prev, [messageId]: data.url }));
+        playUrl(data.url, messageId);
+      } else {
+        alert('Não foi possível obter o arquivo de áudio no momento.');
+      }
+    } catch (err) {
+      console.error('Erro ao baixar áudio:', err);
+      alert('Erro ao processar áudio.');
+    } finally {
+      setLoadingAudioId(null);
+    }
+  };
+ 
   // Status conversion toggles
   const handleTogglePause = () => {
     if (!selectedConversation) return;
@@ -1104,17 +1196,17 @@ export default function BrokerInboxPage() {
     }
   };
 
-  const renderAudioWaveform = () => {
+  const renderAudioWaveform = (isActive: boolean) => {
     return (
       <div className="flex items-center gap-1">
-        <span className="h-3 w-0.5 bg-cyan-400 rounded-full animate-pulse" />
-        <span className="h-5 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
-        <span className="h-7 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-        <span className="h-4 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
-        <span className="h-6 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-        <span className="h-3 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
-        <span className="h-5 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }} />
-        <span className="h-2 w-0.5 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.7s' }} />
+        <span className={`h-3 w-0.5 bg-cyan-400 rounded-full ${isActive ? 'animate-pulse' : 'opacity-40'}`} />
+        <span className={`h-5 w-0.5 bg-cyan-400 rounded-full ${isActive ? 'animate-pulse' : 'opacity-40'}`} style={isActive ? { animationDelay: '0.1s' } : undefined} />
+        <span className={`h-7 w-0.5 bg-cyan-400 rounded-full ${isActive ? 'animate-pulse' : 'opacity-40'}`} style={isActive ? { animationDelay: '0.2s' } : undefined} />
+        <span className={`h-4 w-0.5 bg-cyan-400 rounded-full ${isActive ? 'animate-pulse' : 'opacity-40'}`} style={isActive ? { animationDelay: '0.3s' } : undefined} />
+        <span className={`h-6 w-0.5 bg-cyan-400 rounded-full ${isActive ? 'animate-pulse' : 'opacity-40'}`} style={isActive ? { animationDelay: '0.4s' } : undefined} />
+        <span className={`h-3 w-0.5 bg-cyan-400 rounded-full ${isActive ? 'animate-pulse' : 'opacity-40'}`} style={isActive ? { animationDelay: '0.5s' } : undefined} />
+        <span className={`h-5 w-0.5 bg-cyan-400 rounded-full ${isActive ? 'animate-pulse' : 'opacity-40'}`} style={isActive ? { animationDelay: '0.6s' } : undefined} />
+        <span className={`h-2 w-0.5 bg-cyan-400 rounded-full ${isActive ? 'animate-pulse' : 'opacity-40'}`} style={isActive ? { animationDelay: '0.7s' } : undefined} />
       </div>
     );
   };
@@ -1434,6 +1526,8 @@ export default function BrokerInboxPage() {
                   ) : filteredChatMessages.length > 0 ? (
                     filteredChatMessages.map((message) => {
                       const isMine = message.direction === 'outbound';
+                      const isPlaying = playingAudioId === message.id;
+                      const isLoading = loadingAudioId === message.id;
                       return (
                         <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
                           <div className={`max-w-[75%] rounded-[1.5rem] p-3.5 shadow-lg space-y-1.5 ${
@@ -1444,14 +1538,29 @@ export default function BrokerInboxPage() {
                             {/* Se for áudio */}
                             {message.isAudio ? (
                               <div className="flex items-center gap-3">
-                                <div className="h-8 w-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
-                                  <Mic size={14} />
-                                </div>
+                                <button
+                                  onClick={() => handlePlayAudio(message.id)}
+                                  className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 transition-all border cursor-pointer ${
+                                    isMine 
+                                      ? 'bg-white/10 hover:bg-white/20 text-white border-white/10' 
+                                      : 'bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-400 border-cyan-500/20'
+                                  }`}
+                                >
+                                  {isLoading ? (
+                                    <div className={`h-3 w-3 rounded-full border-2 border-t-transparent animate-spin ${isMine ? 'border-white' : 'border-cyan-400'}`} />
+                                  ) : isPlaying ? (
+                                    <Pause size={12} fill="currentColor" />
+                                  ) : (
+                                    <Play size={12} className="ml-0.5" fill="currentColor" />
+                                  )}
+                                </button>
                                 <div className="space-y-0.5">
                                   <span className="text-[10px] font-black uppercase tracking-wider block">Mensagem de Voz</span>
-                                  <span className="text-[8px] font-bold text-slate-300 block">{message.audioDuration || '00:00'}</span>
+                                  <span className={`text-[8px] font-bold block ${isMine ? 'text-cyan-200' : 'text-slate-400'}`}>
+                                    {isPlaying ? 'Tocando...' : (message.audioDuration || '00:00')}
+                                  </span>
                                 </div>
-                                {renderAudioWaveform()}
+                                {renderAudioWaveform(isPlaying)}
                               </div>
                             ) : (
                               <p className="text-xs font-bold leading-normal whitespace-pre-wrap">{message.mensagem}</p>
@@ -1524,7 +1633,7 @@ export default function BrokerInboxPage() {
                           </span>
                         </div>
                         {/* Waveform animado */}
-                        {renderAudioWaveform()}
+                        {renderAudioWaveform(true)}
                       </div>
                       
                       <div className="flex items-center gap-3">

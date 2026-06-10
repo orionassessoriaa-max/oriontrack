@@ -196,17 +196,32 @@ export async function POST(request: Request) {
         ? mediaBase64.split(';base64,')[1] 
         : mediaBase64;
 
-      payload = await evolutionFetch(`/message/sendMedia/${instance}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          number: phone,
-          mediatype: mediatype || 'document',
-          mimetype: mimetype || 'application/octet-stream',
-          media: base64Data,
-          fileName: fileName || 'arquivo',
-          caption: text || undefined,
-        }),
-      }, instanceApiKey);
+      if (mediatype === 'audio') {
+        payload = await evolutionFetch(`/message/sendWhatsAppAudio/${instance}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            number: phone,
+            audio: base64Data,
+            options: {
+              delay: 1200,
+              presence: 'recording',
+              encoding: true
+            }
+          }),
+        }, instanceApiKey);
+      } else {
+        payload = await evolutionFetch(`/message/sendMedia/${instance}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            number: phone,
+            mediatype: mediatype || 'document',
+            mimetype: mimetype || 'application/octet-stream',
+            media: base64Data,
+            fileName: fileName || 'arquivo',
+            caption: text || undefined,
+          }),
+        }, instanceApiKey);
+      }
     } else {
       payload = await evolutionFetch(`/message/sendText/${instance}`, {
         method: 'POST',
@@ -226,7 +241,7 @@ export async function POST(request: Request) {
 
     let messageTextDb = text;
     if (mediaBase64) {
-      const typeLabel = mediatype === 'image' ? '📷 Imagem' : mediatype === 'audio' ? '🎵 Áudio' : mediatype === 'video' ? '🎥 Vídeo' : '📎 Arquivo';
+      const typeLabel = mediatype === 'image' ? '📷 Imagem' : mediatype === 'audio' ? '🎤 Mensagem de voz' : mediatype === 'video' ? '🎥 Vídeo' : '📎 Arquivo';
       messageTextDb = text ? `${typeLabel}: ${text}` : `${typeLabel} (${fileName})`;
     }
 

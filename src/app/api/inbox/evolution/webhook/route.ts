@@ -67,7 +67,20 @@ export async function POST(request: Request) {
 
     if (!profile?.corretor_id) return NextResponse.json({ ok: true, ignored: true });
 
-    const message = readText(data);
+    let message = readText(data);
+    const hasAudio = Boolean(data?.message?.audioMessage);
+    const hasImage = Boolean(data?.message?.imageMessage);
+    const hasVideo = Boolean(data?.message?.videoMessage);
+    const hasDocument = Boolean(data?.message?.documentMessage);
+    const hasMedia = hasAudio || hasImage || hasVideo || hasDocument;
+
+    if (!message && hasMedia) {
+      if (hasAudio) message = '🎤 Mensagem de voz';
+      else if (hasImage) message = '📷 Imagem';
+      else if (hasVideo) message = '🎥 Vídeo';
+      else if (hasDocument) message = '📎 Arquivo';
+    }
+
     const remoteJid = readRemoteJid(data);
     const phone = normalizePhone(remoteJid.split('@')[0]);
     if (!message || !phone) return NextResponse.json({ ok: true, ignored: true });
