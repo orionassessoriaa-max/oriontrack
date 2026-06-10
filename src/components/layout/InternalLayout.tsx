@@ -46,8 +46,8 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isCreativeRoute = pathname.startsWith('/criativos');
         const isTeamRoute = pathname.startsWith('/equipe');
         const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/simulador') || pathname.startsWith('/apolo-one') || pathname.startsWith('/ajuda');
-        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/financeiro', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || pathname === '/criativos';
-        const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/financeiro', '/minha-pagina', '/simulador', '/inbox', '/time', '/perfil', '/notificacoes', '/apolo-one', '/ajuda'].some(p => pathname.startsWith(p));
+        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/inbox', '/financeiro', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || isCreativeRoute;
+        const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/leads', '/financeiro', '/minha-pagina', '/simulador', '/inbox', '/time', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
         const isOperationalViewingBroker = isViewingAsCorretor && ['gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario));
 
         if (isOperationalViewingBroker) {
@@ -64,11 +64,11 @@ export default function InternalLayout({ children }: { children: React.ReactNode
 
         // 1. Corretor Access: Only broker routes
         if (isCorretor) {
-          if (!isLimitedBrokerRoute) router.push('/leads');
+          if (!isLimitedBrokerRoute) router.push('/dashboard');
         }
         else if (isCorretorMember) {
-          const isMemberRoute = ['/dashboard', '/crm', '/leads', '/simulador', '/inbox', '/perfil', '/notificacoes', '/apolo-one', '/ajuda'].some(p => pathname.startsWith(p));
-          if (!isMemberRoute) router.push('/crm');
+          const isMemberRoute = ['/dashboard', '/crm', '/leads', '/simulador', '/inbox', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
+          if (!isMemberRoute) router.push('/dashboard');
         }
         // 2. Traffic Manager Access: Traffic routes + Broker List (to select for reports)
         // But NO /admin dashboard or system settings

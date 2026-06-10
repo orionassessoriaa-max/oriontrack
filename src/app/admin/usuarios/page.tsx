@@ -354,6 +354,12 @@ export default function AdminUsuariosPage() {
   }
 
   async function handleEditUser(profile: AdminProfile) {
+    const corretor = corretores.find((item) => item.id === profile.corretor_id || item.email === profile.email);
+    const brokerId = profile.corretor_id || corretor?.id;
+    if (profile.tipo_usuario === 'corretor' && brokerId) {
+      router.push(`/admin/corretores/${brokerId}/editar`);
+      return;
+    }
     fillEditForm(profile);
     router.replace(`/admin/usuarios?edit=${profile.id}`);
   }

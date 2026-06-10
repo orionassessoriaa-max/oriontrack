@@ -84,7 +84,7 @@ export default function LoginPage() {
       }
 
       // Define a rota de destino baseada no perfil
-      let destination = '/leads';
+      let destination = '/dashboard';
       if (profile.tipo_usuario === 'admin') {
         window.sessionStorage.removeItem('orion:selected_team');
         destination = '/selecionar-time';
@@ -94,8 +94,6 @@ export default function LoginPage() {
         destination = '/designer';
       } else if (profile.tipo_usuario === 'account_manager') {
         destination = '/account';
-      } else if (profile.tipo_usuario === 'corretor_membro') {
-        destination = '/crm';
       }
 
       handlePlayGoal(destination);
