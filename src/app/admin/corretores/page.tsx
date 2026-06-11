@@ -75,24 +75,21 @@ function CorretoresContent() {
     setLoading(true);
     setError(null);
     try {
-      const [corretoresRes, gestoresRes] = await Promise.all([
-        supabase
-          .from('corretores')
-          .select('*')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('tipo_usuario', 'gestor_trafego')
-          .in('status', ['active', 'ativo', 'Ativo'])
-          .order('nome')
-      ]);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
 
-      if (corretoresRes.error) throw corretoresRes.error;
-      if (gestoresRes.error) throw gestoresRes.error;
+      const response = await fetch('/api/admin/usuarios', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Erro ao carregar dados.');
       
-      const gestoresList = gestoresRes.data || [];
-      const formattedCorretores = ((corretoresRes.data || []) as CorretorWithGestorJoin[]).map((c) => {
+      const gestoresList = ((payload.profiles || []) as Profile[])
+        .filter((item) => item.tipo_usuario === 'gestor_trafego' && ['active', 'ativo', 'Ativo'].includes(item.status))
+        .sort((a, b) => a.nome.localeCompare(b.nome));
+      const formattedCorretores = ((payload.corretores || []) as CorretorWithGestorJoin[]).map((c) => {
         const inferredGestor = inferGestorFromTeam(c, gestoresList);
         return {
           ...c,
