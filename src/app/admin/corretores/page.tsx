@@ -78,7 +78,7 @@ function CorretoresContent() {
       const [corretoresRes, gestoresRes] = await Promise.all([
         supabase
           .from('corretores')
-          .select('*, profiles:gestor_trafego_id(id, nome, email)')
+          .select('*')
           .order('created_at', { ascending: false }),
         supabase
           .from('profiles')
@@ -89,6 +89,7 @@ function CorretoresContent() {
       ]);
 
       if (corretoresRes.error) throw corretoresRes.error;
+      if (gestoresRes.error) throw gestoresRes.error;
       
       const gestoresList = gestoresRes.data || [];
       const formattedCorretores = ((corretoresRes.data || []) as CorretorWithGestorJoin[]).map((c) => {
