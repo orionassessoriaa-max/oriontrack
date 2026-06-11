@@ -308,9 +308,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
       items = corretorMenu;
     }
 
-    if (!hasTeamMembers && pathname !== '/time') {
-      items = items.filter((item) => item.href !== '/time');
-    }
+
 
     return items;
   };
