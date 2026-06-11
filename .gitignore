@@ -24,6 +24,12 @@
 .DS_Store
 *.pem
 /scratch/
+.supabase/
+supabase/.temp/
+src/app/inbox/check_*.js
+src/app/inbox/get_conv_messages.js
+src/app/inbox/list_leads.js
+src/app/inbox/test_webhook_eval.js
 
 # debug
 npm-debug.log*
