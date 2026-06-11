@@ -733,9 +733,9 @@ function CorretorasContent() {
                                             : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                                         }`}>
                                           {member.tipo_usuario === 'corretor' 
-                                            ? 'Admin' 
+                                            ? 'Corretor Admin' 
                                             : member.tipo_usuario === 'corretor_admin' 
-                                            ? 'Admin' 
+                                            ? 'Corretor Admin' 
                                             : member.has_profile
                                             ? 'Corretor integrante'
                                             : 'Cadastro sem acesso'}

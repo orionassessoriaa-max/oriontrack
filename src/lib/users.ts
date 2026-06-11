@@ -44,7 +44,8 @@ export function getRoleLabel(role: UserRole) {
   if (role === 'designer') return 'Designer';
   if (role === 'account_manager') return 'Account manager';
   if (role === 'corretor_membro') return 'Corretor integrante';
-  if (role === 'corretor_admin') return 'Admin';
+  if (role === 'corretor_admin') return 'Corretor Admin';
+  if (role === 'corretor') return 'Corretor Admin';
   return 'Admin';
 }
 

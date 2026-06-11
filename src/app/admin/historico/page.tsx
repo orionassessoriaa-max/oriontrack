@@ -44,7 +44,8 @@ const ACTION_LABELS: Record<string, string> = {
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
-  corretor: 'Admin',
+  corretor: 'Corretor Admin',
+  corretor_admin: 'Corretor Admin',
   corretor_membro: 'Corretor integrante',
   gestor_trafego: 'Gestor',
   designer: 'Designer',

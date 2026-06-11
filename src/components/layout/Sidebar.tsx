@@ -329,7 +329,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
         : profile?.tipo_usuario === 'account_manager'
           ? 'Account manager'
           : ['corretor', 'corretor_admin'].includes(profile?.tipo_usuario || '')
-            ? 'Admin'
+            ? 'Corretor Admin'
           : profile?.tipo_usuario === 'corretor_membro'
             ? 'Corretor integrante'
           : 'Corretor integrante';

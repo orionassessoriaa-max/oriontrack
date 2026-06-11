@@ -501,7 +501,7 @@ export default function AdminUsuariosPage() {
                 }}
                 className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
               >
-                <option value="corretor">Admin</option>
+                <option value="corretor">Corretor Admin</option>
                 <option value="gestor_trafego">Gestor de tráfego</option>
                 <option value="designer">Designer</option>
                 <option value="account_manager">Account manager</option>

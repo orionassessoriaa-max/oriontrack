@@ -727,7 +727,7 @@ export default function CrmPage() {
 
   useEffect(() => {
     if (crmScopeOptions.some((option) => option.value === crmScopeView)) return;
-    setCrmScopeView(profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
+    setCrmScopeView(profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
   }, [crmScopeOptions, crmScopeView, profile?.tipo_usuario, isViewingBrokerAsAdmin]);
 
   const viewScopedLeads = useMemo(() => {
