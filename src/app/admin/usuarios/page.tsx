@@ -48,6 +48,7 @@ const initialForm = {
   time_operacional: [] as OrionTeamMember[],
   comissao_percentual: '2.5',
   rodizio_ativo: true,
+  participa_rodizio: true,
   foto_url: '',
   operadora_outros: '',
   equipe_orion: '' as '' | 'apollo' | 'kripto_hunters',
@@ -120,9 +121,10 @@ export default function AdminUsuariosPage() {
       time_operacional: Array.isArray(corretor?.time_operacional) ? corretor.time_operacional as OrionTeamMember[] : [],
       comissao_percentual: String(corretor?.comissao_percentual ?? '2.5'),
       rodizio_ativo: corretor?.rodizio_ativo !== false,
+      participa_rodizio: true,
       foto_url: profile.foto_url || '',
       operadora_outros: customOperadora || '',
-      equipe_orion: profile.tipo_usuario === 'corretor' ? '' : (profile.equipe_orion || ''),
+      equipe_orion: ['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario) ? '' : (profile.equipe_orion || ''),
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -179,10 +181,11 @@ export default function AdminUsuariosPage() {
     const requestedRole = params.get('tipo') as UserRole | null;
     const requestedBrokerage = String(params.get('corretora') || '').trim();
     if (requestedRole && ['admin', 'corretor', 'gestor_trafego', 'designer', 'account_manager', 'corretor_admin', 'corretor_membro'].includes(requestedRole)) {
+      const isBrokerRole = ['corretor', 'corretor_membro'].includes(requestedRole);
       setForm((current) => ({
         ...current,
         tipo_usuario: requestedRole,
-        nome_empresa: requestedRole === 'corretor' && requestedBrokerage ? requestedBrokerage : current.nome_empresa,
+        nome_empresa: isBrokerRole && requestedBrokerage ? requestedBrokerage : current.nome_empresa,
         time_operacional: requestedRole === 'corretor' ? current.time_operacional : [],
         operadoras: requestedRole === 'corretor' ? current.operadoras : []
       }));
@@ -491,17 +494,20 @@ export default function AdminUsuariosPage() {
                 value={form.tipo_usuario}
                 onChange={(event) => {
                   const tipo_usuario = event.target.value as UserRole;
+                  const isBrokerOwner = tipo_usuario === 'corretor';
+                  const isBrokerAccess = ['corretor', 'corretor_membro'].includes(tipo_usuario);
                   setForm((current) => ({
                     ...current,
                     tipo_usuario,
-                    time_operacional: tipo_usuario === 'corretor' ? current.time_operacional : [],
-                    operadoras: tipo_usuario === 'corretor' ? current.operadoras : [],
-                    equipe_orion: tipo_usuario === 'corretor' ? '' : current.equipe_orion
+                    time_operacional: isBrokerOwner ? current.time_operacional : [],
+                    operadoras: isBrokerOwner ? current.operadoras : [],
+                    equipe_orion: isBrokerAccess ? '' : current.equipe_orion
                   }));
                 }}
                 className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="corretor">Corretor Admin</option>
+                <option value="corretor_membro">Corretor Integrante</option>
                 <option value="gestor_trafego">Gestor de tráfego</option>
                 <option value="designer">Designer</option>
                 <option value="account_manager">Account manager</option>
@@ -509,7 +515,7 @@ export default function AdminUsuariosPage() {
               </select>
             </div>
 
-            {form.tipo_usuario !== 'corretor' && (
+            {!['corretor', 'corretor_membro'].includes(form.tipo_usuario) && (
               <div>
                 <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Time interno</label>
                 <select
@@ -565,10 +571,12 @@ export default function AdminUsuariosPage() {
               </label>
             </div>
 
-            {form.tipo_usuario === 'corretor' && (
+            {['corretor', 'corretor_membro'].includes(form.tipo_usuario) && (
               <>
                 <div>
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome da concessionaria</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                    {form.tipo_usuario === 'corretor_membro' ? 'Concessionaria do integrante' : 'Nome da concessionaria'}
+                  </label>
                   <input
                     value={form.nome_empresa}
                     onChange={(event) => setForm((current) => ({ ...current, nome_empresa: event.target.value }))}
@@ -601,10 +609,48 @@ export default function AdminUsuariosPage() {
                     </div>
                   )}
                   <p className="mt-2 text-[10px] font-bold text-slate-400">
-                    Use o mesmo nome para agrupar socios da mesma concessionaria.
+                    {form.tipo_usuario === 'corretor_membro'
+                      ? 'Selecione uma concessionaria existente para vincular este integrante ao CRM e ao rodizio.'
+                      : 'Use o mesmo nome para agrupar socios da mesma concessionaria.'}
                   </p>
                 </div>
 
+                {form.tipo_usuario === 'corretor_membro' && (
+                  <>
+                    <label className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-5 py-4">
+                      <div>
+                        <p className="text-sm font-black text-slate-700">Participa do rodizio</p>
+                        <p className="mt-1 text-[10px] font-bold text-slate-400">Quando ativo, este integrante pode receber leads automaticamente.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={form.participa_rodizio}
+                        onChange={(event) => setForm((current) => ({ ...current, participa_rodizio: event.target.checked }))}
+                        className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </label>
+
+                    <div>
+                      <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</label>
+                      <input
+                        required
+                        value={form.telefone}
+                        onChange={(event) => {
+                          const formatted = formatarTelefone(event.target.value);
+                          setForm((current) => ({ ...current, telefone: formatted }));
+                        }}
+                        placeholder="(99)99999-9999"
+                        maxLength={14}
+                        pattern="\(\d{2}\)\d{5}-\d{4}"
+                        title="Formato correto: (99)99999-9999"
+                        className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {form.tipo_usuario === 'corretor' && (
+                  <>
                 <div>
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Time Orion</label>
                   <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -708,6 +754,8 @@ export default function AdminUsuariosPage() {
                     <option value="ambos">Ambos</option>
                   </select>
                 </div>
+                  </>
+                )}
 
               </>
             )}

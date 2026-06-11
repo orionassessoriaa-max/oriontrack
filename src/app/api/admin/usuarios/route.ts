@@ -99,6 +99,49 @@ function parseCommissionPercent(value: unknown) {
   return Math.min(parsed, 100);
 }
 
+async function resolvePrimaryCorretorByBrokerage(nomeEmpresa: unknown) {
+  const brokerageName = String(nomeEmpresa || '').trim();
+  if (!brokerageName) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('corretores')
+    .select('id, nome, nome_empresa')
+    .eq('nome_empresa', brokerageName)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+async function ensureCorretorTeam(corretorId: string, nomeEmpresa?: string | null) {
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('corretor_times')
+    .select('id')
+    .eq('corretor_id', corretorId)
+    .eq('ativo', true)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing?.id) return existing.id;
+
+  const { data: created, error: createError } = await supabaseAdmin
+    .from('corretor_times')
+    .insert([{
+      corretor_id: corretorId,
+      nome: String(nomeEmpresa || 'Time Comercial').trim() || 'Time Comercial',
+      ativo: true,
+    }])
+    .select('id')
+    .single();
+
+  if (createError) throw createError;
+  return created.id;
+}
+
 export async function GET(request: Request) {
   try {
     const guard = await requireAdmin(request);
@@ -158,8 +201,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Nome e tipo de usuário são obrigatórios.' }, { status: 400 });
     }
 
-    if (role === 'corretor' && !telefone) {
+    if (['corretor', 'corretor_membro'].includes(role) && !telefone) {
       return NextResponse.json({ error: 'Telefone é obrigatório para corretor.' }, { status: 400 });
+    }
+
+    if (role === 'corretor_membro' && !String(body.nome_empresa || '').trim()) {
+      return NextResponse.json({ error: 'Selecione a concessionaria do corretor integrante.' }, { status: 400 });
     }
 
     const email = await resolveUniqueAccessEmail(nome, body.email);
@@ -181,6 +228,8 @@ export async function POST(request: Request) {
     }
 
     let corretorId: string | null = null;
+    let memberTeamId: string | null = null;
+    let memberBrokerageName: string | null = null;
 
     try {
       if (role === 'corretor') {
@@ -212,6 +261,17 @@ export async function POST(request: Request) {
         corretorId = corretor.id;
       }
 
+      if (role === 'corretor_membro') {
+        const primaryCorretor = await resolvePrimaryCorretorByBrokerage(body.nome_empresa);
+        if (!primaryCorretor?.id) {
+          throw new Error('Concessionaria nao encontrada. Crie a concessionaria ou um Corretor Admin primeiro.');
+        }
+
+        corretorId = primaryCorretor.id;
+        memberBrokerageName = primaryCorretor.nome_empresa || String(body.nome_empresa || '').trim();
+        memberTeamId = await ensureCorretorTeam(primaryCorretor.id, memberBrokerageName);
+      }
+
       const profilePayload = {
           id: authUser.user.id,
           email,
@@ -220,10 +280,10 @@ export async function POST(request: Request) {
           corretor_id: corretorId,
           status: status === 'inativo' ? 'inactive' : 'active',
           email_real: emailReal,
-          nome_empresa: role === 'corretor' ? String(body.nome_empresa || '').trim() || null : null,
+          nome_empresa: ['corretor', 'corretor_membro'].includes(role) ? String(memberBrokerageName || body.nome_empresa || '').trim() || null : null,
           foto_url: fotoUrl,
           precisa_trocar_senha: true,
-          equipe_orion: role === 'corretor' ? null : equipeOrion,
+          equipe_orion: ['corretor', 'corretor_membro'].includes(role) ? null : equipeOrion,
         };
 
       let { error: profileError } = await supabaseAdmin
@@ -239,6 +299,32 @@ export async function POST(request: Request) {
       }
 
       if (profileError) throw profileError;
+
+      if (role === 'corretor_membro' && corretorId && memberTeamId) {
+        const { data: lastMember } = await supabaseAdmin
+          .from('corretor_time_membros')
+          .select('ordem')
+          .eq('time_id', memberTeamId)
+          .order('ordem', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const ordem = Number(lastMember?.ordem || 0) + 1;
+        const { error: memberError } = await supabaseAdmin
+          .from('corretor_time_membros')
+          .insert([{
+            time_id: memberTeamId,
+            corretor_id: corretorId,
+            profile_id: authUser.user.id,
+            nome,
+            email,
+            status: 'ativo',
+            ordem,
+            participa_rodizio: body.participa_rodizio !== false,
+          }]);
+
+        if (memberError) throw memberError;
+      }
 
       await writeAuditLog(request, guard.profile as any, {
         action: 'user.create',
