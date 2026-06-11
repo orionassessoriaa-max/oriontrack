@@ -271,7 +271,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
-    { icon: Palette, label: 'Solicitar Criativo', href: '/criativos' },
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },

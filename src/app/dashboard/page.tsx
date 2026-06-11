@@ -966,7 +966,12 @@ export default function DashboardPage() {
     { icon: HelpCircle, label: 'Ajuda Orion', desc: 'Solicite suporte ou alinhamento.', href: '/ajuda', color: 'slate' },
     { icon: GraduationCap, label: 'Treinamento', desc: 'Apoio para melhorar sua conversão.', href: '/ajuda?tipo=treinamento_comercial', color: 'green' },
     { icon: CalendarDays, label: 'Reunião Alinhamento', desc: 'Ajuste o perfil dos seus leads.', href: '/ajuda?tipo=alinhamento_leads', color: 'orange' },
-  ];
+  ].filter((action) => {
+    if (profile?.tipo_usuario === 'corretor_membro') {
+      return !['Ajuda Orion', 'Treinamento', 'Reunião Alinhamento'].includes(action.label);
+    }
+    return true;
+  });
 
   return (
     <InternalLayout>
@@ -1112,7 +1117,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Meta Ads Account Financial Status Bar */}
-      {metaAccount && (() => {
+      {metaAccount && profile?.tipo_usuario !== 'corretor_membro' && (() => {
         const metaStatus = getBrokerMetaStatus(metaAccount, displayPeriodCpl, periodLabelText);
         if (!metaStatus) return null;
 
@@ -1219,35 +1224,39 @@ export default function DashboardPage() {
       {/* 🚀 STEP 2: THE GORGEOUS 2-COLUMN MAIN CHARTS SECTION */}
       <div className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-5">
         {/* Column 1: SVG Curved Area Growth Chart (Meta Ads x Leads Growth) */}
-        <div className="rounded-[1.5rem] border border-slate-100 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-6 lg:col-span-3">
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <div>
-              <p className="mb-1 text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-cyan-400">Evolução Mensal</p>
-              <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">Investimento Meta x Leads</h2>
-            </div>
-            <div className="text-right">
-              <p className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">Últimos 6 meses</p>
-              <div className="mt-2 flex items-center gap-5 text-xs sm:text-sm font-extrabold uppercase">
-                <span className="flex items-center gap-2 text-cyan-400">
-                  <span className="h-3 w-3 rounded-full bg-cyan-400" /> Investimento
-                </span>
-                <span className="flex items-center gap-2 text-emerald-400">
-                  <span className="h-3 w-3 rounded-full bg-emerald-400" /> Leads
-                </span>
+        {profile?.tipo_usuario !== 'corretor_membro' && (
+          <div className="rounded-[1.5rem] border border-slate-100 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-6 lg:col-span-3">
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <div>
+                <p className="mb-1 text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-cyan-400">Evolução Mensal</p>
+                <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">Investimento Meta x Leads</h2>
+              </div>
+              <div className="text-right">
+                <p className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">Últimos 6 meses</p>
+                <div className="mt-2 flex items-center gap-5 text-xs sm:text-sm font-extrabold uppercase">
+                  <span className="flex items-center gap-2 text-cyan-400">
+                    <span className="h-3 w-3 rounded-full bg-cyan-400" /> Investimento
+                  </span>
+                  <span className="flex items-center gap-2 text-emerald-400">
+                    <span className="h-3 w-3 rounded-full bg-emerald-400" /> Leads
+                  </span>
+                </div>
               </div>
             </div>
+            <div className="relative min-h-[220px] w-full flex items-center justify-center">
+              {isDataLoading ? (
+                <Loader2 className="animate-spin text-cyan-500" size={32} />
+              ) : (
+                <CustomGrowthAreaChart data={monthlyPerformance} formatCurrency={formatCurrency} />
+              )}
+            </div>
           </div>
-          <div className="relative min-h-[220px] w-full flex items-center justify-center">
-            {isDataLoading ? (
-              <Loader2 className="animate-spin text-cyan-500" size={32} />
-            ) : (
-              <CustomGrowthAreaChart data={monthlyPerformance} formatCurrency={formatCurrency} />
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Column 2: Gorgeous concentric glowing SVG Pizza (Donut) Chart */}
-        <div className="rounded-[1.5rem] border border-slate-100 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-6 lg:col-span-2">
+        <div className={`rounded-[1.5rem] border border-slate-100 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-6 ${
+          profile?.tipo_usuario === 'corretor_membro' ? 'lg:col-span-5' : 'lg:col-span-2'
+        }`}>
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <p className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">Distribuição de Leads</p>
