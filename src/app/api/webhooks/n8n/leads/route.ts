@@ -174,6 +174,7 @@ async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
     .eq('time_id', team.id)
     .in('status', ['active', 'ativo'])
     .not('profile_id', 'is', null)
+    .neq('participa_rodizio', false)
     .order('ordem', { ascending: true })
     .order('created_at', { ascending: true });
 
