@@ -39,7 +39,6 @@ import {
   MessageCircle
 } from 'lucide-react';
 import OrionMark from '@/components/ui/OrionMark';
-import SaleFinanceRedirect from '@/components/ui/SaleFinanceRedirect';
 
 type WhatsAppConversa = {
   id: string;
@@ -246,13 +245,13 @@ export default function CrmPage() {
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
   const boardScrollbarRef = useRef<HTMLDivElement | null>(null);
   const boardScrollSyncRef = useRef(false);
+  const pageScrollBeforeLeadRef = useRef(0);
   const [boardScrollWidth, setBoardScrollWidth] = useState(0);
   const [boardClientWidth, setBoardClientWidth] = useState(0);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [dealershipBrokers, setDealershipBrokers] = useState<DealershipBroker[]>([]);
   const [simulatedCorretorId, setSimulatedCorretorId] = useState<string | null>(null);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
-  const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
   const canAssignTeamLeads = !isTeamMemberProfile && (
     profile?.tipo_usuario === 'admin' ||
@@ -271,6 +270,30 @@ export default function CrmPage() {
       setMetricFilter(requestedFilter);
     }
   }, []);
+
+  useEffect(() => {
+    if (!selectedLead) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [selectedLead?.id]);
+
+  function openLeadDetails(lead: Lead) {
+    pageScrollBeforeLeadRef.current = window.scrollY;
+    setSelectedLead(lead);
+  }
+
+  function closeLeadDetails() {
+    const scrollTop = pageScrollBeforeLeadRef.current;
+    setSelectedLead(null);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollTop, left: window.scrollX, behavior: 'auto' });
+    });
+  }
 
   useEffect(() => {
     setCrmScopeView(profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
@@ -963,10 +986,6 @@ export default function CrmPage() {
       setSelectedLead((current) => current?.id === leadId ? { ...current, ...payload.lead } : current);
     }
 
-    if (status === 'Venda realizada') {
-      setFinanceRedirect({ leadId, leadName: currentLead.nome });
-    }
-
     if (selectedLead?.id === leadId) await fetchTimeline(leadId);
   }
 
@@ -1365,7 +1384,7 @@ export default function CrmPage() {
                 <div
                   ref={boardScrollRef}
                   onScroll={() => syncBoardScroll('board')}
-                  className="scrollbar-visible flex min-h-[calc(100dvh-330px)] snap-x gap-4 overflow-x-scroll pb-8 sm:gap-5"
+                  className="scrollbar-visible flex h-[calc(100dvh-260px)] min-h-[560px] snap-x gap-4 overflow-x-scroll overflow-y-auto overscroll-contain pb-8 sm:gap-5"
                 >
                   {columns.map((column) => {
                     const columnLeads = getLeadsByStatus(column.id);
@@ -1376,7 +1395,7 @@ export default function CrmPage() {
 
                     return (
                       <div key={column.id} className="min-w-[285px] flex-1 snap-start sm:min-w-[310px]">
-                        <div className="sticky top-0 z-20 mb-3 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+                        <div className="sticky top-0 z-30 mb-3 rounded-[1.5rem] border border-gray-100 bg-white/95 p-4 shadow-sm backdrop-blur">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="flex items-center gap-2">
@@ -1412,7 +1431,7 @@ export default function CrmPage() {
                                 draggable
                                 onDragStart={() => setDraggedLeadId(lead.id)}
                                 onDragEnd={() => setDraggedLeadId(null)}
-                                onClick={() => setSelectedLead(lead)}
+                                onClick={() => openLeadDetails(lead)}
                                 className={`w-full rounded-[1.5rem] border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-blue-300 ring-4 ring-blue-100' : 'border-white'}`}
                               >
                                 <div className="mb-3 flex items-start justify-between gap-3">
@@ -1502,7 +1521,7 @@ export default function CrmPage() {
               <>
               <div
                 className="fixed inset-0 z-[90] bg-slate-950/35 backdrop-blur-sm"
-                onClick={() => setSelectedLead(null)}
+                onClick={closeLeadDetails}
               />
               <aside className="fixed inset-y-0 right-0 z-[100] w-full max-w-[620px] overflow-y-auto border-l border-gray-100 bg-white p-5 shadow-2xl shadow-slate-950/20 sm:p-6">
                 <div className="mb-5 flex items-start justify-between gap-4">
@@ -1533,7 +1552,7 @@ export default function CrmPage() {
                     <button onClick={() => setEditing((current) => !current)} className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black uppercase tracking-widest text-blue-600 hover:bg-blue-100">
                       {editing ? 'Ver ficha' : 'Editar'}
                     </button>
-                    <button onClick={() => setSelectedLead(null)} className="rounded-xl bg-slate-50 p-2 text-slate-400 hover:text-slate-700">
+                    <button onClick={closeLeadDetails} className="rounded-xl bg-slate-50 p-2 text-slate-400 hover:text-slate-700">
                       <X size={18} />
                     </button>
                   </div>
@@ -2239,13 +2258,6 @@ export default function CrmPage() {
         </div>
       )}
 
-      {financeRedirect && (
-        <SaleFinanceRedirect
-          leadId={financeRedirect.leadId}
-          leadName={financeRedirect.leadName}
-          onCancel={() => setFinanceRedirect(null)}
-        />
-      )}
     </InternalLayout>
   );
 }
