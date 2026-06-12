@@ -178,6 +178,17 @@ async function resolveCorretorId(body: any) {
 }
 
 async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
+  const { data: currentLead } = await supabaseAdmin
+    .from('leads')
+    .select('responsavel_membro_id')
+    .eq('id', leadId)
+    .eq('corretor_id', corretorId)
+    .maybeSingle();
+
+  if (currentLead?.responsavel_membro_id) {
+    return currentLead.responsavel_membro_id;
+  }
+
   const { data: broker } = await supabaseAdmin
     .from('corretores')
     .select('rodizio_ativo')
@@ -188,7 +199,7 @@ async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
 
   const { data: team } = await supabaseAdmin
     .from('corretor_times')
-    .select('id, proximo_indice')
+    .select('id')
     .eq('corretor_id', corretorId)
     .eq('ativo', true)
     .maybeSingle();
@@ -197,19 +208,18 @@ async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
 
   const { data: members } = await supabaseAdmin
     .from('corretor_time_membros')
-    .select('id, profile_id, ordem, created_at')
+    .select('id, profile_id, ordem, ultimo_lead_at, created_at')
     .eq('time_id', team.id)
     .in('status', ['active', 'ativo'])
     .not('profile_id', 'is', null)
     .neq('participa_rodizio', false)
+    .order('ultimo_lead_at', { ascending: true, nullsFirst: true })
     .order('ordem', { ascending: true })
     .order('created_at', { ascending: true });
 
   if (!members || members.length === 0) return null;
 
-  const nextIndex = Math.max(Number(team.proximo_indice || 0), 0) % members.length;
-  const member = members[nextIndex];
-  const nextPointer = (nextIndex + 1) % members.length;
+  const member = members[0];
   const now = new Date().toISOString();
 
   await supabaseAdmin
@@ -226,11 +236,6 @@ async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
     .from('corretor_time_membros')
     .update({ ultimo_lead_at: now })
     .eq('id', member.id);
-
-  await supabaseAdmin
-    .from('corretor_times')
-    .update({ proximo_indice: nextPointer })
-    .eq('id', team.id);
 
   return member.id;
 }
