@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useDialog } from '@/components/providers/DialogProvider';
 import { supabase } from '@/lib/supabase/client';
 import { Bell, Loader2, RefreshCw, ShieldAlert, HelpCircle, Send, Settings, Save, Sparkles, TrendingUp, DollarSign, Smartphone } from 'lucide-react';
 import { format } from 'date-fns';
@@ -19,7 +20,8 @@ type Notification = {
 };
 
 export default function NotificacoesPage() {
-  const { profile } = useAuth();
+  const { profile, actualProfile } = useAuth();
+  const { confirmDialog } = useDialog();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -62,6 +64,13 @@ export default function NotificacoesPage() {
   }, []);
 
   const isDark = tema === 'noturno';
+  const preferencesTargetProfileId = profile?.id || '';
+  const isSavingViewedProfile = Boolean(
+    actualProfile?.tipo_usuario === 'admin' &&
+    profile?.id &&
+    actualProfile.id !== profile.id
+  );
+  const preferencesTargetLabel = `${profile?.nome || 'este usuario'}${profile?.email || profile?.email_real ? ` (${profile.email_real || profile.email})` : ''}`;
 
   const fetchCorretores = async () => {
     if (!profile?.id || !['admin', 'gestor_trafego'].includes(profile.tipo_usuario)) return;
@@ -131,7 +140,10 @@ export default function NotificacoesPage() {
     const token = data.session?.access_token;
     if (!token) return;
 
-    const response = await fetch('/api/notificacoes/preferencias', {
+    const targetQuery = isSavingViewedProfile
+      ? `?target_profile_id=${encodeURIComponent(preferencesTargetProfileId)}`
+      : '';
+    const response = await fetch(`/api/notificacoes/preferencias${targetQuery}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const payload = await response.json().catch(() => ({}));
@@ -193,6 +205,16 @@ export default function NotificacoesPage() {
   };
 
   const savePreferences = async () => {
+    const confirmed = await confirmDialog(
+      `Salvar este numero e preferencias de WhatsApp para ${preferencesTargetLabel}?`,
+      {
+        title: 'Confirmar notificacoes',
+        confirmLabel: 'Salvar',
+        cancelLabel: 'Cancelar',
+      }
+    );
+    if (!confirmed) return;
+
     setSavingPreferences(true);
     setPreferencesSaved(false);
     setError(null);
@@ -205,7 +227,10 @@ export default function NotificacoesPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(preferences),
+        body: JSON.stringify({
+          ...preferences,
+          target_profile_id: isSavingViewedProfile ? preferencesTargetProfileId : undefined,
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Erro ao salvar preferencias.');

@@ -11,6 +11,38 @@ const DEFAULT_TYPES = {
   demandas: true,
 };
 
+async function resolveTargetProfile(guardProfile: any, request: Request, body?: any) {
+  const url = new URL(request.url);
+  const requestedTargetId = String(body?.target_profile_id || url.searchParams.get('target_profile_id') || '').trim();
+  const targetProfileId = requestedTargetId || guardProfile.id;
+
+  if (targetProfileId === guardProfile.id) {
+    return { target: guardProfile };
+  }
+
+  if (guardProfile.tipo_usuario !== 'admin') {
+    return {
+      error: NextResponse.json({ error: 'Voce nao pode alterar preferencias de outro usuario.' }, { status: 403 }),
+    };
+  }
+
+  const { data: target, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome, email, email_real, tipo_usuario, telefone, status')
+    .eq('id', targetProfileId)
+    .maybeSingle();
+
+  if (error) {
+    return { error: NextResponse.json({ error: error.message }, { status: 500 }) };
+  }
+
+  if (!target) {
+    return { error: NextResponse.json({ error: 'Perfil alvo nao encontrado.' }, { status: 404 }) };
+  }
+
+  return { target };
+}
+
 export async function GET(request: Request) {
   try {
     const limited = rateLimit(request, 'notifications:preferences:get', { limit: 60, windowMs: 60_000 });
@@ -19,10 +51,14 @@ export async function GET(request: Request) {
     const guard = await requireApiUser(request);
     if ('error' in guard) return guard.error;
 
+    const resolved = await resolveTargetProfile(guard.profile, request);
+    if ('error' in resolved) return resolved.error;
+    const target = resolved.target;
+
     const { data, error } = await supabaseAdmin
       .from('notificacao_preferencias')
       .select('*')
-      .eq('profile_id', guard.profile.id)
+      .eq('profile_id', target.id)
       .maybeSingle();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -30,9 +66,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       preferences: data || {
-        profile_id: guard.profile.id,
+        profile_id: target.id,
         whatsapp_enabled: false,
-        telefone: guard.profile.telefone || '',
+        telefone: target.telefone || '',
         tipos: DEFAULT_TYPES,
       },
     });
@@ -50,13 +86,17 @@ export async function PATCH(request: Request) {
     if ('error' in guard) return guard.error;
 
     const body = await request.json().catch(() => ({}));
+    const resolved = await resolveTargetProfile(guard.profile, request, body);
+    if ('error' in resolved) return resolved.error;
+    const target = resolved.target;
+
     const telefone = String(body.telefone || '').trim();
     const tipos = body.tipos && typeof body.tipos === 'object'
       ? { ...DEFAULT_TYPES, ...body.tipos }
       : DEFAULT_TYPES;
 
     const payload = {
-      profile_id: guard.profile.id,
+      profile_id: target.id,
       whatsapp_enabled: Boolean(body.whatsapp_enabled),
       telefone,
       tipos,
