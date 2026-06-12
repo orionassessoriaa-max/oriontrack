@@ -75,6 +75,8 @@ const TEMPLATES_PADRAO = [
   { id: '4', title: 'Pesquisa de Satisfação', text: 'O que achou do nosso atendimento hoje? Sua opinião é muito importante para nós!' }
 ];
 
+const QUICK_EMOJIS = ['😀', '😊', '🙏', '👍', '✅', '🚀', '📌', '📄', '💬', '📲', '💙', '🔥'];
+
 export default function BrokerInboxPage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -94,6 +96,7 @@ export default function BrokerInboxPage() {
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   // File states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -1683,7 +1686,7 @@ export default function BrokerInboxPage() {
                     </div>
                   ) : (
                     /* ENTRADA DE TEXTO COMUM */
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="relative flex items-center gap-2 shrink-0">
                       {/* Media/Tools Icons */}
                       <div className="flex items-center gap-1">
                         <label className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 cursor-pointer flex items-center justify-center shrink-0">
@@ -1697,7 +1700,7 @@ export default function BrokerInboxPage() {
                         </label>
                         <button
                           type="button"
-                          onClick={() => alert('Seletor de Emoji!')}
+                          onClick={() => setShowEmojiPicker((current) => !current)}
                           className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 cursor-pointer shrink-0"
                         >
                           <Smile size={16} />
@@ -1711,6 +1714,24 @@ export default function BrokerInboxPage() {
                           <FileText size={16} />
                         </button>
                       </div>
+
+                      {showEmojiPicker && (
+                        <div className="absolute bottom-20 left-16 z-30 grid grid-cols-6 gap-1 rounded-2xl border border-white/10 bg-slate-950 p-2 shadow-2xl">
+                          {QUICK_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => {
+                                setMessageText((current) => `${current}${emoji}`);
+                                setShowEmojiPicker(false);
+                              }}
+                              className="flex h-8 w-8 items-center justify-center rounded-xl text-base hover:bg-white/10"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Text Input */}
                       <textarea

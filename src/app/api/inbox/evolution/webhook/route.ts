@@ -45,6 +45,36 @@ async function findLead(corretorId: string, phone: string) {
   return data;
 }
 
+async function findConversation(corretorId: string, phone: string, leadId?: string | null) {
+  if (leadId) {
+    const { data } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .select('*')
+      .eq('corretor_id', corretorId)
+      .eq('lead_id', leadId)
+      .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) return data;
+  }
+
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8) return null;
+  const last8 = digits.slice(-8);
+
+  const { data } = await supabaseAdmin
+    .from('whatsapp_conversas')
+    .select('*')
+    .eq('corretor_id', corretorId)
+    .or(`telefone.eq.${phone},telefone.ilike.%${last8}%`)
+    .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -98,13 +128,7 @@ export async function POST(request: Request) {
 
     const lead = await findLead(profile.corretor_id, phone);
 
-    const { data: currentConversation } = await supabaseAdmin
-      .from('whatsapp_conversas')
-      .select('*')
-      .eq('corretor_id', profile.corretor_id)
-      .eq('telefone', phone)
-      .limit(1)
-      .maybeSingle();
+    const currentConversation = await findConversation(profile.corretor_id, phone, lead?.id || null);
 
     // Ignorar mensagens de contatos pessoais (que não sejam leads no CRM e não possuam conversa já criada no banco)
     if (!lead && !currentConversation) {
@@ -122,7 +146,7 @@ export async function POST(request: Request) {
           corretor_id: profile.corretor_id,
           lead_id: lead?.id || null,
           telefone: phone,
-          nome_contato: contactName,
+          nome_contato: lead?.nome || contactName,
           status: 'aberta',
           ultima_mensagem_at: new Date().toISOString(),
         }])
@@ -136,7 +160,8 @@ export async function POST(request: Request) {
         .from('whatsapp_conversas')
         .update({
           lead_id: currentConversation.lead_id || lead?.id || null,
-          nome_contato: currentConversation.nome_contato || contactName,
+          nome_contato: lead?.nome || currentConversation.nome_contato || contactName,
+          telefone: currentConversation.telefone || phone,
           ultima_mensagem_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })

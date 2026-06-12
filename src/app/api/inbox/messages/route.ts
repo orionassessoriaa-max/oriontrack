@@ -36,6 +36,42 @@ async function canAccessConversation(profile: any, conversation: any) {
   return false;
 }
 
+async function findExistingConversation(corretorId: string, phone: string, leadId?: string | null) {
+  if (leadId) {
+    const { data } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .select('*')
+      .eq('corretor_id', corretorId)
+      .eq('lead_id', leadId)
+      .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) return data;
+  }
+
+  const digits = phone.replace(/\D/g, '');
+  const last8 = digits.length >= 8 ? digits.slice(-8) : '';
+
+  let query = supabaseAdmin
+    .from('whatsapp_conversas')
+    .select('*')
+    .eq('corretor_id', corretorId);
+
+  if (last8) {
+    query = query.or(`telefone.eq.${phone},telefone.ilike.%${last8}%`);
+  } else {
+    query = query.eq('telefone', phone);
+  }
+
+  const { data } = await query
+    .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data;
+}
+
 export async function GET(request: Request) {
   try {
     const limited = rateLimit(request, 'inbox:messages:read', { limit: 120, windowMs: 60_000 });
@@ -127,13 +163,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Telefone do contato invalido.' }, { status: 400 });
       }
 
-      const { data: existing } = await supabaseAdmin
-        .from('whatsapp_conversas')
-        .select('*')
-        .eq('corretor_id', corretorId)
-        .eq('telefone', phone)
-        .limit(1)
-        .maybeSingle();
+      const existing = await findExistingConversation(corretorId, phone, leadIdParam || null);
 
       if (existing) {
         conversation = existing;
@@ -174,15 +204,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Telefone do contato invalido.' }, { status: 400 });
     }
 
+    let senderProfile: any = guard.profile;
     let senderProfileId = guard.profile.id;
     const viewingProfileId = request.headers.get('x-orion-view-profile-id');
     if (guard.profile.tipo_usuario === 'admin' && viewingProfileId) {
       const { data } = await supabaseAdmin
         .from('profiles')
-        .select('id')
+        .select('id, nome, email, email_real, tipo_usuario, corretor_id')
         .eq('id', viewingProfileId)
         .maybeSingle();
-      if (data) senderProfileId = data.id;
+      if (data) {
+        senderProfile = data;
+        senderProfileId = data.id;
+      }
     }
 
     const instance = evolutionInstanceName(senderProfileId);
@@ -201,7 +235,7 @@ export async function POST(request: Request) {
           method: 'POST',
           body: JSON.stringify({
             number: phone,
-            audio: mediaBase64,
+            audio: base64Data,
             options: {
               delay: 1200,
               presence: 'recording',
@@ -250,10 +284,10 @@ export async function POST(request: Request) {
       .insert([{
         conversa_id: conversationId,
         direction: 'outbound',
-        remetente: guard.profile.nome || guard.profile.email_real || guard.profile.email || 'Orion',
+        remetente: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
         mensagem: messageTextDb,
         provider_message_id: providerId,
-        metadata: payload || {},
+        metadata: { ...(payload || {}), instance },
       }])
       .select('*')
       .single();
