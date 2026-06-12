@@ -41,6 +41,27 @@ function getMetaCompatibleRange(since: string, until: string) {
   };
 }
 
+function describeMetaError(error: any, accountId?: string | null) {
+  const message = String(error?.message || '').trim();
+  const code = String(error?.code || '').trim();
+  const lower = message.toLowerCase();
+  const accountText = accountId ? ` (${accountId})` : '';
+
+  if (code === '1' && lower.includes('unknown error')) {
+    return `Conta Meta${accountText} indisponivel para o token atual. Sincronize as contas Meta novamente e confira se este token tem acesso a essa conta de anuncios.`;
+  }
+
+  if (code === '190' || lower.includes('invalid oauth') || lower.includes('access token')) {
+    return 'Token Meta expirado ou invalido. Gere um novo token e sincronize as contas novamente.';
+  }
+
+  if (lower.includes('permission') || lower.includes('permissions') || lower.includes('permiss')) {
+    return `Token Meta sem permissao para ler a conta${accountText}. Revise as permissoes de Ads no Business Manager.`;
+  }
+
+  return message || 'Nao consegui consultar esta conta Meta agora.';
+}
+
 async function resolveBrokerageMetaAccount(corretor: any) {
   if (String(corretor.meta_ad_account_id || '').trim()) {
     return corretor;
@@ -129,7 +150,7 @@ export async function POST(request: Request) {
     const payload = await response.json();
 
     if (!response.ok || payload.error) {
-      return NextResponse.json({ error: payload.error?.message || 'Erro ao consultar investimento Meta.' }, { status: 400 });
+      return NextResponse.json({ error: describeMetaError(payload.error, accountId) }, { status: 400 });
     }
 
     const spend = (payload.data || []).reduce((total: number, item: any) => total + Number(item.spend || 0), 0);

@@ -83,6 +83,27 @@ function parseMoneyFromMetaText(value?: string | null) {
   return Number.isFinite(amount) ? amount : null;
 }
 
+function describeMetaError(error: any, accountId?: string | null) {
+  const message = String(error?.message || '').trim();
+  const code = String(error?.code || '').trim();
+  const lower = message.toLowerCase();
+  const accountText = accountId ? ` (${accountId})` : '';
+
+  if (code === '1' && lower.includes('unknown error')) {
+    return `Conta Meta${accountText} indisponivel para o token atual. Sincronize as contas Meta novamente e confira se este token tem acesso a essa conta de anuncios.`;
+  }
+
+  if (code === '190' || lower.includes('invalid oauth') || lower.includes('access token')) {
+    return 'Token Meta expirado ou invalido. Gere um novo token e sincronize as contas novamente.';
+  }
+
+  if (lower.includes('permission') || lower.includes('permissions') || lower.includes('permiss')) {
+    return `Token Meta sem permissao para ler a conta${accountText}. Revise as permissoes de Ads no Business Manager.`;
+  }
+
+  return message || 'Nao consegui consultar esta conta Meta agora.';
+}
+
 async function fetchSheetLeadCount(corretor: CorretorMeta, since: string, until: string) {
   const start = `${since}T00:00:00.000-03:00`;
   const end = `${until}T23:59:59.999-03:00`;
@@ -135,7 +156,11 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   ]);
 
   if (!insightsResponse.ok || insightsPayload.error) {
-    throw new Error(insightsPayload.error?.message || 'Erro ao consultar metricas Meta.');
+    throw new Error(describeMetaError(insightsPayload.error, accountId));
+  }
+
+  if (!accountResponse.ok || accountPayload.error) {
+    throw new Error(describeMetaError(accountPayload.error, accountId));
   }
 
   const row = insightsPayload.data?.[0] || {};
