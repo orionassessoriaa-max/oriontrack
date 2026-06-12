@@ -106,11 +106,21 @@ async function resolveCorretorId(body: any) {
       .select('id')
       .eq('id', corretorId)
       .maybeSingle();
-    if (data?.id) resolvedId = data.id;
+    if (data?.id) {
+      resolvedId = data.id;
+    } else {
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('corretor_id')
+        .eq('id', corretorId)
+        .maybeSingle();
+
+      if (prof?.corretor_id) resolvedId = prof.corretor_id;
+    }
   }
 
   if (!resolvedId) {
-    const corretorEmail = normalizeText(field(body, ['corretor_email', 'email_corretor', 'email do corretor'])).toLowerCase();
+    const corretorEmail = normalizeText(field(body, ['corretor_email', 'email_corretor', 'email do corretor', 'email'])).toLowerCase();
     if (corretorEmail) {
       const { data: broker } = await supabaseAdmin
         .from('corretores')
