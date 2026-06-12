@@ -115,7 +115,9 @@ export default function AdminUsuariosPage() {
       nome_empresa: corretor?.nome_empresa || profile.nome_empresa || '',
       email_real: profile.email_real || '',
       tipo_usuario: profile.tipo_usuario,
-      telefone: corretor?.telefone || '',
+      telefone: profile.tipo_usuario === 'corretor_membro'
+        ? profile.telefone || ''
+        : corretor?.telefone || profile.telefone || '',
       tipo_campanha: (corretor?.tipo_campanha as TipoCampanha) || 'ambos',
       operadoras: customOperadora ? [...knownOperadoras.filter((item) => item !== 'Outros'), 'Outros'] : knownOperadoras,
       time_operacional: Array.isArray(corretor?.time_operacional) ? corretor.time_operacional as OrionTeamMember[] : [],

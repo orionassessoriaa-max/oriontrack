@@ -71,6 +71,7 @@ export default function NotificacoesPage() {
     actualProfile.id !== profile.id
   );
   const preferencesTargetLabel = `${profile?.nome || 'este usuario'}${profile?.email || profile?.email_real ? ` (${profile.email_real || profile.email})` : ''}`;
+  const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
 
   const fetchCorretores = async () => {
     if (!profile?.id || !['admin', 'gestor_trafego'].includes(profile.tipo_usuario)) return;
@@ -353,7 +354,7 @@ export default function NotificacoesPage() {
           </label>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)_160px] lg:items-end">
+        <div className={`grid gap-5 ${isTeamMemberProfile ? 'lg:grid-cols-[minmax(0,360px)_160px]' : 'lg:grid-cols-[320px_minmax(0,1fr)_160px]'} lg:items-end`}>
           <div className="space-y-2">
             <label className={`ml-1 text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Telefone receptor</label>
             <input
@@ -366,31 +367,33 @@ export default function NotificacoesPage() {
             />
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              ['notificacao', 'Avisos gerais'],
-              ['saldo_baixo', 'Saldo baixo'],
-              ['cpl_alto', 'CPL alto'],
-              ['novo_lead', 'Novos leads'],
-              ['suporte', 'Suporte'],
-              ['demandas', 'Demandas'],
-            ].map(([key, label]) => (
-              <label key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${
-                isDark ? 'border-white/5 bg-white/[0.02] text-slate-300' : 'border-gray-100 bg-slate-50 text-gray-600'
-              }`}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(preferences.tipos[key])}
-                  onChange={(event) => setPreferences((current) => ({
-                    ...current,
-                    tipos: { ...current.tipos, [key]: event.target.checked },
-                  }))}
-                  className="h-3.5 w-3.5 rounded border-slate-400 text-blue-600 focus:ring-blue-500"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
+          {!isTeamMemberProfile && (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                ['notificacao', 'Avisos gerais'],
+                ['saldo_baixo', 'Saldo baixo'],
+                ['cpl_alto', 'CPL alto'],
+                ['novo_lead', 'Novos leads'],
+                ['suporte', 'Suporte'],
+                ['demandas', 'Demandas'],
+              ].map(([key, label]) => (
+                <label key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${
+                  isDark ? 'border-white/5 bg-white/[0.02] text-slate-300' : 'border-gray-100 bg-slate-50 text-gray-600'
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(preferences.tipos[key])}
+                    onChange={(event) => setPreferences((current) => ({
+                      ...current,
+                      tipos: { ...current.tipos, [key]: event.target.checked },
+                    }))}
+                    className="h-3.5 w-3.5 rounded border-slate-400 text-blue-600 focus:ring-blue-500"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
 
           <button
             type="button"

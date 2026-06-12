@@ -99,6 +99,26 @@ function parseCommissionPercent(value: unknown) {
   return Math.min(parsed, 100);
 }
 
+async function upsertNotificationPhone(profileId: string, telefone: string) {
+  if (!profileId || !telefone) return;
+
+  const { data: current } = await supabaseAdmin
+    .from('notificacao_preferencias')
+    .select('whatsapp_enabled, tipos')
+    .eq('profile_id', profileId)
+    .maybeSingle();
+
+  await supabaseAdmin
+    .from('notificacao_preferencias')
+    .upsert({
+      profile_id: profileId,
+      telefone,
+      whatsapp_enabled: Boolean(current?.whatsapp_enabled),
+      tipos: current?.tipos || {},
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'profile_id' });
+}
+
 async function resolvePrimaryCorretorByBrokerage(nomeEmpresa: unknown) {
   const brokerageName = String(nomeEmpresa || '').trim();
   if (!brokerageName) return null;
@@ -323,6 +343,7 @@ export async function POST(request: Request) {
           status: status === 'inativo' ? 'inactive' : 'active',
           email_real: emailReal,
           nome_empresa: ['corretor', 'corretor_membro'].includes(profileRole) ? String(memberBrokerageName || body.nome_empresa || '').trim() || null : null,
+          telefone: telefone || null,
           foto_url: fotoUrl,
           precisa_trocar_senha: true,
           equipe_orion: ['corretor', 'corretor_membro'].includes(profileRole) ? null : equipeOrion,
@@ -341,6 +362,7 @@ export async function POST(request: Request) {
       }
 
       if (profileError) throw profileError;
+      await upsertNotificationPhone(authUser.user.id, telefone);
 
       if (profileRole !== role) {
         await supabaseAdmin.auth.admin.updateUserById(authUser.user.id, {
@@ -427,7 +449,7 @@ export async function PATCH(request: Request) {
 
     const { data: targetProfile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, email, email_real, tipo_usuario, corretor_id, is_admin_master')
+      .select('id, email, email_real, tipo_usuario, corretor_id, is_admin_master, telefone')
       .eq('id', id)
       .maybeSingle();
 
@@ -439,6 +461,7 @@ export async function PATCH(request: Request) {
       const nome = String(body.nome || '').trim();
       const emailReal = String(body.email_real || '').trim() || null;
       const fotoUrl = typeof body.foto_url === 'string' ? body.foto_url : null;
+      const telefone = String(body.telefone || '').trim();
       const nextRole = body.tipo_usuario as UserRole | undefined;
       const nextEquipe = ['apollo', 'kripto_hunters'].includes(String(body.equipe_orion || ''))
         ? String(body.equipe_orion)
@@ -462,6 +485,7 @@ export async function PATCH(request: Request) {
         email_real: emailReal,
         nome_empresa: roleToSave === 'corretor' ? String(body.nome_empresa || '').trim() || null : null,
         foto_url: fotoUrl,
+        telefone: telefone || null,
         tipo_usuario: roleToSave,
         equipe_orion: roleToSave === 'corretor' ? null : nextEquipe,
       };
@@ -487,6 +511,8 @@ export async function PATCH(request: Request) {
         user_metadata: { name: nome, nome, email_real: emailReal, tipo_usuario: roleToSave }
       });
 
+      await upsertNotificationPhone(id, telefone);
+
       if (targetProfile.tipo_usuario === 'corretor') {
         const { data: profileWithCorretor } = await supabaseAdmin
           .from('profiles')
@@ -497,11 +523,10 @@ export async function PATCH(request: Request) {
         const timeOperacional = Array.isArray(body.time_operacional) ? body.time_operacional : [];
         const operadoras = Array.isArray(body.operadoras) ? body.operadoras : [];
         const gestorTrafegoId = await resolveGestorTrafegoId(body.gestor_trafego_id, timeOperacional);
-        const telefone = String(body.telefone || '').trim() || 'Sem telefone';
         const corretorUpdatePayload: Record<string, unknown> = {
           nome,
           email_real: emailReal,
-          telefone,
+          telefone: telefone || 'Sem telefone',
           nome_empresa: body.nome_empresa || null,
           tipo_campanha: body.tipo_campanha || 'ambos',
           time_operacional: timeOperacional,
