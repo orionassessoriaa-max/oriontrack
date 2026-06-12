@@ -2221,7 +2221,6 @@ export default function CrmPage() {
                         <input
                           type="number"
                           min="0"
-                          max="100"
                           step="0.01"
                           value={commercialModal.comissao_percentual}
                           onChange={(event) => setCommercialModal((current) => current ? { ...current, comissao_percentual: event.target.value } : current)}
