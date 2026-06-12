@@ -6,7 +6,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Clock, ClipboardList, Loader2, MessageSquare, Palette, Trash2, Upload, Sparkles, ChevronRight } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Clock, Loader2, MessageSquare, Palette, Trash2, Upload } from 'lucide-react';
 
 type DemandStatus = 'pendente' | 'atrasado' | 'feito' | 'entregue' | 'aprovado' | 'revisao';
 type AssetStatus = 'em_aprovacao' | 'aprovado' | 'revisao' | 'rodando';
@@ -177,18 +177,18 @@ export default function DesignerHomePage() {
       </div>
 
       <div className="mt-8 grid gap-6 md:grid-cols-2">
-        <Link href="/criativos/demandas" className="group border border-white/5 bg-[#090e1a]/85 p-6 rounded-2xl shadow-xl transition-all duration-300 hover:border-blue-500/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.08)] flex flex-col justify-between min-h-[160px]">
+        <div className="border border-white/5 bg-[#090e1a]/85 p-6 rounded-2xl shadow-xl flex flex-col justify-between min-h-[160px]">
           <div>
-            <div className="p-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl w-fit group-hover:scale-105 transition-transform">
-              <ClipboardList size={24} />
+            <div className="p-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl w-fit">
+              <Palette size={24} />
             </div>
-            <h2 className="mt-4 text-xl font-black text-white group-hover:text-cyan-400 transition-colors">Visualizar Demandas</h2>
-            <p className="mt-1 text-xs font-semibold text-slate-500">Ver solicitações, prazos, excluir entregas e subir o criativo dentro da demanda.</p>
+            <h2 className="mt-4 text-xl font-black text-white">Kanban de criativos</h2>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Fluxo em reorganizacao para pendente, fazendo e entregue com aprovacao por concessionaria.</p>
           </div>
-          <span className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-cyan-400 group-hover:text-white transition-colors">
-            Acessar Demandas <ChevronRight size={12} />
+          <span className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            Em desenvolvimento
           </span>
-        </Link>
+        </div>
         <Link href="/designer/ofertas" className="group border border-white/5 bg-[#090e1a]/85 p-6 rounded-2xl shadow-xl transition-all duration-300 hover:border-blue-500/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.08)] flex flex-col justify-between min-h-[160px]">
           <div>
             <div className="p-3 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl w-fit group-hover:scale-105 transition-transform">
@@ -273,9 +273,6 @@ export default function DesignerHomePage() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Link href="/criativos/demandas" className="bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white rounded-xl transition-colors shadow-md shadow-blue-600/10">
-                      Abrir demanda
-                    </Link>
                     {canDelete && (
                       <button
                         onClick={() => deleteDemand(demand)}

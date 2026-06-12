@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Loader2, MessageSquare, Palette, XCircle, Download, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { CheckCircle2, Loader2, MessageSquare, Palette, XCircle, Download } from 'lucide-react';
 
 type CreativeAsset = {
   id: string;
@@ -122,12 +121,6 @@ export default function BrokerCreativesPage() {
             Aqui ficam as artes/ofertas entregues pela equipe. Aprove para liberar como criativo rodando ou envie uma revisão com comentário.
           </p>
         </div>
-        <Link
-          href="/criativos/demandas"
-          className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-4 font-black text-white hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 md:w-auto text-center"
-        >
-          <Plus size={18} /> Solicitar Criativo
-        </Link>
       </div>
 
       {loading ? (
@@ -138,14 +131,6 @@ export default function BrokerCreativesPage() {
         <div className="border border-dashed border-slate-200 bg-white p-12 text-center">
           <Palette className="mx-auto text-slate-300" size={42} />
           <p className="mt-4 text-sm font-black uppercase tracking-widest text-slate-400">Nenhum criativo enviado ainda</p>
-          <div className="mt-6">
-            <Link
-              href="/criativos/demandas"
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-white hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
-            >
-              <Plus size={16} /> Solicitar Criativo
-            </Link>
-          </div>
         </div>
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { ArrowRight, CheckCircle2, ClipboardList, MessageSquare, PhoneCall, TrendingUp, Users, Trophy, Sparkles } from 'lucide-react';
+import { ArrowRight, CheckCircle2, MessageSquare, PhoneCall, TrendingUp, Users, Trophy } from 'lucide-react';
 
 export default function AccountHomePage() {
   return (
@@ -31,10 +31,9 @@ export default function AccountHomePage() {
       </div>
 
       {/* Shortcuts Grid */}
-      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 mb-12">
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3 mb-12">
         <Shortcut href="/account/inbox" icon={MessageSquare} title="Inbox" text="Acessar WhatsApp, relatórios rápidos e check diário." color="blue" />
         <Shortcut href="/trafego/relatorios" icon={TrendingUp} title="Relatórios" text="Gerar e salvar relatórios de tráfego completos." color="emerald" />
-        <Shortcut href="/criativos/demandas" icon={ClipboardList} title="Demandas" text="Ver solicitações e prazos de criativos para clientes." color="rose" />
         <Shortcut href="/equipe/apollo" icon={Trophy} title="Meu time" text="Visualizar equipe Apollo, conquistas e objetivos." color="indigo" />
       </div>
 
@@ -61,12 +60,11 @@ function HeroMetric({ icon: Icon, label, value }: { icon: any; label: string; va
   );
 }
 
-function Shortcut({ href, icon: Icon, title, text, color }: { href: string; icon: any; title: string; text: string; color: 'blue' | 'emerald' | 'indigo' | 'rose' }) {
+function Shortcut({ href, icon: Icon, title, text, color }: { href: string; icon: any; title: string; text: string; color: 'blue' | 'emerald' | 'indigo' }) {
   const colors = {
     blue: 'bg-blue-600 shadow-blue-600/20 group-hover:bg-blue-500',
     emerald: 'bg-emerald-600 shadow-emerald-600/20 group-hover:bg-emerald-500',
     indigo: 'bg-indigo-600 shadow-indigo-600/20 group-hover:bg-indigo-500',
-    rose: 'bg-rose-600 shadow-rose-600/20 group-hover:bg-rose-500',
   };
 
   return (

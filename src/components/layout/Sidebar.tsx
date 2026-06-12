@@ -204,7 +204,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Palette, label: 'Designer', href: '/admin/designers' },
     { icon: MessageSquare, label: 'Account', href: '/admin/accounts' },
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
-    { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
     { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: Globe, label: 'Paginas', href: '/admin/paginas' },
     { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
@@ -224,7 +223,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: AlertTriangle, label: 'Avisos Meta', href: '/trafego/avisos-meta' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
     { icon: Users, label: 'Corretores', href: '/trafego/corretores' },
-    { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Ajuda Orion', href: '/ajuda' },
@@ -233,7 +231,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const designerMenu = [
     { icon: Palette, label: 'Designer', href: '/designer' },
-    { icon: ClipboardList, label: 'Demandas', href: '/designer/demandas' },
     { icon: FileText, label: 'Ofertas', href: '/designer/ofertas' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
@@ -245,7 +242,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Users, label: 'Corretores', href: '/account/corretores' },
     { icon: MessageSquare, label: 'Inbox', href: '/account/inbox' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
-    { icon: Palette, label: 'Demandas criativas', href: '/criativos/demandas' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
