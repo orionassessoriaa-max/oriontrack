@@ -96,6 +96,13 @@ function buildLeadDetailsMessage(lead: any, intro: string) {
   ].join('\n');
 }
 
+function normalizeLeadNotificationMode(value: unknown) {
+  const mode = String(value || '').trim();
+  return ['responsavel_apenas', 'responsavel_e_admin_se_integrante', 'responsavel_e_admins'].includes(mode)
+    ? mode
+    : 'responsavel_e_admin_se_integrante';
+}
+
 async function resolveCorretorId(body: any) {
   let resolvedId: string | null = null;
 
@@ -387,6 +394,17 @@ export async function POST(request: Request) {
         .eq('id', corretorId)
         .maybeSingle();
 
+      const { data: teamConfig } = await supabaseAdmin
+        .from('corretor_times')
+        .select('notificacao_novo_lead_modo')
+        .eq('corretor_id', corretorId)
+        .eq('ativo', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const notificationMode = normalizeLeadNotificationMode(teamConfig?.notificacao_novo_lead_modo);
+
       let adminQuery = supabaseAdmin
         .from('profiles')
         .select('id, nome, email, tipo_usuario, telefone')
@@ -417,9 +435,14 @@ export async function POST(request: Request) {
       const assignedMembroObj = Array.isArray(assignedMembroRaw) ? assignedMembroRaw[0] : (assignedMembroRaw as any);
       const memberName = assignedMembroObj?.nome || memberProfile?.nome;
       const ownerRecipients = (admins || []).filter((admin) => admin.id !== memberProfile?.id);
+      const shouldNotifyOwners = ownerRecipients.length > 0 && (
+        !memberProfile ||
+        notificationMode === 'responsavel_e_admins' ||
+        (notificationMode === 'responsavel_e_admin_se_integrante' && memberProfile.tipo_usuario === 'corretor_membro')
+      );
 
       // 1. Notify broker admins
-      if (ownerRecipients.length > 0) {
+      if (shouldNotifyOwners) {
         const adminMsg = buildLeadDetailsMessage(
           finalLead,
           memberName

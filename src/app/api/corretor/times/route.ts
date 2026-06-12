@@ -15,6 +15,14 @@ type GuardProfile = {
   status: string | null;
 };
 
+const DEFAULT_LEAD_NOTIFICATION_MODE = 'responsavel_e_admin_se_integrante';
+const LEAD_NOTIFICATION_MODES = ['responsavel_apenas', 'responsavel_e_admin_se_integrante', 'responsavel_e_admins'];
+
+function normalizeLeadNotificationMode(value: unknown) {
+  const mode = String(value || '').trim();
+  return LEAD_NOTIFICATION_MODES.includes(mode) ? mode : DEFAULT_LEAD_NOTIFICATION_MODE;
+}
+
 async function requireUser(request: Request) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -220,6 +228,7 @@ export async function GET(request: Request) {
           owner_profiles: ownerProfiles,
           owner_profile: ownerProfiles[0] || null,
           rodizio_ativo: corretorIdentity?.rodizio_ativo !== false,
+          notificacao_novo_lead_modo: DEFAULT_LEAD_NOTIFICATION_MODE,
         },
       });
     }
@@ -303,6 +312,7 @@ export async function GET(request: Request) {
         owner_profiles: ownerProfiles,
         owner_profile: ownerProfiles[0] || null,
         rodizio_ativo: corretorIdentity?.rodizio_ativo !== false,
+        notificacao_novo_lead_modo: normalizeLeadNotificationMode(team.notificacao_novo_lead_modo),
       },
     });
   } catch (error: any) {
@@ -481,6 +491,31 @@ export async function POST(request: Request) {
       });
 
       return NextResponse.json({ success: true, team: data, settings: { rodizio_ativo: active } });
+    }
+
+    if (action === 'update_lead_notification_mode') {
+      if (!['admin', 'corretor', 'corretor_admin'].includes(guard.profile.tipo_usuario)) {
+        return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+      }
+
+      const mode = normalizeLeadNotificationMode(body.mode);
+      const { data, error } = await supabaseAdmin
+        .from('corretor_times')
+        .update({ notificacao_novo_lead_modo: mode })
+        .eq('id', team.id)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.lead_notification_mode.update',
+        entity_type: 'corretor_times',
+        entity_id: team.id,
+        metadata: { corretor_id: corretorId, mode },
+      });
+
+      return NextResponse.json({ success: true, team: data, settings: { notificacao_novo_lead_modo: mode } });
     }
 
     if (action === 'toggle_owner_member') {
