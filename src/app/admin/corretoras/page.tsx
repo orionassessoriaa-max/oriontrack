@@ -20,12 +20,14 @@ import {
   UserPlus,
   Edit2,
   Plus,
+  Trash2,
   X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile } from '@/types';
 import Link from 'next/link';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useDialog } from '@/components/providers/DialogProvider';
 
 interface CorretoraGroup {
   id: string; // ID of the first corretor/profile in the group
@@ -223,6 +225,7 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
 
 function CorretorasContent() {
   const { profile, startViewingAsCorretor } = useAuth();
+  const { confirmDialog } = useDialog();
   const router = useRouter();
 
   const [corretores, setCorretores] = useState<Corretor[]>([]);
@@ -241,6 +244,7 @@ function CorretorasContent() {
   const [migrationPending, setMigrationPending] = useState(false);
   const [savingOperationMode, setSavingOperationMode] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [deletingBrokerageId, setDeletingBrokerageId] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -447,6 +451,51 @@ function CorretorasContent() {
       setCreateBrokerageError(err.message || 'Erro ao criar concessionaria.');
     } finally {
       setCreatingBrokerage(false);
+    }
+  };
+
+  const deleteBrokerage = async (group: CorretoraGroup) => {
+    const corretoraId = group.corretora_id || (group.empty ? group.id : null);
+    if (!corretoraId) {
+      alert('Esta concessionaria ainda nao possui cadastro proprio para excluir.');
+      return;
+    }
+
+    const members = getCorretoraMembers(group);
+    const confirmed = await confirmDialog(
+      members.length > 0
+        ? `A concessionaria ${group.nome} tem ${members.length} corretor(es). Para proteger os dados, mova ou remova os corretores antes de excluir.`
+        : `Excluir a concessionaria ${group.nome}?`,
+      {
+        title: members.length > 0 ? 'Concessionaria com vinculos' : 'Excluir concessionaria',
+        confirmLabel: members.length > 0 ? 'Entendi' : 'Excluir',
+        cancelLabel: members.length > 0 ? undefined : 'Cancelar',
+        variant: members.length > 0 ? 'info' : 'danger',
+      }
+    );
+
+    if (!confirmed || members.length > 0) return;
+
+    setDeletingBrokerageId(corretoraId);
+    setError(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
+
+      const response = await fetch(`/api/admin/corretoras?id=${encodeURIComponent(corretoraId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Erro ao excluir concessionaria.');
+
+      setCorretorasCadastradas((current) => current.filter((item) => item.id !== corretoraId));
+      await fetchData();
+    } catch (err: any) {
+      setError(err.message || 'Erro ao excluir concessionaria.');
+    } finally {
+      setDeletingBrokerageId(null);
     }
   };
 
@@ -683,6 +732,21 @@ function CorretorasContent() {
                     >
                       <UserPlus size={13} /> Adicionar corretor
                     </Link>
+
+                    {c.corretora_id && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void deleteBrokerage(c);
+                        }}
+                        disabled={deletingBrokerageId === c.corretora_id}
+                        className="inline-flex items-center gap-2 rounded-full border border-rose-500/20 bg-rose-500/10 px-3.5 py-1.5 text-xs font-black uppercase tracking-widest text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {deletingBrokerageId === c.corretora_id ? <Loader2 className="animate-spin" size={13} /> : <Trash2 size={13} />}
+                        Excluir
+                      </button>
+                    )}
 
                     {/* Conta Meta Vinculada */}
                     {c.meta_ad_account_name ? (
