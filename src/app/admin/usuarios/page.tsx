@@ -387,7 +387,7 @@ export default function AdminUsuariosPage() {
   }
 
   function getUserIntegrationId(profile: Profile, corretor?: Corretor) {
-    return profile.tipo_usuario === 'corretor'
+    return ['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario)
       ? profile.corretor_id || corretor?.id || profile.id
       : profile.id;
   }
@@ -870,7 +870,7 @@ export default function AdminUsuariosPage() {
                           </p>
                         )}
                         <p className="mt-2 max-w-full truncate rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 sm:max-w-[640px]">
-                          ID para n8n: <span className="normal-case tracking-normal text-slate-700">{getUserIntegrationId(profile, corretor)}</span>
+                          ID corretor para n8n: <span className="normal-case tracking-normal text-slate-700">{getUserIntegrationId(profile, corretor)}</span>
                         </p>
                       </div>
                     </button>
@@ -881,7 +881,7 @@ export default function AdminUsuariosPage() {
                         className="flex items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md"
                       >
                         <Copy size={16} />
-                        Copiar ID
+                        Copiar ID n8n
                       </button>
                       <button
                         onClick={() => handleEditUser(profile)}

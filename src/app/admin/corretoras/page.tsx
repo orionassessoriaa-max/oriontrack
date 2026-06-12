@@ -353,7 +353,7 @@ function CorretorasContent() {
 
   const copyId = (id: string) => {
     navigator.clipboard.writeText(id);
-    alert('ID copiado com sucesso!');
+    alert('ID copiado para usar no n8n.');
   };
 
   const updateOperationMode = async (group: CorretoraGroup, modoOperacao: OperationMode) => {
@@ -852,7 +852,7 @@ function CorretorasContent() {
                                       type="button"
                                       onClick={() => copyId(member.corretor_id || member.profile_id || member.key)}
                                       className="cursor-pointer p-2.5 text-slate-400 transition-all hover:bg-slate-100 rounded-lg"
-                                      title="Copiar ID"
+                                      title="Copiar ID para n8n"
                                     >
                                       <Copy size={16} />
                                     </button>
