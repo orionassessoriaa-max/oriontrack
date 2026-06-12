@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { 
   Building2,
@@ -239,6 +240,11 @@ function CorretorasContent() {
   const [createBrokerageError, setCreateBrokerageError] = useState<string | null>(null);
   const [migrationPending, setMigrationPending] = useState(false);
   const [savingOperationMode, setSavingOperationMode] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   async function fetchData() {
     setLoading(true);
@@ -482,9 +488,9 @@ function CorretorasContent() {
         </div>
       )}
 
-      {createModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md">
-          <form onSubmit={createBrokerage} className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-[#090e1a] p-6 shadow-2xl">
+      {mounted && createModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-[#020617]/95 px-4 pb-8 pt-24 backdrop-blur-md sm:items-center sm:py-8">
+          <form onSubmit={createBrokerage} className="w-full max-w-xl max-h-[calc(100vh-7rem)] overflow-y-auto rounded-[2rem] border border-cyan-400/20 bg-[#090e1a] p-6 shadow-2xl shadow-cyan-950/50">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Cadastro de concessionaria</p>
@@ -531,7 +537,8 @@ function CorretorasContent() {
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Estatísticas */}
