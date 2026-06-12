@@ -197,8 +197,14 @@ export default function BrokerLeadsPage() {
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
-  const canAssignTeamLeads = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || actualProfile?.tipo_usuario === 'admin';
-  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || actualProfile?.tipo_usuario === 'admin';
+  const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
+  const canAssignTeamLeads = !isTeamMemberProfile && (
+    profile?.tipo_usuario === 'admin' ||
+    profile?.tipo_usuario === 'corretor' ||
+    profile?.tipo_usuario === 'corretor_admin' ||
+    actualProfile?.tipo_usuario === 'admin'
+  );
+  const canManageLeadResponsible = canAssignTeamLeads;
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');
@@ -894,7 +900,7 @@ export default function BrokerLeadsPage() {
             <option value="todos">Anuncio: todos</option>
             {adOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
-          {teamMembers.length > 0 && (
+          {!isTeamMemberProfile && teamMembers.length > 0 && (
             <select
               value={responsavelFilter}
               onChange={(e) => setResponsavelFilter(e.target.value)}
@@ -929,7 +935,7 @@ export default function BrokerLeadsPage() {
           <span className="orion-chip bg-amber-50 text-amber-700">
             CNPJ: {cnpjFilter === 'todos' ? 'todos' : cnpjFilter === 'com' ? 'com CNPJ' : cnpjFilter === 'sem' ? 'sem CNPJ' : 'nao informado'}
           </span>
-          {responsavelFilter !== 'todos' && (
+          {!isTeamMemberProfile && responsavelFilter !== 'todos' && (
             <span className="orion-chip bg-indigo-50 text-indigo-700">
               Responsável: {responsavelFilter === 'sem_responsavel' ? 'sem responsável' : teamMembers.find(m => m.id === responsavelFilter)?.nome || 'carregando...'}
             </span>

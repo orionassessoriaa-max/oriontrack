@@ -253,8 +253,14 @@ export default function CrmPage() {
   const [simulatedCorretorId, setSimulatedCorretorId] = useState<string | null>(null);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
-  const canAssignTeamLeads = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || actualProfile?.tipo_usuario === 'admin';
-  const canManageLeadResponsible = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || actualProfile?.tipo_usuario === 'admin';
+  const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
+  const canAssignTeamLeads = !isTeamMemberProfile && (
+    profile?.tipo_usuario === 'admin' ||
+    profile?.tipo_usuario === 'corretor' ||
+    profile?.tipo_usuario === 'corretor_admin' ||
+    actualProfile?.tipo_usuario === 'admin'
+  );
+  const canManageLeadResponsible = canAssignTeamLeads;
   const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const isViewingBrokerAsAdmin = Boolean(simulatedCorretorId) && !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile?.tipo_usuario || '');
   const canUseDealershipViews = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin || (canAssignTeamLeads && teamMembers.length > 0);
@@ -695,13 +701,15 @@ export default function CrmPage() {
       );
     }
 
-    teamMembers.forEach((member) => {
-      options.push({
-        value: `member:${member.id}`,
-        label: member.nome,
-        desc: member.tipo_usuario === 'corretor_admin' ? 'Admin da concessionaria' : 'Responsavel do time',
+    if (!isTeamMemberProfile) {
+      teamMembers.forEach((member) => {
+        options.push({
+          value: `member:${member.id}`,
+          label: member.nome,
+          desc: member.tipo_usuario === 'corretor_admin' ? 'Admin da concessionaria' : 'Responsavel do time',
+        });
       });
-    });
+    }
 
     dealershipBrokers.forEach((broker) => {
       if (profile?.corretor_id === broker.id && teamMembers.some((member) => member.profile_id === profile.id)) return;
@@ -723,7 +731,7 @@ export default function CrmPage() {
     });
 
     return uniqueOptions;
-  }, [canUseDealershipViews, dealershipBrokers, profile?.corretor_id, profile?.id, teamMembers]);
+  }, [canUseDealershipViews, dealershipBrokers, isTeamMemberProfile, profile?.corretor_id, profile?.id, teamMembers]);
 
   useEffect(() => {
     if (crmScopeOptions.some((option) => option.value === crmScopeView)) return;
