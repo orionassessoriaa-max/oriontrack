@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
+import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 import { 
   CheckCircle2, 
   Loader2, 
@@ -499,7 +500,7 @@ export default function BrokerInboxPage() {
         .single();
       if (error) throw error;
       if (data) {
-        setLeadStatus(data.status || 'Aguardando atendimento');
+        setLeadStatus(normalizeLeadStatus(data.status));
       }
     } catch (err) {
       console.error('Erro ao buscar status do lead:', err);
@@ -1822,21 +1823,13 @@ export default function BrokerInboxPage() {
                     </div>
                   ) : (
                     <select
-                      value={leadStatus}
+                      value={normalizeLeadStatus(leadStatus)}
                       onChange={(e) => handleUpdateLeadStatus(e.target.value)}
                       className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white font-black uppercase tracking-wider focus:outline-none focus:border-cyan-500/50"
                     >
-                      <option value="Aguardando atendimento">Oportunidade (Aguardando)</option>
-                      <option value="Inicio">Início (Primeiro Contato)</option>
-                      <option value="Contato feito">Contato Feito (Em Atendimento)</option>
-                      <option value="Cotação enviada">Cotação Enviada</option>
-                      <option value="Em negociação">Em Negociação</option>
-                      <option value="Não tive retorno">Sem Retorno</option>
-                      <option value="Venda realizada">Venda Realizada (Ganho)</option>
-                      <option value="Sem interesse">Sem Interesse (Perdido)</option>
-                      <option value="Região sem comercialização">Região Sem Comercialização</option>
-                      <option value="Chamou duas vezes">Chamou Duas Vezes</option>
-                      <option value="Telefone não existe">Telefone Não Existe</option>
+                      {LEAD_STATUSES.map((status) => (
+                        <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>
+                      ))}
                     </select>
                   )}
                 </div>
