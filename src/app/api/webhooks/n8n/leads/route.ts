@@ -96,6 +96,7 @@ function buildEnrichmentUpdate(existing: any, incoming: any) {
   const fields = [
     'idades',
     'possui_cnpj',
+    'cnpj',
     'tem_plano_ativo',
     'plano_atual',
     'custo_plano_atual',
@@ -130,6 +131,24 @@ function normalizeBooleanLabel(value: unknown) {
   if (key.includes('nao_tenho') || key.includes('nao_possui')) return 'Nao';
   if (key.includes('tenho') || key.includes('possui')) return 'Sim';
   return normalizeText(value, 'Nao informado') || 'Nao informado';
+}
+
+function normalizeCnpjOwnershipLabel(value: unknown) {
+  const text = normalizeText(value);
+  const key = normalizeKey(text);
+  if (!key) return 'Nao informado';
+  if (key.includes('mei')) return 'Tenho MEI';
+  if (['nao', 'n_o', 'n', 'false', '0', 'no'].includes(key) || key.includes('nao_tenho') || key.includes('nao_possui')) return 'Não';
+  if (['sim', 's', 'true', '1', 'yes'].includes(key) || key.includes('tenho_cnpj') || key.includes('possui_cnpj')) return 'Sim';
+  if (text.replace(/\D/g, '').length >= 11) return 'Sim';
+  return text || 'Nao informado';
+}
+
+function extractCnpjValue(value: unknown) {
+  const text = normalizeText(value);
+  const digits = text.replace(/\D/g, '');
+  if (digits.length >= 11) return text;
+  return '';
 }
 
 function notificationValue(value: unknown, fallback = 'Nao informado') {
@@ -376,7 +395,8 @@ export async function POST(request: Request) {
       nome,
       telefone,
       idades: normalizeText(field(body, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas', 'age_group'])),
-      possui_cnpj: normalizeBooleanLabel(field(body, ['possui_cnpj', 'possui cnpj', 'possui cnpj?', 'cnpj', 'tem cnpj', 'tem cnpj?'])),
+      possui_cnpj: normalizeCnpjOwnershipLabel(field(body, ['possui_cnpj', 'possui cnpj', 'possui cnpj?', 'tem cnpj', 'tem cnpj?', 'tem mei', 'mei']) || field(body, ['cnpj'])),
+      cnpj: extractCnpjValue(field(body, ['cnpj_numero', 'cnpj numero', 'cnpj nÃºmero', 'numero cnpj', 'nÃºmero cnpj', 'cnpj do cliente', 'cnpj'])) || null,
       tem_plano_ativo: normalizeBooleanLabel(field(body, ['tem_plano_ativo', 'tem plano ativo', 'tem plano ativo?', 'plano ativo', 'planoativo', 'possui plano', 'possui plano?', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano'])),
       plano_atual: normalizeText(field(body, ['plano_atual', 'plano atual', 'qual plano atual', 'qual seu plano atual', 'operadora atual', 'convenio atual', 'convênio atual', 'seguradora atual', 'plano'])) || null,
       custo_plano_atual: normalizeText(field(body, ['custo_plano_atual', 'custo plano atual', 'custo atual', 'valor plano atual', 'valor do plano atual', 'mensalidade atual', 'valor_atual'])) || null,
@@ -405,7 +425,7 @@ export async function POST(request: Request) {
       const to = from + existingLimit - 1;
       const { data: existingLeads, error: existingError } = await supabaseAdmin
         .from('leads')
-        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
+        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
         .eq('corretor_id', corretorId)
         .range(from, to);
 

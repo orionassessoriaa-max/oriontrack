@@ -35,7 +35,8 @@ export default function AdminNovoLeadPage() {
     nome: '',
     telefone: '',
     idades: '',
-    possui_cnpj: 'Não informado',
+    possui_cnpj: 'Não',
+    cnpj: '',
     tem_plano_ativo: 'Não informado',
     plano_atual: '',
     custo_plano_atual: '',
@@ -257,8 +258,21 @@ export default function AdminNovoLeadPage() {
                     >
                       <option value="Sim">Sim</option>
                       <option value="Não">Não</option>
-                      <option value="Não informado">Não informado</option>
+                      <option value="Tenho MEI">Tenho MEI</option>
                     </select>
+                  </div>
+                </div>
+                <div className="space-y-2 group">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">CNPJ DO CLIENTE</label>
+                  <div className="relative">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={formData.cnpj}
+                      onChange={e => setFormData({...formData, cnpj: e.target.value})}
+                      placeholder="00.000.000/0000-00"
+                      className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                    />
                   </div>
                 </div>
                 <div className="space-y-2 group">

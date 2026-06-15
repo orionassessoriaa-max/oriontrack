@@ -106,6 +106,16 @@ function calculateCommissionFromSale(value?: string | number | null, percent = 2
   return parseCurrencyInput(value) * (safePercent / 100);
 }
 
+function normalizeCnpjOwnership(value?: string | null) {
+  const normalized = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (normalized.includes('mei')) return 'Tenho MEI';
+  if (normalized.includes('sim') || normalized.includes('cnpj')) return 'Sim';
+  return 'Não';
+}
+
 function requiresCommercialData(status: LeadStatus) {
   return COMMERCIAL_REQUIRED_STATUSES.includes(status);
 }
@@ -218,7 +228,8 @@ export default function CrmPage() {
     nome: '',
     telefone: '',
     idades: '',
-    possui_cnpj: 'Não informado',
+    possui_cnpj: 'Não',
+    cnpj: '',
     tem_plano_ativo: 'Não informado',
     plano_atual: '',
     custo_plano_atual: '',
@@ -556,7 +567,8 @@ export default function CrmPage() {
         nome: selectedLead.nome || '',
         telefone: selectedLead.telefone || '',
         idades: selectedLead.idades || '',
-        possui_cnpj: selectedLead.possui_cnpj || 'Não informado',
+        possui_cnpj: normalizeCnpjOwnership(selectedLead.possui_cnpj),
+        cnpj: selectedLead.cnpj || '',
         tem_plano_ativo: selectedLead.tem_plano_ativo || 'Não informado',
         plano_atual: selectedLead.plano_atual || '',
         custo_plano_atual: selectedLead.custo_plano_atual || '',
@@ -1154,6 +1166,7 @@ export default function CrmPage() {
         telefone: editForm.telefone,
         idades: editForm.idades,
         possui_cnpj: editForm.possui_cnpj,
+        cnpj: editForm.cnpj || null,
         tem_plano_ativo: editForm.tem_plano_ativo,
         plano_atual: editForm.plano_atual || null,
         custo_plano_atual: editForm.custo_plano_atual || null,
@@ -1629,7 +1642,8 @@ export default function CrmPage() {
                       <EditField label="Telefone" value={editForm.telefone} onChange={(value) => setEditForm((prev) => ({ ...prev, telefone: value }))} />
                       <EditField label="Idades" value={editForm.idades} onChange={(value) => setEditForm((prev) => ({ ...prev, idades: value }))} />
                       <EditField label="Cidade" value={editForm.cidade} onChange={(value) => setEditForm((prev) => ({ ...prev, cidade: value }))} />
-                      <EditSelect label="CNPJ" value={editForm.possui_cnpj} options={['Sim', 'Não', 'Não informado']} onChange={(value) => setEditForm((prev) => ({ ...prev, possui_cnpj: value }))} />
+                      <EditSelect label="Possui CNPJ?" value={editForm.possui_cnpj} options={['Sim', 'Não', 'Tenho MEI']} onChange={(value) => setEditForm((prev) => ({ ...prev, possui_cnpj: value }))} />
+                      <EditField label="CNPJ do cliente" value={editForm.cnpj} onChange={(value) => setEditForm((prev) => ({ ...prev, cnpj: value }))} />
                       <EditSelect label="Plano ativo" value={editForm.tem_plano_ativo} options={['Sim', 'Não', 'Não informado']} onChange={(value) => setEditForm((prev) => ({ ...prev, tem_plano_ativo: value }))} />
                       <EditField label="Plano atual" value={editForm.plano_atual} onChange={(value) => setEditForm((prev) => ({ ...prev, plano_atual: value }))} />
                       <EditField label="Investimento" value={editForm.investimento} onChange={(value) => setEditForm((prev) => ({ ...prev, investimento: value }))} />
@@ -1657,7 +1671,8 @@ export default function CrmPage() {
                   </form>
                 ) : (
                   <div className="mb-5 grid grid-cols-2 gap-3">
-                    <InfoCard label="CNPJ" value={selectedLead.possui_cnpj || '-'} />
+                    <InfoCard label="Possui CNPJ?" value={selectedLead.possui_cnpj || '-'} />
+                    <InfoCard label="CNPJ" value={selectedLead.cnpj || '-'} />
                     <InfoCard label="Vidas" value={selectedLead.idades || '-'} />
                     <InfoCard label="Plano ativo" value={selectedLead.tem_plano_ativo || '-'} />
                     <InfoCard label="Plano atual" value={selectedLead.plano_atual || '-'} />
@@ -1701,7 +1716,8 @@ export default function CrmPage() {
                     type="button"
                     onClick={() => {
                       const idades = selectedLead.idades || '';
-                      window.location.href = `/simulador?idades=${encodeURIComponent(idades)}&nome=${encodeURIComponent(selectedLead.nome)}&pj=${selectedLead.possui_cnpj === 'Sim' ? '1' : '0'}`;
+                      const hasCompanyDocument = ['Sim', 'Tenho MEI'].includes(normalizeCnpjOwnership(selectedLead.possui_cnpj));
+                      window.location.href = `/simulador?idades=${encodeURIComponent(idades)}&nome=${encodeURIComponent(selectedLead.nome)}&pj=${hasCompanyDocument ? '1' : '0'}`;
                     }}
                     className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-2xs font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 shadow-md shadow-blue-600/10"
                   >

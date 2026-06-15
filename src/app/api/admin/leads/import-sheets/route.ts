@@ -13,6 +13,7 @@ type LeadInsert = {
   telefone: string;
   idades: string;
   possui_cnpj: string;
+  cnpj?: string | null;
   tem_plano_ativo: string;
   plano_atual: string;
   custo_plano_atual: string;
@@ -208,6 +209,25 @@ function normalizePlanActiveLabel(value: string) {
   return text;
 }
 
+function normalizeCnpjOwnershipLabel(value: string) {
+  const text = String(value || '').trim();
+  const normalized = normalizeHeader(text);
+  if (!normalized) return '';
+  if (normalized.includes('mei')) return 'Tenho MEI';
+  if (normalized.includes('nao') || normalized === 'n' || normalized === 'false' || normalized === '0') return 'Não';
+  if (normalized === 'sim' || normalized === 's' || normalized === 'true' || normalized === '1') return 'Sim';
+  if (normalized.includes('tenho_cnpj') || normalized.includes('possui_cnpj')) return 'Sim';
+  if (text.replace(/\D/g, '').length >= 11) return 'Sim';
+  return text;
+}
+
+function extractCnpjValue(value: string) {
+  const text = String(value || '').trim();
+  const digits = text.replace(/\D/g, '');
+  if (digits.length >= 11) return text;
+  return '';
+}
+
 function normalizePhoneKey(value: string) {
   return String(value || '').replace(/\D/g, '');
 }
@@ -239,6 +259,7 @@ function buildEnrichmentUpdate(existing: any, incoming: LeadInsert) {
   const fields: Array<keyof LeadInsert> = [
     'idades',
     'possui_cnpj',
+    'cnpj',
     'tem_plano_ativo',
     'plano_atual',
     'custo_plano_atual',
@@ -705,7 +726,8 @@ export async function POST(request: Request) {
             nome: rawNome || 'Lead sem nome',
             telefone: rawTelefone || 'Telefone nao informado',
             idades: pick(row, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas']),
-            possui_cnpj: pick(row, ['possui cnpj', 'cnpj', 'tem cnpj']) || 'Nao informado',
+            possui_cnpj: normalizeCnpjOwnershipLabel(pick(row, ['possui cnpj', 'tem cnpj', 'tem mei', 'mei']) || pick(row, ['cnpj'])) || 'Nao informado',
+            cnpj: extractCnpjValue(pick(row, ['cnpj do cliente', 'numero cnpj', 'nÃºmero cnpj', 'cnpj numero', 'cnpj nÃºmero', 'cnpj'])) || null,
             tem_plano_ativo: normalizePlanActiveLabel(pick(row, ['tem plano ativo', 'plano ativo', 'planoativo', 'possui plano', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano'])) || 'Nao informado',
             plano_atual: pick(row, ['plano atual', 'operadora atual', 'convenio atual', 'convênio atual', 'seguradora atual', 'plano']),
             custo_plano_atual: pick(row, ['custo plano atual', 'custo atual', 'valor plano atual', 'custo do plano', 'custo do plano atual', 'valor do plano atual', 'mensalidade atual']),
@@ -748,7 +770,7 @@ export async function POST(request: Request) {
       const to = from + existingLimit - 1;
       const { data: existingLeads, error: existingError } = await supabaseAdmin
         .from('leads')
-        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, valor_negociacao, operadora_negociacao, status')
+        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, valor_negociacao, operadora_negociacao, status')
         .eq('corretor_id', targetCorretorId)
         .range(from, to);
 

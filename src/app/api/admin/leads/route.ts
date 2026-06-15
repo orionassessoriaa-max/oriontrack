@@ -67,6 +67,7 @@ export async function POST(request: Request) {
         telefone,
         idades: String(body.idades || ''),
         possui_cnpj: String(body.possui_cnpj || 'Nao informado'),
+        cnpj: body.cnpj ? String(body.cnpj) : null,
         tem_plano_ativo: String(body.tem_plano_ativo || 'Nao informado'),
         plano_atual: String(body.plano_atual || ''),
         custo_plano_atual: String(body.custo_plano_atual || ''),

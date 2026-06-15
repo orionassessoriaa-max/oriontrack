@@ -69,7 +69,8 @@ export interface Lead {
   nome: string;
   telefone: string;
   idades: string;
-  possui_cnpj: string; // 'Sim' | 'Não' | 'Não informado'
+  possui_cnpj: string; // 'Sim' | 'Nao' | 'Tenho MEI' | 'Nao informado'
+  cnpj?: string | null;
   tem_plano_ativo: string; // 'Sim' | 'Não' | 'Não informado'
   plano_atual: string | null;
   custo_plano_atual?: string | null;

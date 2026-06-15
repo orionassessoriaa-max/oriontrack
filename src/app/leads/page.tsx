@@ -46,6 +46,7 @@ function cnpjCategory(value?: string | null) {
 }
 
 function cnpjLabel(value?: string | null) {
+  if (normalizeText(value).includes('mei')) return 'TENHO MEI';
   const category = cnpjCategory(value);
   if (category === 'com') return 'COM CNPJ';
   if (category === 'sem') return 'SEM CNPJ';
@@ -687,6 +688,7 @@ export default function BrokerLeadsPage() {
       'Nome',
       'Telefone',
       'Idades',
+      'Possui CNPJ',
       'CNPJ',
       'Plano Ativo',
       'Plano Atual',
@@ -709,6 +711,7 @@ export default function BrokerLeadsPage() {
       lead.telefone || '',
       lead.idades || '',
       lead.possui_cnpj || '',
+      lead.cnpj || '',
       lead.tem_plano_ativo || '',
       lead.plano_atual || '',
       lead.custo_plano_atual || '',
@@ -957,7 +960,7 @@ export default function BrokerLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full min-w-[2700px] border-collapse text-left text-[13px]">
+            <table className="w-full min-w-[2820px] border-collapse text-left text-[13px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100">
                   <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
@@ -966,6 +969,7 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Telefone</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Idades</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Possui CNPJ</th>
+                  <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">CNPJ</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Tem plano ativo?</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Plano atual</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Investimento pretendido</th>
@@ -987,7 +991,7 @@ export default function BrokerLeadsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={(isViewingAsCorretor ? 22 : 21) - (canViewCommission ? 0 : 1)} className="py-20 text-center">
+                    <td colSpan={(isViewingAsCorretor ? 23 : 22) - (canViewCommission ? 0 : 1)} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -1025,6 +1029,7 @@ export default function BrokerLeadsPage() {
                         {cnpjLabel(lead.possui_cnpj)}
                       </span>
                     </td>
+                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.cnpj || '-'}</td>
                     <td className="border border-slate-100 px-3 py-3">
                       <span className={`inline-flex min-w-[190px] max-w-[240px] whitespace-normal rounded-lg px-3 py-2 text-[11px] font-black uppercase leading-relaxed tracking-widest ${
                         normalizeText(lead.tem_plano_ativo).includes('sim') ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' :
