@@ -1215,7 +1215,7 @@ export default function DashboardPage() {
           <Link href="/leads?status=Sem interesse">
             <StatCard title="Vendas perdidas" value={stats.lost} icon={ShieldAlert} color="red" loading={isDataLoading} />
           </Link>
-          <Link href="/crm?filtro=tarefas">
+          <Link href="/tarefas">
             <StatCard title="Follow up" value={stats.tasksOpen} icon={CalendarDays} color="blue" loading={isDataLoading} />
           </Link>
         </div>
