@@ -24,6 +24,11 @@ function flattenPayload(input: any) {
     source.body,
     source.data,
     source.lead,
+    source.cliente,
+    source.customer,
+    source.contato,
+    source.contact,
+    source.form,
     source.payload,
     source.json,
     source.respondent?.answers,
@@ -58,6 +63,63 @@ function parseCurrencyValue(value: unknown) {
     .replace(',', '.');
   const parsed = Number(numeric);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeDateKey(value: string | null) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function normalizePhoneKey(value: string | null) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function buildLeadIdentityKey(lead: Pick<any, 'corretor_id' | 'data_entrada' | 'nome' | 'telefone'>) {
+  return [
+    lead.corretor_id || '',
+    normalizeDateKey(lead.data_entrada),
+    normalizeKey(lead.nome || ''),
+    normalizePhoneKey(lead.telefone || ''),
+  ].join('|');
+}
+
+function isBlankStored(value: unknown) {
+  const text = normalizeText(value).toLowerCase();
+  if (!text || text === '-') return true;
+  return ['nao informado', 'não informado', 'sem aba'].includes(text);
+}
+
+function buildEnrichmentUpdate(existing: any, incoming: any) {
+  const update: Record<string, string | number | null> = {};
+  const fields = [
+    'idades',
+    'possui_cnpj',
+    'tem_plano_ativo',
+    'plano_atual',
+    'custo_plano_atual',
+    'investimento',
+    'cidade',
+    'operadora',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_term',
+    'utm_content',
+    'valor_negociacao',
+    'operadora_negociacao',
+  ];
+
+  fields.forEach((field) => {
+    const value = incoming[field];
+    if (value === undefined || value === null || value === '') return;
+    if (isBlankStored(existing[field])) {
+      update[field] = value;
+    }
+  });
+
+  return update;
 }
 
 function normalizeBooleanLabel(value: unknown) {
@@ -314,11 +376,11 @@ export async function POST(request: Request) {
       nome,
       telefone,
       idades: normalizeText(field(body, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas', 'age_group'])),
-      possui_cnpj: normalizeBooleanLabel(field(body, ['possui_cnpj', 'possui cnpj', 'cnpj', 'tem cnpj'])),
-      tem_plano_ativo: normalizeBooleanLabel(field(body, ['tem_plano_ativo', 'tem plano ativo', 'plano ativo', 'planoativo', 'possui plano', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano'])),
-      plano_atual: normalizeText(field(body, ['plano_atual', 'plano atual', 'operadora atual', 'convenio atual', 'convênio atual', 'seguradora atual', 'plano'])) || null,
+      possui_cnpj: normalizeBooleanLabel(field(body, ['possui_cnpj', 'possui cnpj', 'possui cnpj?', 'cnpj', 'tem cnpj', 'tem cnpj?'])),
+      tem_plano_ativo: normalizeBooleanLabel(field(body, ['tem_plano_ativo', 'tem plano ativo', 'tem plano ativo?', 'plano ativo', 'planoativo', 'possui plano', 'possui plano?', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano'])),
+      plano_atual: normalizeText(field(body, ['plano_atual', 'plano atual', 'qual plano atual', 'qual seu plano atual', 'operadora atual', 'convenio atual', 'convênio atual', 'seguradora atual', 'plano'])) || null,
       custo_plano_atual: normalizeText(field(body, ['custo_plano_atual', 'custo plano atual', 'custo atual', 'valor plano atual', 'valor do plano atual', 'mensalidade atual', 'valor_atual'])) || null,
-      investimento: normalizeText(field(body, ['investimento', 'investimento pretendido', 'investimento_pretendido', 'pretensao investimento', 'valor_pretendido', 'budget', 'orcamento'])),
+      investimento: normalizeText(field(body, ['investimento', 'investimento pretendido', 'investimento_pretendido', 'pretensao investimento', 'pretensão investimento', 'valor_pretendido', 'budget', 'orcamento', 'orçamento'])),
       cidade: normalizeText(field(body, ['cidade', 'city', 'regiao', 'localidade'])),
       operadora: normalizeText(field(body, ['operadora', 'pagina', 'página', 'aba', 'operator', 'page', 'source_page'])) || null,
       utm_source: normalizeText(field(body, ['utm_source', 'source', 'origem', 'utm origem'])) || null,
@@ -349,6 +411,31 @@ export async function POST(request: Request) {
 
       if (existingError) {
         return NextResponse.json({ error: existingError.message }, { status: 500 });
+      }
+
+      const existingIdentity = (existingLeads || []).find((lead) => buildLeadIdentityKey(lead) === buildLeadIdentityKey(leadPayload));
+      if (existingIdentity) {
+        const update = buildEnrichmentUpdate(existingIdentity, leadPayload);
+        if (Object.keys(update).length > 0) {
+          const { data: enrichedLead, error: enrichError } = await supabaseAdmin
+            .from('leads')
+            .update({ ...update, updated_at: new Date().toISOString() })
+            .eq('id', existingIdentity.id)
+            .select('id, corretor_id, nome, telefone, status')
+            .single();
+
+          if (enrichError) {
+            return NextResponse.json({ error: enrichError.message }, { status: 500 });
+          }
+
+          return NextResponse.json({
+            success: true,
+            duplicate: true,
+            enriched: true,
+            lead: enrichedLead,
+            message: 'Lead existente enriquecido com dados novos.',
+          });
+        }
       }
 
       const duplicate = (existingLeads || []).find((lead) => buildLeadDuplicateKey(lead) === duplicateKey);
