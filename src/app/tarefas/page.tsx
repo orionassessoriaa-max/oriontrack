@@ -33,6 +33,7 @@ type ProfileRow = {
 };
 
 type TaskFilter = 'pendentes' | 'hoje' | 'atrasadas' | 'concluidas' | 'todas';
+type ResponsibleFilter = 'todos' | 'sem_responsavel' | string;
 
 function formatDateTime(value?: string | null) {
   if (!value) return 'Sem prazo';
@@ -93,6 +94,7 @@ export default function TarefasPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<TaskFilter>('pendentes');
+  const [responsibleFilter, setResponsibleFilter] = useState<ResponsibleFilter>('todos');
 
   async function resolveBrokerScope() {
     const simulatedId = typeof window !== 'undefined' ? window.sessionStorage.getItem('orion:viewing_corretor_id') : null;
@@ -204,21 +206,56 @@ export default function TarefasPage() {
     await fetchTasks();
   }
 
+  function getTaskResponsibleId(task: LeadTarefa) {
+    const lead = leadsById[task.lead_id];
+    return task.responsavel_profile_id || lead?.responsavel_profile_id || null;
+  }
+
+  const responsibleOptions = useMemo(() => {
+    const options = new Map<string, ProfileRow>();
+    let hasUnassigned = false;
+
+    tasks.forEach((task) => {
+      const responsibleId = getTaskResponsibleId(task);
+      if (!responsibleId) {
+        hasUnassigned = true;
+        return;
+      }
+
+      const responsible = profilesById[responsibleId];
+      options.set(responsibleId, responsible || { id: responsibleId, nome: 'Responsavel sem perfil', email: null });
+    });
+
+    return {
+      people: Array.from(options.values()).sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')),
+      hasUnassigned,
+    };
+  }, [tasks, leadsById, profilesById]);
+
+  const tasksByResponsible = useMemo(() => {
+    if (responsibleFilter === 'todos') return tasks;
+    return tasks.filter((task) => {
+      const responsibleId = getTaskResponsibleId(task);
+      if (responsibleFilter === 'sem_responsavel') return !responsibleId;
+      return responsibleId === responsibleFilter;
+    });
+  }, [tasks, leadsById, responsibleFilter]);
+
   const stats = useMemo(() => {
     return {
-      total: tasks.length,
-      pending: tasks.filter((task) => task.status === 'pendente').length,
-      today: tasks.filter((task) => matchesTaskFilter(task, 'hoje')).length,
-      late: tasks.filter((task) => matchesTaskFilter(task, 'atrasadas')).length,
+      total: tasksByResponsible.length,
+      pending: tasksByResponsible.filter((task) => task.status === 'pendente').length,
+      today: tasksByResponsible.filter((task) => matchesTaskFilter(task, 'hoje')).length,
+      late: tasksByResponsible.filter((task) => matchesTaskFilter(task, 'atrasadas')).length,
     };
-  }, [tasks]);
+  }, [tasksByResponsible]);
 
   const visibleTasks = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    return tasks.filter((task) => {
+    return tasksByResponsible.filter((task) => {
       const lead = leadsById[task.lead_id];
       const broker = task.corretor_id ? brokersById[task.corretor_id] : null;
-      const responsibleId = task.responsavel_profile_id || lead?.responsavel_profile_id || null;
+      const responsibleId = getTaskResponsibleId(task);
       const responsible = responsibleId ? profilesById[responsibleId] : null;
       const haystack = [
         task.titulo,
@@ -233,7 +270,7 @@ export default function TarefasPage() {
 
       return matchesTaskFilter(task, filter) && (!normalizedSearch || haystack.includes(normalizedSearch));
     });
-  }, [tasks, leadsById, brokersById, profilesById, filter, search]);
+  }, [tasksByResponsible, leadsById, brokersById, profilesById, filter, search]);
 
   return (
     <InternalLayout>
@@ -263,7 +300,7 @@ export default function TarefasPage() {
       </div>
 
       <div className="mb-6 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
-        <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
+        <div className="grid gap-3 lg:grid-cols-[1fr_240px_220px]">
           <label className="relative block">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={17} />
             <input
@@ -273,6 +310,17 @@ export default function TarefasPage() {
               className="w-full rounded-2xl border border-white/10 bg-slate-950 px-11 py-3.5 text-sm font-bold text-white outline-none focus:border-cyan-400/70"
             />
           </label>
+          <select
+            value={responsibleFilter}
+            onChange={(event) => setResponsibleFilter(event.target.value)}
+            className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3.5 text-sm font-black text-white outline-none focus:border-cyan-400/70"
+          >
+            <option value="todos">Todos responsaveis</option>
+            {responsibleOptions.people.map((person) => (
+              <option key={person.id} value={person.id}>{person.nome || person.email || 'Sem nome'}</option>
+            ))}
+            {responsibleOptions.hasUnassigned && <option value="sem_responsavel">Sem responsavel</option>}
+          </select>
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value as TaskFilter)}
@@ -318,7 +366,7 @@ export default function TarefasPage() {
             {visibleTasks.map((task) => {
               const lead = leadsById[task.lead_id];
               const broker = task.corretor_id ? brokersById[task.corretor_id] : null;
-              const responsibleId = task.responsavel_profile_id || lead?.responsavel_profile_id || null;
+              const responsibleId = getTaskResponsibleId(task);
               const responsible = responsibleId ? profilesById[responsibleId] : null;
               const badge = getTaskBadge(task);
 
