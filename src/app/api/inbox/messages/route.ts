@@ -231,18 +231,32 @@ export async function POST(request: Request) {
         : mediaBase64;
 
       if (mediatype === 'audio') {
-        payload = await evolutionFetch(`/message/sendWhatsAppAudio/${instance}`, {
-          method: 'POST',
-          body: JSON.stringify({
-            number: phone,
-            audio: base64Data,
-            options: {
-              delay: 1200,
-              presence: 'recording',
-              encoding: true
-            }
-          }),
-        }, instanceApiKey);
+        try {
+          payload = await evolutionFetch(`/message/sendWhatsAppAudio/${instance}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              number: phone,
+              audio: base64Data,
+              options: {
+                delay: 1200,
+                presence: 'recording',
+                encoding: true
+              }
+            }),
+          }, instanceApiKey);
+        } catch (audioError) {
+          console.warn('[POST /api/inbox/messages] Audio endpoint failed, retrying as media:', audioError);
+          payload = await evolutionFetch(`/message/sendMedia/${instance}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              number: phone,
+              mediatype: 'audio',
+              mimetype: mimetype || 'audio/webm',
+              media: base64Data,
+              fileName: fileName || 'audio.webm',
+            }),
+          }, instanceApiKey);
+        }
       } else {
         payload = await evolutionFetch(`/message/sendMedia/${instance}`, {
           method: 'POST',

@@ -731,6 +731,7 @@ export default function BrokerInboxPage() {
       }
     } catch (err) {
       console.error(err);
+      setSendError('Nao consegui enviar agora. Tente novamente em instantes.');
     } finally {
       setSendingMessage(false);
     }
@@ -739,17 +740,26 @@ export default function BrokerInboxPage() {
   // Audio Recording Toggle
   const startRecording = async () => {
     try {
+      setSendError(null);
+
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        setSendError('Este navegador nao permite gravar audio aqui. Use Chrome/Edge atualizado e confira a permissao do microfone.');
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioStreamRef.current = stream;
       
-      let mimeType = 'audio/webm';
-      if (MediaRecorder.isTypeSupported('audio/ogg; codecs=opus')) {
-        mimeType = 'audio/ogg; codecs=opus';
-      } else if (MediaRecorder.isTypeSupported('audio/webm; codecs=opus')) {
-        mimeType = 'audio/webm; codecs=opus';
-      }
+      const supportedMimeType = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+      ].find((type) => MediaRecorder.isTypeSupported(type));
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      const mediaRecorder = supportedMimeType
+        ? new MediaRecorder(stream, { mimeType: supportedMimeType })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -759,7 +769,7 @@ export default function BrokerInboxPage() {
         }
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(250);
       setIsRecording(true);
       setRecordSeconds(0);
       
@@ -781,6 +791,7 @@ export default function BrokerInboxPage() {
     if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
 
     const recordedMimeType = mediaRecorder.mimeType || 'audio/webm';
+    const finalRecordSeconds = Math.max(recordSeconds, 1);
 
     mediaRecorder.onstop = () => {
       const audioBlob = new Blob(audioChunksRef.current, { type: recordedMimeType });
@@ -790,12 +801,24 @@ export default function BrokerInboxPage() {
         audioStreamRef.current = null;
       }
 
+      mediaRecorderRef.current = null;
+      if (!audioBlob.size) {
+        setSendError('A gravacao ficou vazia. Tente novamente e permita o microfone.');
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
-        const base64Audio = reader.result as string;
+        const dataUrl = String(reader.result || '');
+        const base64Audio = dataUrl.includes(';base64,') ? dataUrl.split(';base64,')[1] : dataUrl;
+
+        if (!base64Audio) {
+          setSendError('Nao consegui preparar o audio gravado. Tente novamente.');
+          return;
+        }
         
-        const mins = Math.floor(recordSeconds / 60).toString().padStart(2, '0');
-        const secs = (recordSeconds % 60).toString().padStart(2, '0');
+        const mins = Math.floor(finalRecordSeconds / 60).toString().padStart(2, '0');
+        const secs = (finalRecordSeconds % 60).toString().padStart(2, '0');
         const durationStr = `${mins}:${secs}`;
         
         void sendMessage(undefined, true, durationStr, base64Audio, recordedMimeType);
