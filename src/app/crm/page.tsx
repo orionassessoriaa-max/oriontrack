@@ -1554,7 +1554,7 @@ export default function CrmPage() {
                 className="fixed inset-0 z-[90] bg-slate-950/35 backdrop-blur-sm"
                 onClick={closeLeadDetails}
               />
-              <aside className="fixed inset-y-0 right-0 z-[100] w-full max-w-[620px] overflow-y-auto border-l border-gray-100 bg-white p-5 shadow-2xl shadow-slate-950/20 sm:p-6">
+              <aside className="fixed inset-y-0 right-0 z-[100] h-dvh max-h-dvh w-full max-w-[620px] overflow-y-scroll overscroll-y-contain border-l border-gray-100 bg-white p-5 pb-28 shadow-2xl shadow-slate-950/20 [scrollbar-gutter:stable] sm:p-6 sm:pb-32">
                 <div className="mb-5 flex items-start justify-between gap-4">
                   <div>
                     <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Cliente selecionado</p>
