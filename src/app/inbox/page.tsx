@@ -288,7 +288,7 @@ export default function BrokerInboxPage() {
       protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
       tags: row.tags || ['Lead Frio'],
       notes: row.notes || [],
-      source: row.source || 'Instagram Organico',
+      source: 'Meta',
       aiActive: row.aiActive ?? false,
       customFields: row.customFields || []
     })) as Conversation[];
@@ -1877,17 +1877,11 @@ export default function BrokerInboxPage() {
                 {/* Lead Source */}
                 <div className="space-y-2 shrink-0">
                   <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Origem do Lead</label>
-                  <div className="bg-slate-950 border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+                  <div className="bg-slate-950 border border-white/5 rounded-2xl p-4">
                     <div>
                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Origem Cadastrada</span>
-                      <span className="text-xs font-black text-white block mt-0.5">{selectedConversation.source || 'Instagram Organico'}</span>
+                      <span className="text-xs font-black text-white block mt-0.5">Meta</span>
                     </div>
-                    <button
-                      onClick={() => alert('Origem removida!')}
-                      className="p-1.5 bg-white/5 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-xl transition-all cursor-pointer"
-                    >
-                      <Trash2 size={13} />
-                    </button>
                   </div>
                 </div>
 
