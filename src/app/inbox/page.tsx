@@ -1163,8 +1163,10 @@ export default function BrokerInboxPage() {
 
   const handleAddTag = (tag: string) => {
     if (!selectedConversation || !tag) return;
-    if (selectedConversation.tags?.includes(tag)) return;
-    const updatedTags = [...(selectedConversation.tags || []), tag];
+    const nextTag = tag.trim();
+    if (!nextTag) return;
+    if (selectedConversation.tags?.some((item) => item.toLowerCase() === nextTag.toLowerCase())) return;
+    const updatedTags = [...(selectedConversation.tags || []), nextTag];
     const updated = { ...selectedConversation, tags: updatedTags };
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
@@ -1841,12 +1843,19 @@ export default function BrokerInboxPage() {
                   <select
                     value={selectedTag}
                     onChange={(e) => {
-                      handleAddTag(e.target.value);
+                      const value = e.target.value;
+                      if (value === '__nova_etiqueta__') {
+                        const novaEtiqueta = window.prompt('Nome da nova etiqueta');
+                        if (novaEtiqueta?.trim()) handleAddTag(novaEtiqueta);
+                      } else {
+                        handleAddTag(value);
+                      }
                       setSelectedTag('');
                     }}
                     className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/50"
                   >
                     <option value="">Selecione uma etiqueta...</option>
+                    <option value="__nova_etiqueta__">+ Adicionar etiqueta</option>
                     <option value="Lead Quente">Lead Quente 🔥</option>
                     <option value="Aguardando Retorno">Aguardando Retorno ⏳</option>
                     <option value="Sem Interesse">Sem Interesse ❄️</option>
