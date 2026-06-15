@@ -1384,7 +1384,7 @@ export default function CrmPage() {
                 <div
                   ref={boardScrollRef}
                   onScroll={() => syncBoardScroll('board')}
-                  className="scrollbar-visible flex h-[calc(100dvh-260px)] min-h-[560px] snap-x gap-4 overflow-x-scroll overflow-y-auto overscroll-contain pb-8 sm:gap-5"
+                  className="scrollbar-visible flex min-h-[560px] snap-x gap-4 overflow-x-scroll pb-8 sm:gap-5"
                 >
                   {columns.map((column) => {
                     const columnLeads = getLeadsByStatus(column.id);
@@ -1395,16 +1395,16 @@ export default function CrmPage() {
 
                     return (
                       <div key={column.id} className="min-w-[285px] flex-1 snap-start sm:min-w-[310px]">
-                        <div className="sticky top-0 z-30 mb-3 rounded-[1.5rem] border border-gray-100 bg-white/95 p-4 shadow-sm backdrop-blur">
+                        <div className="sticky top-20 z-30 mb-3 rounded-[1.5rem] border border-gray-100 bg-white/95 p-4 shadow-sm backdrop-blur">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
-                                <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">{column.label}</h3>
+                                <h3 className="text-sm font-black uppercase tracking-widest text-blue-950">{column.label}</h3>
                               </div>
-                              <p className="mt-1 text-xs font-medium text-gray-400">{column.desc}</p>
+                              <p className="mt-1 text-xs font-bold text-blue-900/70">{column.desc}</p>
                             </div>
-                            <span className="rounded-full border border-slate-100 bg-slate-50 px-2.5 py-1 text-[10px] font-black text-slate-600">
+                            <span className="rounded-full border border-blue-100 bg-blue-950 px-2.5 py-1 text-[10px] font-black text-white">
                               {columnLeads.length}
                             </span>
                           </div>
