@@ -265,6 +265,7 @@ export default function CrmPage() {
   const [dealershipBrokers, setDealershipBrokers] = useState<DealershipBroker[]>([]);
   const [simulatedCorretorId, setSimulatedCorretorId] = useState<string | null>(null);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
+  const requestedLeadIdRef = useRef<string | null>(null);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
   const canAssignTeamLeads = !isTeamMemberProfile && (
     profile?.tipo_usuario === 'admin' ||
@@ -278,7 +279,9 @@ export default function CrmPage() {
   const canUseDealershipViews = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin || (canAssignTeamLeads && teamMembers.length > 0);
 
   useEffect(() => {
-    const requestedFilter = new URLSearchParams(window.location.search).get('filtro') as MetricFilter | null;
+    const params = new URLSearchParams(window.location.search);
+    const requestedFilter = params.get('filtro') as MetricFilter | null;
+    requestedLeadIdRef.current = params.get('lead');
     if (requestedFilter && ['todos', 'sem_resposta', 'tarefas', 'hoje', 'cadencia', 'fit_icp'].includes(requestedFilter)) {
       setMetricFilter(requestedFilter);
     }
@@ -450,6 +453,15 @@ export default function CrmPage() {
       setTarefas(tarefasRes.data || []);
       setConversas(conversasRes.data || []);
       setSelectedLead((current) => {
+        const requestedLeadId = requestedLeadIdRef.current;
+        if (requestedLeadId) {
+          const requestedLead = normalizedLeads.find((lead) => lead.id === requestedLeadId);
+          if (requestedLead) {
+            requestedLeadIdRef.current = null;
+            setCrmView('board');
+            return requestedLead;
+          }
+        }
         if (!current) return null;
         return normalizedLeads.find((lead) => lead.id === current.id) || null;
       });

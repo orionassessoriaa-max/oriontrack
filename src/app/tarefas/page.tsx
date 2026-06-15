@@ -143,9 +143,8 @@ export default function TarefasPage() {
 
       const leadIds = Array.from(new Set(nextTasks.map((task) => task.lead_id).filter(Boolean)));
       const brokerTaskIds = Array.from(new Set(nextTasks.map((task) => task.corretor_id).filter(Boolean))) as string[];
-      const profileIds = Array.from(new Set(nextTasks.map((task) => task.responsavel_profile_id).filter(Boolean))) as string[];
 
-      const [leadsResult, brokersResult, profilesResult] = await Promise.all([
+      const [leadsResult, brokersResult] = await Promise.all([
         leadIds.length
           ? supabase
               .from('leads')
@@ -158,19 +157,25 @@ export default function TarefasPage() {
               .select('id,nome,email,nome_empresa')
               .in('id', brokerTaskIds)
           : Promise.resolve({ data: [], error: null }),
-        profileIds.length
-          ? supabase
-              .from('profiles')
-              .select('id,nome,email')
-              .in('id', profileIds)
-          : Promise.resolve({ data: [], error: null }),
       ]);
 
       if (leadsResult.error) throw leadsResult.error;
       if (brokersResult.error) throw brokersResult.error;
+
+      const nextLeads = (leadsResult.data || []) as TaskLead[];
+      const profileIds = Array.from(new Set([
+        ...nextTasks.map((task) => task.responsavel_profile_id).filter(Boolean),
+        ...nextLeads.map((lead) => lead.responsavel_profile_id).filter(Boolean),
+      ])) as string[];
+      const profilesResult = profileIds.length
+        ? await supabase
+            .from('profiles')
+            .select('id,nome,email')
+            .in('id', profileIds)
+        : { data: [], error: null };
       if (profilesResult.error) throw profilesResult.error;
 
-      setLeadsById(Object.fromEntries(((leadsResult.data || []) as TaskLead[]).map((lead) => [lead.id, lead])));
+      setLeadsById(Object.fromEntries(nextLeads.map((lead) => [lead.id, lead])));
       setBrokersById(Object.fromEntries(((brokersResult.data || []) as BrokerRow[]).map((broker) => [broker.id, broker])));
       setProfilesById(Object.fromEntries(((profilesResult.data || []) as ProfileRow[]).map((item) => [item.id, item])));
     } catch (err) {
@@ -213,7 +218,8 @@ export default function TarefasPage() {
     return tasks.filter((task) => {
       const lead = leadsById[task.lead_id];
       const broker = task.corretor_id ? brokersById[task.corretor_id] : null;
-      const responsible = task.responsavel_profile_id ? profilesById[task.responsavel_profile_id] : null;
+      const responsibleId = task.responsavel_profile_id || lead?.responsavel_profile_id || null;
+      const responsible = responsibleId ? profilesById[responsibleId] : null;
       const haystack = [
         task.titulo,
         task.descricao,
@@ -312,11 +318,18 @@ export default function TarefasPage() {
             {visibleTasks.map((task) => {
               const lead = leadsById[task.lead_id];
               const broker = task.corretor_id ? brokersById[task.corretor_id] : null;
-              const responsible = task.responsavel_profile_id ? profilesById[task.responsavel_profile_id] : null;
+              const responsibleId = task.responsavel_profile_id || lead?.responsavel_profile_id || null;
+              const responsible = responsibleId ? profilesById[responsibleId] : null;
               const badge = getTaskBadge(task);
 
               return (
-                <div key={task.id} className="grid grid-cols-[42px_minmax(260px,1.4fr)_130px_190px_minmax(160px,0.8fr)_minmax(180px,0.9fr)_150px] items-center px-4 py-4 text-sm">
+                <div
+                  key={task.id}
+                  onClick={() => {
+                    if (task.lead_id) window.location.href = `/crm?lead=${task.lead_id}`;
+                  }}
+                  className="grid cursor-pointer grid-cols-[42px_minmax(260px,1.4fr)_130px_190px_minmax(160px,0.8fr)_minmax(180px,0.9fr)_150px] items-center px-4 py-4 text-sm transition hover:bg-white/5"
+                >
                   <div>
                     <span className="block h-4 w-4 rounded border border-slate-600 bg-slate-950" />
                   </div>
@@ -346,7 +359,10 @@ export default function TarefasPage() {
                     {task.status === 'pendente' ? (
                       <button
                         type="button"
-                        onClick={() => completeTask(task.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void completeTask(task.id);
+                        }}
                         disabled={savingId === task.id}
                         className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
                       >
