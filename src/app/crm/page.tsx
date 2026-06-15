@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
@@ -1561,13 +1562,13 @@ export default function CrmPage() {
               )}
             </div>
 
-            {selectedLead && (
+            {selectedLead && typeof document !== 'undefined' && createPortal((
               <>
               <div
-                className="fixed inset-0 z-[90] bg-slate-950/70 backdrop-blur-md"
+                className="fixed inset-0 z-[9998] bg-slate-950/70 backdrop-blur-md"
                 onClick={closeLeadDetails}
               />
-              <aside className="fixed left-1/2 top-1/2 z-[100] h-[92dvh] max-h-[92dvh] w-[calc(100vw-24px)] max-w-[760px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-y-contain rounded-[2rem] border border-gray-100 bg-white p-5 pb-10 shadow-2xl shadow-slate-950/35 [scrollbar-gutter:stable] sm:w-[min(760px,calc(100vw-48px))] sm:p-6 sm:pb-10">
+              <aside className="fixed left-1/2 top-1/2 z-[9999] h-[92dvh] max-h-[92dvh] w-[calc(100vw-24px)] max-w-[760px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-y-contain rounded-[2rem] border border-gray-100 bg-white p-5 pb-10 shadow-2xl shadow-slate-950/60 [scrollbar-gutter:stable] sm:w-[min(760px,calc(100vw-48px))] sm:p-6 sm:pb-10">
                 <div className="mb-5 flex items-start justify-between gap-4">
                   <div>
                     <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">Cliente selecionado</p>
@@ -1846,7 +1847,7 @@ export default function CrmPage() {
                 </div>
               </aside>
               </>
-            )}
+            ), document.body)}
           </div>
         </>
       ) : (
