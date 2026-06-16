@@ -28,6 +28,15 @@ async function getMessageAndConversation(messageId: string) {
 async function canAccessConversation(profile: any, conversation: any) {
   if (!conversation) return false;
   if (profile.tipo_usuario === 'admin' || profile.tipo_usuario === 'account_manager') return true;
+  if (profile.tipo_usuario === 'corretor_membro') {
+    if (!conversation.lead_id) return false;
+    const { data: lead } = await supabaseAdmin
+      .from('leads')
+      .select('responsavel_profile_id')
+      .eq('id', conversation.lead_id)
+      .maybeSingle();
+    return lead?.responsavel_profile_id === profile.id;
+  }
   if (!profile.corretor_id) return false;
   if (profile.corretor_id === conversation.corretor_id) return true;
 

@@ -47,6 +47,7 @@ type Conversation = {
   status: string;
   ultima_mensagem_at: string | null;
   agentName?: string;
+  responsibleProfileId?: string | null;
   expirationTime?: string;
   protocolNumber?: string;
   tags?: string[];
@@ -106,6 +107,7 @@ export default function BrokerInboxPage() {
   // Tab Filtering & Search
   const [activeFilter, setActiveFilter] = useState<'chatting' | 'waiting' | 'closed' | 'alerts'>('chatting');
   const [searchTerm, setSearchTerm] = useState('');
+  const [responsibleFilter, setResponsibleFilter] = useState('todos');
 
   // Audio Recording States
   const [isRecording, setIsRecording] = useState(false);
@@ -264,7 +266,8 @@ export default function BrokerInboxPage() {
     const urlPhone = params.get('telefone') || '';
 
     let idsToFetch = [profile.corretor_id];
-    if (profile.nome_empresa) {
+    const isTeamMember = profile.tipo_usuario === 'corretor_membro';
+    if (!isTeamMember && profile.nome_empresa) {
       const { data: siblings } = await supabase
         .from('corretores')
         .select('id')
@@ -274,17 +277,24 @@ export default function BrokerInboxPage() {
       }
     }
 
-    const { data } = await supabase
+    let conversationsQuery = supabase
       .from('whatsapp_conversas')
-      .select('*, leads(id, nome, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))')
+      .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
       .in('corretor_id', idsToFetch)
       .order('ultima_mensagem_at', { ascending: false })
       .limit(80);
+
+    if (isTeamMember) {
+      conversationsQuery = conversationsQuery.eq('leads.responsavel_profile_id', profile.id);
+    }
+
+    const { data } = await conversationsQuery;
 
     const rows = (data || []).map((row: any) => ({
       ...row,
       status: row.status === 'aguardando' ? 'espera' : row.status === 'resolvida' ? 'fechada' : row.status,
       agentName: (row.leads as any)?.responsavel_membro?.nome || profile?.nome || 'Fila Geral',
+      responsibleProfileId: (row.leads as any)?.responsavel_profile_id || null,
       expirationTime: '03/06 às 23:07',
       protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
       tags: row.tags || ['Lead Frio'],
@@ -307,9 +317,16 @@ export default function BrokerInboxPage() {
         if (leadId && contactName === 'Novo Contato') {
           const { data: leadData } = await supabase
             .from('leads')
-            .select('nome')
+            .select('nome,responsavel_profile_id')
             .eq('id', leadId)
             .maybeSingle();
+          if (isTeamMember && leadData?.responsavel_profile_id !== profile.id) {
+            setConversations(rows);
+            setSelectedConversation(rows[0] || null);
+            setLoading(false);
+            void fetchConnectionStatus();
+            return;
+          }
           if (leadData?.nome) {
             contactName = leadData.nome;
           }
@@ -1220,7 +1237,24 @@ export default function BrokerInboxPage() {
   };
 
   // Tab Filtering logic
-  const filteredConversations = conversations.filter((c) => {
+  const responsibleOptions = Array.from(
+    new Map(
+      conversations
+        .filter((conversation) => conversation.responsibleProfileId)
+        .map((conversation) => [
+          conversation.responsibleProfileId as string,
+          { id: conversation.responsibleProfileId as string, name: conversation.agentName || 'Responsavel' }
+        ])
+    ).values()
+  ).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  const conversationsByResponsible = conversations.filter((conversation) => {
+    if (responsibleFilter === 'todos') return true;
+    if (responsibleFilter === 'sem_responsavel') return !conversation.responsibleProfileId;
+    return conversation.responsibleProfileId === responsibleFilter;
+  });
+
+  const filteredConversations = conversationsByResponsible.filter((c) => {
     // Search filter
     if (searchTerm) {
       const matchName = c.nome_contato?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -1236,9 +1270,9 @@ export default function BrokerInboxPage() {
   });
 
   const getFilterCount = (filter: 'chatting' | 'waiting' | 'closed' | 'alerts') => {
-    if (filter === 'chatting') return conversations.filter(c => c.status === 'aberta' || c.status === 'pausada').length;
-    if (filter === 'waiting') return conversations.filter(c => c.status === 'espera').length;
-    if (filter === 'closed') return conversations.filter(c => c.status === 'fechada').length;
+    if (filter === 'chatting') return conversationsByResponsible.filter(c => c.status === 'aberta' || c.status === 'pausada').length;
+    if (filter === 'waiting') return conversationsByResponsible.filter(c => c.status === 'espera').length;
+    if (filter === 'closed') return conversationsByResponsible.filter(c => c.status === 'fechada').length;
     if (filter === 'alerts') return 0;
     return 0;
   };
@@ -1374,6 +1408,22 @@ export default function BrokerInboxPage() {
                   );
                 })}
               </div>
+
+              {profile?.tipo_usuario !== 'corretor_membro' && (responsibleOptions.length > 1 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
+                <select
+                  value={responsibleFilter}
+                  onChange={(event) => setResponsibleFilter(event.target.value)}
+                  className="w-full rounded-xl border border-white/5 bg-slate-950 px-3 py-2 text-2xs font-black text-white outline-none focus:border-cyan-500/50"
+                >
+                  <option value="todos">Todos responsaveis</option>
+                  {responsibleOptions.map((responsible) => (
+                    <option key={responsible.id} value={responsible.id}>{responsible.name}</option>
+                  ))}
+                  {conversations.some((conversation) => !conversation.responsibleProfileId) && (
+                    <option value="sem_responsavel">Sem responsavel</option>
+                  )}
+                </select>
+              )}
 
               {/* Search Box */}
               <div className="relative">
