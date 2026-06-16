@@ -81,6 +81,31 @@ async function findExistingConversation(corretorId: string, phone: string, leadI
   return data;
 }
 
+async function findAccessibleConversationIdsByPhone(profile: any, conversation: any) {
+  const phone = normalizePhone(conversation?.telefone || '');
+  const digits = phone.replace(/\D/g, '');
+  const last8 = digits.length >= 8 ? digits.slice(-8) : '';
+
+  if (!last8) return [conversation.id];
+
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_conversas')
+    .select('id, lead_id, corretor_id, telefone')
+    .or(`telefone.eq.${phone},telefone.ilike.%${last8}%`)
+    .limit(50);
+
+  if (error) throw error;
+
+  const accessible: string[] = [];
+  for (const candidate of data || []) {
+    if (await canAccessConversation(profile, candidate)) {
+      accessible.push(candidate.id);
+    }
+  }
+
+  return Array.from(new Set([conversation.id, ...accessible])).filter(Boolean);
+}
+
 export async function GET(request: Request) {
   try {
     const limited = rateLimit(request, 'inbox:messages:read', { limit: 120, windowMs: 60_000 });
@@ -100,10 +125,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
     }
 
+    const conversationIds = await findAccessibleConversationIdsByPhone(guard.profile, conversation);
+
     const { data, error } = await supabaseAdmin
       .from('whatsapp_mensagens')
       .select('*')
-      .eq('conversa_id', conversationId)
+      .in('conversa_id', conversationIds)
       .order('created_at', { ascending: true })
       .limit(300);
 
