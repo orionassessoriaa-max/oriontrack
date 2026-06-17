@@ -5,6 +5,44 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 
+function pickMediaMessage(metadata: any) {
+  const roots = [
+    metadata?.message,
+    metadata?.data?.message,
+    metadata?.message?.message,
+    metadata?.data?.message?.message,
+  ];
+
+  for (const root of roots) {
+    if (!root) continue;
+    const media =
+      root.audioMessage ||
+      root.imageMessage ||
+      root.videoMessage ||
+      root.documentMessage ||
+      root.stickerMessage;
+    if (media) return media;
+  }
+
+  return null;
+}
+
+function pickMediaUrl(metadata: any) {
+  return (
+    metadata?.message?.audioMessage?.url ||
+    metadata?.data?.message?.audioMessage?.url ||
+    metadata?.message?.imageMessage?.url ||
+    metadata?.data?.message?.imageMessage?.url ||
+    metadata?.message?.videoMessage?.url ||
+    metadata?.data?.message?.videoMessage?.url ||
+    metadata?.message?.documentMessage?.url ||
+    metadata?.data?.message?.documentMessage?.url ||
+    metadata?.url ||
+    metadata?.data?.url ||
+    null
+  );
+}
+
 async function getMessageAndConversation(messageId: string) {
   const { data: message, error: msgError } = await supabaseAdmin
     .from('whatsapp_mensagens')
@@ -74,8 +112,26 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
     }
 
+    const mediaMessage = pickMediaMessage(message.metadata);
+    const mimeType =
+      mediaMessage?.mimetype ||
+      mediaMessage?.mimeType ||
+      message.metadata?.mimetype ||
+      message.metadata?.mimeType ||
+      'application/octet-stream';
+    const fileName =
+      mediaMessage?.fileName ||
+      mediaMessage?.filename ||
+      message.metadata?.fileName ||
+      message.metadata?.filename ||
+      null;
+
     const providerId = message.provider_message_id;
     if (!providerId) {
+      const directUrl = pickMediaUrl(message.metadata);
+      if (directUrl) {
+        return NextResponse.json({ url: directUrl, mimeType, fileName });
+      }
       return NextResponse.json({ error: 'Esta mensagem nao possui ID do provedor de WhatsApp.' }, { status: 400 });
     }
 
@@ -111,22 +167,23 @@ export async function GET(request: Request) {
         }),
       }, instanceApiKey);
 
-      if (payload?.base64) {
-        return NextResponse.json({ base64: payload.base64 });
+      const base64 = payload?.base64 || payload?.data?.base64 || payload?.media || payload?.data?.media;
+      if (base64) {
+        return NextResponse.json({
+          base64,
+          mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
+          fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
+        });
       }
     } catch (evoErr: any) {
       console.error('[Media API Error calling Evolution]', evoErr);
     }
 
     // Fallback: verificar se existe URL de midia no metadata
-    const directUrl = 
-      message.metadata?.message?.audioMessage?.url || 
-      message.metadata?.data?.message?.audioMessage?.url ||
-      message.metadata?.message?.imageMessage?.url ||
-      message.metadata?.data?.message?.imageMessage?.url;
+    const directUrl = pickMediaUrl(message.metadata);
 
     if (directUrl) {
-      return NextResponse.json({ url: directUrl });
+      return NextResponse.json({ url: directUrl, mimeType, fileName });
     }
 
     return NextResponse.json({ error: 'Nao consegui extrair a midia desta mensagem da Evolution API.' }, { status: 404 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
@@ -35,7 +35,10 @@ import {
   Sparkles,
   Settings,
   Play,
-  Pause
+  Pause,
+  Image as ImageIcon,
+  Video,
+  Download
 } from 'lucide-react';
 
 type Conversation = {
@@ -69,6 +72,87 @@ type InboxMessage = {
   provider_message_id?: string | null;
   metadata?: any;
 };
+
+type MessageMediaKind = 'audio' | 'image' | 'video' | 'file' | null;
+
+function readNestedMedia(message: InboxMessage) {
+  const metadata = message.metadata || {};
+  const roots = [
+    metadata.message,
+    metadata.data?.message,
+    metadata.message?.message,
+    metadata.data?.message?.message,
+  ];
+
+  for (const root of roots) {
+    if (!root) continue;
+    const media =
+      root.audioMessage ||
+      root.imageMessage ||
+      root.videoMessage ||
+      root.documentMessage ||
+      root.stickerMessage;
+    if (media) return media;
+  }
+
+  return null;
+}
+
+function getMessageMimeType(message: InboxMessage) {
+  const metadata = message.metadata || {};
+  const media = readNestedMedia(message);
+  return String(
+    media?.mimetype ||
+    media?.mimeType ||
+    metadata.mimetype ||
+    metadata.mimeType ||
+    metadata.mediaMimeType ||
+    metadata.contentType ||
+    ''
+  ).toLowerCase();
+}
+
+function getMessageFileName(message: InboxMessage) {
+  const metadata = message.metadata || {};
+  const media = readNestedMedia(message);
+  return String(
+    media?.fileName ||
+    media?.filename ||
+    metadata.fileName ||
+    metadata.filename ||
+    metadata.caption ||
+    ''
+  ).trim();
+}
+
+function getMessageMediaKind(message: InboxMessage): MessageMediaKind {
+  const metadata = message.metadata || {};
+  const text = String(message.mensagem || '').toLowerCase();
+  const mime = getMessageMimeType(message);
+  const messageType = String(
+    metadata.messageType ||
+    metadata.type ||
+    metadata.mediaType ||
+    metadata.data?.messageType ||
+    ''
+  ).toLowerCase();
+
+  if (message.isAudio || mime.startsWith('audio/') || messageType.includes('audio')) return 'audio';
+  if (mime.startsWith('image/') || messageType.includes('image') || text.includes('imagem')) return 'image';
+  if (mime.startsWith('video/') || messageType.includes('video') || text.includes('video') || text.includes('vã­deo') || text.includes('vídeo')) return 'video';
+  if (mime || messageType.includes('document') || messageType.includes('file') || text.includes('arquivo') || text.includes('documento')) return 'file';
+  return null;
+}
+
+function base64ToObjectUrl(base64: string, mimeType: string) {
+  const cleanBase64 = base64.includes(';base64,') ? base64.split(';base64,')[1] : base64;
+  const byteCharacters = atob(cleanBase64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  return URL.createObjectURL(new Blob([new Uint8Array(byteNumbers)], { type: mimeType }));
+}
 
 const TEMPLATES_PADRAO = [
   { id: '1', title: 'Boas-vindas Comercial', text: 'Ola! Tudo bem? Como posso te ajudar hoje com a cotacao do seu plano de saude?' },
@@ -123,6 +207,9 @@ export default function BrokerInboxPage() {
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [audioUrls, setAudioUrls] = useState<Record<string, string>>({});
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
+  const [mediaUrls, setMediaUrls] = useState<Record<string, { url: string; mimeType: string; fileName?: string }>>({});
+  const [loadingMediaId, setLoadingMediaId] = useState<string | null>(null);
+  const [mediaLoadErrors, setMediaLoadErrors] = useState<Record<string, boolean>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Template Modal
@@ -933,6 +1020,53 @@ export default function BrokerInboxPage() {
     };
   };
 
+  const fetchMessageMedia = useCallback(async (message: InboxMessage) => {
+    const cached = mediaUrls[message.id];
+    if (cached) return cached;
+    setMediaLoadErrors(prev => {
+      if (!prev[message.id]) return prev;
+      const next = { ...prev };
+      delete next[message.id];
+      return next;
+    });
+
+    setLoadingMediaId(message.id);
+    try {
+      const token = await getToken();
+      const response = await fetch(`/api/inbox/messages/media?message_id=${message.id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Nao foi possivel carregar este arquivo.');
+      }
+
+      const mimeType = data.mimeType || data.mimetype || getMessageMimeType(message) || 'application/octet-stream';
+      const fileName = data.fileName || data.filename || getMessageFileName(message) || undefined;
+      const url = data.base64 ? base64ToObjectUrl(data.base64, mimeType) : data.url;
+      if (!url) throw new Error('Arquivo indisponivel.');
+
+      const media = { url, mimeType, fileName };
+      setMediaUrls(prev => ({ ...prev, [message.id]: media }));
+      return media;
+    } finally {
+      setLoadingMediaId(null);
+    }
+  }, [mediaUrls, profile?.id]);
+
+  const openMessageMedia = async (message: InboxMessage) => {
+    try {
+      const media = await fetchMessageMedia(message);
+      window.open(media.url, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      console.error('Erro ao abrir arquivo:', err);
+      alert(err.message || 'Nao foi possivel abrir o arquivo.');
+    }
+  };
+
   const handlePlayAudio = async (messageId: string) => {
     if (playingAudioId === messageId) {
       audioRef.current?.pause();
@@ -956,15 +1090,7 @@ export default function BrokerInboxPage() {
       });
       const data = await response.json();
       if (data.base64) {
-        const base64Data = data.base64.includes(';base64,') ? data.base64.split(';base64,')[1] : data.base64;
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'audio/ogg' });
-        const url = URL.createObjectURL(blob);
+        const url = base64ToObjectUrl(data.base64, data.mimeType || 'audio/ogg');
         
         setAudioUrls(prev => ({ ...prev, [messageId]: url }));
         playUrl(url, messageId);
@@ -1422,6 +1548,18 @@ export default function BrokerInboxPage() {
     m.mensagem.toLowerCase().includes(searchChatQuery.toLowerCase().trim())
   );
 
+  useEffect(() => {
+    const imageMessages = filteredChatMessages
+      .filter(message => getMessageMediaKind(message) === 'image' && !mediaUrls[message.id] && loadingMediaId !== message.id && !mediaLoadErrors[message.id])
+      .slice(0, 10);
+
+    imageMessages.forEach(message => {
+      void fetchMessageMedia(message).catch(() => {
+        setMediaLoadErrors(prev => ({ ...prev, [message.id]: true }));
+      });
+    });
+  }, [filteredChatMessages, mediaUrls, loadingMediaId, mediaLoadErrors, fetchMessageMedia]);
+
   return (
     <InternalLayout>
       <div className="orion-inbox-shell space-y-6 h-[calc(100vh-120px)] flex flex-col">
@@ -1750,6 +1888,10 @@ export default function BrokerInboxPage() {
                       const isMine = message.direction === 'outbound';
                       const isPlaying = playingAudioId === message.id;
                       const isLoading = loadingAudioId === message.id;
+                      const mediaKind = getMessageMediaKind(message);
+                      const media = mediaUrls[message.id];
+                      const isMediaLoading = loadingMediaId === message.id;
+                      const fileName = media?.fileName || getMessageFileName(message) || message.mensagem.replace(/^.*?(Imagem|Arquivo|Video|Vídeo)\s*:?\s*/i, '').replace(/[()]/g, '').trim() || 'Arquivo recebido';
                       return (
                         <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
                           <div className={`max-w-[75%] rounded-[1.5rem] p-3.5 shadow-lg space-y-1.5 ${
@@ -1758,7 +1900,7 @@ export default function BrokerInboxPage() {
                               : 'bg-slate-900 border border-white/5 text-slate-100 rounded-tl-none'
                           }`}>
                             {/* Se for áudio */}
-                            {message.isAudio ? (
+                            {mediaKind === 'audio' ? (
                               <div className="flex items-center gap-3">
                                 <button
                                   onClick={() => handlePlayAudio(message.id)}
@@ -1784,6 +1926,77 @@ export default function BrokerInboxPage() {
                                 </div>
                                 {renderAudioWaveform(isPlaying)}
                               </div>
+                            ) : mediaKind === 'image' ? (
+                              <button
+                                type="button"
+                                onClick={() => openMessageMedia(message)}
+                                className="block w-full text-left"
+                              >
+                                {media?.url ? (
+                                  <img
+                                    src={media.url}
+                                    alt={fileName}
+                                    className="max-h-72 w-full rounded-2xl border border-white/10 bg-black/20 object-cover"
+                                  />
+                                ) : (
+                                  <div className={`flex min-w-48 items-center gap-3 rounded-2xl border p-3 transition ${
+                                    isMine ? 'border-white/15 bg-white/10 hover:bg-white/15' : 'border-cyan-500/20 bg-cyan-950/20 hover:bg-cyan-950/35'
+                                  }`}>
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/20">
+                                      {isMediaLoading ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-black">Imagem</p>
+                                      <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
+                                        {isMediaLoading ? 'Carregando...' : 'Clique para visualizar'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                              </button>
+                            ) : mediaKind === 'video' ? (
+                              <div className="space-y-2">
+                                {media?.url ? (
+                                  <video controls src={media.url} className="max-h-72 w-full rounded-2xl border border-white/10 bg-black/20" />
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => openMessageMedia(message)}
+                                    className={`flex min-w-48 items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                                      isMine ? 'border-white/15 bg-white/10 hover:bg-white/15' : 'border-cyan-500/20 bg-cyan-950/20 hover:bg-cyan-950/35'
+                                    }`}
+                                  >
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/20">
+                                      {isMediaLoading ? <Loader2 size={16} className="animate-spin" /> : <Video size={16} />}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-black">Video</p>
+                                      <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
+                                        {isMediaLoading ? 'Carregando...' : 'Clique para abrir'}
+                                      </p>
+                                    </div>
+                                  </button>
+                                )}
+                              </div>
+                            ) : mediaKind === 'file' ? (
+                              <button
+                                type="button"
+                                onClick={() => openMessageMedia(message)}
+                                className={`flex min-w-52 items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                                  isMine ? 'border-white/15 bg-white/10 hover:bg-white/15' : 'border-cyan-500/20 bg-cyan-950/20 hover:bg-cyan-950/35'
+                                }`}
+                              >
+                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/20">
+                                  {isMediaLoading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-black">{fileName}</p>
+                                  <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
+                                    Clique para abrir arquivo
+                                  </p>
+                                </div>
+                                <Download size={14} className="shrink-0 opacity-80" />
+                              </button>
                             ) : (
                               <p className="text-xs font-bold leading-normal whitespace-pre-wrap">{message.mensagem}</p>
                             )}
