@@ -164,12 +164,16 @@ function resolveAdName(lead: any) {
 }
 
 function buildLeadDetailsMessage(lead: any, intro: string) {
+  const cnpjNumber = notificationValue(lead?.cnpj, '');
+
   return [
     intro,
     '',
     `Nome: ${notificationValue(lead?.nome)}`,
     `Telefone: ${notificationValue(lead?.telefone)}`,
     `Cidade: ${notificationValue(lead?.cidade)}`,
+    `Possui CNPJ: ${notificationValue(lead?.possui_cnpj)}`,
+    ...(cnpjNumber ? [`CNPJ: ${cnpjNumber}`] : []),
     `Investimento: ${notificationValue(lead?.investimento)}`,
     `Tem plano de saude: ${notificationValue(lead?.tem_plano_ativo)}`,
     `Plano atual: ${notificationValue(lead?.plano_atual)}`,
