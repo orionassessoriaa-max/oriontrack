@@ -210,6 +210,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Bot, label: 'Apolo WhatsApp', href: '/admin/configuracoes' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
+    { icon: ClipboardList, label: 'Historico Leads', href: '/historico' },
     { icon: ClipboardList, label: 'Historico', href: '/admin/historico' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Solicitacoes de suporte', href: '/admin/suporte' },
@@ -258,6 +259,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Palette, label: 'Solicitar Criativo', href: '/criativos' },
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Trophy, label: 'Meu time', href: '/time' },
+    { icon: ClipboardList, label: 'Historico', href: '/historico' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
@@ -268,6 +270,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
+    { icon: ClipboardList, label: 'Historico', href: '/historico' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];

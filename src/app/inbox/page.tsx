@@ -138,6 +138,7 @@ export default function BrokerInboxPage() {
   const [leadStatus, setLeadStatus] = useState<string>('Aguardando atendimento');
   const [loadingLead, setLoadingLead] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [leadActivities, setLeadActivities] = useState<any[]>([]);
 
   // Apolo Bot & Close Reason Modal States
   const [showBotConfigModal, setShowBotConfigModal] = useState(false);
@@ -512,19 +513,68 @@ export default function BrokerInboxPage() {
     try {
       const { data, error } = await supabase
         .from('leads')
-        .select('status')
+        .select('status, etiqueta, observacoes')
         .eq('id', leadId)
         .single();
       if (error) throw error;
       if (data) {
         setLeadStatus(normalizeLeadStatus(data.status));
+        setSelectedConversation((current) => current?.lead_id === leadId ? {
+          ...current,
+          tags: data.etiqueta ? [data.etiqueta] : current.tags || [],
+        } : current);
       }
+
+      const { data: activities } = await supabase
+        .from('lead_atividades')
+        .select('*')
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false })
+        .limit(80);
+
+      setLeadActivities(activities || []);
     } catch (err) {
       console.error('Erro ao buscar status do lead:', err);
     } finally {
       setLoadingLead(false);
     }
   };
+
+  async function logLeadActivity(input: { tipo?: string; titulo: string; descricao?: string | null }) {
+    if (!selectedConversation?.lead_id) return null;
+    const { data, error } = await supabase
+      .from('lead_atividades')
+      .insert([{
+        lead_id: selectedConversation.lead_id,
+        profile_id: profile?.id,
+        tipo: input.tipo || 'sistema',
+        titulo: input.titulo,
+        descricao: input.descricao || null,
+      }])
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    if (data) {
+      setLeadActivities((current) => [data, ...current]);
+      setHistoryActivities((current) => [data, ...current]);
+      return data;
+    }
+    return null;
+  }
+
+  function formatActivityDate(value?: string | null) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
 
   const handleUpdateLeadStatus = async (newStatus: string) => {
     if (!selectedConversation?.lead_id) {
@@ -534,18 +584,25 @@ export default function BrokerInboxPage() {
     
     setUpdatingStatus(true);
     try {
-      const { error } = await supabase
-        .from('leads')
-        .update({ status: newStatus })
-        .eq('id', selectedConversation.lead_id);
-        
-      if (error) throw error;
+      const token = await getToken();
+      const response = await fetch(`/api/crm/leads/${selectedConversation.lead_id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(payload.error || 'Erro ao atualizar status no CRM.');
       
       setLeadStatus(newStatus);
+      void fetchLeadDetails(selectedConversation.lead_id);
       alert('Status do Lead atualizado com sucesso no CRM!');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao atualizar status do lead:', err);
-      alert('Erro ao atualizar status no Supabase.');
+      alert(err.message || 'Erro ao atualizar status no Supabase.');
     } finally {
       setUpdatingStatus(false);
     }
@@ -1050,6 +1107,13 @@ export default function BrokerInboxPage() {
         status: 'pendente'
       }]);
       if (error) throw error;
+
+      await logLeadActivity({
+        tipo: 'tarefa',
+        titulo: 'Tarefa criada',
+        descricao: `${taskTitle.trim()}${taskDue ? ` | Prazo: ${formatActivityDate(new Date(taskDue).toISOString())}` : ''}`,
+      });
+
       alert('Tarefa agendada com sucesso!');
       setShowTaskModal(false);
       setTaskTitle('');
@@ -1169,16 +1233,24 @@ export default function BrokerInboxPage() {
   };
 
   // Sidebar notes & tags updates
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (!selectedConversation || !newNote.trim()) return;
-    const updatedNotes = [...(selectedConversation.notes || []), newNote.trim()];
+    const saved = await logLeadActivity({
+      tipo: 'nota',
+      titulo: 'Anotacao interna',
+      descricao: newNote.trim(),
+    });
+    const displayNote = saved
+      ? `${newNote.trim()} - ${formatActivityDate(saved.created_at)}`
+      : `${newNote.trim()} - ${formatActivityDate(new Date().toISOString())}`;
+    const updatedNotes = [...(selectedConversation.notes || []), displayNote];
     const updated = { ...selectedConversation, notes: updatedNotes };
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
     setNewNote('');
   };
 
-  const handleAddTag = (tag: string) => {
+  const handleAddTag = async (tag: string) => {
     if (!selectedConversation || !tag) return;
     const nextTag = tag.trim();
     if (!nextTag) return;
@@ -1187,24 +1259,49 @@ export default function BrokerInboxPage() {
     const updated = { ...selectedConversation, tags: updatedTags };
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+
+    if (selectedConversation.lead_id) {
+      await supabase
+        .from('leads')
+        .update({ etiqueta: nextTag, updated_at: new Date().toISOString() })
+        .eq('id', selectedConversation.lead_id);
+      await logLeadActivity({
+        tipo: 'sistema',
+        titulo: 'Etiqueta adicionada',
+        descricao: nextTag,
+      });
+    }
   };
 
-  const handleRemoveTag = (tag: string) => {
+  const handleRemoveTag = async (tag: string) => {
     if (!selectedConversation) return;
     const updatedTags = (selectedConversation.tags || []).filter(t => t !== tag);
     const updated = { ...selectedConversation, tags: updatedTags };
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+
+    if (selectedConversation.lead_id) {
+      await supabase
+        .from('leads')
+        .update({ etiqueta: updatedTags[0] || null, updated_at: new Date().toISOString() })
+        .eq('id', selectedConversation.lead_id);
+      await logLeadActivity({
+        tipo: 'sistema',
+        titulo: 'Etiqueta removida',
+        descricao: tag,
+      });
+    }
   };
 
-  const handleAddCustomField = () => {
+  const handleAddCustomField = async () => {
     if (!selectedConversation || !customFieldName.trim() || !customFieldValue.trim()) return;
     
     const currentFields = selectedConversation.customFields || [];
     const newField = { key: customFieldName.trim(), value: customFieldValue.trim() };
+    const isUpdate = currentFields.some(f => f.key.toLowerCase() === newField.key.toLowerCase());
     
     let updatedFields;
-    if (currentFields.some(f => f.key.toLowerCase() === newField.key.toLowerCase())) {
+    if (isUpdate) {
       updatedFields = currentFields.map(f => f.key.toLowerCase() === newField.key.toLowerCase() ? newField : f);
     } else {
       updatedFields = [...currentFields, newField];
@@ -1216,14 +1313,26 @@ export default function BrokerInboxPage() {
     
     setCustomFieldName('');
     setCustomFieldValue('');
+
+    await logLeadActivity({
+      tipo: 'sistema',
+      titulo: isUpdate ? 'Campo personalizado atualizado' : 'Campo personalizado criado',
+      descricao: `${newField.key}: ${newField.value}`,
+    });
   };
 
-  const handleRemoveCustomField = (key: string) => {
+  const handleRemoveCustomField = async (key: string) => {
     if (!selectedConversation) return;
     const updatedFields = (selectedConversation.customFields || []).filter(f => f.key !== key);
     const updated = { ...selectedConversation, customFields: updatedFields };
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+
+    await logLeadActivity({
+      tipo: 'sistema',
+      titulo: 'Campo personalizado removido',
+      descricao: key,
+    });
   };
 
   // Handlers for attachments
@@ -1268,6 +1377,14 @@ export default function BrokerInboxPage() {
     if (activeFilter === 'closed') return c.status === 'fechada';
     return true; // fallback
   });
+
+  const internalNotes = leadActivities
+    .filter((activity) => activity.tipo === 'nota')
+    .map((activity) => ({
+      id: activity.id,
+      text: activity.descricao || activity.titulo,
+      createdAt: activity.created_at,
+    }));
 
   const getFilterCount = (filter: 'chatting' | 'waiting' | 'closed' | 'alerts') => {
     if (filter === 'chatting') return conversationsByResponsible.filter(c => c.status === 'aberta' || c.status === 'pausada').length;
@@ -1962,10 +2079,11 @@ export default function BrokerInboxPage() {
 
                   {/* Notes list */}
                   <div className="flex-1 overflow-y-auto bg-slate-950/40 border border-white/5 p-3 rounded-2xl space-y-2 max-h-[140px]">
-                    {selectedConversation.notes && selectedConversation.notes.length > 0 ? (
-                      selectedConversation.notes.map((note, idx) => (
-                        <div key={idx} className="bg-slate-950 p-2.5 rounded-xl border border-white/2 text-[10px] font-bold text-slate-300 leading-normal">
-                          {note}
+                    {internalNotes.length > 0 ? (
+                      internalNotes.map((note) => (
+                        <div key={note.id} className="bg-slate-950 p-2.5 rounded-xl border border-white/2 text-[10px] font-bold text-slate-300 leading-normal">
+                          <p>{note.text}</p>
+                          <p className="mt-1 text-[8px] font-black uppercase tracking-widest text-cyan-400">{formatActivityDate(note.createdAt)}</p>
                         </div>
                       ))
                     ) : (

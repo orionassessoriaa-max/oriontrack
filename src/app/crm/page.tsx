@@ -1112,13 +1112,33 @@ export default function CrmPage() {
       return;
     }
 
+    await supabase.from('lead_atividades').insert([{
+      lead_id: selectedLead.id,
+      profile_id: profile?.id,
+      tipo: 'tarefa',
+      titulo: 'Tarefa criada',
+      descricao: `${taskTitle.trim()}${taskDue ? ` | Prazo: ${format(new Date(taskDue), 'dd/MM/yyyy HH:mm', { locale: ptBR })}` : ''}`,
+    }]);
+
     setTaskTitle('');
     setTaskDue('');
+    await fetchTimeline(selectedLead.id);
     await fetchCrm();
   }
 
   async function completeTask(taskId: string) {
+    const task = tarefas.find((item) => item.id === taskId);
     await supabase.from('lead_tarefas').update({ status: 'concluida', updated_at: new Date().toISOString() }).eq('id', taskId);
+    if (task) {
+      await supabase.from('lead_atividades').insert([{
+        lead_id: task.lead_id,
+        profile_id: profile?.id,
+        tipo: 'tarefa',
+        titulo: 'Tarefa concluida',
+        descricao: task.titulo,
+      }]);
+      if (selectedLead?.id === task.lead_id) await fetchTimeline(task.lead_id);
+    }
     await fetchCrm();
   }
 
