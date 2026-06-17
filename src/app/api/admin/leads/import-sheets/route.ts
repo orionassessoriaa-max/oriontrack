@@ -596,7 +596,6 @@ function buildNotes(row: CsvRow) {
     pick(row, ['hospitais']),
     pick(row, ['redes de preferencia']),
     pick(row, ['negocio etapa', 'negocio - etapa']),
-    utms,
   ].filter(Boolean);
 
   return notes.join(' | ');

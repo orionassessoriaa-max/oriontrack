@@ -39,6 +39,6 @@ export function cleanLeadObservationText(value?: string | null) {
   return String(value || '')
     .split('|')
     .map((part) => part.trim())
-    .filter((part) => part && !part.startsWith(IMPORT_WARNING_PREFIX))
+    .filter((part) => part && !part.startsWith(IMPORT_WARNING_PREFIX) && !/^utm_(source|medium|campaign|term|content)\s*:/i.test(part))
     .join(' | ');
 }

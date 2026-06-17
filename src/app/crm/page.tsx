@@ -1770,7 +1770,7 @@ export default function CrmPage() {
 
                 {selectedLead.observacoes && cleanLeadObservationText(selectedLead.observacoes) && (
                   <div className="mb-5 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
-                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">UTMs / observacoes da planilha</p>
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Observacoes da planilha</p>
                     <p className="text-sm font-bold leading-relaxed text-slate-600">{cleanLeadObservationText(selectedLead.observacoes)}</p>
                   </div>
                 )}
