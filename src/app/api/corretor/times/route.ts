@@ -163,6 +163,32 @@ async function getAssignableProfiles(corretorIds: string[]) {
   return data || [];
 }
 
+async function getTeamLeads(corretorIds: string[]) {
+  const pageSize = 1000;
+  let page = 0;
+  let results: any[] = [];
+
+  while (true) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error } = await supabaseAdmin
+      .from('leads')
+      .select('id, nome, telefone, status, cidade, investimento, valor_negociacao, valor_venda, valor_comissao, responsavel_membro_id, responsavel_profile_id, data_entrada, updated_at')
+      .in('corretor_id', corretorIds)
+      .order('data_entrada', { ascending: false, nullsFirst: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    const batch = data || [];
+    results = results.concat(batch);
+    if (batch.length < pageSize) break;
+    page += 1;
+  }
+
+  return results;
+}
+
 export async function GET(request: Request) {
   try {
     const guard = await requireUser(request);
@@ -242,18 +268,7 @@ export async function GET(request: Request) {
 
     if (membersError) throw membersError;
 
-    let leads: any[] = [];
-    if (guard.profile.tipo_usuario === 'corretor' || guard.profile.tipo_usuario === 'corretor_admin') {
-      const { data: leadsData, error: leadsError } = await supabaseAdmin
-        .from('leads')
-        .select('id, nome, telefone, status, cidade, investimento, valor_negociacao, valor_venda, valor_comissao, responsavel_membro_id, data_entrada, updated_at')
-        .in('corretor_id', scope.corretorIds)
-        .order('data_entrada', { ascending: false, nullsFirst: false })
-        .limit(1000);
-
-      if (leadsError) throw leadsError;
-      leads = leadsData || [];
-    }
+    const leads = await getTeamLeads(scope.corretorIds);
 
     const [ownerProfiles, assignableProfiles] = await Promise.all([
       getOwnerProfiles(scope.corretorIds),

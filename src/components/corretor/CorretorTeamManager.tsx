@@ -66,6 +66,7 @@ type AssignableLead = {
   valor_venda?: number | string | null;
   valor_comissao?: number | string | null;
   responsavel_membro_id: string | null;
+  responsavel_profile_id: string | null;
   data_entrada?: string | null;
   updated_at?: string | null;
 };
@@ -112,6 +113,13 @@ function hoursSince(value?: string | null) {
   return Math.floor(diff / 36_000) / 100;
 }
 
+function leadBelongsToMember(lead: AssignableLead, member: Membro) {
+  return Boolean(
+    (lead.responsavel_membro_id && lead.responsavel_membro_id === member.id) ||
+    (lead.responsavel_profile_id && member.profile_id && lead.responsavel_profile_id === member.profile_id)
+  );
+}
+
 export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerProps) {
   const { profile } = useAuth();
   const { confirmDialog } = useDialog();
@@ -152,7 +160,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
 
   const memberStats = useMemo<MemberStats[]>(() => {
     return membros.map((member) => {
-      const memberLeads = leads.filter((lead) => lead.responsavel_membro_id === member.id);
+      const memberLeads = leads.filter((lead) => leadBelongsToMember(lead, member));
       const stats = memberLeads.reduce((acc, lead) => {
         const status = normalizeStatus(lead.status);
         const isSale = status.includes('venda');
@@ -186,7 +194,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   }, [membros, leads]);
 
   const teamSummary = useMemo(() => {
-    const assigned = leads.filter((lead) => lead.responsavel_membro_id).length;
+    const assigned = leads.filter((lead) => membros.some((member) => leadBelongsToMember(lead, member))).length;
     const sales = memberStats.reduce((sum, member) => sum + member.vendas, 0);
     const semResposta = memberStats.reduce((sum, member) => sum + member.semResposta, 0);
     const comissao = memberStats.reduce((sum, member) => sum + member.comissao, 0);
@@ -208,7 +216,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       receita,
       conversion: leads.length ? Math.round((sales / leads.length) * 100) : 0,
     };
-  }, [leads, memberStats]);
+  }, [leads, membros, memberStats]);
 
   const ranking = useMemo(() => {
     return [...memberStats].sort((a, b) => b.vendas - a.vendas || b.comissao - a.comissao || b.totalLeads - a.totalLeads);
