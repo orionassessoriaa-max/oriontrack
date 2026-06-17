@@ -17,7 +17,8 @@ import {
   RotateCcw,
   Trash2,
   Trophy,
-  Users
+  Users,
+  Plus
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadStatus } from '@/types';
@@ -144,6 +145,19 @@ type TeamMember = {
   tipo_usuario?: string | null;
 };
 
+const EMPTY_MANUAL_LEAD = {
+  nome: '',
+  telefone: '',
+  idades: '',
+  possui_cnpj: 'Nao informado',
+  cnpj: '',
+  tem_plano_ativo: 'Nao informado',
+  plano_atual: '',
+  investimento: '',
+  cidade: '',
+  responsavel_membro_id: 'unassigned',
+};
+
 function noteValue(lead: Lead, key: string) {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = String(lead.observacoes || '').match(new RegExp(`${escaped}:\\s*([^|]+)`, 'i'));
@@ -188,6 +202,10 @@ export default function BrokerLeadsPage() {
   const [responsavelFilter, setResponsavelFilter] = useState('todos');
   const [showCrmModal, setShowCrmModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showManualLeadModal, setShowManualLeadModal] = useState(false);
+  const [manualLeadForm, setManualLeadForm] = useState(EMPTY_MANUAL_LEAD);
+  const [creatingManualLead, setCreatingManualLead] = useState(false);
+  const [manualLeadError, setManualLeadError] = useState<string | null>(null);
   const [crmApiUrl, setCrmApiUrl] = useState('');
   const [sheetUrl, setSheetUrl] = useState('');
   const [importing, setImporting] = useState(false);
@@ -206,6 +224,7 @@ export default function BrokerLeadsPage() {
     actualProfile?.tipo_usuario === 'admin'
   );
   const canManageLeadResponsible = canAssignTeamLeads;
+  const canCreateManualLead = profile?.tipo_usuario === 'corretor_admin';
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');
@@ -599,6 +618,56 @@ export default function BrokerLeadsPage() {
     await fetchLeads(0, false);
   };
 
+  const createManualLead = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!profile?.corretor_id || !canCreateManualLead) return;
+    if (!manualLeadForm.nome.trim() || !manualLeadForm.telefone.trim()) {
+      setManualLeadError('Informe nome e telefone do lead.');
+      return;
+    }
+
+    setCreatingManualLead(true);
+    setManualLeadError(null);
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setCreatingManualLead(false);
+      setManualLeadError('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    const response = await fetch('/api/admin/leads', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        corretor_id: profile.corretor_id,
+        ...manualLeadForm,
+        status: 'Aguardando atendimento',
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    setCreatingManualLead(false);
+
+    if (!response.ok) {
+      setManualLeadError(payload.error || 'Erro ao criar lead.');
+      return;
+    }
+
+    if (payload.lead) {
+      setLeads((current) => [{ ...payload.lead, status: normalizeLeadStatus(payload.lead.status) }, ...current]);
+    } else {
+      await fetchLeads(0, false);
+    }
+
+    setManualLeadForm(EMPTY_MANUAL_LEAD);
+    setShowManualLeadModal(false);
+  };
+
   const filteredLeads = leads.filter(lead => {
     const leadTab = tabLabel(lead.operadora);
     const searchMatch =
@@ -776,7 +845,18 @@ export default function BrokerLeadsPage() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Leads</h1>
           <p className="font-medium text-gray-500">Lista detalhada com filtros, status comercial, página de origem e UTMs.</p>
         </div>
-        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3 md:w-auto">
+        <div className={`grid w-full grid-cols-1 gap-3 md:w-auto ${canCreateManualLead ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+          {canCreateManualLead && (
+            <button
+              onClick={() => {
+                setManualLeadError(null);
+                setShowManualLeadModal(true);
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-100 bg-cyan-50 px-5 py-3 font-black text-cyan-700 transition-all hover:bg-cyan-100"
+            >
+              <Plus size={18} /> Adicionar lead
+            </button>
+          )}
           <button
             onClick={() => setShowCrmModal(true)}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-5 py-3 font-black text-blue-600 transition-all hover:bg-blue-100"
@@ -1217,6 +1297,152 @@ export default function BrokerLeadsPage() {
               <button disabled={savingCrm} className="flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 py-5 font-black text-white shadow-xl shadow-blue-600/20 hover:bg-blue-700 disabled:opacity-50">
                 {savingCrm ? <Loader2 className="animate-spin" size={20} /> : <><Save size={18} /> Salvar conexao</>}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showManualLeadModal && canCreateManualLead && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md sm:p-6">
+          <div className="max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl sm:rounded-[2.5rem]">
+            <div className="flex items-center justify-between border-b border-gray-100 p-5 sm:p-8">
+              <div>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-cyan-600">Cadastro manual</p>
+                <h2 className="text-xl font-black text-gray-900">Adicionar lead</h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">Selecione o responsavel para avisar automaticamente.</p>
+              </div>
+              <button onClick={() => setShowManualLeadModal(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100">
+                <X size={22} />
+              </button>
+            </div>
+            <form onSubmit={createManualLead} className="space-y-5 p-5 sm:p-8">
+              {manualLeadError && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-black text-red-600">
+                  {manualLeadError}
+                </div>
+              )}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome</label>
+                  <input
+                    required
+                    value={manualLeadForm.nome}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, nome: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    placeholder="Nome do cliente"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</label>
+                  <input
+                    required
+                    value={manualLeadForm.telefone}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, telefone: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    placeholder="55 11 99999-9999"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Responsavel</label>
+                  <select
+                    value={manualLeadForm.responsavel_membro_id}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, responsavel_membro_id: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option value="unassigned">Sem responsavel</option>
+                    {teamMembers.map((member) => (
+                      <option key={member.id} value={member.id}>{member.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Cidade</label>
+                  <input
+                    value={manualLeadForm.cidade}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, cidade: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    placeholder="Cidade"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Idade</label>
+                  <input
+                    value={manualLeadForm.idades}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, idades: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    placeholder="Ex: 32"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Investimento</label>
+                  <input
+                    value={manualLeadForm.investimento}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, investimento: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    placeholder="Ex: Ate R$2.000,00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Possui CNPJ?</label>
+                  <select
+                    value={manualLeadForm.possui_cnpj}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, possui_cnpj: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option>Sim</option>
+                    <option>Nao</option>
+                    <option>Tenho MEI</option>
+                    <option>Nao informado</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">CNPJ</label>
+                  <input
+                    value={manualLeadForm.cnpj}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, cnpj: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    placeholder="Opcional"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Tem plano ativo?</label>
+                  <select
+                    value={manualLeadForm.tem_plano_ativo}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, tem_plano_ativo: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option>Sim</option>
+                    <option>Nao</option>
+                    <option>Nao informado</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Plano atual</label>
+                  <input
+                    value={manualLeadForm.plano_atual}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, plano_atual: e.target.value }))}
+                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    placeholder="Opcional"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowManualLeadModal(false)}
+                  className="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-600 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={creatingManualLead}
+                  className="flex items-center justify-center gap-3 rounded-2xl bg-cyan-600 px-6 py-4 text-sm font-black text-white shadow-xl shadow-cyan-600/20 hover:bg-cyan-700 disabled:opacity-50"
+                >
+                  {creatingManualLead ? <Loader2 className="animate-spin" size={18} /> : <><Plus size={18} /> Criar lead</>}
+                </button>
+              </div>
             </form>
           </div>
         </div>

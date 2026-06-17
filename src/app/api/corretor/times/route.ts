@@ -17,6 +17,7 @@ type GuardProfile = {
 
 const DEFAULT_LEAD_NOTIFICATION_MODE = 'responsavel_e_admin_se_integrante';
 const LEAD_NOTIFICATION_MODES = ['responsavel_apenas', 'responsavel_e_admin_se_integrante', 'responsavel_e_admins'];
+const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
 
 function normalizeLeadNotificationMode(value: unknown) {
   const mode = String(value || '').trim();
@@ -147,7 +148,7 @@ async function getOwnerProfiles(corretorIds: string[]) {
     .select('id, nome, email, email_real')
     .in('tipo_usuario', ['corretor', 'corretor_admin'])
     .in('corretor_id', corretorIds)
-    .eq('status', 'active');
+    .in('status', ACTIVE_PROFILE_STATUSES);
 
   return data || [];
 }
@@ -158,7 +159,7 @@ async function getAssignableProfiles(corretorIds: string[]) {
     .select('id, nome, email, email_real, tipo_usuario, corretor_id')
     .in('corretor_id', corretorIds)
     .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
-    .eq('status', 'active');
+    .in('status', ACTIVE_PROFILE_STATUSES);
 
   return data || [];
 }
@@ -818,7 +819,7 @@ export async function POST(request: Request) {
           .eq('id', profileId)
           .in('corretor_id', scope.corretorIds)
           .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
-          .eq('status', 'active')
+          .in('status', ACTIVE_PROFILE_STATUSES)
           .maybeSingle();
 
         if (!assignableProfile) return NextResponse.json({ error: 'Responsavel nao encontrado nesta conta.' }, { status: 404 });
