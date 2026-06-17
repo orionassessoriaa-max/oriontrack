@@ -52,84 +52,36 @@ export default function HistoricoPage() {
   const isTeamMember = profile?.tipo_usuario === 'corretor_membro';
   const canFilterResponsible = !isTeamMember;
 
-  async function resolveBrokerScope() {
-    const simulatedId = typeof window !== 'undefined' ? window.sessionStorage.getItem('orion:viewing_corretor_id') : null;
-    const brokerRole = ['corretor', 'corretor_admin', 'corretor_membro'].includes(profile?.tipo_usuario || '');
-    const baseBrokerId = simulatedId || (brokerRole ? profile?.corretor_id : null);
-    if (!baseBrokerId) return [] as string[];
-
-    let brokerIds = [baseBrokerId];
-    const { data: brokerRow } = await supabase
-      .from('corretores')
-      .select('id,nome_empresa')
-      .eq('id', baseBrokerId)
-      .maybeSingle();
-
-    if (brokerRow?.nome_empresa) {
-      const { data: siblings } = await supabase
-        .from('corretores')
-        .select('id')
-        .eq('nome_empresa', brokerRow.nome_empresa);
-      if (siblings?.length) brokerIds = siblings.map((item) => item.id);
-    }
-
-    return brokerIds;
-  }
-
   async function fetchHistory() {
     if (!profile) return;
     setLoading(true);
     setError(null);
 
     try {
-      const brokerIds = await resolveBrokerScope();
-      let leadsQuery = supabase
-        .from('leads')
-        .select('id,nome,telefone,status,cidade,corretor_id,responsavel_profile_id')
-        .order('data_entrada', { ascending: false, nullsFirst: false })
-        .limit(1500);
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
 
-      if (brokerIds.length > 0) leadsQuery = leadsQuery.in('corretor_id', brokerIds);
-      if (profile.tipo_usuario === 'corretor_membro') leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
+      const simulatedId = typeof window !== 'undefined' ? window.sessionStorage.getItem('orion:viewing_corretor_id') : null;
+      const params = new URLSearchParams();
+      if (simulatedId) params.set('corretor_id', simulatedId);
 
-      const { data: leadsData, error: leadsError } = await leadsQuery;
-      if (leadsError) throw leadsError;
+      const response = await fetch(`/api/historico/leads${params.toString() ? `?${params.toString()}` : ''}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Erro ao carregar historico.');
 
-      const nextLeads = (leadsData || []) as TimelineLead[];
-      const leadIds = nextLeads.map((lead) => lead.id);
-
-      let activitiesQuery = supabase
-        .from('lead_atividades')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1000);
-
-      if (leadIds.length > 0) activitiesQuery = activitiesQuery.in('lead_id', leadIds);
-      if (leadIds.length === 0 && profile.tipo_usuario !== 'admin') {
-        setActivities([]);
-        setLeadsById({});
-        setProfilesById({});
-        setLoading(false);
-        return;
-      }
-
-      const { data: activitiesData, error: activitiesError } = await activitiesQuery;
-      if (activitiesError) throw activitiesError;
-
-      const nextActivities = (activitiesData || []) as LeadAtividade[];
-      const profileIds = Array.from(new Set([
-        ...nextLeads.map((lead) => lead.responsavel_profile_id).filter(Boolean),
-        ...nextActivities.map((activity) => activity.profile_id).filter(Boolean),
-      ])) as string[];
-
-      const profilesResult = profileIds.length
-        ? await supabase.from('profiles').select('id,nome,email').in('id', profileIds)
-        : { data: [], error: null };
-      if (profilesResult.error) throw profilesResult.error;
+      const nextLeads = (payload.leads || []) as TimelineLead[];
+      const nextActivities = (payload.activities || []) as LeadAtividade[];
+      const nextProfiles = (payload.profiles || []) as Array<ProfileRow & { email_real?: string | null }>;
 
       setActivities(nextActivities);
       setLeadsById(Object.fromEntries(nextLeads.map((lead) => [lead.id, lead])));
-      setProfilesById(Object.fromEntries(((profilesResult.data || []) as ProfileRow[]).map((item) => [item.id, item])));
+      setProfilesById(Object.fromEntries(nextProfiles.map((item) => [item.id, { ...item, email: item.email_real || item.email }])));
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar historico.');
     } finally {
