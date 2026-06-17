@@ -1491,7 +1491,7 @@ export default function BrokerInboxPage() {
           </div>
 
           {/* COLUMN 2: MIDDLE CHAT CONVERSATION WINDOW */}
-          <div className="orion-inbox-chat flex flex-col bg-slate-900/10 border-r border-white/5 h-full overflow-hidden">
+          <div className="orion-inbox-chat flex flex-col bg-[#050b16] border-r border-white/5 h-full overflow-hidden">
             {selectedConversation ? (
               <>
                 {/* Header do chat */}
@@ -1623,7 +1623,7 @@ export default function BrokerInboxPage() {
                 )}
 
                 {/* Mensagens list */}
-                <div className="orion-inbox-messages flex-1 overflow-y-auto bg-slate-950/20 p-5 space-y-4">
+                <div className="orion-inbox-messages flex-1 overflow-y-auto bg-[#050b16] p-5 space-y-4">
                   {loadingMessages ? (
                     <div className="flex h-full items-center justify-center">
                       <Loader2 className="animate-spin text-cyan-400" size={24} />
@@ -1695,7 +1695,7 @@ export default function BrokerInboxPage() {
                 </div>
 
                 {/* Rodapé de envio de mensagens */}
-                <div className="orion-inbox-composer p-4 border-t border-white/5 bg-slate-900/30 shrink-0">
+                <div className="orion-inbox-composer p-4 border-t border-white/5 bg-[#050b16] shrink-0">
                   
                   {/* Visualizadores de Anexos */}
                   {filePreview && (
