@@ -1516,7 +1516,7 @@ export default function CrmPage() {
                                 )}
                                 <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
                                   <span>CNPJ: {lead.possui_cnpj || '-'}</span>
-                                  <span>Vidas: {lead.idades || '-'}</span>
+                                  <span>Idade: {lead.idades || '-'}</span>
                                   <span className="col-span-2 rounded-xl bg-blue-50 px-2 py-1 text-blue-700">Pagina: {lead.operadora || 'Sem pagina'}</span>
                                   {lead.responsavel_membro?.nome && (
                                     <span className="col-span-2 rounded-xl bg-emerald-50 px-2 py-1 text-emerald-700">Responsavel: {lead.responsavel_membro.nome}</span>
@@ -1686,7 +1686,7 @@ export default function CrmPage() {
                   <div className="mb-5 grid grid-cols-2 gap-3">
                     <InfoCard label="Possui CNPJ?" value={selectedLead.possui_cnpj || '-'} />
                     <InfoCard label="CNPJ" value={selectedLead.cnpj || '-'} />
-                    <InfoCard label="Vidas" value={selectedLead.idades || '-'} />
+                    <InfoCard label="Idade" value={selectedLead.idades || '-'} />
                     <InfoCard label="Plano ativo" value={selectedLead.tem_plano_ativo || '-'} />
                     <InfoCard label="Plano atual" value={selectedLead.plano_atual || '-'} />
                     <InfoCard label="Investimento" value={selectedLead.investimento || '-'} />

@@ -1018,7 +1018,7 @@ Payload: {
                       <span>Perfis rapidos</span>
                     </h3>
                     <p className="mt-1 text-[10px] font-bold text-slate-500">
-                      Monte uma cotacao em um clique e ajuste as vidas depois.
+                      Monte uma cotacao em um clique e ajuste as idades depois.
                     </p>
                   </div>
                   {faixasAtivas.length > 0 && (
@@ -1043,7 +1043,7 @@ Payload: {
                     className="rounded-2xl border border-white/5 bg-white/5 p-4 text-left transition-all hover:border-cyan-500/30 hover:bg-cyan-500/10"
                   >
                     <p className="text-xs font-black uppercase tracking-widest text-white">Casal PF</p>
-                    <p className="mt-1 text-[10px] font-bold text-slate-500">2 vidas individuais</p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-500">2 idades individuais</p>
                   </button>
                   <button
                     type="button"
@@ -1051,7 +1051,7 @@ Payload: {
                     className="rounded-2xl border border-white/5 bg-white/5 p-4 text-left transition-all hover:border-cyan-500/30 hover:bg-cyan-500/10"
                   >
                     <p className="text-xs font-black uppercase tracking-widest text-white">Empresa</p>
-                    <p className="mt-1 text-[10px] font-bold text-slate-500">12 vidas PME</p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-500">12 idades PME</p>
                   </button>
                 </div>
               </div>
@@ -1061,7 +1061,7 @@ Payload: {
                 <div className="flex items-center justify-between">
                   <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-300">
                     <User size={16} className="text-cyan-400" />
-                    <span>Vidas por Faixa Etária</span>
+                    <span>Idades por Faixa Etária</span>
                   </h3>
                   {totalVidas > 0 && (
                     <button
@@ -1088,7 +1088,7 @@ Payload: {
                         <div>
                           <p className="text-xs font-black text-white">{faixa.label}</p>
                           <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                            {quantidade === 1 ? '1 Vida' : `${quantidade} Vidas`}
+                            {quantidade === 1 ? '1 Idade' : `${quantidade} Idades`}
                           </p>
                         </div>
                         
@@ -1131,8 +1131,8 @@ Payload: {
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Total de Vidas</span>
-                  <p className="text-base font-black text-cyan-400">{totalVidas} vidas</p>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Total de Idades</span>
+                  <p className="text-base font-black text-cyan-400">{totalVidas} idades</p>
                 </div>
               </div>
 
@@ -1177,7 +1177,7 @@ Payload: {
                   <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-600/10 text-blue-400 border border-blue-500/10 mb-4 animate-bounce overflow-hidden p-3 bg-white shadow-md">
                     <img src="/orion-empty-logo.png" alt="Orion" className="h-10 w-10 object-contain animate-pulse" />
                   </div>
-                  <h3 className="text-lg font-black text-white">Insira as vidas para começar</h3>
+                  <h3 className="text-lg font-black text-white">Insira as idades para começar</h3>
                   <p className="mt-1 max-w-sm text-xs font-bold leading-relaxed text-slate-500">
                     Ajuste o número de pessoas por faixa etária no painel esquerdo para que o simulador calcule instantaneamente as propostas e preços de todas as operadoras parceiras.
                   </p>
@@ -1247,7 +1247,7 @@ Payload: {
                                 </span>
                               </div>
                               <span className="text-[9px] font-bold text-slate-500 block">
-                                Média de R$ {precoMedio.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} por vida
+                                Média de R$ {precoMedio.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} por idade
                               </span>
                             </div>
                           </div>
@@ -1317,7 +1317,7 @@ Payload: {
                                 <div key={item.label} className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/30 px-3 py-2">
                                   <div>
                                     <p className="text-xs font-black text-white">{item.count}x {item.label}</p>
-                                    <p className="text-[9px] font-bold text-slate-500">R$ {item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} por vida</p>
+                                    <p className="text-[9px] font-bold text-slate-500">R$ {item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} por idade</p>
                                   </div>
                                   <p className="text-xs font-black text-cyan-400">
                                     R$ {item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -1978,7 +1978,7 @@ Payload: {
 
                 {/* Tabela de Vidas e Subtotais */}
                 <div>
-                  <h4 className="text-2xs font-black uppercase tracking-wider text-slate-500 mb-2">Composição da População / Vidas</h4>
+                  <h4 className="text-2xs font-black uppercase tracking-wider text-slate-500 mb-2">Composição da População / Idades</h4>
                   
                   <div className="space-y-1.5">
                     {propostaModal.vidasPorFaixa.map((item, index) => (
@@ -2027,7 +2027,7 @@ Conforme conversamos, preparei uma simulação muito especial de plano de saúde
 🏥 *Plano de Saúde:* ${propostaModal.plano.nome}
 ⚖️ *Coparticipação:* ${propostaModal.plano.coparticipacao === 'Sim' ? 'Sim (mensalidade menor e taxas muito pequenas apenas quando usar)' : 'Não (mensalidade fixa, sem cobrança adicional em exames ou consultas)'}
 💰 *Reembolso para consultas particulares:* ${propostaModal.plano.reembolso !== 'Sem reembolso' ? propostaModal.plano.reembolso : 'Não possui (atendimento completo na rede credenciada)'}
-👥 *Quantidade de pessoas:* ${propostaModal.totalVidas} ${propostaModal.totalVidas === 1 ? 'vida' : 'vidas'}
+👥 *Quantidade de pessoas:* ${propostaModal.totalVidas} ${propostaModal.totalVidas === 1 ? 'idade' : 'idades'}
 
 📊 *Resumo de Valores por Faixa Etária:*
 ${propostaModal.vidasPorFaixa.map(v => `• *${v.count}x ${v.label}:* R$ ${v.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cada (Subtotal: R$ ${v.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`).join('\n')}
@@ -2157,7 +2157,7 @@ Estou aqui para tirar qualquer dúvida e te ajudar a escolher o melhor caminho p
                           R$ {plano.custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                         <span className="text-[9px] font-bold text-slate-500 mt-0.5">
-                          Média: R$ {(plano.custoTotal / totalVidas).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} / vida
+                          Média: R$ {(plano.custoTotal / totalVidas).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} / idade
                         </span>
                       </div>
                     );

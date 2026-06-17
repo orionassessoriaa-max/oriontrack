@@ -146,7 +146,7 @@ export default function BrokerInboxPage() {
   const [welcomeMessage, setWelcomeMessage] = useState('Ola! Seja bem-vindo. Sou o seu assistente virtual. Como posso te ajudar hoje?');
   const [flowSteps, setFlowSteps] = useState([
     { id: 'step_welcome', label: 'Mensagem Inicial', text: 'Ola! Seja bem-vindo. Sou o seu assistente virtual. Como posso te ajudar hoje?', buttons: ['Fazer uma simulação', 'Falar com atendente', 'Outros assuntos'] },
-    { id: 'step_simulate', label: 'Simulação Selecionada', text: 'Excelente! Para fazermos a cotação ideal para você, quantas vidas serão incluídas no plano?', buttons: ['Apenas eu', 'Eu e minha família', 'Minha empresa'] },
+    { id: 'step_simulate', label: 'Simulação Selecionada', text: 'Excelente! Para fazermos a cotação ideal para você, quais idades serão incluídas no plano?', buttons: ['Apenas eu', 'Eu e minha família', 'Minha empresa'] },
     { id: 'step_agent', label: 'Falar com Atendente', text: 'Perfeito. Estou repassando sua conversa para um de nossos especialistas. Aguarde um minutinho!', buttons: [] },
     { id: 'step_others', label: 'Outros Assuntos', text: 'Por favor, descreva em uma mensagem o que você precisa para que possamos te direcionar melhor.', buttons: [] }
   ]);
