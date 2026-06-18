@@ -175,6 +175,7 @@ export default function BrokerInboxPage() {
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const [whatsAppOwnerName, setWhatsAppOwnerName] = useState('');
 
   // Message states
   const [messages, setMessages] = useState<InboxMessage[]>([]);
@@ -308,6 +309,7 @@ export default function BrokerInboxPage() {
       if (response.ok && payload.success) {
         setIsWhatsAppConnected(payload.connected);
         setWhatsappStatus(payload.state || 'close');
+        setWhatsAppOwnerName(payload.targetProfile?.nome || profile?.nome || '');
         if (payload.connected) {
           setQrCode(null);
           setConnectError(null);
@@ -456,7 +458,7 @@ export default function BrokerInboxPage() {
 
   useEffect(() => {
     void fetchInbox();
-  }, [profile?.corretor_id, profile?.nome_empresa]);
+  }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
   useEffect(() => {
     if (!isWhatsAppConnected && !qrCode && whatsappStatus !== 'connecting') {
@@ -469,7 +471,7 @@ export default function BrokerInboxPage() {
     }, intervalTime);
 
     return () => clearInterval(interval);
-  }, [isWhatsAppConnected, qrCode, whatsappStatus]);
+  }, [isWhatsAppConnected, qrCode, whatsappStatus, profile?.id]);
 
   // Fetch team members when forwarding modal opens
   useEffect(() => {
@@ -734,6 +736,7 @@ export default function BrokerInboxPage() {
         return;
       }
 
+      setWhatsAppOwnerName(payload.targetProfile?.nome || profile?.nome || '');
       setQrCode(payload.qrcode);
       setWhatsappStatus('connecting');
     } catch (err) {
@@ -774,6 +777,7 @@ export default function BrokerInboxPage() {
 
       setIsWhatsAppConnected(false);
       setWhatsappStatus('close');
+      setWhatsAppOwnerName(profile?.nome || '');
       alert('Instancia limpa e reiniciada no servidor!');
     } catch (err) {
       console.error(err);
@@ -1575,7 +1579,9 @@ export default function BrokerInboxPage() {
               <QrCode className="text-emerald-400 shrink-0" size={20} />
               <div>
                 <p className="text-xs font-black text-emerald-200 uppercase tracking-wider">WhatsApp Conectado</p>
-                <p className="text-2xs text-slate-400 font-bold mt-0.5">Sua conta está ativa e pronta para enviar e receber mensagens diretamente.</p>
+                <p className="text-2xs text-slate-400 font-bold mt-0.5">
+                  {whatsAppOwnerName ? `${whatsAppOwnerName} conectado e pronto para enviar e receber mensagens diretamente.` : 'Conta conectada e pronta para enviar e receber mensagens diretamente.'}
+                </p>
               </div>
             </div>
             <button
@@ -1592,7 +1598,9 @@ export default function BrokerInboxPage() {
               <QrCode className="text-amber-400 shrink-0" size={20} />
               <div>
                 <p className="text-xs font-black text-amber-200 uppercase tracking-wider">WhatsApp Desconectado</p>
-                <p className="text-2xs text-slate-400 font-bold mt-0.5">Conecte sua conta para poder enviar mensagens reais diretamente por aqui.</p>
+                <p className="text-2xs text-slate-400 font-bold mt-0.5">
+                  {whatsAppOwnerName ? `${whatsAppOwnerName} ainda nao esta conectado ao Inbox.` : 'Conecte esta conta para poder enviar mensagens reais diretamente por aqui.'}
+                </p>
                 {connectError && (
                   <p className="mt-2 text-[10px] font-black text-rose-300">{connectError}</p>
                 )}

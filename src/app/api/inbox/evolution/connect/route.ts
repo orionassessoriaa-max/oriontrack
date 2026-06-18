@@ -1,7 +1,54 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { configureEvolutionWebhook, evolutionFetch, evolutionInstanceName, extractEvolutionQrCode, getEvolutionInstanceApiKey } from '@/lib/evolution';
+
+const WHATSAPP_TARGET_ROLES = ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
+const CAN_VIEW_AS_ROLES = ['admin', 'gestor_trafego', 'account_manager'] as const;
+
+type WhatsappTargetProfile = ApiProfile & {
+  nome_empresa?: string | null;
+  equipe_orion?: 'apollo' | 'kripto_hunters' | null;
+};
+
+function canViewWhatsappTarget(actor: ApiProfile, target: WhatsappTargetProfile) {
+  if (actor.id === target.id) return true;
+  if (actor.tipo_usuario === 'admin') return true;
+  if (!CAN_VIEW_AS_ROLES.includes(actor.tipo_usuario as any)) return false;
+  if (!actor.corretor_id || !target.corretor_id) return false;
+  if (actor.corretor_id === target.corretor_id) return true;
+  return false;
+}
+
+async function resolveWhatsappTargetProfile(request: Request, actor: ApiProfile) {
+  const viewingProfileId = request.headers.get('x-orion-view-profile-id');
+  if (!viewingProfileId || viewingProfileId === actor.id) {
+    return actor as WhatsappTargetProfile;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, email, email_real, nome, tipo_usuario, corretor_id, telefone, status, is_admin_master, equipe_orion, nome_empresa')
+    .eq('id', viewingProfileId)
+    .in('tipo_usuario', WHATSAPP_TARGET_ROLES as unknown as string[])
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data || !canViewWhatsappTarget(actor, data as WhatsappTargetProfile)) {
+    throw new Error('Voce nao tem permissao para gerenciar o WhatsApp deste perfil.');
+  }
+
+  return data as WhatsappTargetProfile;
+}
+
+function targetPayload(profile: WhatsappTargetProfile) {
+  return {
+    id: profile.id,
+    nome: profile.nome,
+    email: profile.email_real || profile.email,
+    tipo_usuario: profile.tipo_usuario,
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -16,17 +63,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Confirme o aceite para conectar o WhatsApp.' }, { status: 400 });
     }
 
-    let targetProfile = guard.profile;
-    const viewingProfileId = request.headers.get('x-orion-view-profile-id');
-    if (guard.profile.tipo_usuario === 'admin' && viewingProfileId) {
-      const { data } = await supabaseAdmin
-        .from('profiles')
-        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status')
-        .eq('id', viewingProfileId)
-        .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'])
-        .maybeSingle();
-      if (data) targetProfile = { ...data, is_admin_master: false, equipe_orion: null } as typeof targetProfile;
-    }
+    const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
 
     const instance = evolutionInstanceName(targetProfile.id);
 
@@ -103,6 +140,7 @@ export async function POST(request: Request) {
       success: true,
       instance,
       qrcode,
+      targetProfile: targetPayload(targetProfile),
       raw: qrcode ? undefined : payload,
     });
   } catch (error: any) {
@@ -123,17 +161,7 @@ export async function GET(request: Request) {
     const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 
-    let targetProfile = guard.profile;
-    const viewingProfileId = request.headers.get('x-orion-view-profile-id');
-    if (guard.profile.tipo_usuario === 'admin' && viewingProfileId) {
-      const { data } = await supabaseAdmin
-        .from('profiles')
-        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status')
-        .eq('id', viewingProfileId)
-        .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'])
-        .maybeSingle();
-      if (data) targetProfile = { ...data, is_admin_master: false, equipe_orion: null } as typeof targetProfile;
-    }
+    const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
 
     const instance = evolutionInstanceName(targetProfile.id);
 
@@ -145,6 +173,7 @@ export async function GET(request: Request) {
         instance,
         state, // 'open', 'connecting', 'close'
         connected: state === 'open',
+        targetProfile: targetPayload(targetProfile),
       });
     } catch (error: any) {
       return NextResponse.json({
@@ -152,6 +181,7 @@ export async function GET(request: Request) {
         instance,
         state: 'close',
         connected: false,
+        targetProfile: targetPayload(targetProfile),
       });
     }
   } catch (error: any) {
@@ -168,17 +198,7 @@ export async function DELETE(request: Request) {
     const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 
-    let targetProfile = guard.profile;
-    const viewingProfileId = request.headers.get('x-orion-view-profile-id');
-    if (guard.profile.tipo_usuario === 'admin' && viewingProfileId) {
-      const { data } = await supabaseAdmin
-        .from('profiles')
-        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status')
-        .eq('id', viewingProfileId)
-        .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'])
-        .maybeSingle();
-      if (data) targetProfile = { ...data, is_admin_master: false, equipe_orion: null } as typeof targetProfile;
-    }
+    const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
 
     const instance = evolutionInstanceName(targetProfile.id);
     const instanceApiKey = await getEvolutionInstanceApiKey(instance);
@@ -211,6 +231,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({
       success: true,
+      targetProfile: targetPayload(targetProfile),
       message: 'WhatsApp desconectado com sucesso.'
     });
   } catch (error: any) {
