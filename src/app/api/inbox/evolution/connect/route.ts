@@ -50,6 +50,50 @@ function targetPayload(profile: WhatsappTargetProfile) {
   };
 }
 
+function normalizeEvolutionState(value?: unknown) {
+  const raw = String(value || '').toLowerCase();
+  if (!raw || raw.includes('disconnect') || raw.includes('close') || raw.includes('logout')) return 'close';
+  if (raw.includes('connecting') || raw.includes('qr')) return 'connecting';
+  if (['open', 'connected', 'connectado', 'conectado'].includes(raw)) return 'open';
+  if (raw.includes('open') || raw.includes('connected') || raw.includes('conectado')) return 'open';
+  return 'close';
+}
+
+function readEvolutionState(payload: any) {
+  return normalizeEvolutionState(
+    payload?.instance?.state ||
+    payload?.instance?.connectionStatus ||
+    payload?.instance?.status ||
+    payload?.state ||
+    payload?.connectionStatus ||
+    payload?.status
+  );
+}
+
+async function fetchEvolutionInstanceState(instance: string) {
+  const instanceApiKey = await getEvolutionInstanceApiKey(instance).catch(() => null);
+
+  try {
+    const statePayload = await evolutionFetch(`/instance/connectionState/${instance}`, { method: 'GET' }, instanceApiKey);
+    return readEvolutionState(statePayload);
+  } catch (error) {
+    console.warn(`[GET /api/inbox/evolution/connect] connectionState failed for ${instance}. Trying fetchInstances fallback.`, error);
+  }
+
+  const instancesPayload = await evolutionFetch(`/instance/fetchInstances?instanceName=${encodeURIComponent(instance)}`, { method: 'GET' }, instanceApiKey);
+  const rows = Array.isArray(instancesPayload)
+    ? instancesPayload
+    : Array.isArray(instancesPayload?.data)
+      ? instancesPayload.data
+      : [instancesPayload];
+  const match = rows.find((row: any) => {
+    const name = row?.instance?.instanceName || row?.instanceName || row?.name;
+    return name === instance;
+  }) || rows[0];
+
+  return readEvolutionState(match);
+}
+
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'inbox:evolution:connect', { limit: 12, windowMs: 10 * 60_000 });
@@ -166,8 +210,7 @@ export async function GET(request: Request) {
     const instance = evolutionInstanceName(targetProfile.id);
 
     try {
-      const statePayload = await evolutionFetch(`/instance/connectionState/${instance}`, { method: 'GET' });
-      const state = statePayload?.instance?.state || statePayload?.state || 'close';
+      const state = await fetchEvolutionInstanceState(instance);
       return NextResponse.json({
         success: true,
         instance,
