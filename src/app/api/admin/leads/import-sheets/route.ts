@@ -214,7 +214,7 @@ function normalizeCnpjOwnershipLabel(value: string) {
   const normalized = normalizeHeader(text);
   if (!normalized) return '';
   if (normalized.includes('mei')) return 'Tenho MEI';
-  if (normalized.includes('nao') || normalized === 'n' || normalized === 'false' || normalized === '0') return 'Não';
+  if (normalized.includes('nao') || normalized === 'n' || normalized === 'false' || normalized === '0') return 'Nao';
   if (normalized === 'sim' || normalized === 's' || normalized === 'true' || normalized === '1') return 'Sim';
   if (normalized.includes('tenho_cnpj') || normalized.includes('possui_cnpj')) return 'Sim';
   if (text.replace(/\D/g, '').length >= 11) return 'Sim';

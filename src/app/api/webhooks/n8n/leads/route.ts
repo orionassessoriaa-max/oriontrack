@@ -138,7 +138,7 @@ function normalizeCnpjOwnershipLabel(value: unknown) {
   const key = normalizeKey(text);
   if (!key) return 'Nao informado';
   if (key.includes('mei')) return 'Tenho MEI';
-  if (['nao', 'n_o', 'n', 'false', '0', 'no'].includes(key) || key.includes('nao_tenho') || key.includes('nao_possui')) return 'Não';
+  if (['nao', 'n_o', 'n', 'false', '0', 'no'].includes(key) || key.includes('nao_tenho') || key.includes('nao_possui')) return 'Nao';
   if (['sim', 's', 'true', '1', 'yes'].includes(key) || key.includes('tenho_cnpj') || key.includes('possui_cnpj')) return 'Sim';
   if (text.replace(/\D/g, '').length >= 11) return 'Sim';
   return text || 'Nao informado';
@@ -494,7 +494,7 @@ export async function POST(request: Request) {
     // Fetch final lead assignment details to notify the correct users
     const { data: finalLead } = await supabaseAdmin
       .from('leads')
-      .select('id, corretor_id, nome, telefone, cidade, investimento, tem_plano_ativo, plano_atual, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, responsavel_membro:responsavel_membro_id(nome)')
+      .select('id, corretor_id, nome, telefone, cidade, possui_cnpj, cnpj, investimento, tem_plano_ativo, plano_atual, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, responsavel_membro:responsavel_membro_id(nome)')
       .eq('id', data.id)
       .maybeSingle();
 
