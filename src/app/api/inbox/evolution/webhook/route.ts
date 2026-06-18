@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { normalizePhone, profileIdFromEvolutionInstance } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { continueLeadAiFromIncoming } from '@/lib/leadAiAgent';
 
 function readText(data: any) {
   return String(
@@ -205,6 +206,18 @@ export async function POST(request: Request) {
       provider_message_id: providerId || null,
       metadata: body || {},
     }]);
+
+    if (!fromMe && lead?.id) {
+      try {
+        await continueLeadAiFromIncoming({
+          leadId: lead.id,
+          conversationId: conversation.id,
+          customerMessage: message,
+        });
+      } catch (aiErr) {
+        console.error('[evolution_webhook] Failed continuing lead AI:', aiErr);
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {

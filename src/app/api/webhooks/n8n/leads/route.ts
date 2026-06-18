@@ -4,6 +4,7 @@ import { normalizeLeadStatus } from '@/lib/leadStatus';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
+import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 
 function normalizeText(value: unknown, fallback = '') {
   return String(value ?? fallback).trim();
@@ -604,6 +605,12 @@ export async function POST(request: Request) {
           console.error('[Webhook n8n] Failed sending member WA notification:', waErr);
         }
       }
+    }
+
+    try {
+      await startLeadAiIfEligible(data.id);
+    } catch (aiErr) {
+      console.error('[Webhook n8n] Failed starting lead AI:', aiErr);
     }
 
     await writeAuditLog(request, null, {
