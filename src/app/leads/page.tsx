@@ -235,9 +235,14 @@ export default function BrokerLeadsPage() {
     if (profile?.corretor_id) {
       fetchLeads(0, false);
       fetchCrmConfig();
-      fetchTeamMembers();
     }
   }, [profile?.corretor_id, profile?.nome_empresa]);
+
+  useEffect(() => {
+    if (profile?.corretor_id && canAssignTeamLeads) {
+      fetchTeamMembers();
+    }
+  }, [profile?.corretor_id, profile?.nome_empresa, canAssignTeamLeads]);
 
   const fetchLeads = async (page = 0, append = false) => {
     if (!profile?.corretor_id) {
@@ -317,7 +322,10 @@ export default function BrokerLeadsPage() {
   };
 
   const fetchTeamMembers = async () => {
-    if (!profile?.corretor_id || !canAssignTeamLeads) return;
+    if (!profile?.corretor_id || !canAssignTeamLeads) {
+      setTeamMembers([]);
+      return;
+    }
 
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -329,6 +337,9 @@ export default function BrokerLeadsPage() {
     const payload = await response.json().catch(() => ({}));
     if (response.ok) {
       setTeamMembers(payload.membros || []);
+    } else {
+      console.error('Erro ao buscar responsaveis:', payload.error || response.statusText);
+      setTeamMembers([]);
     }
   };
 
@@ -966,6 +977,22 @@ export default function BrokerLeadsPage() {
             <option value="todos">Todos os status</option>
             {LEAD_STATUSES.map(status => <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>)}
           </select>
+          {canManageLeadResponsible && (
+            <select
+              value={responsavelFilter}
+              onChange={(e) => setResponsavelFilter(e.target.value)}
+              disabled={teamMembers.length === 0}
+              className="orion-control min-w-[220px] flex-[1_1_220px] px-4 py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="todos">Responsavel: todos</option>
+              <option value="sem_responsavel">Sem responsavel</option>
+              {teamMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.nome}
+                </option>
+              ))}
+            </select>
+          )}
           <select value={operadoraFilter} onChange={(e) => setOperadoraFilter(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
             <option value="todas">Página: todas</option>
             {sheetTabs.map((tab) => <option key={tab} value={tab}>{tab}</option>)}
@@ -983,21 +1010,6 @@ export default function BrokerLeadsPage() {
             <option value="todos">Anuncio: todos</option>
             {adOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
-          {!isTeamMemberProfile && teamMembers.length > 0 && (
-            <select
-              value={responsavelFilter}
-              onChange={(e) => setResponsavelFilter(e.target.value)}
-              className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm"
-            >
-              <option value="todos">Responsável: todos</option>
-              <option value="sem_responsavel">Sem responsável</option>
-              {teamMembers.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.nome}
-                </option>
-              ))}
-            </select>
-          )}
           <button
             type="button"
             onClick={clearFilters}
