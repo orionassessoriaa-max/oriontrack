@@ -264,6 +264,11 @@ export default function BrokerInboxPage() {
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [forwarding, setForwarding] = useState(false);
+  const teamMemberByProfileId = new Map(
+    teamMembers
+      .filter((member) => member.profile_id)
+      .map((member) => [String(member.profile_id), member])
+  );
 
   // Load configuration from localStorage on mount
   useEffect(() => {
@@ -380,19 +385,25 @@ export default function BrokerInboxPage() {
 
     const { data } = await conversationsQuery;
 
-    const rows = (data || []).map((row: any) => ({
-      ...row,
-      status: row.status === 'aguardando' ? 'espera' : row.status === 'resolvida' ? 'fechada' : row.status,
-      agentName: (row.leads as any)?.responsavel_membro?.nome || profile?.nome || 'Fila Geral',
-      responsibleProfileId: (row.leads as any)?.responsavel_profile_id || null,
-      expirationTime: '03/06 às 23:07',
-      protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
-      tags: row.tags || ['Lead Frio'],
-      notes: row.notes || [],
-      source: 'Meta',
-      aiActive: row.aiActive ?? false,
-      customFields: row.customFields || []
-    })) as Conversation[];
+    const rows = (data || []).map((row: any) => {
+      const lead = row.leads as any;
+      const responsibleProfileId = lead?.responsavel_profile_id || null;
+      const member = responsibleProfileId ? teamMemberByProfileId.get(String(responsibleProfileId)) : null;
+
+      return {
+        ...row,
+        status: row.status === 'aguardando' ? 'espera' : row.status === 'resolvida' ? 'fechada' : row.status,
+        agentName: lead?.responsavel_membro?.nome || member?.nome || (responsibleProfileId && responsibleProfileId === profile?.id ? profile?.nome : null) || 'Fila Geral',
+        responsibleProfileId,
+        expirationTime: '03/06 às 23:07',
+        protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
+        tags: row.tags || ['Lead Frio'],
+        notes: row.notes || [],
+        source: 'Meta',
+        aiActive: row.aiActive ?? false,
+        customFields: row.customFields || []
+      };
+    }) as Conversation[];
 
     // Add temp conversation if URL has lead phone and it's not saved
     let matchedConv = null;
@@ -458,6 +469,9 @@ export default function BrokerInboxPage() {
 
   useEffect(() => {
     void fetchInbox();
+    if (profile?.tipo_usuario !== 'corretor_membro') {
+      void fetchTeamMembers();
+    }
   }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
   useEffect(() => {
@@ -1478,12 +1492,23 @@ export default function BrokerInboxPage() {
   // Tab Filtering logic
   const responsibleOptions = Array.from(
     new Map(
-      conversations
-        .filter((conversation) => conversation.responsibleProfileId)
-        .map((conversation) => [
-          conversation.responsibleProfileId as string,
-          { id: conversation.responsibleProfileId as string, name: conversation.agentName || 'Responsavel' }
-        ])
+      [
+        ...teamMembers
+          .filter((member) => member.profile_id)
+          .map((member) => [
+            String(member.profile_id),
+            { id: String(member.profile_id), name: member.nome || 'Responsavel' }
+          ] as const),
+        ...conversations
+          .filter((conversation) => conversation.responsibleProfileId)
+          .map((conversation) => [
+            conversation.responsibleProfileId as string,
+            {
+              id: conversation.responsibleProfileId as string,
+              name: teamMemberByProfileId.get(conversation.responsibleProfileId as string)?.nome || conversation.agentName || 'Responsavel'
+            }
+          ] as const)
+      ]
     ).values()
   ).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
