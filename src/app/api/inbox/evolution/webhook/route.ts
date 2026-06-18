@@ -26,18 +26,46 @@ function readRemoteJid(data: any) {
   );
 }
 
-async function findLead(corretorId: string, phone: string) {
+async function resolveProfileCorretorScope(profile: any) {
+  const ids = new Set<string>();
+  if (profile?.corretor_id) ids.add(profile.corretor_id);
+
+  const brokerageName = String(profile?.nome_empresa || '').trim();
+  if (brokerageName) {
+    const { data } = await supabaseAdmin
+      .from('corretores')
+      .select('id')
+      .eq('nome_empresa', brokerageName);
+
+    for (const row of data || []) {
+      if (row?.id) ids.add(row.id);
+    }
+  }
+
+  return Array.from(ids);
+}
+
+async function findLead(profile: any, phone: string) {
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 8) return null;
 
   const last8 = digits.slice(-8);
   const last8WithHyphen = `${last8.slice(0, 4)}-${last8.slice(4)}`;
 
-  const { data } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('leads')
-    .select('id, nome, telefone')
-    .eq('corretor_id', corretorId)
-    .or(`telefone.ilike.%${last8}%,telefone.ilike.%${last8WithHyphen}%`)
+    .select('id, nome, telefone, corretor_id, responsavel_profile_id')
+    .or(`telefone.ilike.%${last8}%,telefone.ilike.%${last8WithHyphen}%`);
+
+  if (profile.tipo_usuario === 'corretor_membro') {
+    query = query.eq('responsavel_profile_id', profile.id);
+  } else {
+    const scopeIds = await resolveProfileCorretorScope(profile);
+    if (scopeIds.length === 0) return null;
+    query = query.in('corretor_id', scopeIds);
+  }
+
+  const { data } = await query
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -91,7 +119,7 @@ export async function POST(request: Request) {
 
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('id, nome, email, email_real, corretor_id')
+      .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa')
       .eq('id', profileId)
       .maybeSingle();
 
@@ -126,7 +154,7 @@ export async function POST(request: Request) {
       if (existing) return NextResponse.json({ ok: true, duplicated: true });
     }
 
-    const lead = await findLead(profile.corretor_id, phone);
+    const lead = await findLead(profile, phone);
 
     const currentConversation = await findConversation(profile.corretor_id, phone, lead?.id || null);
 
