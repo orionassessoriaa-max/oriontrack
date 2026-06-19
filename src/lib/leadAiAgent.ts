@@ -80,12 +80,22 @@ function splitReply(text: string) {
     .slice(0, 4);
 }
 
+function stripPersonaPrefix(text: string) {
+  return text
+    .replace(/^\s*(?:aline|aline\s+ia|ia\s+aline)\s*[:\-–—]\s*/i, '')
+    .trim();
+}
+
 function parseAiJson(raw: string) {
   const clean = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
   try {
-    return JSON.parse(clean);
+    const parsed = JSON.parse(clean);
+    return {
+      ...parsed,
+      reply: stripPersonaPrefix(String(parsed?.reply || '')),
+    };
   } catch {
-    return { reply: clean, handoff: false, summary: '' };
+    return { reply: stripPersonaPrefix(clean), handoff: false, summary: '' };
   }
 }
 
@@ -295,12 +305,13 @@ async function askAline(lead: LeadRow, history: Array<{ direction: string; remet
 
   const messages = history.slice(-16).map((item) => ({
     role: item.direction === 'inbound' ? 'user' : 'assistant',
-    content: `${item.remetente || ''}: ${item.mensagem}`,
+    content: item.mensagem,
   }));
 
   const system = `Voce conduz o primeiro contato comercial do Orion Teste para planos de saude.
 Sua identidade operacional interna e ${AI_PERSONA}, mas NAO fale que e IA, bot, assistente virtual, automacao ou sistema.
-Nao assine mensagens e nao repita seu nome em toda resposta. Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
+Nao assine mensagens, nao coloque prefixo de atendente e nunca comece a resposta com "${AI_PERSONA}:".
+Nao repita seu nome em toda resposta. Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
 Fale em portugues do Brasil, com tom humano, simpatico, objetivo e profissional.
 Sua missao nao e fazer uma qualificacao longa. Sua missao e confirmar o interesse, coletar somente o minimo que faltar e puxar o cliente para atendimento humano sem parecer transferencia brusca.
 
