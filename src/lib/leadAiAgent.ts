@@ -91,7 +91,7 @@ async function findBroker(corretorId: string) {
   return data;
 }
 
-async function findLucasAdmin(corretorId: string): Promise<ProfileRow | null> {
+async function findAiAdmin(corretorId: string): Promise<ProfileRow | null> {
   const { data: broker } = await supabaseAdmin
     .from('corretores')
     .select('nome_empresa')
@@ -100,17 +100,20 @@ async function findLucasAdmin(corretorId: string): Promise<ProfileRow | null> {
 
   if (!sameBrokerage(broker?.nome_empresa)) return null;
 
-  const { data } = await supabaseAdmin
+  const { data: admins } = await supabaseAdmin
     .from('profiles')
     .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
-    .eq('nome_empresa', AI_TEST_BROKERAGE)
-    .ilike('nome', '%LUCAS%')
+    .eq('corretor_id', corretorId)
+    .eq('tipo_usuario', 'corretor_admin')
     .in('status', ['active', 'ativo', 'Ativo'])
     .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(10);
 
-  return data || null;
+  const activeAdmins = admins || [];
+  const configuredPhone = normalizePhone(process.env.ORION_TEST_AI_ADMIN_PHONE || '556181625459');
+  const phoneMatch = activeAdmins.find((profile) => normalizePhone(profile.telefone) === configuredPhone);
+
+  return phoneMatch || activeAdmins.find((profile) => normalizePhone(profile.telefone)) || activeAdmins[0] || null;
 }
 
 async function findResponsibleProfile(profileId?: string | null) {
@@ -180,7 +183,7 @@ async function insertMessage(conversaId: string, direction: 'inbound' | 'outboun
   return data;
 }
 
-async function sendLucasText(adminProfile: ProfileRow, phone: string, text: string) {
+async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: string) {
   const instance = evolutionInstanceName(adminProfile.id);
   const instanceApiKey = await getEvolutionInstanceApiKey(instance);
   return evolutionFetch(`/message/sendText/${instance}`, {
@@ -281,8 +284,8 @@ export async function startLeadAiIfEligible(leadId: string) {
   const broker = await findBroker(lead.corretor_id);
   if (!sameBrokerage(broker?.nome_empresa)) return { started: false, eligible: false, reason: 'IA desativada para esta concessionaria.' };
 
-  const adminProfile = await findLucasAdmin(lead.corretor_id);
-  if (!adminProfile) return { started: false, eligible: true, reason: 'Lucas RO nao encontrado.' };
+  const adminProfile = await findAiAdmin(lead.corretor_id);
+  if (!adminProfile) return { started: false, eligible: true, reason: 'Admin IA do Orion Teste nao encontrado.' };
 
   const phone = normalizePhone(lead.telefone);
   if (!phone) return { started: false, eligible: true, reason: 'Lead sem telefone.' };
@@ -292,7 +295,7 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   const intro = [
     `Oi, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
-    `Aqui e a ${AI_PERSONA}, da equipe do Lucas.`,
+    `Aqui e a ${AI_PERSONA}, da equipe Orion Teste.`,
     `Vi seu cadastro para plano de saude e vou confirmar rapidinho algumas informacoes para deixar seu atendimento certinho.`,
     lead.idades ? `As idades sao ${lead.idades}, certo?` : 'Quais idades entram na cotacao?',
   ].join('\n\n');
@@ -320,7 +323,7 @@ export async function startLeadAiIfEligible(leadId: string) {
     }], { onConflict: 'lead_id' });
 
   try {
-    const payload = await sendLucasText(adminProfile, phone, intro);
+    const payload = await sendAiAdminText(adminProfile, phone, intro);
     await insertMessage(conversation.id, 'outbound', `${AI_PERSONA} IA`, intro, {
       ...(payload || {}),
       instance: evolutionInstanceName(adminProfile.id),
@@ -364,8 +367,8 @@ export async function continueLeadAiFromIncoming(options: {
 
   if (!lead) return { handled: false, reason: 'Lead nao encontrado.' };
 
-  const adminProfile = await findLucasAdmin(lead.corretor_id);
-  if (!adminProfile) return { handled: false, reason: 'Lucas RO nao encontrado.' };
+  const adminProfile = await findAiAdmin(lead.corretor_id);
+  if (!adminProfile) return { handled: false, reason: 'Admin IA do Orion Teste nao encontrado.' };
 
   const { data: history } = await supabaseAdmin
     .from('whatsapp_mensagens')
@@ -379,7 +382,7 @@ export async function continueLeadAiFromIncoming(options: {
   if (!reply) return { handled: false, reason: 'IA sem resposta.' };
 
   for (const part of splitReply(reply)) {
-    const payload = await sendLucasText(adminProfile, lead.telefone || '', part);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part);
     await insertMessage(options.conversationId, 'outbound', `${AI_PERSONA} IA`, part, {
       ...(payload || {}),
       instance: evolutionInstanceName(adminProfile.id),
