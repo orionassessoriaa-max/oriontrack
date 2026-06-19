@@ -220,14 +220,63 @@ async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: st
   }, instanceApiKey);
 }
 
-async function textToSpeechBase64(text: string) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
-
-  const cleanText = text
+function cleanTextForSpeech(text: string) {
+  return text
     .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+    .replace(/\bCNPJ\b/gi, 'C N P J')
+    .replace(/\bMEI\b/gi, 'M E I')
+    .replace(/\bPME\b/gi, 'P M E')
+    .replace(/\bCPF\b/gi, 'C P F')
+    .replace(/\bHapvida\b/gi, 'Hapvida')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+async function formatTextForSpeech(text: string) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const cleanText = cleanTextForSpeech(text);
+  if (!apiKey || cleanText.length < 20) return cleanText;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.ORION_LEAD_AI_SPEECH_FORMAT_MODEL || process.env.ORION_LEAD_AI_MODEL || 'gpt-4o-mini',
+        temperature: 0.25,
+        max_tokens: 220,
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'Reescreva o texto para ser falado em audio de WhatsApp de forma humana, curta e natural.',
+              'Nao mude o sentido, nao invente dados e nao adicione apresentacao.',
+              'Use frases curtas, pontuacao simples e pausas naturais.',
+              'Remova emojis, markdown, listas e qualquer prefixo de atendente.',
+              'Expanda siglas para ficarem boas de ouvir: CNPJ como C N P J, MEI como M E I, PME como P M E.',
+              'Responda somente o texto final.',
+            ].join(' '),
+          },
+          { role: 'user', content: cleanText },
+        ],
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return cleanText;
+
+    return cleanTextForSpeech(payload?.choices?.[0]?.message?.content || cleanText);
+  } catch {
+    return cleanText;
+  }
+}
+
+async function openAiTextToSpeechBase64(text: string) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
 
   const response = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
@@ -236,9 +285,9 @@ async function textToSpeechBase64(text: string) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: process.env.ORION_LEAD_AI_TTS_MODEL || 'tts-1',
+      model: process.env.ORION_LEAD_AI_TTS_MODEL || 'tts-1-hd',
       voice: process.env.ORION_LEAD_AI_TTS_VOICE || 'nova',
-      input: cleanText,
+      input: text,
       response_format: 'mp3',
     }),
   });
@@ -252,12 +301,56 @@ async function textToSpeechBase64(text: string) {
   return buffer.toString('base64');
 }
 
+async function elevenLabsTextToSpeechBase64(text: string) {
+  const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ORION_ELEVENLABS_API_KEY;
+  const voiceId = process.env.ORION_LEAD_AI_ELEVEN_VOICE_ID || process.env.ELEVENLABS_VOICE_ID;
+  if (!apiKey || !voiceId) return null;
+
+  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'xi-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      text,
+      model_id: process.env.ORION_LEAD_AI_ELEVEN_MODEL || 'eleven_multilingual_v2',
+      voice_settings: {
+        stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.45),
+        similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.8),
+        style: Number(process.env.ORION_LEAD_AI_ELEVEN_STYLE || 0.25),
+        use_speaker_boost: true,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload?.detail?.message || payload?.message || 'Erro ao gerar audio no ElevenLabs.');
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return buffer.toString('base64');
+}
+
+async function textToSpeechBase64(text: string) {
+  const speechText = await formatTextForSpeech(text);
+  const elevenAudio = await elevenLabsTextToSpeechBase64(speechText);
+  if (elevenAudio) return { audio: elevenAudio, provider: 'elevenlabs', speechText };
+
+  return {
+    audio: await openAiTextToSpeechBase64(speechText),
+    provider: 'openai',
+    speechText,
+  };
+}
+
 async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: string) {
   const instance = evolutionInstanceName(adminProfile.id);
   const instanceApiKey = await getEvolutionInstanceApiKey(instance);
-  const audio = await textToSpeechBase64(text);
+  const { audio, provider, speechText } = await textToSpeechBase64(text);
 
-  return evolutionFetch(`/message/sendWhatsAppAudio/${instance}`, {
+  const payload = await evolutionFetch(`/message/sendWhatsAppAudio/${instance}`, {
     method: 'POST',
     body: JSON.stringify({
       number: normalizePhone(phone),
@@ -270,6 +363,8 @@ async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: s
       },
     }),
   }, instanceApiKey);
+
+  return { ...(payload || {}), tts_provider: provider, tts_text: speechText };
 }
 
 async function notifyResponsible(lead: LeadRow, summary: string) {
