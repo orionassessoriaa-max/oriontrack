@@ -276,19 +276,19 @@ export async function startLeadAiIfEligible(leadId: string) {
     .eq('id', leadId)
     .maybeSingle();
 
-  if (!lead?.corretor_id) return { started: false, reason: 'Lead sem corretor.' };
+  if (!lead?.corretor_id) return { started: false, eligible: false, reason: 'Lead sem corretor.' };
 
   const broker = await findBroker(lead.corretor_id);
-  if (!sameBrokerage(broker?.nome_empresa)) return { started: false, reason: 'IA desativada para esta concessionaria.' };
+  if (!sameBrokerage(broker?.nome_empresa)) return { started: false, eligible: false, reason: 'IA desativada para esta concessionaria.' };
 
   const adminProfile = await findLucasAdmin(lead.corretor_id);
-  if (!adminProfile) return { started: false, reason: 'Lucas RO nao encontrado.' };
+  if (!adminProfile) return { started: false, eligible: true, reason: 'Lucas RO nao encontrado.' };
 
   const phone = normalizePhone(lead.telefone);
-  if (!phone) return { started: false, reason: 'Lead sem telefone.' };
+  if (!phone) return { started: false, eligible: true, reason: 'Lead sem telefone.' };
 
   const conversation = await getOrCreateConversation(lead);
-  if (!conversation) return { started: false, reason: 'Conversa nao criada.' };
+  if (!conversation) return { started: false, eligible: true, reason: 'Conversa nao criada.' };
 
   const intro = [
     `Oi, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
@@ -303,7 +303,7 @@ export async function startLeadAiIfEligible(leadId: string) {
     .eq('lead_id', lead.id)
     .maybeSingle();
 
-  if (existing?.status === 'active') return { started: false, reason: 'Sessao ja ativa.' };
+  if (existing?.status === 'active') return { started: false, eligible: true, reason: 'Sessao ja ativa.' };
 
   await supabaseAdmin
     .from('lead_ai_sessions')
@@ -326,15 +326,20 @@ export async function startLeadAiIfEligible(leadId: string) {
       instance: evolutionInstanceName(adminProfile.id),
       ai_agent: AI_PERSONA,
     });
-  } catch (error) {
+  } catch (error: any) {
+    const errorMessage = error?.message || 'Erro ao enviar primeira mensagem da IA.';
     await supabaseAdmin
       .from('lead_ai_sessions')
-      .update({ status: 'error', updated_at: new Date().toISOString() })
+      .update({
+        status: 'error',
+        summary: `${leadFacts(lead)}\n\nErro IA: ${errorMessage}`,
+        updated_at: new Date().toISOString(),
+      })
       .eq('lead_id', lead.id);
     throw error;
   }
 
-  return { started: true };
+  return { started: true, eligible: true };
 }
 
 export async function continueLeadAiFromIncoming(options: {

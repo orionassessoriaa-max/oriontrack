@@ -499,7 +499,16 @@ export async function POST(request: Request) {
       .eq('id', data.id)
       .maybeSingle();
 
-    if (finalLead) {
+    let suppressStandardLeadNotifications = false;
+    try {
+      const aiStart = await startLeadAiIfEligible(data.id);
+      suppressStandardLeadNotifications = Boolean(aiStart?.eligible);
+    } catch (aiErr) {
+      suppressStandardLeadNotifications = true;
+      console.error('[Webhook n8n] Failed starting lead AI:', aiErr);
+    }
+
+    if (finalLead && !suppressStandardLeadNotifications) {
       const { data: leadBroker } = await supabaseAdmin
         .from('corretores')
         .select('id, nome_empresa')
@@ -605,12 +614,6 @@ export async function POST(request: Request) {
           console.error('[Webhook n8n] Failed sending member WA notification:', waErr);
         }
       }
-    }
-
-    try {
-      await startLeadAiIfEligible(data.id);
-    } catch (aiErr) {
-      console.error('[Webhook n8n] Failed starting lead AI:', aiErr);
     }
 
     await writeAuditLog(request, null, {
