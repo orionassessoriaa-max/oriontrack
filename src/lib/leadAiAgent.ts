@@ -64,6 +64,31 @@ function leadFacts(lead: LeadRow) {
   ].filter(Boolean).join('\n');
 }
 
+function knownLeadDetails(lead: LeadRow) {
+  const details = [
+    lead.idades ? `idades ${lead.idades}` : null,
+    lead.cidade ? `cidade ${lead.cidade}` : null,
+    lead.possui_cnpj ? `CNPJ/MEI ${lead.possui_cnpj}` : null,
+    lead.investimento ? `investimento ${lead.investimento}` : null,
+    lead.tem_plano_ativo ? `plano atual: ${lead.tem_plano_ativo}${lead.plano_atual ? ` (${lead.plano_atual})` : ''}` : null,
+  ].filter(Boolean);
+
+  return details.join(', ');
+}
+
+function initialLeadQuestion(lead: LeadRow) {
+  if (!lead.possui_cnpj) {
+    return 'So me confirma uma coisa: seria pelo CNPJ/MEI ou pessoa fisica?';
+  }
+  if (!lead.tem_plano_ativo) {
+    return 'Hoje voce ja tem algum plano de saude ativo?';
+  }
+  if (String(lead.tem_plano_ativo).toLowerCase().includes('sim') && !lead.plano_atual) {
+    return 'Qual e a operadora do seu plano atual?';
+  }
+  return 'Me confirma se esta tudo certinho para eu seguir com seu atendimento?';
+}
+
 function splitReply(text: string) {
   return text
     .split(/\n{2,}/)
@@ -301,8 +326,9 @@ ${leadFacts(lead)}
 
 Regras:
 - Nunca peca dados que ja estao nos dados conhecidos ou no historico.
+- Se as idades, cidade, CNPJ/MEI, investimento ou plano atual ja estiverem nos dados conhecidos, apenas confirme de forma natural. Nunca pergunte novamente.
 - Nao faca checklist. Faca no maximo uma pergunta por mensagem.
-- Primeiro confirme de forma natural o interesse e as idades, se isso ainda nao estiver claro.
+- Primeiro confirme de forma natural o interesse e os dados ja conhecidos.
 - Se faltar, peca apenas o essencial para encaminhar bem: CNPJ/MEI/PF, motivo da busca, hospital/regiao de preferencia ou plano atual.
 - Nao force email no inicio. So peca email se o cliente ja estiver claramente interessado em proposta.
 - Incentive audio de forma leve quando fizer sentido.
@@ -365,10 +391,13 @@ export async function startLeadAiIfEligible(leadId: string) {
   const conversation = await getOrCreateConversation(lead);
   if (!conversation) return { started: false, eligible: true, reason: 'Conversa nao criada.' };
 
+  const details = knownLeadDetails(lead);
   const intro = [
     `Oi, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
-    `Vi seu cadastro para plano de saude e ja vou deixar seu atendimento encaminhado certinho.`,
-    lead.idades ? `As idades sao ${lead.idades}, certo?` : 'Quais idades entram na cotacao?',
+    details
+      ? `Vi seu cadastro para plano de saude com essas informacoes: ${details}.`
+      : 'Vi seu cadastro para plano de saude e ja vou deixar seu atendimento encaminhado certinho.',
+    initialLeadQuestion(lead),
   ].join('\n\n');
 
   const { data: existing } = await supabaseAdmin
