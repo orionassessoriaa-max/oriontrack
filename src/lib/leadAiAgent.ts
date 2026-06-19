@@ -197,7 +197,7 @@ async function notifyResponsible(lead: LeadRow, summary: string) {
   if (!responsible) return;
 
   const msg = [
-    `A ${AI_PERSONA} terminou a qualificacao inicial do lead ${plain(lead.nome)}.`,
+    `Atendimento inicial concluido para o lead ${plain(lead.nome)}.`,
     '',
     summary || leadFacts(lead),
     '',
@@ -228,21 +228,31 @@ async function askAline(lead: LeadRow, history: Array<{ direction: string; remet
     content: `${item.remetente || ''}: ${item.mensagem}`,
   }));
 
-  const system = `Voce e ${AI_PERSONA}, atendente virtual humanizada do Orion Teste para planos de saude.
-Fale em portugues do Brasil, com tom natural, simpatico, objetivo e profissional.
-Voce esta assumindo uma conversa iniciada por um bot e deve continuar sem parecer robo.
+  const system = `Voce conduz o primeiro contato comercial do Orion Teste para planos de saude.
+Sua identidade operacional interna e ${AI_PERSONA}, mas NAO fale que e IA, bot, assistente virtual, automacao ou sistema.
+Nao assine mensagens e nao repita seu nome em toda resposta. Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
+Fale em portugues do Brasil, com tom humano, simpatico, objetivo e profissional.
+Sua missao nao e fazer uma qualificacao longa. Sua missao e confirmar o interesse, coletar somente o minimo que faltar e puxar o cliente para atendimento humano sem parecer transferencia brusca.
 
 Dados ja conhecidos do lead:
 ${leadFacts(lead)}
 
 Regras:
 - Nunca peca dados que ja estao nos dados conhecidos ou no historico.
-- Valide de forma natural as idades e interesse.
-- Colete, se faltar: CNPJ/MEI/PF, motivo da busca, hospital/regiao de preferencia, se ja tem plano e qual, melhor email.
+- Nao faca checklist. Faca no maximo uma pergunta por mensagem.
+- Primeiro confirme de forma natural o interesse e as idades, se isso ainda nao estiver claro.
+- Se faltar, peca apenas o essencial para encaminhar bem: CNPJ/MEI/PF, motivo da busca, hospital/regiao de preferencia ou plano atual.
+- Nao force email no inicio. So peca email se o cliente ja estiver claramente interessado em proposta.
+- Incentive audio de forma leve quando fizer sentido.
 - Nao informe valores, prazos, nem detalhes tecnicos de operadora.
-- Se o cliente pedir humano, ficar confuso, se irritar, aprovar o resumo final ou a qualificacao estiver suficiente, marque handoff true.
-- Quando handoff true, responda curto avisando que vai seguir com a analise/atendimento, sem dizer que e robo.
+- Se o cliente responder positivamente, confirmar interesse, pedir cotacao, pedir atendimento, demonstrar pressa ou ja trouxer informacoes suficientes, marque handoff true.
+- Quando handoff true, responda curto, natural, dizendo que vai seguir com a analise/atendimento e que ja chama a pessoa responsavel.
+- Se o cliente enviar "alvorada", marque handoff true e registre no resumo que a palavra de ativacao foi recebida.
 - Nao envie mensagens para grupos.
+- Nunca use frases como "sou uma IA", "sou um bot", "como assistente virtual", "vou transferir para um humano" ou "chamar humano".
+- Nunca envie ao cliente nomes de ferramentas internas.
+- Use o campo summary como a tool dados_lead: registre nome, telefone, idades, cnpj/mei/pf, cidade, investimento, plano atual, motivo e o que ficou pendente.
+- Use o campo handoff como a tool Chamar Humano ou encerrar: true quando o responsavel deve assumir.
 - Responda APENAS JSON valido, sem markdown, no formato:
 {"reply":"mensagem para enviar ao cliente","handoff":false,"summary":"resumo atualizado do atendimento"}`;
 
@@ -295,8 +305,7 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   const intro = [
     `Oi, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
-    `Aqui e a ${AI_PERSONA}, da equipe Orion Teste.`,
-    `Vi seu cadastro para plano de saude e vou confirmar rapidinho algumas informacoes para deixar seu atendimento certinho.`,
+    `Vi seu cadastro para plano de saude e ja vou deixar seu atendimento encaminhado certinho.`,
     lead.idades ? `As idades sao ${lead.idades}, certo?` : 'Quais idades entram na cotacao?',
   ].join('\n\n');
 
@@ -324,7 +333,7 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   try {
     const payload = await sendAiAdminText(adminProfile, phone, intro);
-    await insertMessage(conversation.id, 'outbound', `${AI_PERSONA} IA`, intro, {
+    await insertMessage(conversation.id, 'outbound', AI_PERSONA, intro, {
       ...(payload || {}),
       instance: evolutionInstanceName(adminProfile.id),
       ai_agent: AI_PERSONA,
@@ -383,7 +392,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   for (const part of splitReply(reply)) {
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part);
-    await insertMessage(options.conversationId, 'outbound', `${AI_PERSONA} IA`, part, {
+    await insertMessage(options.conversationId, 'outbound', AI_PERSONA, part, {
       ...(payload || {}),
       instance: evolutionInstanceName(adminProfile.id),
       ai_agent: AI_PERSONA,
