@@ -4,6 +4,7 @@ import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
+const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
 
 type ProfileRow = {
   id: string;
@@ -252,12 +253,18 @@ async function formatTextForSpeech(text: string) {
           {
             role: 'system',
             content: [
-              'Reescreva o texto para ser falado em audio de WhatsApp de forma humana, curta e natural.',
-              'Nao mude o sentido, nao invente dados e nao adicione apresentacao.',
-              'Use frases curtas, pontuacao simples e pausas naturais.',
+              'Voce e um assistente especialista em text-to-speech e formatacao usando tags SSML.',
+              'Receba um texto e aplique SSML para deixa-lo mais natural no processo de geracao de voz.',
+              'Sempre coloque uma pausa de 1.0s no comeco usando <break time="1.0s"/>.',
+              'Nao use breaks no meio do texto, apenas no comeco.',
+              'Mantenha o mesmo sentido original, mas revise virgulas excessivas para deixar a fala natural.',
+              'Datas e horas devem ficar naturais quando faladas, por exemplo 10:00 vira dez horas.',
+              'Telefones devem ficar naturais: DDD em dezena e blocos com pausas por virgula.',
               'Remova emojis, markdown, listas e qualquer prefixo de atendente.',
-              'Expanda siglas para ficarem boas de ouvir: CNPJ como C N P J, MEI como M E I, PME como P M E.',
-              'Responda somente o texto final.',
+              'Use <speak> ao redor da saida.',
+              'Nao inclua nenhuma informacao alem do texto convertido.',
+              'Nunca inclua caractere de nova linha na saida.',
+              'Nunca coloque ancoras como ```ssml ao redor do texto.',
             ].join(' '),
           },
           { role: 'user', content: cleanText },
@@ -303,10 +310,11 @@ async function openAiTextToSpeechBase64(text: string) {
 
 async function elevenLabsTextToSpeechBase64(text: string) {
   const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ORION_ELEVENLABS_API_KEY;
-  const voiceId = process.env.ORION_LEAD_AI_ELEVEN_VOICE_ID || process.env.ELEVENLABS_VOICE_ID;
+  const voiceId = process.env.ORION_LEAD_AI_ELEVEN_VOICE_ID || process.env.ELEVENLABS_VOICE_ID || DEFAULT_ELEVENLABS_VOICE_ID;
   if (!apiKey || !voiceId) return null;
 
-  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`, {
+  const outputFormat = process.env.ORION_LEAD_AI_ELEVEN_OUTPUT_FORMAT || 'mp3_44100_32';
+  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=${outputFormat}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -314,7 +322,7 @@ async function elevenLabsTextToSpeechBase64(text: string) {
     },
     body: JSON.stringify({
       text,
-      model_id: process.env.ORION_LEAD_AI_ELEVEN_MODEL || 'eleven_multilingual_v2',
+      model_id: process.env.ORION_LEAD_AI_ELEVEN_MODEL || 'eleven_flash_v2_5',
       voice_settings: {
         stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.45),
         similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.8),
