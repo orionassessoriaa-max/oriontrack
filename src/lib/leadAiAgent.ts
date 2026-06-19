@@ -81,6 +81,16 @@ function parseAiJson(raw: string) {
   }
 }
 
+function providerMessageId(payload: any) {
+  return String(
+    payload?.key?.id ||
+    payload?.message?.key?.id ||
+    payload?.data?.key?.id ||
+    payload?.id ||
+    ''
+  ).trim() || null;
+}
+
 async function findBroker(corretorId: string) {
   const { data } = await supabaseAdmin
     .from('corretores')
@@ -189,6 +199,58 @@ async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: st
   return evolutionFetch(`/message/sendText/${instance}`, {
     method: 'POST',
     body: JSON.stringify({ number: normalizePhone(phone), text }),
+  }, instanceApiKey);
+}
+
+async function textToSpeechBase64(text: string) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
+
+  const cleanText = text
+    .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: process.env.ORION_LEAD_AI_TTS_MODEL || 'tts-1',
+      voice: process.env.ORION_LEAD_AI_TTS_VOICE || 'nova',
+      input: cleanText,
+      response_format: 'mp3',
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload?.error?.message || 'Erro ao gerar audio da IA.');
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return buffer.toString('base64');
+}
+
+async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: string) {
+  const instance = evolutionInstanceName(adminProfile.id);
+  const instanceApiKey = await getEvolutionInstanceApiKey(instance);
+  const audio = await textToSpeechBase64(text);
+
+  return evolutionFetch(`/message/sendWhatsAppAudio/${instance}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      number: normalizePhone(phone),
+      audio,
+      delay: 2000,
+      options: {
+        delay: 1200,
+        presence: 'recording',
+        encoding: true,
+      },
+    }),
   }, instanceApiKey);
 }
 
@@ -358,6 +420,7 @@ export async function continueLeadAiFromIncoming(options: {
   leadId: string;
   conversationId: string;
   customerMessage: string;
+  incomingWasAudio?: boolean;
 }) {
   const { data: session } = await supabaseAdmin
     .from('lead_ai_sessions')
@@ -391,6 +454,27 @@ export async function continueLeadAiFromIncoming(options: {
   if (!reply) return { handled: false, reason: 'IA sem resposta.' };
 
   for (const part of splitReply(reply)) {
+    if (options.incomingWasAudio) {
+      try {
+        const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', part);
+        await insertMessage(options.conversationId, 'outbound', AI_PERSONA, 'Mensagem de voz', {
+          ...(payload || {}),
+          instance: evolutionInstanceName(adminProfile.id),
+          provider_message_id: providerMessageId(payload),
+          ai_agent: AI_PERSONA,
+          ai_text: part,
+          messageType: 'audioMessage',
+          mediaType: 'audio',
+          mediatype: 'audio',
+          mimetype: 'audio/mpeg',
+          fileName: 'aline-resposta.mp3',
+        });
+        continue;
+      } catch (audioErr) {
+        console.error('[lead_ai_agent] Failed sending audio reply, falling back to text:', audioErr);
+      }
+    }
+
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part);
     await insertMessage(options.conversationId, 'outbound', AI_PERSONA, part, {
       ...(payload || {}),

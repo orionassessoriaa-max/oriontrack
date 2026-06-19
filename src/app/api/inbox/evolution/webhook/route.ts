@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { normalizePhone, profileIdFromEvolutionInstance } from '@/lib/evolution';
+import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone, profileIdFromEvolutionInstance } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming } from '@/lib/leadAiAgent';
 
@@ -25,6 +25,58 @@ function readRemoteJid(data: any) {
     data?.jid ||
     ''
   );
+}
+
+function getAudioMessage(data: any) {
+  return data?.message?.audioMessage || data?.message?.message?.audioMessage || null;
+}
+
+async function getMediaBase64(instance: string, providerId: string) {
+  if (!providerId) return '';
+  const instanceApiKey = await getEvolutionInstanceApiKey(instance);
+  const payload = await evolutionFetch(`/chat/getBase64FromMediaMessage/${instance}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      message: {
+        key: {
+          id: providerId,
+        },
+      },
+    }),
+  }, instanceApiKey);
+
+  return String(payload?.base64 || payload?.data?.base64 || payload?.media || payload?.data?.media || '').trim();
+}
+
+async function transcribeAudio(base64: string, mimeType = 'audio/ogg') {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || !base64) return '';
+
+  const cleanBase64 = base64.includes(';base64,') ? base64.split(';base64,')[1] : base64;
+  const bytes = Buffer.from(cleanBase64, 'base64');
+  if (!bytes.length) return '';
+
+  const formData = new FormData();
+  const fileName = mimeType.includes('mpeg') || mimeType.includes('mp3') ? 'audio.mp3' : 'audio.ogg';
+  formData.append('file', new Blob([bytes], { type: mimeType }), fileName);
+  formData.append('model', process.env.ORION_LEAD_AI_TRANSCRIBE_MODEL || 'whisper-1');
+  formData.append('language', 'pt');
+
+  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: formData,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error('[evolution_webhook] Audio transcription failed:', payload);
+    return '';
+  }
+
+  return String(payload?.text || '').trim();
 }
 
 async function resolveProfileCorretorScope(profile: any) {
@@ -127,11 +179,38 @@ export async function POST(request: Request) {
     if (!profile?.corretor_id) return NextResponse.json({ ok: true, ignored: true });
 
     let message = readText(data);
-    const hasAudio = Boolean(data?.message?.audioMessage);
+    const audioMessage = getAudioMessage(data);
+    const hasAudio = Boolean(audioMessage);
     const hasImage = Boolean(data?.message?.imageMessage);
     const hasVideo = Boolean(data?.message?.videoMessage);
     const hasDocument = Boolean(data?.message?.documentMessage);
     const hasMedia = hasAudio || hasImage || hasVideo || hasDocument;
+    const providerId = String(data?.key?.id || data?.id || body?.id || '');
+    let audioTranscript = '';
+    let aiCustomerMessage = message;
+
+    if (providerId) {
+      const { data: existing } = await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .select('id')
+        .eq('provider_message_id', providerId)
+        .limit(1)
+        .maybeSingle();
+      if (existing) return NextResponse.json({ ok: true, duplicated: true });
+    }
+
+    if (hasAudio) {
+      try {
+        const mediaBase64 = await getMediaBase64(instance, providerId);
+        const mimeType = String(audioMessage?.mimetype || audioMessage?.mimeType || 'audio/ogg');
+        audioTranscript = mediaBase64 ? await transcribeAudio(mediaBase64, mimeType) : '';
+        if (audioTranscript) {
+          aiCustomerMessage = `Audio transcrito do cliente: ${audioTranscript}`;
+        }
+      } catch (audioErr) {
+        console.error('[evolution_webhook] Failed processing inbound audio:', audioErr);
+      }
+    }
 
     if (!message && hasMedia) {
       if (hasAudio) message = '🎤 Mensagem de voz';
@@ -144,17 +223,7 @@ export async function POST(request: Request) {
     const phone = normalizePhone(remoteJid.split('@')[0]);
     if (!message || !phone) return NextResponse.json({ ok: true, ignored: true });
 
-    const providerId = String(data?.key?.id || data?.id || body?.id || '');
-    if (providerId) {
-      const { data: existing } = await supabaseAdmin
-        .from('whatsapp_mensagens')
-        .select('id')
-        .eq('provider_message_id', providerId)
-        .limit(1)
-        .maybeSingle();
-      if (existing) return NextResponse.json({ ok: true, duplicated: true });
-    }
-
+    if (!aiCustomerMessage) aiCustomerMessage = audioTranscript || message;
     const lead = await findLead(profile, phone);
 
     const currentConversation = await findConversation(profile.corretor_id, phone, lead?.id || null);
@@ -204,7 +273,11 @@ export async function POST(request: Request) {
       remetente: fromMe ? (profile.nome || 'Orion') : contactName,
       mensagem: message,
       provider_message_id: providerId || null,
-      metadata: body || {},
+      metadata: {
+        ...(body || {}),
+        audio_transcript: audioTranscript || undefined,
+        ai_customer_message: aiCustomerMessage || undefined,
+      },
     }]);
 
     if (!fromMe && lead?.id) {
@@ -212,7 +285,8 @@ export async function POST(request: Request) {
         await continueLeadAiFromIncoming({
           leadId: lead.id,
           conversationId: conversation.id,
-          customerMessage: message,
+          customerMessage: aiCustomerMessage || message,
+          incomingWasAudio: hasAudio,
         });
       } catch (aiErr) {
         console.error('[evolution_webhook] Failed continuing lead AI:', aiErr);
