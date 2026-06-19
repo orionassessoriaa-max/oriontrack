@@ -64,29 +64,12 @@ function leadFacts(lead: LeadRow) {
   ].filter(Boolean).join('\n');
 }
 
-function knownLeadDetails(lead: LeadRow) {
-  const details = [
-    lead.idades ? `idades ${lead.idades}` : null,
-    lead.cidade ? `cidade ${lead.cidade}` : null,
-    lead.possui_cnpj ? `CNPJ/MEI ${lead.possui_cnpj}` : null,
-    lead.investimento ? `investimento ${lead.investimento}` : null,
-    lead.tem_plano_ativo ? `plano atual: ${lead.tem_plano_ativo}${lead.plano_atual ? ` (${lead.plano_atual})` : ''}` : null,
-  ].filter(Boolean);
-
-  return details.join(', ');
-}
-
 function initialLeadQuestion(lead: LeadRow) {
-  if (!lead.possui_cnpj) {
-    return 'So me confirma uma coisa: seria pelo CNPJ/MEI ou pessoa fisica?';
+  if (lead.idades) {
+    return `Voce gostaria de receber uma cotacao para as idades ${lead.idades}, correto?`;
   }
-  if (!lead.tem_plano_ativo) {
-    return 'Hoje voce ja tem algum plano de saude ativo?';
-  }
-  if (String(lead.tem_plano_ativo).toLowerCase().includes('sim') && !lead.plano_atual) {
-    return 'Qual e a operadora do seu plano atual?';
-  }
-  return 'Me confirma se esta tudo certinho para eu seguir com seu atendimento?';
+
+  return 'Voce gostaria de receber uma cotacao? Se puder, me confirma quais idades entram no plano.';
 }
 
 function splitReply(text: string) {
@@ -391,12 +374,10 @@ export async function startLeadAiIfEligible(leadId: string) {
   const conversation = await getOrCreateConversation(lead);
   if (!conversation) return { started: false, eligible: true, reason: 'Conversa nao criada.' };
 
-  const details = knownLeadDetails(lead);
   const intro = [
-    `Oi, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
-    details
-      ? `Vi seu cadastro para plano de saude com essas informacoes: ${details}.`
-      : 'Vi seu cadastro para plano de saude e ja vou deixar seu atendimento encaminhado certinho.',
+    `Ola, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
+    'Somos da corretora *Vida Protegida*.',
+    'Voce clicou em um anuncio nosso e preencheu o formulario de interesse da Hapvida PME.',
     initialLeadQuestion(lead),
   ].join('\n\n');
 
