@@ -119,6 +119,21 @@ function requiresStatusMoveModal(status: LeadStatus) {
   return requiresCommercialData(status) || status === 'Sem interesse';
 }
 
+function statusBoardTone(status: LeadStatus) {
+  const normalized = normalizeLeadStatus(status);
+  if (normalized === 'Aguardando atendimento') return 'border-blue-500/25 bg-blue-950/10';
+  if (normalized === 'Inicio') return 'border-cyan-500/25 bg-cyan-950/10';
+  if (normalized === 'Contato feito') return 'border-purple-500/25 bg-purple-950/10';
+  if (normalized === 'Cotação enviada') return 'border-indigo-500/25 bg-indigo-950/10';
+  if (normalized === 'Em negociação') return 'border-amber-500/25 bg-amber-950/10';
+  if (normalized === 'Não tive retorno') return 'border-slate-500/25 bg-slate-950/20';
+  if (normalized === 'Venda realizada') return 'border-emerald-500/25 bg-emerald-950/10';
+  if (normalized === 'Sem interesse') return 'border-rose-500/25 bg-rose-950/10';
+  if (normalized === 'Região sem comercialização') return 'border-orange-500/25 bg-orange-950/10';
+  if (normalized === 'Chamou duas vezes') return 'border-violet-500/25 bg-violet-950/10';
+  return 'border-zinc-500/25 bg-zinc-950/20';
+}
+
 type CommercialPayload = {
   valor_negociacao?: number | null;
   operadora_negociacao?: string | null;
@@ -200,6 +215,7 @@ export default function BrokerLeadsPage() {
   const [adsetFilter, setAdsetFilter] = useState('todos');
   const [adFilter, setAdFilter] = useState('todos');
   const [responsavelFilter, setResponsavelFilter] = useState('todos');
+  const [viewMode, setViewMode] = useState<'status' | 'table'>('status');
   const [showCrmModal, setShowCrmModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showManualLeadModal, setShowManualLeadModal] = useState(false);
@@ -708,6 +724,21 @@ export default function BrokerLeadsPage() {
     return searchMatch && cnpjMatch && statusMatch && operadoraMatch && campaignMatch && adsetMatch && adMatch && dateTypeMatch && fromMatch && toMatch && responsavelMatch;
   });
 
+  const leadsByStatus = useMemo(() => {
+    const groups = LEAD_STATUSES.reduce((acc, status) => {
+      acc[status] = [];
+      return acc;
+    }, {} as Record<LeadStatus, Lead[]>);
+
+    filteredLeads.forEach((lead) => {
+      const status = normalizeLeadStatus(lead.status);
+      if (!groups[status]) groups[status] = [];
+      groups[status].push(lead);
+    });
+
+    return groups;
+  }, [filteredLeads]);
+
   const filterOptions = (values: string[]) => Array.from(new Set(values.filter((value) => value && value !== '-'))).sort((a, b) => a.localeCompare(b));
 
   const sheetTabs = useMemo(() => {
@@ -1035,9 +1066,142 @@ export default function BrokerLeadsPage() {
               Responsável: {responsavelFilter === 'sem_responsavel' ? 'sem responsável' : teamMembers.find(m => m.id === responsavelFilter)?.nome || 'carregando...'}
             </span>
           )}
+          <div className="ml-auto inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setViewMode('status')}
+              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'status' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              Status
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'table' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              Tabela
+            </button>
+          </div>
         </div>
       </div>
 
+      {!error && viewMode === 'status' && (
+        <div className="-mx-5 sm:-mx-6 lg:-mx-8">
+          <div className="scrollbar-visible overflow-x-auto px-5 pb-4 sm:px-6 lg:px-8">
+            <div className="flex min-w-max gap-4">
+              {LEAD_STATUSES.map((status) => {
+                const statusStyle = getLeadStatusStyle(status);
+                const columnLeads = leadsByStatus[status] || [];
+
+                return (
+                  <section
+                    key={status}
+                    className={`flex h-[70vh] w-[320px] shrink-0 flex-col overflow-hidden rounded-2xl border ${statusBoardTone(status)} shadow-sm`}
+                  >
+                    <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
+                          <h3 className="truncate text-[12px] font-black uppercase tracking-widest text-white">{statusStyle.label}</h3>
+                        </div>
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Leads nesta etapa</p>
+                      </div>
+                      <span className="rounded-full bg-blue-600/20 px-3 py-1 text-xs font-black text-blue-100 ring-1 ring-blue-400/20">
+                        {columnLeads.length}
+                      </span>
+                    </header>
+
+                    <div className="scrollbar-visible flex-1 space-y-3 overflow-y-auto p-3">
+                      {loading ? (
+                        <div className="flex h-40 items-center justify-center">
+                          <Loader2 className="animate-spin text-blue-400" size={28} />
+                        </div>
+                      ) : columnLeads.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/30 p-5 text-center">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sem leads aqui</p>
+                        </div>
+                      ) : columnLeads.map((lead) => {
+                        const leadTab = tabLabel(lead.operadora);
+                        const importWarnings = getLeadImportWarnings(lead);
+
+                        return (
+                          <article key={lead.id} className="rounded-2xl border border-white/10 bg-slate-950/80 p-4 shadow-lg shadow-black/10">
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h4 className="truncate text-sm font-black text-white" title={lead.nome || ''}>{lead.nome || 'Sem nome'}</h4>
+                                <div className="mt-2 text-xs font-bold text-slate-300">
+                                  <PhoneAction phone={lead.telefone} leadId={lead.id} />
+                                </div>
+                              </div>
+                              {importWarnings.length > 0 && (
+                                <span title={importWarnings.join('\n')} className="rounded-full border border-amber-300/30 bg-amber-500/10 p-1.5 text-amber-300">
+                                  <AlertTriangle size={14} />
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-300">
+                              <div className="rounded-xl bg-white/5 p-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Idade</p>
+                                <p className="mt-1 truncate">{lead.idades || '-'}</p>
+                              </div>
+                              <div className="rounded-xl bg-white/5 p-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Cidade</p>
+                                <p className="mt-1 truncate">{lead.cidade || '-'}</p>
+                              </div>
+                              <div className="rounded-xl bg-white/5 p-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">CNPJ</p>
+                                <span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-widest ${cnpjBadgeStyle(lead.possui_cnpj)}`}>
+                                  {cnpjLabel(lead.possui_cnpj)}
+                                </span>
+                              </div>
+                              <div className="rounded-xl bg-white/5 p-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Plano</p>
+                                <p className="mt-1 truncate">{lead.tem_plano_ativo || 'Nao informado'}</p>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 space-y-2 rounded-xl bg-cyan-500/10 p-3 text-[11px] font-black text-cyan-100 ring-1 ring-cyan-400/10">
+                              <p className="truncate">Pagina: {leadTab}</p>
+                              <p className="truncate">Investimento: {lead.investimento || '-'}</p>
+                              <p className="truncate">Anuncio: {leadAd(lead)}</p>
+                              {canManageLeadResponsible && teamMembers.length > 0 ? (
+                                <select
+                                  value={lead.responsavel_membro_id || 'unassigned'}
+                                  onChange={(event) => assignLeadToMember(lead.id, event.target.value)}
+                                  className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-cyan-100 outline-none"
+                                >
+                                  <option value="unassigned">Sem responsavel</option>
+                                  {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
+                                </select>
+                              ) : (
+                                <p className="truncate">Responsavel: {lead.responsavel_membro?.nome || '-'}</p>
+                              )}
+                            </div>
+
+                            <div className="mt-3 flex items-center gap-2">
+                              <select
+                                value={lead.status}
+                                onChange={(e) => updateLeadStatus(lead.id, e.target.value as LeadStatus)}
+                                className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest outline-none ${statusStyle.chip}`}
+                              >
+                                {LEAD_STATUSES.map((item) => <option key={item} value={item}>{getLeadStatusStyle(item).label}</option>)}
+                              </select>
+                              {savingStatusId === lead.id && <Loader2 className="shrink-0 animate-spin text-blue-300" size={16} />}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(error || viewMode === 'table') && (
       <div className="-mx-5 sm:-mx-6 lg:-mx-8">
         <div className="scrollbar-visible overflow-x-auto overflow-y-visible px-5 sm:px-6 lg:px-8">
           {error ? (
@@ -1265,6 +1429,7 @@ export default function BrokerLeadsPage() {
           </div>
         )}
       </div>
+      )}
 
       {hasMoreLeads && !error && (
         <div className="mt-4 flex justify-center">
