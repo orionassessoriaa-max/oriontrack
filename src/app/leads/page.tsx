@@ -1038,8 +1038,8 @@ export default function BrokerLeadsPage() {
         </div>
       </div>
 
-      <div className="orion-table-shell overflow-hidden">
-        <div className="scrollbar-visible overflow-x-auto overflow-y-visible">
+      <div className="-mx-5 sm:-mx-6 lg:-mx-8">
+        <div className="scrollbar-visible overflow-x-auto overflow-y-visible px-5 sm:px-6 lg:px-8">
           {error ? (
             <div className="py-24 text-center">
               <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">
