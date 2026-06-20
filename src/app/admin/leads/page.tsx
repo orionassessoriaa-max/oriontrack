@@ -594,7 +594,7 @@ export default function AdminLeadsPage() {
           </div>
         </div>
 
-        <div className="scrollbar-visible max-h-[calc(100vh-330px)] overflow-auto">
+        <div className="scrollbar-visible overflow-x-auto overflow-y-visible">
           {error ? (
             <div className="py-24 text-center">
               <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
