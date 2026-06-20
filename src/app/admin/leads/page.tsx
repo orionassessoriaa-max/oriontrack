@@ -24,7 +24,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Link from 'next/link';
 import PhoneAction from '@/components/ui/PhoneAction';
-import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 
 type BrokerOption = {
   id: string;
@@ -51,21 +50,6 @@ function getConcessionariaName(corretor?: Pick<BrokerOption, 'nome' | 'nome_empr
   return String(corretor?.nome_empresa || corretor?.nome || 'Sem concessionaria').trim();
 }
 
-function adminStatusBoardTone(status: Lead['status']) {
-  const normalized = normalizeLeadStatus(status);
-  if (normalized === 'Aguardando atendimento') return 'border-blue-500/25 bg-blue-950/10';
-  if (normalized === 'Inicio') return 'border-cyan-500/25 bg-cyan-950/10';
-  if (normalized === 'Contato feito') return 'border-purple-500/25 bg-purple-950/10';
-  if (normalized === 'Cotação enviada') return 'border-indigo-500/25 bg-indigo-950/10';
-  if (normalized === 'Em negociação') return 'border-amber-500/25 bg-amber-950/10';
-  if (normalized === 'Não tive retorno') return 'border-slate-500/25 bg-slate-950/20';
-  if (normalized === 'Venda realizada') return 'border-emerald-500/25 bg-emerald-950/10';
-  if (normalized === 'Sem interesse') return 'border-rose-500/25 bg-rose-950/10';
-  if (normalized === 'Região sem comercialização') return 'border-orange-500/25 bg-orange-950/10';
-  if (normalized === 'Chamou duas vezes') return 'border-violet-500/25 bg-violet-950/10';
-  return 'border-zinc-500/25 bg-zinc-950/20';
-}
-
 export default function AdminLeadsPage() {
   const [leads, setLeads] = useState<LeadWithBroker[]>([]);
   const [corretores, setCorretores] = useState<BrokerOption[]>([]);
@@ -79,7 +63,6 @@ export default function AdminLeadsPage() {
   const [filterCidade, setFilterCidade] = useState('');
   const [filterDataInicio, setFilterDataInicio] = useState('');
   const [filterDataFim, setFilterDataFim] = useState('');
-  const [viewMode, setViewMode] = useState<'status' | 'table'>('status');
   const [sheetUrl, setSheetUrl] = useState('');
   const [sheetCorretorId, setSheetCorretorId] = useState('');
   const [showImportBox, setShowImportBox] = useState(false);
@@ -367,7 +350,7 @@ export default function AdminLeadsPage() {
     const matchesConcessionaria = !selectedConcessionaria
       || selectedConcessionaria.brokerIds.includes(String(lead.corretor_id || ''))
       || getConcessionariaName(lead.corretores).toLowerCase() === selectedConcessionaria.key;
-    const matchesStatus = !filterStatus || normalizeLeadStatus(lead.status) === filterStatus;
+    const matchesStatus = !filterStatus || lead.status === filterStatus;
     const matchesCidade = !filterCidade || (lead.cidade?.toLowerCase() || '').includes(filterCidade.toLowerCase());
     
     let matchesDate = true;
@@ -383,21 +366,6 @@ export default function AdminLeadsPage() {
 
     return matchesSearch && matchesConcessionaria && matchesStatus && matchesCidade && matchesDate;
   });
-
-  const leadsByStatus = useMemo(() => {
-    const groups = LEAD_STATUSES.reduce((acc, status) => {
-      acc[status] = [];
-      return acc;
-    }, {} as Record<string, LeadWithBroker[]>);
-
-    filteredLeads.forEach((lead) => {
-      const status = normalizeLeadStatus(lead.status);
-      if (!groups[status]) groups[status] = [];
-      groups[status].push(lead);
-    });
-
-    return groups;
-  }, [filteredLeads]);
 
   const loadedDeleteScopeLeadsCount = selectedConcessionaria
     ? leads.filter((lead) => selectedConcessionaria.brokerIds.includes(String(lead.corretor_id || ''))).length
@@ -626,113 +594,6 @@ export default function AdminLeadsPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-50 px-8 py-4">
-          <span className="rounded-full bg-slate-100 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600">
-            {filteredLeads.length} lead(s) filtrados
-          </span>
-          <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setViewMode('status')}
-              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'status' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
-            >
-              Status
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('table')}
-              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'table' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
-            >
-              Tabela
-            </button>
-          </div>
-        </div>
-
-        {!error && viewMode === 'status' && (
-          <div className="-mx-8 px-8 pb-8">
-            <div className="scrollbar-visible overflow-x-auto">
-              <div className="flex min-w-max gap-4">
-                {LEAD_STATUSES.map((status) => {
-                  const statusStyle = getLeadStatusStyle(status);
-                  const columnLeads = leadsByStatus[status] || [];
-
-                  return (
-                    <section
-                      key={status}
-                      className={`flex h-[70vh] w-[320px] shrink-0 flex-col overflow-hidden rounded-2xl border ${adminStatusBoardTone(status)} shadow-sm`}
-                    >
-                      <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
-                            <h3 className="truncate text-[12px] font-black uppercase tracking-widest text-white">{statusStyle.label}</h3>
-                          </div>
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Auditoria por etapa</p>
-                        </div>
-                        <span className="rounded-full bg-blue-600/20 px-3 py-1 text-xs font-black text-blue-100 ring-1 ring-blue-400/20">
-                          {columnLeads.length}
-                        </span>
-                      </header>
-
-                      <div className="scrollbar-visible flex-1 space-y-3 overflow-y-auto p-3">
-                        {loading ? (
-                          <div className="flex h-40 items-center justify-center">
-                            <Loader2 className="animate-spin text-blue-400" size={28} />
-                          </div>
-                        ) : columnLeads.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/30 p-5 text-center">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sem leads aqui</p>
-                          </div>
-                        ) : columnLeads.map((lead) => {
-                          const concessionaria = getConcessionariaName(lead.corretores);
-
-                          return (
-                            <article key={lead.id} className="rounded-2xl border border-white/10 bg-slate-950/80 p-4 shadow-lg shadow-black/10">
-                              <div className="mb-3 min-w-0">
-                                <h4 className="truncate text-sm font-black text-white" title={lead.nome || ''}>{lead.nome || 'Sem nome'}</h4>
-                                <div className="mt-2 text-xs font-bold text-slate-300">
-                                  <PhoneAction phone={lead.telefone} />
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-300">
-                                <div className="rounded-xl bg-white/5 p-2">
-                                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Idade</p>
-                                  <p className="mt-1 truncate">{lead.idades || '-'}</p>
-                                </div>
-                                <div className="rounded-xl bg-white/5 p-2">
-                                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Cidade</p>
-                                  <p className="mt-1 truncate">{lead.cidade || '-'}</p>
-                                </div>
-                                <div className="rounded-xl bg-white/5 p-2">
-                                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">CNPJ</p>
-                                  <p className="mt-1 truncate">{lead.possui_cnpj || '-'}</p>
-                                </div>
-                                <div className="rounded-xl bg-white/5 p-2">
-                                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Plano</p>
-                                  <p className="mt-1 truncate">{lead.tem_plano_ativo || '-'}</p>
-                                </div>
-                              </div>
-
-                              <div className="mt-3 space-y-2 rounded-xl bg-cyan-500/10 p-3 text-[11px] font-black text-cyan-100 ring-1 ring-cyan-400/10">
-                                <p className="truncate">Concessionaria: {concessionaria}</p>
-                                <p className="truncate">Corretor: {lead.corretores?.nome || '-'}</p>
-                                <p className="truncate">Pagina: {lead.operadora || '-'}</p>
-                                <p className="truncate">Investimento: {lead.investimento || '-'}</p>
-                              </div>
-                            </article>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {(error || viewMode === 'table') && (
         <div className="-mx-8 scrollbar-visible overflow-x-auto overflow-y-visible px-8">
           {error ? (
             <div className="py-24 text-center">
@@ -831,8 +692,6 @@ export default function AdminLeadsPage() {
             </table>
           )}
         </div>
-        )}
-
         {!loading && !error && filteredLeads.length === 0 && (
           <div className="py-24 text-center">
             <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">

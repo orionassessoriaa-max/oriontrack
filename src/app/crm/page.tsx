@@ -254,13 +254,7 @@ export default function CrmPage() {
   const [commercialModal, setCommercialModal] = useState<CommercialModalState>(null);
   const [commercialModalError, setCommercialModalError] = useState<string | null>(null);
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
-  const boardHeaderRef = useRef<HTMLDivElement | null>(null);
-  const boardScrollRef = useRef<HTMLDivElement | null>(null);
-  const boardScrollbarRef = useRef<HTMLDivElement | null>(null);
-  const boardScrollSyncRef = useRef(false);
   const pageScrollBeforeLeadRef = useRef(0);
-  const [boardScrollWidth, setBoardScrollWidth] = useState(0);
-  const [boardClientWidth, setBoardClientWidth] = useState(0);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [dealershipBrokers, setDealershipBrokers] = useState<DealershipBroker[]>([]);
   const [simulatedCorretorId, setSimulatedCorretorId] = useState<string | null>(null);
@@ -603,28 +597,6 @@ export default function CrmPage() {
     }
   }, [selectedLead?.id]);
 
-  function syncBoardScroll(source: 'board' | 'bar' | 'header') {
-    const header = boardHeaderRef.current;
-    const board = boardScrollRef.current;
-    const bar = boardScrollbarRef.current;
-    if (!board || boardScrollSyncRef.current) return;
-
-    const nextScrollLeft =
-      source === 'bar'
-        ? bar?.scrollLeft || 0
-        : source === 'header'
-          ? header?.scrollLeft || 0
-          : board.scrollLeft;
-
-    boardScrollSyncRef.current = true;
-    if (source !== 'board') board.scrollLeft = nextScrollLeft;
-    if (header && source !== 'header') header.scrollLeft = nextScrollLeft;
-    if (bar && source !== 'bar') bar.scrollLeft = nextScrollLeft;
-    requestAnimationFrame(() => {
-      boardScrollSyncRef.current = false;
-    });
-  }
-
   function getConversationLead(conversation: WhatsAppConversa) {
     return conversation.lead_id ? leads.find((lead) => lead.id === conversation.lead_id) : null;
   }
@@ -860,27 +832,6 @@ export default function CrmPage() {
 
     return nextLeads;
   }, [viewScopedLeads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
-
-  useEffect(() => {
-    const board = boardScrollRef.current;
-    if (!board) return;
-
-    const syncSize = () => {
-      setBoardScrollWidth(board.scrollWidth);
-      setBoardClientWidth(board.clientWidth);
-    };
-
-    syncSize();
-    const observer = new ResizeObserver(syncSize);
-    observer.observe(board);
-    Array.from(board.children).forEach((child) => observer.observe(child));
-    window.addEventListener('resize', syncSize);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', syncSize);
-    };
-  }, [filteredLeads.length, selectedLead?.id, loading]);
 
   const pageOptions = useMemo(() => {
     const pages = viewScopedLeads.map((lead) => lead.operadora || '').filter(Boolean);
@@ -1435,68 +1386,46 @@ export default function CrmPage() {
               ) : (
                 <>
                 <div
-                  ref={boardHeaderRef}
-                  onScroll={() => syncBoardScroll('header')}
-                  className="scrollbar-none sticky top-20 z-40 mb-2 overflow-x-auto rounded-2xl bg-[#06111f]/95 py-1 backdrop-blur"
-                >
-                  <div
-                    className="flex gap-4 sm:gap-5"
-                    style={{ width: boardScrollWidth > boardClientWidth ? boardScrollWidth : '100%' }}
-                  >
-                    {columns.map((column) => {
-                      const columnLeads = getLeadsByStatus(column.id);
-                      const statusStyle = getLeadStatusStyle(column.id);
-                      const commercialTotal = getCommercialTotal(column.id);
-
-                      return (
-                        <div
-                          key={column.id}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={() => handleDrop(column.id)}
-                          className="min-w-[285px] flex-1 snap-start sm:min-w-[310px]"
-                        >
-                          <div className={`rounded-2xl border p-3 shadow-sm transition-colors ${draggedLeadId ? 'border-blue-300 bg-blue-50' : 'border-white/10 bg-white/5'}`}>
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
-                                  <h3 className="text-sm font-black uppercase tracking-widest text-white">{column.label}</h3>
-                                </div>
-                                <p className="mt-1 text-xs font-bold text-blue-800">{column.desc}</p>
-                              </div>
-                              <span className="rounded-full border border-blue-100 bg-blue-950 px-2.5 py-1 text-[10px] font-black text-white">
-                                {columnLeads.length}
-                              </span>
-                            </div>
-                            {requiresCommercialData(column.id) && (
-                              <div className="mt-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Total na etapa</p>
-                                <p className="text-sm font-black text-emerald-300">{formatCurrencyValue(commercialTotal)}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div
-                  ref={boardScrollRef}
-                  onScroll={() => syncBoardScroll('board')}
-                  className="scrollbar-visible flex min-h-[560px] snap-x gap-4 overflow-x-scroll pb-8 sm:gap-5"
+                  className="scrollbar-visible flex h-[calc(100dvh-360px)] min-h-[560px] snap-x gap-4 overflow-x-auto pb-4 sm:gap-5"
                 >
                   {columns.map((column) => {
                     const columnLeads = getLeadsByStatus(column.id);
                     const statusStyle = getLeadStatusStyle(column.id);
+                    const commercialTotal = getCommercialTotal(column.id);
                     const limit = visibleLimits[column.id] || 50;
                     const visibleLeads = columnLeads.slice(0, limit);
 
                     return (
-                      <div key={column.id} className="min-w-[285px] flex-1 snap-start sm:min-w-[310px]">
+                      <section
+                        key={column.id}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => handleDrop(column.id)}
+                        className={`flex h-full min-w-[285px] flex-1 snap-start flex-col overflow-hidden rounded-[1.35rem] border transition-colors sm:min-w-[310px] ${draggedLeadId ? 'border-blue-300 bg-blue-950/20' : 'border-white/10 bg-white/5'}`}
+                      >
+                        <header className="shrink-0 border-b border-white/10 bg-[#07111f]/95 p-3 backdrop-blur">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
+                                <h3 className="truncate text-sm font-black uppercase tracking-widest text-white">{column.label}</h3>
+                              </div>
+                              <p className="mt-1 text-xs font-bold text-sky-300">{column.desc}</p>
+                            </div>
+                            <span className="rounded-full border border-blue-400/20 bg-blue-600/20 px-2.5 py-1 text-[10px] font-black text-blue-100">
+                              {columnLeads.length}
+                            </span>
+                          </div>
+                          {requiresCommercialData(column.id) && (
+                            <div className="mt-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-300">Total na etapa</p>
+                              <p className="text-sm font-black text-emerald-100">{formatCurrencyValue(commercialTotal)}</p>
+                            </div>
+                          )}
+                        </header>
                         <div
                           onDragOver={(event) => event.preventDefault()}
                           onDrop={() => handleDrop(column.id)}
-                          className={`min-h-[220px] space-y-3 rounded-[2rem] border p-3 transition-colors ${draggedLeadId ? 'border-blue-200 bg-blue-50/70' : statusStyle.column}`}
+                          className={`scrollbar-visible flex-1 space-y-3 overflow-y-auto p-3 transition-colors ${draggedLeadId ? 'bg-blue-950/10' : statusStyle.column}`}
                         >
                           {visibleLeads.map((lead) => {
                             const qualification = getLeadQualification(lead, tipoCampanha);
@@ -1575,21 +1504,10 @@ export default function CrmPage() {
                             </div>
                           )}
                         </div>
-                      </div>
+                      </section>
                     );
                   })}
                 </div>
-                {boardScrollWidth > boardClientWidth && (
-                  <div className="sticky bottom-0 z-40 -mt-5 border-t border-slate-200 bg-white/95 px-2 py-2 backdrop-blur">
-                    <div
-                      ref={boardScrollbarRef}
-                      onScroll={() => syncBoardScroll('bar')}
-                      className="scrollbar-visible overflow-x-scroll"
-                    >
-                      <div style={{ width: boardScrollWidth, height: 1 }} />
-                    </div>
-                  </div>
-                )}
                 </>
               )}
             </div>
