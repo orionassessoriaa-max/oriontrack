@@ -73,10 +73,10 @@ function leadFacts(lead: LeadRow) {
 
 function initialLeadQuestion(lead: LeadRow) {
   if (hasKnownValue(lead.idades)) {
-    return `Voce gostaria de receber uma cotacao para as idades ${plain(lead.idades, '')}, correto?`;
+    return `Você gostaria de receber uma cotação para as idades ${plain(lead.idades, '')}, correto?`;
   }
 
-  return 'Voce gostaria de receber uma cotacao do plano, correto?';
+  return 'Você gostaria de receber uma cotação, correto?';
 }
 
 function splitReply(text: string) {
@@ -516,9 +516,9 @@ export async function startLeadAiIfEligible(leadId: string) {
   if (!conversation) return { started: false, eligible: true, reason: 'Conversa nao criada.' };
 
   const intro = [
-    `Ola, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
-    'Somos da corretora *Vida Protegida*.',
-    'Voce clicou em um anuncio nosso e preencheu o formulario de interesse da Hapvida PME.',
+    `Olá, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
+    'Somos da corretora Vida Protegida',
+    'Você clicou em um anúncio nosso e preencheu o formulário de interesse da Hapvida PME.',
     initialLeadQuestion(lead),
   ].join('\n\n');
 
