@@ -160,6 +160,7 @@ function buildManualLeadMessage(lead: any, responsibleName?: string | null) {
     `Nome: ${lead.nome}`,
     `Telefone: ${lead.telefone}`,
   ];
+  if (lead.idades) lines.push(`Idades: ${lead.idades}`);
   if (lead.cidade) lines.push(`Cidade: ${lead.cidade}`);
   if (lead.investimento) lines.push(`Investimento: ${lead.investimento}`);
   if (lead.possui_cnpj) lines.push(`CNPJ: ${lead.possui_cnpj}`);

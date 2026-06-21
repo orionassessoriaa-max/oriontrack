@@ -172,6 +172,7 @@ function buildLeadDetailsMessage(lead: any, intro: string) {
     '',
     `Nome: ${notificationValue(lead?.nome)}`,
     `Telefone: ${notificationValue(lead?.telefone)}`,
+    `Idades: ${notificationValue(lead?.idades)}`,
     `Cidade: ${notificationValue(lead?.cidade)}`,
     `Possui CNPJ: ${notificationValue(lead?.possui_cnpj)}`,
     ...(cnpjNumber ? [`CNPJ: ${cnpjNumber}`] : []),
@@ -495,7 +496,7 @@ export async function POST(request: Request) {
     // Fetch final lead assignment details to notify the correct users
     const { data: finalLead } = await supabaseAdmin
       .from('leads')
-      .select('id, corretor_id, nome, telefone, cidade, possui_cnpj, cnpj, investimento, tem_plano_ativo, plano_atual, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, responsavel_membro:responsavel_membro_id(nome)')
+      .select('id, corretor_id, nome, telefone, idades, cidade, possui_cnpj, cnpj, investimento, tem_plano_ativo, plano_atual, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, responsavel_membro:responsavel_membro_id(nome)')
       .eq('id', data.id)
       .maybeSingle();
 
