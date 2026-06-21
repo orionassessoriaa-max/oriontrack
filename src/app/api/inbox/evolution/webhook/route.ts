@@ -31,6 +31,22 @@ function getAudioMessage(data: any) {
   return data?.message?.audioMessage || data?.message?.message?.audioMessage || null;
 }
 
+function isCallEvent(body: any, data: any, event: string) {
+  const messageType = String(body?.messageType || data?.messageType || data?.type || '').toLowerCase();
+  return event.includes('CALL') || messageType.includes('call') || Boolean(data?.call || body?.call);
+}
+
+function readCallText(body: any, data: any) {
+  const duration = String(data?.call?.duration || body?.call?.duration || data?.duration || '').trim();
+  const status = String(data?.call?.status || body?.call?.status || data?.status || '').trim();
+  const suffix = [
+    duration ? `Duração: ${duration}` : null,
+    status ? `Status: ${status}` : null,
+  ].filter(Boolean).join(' | ');
+
+  return suffix ? `Ligação de voz\n${suffix}` : 'Ligação de voz';
+}
+
 async function getMediaBase64(instance: string, providerId: string) {
   if (!providerId) return '';
   const instanceApiKey = await getEvolutionInstanceApiKey(instance);
@@ -187,7 +203,9 @@ export async function POST(request: Request) {
     const data = body?.data || body;
     const event = String(body?.event || body?.type || '').toUpperCase();
 
-    if (event && !event.includes('MESSAGE') && !event.includes('SEND')) {
+    const callEvent = isCallEvent(body, data, event);
+
+    if (event && !event.includes('MESSAGE') && !event.includes('SEND') && !callEvent) {
       return NextResponse.json({ ok: true, ignored: true });
     }
 
@@ -203,7 +221,7 @@ export async function POST(request: Request) {
 
     if (!profile?.corretor_id) return NextResponse.json({ ok: true, ignored: true });
 
-    let message = readText(data);
+    let message = callEvent ? readCallText(body, data) : readText(data);
     const audioMessage = getAudioMessage(data);
     const hasAudio = Boolean(audioMessage);
     const hasImage = Boolean(data?.message?.imageMessage);
@@ -300,6 +318,8 @@ export async function POST(request: Request) {
       provider_message_id: providerId || null,
       metadata: {
         ...(body || {}),
+        messageType: callEvent ? 'call' : body?.messageType,
+        mediaType: callEvent ? 'call' : body?.mediaType,
         audio_transcript: audioTranscript || undefined,
         ai_customer_message: aiCustomerMessage || undefined,
       },

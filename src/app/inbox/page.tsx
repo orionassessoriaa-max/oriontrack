@@ -38,7 +38,8 @@ import {
   Pause,
   Image as ImageIcon,
   Video,
-  Download
+  Download,
+  PhoneCall
 } from 'lucide-react';
 
 type Conversation = {
@@ -73,7 +74,7 @@ type InboxMessage = {
   metadata?: any;
 };
 
-type MessageMediaKind = 'audio' | 'image' | 'video' | 'file' | null;
+type MessageMediaKind = 'audio' | 'image' | 'video' | 'file' | 'call' | null;
 
 function readNestedMedia(message: InboxMessage) {
   const metadata = message.metadata || {};
@@ -137,6 +138,7 @@ function getMessageMediaKind(message: InboxMessage): MessageMediaKind {
     ''
   ).toLowerCase();
 
+  if (messageType.includes('call') || text.includes('ligacao de voz') || text.includes('ligação de voz')) return 'call';
   if (message.isAudio || mime.startsWith('audio/') || messageType.includes('audio')) return 'audio';
   if (mime.startsWith('image/') || messageType.includes('image') || text.includes('imagem')) return 'image';
   if (mime.startsWith('video/') || messageType.includes('video') || text.includes('video') || text.includes('vã­deo') || text.includes('vídeo')) return 'video';
@@ -1557,6 +1559,43 @@ export default function BrokerInboxPage() {
     }
   };
 
+  const messageDayKey = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+  };
+
+  const formatMessageDay = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+
+    if (sameDay(date, today)) return 'Hoje';
+    if (sameDay(date, yesterday)) return 'Ontem';
+
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const diffMs = todayStart - dateStart;
+    const diffDays = Math.round(diffMs / 86400000);
+    if (diffDays > 1 && diffDays < 7) {
+      return date.toLocaleDateString('pt-BR', { weekday: 'long' });
+    }
+
+    return date.toLocaleDateString('pt-BR');
+  };
+
   const renderAudioWaveform = (isActive: boolean) => {
     return (
       <div className="flex items-center gap-1">
@@ -1917,7 +1956,7 @@ export default function BrokerInboxPage() {
                       <Loader2 className="animate-spin text-cyan-400" size={24} />
                     </div>
                   ) : filteredChatMessages.length > 0 ? (
-                    filteredChatMessages.map((message) => {
+                    filteredChatMessages.map((message, index) => {
                       const isMine = message.direction === 'outbound';
                       const isPlaying = playingAudioId === message.id;
                       const isLoading = loadingAudioId === message.id;
@@ -1925,8 +1964,18 @@ export default function BrokerInboxPage() {
                       const media = mediaUrls[message.id];
                       const isMediaLoading = loadingMediaId === message.id;
                       const fileName = media?.fileName || getMessageFileName(message) || message.mensagem.replace(/^.*?(Imagem|Arquivo|Video|Vídeo)\s*:?\s*/i, '').replace(/[()]/g, '').trim() || 'Arquivo recebido';
+                      const previousMessage = filteredChatMessages[index - 1];
+                      const showDaySeparator = !previousMessage || messageDayKey(previousMessage.created_at) !== messageDayKey(message.created_at);
                       return (
-                        <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
+                        <div key={message.id} className="space-y-4">
+                          {showDaySeparator && (
+                            <div className="flex justify-center">
+                              <span className="rounded-lg border border-white/10 bg-slate-800/90 px-3 py-1 text-[10px] font-bold text-slate-200 shadow-lg">
+                                {formatMessageDay(message.created_at)}
+                              </span>
+                            </div>
+                          )}
+                          <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
                           <div className={`max-w-[75%] rounded-[1.5rem] p-3.5 shadow-lg space-y-1.5 ${
                             isMine 
                               ? 'bg-cyan-600 text-white rounded-tr-none' 
@@ -1958,6 +2007,20 @@ export default function BrokerInboxPage() {
                                   </span>
                                 </div>
                                 {renderAudioWaveform(isPlaying)}
+                              </div>
+                            ) : mediaKind === 'call' ? (
+                              <div className="flex min-w-52 items-center gap-3">
+                                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                                  isMine ? 'bg-white text-cyan-700' : 'bg-cyan-500/20 text-cyan-300'
+                                }`}>
+                                  <PhoneCall size={17} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-black">Ligação de voz</p>
+                                  <p className={`text-[10px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
+                                    {formatHour(message.created_at)}
+                                  </p>
+                                </div>
                               </div>
                             ) : mediaKind === 'image' ? (
                               <button
@@ -2042,6 +2105,7 @@ export default function BrokerInboxPage() {
                               </span>
                             </div>
                           </div>
+                        </div>
                         </div>
                       );
                     })
