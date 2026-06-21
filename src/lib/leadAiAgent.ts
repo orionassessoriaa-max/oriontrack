@@ -46,6 +46,12 @@ function plain(value?: unknown, fallback = 'Nao informado') {
   return text || fallback;
 }
 
+function hasKnownValue(value?: unknown) {
+  const text = String(value ?? '').trim();
+  if (!text) return false;
+  return !['-', 'nao informado', 'não informado', 'sem informacao', 'sem informação'].includes(text.toLowerCase());
+}
+
 function adName(lead: LeadRow) {
   return plain(lead.utm_content || lead.utm_term || lead.utm_campaign || lead.utm_medium || lead.utm_source);
 }
@@ -66,11 +72,11 @@ function leadFacts(lead: LeadRow) {
 }
 
 function initialLeadQuestion(lead: LeadRow) {
-  if (lead.idades) {
-    return `Voce gostaria de receber uma cotacao para as idades ${lead.idades}, correto?`;
+  if (hasKnownValue(lead.idades)) {
+    return `Voce gostaria de receber uma cotacao para as idades ${plain(lead.idades, '')}, correto?`;
   }
 
-  return 'Voce gostaria de receber uma cotacao? Se puder, me confirma quais idades entram no plano.';
+  return 'Voce gostaria de receber uma cotacao do plano, correto?';
 }
 
 function splitReply(text: string) {
@@ -424,8 +430,9 @@ ${leadFacts(lead)}
 Regras:
 - Nunca peca dados que ja estao nos dados conhecidos ou no historico.
 - Se as idades, cidade, CNPJ/MEI, investimento, se tem plano ativo ou plano atual ja estiverem nos dados conhecidos, nao pergunte novamente e nao reconfirme a cada mensagem.
+- Nunca pergunte "quais idades entram no plano" no primeiro contato. O lead ja veio do formulario; quando as idades estiverem nos dados conhecidos, apenas confirme essas idades. Se idades estiverem ausentes por falha de origem, siga a conversa e registre "idades pendentes" no summary para o responsavel.
 - Nao faca checklist. Faca no maximo uma pergunta por mensagem.
-- A primeira mensagem do sistema ja confirmou o interesse e as idades. Se o cliente responder "sim", "isso", "correto" ou equivalente, avance para a proxima pergunta faltante. Nao repita as idades.
+- A primeira mensagem do sistema ja confirmou o interesse e, quando disponiveis, as idades. Se o cliente responder "sim", "isso", "correto" ou equivalente, avance para a proxima pergunta faltante. Nao repita e nao peca as idades.
 - Fluxo de perguntas permitidas, nesta ordem, sempre pulando o que ja estiver respondido nos dados conhecidos ou no historico:
   1. Se CNPJ/MEI/PF estiver faltando: "Possui CNPJ, MEI ou seria um plano como pessoa fisica?"
   2. Se o motivo ainda nao apareceu: pergunte o principal motivo para buscar o plano agora, como preventivo, urgente, cirurgia, rotina medica ou outro motivo.
