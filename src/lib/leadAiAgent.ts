@@ -265,6 +265,8 @@ async function formatTextForSpeech(text: string) {
               'Mantenha o mesmo sentido original, sem adicionar novas perguntas ou novas informacoes.',
               'Use frases curtas, pontuacao natural e pequenas pausas com virgulas e pontos.',
               'Deixe a fala mais calma, com ritmo de atendimento humano no WhatsApp, sem pressa.',
+              'Prefira um jeito conversado, como uma consultora real falando em audio curto para um cliente.',
+              'Nao deixe o texto com cara de leitura formal, comercial gravado ou locucao.',
               'Evite linguagem robotica, formal demais ou com cara de script.',
               'Datas e horas devem ficar naturais quando faladas, por exemplo 10:00 vira dez horas.',
               'Telefones devem ficar naturais: DDD em dezena e blocos separados por virgula.',
@@ -320,7 +322,7 @@ async function elevenLabsTextToSpeechBase64(text: string) {
   const voiceId = process.env.ORION_LEAD_AI_ELEVEN_VOICE_ID || process.env.ELEVENLABS_VOICE_ID || DEFAULT_ELEVENLABS_VOICE_ID;
   if (!apiKey || !voiceId) return null;
 
-  const outputFormat = process.env.ORION_LEAD_AI_ELEVEN_OUTPUT_FORMAT || 'mp3_44100_32';
+  const outputFormat = process.env.ORION_LEAD_AI_ELEVEN_OUTPUT_FORMAT || 'mp3_44100_128';
   const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=${outputFormat}`, {
     method: 'POST',
     headers: {
@@ -331,10 +333,10 @@ async function elevenLabsTextToSpeechBase64(text: string) {
       text,
       model_id: process.env.ORION_LEAD_AI_ELEVEN_MODEL || 'eleven_multilingual_v2',
       voice_settings: {
-        stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.55),
-        similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.9),
-        style: Number(process.env.ORION_LEAD_AI_ELEVEN_STYLE || 0.25),
-        speed: Number(process.env.ORION_LEAD_AI_ELEVEN_SPEED || 0.82),
+        stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.48),
+        similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.92),
+        style: Number(process.env.ORION_LEAD_AI_ELEVEN_STYLE || 0.32),
+        speed: Number(process.env.ORION_LEAD_AI_ELEVEN_SPEED || 0.78),
         use_speaker_boost: true,
       },
     }),
