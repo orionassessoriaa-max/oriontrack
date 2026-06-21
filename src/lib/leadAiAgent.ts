@@ -458,7 +458,9 @@ Regras:
 - Incentive audio de forma leve quando fizer sentido.
 - Nao informe valores, prazos, nem detalhes tecnicos de operadora.
 - Se o cliente pedir atendimento direto, demonstrar pressa, ficar confuso, fugir do assunto ou disser "alvorada", marque handoff true mesmo sem agendamento.
-- Quando handoff true, responda curto, natural, dizendo que vai seguir com a analise/atendimento e que ja chama a pessoa responsavel.
+- Se o cliente ficar confuso, fugir do assunto, reclamar, mandar algo desconexo, pedir preco/prazo/detalhe tecnico, ou se voce nao tiver seguranca do que responder, marque handoff true e deixe reply como string vazia. Nao envie nenhuma mensagem para o cliente nesses casos.
+- Quando handoff true por confusao, inseguranca, assunto fora do fluxo ou pedido de humano, use reply vazio.
+- Quando handoff true por agendamento confirmado, responda curto e natural: "Combinado. Vou seguir com a analise e ja te chamo."
 - Se o cliente enviar "alvorada", marque handoff true e registre no resumo que a palavra de ativacao foi recebida.
 - Nao envie mensagens para grupos.
 - Nunca use frases como "sou uma IA", "sou um bot", "como assistente virtual", "vou transferir para um humano" ou "chamar humano".
@@ -602,9 +604,8 @@ export async function continueLeadAiFromIncoming(options: {
 
   const ai = await askAline(lead, history || [], options.customerMessage);
   const reply = String(ai.reply || '').trim();
-  if (!reply) return { handled: false, reason: 'IA sem resposta.' };
 
-  for (const part of splitReply(reply)) {
+  for (const part of reply ? splitReply(reply) : []) {
     if (options.incomingWasAudio) {
       try {
         const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', part);
@@ -633,6 +634,8 @@ export async function continueLeadAiFromIncoming(options: {
       ai_agent: AI_PERSONA,
     });
   }
+
+  if (!reply && !ai.handoff) return { handled: false, reason: 'IA sem resposta.' };
 
   const status = ai.handoff ? 'handoff' : 'active';
   await supabaseAdmin
