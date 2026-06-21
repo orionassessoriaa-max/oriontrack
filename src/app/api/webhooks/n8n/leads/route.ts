@@ -39,9 +39,25 @@ function flattenPayload(input: any) {
   return Object.assign({}, source, ...nested);
 }
 
+function collectPayloadEntries(input: any, entries: Array<[string, unknown]> = [], prefix = '') {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return entries;
+
+  Object.entries(input).forEach(([key, value]) => {
+    const path = prefix ? `${prefix}_${key}` : key;
+    entries.push([key, value]);
+    entries.push([path, value]);
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      collectPayloadEntries(value, entries, path);
+    }
+  });
+
+  return entries;
+}
+
 function field(body: Record<string, any>, aliases: string[]) {
   const normalized = new Map<string, unknown>();
-  Object.entries(body || {}).forEach(([key, value]) => {
+  collectPayloadEntries(body || {}).forEach(([key, value]) => {
     normalized.set(normalizeKey(key), value);
   });
 
@@ -400,7 +416,7 @@ export async function POST(request: Request) {
       data_entrada: dataEntrada,
       nome,
       telefone,
-      idades: normalizeText(field(body, ['idades', 'idade', 'vidas', 'quantidade de vidas', 'qtd vidas', 'age_group'])),
+      idades: normalizeText(field(body, ['idades', 'idade', 'idade(s)', 'idades beneficiarios', 'idades beneficiários', 'idades dos beneficiarios', 'idades dos beneficiários', 'vidas', 'vida', 'quantidade de vidas', 'qtd vidas', 'qtd_vidas', 'numero de vidas', 'número de vidas', 'age_group'])),
       possui_cnpj: normalizeCnpjOwnershipLabel(field(body, ['possui_cnpj', 'possui cnpj', 'possui cnpj?', 'tem cnpj', 'tem cnpj?', 'tem mei', 'mei']) || field(body, ['cnpj'])),
       cnpj: extractCnpjValue(field(body, ['cnpj_numero', 'cnpj numero', 'cnpj nÃºmero', 'numero cnpj', 'nÃºmero cnpj', 'cnpj do cliente', 'cnpj'])) || null,
       tem_plano_ativo: normalizeBooleanLabel(field(body, ['tem_plano_ativo', 'tem plano ativo', 'tem plano ativo?', 'plano ativo', 'planoativo', 'possui plano', 'possui plano?', 'possui convenio', 'tem convenio', 'ja tem plano', 'já tem plano'])),
