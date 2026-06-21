@@ -333,11 +333,11 @@ async function elevenLabsTextToSpeechBase64(text: string) {
       text,
       model_id: process.env.ORION_LEAD_AI_ELEVEN_MODEL || 'eleven_multilingual_v2',
       voice_settings: {
-        stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.48),
-        similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.92),
-        style: Number(process.env.ORION_LEAD_AI_ELEVEN_STYLE || 0.32),
-        speed: Number(process.env.ORION_LEAD_AI_ELEVEN_SPEED || 0.78),
-        use_speaker_boost: true,
+        stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.32),
+        similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.78),
+        style: Number(process.env.ORION_LEAD_AI_ELEVEN_STYLE || 0.72),
+        speed: Number(process.env.ORION_LEAD_AI_ELEVEN_SPEED || 0.84),
+        use_speaker_boost: String(process.env.ORION_LEAD_AI_ELEVEN_SPEAKER_BOOST || 'false').toLowerCase() === 'true',
       },
     }),
   });
