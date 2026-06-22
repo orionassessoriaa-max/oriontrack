@@ -440,7 +440,7 @@ async function elevenLabsTextToSpeechBase64(text: string) {
 }
 
 async function textToSpeechBase64(text: string) {
-  const speechText = await formatTextForSpeech(text);
+  const speechText = cleanTextForSpeech(text);
   const elevenAudio = await elevenLabsTextToSpeechBase64(speechText);
   if (elevenAudio) return { audio: elevenAudio, provider: 'elevenlabs', speechText };
 
