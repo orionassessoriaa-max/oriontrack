@@ -87,7 +87,7 @@ async function run() {
 
   const summary = session.summary || 'Sem resumo disponível.';
   
-  const msg = [
+  const msgHenrique = [
     `Atendimento inicial concluído para o lead *${lead.nome}*.`,
     '',
     summary,
@@ -95,39 +95,54 @@ async function run() {
     'Agora é a hora do atendimento humano.',
   ].join('\n');
 
-  console.log("\n--- NOTIFICATION MESSAGE TO SEND ---");
-  console.log(msg);
-  console.log("------------------------------------\n");
+  const msgDanilo = [
+    `Atendimento inicial concluído para o lead *${lead.nome}*.`,
+    `Agora é com o *Henrique Corretor*.`,
+    '',
+    summary,
+    '',
+    'Agora é a hora do atendimento humano.',
+  ].join('\n');
 
-  console.log("1. Creating notification in database...");
-  const { error: notifErr } = await supabase.from('notificacoes').insert([{
-    titulo: 'Lead pronto para atendimento',
-    mensagem: msg,
-    destinatario_profile_id: henriqueProfileId,
-    lida: false,
-  }]);
+  console.log("1. Creating notifications in database...");
+  await supabase.from('notificacoes').insert([
+    {
+      titulo: 'Lead pronto para atendimento',
+      mensagem: msgHenrique,
+      destinatario_profile_id: henriqueProfileId,
+      lida: false,
+    },
+    {
+      titulo: 'Lead pronto para atendimento',
+      mensagem: msgDanilo,
+      destinatario_profile_id: 'e1db6a41-8395-4c7d-b92d-70642f26edc0', // Danilo
+      lida: false,
+    }
+  ]);
+  console.log("Database notifications created successfully!");
 
-  if (notifErr) {
-    console.error("Failed to create database notification:", notifErr);
-  } else {
-    console.log("Database notification created successfully!");
-  }
-
-  console.log("2. Sending WhatsApp notification via Evolution API (Apolo)...");
+  console.log("2. Sending WhatsApp notifications via Evolution API (Apolo)...");
   try {
     const apoloInstance = 'apolo_master_sender';
     const instanceApiKey = await getEvolutionInstanceApiKey(apoloInstance);
     
-    const text = `*Lead pronto para atendimento*\n\nOlá, Henrique!\n\n${msg}\n\n_Apolo Notificador - Orion Track_`;
-    
-    const sendResult = await evolutionFetch(`/message/sendText/${apoloInstance}`, {
+    // Send to Henrique
+    const textHenrique = `*Lead pronto para atendimento*\n\nOlá, Henrique!\n\n${msgHenrique}\n\n_Apolo Notificador - Orion Track_`;
+    await evolutionFetch(`/message/sendText/${apoloInstance}`, {
       method: 'POST',
-      body: JSON.stringify({ number: henriquePhone, text }),
+      body: JSON.stringify({ number: henriquePhone, text: textHenrique }),
     }, instanceApiKey);
+    console.log("WhatsApp message sent to Henrique!");
 
-    console.log("WhatsApp message sent successfully! Response:", sendResult);
+    // Send to Danilo
+    const textDanilo = `*Lead pronto para atendimento*\n\nOlá, Danilo!\n\n${msgDanilo}\n\n_Apolo Notificador - Orion Track_`;
+    await evolutionFetch(`/message/sendText/${apoloInstance}`, {
+      method: 'POST',
+      body: JSON.stringify({ number: '5511970565261', text: textDanilo }),
+    }, instanceApiKey);
+    console.log("WhatsApp message sent to Danilo!");
   } catch (err) {
-    console.error("Failed to send WhatsApp message via Evolution:", err.message);
+    console.error("Failed to send WhatsApp messages:", err.message);
   }
 
   console.log("3. Updating AI session status to handoff...");

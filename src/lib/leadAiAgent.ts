@@ -480,33 +480,48 @@ async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: s
 }
 
 async function notifyResponsible(lead: LeadRow, summary: string) {
-  let responsible: any = await findResponsibleProfile(lead.responsavel_profile_id);
-  if (!responsible) {
-    responsible = await findAiAdmin(lead.corretor_id);
+  const responsible = await findResponsibleProfile(lead.responsavel_profile_id);
+  const admin = await findAiAdmin(lead.corretor_id);
+
+  const targets: any[] = [];
+  if (responsible) {
+    targets.push(responsible);
   }
-  if (!responsible) return;
+  if (admin && (!responsible || admin.id !== responsible.id)) {
+    targets.push(admin);
+  }
 
-  const msg = [
-    `Atendimento inicial concluido para o lead ${plain(lead.nome)}.`,
-    '',
-    summary || leadFacts(lead),
-    '',
-    'Agora e a hora do atendimento humano.',
-  ].join('\n');
+  if (targets.length === 0) return;
 
-  await supabaseAdmin.from('notificacoes').insert([{
-    titulo: 'Lead pronto para atendimento',
-    mensagem: msg,
-    destinatario_profile_id: responsible.id,
-    lida: false,
-  }]);
+  for (const target of targets) {
+    const isOwner = admin && target.id === admin.id;
+    const bodyParts = [
+      `Atendimento inicial concluído para o lead *${plain(lead.nome)}*.`,
+    ];
+    if (isOwner && responsible && responsible.id !== admin.id) {
+      bodyParts.push(`Agora é com o *${responsible.nome}*.`);
+    }
+    bodyParts.push('');
+    bodyParts.push(summary || leadFacts(lead));
+    bodyParts.push('');
+    bodyParts.push('Agora é a hora do atendimento humano.');
 
-  await sendApoloWhatsApp({
-    type: 'novo_lead',
-    title: 'Lead pronto para atendimento',
-    message: msg,
-    profiles: [responsible],
-  });
+    const msg = bodyParts.join('\n');
+
+    await supabaseAdmin.from('notificacoes').insert([{
+      titulo: 'Lead pronto para atendimento',
+      mensagem: msg,
+      destinatario_profile_id: target.id,
+      lida: false,
+    }]);
+
+    await sendApoloWhatsApp({
+      type: 'novo_lead',
+      title: 'Lead pronto para atendimento',
+      message: msg,
+      profiles: [target],
+    });
+  }
 }
 
 async function askAline(
