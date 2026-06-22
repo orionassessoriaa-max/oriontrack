@@ -77,19 +77,19 @@ Regras de Handoff (Transferencia para Especialista):
 
 Nao envie ao cliente nomes de ferramentas internas. O resumo (summary) deve ficar apenas no banco de dados interno.
 
-Use o campo summary como a tool dados_lead para registrar as informacoes de forma organizada, pulando linha para cada campo, exatamente neste formato:
-Nome: [nome]
-Telefone: [telefone]
-Idades: [idades]
-CNPJ/MEI: [cnpj/mei/pf]
-Cidade: [cidade]
-Investimento: [investimento]
-Plano Atual: [plano atual]
-Motivo: [motivo]
-Hospital/Regiao: [hospital/regiao]
-Email: [email]
-Agendado: [true/false]
-Pendente: [o que ficou pendente]
+Use o campo summary como a tool dados_lead para registrar as informacoes de forma organizada, pulando linha para cada campo, exatamente neste formato (com as chaves dos atributos em negrito usando asteriscos, por exemplo *Nome*):
+*Nome*: [nome]
+*Telefone*: [telefone]
+*Idades*: [idades]
+*CNPJ/MEI*: [cnpj/mei/pf]
+*Cidade*: [cidade]
+*Investimento*: [investimento]
+*Plano Atual*: [plano atual]
+*Motivo*: [motivo]
+*Hospital/Regiao*: [hospital/regiao]
+*Email*: [email]
+*Agendado*: [se agendou, preencha com o dia e horario que foi marcado de forma amigavel, por exemplo: "Terca-feira as 14:00" ou "Amanha as 15h". Caso contrario, preencha com "Nao"]
+*Pendente*: [o que ficou pendente]
 
 Responda APENAS JSON valido, sem markdown, no formato:
 {"reply":"mensagem para enviar ao cliente","handoff":false,"summary":"resumo atualizado do atendimento"}`;
@@ -759,6 +759,10 @@ export async function continueLeadAiFromIncoming(options: {
 
   if (ai.handoff) {
     await notifyResponsible(lead, ai.summary || '');
+    const scheduledVal = extractAgendadoValue(ai.summary);
+    if (scheduledVal) {
+      await createAutoScheduledTask(lead, scheduledVal, adminProfile.id);
+    }
   }
 
   return { handled: true, handoff: Boolean(ai.handoff) };
@@ -841,4 +845,67 @@ export async function checkLeadAiTimeouts() {
   }
   
   return { count: handoffCount };
+}
+
+function extractAgendadoValue(summary?: string | null): string | null {
+  if (!summary) return null;
+  const match = summary.match(/(?:\*?Agendado\*?:?\s*)([^\r\n]+)/i);
+  if (match && match[1]) {
+    const value = match[1].trim();
+    const lowerVal = value.toLowerCase();
+    if (lowerVal && lowerVal !== 'false' && lowerVal !== 'não' && lowerVal !== 'nao' && lowerVal !== 'null' && lowerVal !== 'no') {
+      return value;
+    }
+  }
+  return null;
+}
+
+async function createAutoScheduledTask(lead: LeadRow, scheduledText: string, fallbackProfileId?: string | null) {
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from('lead_tarefas')
+      .select('id')
+      .eq('lead_id', lead.id)
+      .ilike('titulo', `%Reunião agendada pela IA%`)
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) return;
+
+    const title = `Reunião agendada pela IA: ${scheduledText}`;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    const vencimento = tomorrow.toISOString();
+
+    const targetProfileId = lead.responsavel_profile_id || fallbackProfileId || null;
+
+    const { error } = await supabaseAdmin
+      .from('lead_tarefas')
+      .insert([{
+        lead_id: lead.id,
+        corretor_id: lead.corretor_id,
+        responsavel_profile_id: targetProfileId,
+        titulo: title,
+        vencimento: vencimento,
+        prioridade: 'alta',
+        status: 'pendente'
+      }]);
+
+    if (error) throw error;
+
+    await supabaseAdmin
+      .from('lead_atividades')
+      .insert([{
+        lead_id: lead.id,
+        profile_id: targetProfileId,
+        tipo: 'tarefa',
+        titulo: 'Tarefa criada automaticamente',
+        descricao: `Lembrete agendado pela IA: ${title}`
+      }]);
+
+    console.log(`[auto_task] Created task successfully: ${title}`);
+  } catch (err) {
+    console.error('[auto_task] Failed to create auto task:', err);
+  }
 }
