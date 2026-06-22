@@ -199,7 +199,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Home, label: 'Visao Geral', href: '/admin' },
     { icon: Shield, label: 'Usuarios', href: '/admin/usuarios' },
     { icon: Building2, label: 'Concessionarias', href: '/admin/corretoras' },
-    { icon: Cpu, label: 'IA Central', href: '/admin/ia' },
+    { icon: Cpu, label: 'IA', href: '/admin/ia' },
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
     { icon: UserCog, label: 'Gestores de Trafego', href: '/admin/gestores' },
     { icon: Palette, label: 'Designer', href: '/admin/designers' },

@@ -300,7 +300,7 @@ export default function AdminIaPage() {
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-950/40 text-cyan-400 border border-cyan-500/20 shadow-sm shadow-cyan-500/10">
                 <Cpu size={18} />
               </span>
-              <h1 className="text-2xl font-black tracking-tight text-white">IA Central</h1>
+              <h1 className="text-2xl font-black tracking-tight text-white">IA</h1>
             </div>
             <p className="mt-1 text-xs font-bold text-slate-400">
               Configure e gerencie as concessionárias onde o comercial automatizado (Aline) está ativado.

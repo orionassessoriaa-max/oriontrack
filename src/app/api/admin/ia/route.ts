@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     // Fetch all AI configs
     const { data: aiConfigs, error: errAiConfigs } = await supabaseAdmin
       .from('corretora_ai_configs')
-      .select('*')
+      .select('*, corretoras(nome)')
       .order('created_at', { ascending: true });
       
     if (errAiConfigs) throw errAiConfigs;
