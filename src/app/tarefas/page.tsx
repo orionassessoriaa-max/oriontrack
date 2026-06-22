@@ -169,6 +169,40 @@ export default function TarefasPage() {
         ...nextTasks.map((task) => task.responsavel_profile_id).filter(Boolean),
         ...nextLeads.map((lead) => lead.responsavel_profile_id).filter(Boolean),
       ])) as string[];
+
+      const profilesMap: Record<string, ProfileRow> = {};
+
+      if (profile.corretor_id) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (token) {
+          try {
+            const teamRes = await fetch(`/api/corretor/times?corretor_id=${encodeURIComponent(profile.corretor_id)}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (teamRes.ok) {
+              const payload = await teamRes.json().catch(() => ({}));
+              const membros = (payload.membros || []) as any[];
+              const ownerProfiles = (payload.settings?.owner_profiles || []) as any[];
+
+              membros.forEach((m) => {
+                if (m.profile_id) {
+                  profilesMap[m.profile_id] = { id: m.profile_id, nome: m.nome, email: m.email };
+                }
+              });
+
+              ownerProfiles.forEach((o) => {
+                if (o.id) {
+                  profilesMap[o.id] = { id: o.id, nome: o.nome, email: o.email_real || o.email };
+                }
+              });
+            }
+          } catch (e) {
+            console.error('Erro ao buscar perfis do time via API:', e);
+          }
+        }
+      }
+
       const profilesResult = profileIds.length
         ? await supabase
             .from('profiles')
@@ -177,9 +211,14 @@ export default function TarefasPage() {
         : { data: [], error: null };
       if (profilesResult.error) throw profilesResult.error;
 
+      const directProfiles = (profilesResult.data || []) as ProfileRow[];
+      directProfiles.forEach((item) => {
+        profilesMap[item.id] = item;
+      });
+
       setLeadsById(Object.fromEntries(nextLeads.map((lead) => [lead.id, lead])));
       setBrokersById(Object.fromEntries(((brokersResult.data || []) as BrokerRow[]).map((broker) => [broker.id, broker])));
-      setProfilesById(Object.fromEntries(((profilesResult.data || []) as ProfileRow[]).map((item) => [item.id, item])));
+      setProfilesById(profilesMap);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar tarefas.');
     } finally {
