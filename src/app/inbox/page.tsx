@@ -251,7 +251,8 @@ export default function BrokerInboxPage() {
   // Task scheduling states
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskDue, setTaskDue] = useState('');
+  const [taskDueDate, setTaskDueDate] = useState('');
+  const [taskDueTime, setTaskDueTime] = useState('09:00');
   const [taskPriority, setTaskPriority] = useState('normal');
   const [savingTask, setSavingTask] = useState(false);
 
@@ -1241,6 +1242,16 @@ export default function BrokerInboxPage() {
       alert('Por favor, informe o título da tarefa.');
       return;
     }
+
+    let vencimentoDate: Date | null = null;
+    if (taskDueDate) {
+      const timePart = taskDueTime.trim() || '09:00';
+      const parsed = new Date(`${taskDueDate}T${timePart}`);
+      if (!isNaN(parsed.getTime())) {
+        vencimentoDate = parsed;
+      }
+    }
+
     setSavingTask(true);
     try {
       const { error } = await supabase.from('lead_tarefas').insert([{
@@ -1248,7 +1259,7 @@ export default function BrokerInboxPage() {
         corretor_id: selectedConversation.corretor_id,
         responsavel_profile_id: profile?.id,
         titulo: taskTitle.trim(),
-        vencimento: taskDue ? new Date(taskDue).toISOString() : null,
+        vencimento: vencimentoDate ? vencimentoDate.toISOString() : null,
         prioridade: taskPriority,
         status: 'pendente'
       }]);
@@ -1257,13 +1268,14 @@ export default function BrokerInboxPage() {
       await logLeadActivity({
         tipo: 'tarefa',
         titulo: 'Tarefa criada',
-        descricao: `${taskTitle.trim()}${taskDue ? ` | Prazo: ${formatActivityDate(new Date(taskDue).toISOString())}` : ''}`,
+        descricao: `${taskTitle.trim()}${vencimentoDate ? ` | Prazo: ${formatActivityDate(vencimentoDate.toISOString())}` : ''}`,
       });
 
       alert('Tarefa agendada com sucesso!');
       setShowTaskModal(false);
       setTaskTitle('');
-      setTaskDue('');
+      setTaskDueDate('');
+      setTaskDueTime('09:00');
       setTaskPriority('normal');
     } catch (err: any) {
       console.error('Erro ao agendar tarefa:', err);
@@ -2906,13 +2918,22 @@ export default function BrokerInboxPage() {
 
               <div className="space-y-1.5">
                 <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Data de Vencimento</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={taskDue}
-                  onChange={(e) => setTaskDue(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    required
+                    value={taskDueDate}
+                    onChange={(e) => setTaskDueDate(e.target.value)}
+                    className="flex-1 bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                  />
+                  <input
+                    type="time"
+                    required
+                    value={taskDueTime}
+                    onChange={(e) => setTaskDueTime(e.target.value)}
+                    className="w-32 bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1.5">
