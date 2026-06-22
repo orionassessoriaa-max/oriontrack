@@ -354,11 +354,11 @@ async function elevenLabsTextToSpeechBase64(text: string) {
       text,
       model_id: process.env.ORION_LEAD_AI_ELEVEN_MODEL || 'eleven_multilingual_v2',
       voice_settings: {
-        stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.32),
-        similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.78),
-        style: Number(process.env.ORION_LEAD_AI_ELEVEN_STYLE || 0.72),
-        speed: Number(process.env.ORION_LEAD_AI_ELEVEN_SPEED || 0.84),
-        use_speaker_boost: String(process.env.ORION_LEAD_AI_ELEVEN_SPEAKER_BOOST || 'false').toLowerCase() === 'true',
+        stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.50),
+        similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.75),
+        style: Number(process.env.ORION_LEAD_AI_ELEVEN_STYLE || 0.0),
+        speed: Number(process.env.ORION_LEAD_AI_ELEVEN_SPEED || 1.0),
+        use_speaker_boost: String(process.env.ORION_LEAD_AI_ELEVEN_SPEAKER_BOOST || 'true').toLowerCase() === 'true',
       },
     }),
   });
