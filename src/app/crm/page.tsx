@@ -213,7 +213,8 @@ export default function CrmPage() {
   const [visibleLimits, setVisibleLimits] = useState<Record<string, number>>({});
   const [note, setNote] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskDue, setTaskDue] = useState('');
+  const [taskDueDate, setTaskDueDate] = useState('');
+  const [taskDueTime, setTaskDueTime] = useState('09:00');
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     nome: '',
@@ -1027,13 +1028,22 @@ export default function CrmPage() {
     event.preventDefault();
     if (!selectedLead || !taskTitle.trim()) return;
 
+    let vencimentoDate: Date | null = null;
+    if (taskDueDate) {
+      const timePart = taskDueTime.trim() || '09:00';
+      const parsed = new Date(`${taskDueDate}T${timePart}`);
+      if (!isNaN(parsed.getTime())) {
+        vencimentoDate = parsed;
+      }
+    }
+
     setSaving(true);
     const { error: insertError } = await supabase.from('lead_tarefas').insert([{
       lead_id: selectedLead.id,
       corretor_id: selectedLead.corretor_id,
       responsavel_profile_id: profile?.id,
       titulo: taskTitle.trim(),
-      vencimento: taskDue ? new Date(taskDue).toISOString() : null,
+      vencimento: vencimentoDate ? vencimentoDate.toISOString() : null,
       prioridade: isStale(selectedLead) ? 'alta' : 'normal'
     }]);
     setSaving(false);
@@ -1048,11 +1058,12 @@ export default function CrmPage() {
       profile_id: profile?.id,
       tipo: 'tarefa',
       titulo: 'Tarefa criada',
-      descricao: `${taskTitle.trim()}${taskDue ? ` | Prazo: ${format(new Date(taskDue), 'dd/MM/yyyy HH:mm', { locale: ptBR })}` : ''}`,
+      descricao: `${taskTitle.trim()}${vencimentoDate ? ` | Prazo: ${format(vencimentoDate, 'dd/MM/yyyy HH:mm', { locale: ptBR })}` : ''}`,
     }]);
 
     setTaskTitle('');
-    setTaskDue('');
+    setTaskDueDate('');
+    setTaskDueTime('09:00');
     await fetchTimeline(selectedLead.id);
     await fetchCrm();
   }
@@ -1717,12 +1728,20 @@ export default function CrmPage() {
                     placeholder="Ex: retornar amanha"
                     className="mb-3 w-full rounded-2xl border-none bg-slate-50 px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
                   />
-                  <input
-                    type="datetime-local"
-                    value={taskDue}
-                    onChange={(event) => setTaskDue(event.target.value)}
-                    className="mb-3 w-full rounded-2xl border-none bg-slate-50 px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
-                  />
+                  <div className="mb-3 flex gap-2">
+                    <input
+                      type="date"
+                      value={taskDueDate}
+                      onChange={(event) => setTaskDueDate(event.target.value)}
+                      className="flex-1 rounded-2xl border-none bg-slate-50 px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 text-slate-700"
+                    />
+                    <input
+                      type="time"
+                      value={taskDueTime}
+                      onChange={(event) => setTaskDueTime(event.target.value)}
+                      className="w-32 rounded-2xl border-none bg-slate-50 px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 text-slate-700"
+                    />
+                  </div>
                   <button disabled={saving} className="w-full rounded-2xl bg-slate-900 py-3 text-sm font-black text-white disabled:opacity-50">Criar lembrete</button>
                 </form>
 
