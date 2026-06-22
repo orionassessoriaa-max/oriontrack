@@ -1294,19 +1294,19 @@ export default function BrokerLeadsPage() {
       )}
 
       {showManualLeadModal && canCreateManualLead && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md sm:p-6">
-          <div className="max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl sm:rounded-[2.5rem]">
-            <div className="flex items-center justify-between border-b border-gray-100 p-5 sm:p-8">
+        <div className="fixed inset-0 z-[9999] flex min-h-dvh items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-10 backdrop-blur-md sm:py-16">
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#08111f] shadow-2xl shadow-black/40 sm:rounded-[2.5rem]">
+            <div className="flex items-center justify-between border-b border-white/10 p-5 sm:p-8">
               <div>
                 <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-cyan-600">Cadastro manual</p>
-                <h2 className="text-xl font-black text-gray-900">Adicionar lead</h2>
-                <p className="mt-1 text-sm font-bold text-slate-500">Selecione o responsavel para avisar automaticamente.</p>
+                <h2 className="text-xl font-black text-white">Adicionar lead</h2>
+                <p className="mt-1 text-sm font-bold text-slate-400">Selecione o responsavel para avisar automaticamente.</p>
               </div>
-              <button onClick={() => setShowManualLeadModal(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100">
+              <button onClick={() => setShowManualLeadModal(false)} className="rounded-full bg-white/5 p-2 text-slate-400 hover:bg-white/10 hover:text-white">
                 <X size={22} />
               </button>
             </div>
-            <form onSubmit={createManualLead} className="space-y-5 p-5 sm:p-8">
+            <form onSubmit={createManualLead} className="max-h-[calc(100dvh-12rem)] space-y-5 overflow-y-auto p-5 sm:p-8">
               {manualLeadError && (
                 <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-black text-red-600">
                   {manualLeadError}
@@ -1315,31 +1315,31 @@ export default function BrokerLeadsPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Nome</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Nome</label>
                   <input
                     required
                     value={manualLeadForm.nome}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, nome: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                     placeholder="Nome do cliente"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Telefone</label>
                   <input
                     required
                     value={manualLeadForm.telefone}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, telefone: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                     placeholder="55 11 99999-9999"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Responsavel</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Responsavel</label>
                   <select
                     value={manualLeadForm.responsavel_membro_id}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, responsavel_membro_id: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                   >
                     <option value="unassigned">Sem responsavel</option>
                     {teamMembers.map((member) => (
@@ -1348,38 +1348,38 @@ export default function BrokerLeadsPage() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Cidade</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Cidade</label>
                   <input
                     value={manualLeadForm.cidade}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, cidade: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                     placeholder="Cidade"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Idade</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Idade</label>
                   <input
                     value={manualLeadForm.idades}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, idades: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                     placeholder="Ex: 32"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Investimento</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Investimento</label>
                   <input
                     value={manualLeadForm.investimento}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, investimento: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                     placeholder="Ex: Ate R$2.000,00"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Possui CNPJ?</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Possui CNPJ?</label>
                   <select
                     value={manualLeadForm.possui_cnpj}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, possui_cnpj: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                   >
                     <option>Sim</option>
                     <option>Nao</option>
@@ -1388,20 +1388,20 @@ export default function BrokerLeadsPage() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">CNPJ</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">CNPJ</label>
                   <input
                     value={manualLeadForm.cnpj}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, cnpj: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                     placeholder="Opcional"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Tem plano ativo?</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Tem plano ativo?</label>
                   <select
                     value={manualLeadForm.tem_plano_ativo}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, tem_plano_ativo: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                   >
                     <option>Sim</option>
                     <option>Nao</option>
@@ -1409,11 +1409,11 @@ export default function BrokerLeadsPage() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Plano atual</label>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Plano atual</label>
                   <input
                     value={manualLeadForm.plano_atual}
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, plano_atual: e.target.value }))}
-                    className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                     placeholder="Opcional"
                   />
                 </div>
@@ -1423,7 +1423,7 @@ export default function BrokerLeadsPage() {
                 <button
                   type="button"
                   onClick={() => setShowManualLeadModal(false)}
-                  className="rounded-2xl border border-slate-200 px-6 py-4 text-sm font-black text-slate-600 hover:bg-slate-50"
+                  className="rounded-2xl border border-white/10 px-6 py-4 text-sm font-black text-slate-300 hover:bg-white/5 hover:text-white"
                 >
                   Cancelar
                 </button>
