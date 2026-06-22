@@ -412,14 +412,22 @@ async function notifyResponsible(lead: LeadRow, summary: string) {
   });
 }
 
-async function askAline(lead: LeadRow, history: Array<{ direction: string; remetente?: string | null; mensagem: string }>, customerMessage: string) {
+async function askAline(lead: LeadRow, history: Array<{ direction: string; remetente?: string | null; mensagem: string; metadata?: any }>, customerMessage: string) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
 
-  const messages = history.slice(-16).map((item) => ({
-    role: item.direction === 'inbound' ? 'user' : 'assistant',
-    content: item.mensagem,
-  }));
+  const messages = history.slice(-16).map((item) => {
+    let content = item.mensagem;
+    if (item.direction === 'inbound') {
+      content = item.metadata?.audio_transcript || item.metadata?.ai_customer_message?.replace(/^Audio transcrito do cliente:\s*/i, '') || item.mensagem;
+    } else {
+      content = item.metadata?.ai_text || item.mensagem;
+    }
+    return {
+      role: item.direction === 'inbound' ? 'user' : 'assistant',
+      content,
+    };
+  });
 
   const system = `Voce conduz o primeiro contato comercial do Orion Teste para planos de saude.
 Sua identidade operacional interna e ${AI_PERSONA}, mas NAO fale que e IA, bot, assistente virtual, automacao ou sistema.
@@ -598,7 +606,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   const { data: history } = await supabaseAdmin
     .from('whatsapp_mensagens')
-    .select('direction, remetente, mensagem, created_at')
+    .select('direction, remetente, mensagem, metadata, created_at')
     .eq('conversa_id', options.conversationId)
     .order('created_at', { ascending: true })
     .limit(40);
