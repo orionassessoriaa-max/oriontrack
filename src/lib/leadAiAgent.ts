@@ -407,7 +407,10 @@ async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: s
 }
 
 async function notifyResponsible(lead: LeadRow, summary: string) {
-  const responsible = await findResponsibleProfile(lead.responsavel_profile_id);
+  let responsible: any = await findResponsibleProfile(lead.responsavel_profile_id);
+  if (!responsible) {
+    responsible = await findAiAdmin(lead.corretor_id);
+  }
   if (!responsible) return;
 
   const msg = [
@@ -493,7 +496,7 @@ Fluxo linear de perguntas (siga esta ordem, sempre pulando o que ja estiver resp
    - "Acredito que já tenho todas as informações, [Nome]. Teria disponibilidade de uma ligação rápida de 15 minutos amanhã? Me fala aqui o melhor horário para eu deixar agendado."
 
 Regras de Handoff (Transferencia para Especialista):
-- Se o cliente responder de forma positiva marcando o horario da ligacao de 15 minutos: registre "agendado: true" no summary, defina "handoff": true e responda na "reply" de forma natural: "Combinado. Vou seguir com a análise e já te chamo."
+- Se o cliente responder de forma positiva marcando o horario da ligacao de 15 minutos: registre "agendado: true" no summary, defina "handoff": true e responda na "reply" de forma natural exatamente esta frase: "Perfeito! Já tenho todos os dados, agora um especialista vai entrar em contato por outro número para confirmar o horário contigo, ok?"
 - Se a IA tiver qualquer duvida ou problema, se o cliente pedir valores/precos/detalhes tecnicos de operadoras, se demonstrar pressa, ficar confuso, reclamar, mandar algo desconexo ou se voce nao tiver seguranca do que responder: defina "handoff": true e use exatamente esta resposta humanizada e gentil no campo "reply" (nunca deixe reply vazio):
   "Olha, para te passar a informação bem certinha e te ajudar da melhor forma, vou passar seu contato para o nosso especialista do time. Ele vai te chamar de outro número para continuar o atendimento, tudo bem?"
 - Se o cliente enviar a palavra "alvorada", defina "handoff": true e responda com a mensagem do especialista acima.
@@ -567,7 +570,7 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   const intro = [
     `Olá, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
-    'Somos da corretora Vida Protegida',
+    'Me chamo Aline da corretora Vida Protegida',
     'Você clicou em um anúncio nosso e preencheu o formulário de interesse da Hapvida PME.',
     initialLeadQuestion(lead),
   ].join('\n\n');
@@ -705,4 +708,83 @@ export async function continueLeadAiFromIncoming(options: {
   }
 
   return { handled: true, handoff: Boolean(ai.handoff) };
+}
+
+export async function checkLeadAiTimeouts() {
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  
+  // Find all active sessions where the last AI message was sent more than 15 minutes ago
+  const { data: activeSessions, error } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .select('*')
+    .eq('status', 'active')
+    .lte('last_ai_message_at', fifteenMinutesAgo);
+    
+  if (error) {
+    console.error('[cron_timeout] Error fetching active sessions:', error);
+    return { count: 0, error };
+  }
+  
+  let handoffCount = 0;
+  
+  for (const session of activeSessions || []) {
+    // 1. Get the last message of the conversation to see if it was the schedule question
+    const { data: conv } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .select('id')
+      .eq('lead_id', session.lead_id)
+      .maybeSingle();
+      
+    if (!conv) continue;
+    
+    const { data: lastMsg } = await supabaseAdmin
+      .from('whatsapp_mensagens')
+      .select('*')
+      .eq('conversa_id', conv.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+      
+    if (!lastMsg) continue;
+    
+    // We check:
+    // - if the last message is outbound (sent by AI)
+    // - if it contains the keywords from the schedule question (Step 9)
+    const isLastMessageOutbound = lastMsg.direction === 'outbound';
+    const msgText = String(lastMsg.mensagem || '').toLowerCase();
+    const isScheduleQuestion = msgText.includes('disponibilidade de uma ligação') || 
+                               msgText.includes('ligação rápida de 15 minutos') || 
+                               msgText.includes('melhor horário para eu deixar agendado');
+                               
+    if (isLastMessageOutbound && isScheduleQuestion) {
+      console.log(`[cron_timeout] Lead ${session.lead_id} timed out on schedule question.`);
+      
+      const { data: lead } = await supabaseAdmin
+        .from('leads')
+        .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id')
+        .eq('id', session.lead_id)
+        .maybeSingle();
+        
+      if (!lead) continue;
+      
+      const suffix = '\n\nIA encerrada: Lead não respondeu à pergunta de agendamento por mais de 15 minutos.';
+      const newSummary = `${session.summary || leadFacts(lead)}${suffix}`.trim();
+      
+      // Update session status to handoff
+      await supabaseAdmin
+        .from('lead_ai_sessions')
+        .update({
+          status: 'handoff',
+          summary: newSummary,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', session.id);
+        
+      // Notify responsible broker
+      await notifyResponsible(lead, newSummary);
+      handoffCount++;
+    }
+  }
+  
+  return { count: handoffCount };
 }
