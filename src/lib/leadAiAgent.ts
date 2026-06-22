@@ -117,6 +117,9 @@ type LeadRow = {
   plano_atual?: string | null;
   investimento?: string | null;
   cidade?: string | null;
+  email?: string | null;
+  motivo_busca?: string | null;
+  hospital_preferencia?: string | null;
   utm_content?: string | null;
   utm_term?: string | null;
   utm_campaign?: string | null;
@@ -155,6 +158,9 @@ function leadFacts(lead: LeadRow) {
     `Investimento pretendido: ${plain(lead.investimento)}`,
     `Tem plano de saude: ${plain(lead.tem_plano_ativo)}`,
     `Plano atual: ${plain(lead.plano_atual)}`,
+    lead.email ? `E-mail: ${lead.email}` : null,
+    lead.motivo_busca ? `Motivo da busca: ${lead.motivo_busca}` : null,
+    lead.hospital_preferencia ? `Hospital/Região de preferência: ${lead.hospital_preferencia}` : null,
     `Anuncio: ${adName(lead)}`,
   ].filter(Boolean).join('\n');
 }
@@ -746,16 +752,21 @@ export async function continueLeadAiFromIncoming(options: {
   if (!reply && !ai.handoff) return { handled: false, reason: 'IA sem resposta.' };
 
   const status = ai.handoff ? 'handoff' : 'active';
+  const currentSummary = ai.summary || session.summary || null;
   await supabaseAdmin
     .from('lead_ai_sessions')
     .update({
       status,
-      summary: ai.summary || session.summary || null,
+      summary: currentSummary,
       last_customer_message_at: new Date().toISOString(),
       last_ai_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq('id', session.id);
+
+  if (currentSummary) {
+    await updateLeadFromSummary(lead.id, currentSummary);
+  }
 
   if (ai.handoff) {
     await notifyResponsible(lead, ai.summary || '');
@@ -838,6 +849,8 @@ export async function checkLeadAiTimeouts() {
         })
         .eq('id', session.id);
         
+      await updateLeadFromSummary(lead.id, newSummary);
+        
       // Notify responsible broker
       await notifyResponsible(lead, newSummary);
       handoffCount++;
@@ -907,5 +920,81 @@ async function createAutoScheduledTask(lead: LeadRow, scheduledText: string, fal
     console.log(`[auto_task] Created task successfully: ${title}`);
   } catch (err) {
     console.error('[auto_task] Failed to create auto task:', err);
+  }
+}
+
+async function updateLeadFromSummary(leadId: string, summary?: string | null) {
+  if (!summary) return;
+  try {
+    const updates: any = {};
+    
+    const getValue = (key: string) => {
+      const regex = new RegExp(`(?:\\*?${key}\\*?:?\\s*)([^\\r\\n]+)`, 'i');
+      const match = summary.match(regex);
+      if (match && match[1]) {
+        const val = match[1].trim();
+        if (
+          val &&
+          !val.startsWith('[') &&
+          !val.endsWith(']') &&
+          !['não informado', 'nao informado', '-', 'sem informação', 'sem informacao', 'não', 'nao'].includes(val.toLowerCase())
+        ) {
+          return val;
+        }
+      }
+      return null;
+    };
+
+    const nome = getValue('Nome');
+    if (nome) updates.nome = nome;
+
+    const idades = getValue('Idades');
+    if (idades) updates.idades = idades;
+
+    const cidade = getValue('Cidade');
+    if (cidade) updates.cidade = cidade;
+
+    const investimento = getValue('Investimento');
+    if (investimento) updates.investimento = investimento;
+
+    const planoAtual = getValue('Plano\\s+Atual');
+    if (planoAtual) updates.plano_atual = planoAtual;
+
+    const email = getValue('Email');
+    if (email) updates.email = email;
+
+    const motivo = getValue('Motivo');
+    if (motivo) updates.motivo_busca = motivo;
+
+    const hospital = getValue('Hospital/Regiao');
+    if (hospital) updates.hospital_preferencia = hospital;
+
+    const cnpjMei = getValue('CNPJ/MEI');
+    if (cnpjMei) {
+      const lower = cnpjMei.toLowerCase();
+      if (lower.includes('mei')) {
+        updates.possui_cnpj = 'Tenho MEI';
+      } else if (lower.includes('cnpj') || lower.includes('sim')) {
+        updates.possui_cnpj = 'Sim';
+      } else if (lower.includes('não') || lower.includes('nao') || lower.includes('pf') || lower.includes('fisica') || lower.includes('física')) {
+        updates.possui_cnpj = 'Não';
+      }
+      
+      const digits = cnpjMei.replace(/\D/g, '');
+      if (digits.length >= 11) {
+        updates.cnpj = cnpjMei;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabaseAdmin
+        .from('leads')
+        .update(updates)
+        .eq('id', leadId);
+      if (error) throw error;
+      console.log(`[lead_ai_agent] Updated lead ${leadId} from summary:`, updates);
+    }
+  } catch (err) {
+    console.error('[lead_ai_agent] Failed to update lead from summary:', err);
   }
 }

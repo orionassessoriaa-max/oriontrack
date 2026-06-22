@@ -228,6 +228,9 @@ export default function CrmPage() {
     investimento: '',
     cidade: '',
     operadora: '',
+    email: '',
+    motivo_busca: '',
+    hospital_preferencia: '',
     valor_negociacao: '',
     operadora_negociacao: '',
     etiqueta: '',
@@ -569,6 +572,9 @@ export default function CrmPage() {
         investimento: selectedLead.investimento || '',
         cidade: selectedLead.cidade || '',
         operadora: selectedLead.operadora || '',
+        email: selectedLead.email || '',
+        motivo_busca: selectedLead.motivo_busca || '',
+        hospital_preferencia: selectedLead.hospital_preferencia || '',
         valor_negociacao: selectedLead.valor_negociacao ? String(selectedLead.valor_negociacao) : '',
         operadora_negociacao: selectedLead.operadora_negociacao || '',
         etiqueta: selectedLead.etiqueta || '',
@@ -1148,6 +1154,9 @@ export default function CrmPage() {
         investimento: editForm.investimento,
         cidade: editForm.cidade,
         operadora: editForm.operadora || null,
+        email: editForm.email || null,
+        motivo_busca: editForm.motivo_busca || null,
+        hospital_preferencia: editForm.hospital_preferencia || null,
         valor_negociacao: editForm.valor_negociacao ? parseCurrencyInput(editForm.valor_negociacao) : null,
         operadora_negociacao: editForm.operadora_negociacao || null,
         etiqueta: editForm.etiqueta || null,
@@ -1587,6 +1596,9 @@ export default function CrmPage() {
                       <EditField label="Plano atual" value={editForm.plano_atual} onChange={(value) => setEditForm((prev) => ({ ...prev, plano_atual: value }))} />
                       <EditField label="Investimento" value={editForm.investimento} onChange={(value) => setEditForm((prev) => ({ ...prev, investimento: value }))} />
                       <EditField label="Pagina" value={editForm.operadora} onChange={(value) => setEditForm((prev) => ({ ...prev, operadora: value }))} />
+                      <EditField label="E-mail" value={editForm.email} onChange={(value) => setEditForm((prev) => ({ ...prev, email: value }))} />
+                      <EditField label="Motivo da busca" value={editForm.motivo_busca} onChange={(value) => setEditForm((prev) => ({ ...prev, motivo_busca: value }))} />
+                      <EditField label="Hospital/Região" value={editForm.hospital_preferencia} onChange={(value) => setEditForm((prev) => ({ ...prev, hospital_preferencia: value }))} />
                       <EditSelect label="Etiqueta" value={editForm.etiqueta} options={['', ...READY_LABELS]} onChange={(value) => {
                         const etiqueta = value === 'Outra etiqueta' ? (window.prompt('Nome da nova etiqueta', editForm.etiqueta) || '') : value;
                         setEditForm((prev) => ({ ...prev, etiqueta }));
@@ -1612,6 +1624,9 @@ export default function CrmPage() {
                     <InfoCard label="Investimento" value={selectedLead.investimento || '-'} />
                     <InfoCard label="Cidade" value={selectedLead.cidade || '-'} />
                     <InfoCard label="Pagina" value={selectedLead.operadora || '-'} />
+                    <InfoCard label="E-mail" value={selectedLead.email || '-'} />
+                    <InfoCard label="Motivo da busca" value={selectedLead.motivo_busca || '-'} />
+                    <InfoCard label="Hospital/Região" value={selectedLead.hospital_preferencia || '-'} />
                     <InfoCard label="Etiqueta" value={selectedLead.etiqueta || '-'} />
                     {canManageLeadResponsible && teamMembers.length > 0 ? (
                       <div className="rounded-[1.25rem] border border-slate-100 bg-white p-4">
