@@ -1460,32 +1460,32 @@ export default function BrokerLeadsPage() {
       )}
 
       {showImportModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md sm:p-6">
-          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl sm:rounded-[2.5rem]">
-            <div className="flex items-center justify-between border-b border-gray-100 p-5 sm:p-8">
+        <div className="fixed inset-0 z-[9999] flex min-h-dvh items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-10 backdrop-blur-md sm:py-16">
+          <div className="relative w-full max-w-xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#08111f] shadow-2xl shadow-black/40 sm:rounded-[2.5rem]">
+            <div className="flex items-center justify-between border-b border-white/10 p-5 sm:p-8">
               <div>
                 <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">Admin</p>
-                <h2 className="text-xl font-black text-gray-900">Importar planilha</h2>
+                <h2 className="text-xl font-black text-white">Importar planilha</h2>
               </div>
-              <button onClick={() => setShowImportModal(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100">
+              <button onClick={() => setShowImportModal(false)} className="rounded-full bg-white/5 p-2 text-slate-400 hover:bg-white/10 hover:text-white">
                 <X size={22} />
               </button>
             </div>
-            <form onSubmit={importSheet} className="space-y-5 p-5 sm:p-8">
+            <form onSubmit={importSheet} className="max-h-[calc(100dvh-12rem)] space-y-5 overflow-y-auto p-5 sm:p-8">
               {importMessage && (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-black text-emerald-700">
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm font-black text-emerald-300">
                   {importMessage}
                 </div>
               )}
               <div className="space-y-2">
-                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Link do Google Sheets</label>
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Link do Google Sheets</label>
                 <input
                   type="url"
                   required
                   value={sheetUrl}
                   onChange={(e) => setSheetUrl(e.target.value)}
                   placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className="w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500"
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
               <button disabled={importing} className="flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-600 py-5 font-black text-white shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-50">
