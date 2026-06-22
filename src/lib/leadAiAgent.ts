@@ -2,6 +2,27 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { evolutionFetch, evolutionInstanceName, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
+export const recentAiOutboundMessages = new Set<string>();
+
+function cleanSignatureText(text: string) {
+  return String(text || '').replace(/\s+/g, '').replace(/[\u{1F300}-\u{1FAFF}]/gu, '').toLowerCase();
+}
+
+export function registerAiOutbound(phone: string, text: string) {
+  const signature = `${normalizePhone(phone)}:${cleanSignatureText(text)}`;
+  recentAiOutboundMessages.add(signature);
+  
+  if (recentAiOutboundMessages.size > 200) {
+    const first = recentAiOutboundMessages.values().next().value;
+    if (first) recentAiOutboundMessages.delete(first);
+  }
+}
+
+export function isAiOutbound(phone: string, text: string) {
+  const signature = `${normalizePhone(phone)}:${cleanSignatureText(text)}`;
+  return recentAiOutboundMessages.has(signature);
+}
+
 const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
@@ -574,6 +595,7 @@ export async function startLeadAiIfEligible(leadId: string) {
     }], { onConflict: 'lead_id' });
 
   try {
+    registerAiOutbound(phone, intro);
     const payload = await sendAiAdminText(adminProfile, phone, intro);
     await insertMessage(conversation.id, 'outbound', AI_PERSONA, intro, {
       ...(payload || {}),
@@ -635,6 +657,7 @@ export async function continueLeadAiFromIncoming(options: {
   for (const part of reply ? splitReply(reply) : []) {
     if (options.incomingWasAudio) {
       try {
+        registerAiOutbound(lead.telefone || '', '🎤 Mensagem de voz');
         const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', part);
         await insertMessage(options.conversationId, 'outbound', AI_PERSONA, 'Mensagem de voz', {
           ...(payload || {}),
@@ -654,6 +677,7 @@ export async function continueLeadAiFromIncoming(options: {
       }
     }
 
+    registerAiOutbound(lead.telefone || '', part);
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part);
     await insertMessage(options.conversationId, 'outbound', AI_PERSONA, part, {
       ...(payload || {}),
