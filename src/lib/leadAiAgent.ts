@@ -202,7 +202,7 @@ async function insertMessage(conversaId: string, direction: 'inbound' | 'outboun
       direction,
       remetente,
       mensagem,
-      provider_message_id: metadata?.provider_message_id || null,
+      provider_message_id: metadata?.provider_message_id || providerMessageId(metadata),
       metadata,
     }])
     .select('*')
@@ -485,6 +485,7 @@ Regras:
         ...messages,
         { role: 'user', content: customerMessage },
       ],
+      response_format: { type: 'json_object' },
     }),
   });
 
