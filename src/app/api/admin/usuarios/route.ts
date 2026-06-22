@@ -93,12 +93,6 @@ function isMissingTeamColumn(error?: { message?: string | null } | null) {
   return String(error?.message || '').includes('equipe_orion');
 }
 
-function parseCommissionPercent(value: unknown) {
-  const parsed = Number(String(value ?? '2.5').replace(',', '.'));
-  if (!Number.isFinite(parsed) || parsed < 0) return 2.5;
-  return Math.min(parsed, 100);
-}
-
 async function upsertNotificationPhone(profileId: string, telefone: string) {
   if (!profileId || !telefone) return;
 
@@ -285,7 +279,6 @@ export async function POST(request: Request) {
             operadoras_info: { selecionadas: Array.isArray(body.operadoras) ? body.operadoras : [] },
             time_operacional: timeOperacional,
             gestor_trafego_id: gestorTrafegoId,
-            comissao_percentual: parseCommissionPercent(body.comissao_percentual),
             rodizio_ativo: body.rodizio_ativo !== false,
             observacoes: body.observacoes || null,
           }])
@@ -316,7 +309,6 @@ export async function POST(request: Request) {
               operadoras_info: { selecionadas: [] },
               time_operacional: [],
               gestor_trafego_id: null,
-              comissao_percentual: parseCommissionPercent(body.comissao_percentual),
               rodizio_ativo: true,
               observacoes: 'Primeiro acesso criado automaticamente a partir de uma concessionaria vazia.',
             }])
@@ -533,9 +525,6 @@ export async function PATCH(request: Request) {
           gestor_trafego_id: gestorTrafegoId,
           operadoras_info: { selecionadas: operadoras },
         };
-        if (Object.prototype.hasOwnProperty.call(body, 'comissao_percentual')) {
-          corretorUpdatePayload.comissao_percentual = parseCommissionPercent(body.comissao_percentual);
-        }
         if (Object.prototype.hasOwnProperty.call(body, 'rodizio_ativo')) {
           corretorUpdatePayload.rodizio_ativo = body.rodizio_ativo !== false;
         }
@@ -564,7 +553,6 @@ export async function PATCH(request: Request) {
               tipo_campanha: body.tipo_campanha || 'ambos',
               time_operacional: timeOperacional,
               gestor_trafego_id: gestorTrafegoId,
-              comissao_percentual: parseCommissionPercent(body.comissao_percentual),
               rodizio_ativo: body.rodizio_ativo !== false,
               operadoras_info: { selecionadas: operadoras },
             }])

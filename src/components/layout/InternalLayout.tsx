@@ -46,15 +46,16 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isCreativeRoute = pathname.startsWith('/criativos');
         const isTeamRoute = pathname.startsWith('/equipe');
         const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/simulador') || pathname.startsWith('/apolo-one') || pathname.startsWith('/ajuda');
-        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/inbox', '/financeiro', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || isCreativeRoute;
-        const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/financeiro', '/minha-pagina', '/simulador', '/inbox', '/time', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
+        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/inbox', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || isCreativeRoute;
+        const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/minha-pagina', '/simulador', '/inbox', '/time', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
+
+        if (pathname.startsWith('/financeiro')) {
+          router.push('/dashboard');
+          return;
+        }
         const isOperationalViewingBroker = isViewingAsCorretor && ['gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario));
 
         if (isOperationalViewingBroker) {
-          if (pathname.startsWith('/financeiro')) {
-            router.push('/dashboard');
-            return;
-          }
           if (isBrokerRoute || isSharedRoute || pathname.startsWith('/trafego/relatorios') || pathname.startsWith('/account/inbox')) {
             return;
           }
@@ -73,7 +74,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         // 2. Traffic Manager Access: Traffic routes + Broker List (to select for reports)
         // But NO /admin dashboard or system settings
         else if (isTrafficManager) {
-          if (isViewingAsCorretor && isBrokerRoute && !pathname.startsWith('/financeiro')) return;
+          if (isViewingAsCorretor && isBrokerRoute) return;
           if (isAdminRoute) return;
           if (isBrokerRoute || isDesignerRoute || isAccountRoute) {
              router.push('/trafego');
@@ -85,7 +86,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
           }
         }
         else if (isAccountManager) {
-          if (isViewingAsCorretor && isBrokerRoute && !pathname.startsWith('/financeiro')) return;
+          if (isViewingAsCorretor && isBrokerRoute) return;
           if (!isAccountRoute && !isCreativeRoute && !isTeamRoute && !pathname.startsWith('/trafego/relatorios') && pathname !== '/perfil' && pathname !== '/notificacoes') {
             router.push('/account');
           }

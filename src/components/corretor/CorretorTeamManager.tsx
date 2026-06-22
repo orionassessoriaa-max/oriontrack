@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw, Clock, Table } from 'lucide-react';
+import { CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw, Clock, Table } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
@@ -64,7 +64,6 @@ type AssignableLead = {
   investimento?: string | null;
   valor_negociacao?: number | string | null;
   valor_venda?: number | string | null;
-  valor_comissao?: number | string | null;
   responsavel_membro_id: string | null;
   responsavel_profile_id: string | null;
   data_entrada?: string | null;
@@ -78,7 +77,6 @@ type MemberStats = Membro & {
   vendas: number;
   cotacoes: number;
   receita: number;
-  comissao: number;
   parados24h: number;
   tempoMedioHoras: number;
   ultimoLead?: string | null;
@@ -155,7 +153,6 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const [skipOnboarding, setSkipOnboarding] = useState(false);
   const [showAddMemberForm, setShowAddMemberForm] = useState(false);
   const canAssignLeads = profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin';
-  const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const displayTeamName = brokerageName || team?.nome || 'Time comercial';
 
   const memberStats = useMemo<MemberStats[]>(() => {
@@ -179,9 +176,8 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
         acc.tempoTotalHoras += hoursBetween(lead.data_entrada, lead.updated_at);
         acc.leadsComTempo += lead.data_entrada && lead.updated_at ? 1 : 0;
         acc.receita += toNumber(lead.valor_venda) || (isSale ? toNumber(lead.valor_negociacao) : 0);
-        acc.comissao += toNumber(lead.valor_comissao);
         return acc;
-      }, { semResposta: 0, negociacao: 0, cotacoes: 0, vendas: 0, receita: 0, comissao: 0, parados24h: 0, tempoTotalHoras: 0, leadsComTempo: 0 });
+      }, { semResposta: 0, negociacao: 0, cotacoes: 0, vendas: 0, receita: 0, parados24h: 0, tempoTotalHoras: 0, leadsComTempo: 0 });
 
       return {
         ...member,
@@ -197,7 +193,6 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     const assigned = leads.filter((lead) => membros.some((member) => leadBelongsToMember(lead, member))).length;
     const sales = memberStats.reduce((sum, member) => sum + member.vendas, 0);
     const semResposta = memberStats.reduce((sum, member) => sum + member.semResposta, 0);
-    const comissao = memberStats.reduce((sum, member) => sum + member.comissao, 0);
     const receita = memberStats.reduce((sum, member) => sum + member.receita, 0);
     const parados24h = memberStats.reduce((sum, member) => sum + member.parados24h, 0);
     const participantesRodizio = membros.filter((member) => member.participa_rodizio !== false && ['active', 'ativo', 'Ativo'].includes(member.status || '')).length;
@@ -212,14 +207,13 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       semResposta,
       parados24h,
       tempoMedioHoras: totalComTempo ? Math.round((tempoTotal / totalComTempo) * 10) / 10 : 0,
-      comissao,
       receita,
       conversion: leads.length ? Math.round((sales / leads.length) * 100) : 0,
     };
   }, [leads, membros, memberStats]);
 
   const ranking = useMemo(() => {
-    return [...memberStats].sort((a, b) => b.vendas - a.vendas || b.comissao - a.comissao || b.totalLeads - a.totalLeads);
+    return [...memberStats].sort((a, b) => b.vendas - a.vendas || b.totalLeads - a.totalLeads);
   }, [memberStats]);
 
   async function getToken() {
@@ -507,7 +501,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             {[
               { icon: Sparkles, title: "Automação de Vendas", text: "Distribua clientes instantaneamente de forma justa para sua equipe ativa." },
               { icon: Users, title: "Acessos Exclusivos", text: "Seus corretores têm login exclusivo para gerenciar o funil do CRM." },
-              { icon: Crown, title: "Ranking Gamificado", text: "Estimule vendas e comissões com um ranking atualizado em tempo real." },
+              { icon: Crown, title: "Ranking Gamificado", text: "Estimule vendas e performance com um ranking atualizado em tempo real." },
             ].map((f, i) => {
               const Icon = f.icon;
               return (
@@ -866,7 +860,6 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           { label: 'Sem resposta', value: teamSummary.semResposta, detail: 'precisam de atencao', icon: Target, tone: 'amber' },
           { label: 'Parados +24h', value: teamSummary.parados24h, detail: `${teamSummary.tempoMedioHoras}h média mov.`, icon: Clock, tone: 'amber' },
           { label: 'Vendas', value: teamSummary.sales, detail: `${teamSummary.conversion}% conversão`, icon: TrendingUp, tone: 'emerald' },
-          ...(canViewCommission ? [{ label: 'Comissão', value: currency(teamSummary.comissao), detail: `${currency(teamSummary.receita)} em vendas`, icon: BarChart3, tone: 'slate' }] : []),
         ].map((card) => {
           const Icon = card.icon;
           const tone = {
@@ -914,7 +907,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-white group-hover:text-cyan-400 transition-colors">{member.nome}</p>
                       <p className="text-xs font-bold text-slate-400 mt-1">
-                        {member.totalLeads} leads | {member.vendas} vendas | {member.parados24h} parados{canViewCommission ? ` | ${currency(member.comissao)} comissão` : ''}
+                        {member.totalLeads} leads | {member.vendas} vendas | {member.parados24h} parados
                       </p>
                     </div>
                     <div className="text-right">
@@ -1272,7 +1265,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                     </div>
 
                     {/* Bottom Row: 4 metrics side-by-side, fully responsive */}
-                    <div className={`grid grid-cols-2 sm:grid-cols-3 ${canViewCommission ? 'xl:grid-cols-6' : 'xl:grid-cols-5'} gap-2 sm:gap-3 mt-1 border-t border-white/5 pt-4`}>
+                    <div className="grid grid-cols-2 gap-2 border-t border-white/5 pt-4 mt-1 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5">
                       <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
                         <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider">Leads</p>
                         <p className="text-sm font-black text-white mt-0.5">{member.totalLeads}</p>
@@ -1293,12 +1286,6 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                         <p className="text-[9px] font-bold text-cyan-400 uppercase tracking-wider">Media</p>
                         <p className="text-sm font-black text-white mt-0.5">{member.tempoMedioHoras}h</p>
                       </div>
-                      {canViewCommission && (
-                        <div className="bg-[#090f1d] border border-white/5 px-2 py-2 rounded-xl text-center">
-                          <p className="text-[9px] font-bold text-purple-400 uppercase tracking-wider">Comissão</p>
-                          <p className="text-xs font-black text-white mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{currency(member.comissao)}</p>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>

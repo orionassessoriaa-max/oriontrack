@@ -29,7 +29,6 @@ import { ptBR } from 'date-fns/locale';
 import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 import { cleanLeadObservationText, getLeadImportWarnings } from '@/lib/leadWarnings';
 import PhoneAction from '@/components/ui/PhoneAction';
-import SaleFinanceRedirect from '@/components/ui/SaleFinanceRedirect';
 
 function normalizeText(value?: string | null) {
   return String(value || '')
@@ -107,10 +106,6 @@ function formatCurrencyValue(value?: string | number | null) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseCurrencyInput(value));
 }
 
-function calculateCommissionFromSale(value?: string | number | null) {
-  return parseCurrencyInput(value) * 0.025;
-}
-
 function requiresCommercialData(status: LeadStatus) {
   return COMMERCIAL_REQUIRED_STATUSES.includes(status);
 }
@@ -122,7 +117,6 @@ function requiresStatusMoveModal(status: LeadStatus) {
 type CommercialPayload = {
   valor_negociacao?: number | null;
   operadora_negociacao?: string | null;
-  valor_comissao?: number | null;
   sem_interesse_motivo?: string | null;
   sem_interesse_fez_cotacao?: boolean;
 };
@@ -132,7 +126,6 @@ type CommercialModalState = {
   status: LeadStatus;
   valor_negociacao: string;
   operadora_negociacao: string;
-  valor_comissao: string;
   sem_interesse_motivo: string;
   sem_interesse_fez_cotacao: boolean;
 } | null;
@@ -179,7 +172,6 @@ function leadAd(lead: Lead) {
 export default function BrokerLeadsPage() {
   const { profile, actualProfile, isViewingAsCorretor } = useAuth();
   const { confirmDialog } = useDialog();
-  const canViewCommission = profile?.tipo_usuario !== 'corretor_membro';
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -212,7 +204,6 @@ export default function BrokerLeadsPage() {
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [commercialModal, setCommercialModal] = useState<CommercialModalState>(null);
   const [commercialModalError, setCommercialModalError] = useState<string | null>(null);
-  const [financeRedirect, setFinanceRedirect] = useState<{ leadId: string; leadName?: string | null } | null>(null);
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
@@ -396,7 +387,6 @@ export default function BrokerLeadsPage() {
       status,
       valor_negociacao: lead.valor_negociacao ? String(lead.valor_negociacao) : '',
       operadora_negociacao: lead.operadora_negociacao || '',
-      valor_comissao: lead.valor_comissao ? String(lead.valor_comissao) : '',
       sem_interesse_motivo: lead.sem_interesse_motivo || '',
       sem_interesse_fez_cotacao: Boolean(lead.sem_interesse_fez_cotacao || parseCurrencyInput(lead.valor_negociacao) > 0),
     });
@@ -438,7 +428,6 @@ export default function BrokerLeadsPage() {
 
     const payload = {
       valor_negociacao: parseCurrencyInput(commercialModal.valor_negociacao),
-      valor_comissao: calculateCommissionFromSale(commercialModal.valor_negociacao),
     };
 
     if (!payload.valor_negociacao) {
@@ -489,30 +478,23 @@ export default function BrokerLeadsPage() {
     } else if (payload.lead) {
       setLeads(prev => prev.map(lead => lead.id === leadId ? { ...lead, ...payload.lead } : lead));
     }
-    if (response.ok && status === 'Venda realizada') {
-      setFinanceRedirect({ leadId, leadName: currentLead.nome });
-    }
     setSavingStatusId(null);
   };
 
   const updateLeadNegotiationValue = async (lead: Lead, rawValue: string) => {
     const value = parseCurrencyInput(rawValue);
     const valorNegociacao = value > 0 ? value : null;
-    const valorComissao = valorNegociacao ? calculateCommissionFromSale(valorNegociacao) : null;
 
     setSavingStatusId(lead.id);
     setLeads((current) => current.map((item) => item.id === lead.id ? {
       ...item,
       valor_negociacao: valorNegociacao,
-      valor_comissao: valorComissao,
     } : item));
 
     const { error } = await supabase
       .from('leads')
       .update({
         valor_negociacao: valorNegociacao,
-        valor_comissao: valorComissao,
-        comissao_percentual: valorNegociacao ? 2.5 : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', lead.id);
@@ -1069,7 +1051,6 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Valor negociação</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Etiqueta</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Operadora venda</th>
-                  {canViewCommission && <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Comissão</th>}
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
                   <th className="min-w-[180px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Responsavel</th>
@@ -1083,7 +1064,7 @@ export default function BrokerLeadsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={(isViewingAsCorretor ? 23 : 22) - (canViewCommission ? 0 : 1)} className="py-20 text-center">
+                    <td colSpan={isViewingAsCorretor ? 22 : 21} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -1164,7 +1145,6 @@ export default function BrokerLeadsPage() {
                       </select>
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.operadora_negociacao || '-'}</td>
-                    {canViewCommission && <td className="border border-slate-100 px-3 py-3 font-bold text-blue-700">{lead.valor_comissao ? formatCurrencyValue(lead.valor_comissao) : '-'}</td>}
                     <td className="border border-slate-100 px-3 py-3">
                       <div className="flex items-center gap-2">
                         <select
@@ -1576,11 +1556,6 @@ export default function BrokerLeadsPage() {
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                   />
                 </label>
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
-                  <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-emerald-700">Comissão calculada automaticamente</span>
-                  <p className="text-lg font-black text-emerald-800">{formatCurrencyValue(calculateCommissionFromSale(commercialModal.valor_negociacao))}</p>
-                  <p className="mt-1 text-xs font-bold text-emerald-700">250% sobre o valor da negociação.</p>
-                </div>
               </div>
             )}
 
@@ -1601,13 +1576,6 @@ export default function BrokerLeadsPage() {
             </div>
           </form>
         </div>
-      )}
-      {financeRedirect && (
-        <SaleFinanceRedirect
-          leadId={financeRedirect.leadId}
-          leadName={financeRedirect.leadName}
-          onCancel={() => setFinanceRedirect(null)}
-        />
       )}
     </InternalLayout>
   );

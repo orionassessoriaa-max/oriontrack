@@ -46,7 +46,6 @@ const initialForm = {
   tipo_campanha: 'ambos' as TipoCampanha,
   operadoras: [] as string[],
   time_operacional: [] as OrionTeamMember[],
-  comissao_percentual: '2.5',
   rodizio_ativo: true,
   participa_rodizio: true,
   foto_url: '',
@@ -121,7 +120,6 @@ export default function AdminUsuariosPage() {
       tipo_campanha: (corretor?.tipo_campanha as TipoCampanha) || 'ambos',
       operadoras: customOperadora ? [...knownOperadoras.filter((item) => item !== 'Outros'), 'Outros'] : knownOperadoras,
       time_operacional: Array.isArray(corretor?.time_operacional) ? corretor.time_operacional as OrionTeamMember[] : [],
-      comissao_percentual: String(corretor?.comissao_percentual ?? '2.5'),
       rodizio_ativo: corretor?.rodizio_ativo !== false,
       participa_rodizio: true,
       foto_url: profile.foto_url || '',
@@ -229,7 +227,6 @@ export default function AdminUsuariosPage() {
       operadoras,
       gestor_trafego_id: gestorTrafegoId,
     };
-    delete (userPayload as Partial<typeof form>).comissao_percentual;
     delete (userPayload as Partial<typeof form>).rodizio_ativo;
 
     const response = await fetch('/api/admin/usuarios', {

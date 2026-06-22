@@ -36,7 +36,6 @@ import {
   UserCog,
   UserPlus,
   Users,
-  WalletCards,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -251,7 +250,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const corretorMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
-    { icon: WalletCards, label: 'Financeiro', href: '/financeiro' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: ClipboardList, label: 'Kanban', href: '/kanban' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
@@ -278,7 +276,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const getMenu = () => {
     let items = [];
     if (isViewingAsCorretor && ['gestor_trafego', 'account_manager'].includes(String(actualProfile?.tipo_usuario))) {
-      const base = corretorMenu.filter((item) => item.href !== '/financeiro');
+      const base = corretorMenu;
       if (actualProfile?.tipo_usuario === 'account_manager') {
         items = [
           ...base,

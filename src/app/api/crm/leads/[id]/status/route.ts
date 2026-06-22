@@ -18,18 +18,6 @@ function boolOrNull(value: unknown) {
   return ['true', 'sim', '1', 'yes'].includes(String(value).toLowerCase());
 }
 
-function calculateCommission(value: unknown, percent: unknown) {
-  const numeric = numericOrNull(value);
-  const rate = Number(percent);
-  const safeRate = Number.isFinite(rate) && rate >= 0 ? rate : 2.5;
-  return numeric === null ? null : numeric * (safeRate / 100);
-}
-
-function monthStart() {
-  const now = new Date();
-  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 3)).toISOString().slice(0, 10);
-}
-
 function cadenceDays(startValue?: string | null, endValue?: string | null) {
   if (!startValue) return 0;
   const start = new Date(startValue).getTime();
@@ -74,7 +62,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const { data: lead } = await supabaseAdmin
       .from('leads')
-      .select('id, status, corretor_id, responsavel_profile_id, comissao_percentual, created_at, data_entrada, cadencia_inicio, corretores:corretor_id(comissao_percentual)')
+      .select('id, status, corretor_id, responsavel_profile_id, created_at, data_entrada, cadencia_inicio')
       .eq('id', leadId)
       .maybeSingle();
 
@@ -100,52 +88,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     if ('valor_negociacao' in body) updatePayload.valor_negociacao = numericOrNull(body.valor_negociacao);
     if ('operadora_negociacao' in body) updatePayload.operadora_negociacao = body.operadora_negociacao ? String(body.operadora_negociacao).trim() : null;
-    if ('valor_comissao' in body) updatePayload.valor_comissao = numericOrNull(body.valor_comissao);
-    if ('comissao_percentual' in body) updatePayload.comissao_percentual = numericOrNull(body.comissao_percentual);
     if ('sem_interesse_motivo' in body) updatePayload.sem_interesse_motivo = body.sem_interesse_motivo ? String(body.sem_interesse_motivo).trim() : null;
     if ('sem_interesse_fez_cotacao' in body) updatePayload.sem_interesse_fez_cotacao = boolOrNull(body.sem_interesse_fez_cotacao);
-
-    if (status !== 'Sem interesse' && 'valor_negociacao' in body) {
-      const corretor = Array.isArray((lead as any).corretores) ? (lead as any).corretores[0] : (lead as any).corretores;
-      const commissionPercent = numericOrNull(body.comissao_percentual) ?? numericOrNull((lead as any).comissao_percentual) ?? numericOrNull(corretor?.comissao_percentual) ?? 2.5;
-      updatePayload.comissao_percentual = commissionPercent;
-      updatePayload.valor_comissao = calculateCommission(body.valor_negociacao, commissionPercent);
-    }
 
     const { data: updated, error: updateError } = await supabaseAdmin
       .from('leads')
       .update(updatePayload)
       .eq('id', leadId)
-      .select('id, status, valor_negociacao, operadora_negociacao, valor_comissao, comissao_percentual, sem_interesse_motivo, sem_interesse_fez_cotacao, cadencia_inicio, cadencia_fim, cadencia_ativa')
+      .select('id, status, valor_negociacao, operadora_negociacao, sem_interesse_motivo, sem_interesse_fez_cotacao, cadencia_inicio, cadencia_fim, cadencia_ativa')
       .single();
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
-
-    if (status === 'Venda realizada') {
-      const saleValue = numericOrNull(updated.valor_negociacao) || numericOrNull(updated.valor_comissao) || 0;
-      if (saleValue > 0) {
-        const { data: existingFinance } = await supabaseAdmin
-          .from('financeiro_receitas')
-          .select('id')
-          .eq('lead_id', leadId)
-          .limit(1);
-
-        if (!existingFinance?.length) {
-          await supabaseAdmin.from('financeiro_receitas').insert([{
-            corretor_id: lead.corretor_id,
-            lead_id: leadId,
-            parcela_numero: 1,
-            total_parcelas: 1,
-            valor_total: saleValue,
-            valor_parcela: saleValue,
-            vencimento: monthStart(),
-            status: 'pendente',
-            created_by: guard.profile.id,
-          }]);
-        }
-      }
     }
 
     const oldStatus = lead.status;

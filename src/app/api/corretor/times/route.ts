@@ -174,7 +174,7 @@ async function getTeamLeads(corretorIds: string[]) {
     const to = from + pageSize - 1;
     const { data, error } = await supabaseAdmin
       .from('leads')
-      .select('id, nome, telefone, status, cidade, investimento, valor_negociacao, valor_venda, valor_comissao, responsavel_membro_id, responsavel_profile_id, data_entrada, updated_at')
+      .select('id, nome, telefone, status, cidade, investimento, valor_negociacao, valor_venda, responsavel_membro_id, responsavel_profile_id, data_entrada, updated_at')
       .in('corretor_id', corretorIds)
       .order('data_entrada', { ascending: false, nullsFirst: false })
       .range(from, to);

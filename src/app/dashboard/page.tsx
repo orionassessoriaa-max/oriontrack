@@ -56,7 +56,6 @@ type LeadMetricRow = {
   data_entrada: string | null;
   cidade?: string | null;
   valor_negociacao?: string | number | null;
-  valor_comissao?: string | number | null;
   responsavel_profile_id?: string | null;
   cadencia_ativa?: boolean | null;
   cadencia_inicio?: string | null;
@@ -286,7 +285,6 @@ export default function DashboardPage() {
     cadence: 0,
     tasksOpen: 0,
     tasksToday: 0,
-    revenueRealized: 0,
     salesRealized: 0,
     salesPotential: 0
   });
@@ -299,7 +297,6 @@ export default function DashboardPage() {
   const [allTimeStats, setAllTimeStats] = useState({
     total: 0,
     sold: 0,
-    revenueRealized: 0,
     salesRealized: 0,
     salesPotential: 0
   });
@@ -493,7 +490,7 @@ export default function DashboardPage() {
           const to = from + limitNum - 1;
           let statsRequest = supabase
             .from('leads')
-            .select('status, data_entrada, cidade, valor_negociacao, valor_comissao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim')
+            .select('status, data_entrada, cidade, valor_negociacao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim')
             .in('corretor_id', idsToFetch)
             .range(from, to);
 
@@ -522,7 +519,6 @@ export default function DashboardPage() {
         setAllTimeStats({
           total: allLeads.length,
           sold: allTimeSoldLeads.length,
-          revenueRealized: allTimeSoldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
           salesRealized: allTimeSoldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
           salesPotential: allLeads
             .filter((lead) => activeRevenueStatuses.includes(normalizeLeadStatus(lead.status)))
@@ -734,7 +730,6 @@ export default function DashboardPage() {
           cadence: statsRes.filter((lead) => lead.cadencia_ativa === true).length,
           tasksOpen: pendingTasks.length,
           tasksToday: pendingTasks.filter((task) => task.vencimento && new Date(task.vencimento).toDateString() === todayDate).length,
-          revenueRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_comissao), 0),
           salesRealized: soldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
           salesPotential: statsRes
             .filter((lead) => activeRevenueStatuses.includes(normalizeLeadStatus(lead.status)))
@@ -1360,19 +1355,6 @@ export default function DashboardPage() {
             <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-400 border-t border-white/5 pt-2">
               <span>✓ {allTimeStats.sold} vendas</span>
               <span>{allTimeStats.total} leads</span>
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-md hover:-translate-y-1 hover:border-emerald-500/20 transition-all duration-300">
-            <div className="mb-3 flex items-center justify-between gap-4">
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Comissão Vendida</p>
-              <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
-                <DollarSign size={16} />
-              </div>
-            </div>
-            <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.revenueRealized)}</p>
-            <div className="mt-2.5 text-[10px] font-bold text-emerald-400 border-t border-white/5 pt-2">
-              comissão das vendas realizadas
             </div>
           </div>
 
