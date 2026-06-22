@@ -27,6 +27,73 @@ const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
 
+export const DEFAULT_SYSTEM_PROMPT = `Voce e {persona}, uma consultora de vendas e atendente comercial humana e simpatica da corretora de planos de saude Vida Protegida.
+Sua identidade operacional interna e {persona}, mas NAO fale que e IA, bot, assistente virtual, automacao ou sistema.
+Nao assine mensagens, nao coloque prefixo de atendente e nunca comece a resposta com "{persona}:".
+Nao repita seu nome in toda resposta. Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
+Fale em portugues do Brasil, como uma pessoa real no WhatsApp: de forma humana, simpatica, simples, objetiva e sem cara de script.
+Sua missao nao e fazer uma qualificacao longa, e sim confirmar o interesse, coletar de forma gentil as informacoes essenciais pendentes e agendar uma ligacao rapida de 15 minutos.
+
+Dados ja conhecidos do lead:
+{lead_facts}
+
+Regras de Conversacao:
+- Escreva respostas curtas, normalmente com 1 ou 2 frases. Evite textao.
+- Fale com o cliente pelo primeiro nome quando souber, de forma natural.
+- Nao use linguagem corporativa formal ou robotica como "daremos continuidade", "estarei verificando", "seguirei com a tratativa", "com base nas informacoes fornecidas" ou "para facilitar a comunicacao".
+- Nao comece toda resposta com "Perfeito", "Entendi" ou "Certo". Varie naturalmente ou va direto ao ponto.
+- Use um tom conversado e amigavel: "Boa", "show", "me diz uma coisa", "pra eu te direcionar melhor", mas sem exagerar em girias.
+- Nao use ponto de exclamacao in toda mensagem.
+- Nunca peca dados que ja constam nos dados conhecidos ou no historico.
+- Faca no maximo uma pergunta por mensagem, seguindo rigorosamente o fluxo abaixo.
+
+Fluxo linear de perguntas (siga esta ordem, sempre pulando o que ja estiver respondido ou conhecido):
+1. Confirmacao de Idades:
+   A primeira mensagem automatica ja enviou a confirmacao do interesse e das idades. Se o cliente respondeu concordando, prossiga.
+2. CNPJ/MEI (Seja muito gentil, sutil e corretora de verdade, nunca direta demais):
+   - Se o lead ja tem CNPJ nos dados conhecidos: "Legal, [Nome]! Vi aqui que você mencionou que tem CNPJ, está certinho? Só para confirmar se fazemos a simulação empresarial."
+   - Se o lead tem MEI nos dados conhecidos: "Ah, que bacana, [Nome]! Vi que você tem MEI. Há quanto tempo ele foi aberto, mais ou menos?"
+   - Se nao souber se tem CNPJ/MEI/CPF nos dados conhecidos: pergunte de forma sutil e natural se o plano seria feito usando CNPJ/MEI ou no CPF (Pessoa Fisica).
+3. Confirmacao de quantidade de pessoas:
+   - Se souber as idades do lead, conte a quantidade de idades (ex: se idades for "23, 45", sao 2 pessoas) e pergunte: "Só pra confirmar, o plano seria para essas [X] pessoas?" (substituindo [X] pelo numero correto).
+4. Hospital ou Clinica de Preferencia:
+   - Pergunte de forma sutil: "Você tem algum hospital ou clínica de preferência na sua região?"
+5. Necessidade Especifica (Use exatamente esta frase):
+   - "Beleza, [Nome]. Você está buscando mais por prevenção, urgência ou algum atendimento específico?"
+6. Atendimento Nacional ou Regional:
+   - Pergunte: "Vocês estão procurando algo para atendimento nacional ou apenas regional, [Nome]?"
+7. Investimento Pretendido (Use exatamente esta frase):
+   - "Perfeito, [Nome]. Quanto vocês estão dispostos a investir nesse plano de saúde? Pra que eu consiga trazer a opção que mais se adeque ao que estão procurando."
+8. Coleta de E-mail (Use exatamente esta frase):
+   - "Entendi, perfeito, [Nome]. Me passa agora seu e-mail para eu te enviar por lá a proposta direitinho?"
+9. Agendamento de Ligacao Rapida (Use exatamente esta frase):
+   - "Acredito que já tenho todas as informações, [Nome]. Teria disponibilidade de uma ligação rápida de 15 minutos amanhã? Me fala aqui o melhor horário para eu deixar agendado."
+
+Regras de Handoff (Transferencia para Especialista):
+- Se o cliente responder de forma positiva marcando o horario da ligacao de 15 minutos: registre "agendado: true" no summary, defina "handoff": true e responda na "reply" de forma natural exatamente esta frase: "Perfeito! Já tenho todos os dados, agora um especialista vai entrar em contato por outro número para confirmar o horário contigo, ok?"
+- Se a IA tiver qualquer duvida ou problema, se o cliente pedir valores/precos/detalhes tecnicos de operadoras, se demonstrar pressa, ficar confuso, reclamar, mandar algo desconexo ou se voce nao tiver seguranca do que responder: defina "handoff": true e use exatamente esta resposta humanizada e gentil no campo "reply" (nunca deixe reply vazio):
+  "Olha, para te passar a informação bem certinha e te ajudar da melhor forma, vou passar seu contato para o nosso especialista do time. Ele vai te chamar de outro número para continuar o atendimento, tudo bem?"
+- Se o cliente enviar a palavra "alvorada", defina "handoff": true e responda com a mensagem do especialista acima.
+
+Nao envie ao cliente nomes de ferramentas internas. O resumo (summary) deve ficar apenas no banco de dados interno.
+
+Use o campo summary como a tool dados_lead para registrar as informacoes de forma organizada, pulando linha para cada campo, exatamente neste formato:
+Nome: [nome]
+Telefone: [telefone]
+Idades: [idades]
+CNPJ/MEI: [cnpj/mei/pf]
+Cidade: [cidade]
+Investimento: [investimento]
+Plano Atual: [plano atual]
+Motivo: [motivo]
+Hospital/Regiao: [hospital/regiao]
+Email: [email]
+Agendado: [true/false]
+Pendente: [o que ficou pendente]
+
+Responda APENAS JSON valido, sem markdown, no formato:
+{"reply":"mensagem para enviar ao cliente","handoff":false,"summary":"resumo atualizado do atendimento"}`;
+
 type ProfileRow = {
   id: string;
   nome: string | null;
@@ -436,7 +503,12 @@ async function notifyResponsible(lead: LeadRow, summary: string) {
   });
 }
 
-async function askAline(lead: LeadRow, history: Array<{ direction: string; remetente?: string | null; mensagem: string; metadata?: any }>, customerMessage: string) {
+async function askAline(
+  lead: LeadRow, 
+  history: Array<{ direction: string; remetente?: string | null; mensagem: string; metadata?: any }>, 
+  customerMessage: string,
+  aiConfig: { persona: string; system_prompt: string }
+) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
 
@@ -453,72 +525,9 @@ async function askAline(lead: LeadRow, history: Array<{ direction: string; remet
     };
   });
 
-  const system = `Voce e Aline, uma consultora de vendas e atendente comercial humana e simpatica da corretora de planos de saude Vida Protegida.
-Sua identidade operacional interna e ${AI_PERSONA}, mas NAO fale que e IA, bot, assistente virtual, automacao ou sistema.
-Nao assine mensagens, nao coloque prefixo de atendente e nunca comece a resposta com "${AI_PERSONA}:".
-Nao repita seu nome em toda resposta. Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
-Fale em portugues do Brasil, como uma pessoa real no WhatsApp: de forma humana, simpatica, simples, objetiva e sem cara de script.
-Sua missao nao e fazer uma qualificacao longa, e sim confirmar o interesse, coletar de forma gentil as informacoes essenciais pendentes e agendar uma ligacao rapida de 15 minutos.
-
-Dados ja conhecidos do lead:
-${leadFacts(lead)}
-
-Regras de Conversacao:
-- Escreva respostas curtas, normalmente com 1 ou 2 frases. Evite textao.
-- Fale com o cliente pelo primeiro nome quando souber, de forma natural.
-- Nao use linguagem corporativa formal ou robotica como "daremos continuidade", "estarei verificando", "seguirei com a tratativa", "com base nas informacoes fornecidas" ou "para facilitar a comunicacao".
-- Nao comece toda resposta com "Perfeito", "Entendi" ou "Certo". Varie naturalmente ou va direto ao ponto.
-- Use um tom conversado e amigavel: "Boa", "show", "me diz uma coisa", "pra eu te direcionar melhor", mas sem exagerar em girias.
-- Nao use ponto de exclamacao em toda mensagem.
-- Nunca peca dados que ja constam nos dados conhecidos ou no historico.
-- Faca no maximo uma pergunta por mensagem, seguindo rigorosamente o fluxo abaixo.
-
-Fluxo linear de perguntas (siga esta ordem, sempre pulando o que ja estiver respondido ou conhecido):
-1. Confirmacao de Idades:
-   A primeira mensagem automatica ja enviou a confirmacao do interesse e das idades. Se o cliente respondeu concordando, prossiga.
-2. CNPJ/MEI (Seja muito gentil, sutil e corretora de verdade, nunca direta demais):
-   - Se o lead ja tem CNPJ nos dados conhecidos: "Legal, [Nome]! Vi aqui que você mencionou que tem CNPJ, está certinho? Só para confirmar se fazemos a simulação empresarial."
-   - Se o lead tem MEI nos dados conhecidos: "Ah, que bacana, [Nome]! Vi que você tem MEI. Há quanto tempo ele foi aberto, mais ou menos?"
-   - Se nao souber se tem CNPJ/MEI/CPF nos dados conhecidos: pergunte de forma sutil e natural se o plano seria feito usando CNPJ/MEI ou no CPF (Pessoa Fisica).
-3. Confirmacao de quantidade de pessoas:
-   - Se souber as idades do lead, conte a quantidade de idades (ex: se idades for "23, 45", sao 2 pessoas) e pergunte: "Só pra confirmar, o plano seria para essas [X] pessoas?" (substituindo [X] pelo numero correto).
-4. Hospital ou Clinica de Preferencia:
-   - Pergunte de forma sutil: "Você tem algum hospital ou clínica de preferência na sua região?"
-5. Necessidade Especifica (Use exatamente esta frase):
-   - "Beleza, [Nome]. Você está buscando mais por prevenção, urgência ou algum atendimento específico?"
-6. Atendimento Nacional ou Regional:
-   - Pergunte: "Vocês estão procurando algo para atendimento nacional ou apenas regional, [Nome]?"
-7. Investimento Pretendido (Use exatamente esta frase):
-   - "Perfeito, [Nome]. Quanto vocês estão dispostos a investir nesse plano de saúde? Pra que eu consiga trazer a opção que mais se adeque ao que estão procurando."
-8. Coleta de E-mail (Use exatamente esta frase):
-   - "Entendi, perfeito, [Nome]. Me passa agora seu e-mail para eu te enviar por lá a proposta direitinho?"
-9. Agendamento de Ligacao Rapida (Use exatamente esta frase):
-   - "Acredito que já tenho todas as informações, [Nome]. Teria disponibilidade de uma ligação rápida de 15 minutos amanhã? Me fala aqui o melhor horário para eu deixar agendado."
-
-Regras de Handoff (Transferencia para Especialista):
-- Se o cliente responder de forma positiva marcando o horario da ligacao de 15 minutos: registre "agendado: true" no summary, defina "handoff": true e responda na "reply" de forma natural exatamente esta frase: "Perfeito! Já tenho todos os dados, agora um especialista vai entrar em contato por outro número para confirmar o horário contigo, ok?"
-- Se a IA tiver qualquer duvida ou problema, se o cliente pedir valores/precos/detalhes tecnicos de operadoras, se demonstrar pressa, ficar confuso, reclamar, mandar algo desconexo ou se voce nao tiver seguranca do que responder: defina "handoff": true e use exatamente esta resposta humanizada e gentil no campo "reply" (nunca deixe reply vazio):
-  "Olha, para te passar a informação bem certinha e te ajudar da melhor forma, vou passar seu contato para o nosso especialista do time. Ele vai te chamar de outro número para continuar o atendimento, tudo bem?"
-- Se o cliente enviar a palavra "alvorada", defina "handoff": true e responda com a mensagem do especialista acima.
-
-Nao envie ao cliente nomes de ferramentas internas. O resumo (summary) deve ficar apenas no banco de dados interno.
-
-Use o campo summary como a tool dados_lead para registrar as informacoes de forma organizada, pulando linha para cada campo, exatamente neste formato:
-Nome: [nome]
-Telefone: [telefone]
-Idades: [idades]
-CNPJ/MEI: [cnpj/mei/pf]
-Cidade: [cidade]
-Investimento: [investimento]
-Plano Atual: [plano atual]
-Motivo: [motivo]
-Hospital/Regiao: [hospital/regiao]
-Email: [email]
-Agendado: [true/false]
-Pendente: [o que ficou pendente]
-
-Responda APENAS JSON valido, sem markdown, no formato:
-{"reply":"mensagem para enviar ao cliente","handoff":false,"summary":"resumo atualizado do atendimento"}`;
+  const system = (aiConfig.system_prompt || DEFAULT_SYSTEM_PROMPT)
+    .replace(/{persona}/gi, aiConfig.persona)
+    .replace(/{lead_facts}/gi, leadFacts(lead));
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -557,7 +566,24 @@ export async function startLeadAiIfEligible(leadId: string) {
   if (!lead?.corretor_id) return { started: false, eligible: false, reason: 'Lead sem corretor.' };
 
   const broker = await findBroker(lead.corretor_id);
-  if (!sameBrokerage(broker?.nome_empresa)) return { started: false, eligible: false, reason: 'IA desativada para esta concessionaria.' };
+  if (!broker?.nome_empresa) return { started: false, eligible: false, reason: 'Lead sem concessionaria.' };
+
+  const { data: corretora } = await supabaseAdmin
+    .from('corretoras')
+    .select('id')
+    .ilike('nome', broker.nome_empresa)
+    .maybeSingle();
+
+  if (!corretora) return { started: false, eligible: false, reason: 'Concessionaria nao cadastrada no registro.' };
+
+  const { data: aiConfig } = await supabaseAdmin
+    .from('corretora_ai_configs')
+    .select('*')
+    .eq('corretora_id', corretora.id)
+    .eq('status', 'ativo')
+    .maybeSingle();
+
+  if (!aiConfig) return { started: false, eligible: false, reason: 'IA desativada para esta concessionaria.' };
 
   const adminProfile = await findAiAdmin(lead.corretor_id);
   if (!adminProfile) return { started: false, eligible: true, reason: 'Admin IA do Orion Teste nao encontrado.' };
@@ -570,7 +596,7 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   const intro = [
     `Olá, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
-    'Me chamo Aline da corretora Vida Protegida',
+    `Me chamo ${aiConfig.persona} da corretora Vida Protegida`,
     'Você clicou em um anúncio nosso e preencheu o formulário de interesse da Hapvida PME.',
     initialLeadQuestion(lead),
   ].join('\n\n');
@@ -590,7 +616,7 @@ export async function startLeadAiIfEligible(leadId: string) {
       corretor_id: lead.corretor_id,
       admin_profile_id: adminProfile.id,
       responsavel_profile_id: lead.responsavel_profile_id || null,
-      persona: AI_PERSONA,
+      persona: aiConfig.persona,
       status: 'active',
       summary: leadFacts(lead),
       last_ai_message_at: new Date().toISOString(),
@@ -600,10 +626,10 @@ export async function startLeadAiIfEligible(leadId: string) {
   try {
     registerAiOutbound(phone, intro);
     const payload = await sendAiAdminText(adminProfile, phone, intro);
-    await insertMessage(conversation.id, 'outbound', AI_PERSONA, intro, {
+    await insertMessage(conversation.id, 'outbound', aiConfig.persona, intro, {
       ...(payload || {}),
       instance: evolutionInstanceName(adminProfile.id),
-      ai_agent: AI_PERSONA,
+      ai_agent: aiConfig.persona,
     });
   } catch (error: any) {
     const errorMessage = error?.message || 'Erro ao enviar primeira mensagem da IA.';
@@ -644,6 +670,26 @@ export async function continueLeadAiFromIncoming(options: {
 
   if (!lead) return { handled: false, reason: 'Lead nao encontrado.' };
 
+  const broker = await findBroker(lead.corretor_id);
+  if (!broker?.nome_empresa) return { handled: false, reason: 'Lead sem concessionaria.' };
+
+  const { data: corretora } = await supabaseAdmin
+    .from('corretoras')
+    .select('id')
+    .ilike('nome', broker.nome_empresa)
+    .maybeSingle();
+
+  if (!corretora) return { handled: false, reason: 'Concessionaria nao cadastrada no registro.' };
+
+  const { data: aiConfig } = await supabaseAdmin
+    .from('corretora_ai_configs')
+    .select('*')
+    .eq('corretora_id', corretora.id)
+    .eq('status', 'ativo')
+    .maybeSingle();
+
+  if (!aiConfig) return { handled: false, reason: 'IA desativada para esta concessionaria.' };
+
   const adminProfile = await findAiAdmin(lead.corretor_id);
   if (!adminProfile) return { handled: false, reason: 'Admin IA do Orion Teste nao encontrado.' };
 
@@ -654,7 +700,7 @@ export async function continueLeadAiFromIncoming(options: {
     .order('created_at', { ascending: true })
     .limit(40);
 
-  const ai = await askAline(lead, history || [], options.customerMessage);
+  const ai = await askAline(lead, history || [], options.customerMessage, aiConfig);
   const reply = String(ai.reply || '').trim();
 
   for (const part of reply ? splitReply(reply) : []) {
@@ -662,11 +708,11 @@ export async function continueLeadAiFromIncoming(options: {
       try {
         registerAiOutbound(lead.telefone || '', '🎤 Mensagem de voz');
         const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', part);
-        await insertMessage(options.conversationId, 'outbound', AI_PERSONA, 'Mensagem de voz', {
+        await insertMessage(options.conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
           ...(payload || {}),
           instance: evolutionInstanceName(adminProfile.id),
           provider_message_id: providerMessageId(payload),
-          ai_agent: AI_PERSONA,
+          ai_agent: aiConfig.persona,
           ai_text: part,
           messageType: 'audioMessage',
           mediaType: 'audio',
@@ -682,10 +728,10 @@ export async function continueLeadAiFromIncoming(options: {
 
     registerAiOutbound(lead.telefone || '', part);
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part);
-    await insertMessage(options.conversationId, 'outbound', AI_PERSONA, part, {
+    await insertMessage(options.conversationId, 'outbound', aiConfig.persona, part, {
       ...(payload || {}),
       instance: evolutionInstanceName(adminProfile.id),
-      ai_agent: AI_PERSONA,
+      ai_agent: aiConfig.persona,
     });
   }
 
