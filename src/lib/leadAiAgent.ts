@@ -570,7 +570,7 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   const { data: corretora } = await supabaseAdmin
     .from('corretoras')
-    .select('id')
+    .select('id, nome')
     .ilike('nome', broker.nome_empresa)
     .maybeSingle();
 
@@ -594,9 +594,17 @@ export async function startLeadAiIfEligible(leadId: string) {
   const conversation = await getOrCreateConversation(lead);
   if (!conversation) return { started: false, eligible: true, reason: 'Conversa nao criada.' };
 
+  const rawName = corretora.nome || broker.nome_empresa;
+  const cleanName = rawName.replace(/\bcorretora\b/gi, '').replace(/\s+/g, ' ').trim();
+  const formattedBrokerageName = cleanName
+    .toLowerCase()
+    .split(' ')
+    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
   const intro = [
     `Olá, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
-    `Me chamo ${aiConfig.persona} da corretora Vida Protegida`,
+    `Me chamo ${aiConfig.persona} da corretora ${formattedBrokerageName}`,
     'Você clicou em um anúncio nosso e preencheu o formulário de interesse da Hapvida PME.',
     initialLeadQuestion(lead),
   ].join('\n\n');
