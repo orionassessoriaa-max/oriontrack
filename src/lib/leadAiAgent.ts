@@ -221,7 +221,7 @@ async function findAiAdmin(corretorId: string): Promise<ProfileRow | null> {
     .eq('id', corretorId)
     .maybeSingle();
 
-  if (!sameBrokerage(broker?.nome_empresa)) return null;
+  if (!broker?.nome_empresa) return null;
 
   const { data: admins } = await supabaseAdmin
     .from('profiles')
@@ -586,7 +586,7 @@ export async function startLeadAiIfEligible(leadId: string) {
   if (!aiConfig) return { started: false, eligible: false, reason: 'IA desativada para esta concessionaria.' };
 
   const adminProfile = await findAiAdmin(lead.corretor_id);
-  if (!adminProfile) return { started: false, eligible: true, reason: 'Admin IA do Orion Teste nao encontrado.' };
+  if (!adminProfile) return { started: false, eligible: true, reason: 'Admin IA da concessionaria nao encontrado.' };
 
   const phone = normalizePhone(lead.telefone);
   if (!phone) return { started: false, eligible: true, reason: 'Lead sem telefone.' };
@@ -691,7 +691,7 @@ export async function continueLeadAiFromIncoming(options: {
   if (!aiConfig) return { handled: false, reason: 'IA desativada para esta concessionaria.' };
 
   const adminProfile = await findAiAdmin(lead.corretor_id);
-  if (!adminProfile) return { handled: false, reason: 'Admin IA do Orion Teste nao encontrado.' };
+  if (!adminProfile) return { handled: false, reason: 'Admin IA da concessionaria nao encontrado.' };
 
   const { data: history } = await supabaseAdmin
     .from('whatsapp_mensagens')
