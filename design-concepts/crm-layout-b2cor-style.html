@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Orion Track CRM B2Cor Style</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, Segoe UI, Arial, sans-serif; background: #eef3f8; color: #1c2b3a; }
+    .app { width: 1440px; height: 900px; display: grid; grid-template-columns: 292px 1fr; gap: 18px; padding: 18px; background: #eef3f8; }
+    .sidebar { background: #fbfdff; border: 1px solid #e1e9f2; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 30px rgba(19, 35, 56, .06); display: flex; flex-direction: column; }
+    .tabs { height: 58px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px; background: #fbfdff; }
+    .tab { background: #eef2ff; border-radius: 4px; display: grid; place-items: center; color: #465dff; font-weight: 900; }
+    .search { margin: 4px 12px 12px; height: 42px; background: #eef3f8; border-radius: 5px; display: flex; align-items: center; padding: 0 12px; color: #8a9aaa; font-weight: 600; }
+    .counts { height: 44px; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; padding: 0 12px; color: #708090; border-bottom: 1px solid #e7edf4; }
+    .counts b { color: #435bff; }
+    .leadList { overflow: hidden; padding: 10px 8px; display: flex; flex-direction: column; gap: 6px; }
+    .leadItem { height: 76px; border-radius: 5px; display: grid; grid-template-columns: 48px 1fr auto; align-items: center; padding: 8px; color: #6f7f91; }
+    .leadItem.active { background: #e6eef7; }
+    .avatar { width: 42px; height: 42px; border-radius: 50%; background: #d2d9e2; display: grid; place-items: center; color: #fff; font-weight: 900; }
+    .leadName { color: #334155; font-weight: 800; font-size: 14px; }
+    .leadText { color: #7e8fa1; font-size: 12px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 145px; }
+    .time { color: #7b8da2; font-size: 11px; font-weight: 800; }
+    .main { background: #fbfdff; border: 1px solid #e1e9f2; border-radius: 8px; box-shadow: 0 10px 30px rgba(19, 35, 56, .06); display: grid; grid-template-rows: 116px 1fr 78px; overflow: hidden; }
+    .top { border-bottom: 1px solid #dfe8f2; padding: 18px 22px; display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: start; }
+    .profile { display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: center; }
+    .name { font-weight: 900; font-size: 17px; color: #29384a; }
+    .meta { color: #7f8fa3; font-size: 12px; font-weight: 700; margin-top: 4px; }
+    .expires { display: inline-flex; margin-top: 6px; background: #dffcef; color: #00a878; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 900; }
+    .actions { display: flex; gap: 8px; margin-top: 10px; }
+    .btn { height: 26px; border-radius: 999px; border: 1px solid #c7d3e0; background: #fff; color: #26384d; padding: 0 10px; font-weight: 800; font-size: 11px; }
+    .btn.red { color: #ff4769; border-color: #ff8aa0; }
+    .icons { display: flex; gap: 18px; color: #6c7c91; font-weight: 900; align-items: center; }
+    .protocol { font-size: 10px; color: #7b8999; margin-top: 8px; text-align: right; font-style: italic; }
+    .workspace { display: grid; grid-template-columns: 1fr 360px; min-height: 0; }
+    .board { background: #fff; display: grid; grid-template-rows: 58px 74px 1fr; min-width: 0; }
+    .filters { display: grid; grid-template-columns: 1.1fr repeat(4, .8fr); gap: 10px; padding: 10px 20px; border-bottom: 1px solid #edf2f7; }
+    .filter { background: #f3f7fb; border: 1px solid #dfe8f2; border-radius: 5px; color: #78899c; font-weight: 700; display: flex; align-items: center; padding: 0 10px; font-size: 12px; }
+    .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; padding: 10px 20px; border-bottom: 1px solid #edf2f7; }
+    .kpi { background: #f8fbff; border: 1px solid #e3ebf4; border-radius: 5px; padding: 9px 10px; }
+    .kpi span { display: block; color: #7b8da1; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    .kpi strong { display: block; color: #1d3554; margin-top: 5px; font-size: 18px; }
+    .table { min-height: 0; overflow: hidden; }
+    .thead, .row { display: grid; grid-template-columns: 34px 1.2fr .9fr .9fr .9fr .95fr .9fr .9fr; align-items: center; }
+    .thead { height: 42px; color: #66798e; font-size: 10px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid #e8eef5; background: #f8fbff; }
+    .thead div, .row div { padding: 0 12px; }
+    .row { height: 58px; border-bottom: 1px solid #eef3f8; color: #334155; font-size: 12px; }
+    .row:hover { background: #f8fbff; }
+    .check { width: 14px; height: 14px; border: 1px solid #c9d4df; border-radius: 3px; margin-left: 12px; }
+    .client { color: #008ac7; font-weight: 900; }
+    .chip { display: inline-flex; align-items: center; border-radius: 4px; padding: 4px 7px; font-size: 10px; font-weight: 900; background: #e8f7ff; color: #008ac7; }
+    .chip.red { background: #ffe8ef; color: #f52f64; }
+    .chip.green { background: #e4faef; color: #00a878; }
+    .detail { border-left: 1px solid #dfe8f2; background: #f7fbff; display: grid; grid-template-rows: 54px 1fr; min-height: 0; }
+    .detailTop { display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid #e6edf5; color: #23364b; font-weight: 900; }
+    .panel { padding: 16px 18px; overflow: hidden; }
+    .quote { background: #fff; border: 1px solid #e0e8f1; border-radius: 6px; padding: 16px; text-align: center; margin-bottom: 14px; }
+    .quote h3 { margin: 0; color: #25374b; font-size: 17px; }
+    .quote p { margin: 8px 0 0; color: #6f8296; font-size: 13px; line-height: 1.55; }
+    .timeline { background: #fff; border: 1px solid #e0e8f1; border-radius: 6px; padding: 14px; }
+    .timeline h4 { margin: 0 0 12px; color: #29384a; }
+    .event { border-left: 2px solid #00a4d6; padding: 0 0 14px 12px; color: #64758a; font-size: 12px; }
+    .event b { color: #26384c; display: block; margin-bottom: 4px; }
+    .composer { background: #eaf2f8; border-top: 1px solid #dfe8f2; display: grid; grid-template-columns: 42px 42px 1fr 42px 56px; gap: 10px; align-items: center; padding: 14px 28px; }
+    .round { width: 36px; height: 36px; display: grid; place-items: center; color: #6a7d91; font-weight: 900; }
+    .message { height: 38px; border: 1px solid #cbd8e5; background: #fff; border-radius: 4px; color: #8a9aaa; padding: 0 14px; display: flex; align-items: center; }
+    .send { height: 38px; border: 0; border-radius: 4px; color: #fff; background: #00c99a; font-weight: 900; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="tabs"><div class="tab">≡</div><div class="tab">☷</div><div class="tab">▱</div><div class="tab">☰</div></div>
+      <div class="search">Pesquisar...</div>
+      <div class="counts"><span>△ 0</span><span>◷ 25</span><b>▣ 863</b><span>□ 0</span><span>✕ 14</span></div>
+      <div class="leadList">
+        <div class="leadItem active"><div class="avatar">MC</div><div><div class="leadName">Mª Clara ❤</div><div class="leadText">Vamos continuar</div></div><div class="time">23:07</div></div>
+        <div class="leadItem"><div class="avatar">NP</div><div><div class="leadName">Natália Pereira</div><div class="leadText">Vc entendeu, Natál...</div></div><div class="time">22:49</div></div>
+        <div class="leadItem"><div class="avatar">LV</div><div><div class="leadName">Levi Veloso</div><div class="leadText">?</div></div><div class="time">22:20</div></div>
+        <div class="leadItem"><div class="avatar">TH</div><div><div class="leadName">Thamires</div><div class="leadText">Lead de PME</div></div><div class="time">21:54</div></div>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="top">
+        <div>
+          <div class="profile"><div class="avatar">MC</div><div><div class="name">Mª Clara ❤ - Comercial | Bianca Alves</div><div class="expires">Expira em 03/06 às 23:07</div></div></div>
+          <div class="actions"><button class="btn">Template</button><button class="btn">Transferir</button><button class="btn">Pausar</button><button class="btn red">Encerrar</button></div>
+        </div>
+        <div><div class="icons">⇧ ⌕ ⚙ ⊘ ◴ ↻ ▣</div><div class="protocol">Nº PROTOCOLO - 20260529130641616</div></div>
+      </header>
+      <section class="workspace">
+        <div class="board">
+          <div class="filters"><div class="filter">Buscar cliente, telefone ou cidade...</div><div class="filter">Status</div><div class="filter">Responsável</div><div class="filter">Concessionária</div><div class="filter">Período</div></div>
+          <div class="kpis">
+            <div class="kpi"><span>Leads</span><strong>128</strong></div><div class="kpi"><span>Sem resposta</span><strong>31</strong></div><div class="kpi"><span>Tarefas</span><strong>12</strong></div><div class="kpi"><span>Hoje</span><strong>8</strong></div><div class="kpi"><span>Vendas</span><strong>9</strong></div><div class="kpi"><span>CPL</span><strong>R$ 24</strong></div>
+          </div>
+          <div class="table">
+            <div class="thead"><div></div><div>Cliente</div><div>Telefone</div><div>Status</div><div>Responsável</div><div>Concessionária</div><div>Follow-up</div><div>Origem</div></div>
+            <div class="row"><div class="check"></div><div class="client">Jessica Lima</div><div>55 11 98268-2623</div><div><span class="chip">Oportunidade</span></div><div>Henrique</div><div>Octavita</div><div>Hoje 15:30</div><div>Meta AD-1</div></div>
+            <div class="row"><div class="check"></div><div class="client">Ana Paula</div><div>55 11 97436-9908</div><div><span class="chip green">Contato feito</span></div><div>Sandro</div><div>Octavita</div><div>13/06 11:00</div><div>Meta AD-2</div></div>
+            <div class="row"><div class="check"></div><div class="client">Roselindo Rocha</div><div>55 11 98364-1583</div><div><span class="chip red">Sem resposta</span></div><div>Sandro</div><div>Octavita</div><div>Atrasado</div><div>Meta AD-3</div></div>
+            <div class="row"><div class="check"></div><div class="client">Camila Souza</div><div>55 12 98801-3568</div><div><span class="chip">Cotação</span></div><div>Henrique</div><div>Octavita</div><div>14/06 09:30</div><div>Meta AD-4</div></div>
+            <div class="row"><div class="check"></div><div class="client">Alex Pereira</div><div>55 11 99925-9206</div><div><span class="chip green">Contato feito</span></div><div>Sandro</div><div>Octavita</div><div>Hoje 16:00</div><div>Meta AD-5</div></div>
+          </div>
+        </div>
+        <aside class="detail">
+          <div class="detailTop">Ficha do lead <span>⋯</span></div>
+          <div class="panel">
+            <div class="quote"><h3>Nosso Plano QC | Copart. Parcial...</h3><p>Acomodação: <b>Enfermaria</b><br>Abrangência: <b>Regional</b><br>Coparticipação: <b style="color:#00a878">Sim</b><br>Reembolso: <b style="color:#f0445f">Não</b></p></div>
+            <div class="timeline"><h4>Histórico do atendimento</h4><div class="event"><b>Lead recebido</b>Hoje às 14:20 via Meta</div><div class="event"><b>Mensagem enviada</b>Bianca enviou template inicial</div><div class="event"><b>Tarefa criada</b>Retornar cotação às 15:30</div></div>
+          </div>
+        </aside>
+      </section>
+      <footer class="composer"><div class="round">📎</div><div class="round">☺</div><div class="message">Digite "/" para respostas rápidas ou escreva uma mensagem...</div><div class="round">🎙</div><button class="send">▶</button></footer>
+    </main>
+  </div>
+</body>
+</html>

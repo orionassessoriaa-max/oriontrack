@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Orion Track CRM Layout V2</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #050b16; color: #eaf2ff; font-family: Inter, Segoe UI, Arial, sans-serif; }
+    .app { width: 1440px; height: 900px; background: linear-gradient(135deg, #07111f 0%, #051722 45%, #080d19 100%); display: flex; overflow: hidden; }
+    .side { width: 76px; background: #050918; border-right: 1px solid #142338; padding: 22px 14px; display: flex; flex-direction: column; gap: 18px; }
+    .logo { height: 34px; border-radius: 8px; background: #fff; color: #07111f; font-weight: 900; font-size: 10px; display: grid; place-items: center; }
+    .ico { width: 48px; height: 48px; border-radius: 12px; background: #0b1322; border: 1px solid #17243a; display: grid; place-items: center; color: #8ea3bd; font-size: 20px; }
+    .ico.on { background: #052a4d; color: #19d3ff; border-color: #0e75b7; box-shadow: 0 0 18px #03c7ff33; }
+    .main { flex: 1; display: flex; flex-direction: column; }
+    .top { height: 72px; border-bottom: 1px solid #122139; background: #060b19cc; display: flex; align-items: center; padding: 0 28px; gap: 18px; }
+    .search { height: 42px; width: 420px; background: #081321; border: 1px solid #213047; border-radius: 10px; color: #6f829b; display: flex; align-items: center; padding: 0 14px; font-weight: 700; }
+    .select { height: 42px; background: #0b1728; border: 1px solid #24334a; border-radius: 10px; padding: 0 16px; display: flex; align-items: center; color: #d9e7f7; font-weight: 800; }
+    .spacer { flex: 1; }
+    .profile { display: flex; align-items: center; gap: 12px; background: #0b1323; border: 1px solid #1d2b43; border-radius: 12px; padding: 8px 14px; }
+    .avatar { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #2563eb, #21d4fd); display: grid; place-items: center; font-weight: 900; }
+    .content { padding: 24px 28px; display: grid; grid-template-columns: 1fr 360px; gap: 20px; min-height: 0; }
+    .work { min-width: 0; }
+    .titleRow { display: flex; align-items: end; justify-content: space-between; margin-bottom: 16px; }
+    .eyebrow { color: #18d5ff; font-size: 12px; letter-spacing: .18em; font-weight: 900; }
+    .h1 { font-size: 32px; font-weight: 950; margin-top: 6px; }
+    .tabs { display: flex; gap: 8px; }
+    .tab { height: 36px; border-radius: 9px; background: #0a1424; border: 1px solid #1a2a42; padding: 0 14px; display: flex; align-items: center; font-size: 12px; font-weight: 900; color: #aab8cc; }
+    .tab.on { background: #052d52; color: #20d6ff; border-color: #0d7fc2; }
+    .kpis { height: 78px; background: #08111f; border: 1px solid #14263d; border-radius: 14px; display: grid; grid-template-columns: repeat(6, 1fr); overflow: hidden; margin-bottom: 14px; }
+    .kpi { padding: 16px 18px; border-right: 1px solid #14263d; }
+    .kpi:last-child { border-right: 0; }
+    .kpi span { font-size: 11px; color: #8da0b7; font-weight: 900; letter-spacing: .08em; }
+    .kpi strong { display: block; margin-top: 8px; font-size: 24px; }
+    .toolbar { height: 62px; background: #08111f; border: 1px solid #14263d; border-radius: 14px; display: flex; align-items: center; gap: 10px; padding: 10px; margin-bottom: 14px; }
+    .input, .filter { height: 40px; background: #050b14; border: 1px solid #263751; border-radius: 9px; color: #8294ac; font-weight: 800; padding: 0 12px; display: flex; align-items: center; }
+    .input { width: 280px; }
+    .filter { width: 150px; }
+    .lane { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 12px; }
+    .stage { height: 54px; background: #0a1424; border: 1px solid #1a2b43; border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; }
+    .stage b { font-size: 13px; }
+    .stage small { display: block; color: #7190ad; margin-top: 4px; font-weight: 700; }
+    .pill { background: #10284c; color: #bcd7ff; border: 1px solid #1c5dab; border-radius: 999px; padding: 5px 9px; font-weight: 900; }
+    .table { height: 530px; background: #07101d; border: 1px solid #14263d; border-radius: 14px; overflow: hidden; }
+    .thead, .row { display: grid; grid-template-columns: 1.4fr 1fr .9fr 1fr 1.05fr 1fr .9fr; align-items: center; }
+    .thead { height: 46px; background: #0d1728; color: #8fa1bb; font-size: 11px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
+    .thead div, .row div { padding: 0 14px; }
+    .row { height: 62px; border-top: 1px solid #111d2f; color: #dfe9f6; font-size: 13px; }
+    .row:nth-child(even) { background: #091321; }
+    .client { font-weight: 900; }
+    .sub { color: #7f90a8; font-size: 11px; margin-top: 3px; }
+    .chip { display: inline-flex; border-radius: 999px; padding: 6px 9px; font-size: 11px; font-weight: 900; background: #062b35; color: #22d3ee; border: 1px solid #0b7087; }
+    .chip.green { background: #06291f; color: #1ee0a0; border-color: #0b6b51; }
+    .chip.amber { background: #302107; color: #ffc857; border-color: #835b0c; }
+    .chip.red { background: #35101b; color: #ff5c7a; border-color: #7d1c35; }
+    .detail { background: #07101d; border: 1px solid #14263d; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+    .detailHead { padding: 18px; border-bottom: 1px solid #14263d; }
+    .detailHead .name { font-size: 22px; font-weight: 950; }
+    .actions { display: flex; gap: 8px; margin-top: 14px; }
+    .btn { height: 36px; border-radius: 9px; border: 0; padding: 0 12px; font-weight: 950; color: white; background: #0d6efd; }
+    .btn.ghost { background: #0a1424; border: 1px solid #263751; color: #c7d7ea; }
+    .panel { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .section { background: #0a1424; border: 1px solid #162941; border-radius: 12px; padding: 14px; }
+    .section h3 { margin: 0 0 10px; font-size: 12px; color: #29d8ff; letter-spacing: .12em; text-transform: uppercase; }
+    .field { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; color: #b9c8d9; font-size: 12px; }
+    .timeline { display: flex; flex-direction: column; gap: 10px; }
+    .event { border-left: 2px solid #1ecfff; padding-left: 10px; }
+    .event b { font-size: 12px; }
+    .event p { margin: 4px 0 0; color: #8fa1bb; font-size: 11px; }
+    .note { height: 72px; background: #050b14; border: 1px solid #22334d; border-radius: 10px; color: #72839a; padding: 12px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="logo">ORION</div><div class="ico on">⌂</div><div class="ico">◉</div><div class="ico">▤</div><div class="ico">✉</div><div class="ico">⚙</div>
+    </aside>
+    <main class="main">
+      <div class="top">
+        <div class="search">Pesquisar lead, telefone, tarefa...</div>
+        <div class="select">Concessionária: Orion Teste</div>
+        <div class="select">Visualização: Todos</div>
+        <div class="spacer"></div><div class="ico">🔔</div>
+        <div class="profile"><div class="avatar">EH</div><div><b>Ewertton</b><div class="sub">DevOps Manager</div></div></div>
+      </div>
+      <div class="content">
+        <section class="work">
+          <div class="titleRow"><div><div class="eyebrow">CRM OPERACIONAL</div><div class="h1">Pipeline Comercial</div></div><div class="tabs"><div class="tab on">Leads</div><div class="tab">Tarefas</div><div class="tab">Inbox</div><div class="tab">Histórico</div><div class="tab">Meta</div></div></div>
+          <div class="kpis"><div class="kpi"><span>LEADS</span><strong>128</strong></div><div class="kpi"><span>SEM RESPOSTA</span><strong>31</strong></div><div class="kpi"><span>TAREFAS</span><strong>12</strong></div><div class="kpi"><span>VENDAS</span><strong>9</strong></div><div class="kpi"><span>CPL</span><strong>R$ 24</strong></div><div class="kpi"><span>CADÊNCIA</span><strong>18</strong></div></div>
+          <div class="toolbar"><div class="input">Buscar cliente...</div><div class="filter">Status</div><div class="filter">Responsável</div><div class="filter">Origem</div><div class="filter">Período</div><div class="spacer"></div><div class="tab on">+ Novo lead</div></div>
+          <div class="lane"><div class="stage"><div><b>Oportunidade</b><small>Primeiro contato</small></div><span class="pill">45</span></div><div class="stage"><div><b>Início</b><small>Abordagem</small></div><span class="pill">22</span></div><div class="stage"><div><b>Contato feito</b><small>Em atendimento</small></div><span class="pill">31</span></div><div class="stage"><div><b>Cotação</b><small>Proposta enviada</small></div><span class="pill">19</span></div><div class="stage"><div><b>Venda</b><small>Ganho</small></div><span class="pill">9</span></div></div>
+          <div class="table">
+            <div class="thead"><div>Cliente</div><div>Telefone</div><div>Status</div><div>Responsável</div><div>Concessionária</div><div>Follow-up</div><div>Origem</div></div>
+            <div class="row"><div><div class="client">Jessica Lima</div><div class="sub">Cidade: São Paulo</div></div><div>55 11 98268-2623</div><div><span class="chip">Oportunidade</span></div><div>Henrique</div><div>Octavita Corretora</div><div>13/06, 10:30</div><div>Meta • AD-1</div></div>
+            <div class="row"><div><div class="client">Ana Paula</div><div class="sub">Cidade: Osasco</div></div><div>55 11 97436-9908</div><div><span class="chip green">Contato feito</span></div><div>Sandro</div><div>Octavita Corretora</div><div>13/06, 11:00</div><div>Meta • AD-2</div></div>
+            <div class="row"><div><div class="client">Roselindo Rocha</div><div class="sub">Cidade: Atibaia</div></div><div>55 11 98364-1583</div><div><span class="chip amber">Cotação</span></div><div>Sandro</div><div>Octavita Corretora</div><div>14/06, 09:30</div><div>Meta • AD-3</div></div>
+            <div class="row"><div><div class="client">Camila Souza</div><div class="sub">Cidade: Jacareí</div></div><div>55 12 98801-3568</div><div><span class="chip red">Sem resposta</span></div><div>Henrique</div><div>Octavita Corretora</div><div>Hoje, 15:30</div><div>Meta • AD-4</div></div>
+            <div class="row"><div><div class="client">Alex Pereira</div><div class="sub">Cidade: Osasco</div></div><div>55 11 99925-9206</div><div><span class="chip green">Contato feito</span></div><div>Sandro</div><div>Octavita Corretora</div><div>Hoje, 16:00</div><div>Meta • AD-5</div></div>
+            <div class="row"><div><div class="client">Thais Martins</div><div class="sub">Cidade: São Paulo</div></div><div>55 11 96967-869</div><div><span class="chip">Oportunidade</span></div><div>Henrique</div><div>Octavita Corretora</div><div>16/06, 10:00</div><div>Meta • AD-6</div></div>
+          </div>
+        </section>
+        <aside class="detail">
+          <div class="detailHead"><div class="eyebrow">LEAD SELECIONADO</div><div class="name">Jessica Lima</div><div class="sub">55 11 98268-2623 • São Paulo</div><div class="actions"><button class="btn">Enviar WhatsApp</button><button class="btn ghost">Criar tarefa</button></div></div>
+          <div class="panel">
+            <div class="section"><h3>Dados do lead</h3><div class="field"><div>Idade<br><b>32</b></div><div>CNPJ<br><b>Não</b></div><div>Plano ativo<br><b>Não</b></div><div>Investimento<br><b>Até R$3.000</b></div></div></div>
+            <div class="section"><h3>Histórico</h3><div class="timeline"><div class="event"><b>Movido para Contato feito</b><p>Hoje, 10:42 por Henrique</p></div><div class="event"><b>Anotação criada</b><p>Cliente pediu retorno após almoço.</p></div><div class="event"><b>Mensagem recebida</b><p>WhatsApp sincronizado no Inbox.</p></div></div></div>
+            <div class="section"><h3>Anotações internas</h3><div class="note">Digite uma observação rápida...</div></div>
+            <div class="section"><h3>Próxima ação</h3><div class="chip amber">Apresentar cotação hoje às 15:30</div></div>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

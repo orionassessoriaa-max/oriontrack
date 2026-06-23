@@ -112,6 +112,16 @@ function normalizeCnpjOwnership(value?: string | null) {
   return 'Não';
 }
 
+function normalizePlanoAtivo(value?: string | null) {
+  const normalized = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (normalized.includes('sim')) return 'Sim';
+  if (normalized.includes('nao')) return 'Não';
+  return 'Não informado';
+}
+
 function requiresCommercialData(status: LeadStatus) {
   return COMMERCIAL_REQUIRED_STATUSES.includes(status);
 }
@@ -566,7 +576,7 @@ export default function CrmPage() {
         idades: selectedLead.idades || '',
         possui_cnpj: normalizeCnpjOwnership(selectedLead.possui_cnpj),
         cnpj: selectedLead.cnpj || '',
-        tem_plano_ativo: selectedLead.tem_plano_ativo || 'Não informado',
+        tem_plano_ativo: normalizePlanoAtivo(selectedLead.tem_plano_ativo),
         plano_atual: selectedLead.plano_atual || '',
         custo_plano_atual: selectedLead.custo_plano_atual || '',
         investimento: selectedLead.investimento || '',
@@ -1462,7 +1472,7 @@ export default function CrmPage() {
                                   </div>
                                 )}
                                 <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
-                                  <span>CNPJ: {lead.possui_cnpj || '-'}</span>
+                                  <span>CNPJ: {normalizeCnpjOwnership(lead.possui_cnpj)}</span>
                                   <span>Idade: {lead.idades || '-'}</span>
                                   <span className="col-span-2 rounded-xl bg-blue-50 px-2 py-1 text-blue-700">Pagina: {lead.operadora || 'Sem pagina'}</span>
                                   {lead.responsavel_membro?.nome && (
@@ -1616,10 +1626,10 @@ export default function CrmPage() {
                   </form>
                 ) : (
                   <div className="mb-5 grid grid-cols-2 gap-3">
-                    <InfoCard label="Possui CNPJ?" value={selectedLead.possui_cnpj || '-'} />
+                    <InfoCard label="Possui CNPJ?" value={normalizeCnpjOwnership(selectedLead.possui_cnpj)} />
                     <InfoCard label="CNPJ" value={selectedLead.cnpj || '-'} />
                     <InfoCard label="Idade" value={selectedLead.idades || '-'} />
-                    <InfoCard label="Plano ativo" value={selectedLead.tem_plano_ativo || '-'} />
+                    <InfoCard label="Plano ativo" value={normalizePlanoAtivo(selectedLead.tem_plano_ativo)} />
                     <InfoCard label="Plano atual" value={selectedLead.plano_atual || '-'} />
                     <InfoCard label="Investimento" value={selectedLead.investimento || '-'} />
                     <InfoCard label="Cidade" value={selectedLead.cidade || '-'} />
