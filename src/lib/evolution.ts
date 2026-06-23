@@ -138,7 +138,7 @@ export async function configureEvolutionWebhook(instance: string, instanceApiKey
           url: webhookUrl,
           byEvents: false,
           base64: false,
-          events: ['MESSAGES_UPSERT', 'SEND_MESSAGE', 'CONNECTION_UPDATE'],
+          events: ['MESSAGES_UPSERT', 'SEND_MESSAGE', 'CONNECTION_UPDATE', 'CALL', 'CALL_UPSERT'],
         },
       }),
     }, instanceApiKey);

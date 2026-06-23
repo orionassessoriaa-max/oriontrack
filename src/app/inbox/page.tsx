@@ -1914,9 +1914,6 @@ export default function BrokerInboxPage() {
  
                     {/* Header Action Icons Toolbar */}
                     <div className="flex items-center gap-1.5 border-l border-white/5 pl-2 ml-1">
-                      <button onClick={handleCallClick} className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Ligar para o lead">
-                        <Phone size={13} />
-                      </button>
                       <button onClick={handleShare} className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Compartilhar conversa">
                         <Share2 size={13} />
                       </button>
