@@ -577,10 +577,25 @@ async function askAline(
   return parseAiJson(payload?.choices?.[0]?.message?.content || '');
 }
 
+function formatOperadoraName(name?: string | null) {
+  if (!name) return '';
+  const clean = name.trim().toUpperCase();
+  if (clean === 'PORTO' || clean === 'PORTO SEGURO' || clean === 'PORTO_SEGURO') return 'Porto Seguro';
+  if (clean === 'HAPVIDA' || clean === 'HAPVIDA PME' || clean === 'HAPVIDA_PME') return 'Hapvida PME';
+  if (clean === 'SULAMERICA' || clean === 'SULAMÉRICA') return 'Sulamérica';
+  if (clean === 'BRADESCO' || clean === 'BRADESCO SAUDE' || clean === 'BRADESCO_SAUDE') return 'Bradesco';
+  if (clean === 'AMIL' || clean === 'AMIL SAUDE' || clean === 'AMIL_SAUDE') return 'Amil';
+  if (clean === 'GOLDEN' || clean === 'GOLDEN CROSS' || clean === 'GOLDEN_CROSS') return 'Golden Cross';
+  if (clean === 'UNIMED') return 'Unimed';
+  if (clean === 'GNDI' || clean === 'INTERMEDICA' || clean === 'NOTRE DAME' || clean === 'NOTREDAME') return 'NotreDame Intermédica';
+  
+  return clean.charAt(0) + clean.slice(1).toLowerCase();
+}
+
 export async function startLeadAiIfEligible(leadId: string) {
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id')
+    .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, operadora')
     .eq('id', leadId)
     .maybeSingle();
 
@@ -623,10 +638,15 @@ export async function startLeadAiIfEligible(leadId: string) {
     .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 
+  const opName = formatOperadoraName(lead.operadora);
+  const interestText = opName
+    ? `Você clicou em um anúncio nosso e preencheu o formulário de interesse da ${opName}.`
+    : 'Você clicou em um anúncio nosso e preencheu o formulário de interesse em nossos planos de saúde.';
+
   const intro = [
     `Olá, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
     `Me chamo ${aiConfig.persona} da corretora ${formattedBrokerageName}`,
-    'Você clicou em um anúncio nosso e preencheu o formulário de interesse da Hapvida PME.',
+    interestText,
     initialLeadQuestion(lead),
   ].join('\n\n');
 
