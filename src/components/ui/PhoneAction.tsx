@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { MessageCircle, Phone } from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
 
 type PhoneActionProps = {
   phone?: string | null;
@@ -34,6 +35,25 @@ export default function PhoneAction({ phone, leadId, whatsappHref }: PhoneAction
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleCall = async () => {
+    setOpen(false);
+    if (!leadId) return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const profileId = sessionData?.session?.user?.id;
+      
+      await supabase.from('lead_atividades').insert([{
+        lead_id: leadId,
+        profile_id: profileId || null,
+        tipo: 'ligacao',
+        titulo: 'Ligação Iniciada',
+        descricao: 'O corretor iniciou uma chamada telefônica através do painel.'
+      }]);
+    } catch (e) {
+      console.error('Erro ao registrar ligação no histórico:', e);
+    }
+  };
+
   if (!digits) {
     return <span className="whitespace-nowrap text-slate-400">-</span>;
   }
@@ -53,7 +73,7 @@ export default function PhoneAction({ phone, leadId, whatsappHref }: PhoneAction
           <a
             href={`tel:${digits}`}
             className="flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-[11px] font-black uppercase tracking-widest text-white transition-colors hover:bg-slate-700"
-            onClick={() => setOpen(false)}
+            onClick={handleCall}
           >
             <Phone size={14} />
             Ligar

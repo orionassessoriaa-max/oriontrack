@@ -39,7 +39,8 @@ import {
   Image as ImageIcon,
   Video,
   Download,
-  PhoneCall
+  PhoneCall,
+  Phone
 } from 'lucide-react';
 
 type Conversation = {
@@ -229,6 +230,7 @@ export default function BrokerInboxPage() {
   const [loadingLead, setLoadingLead] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [leadActivities, setLeadActivities] = useState<any[]>([]);
+  const [leadInfo, setLeadInfo] = useState<any>(null);
 
   // Apolo Bot & Close Reason Modal States
   const [showBotConfigModal, setShowBotConfigModal] = useState(false);
@@ -611,6 +613,7 @@ export default function BrokerInboxPage() {
       void fetchLeadDetails(selectedConversation.lead_id);
     } else {
       setLeadStatus('Aguardando atendimento');
+      setLeadInfo(null);
     }
   }, [selectedConversation?.id]);
 
@@ -619,16 +622,23 @@ export default function BrokerInboxPage() {
     try {
       const { data, error } = await supabase
         .from('leads')
-        .select('status, etiqueta, observacoes')
+        .select(`
+          status, etiqueta, observacoes, nome, telefone, idades, possui_cnpj, cnpj,
+          tem_plano_ativo, plano_atual, investimento, cidade, operadora, email,
+          motivo_busca, hospital_preferencia, valor_negociacao, operadora_negociacao
+        `)
         .eq('id', leadId)
         .single();
       if (error) throw error;
       if (data) {
         setLeadStatus(normalizeLeadStatus(data.status));
+        setLeadInfo(data);
         setSelectedConversation((current) => current?.lead_id === leadId ? {
           ...current,
           tags: data.etiqueta ? [data.etiqueta] : current.tags || [],
         } : current);
+      } else {
+        setLeadInfo(null);
       }
 
       const { data: activities } = await supabase
@@ -668,6 +678,28 @@ export default function BrokerInboxPage() {
     }
     return null;
   }
+
+  const handleCallClick = async () => {
+    if (!selectedConversation?.telefone) return;
+    const phone = selectedConversation.telefone.replace(/\D/g, '');
+    if (!phone) return;
+    
+    // 1. Open the phone link
+    window.open(`tel:${phone}`, '_self');
+
+    // 2. Log the activity in the database
+    if (selectedConversation.lead_id) {
+      try {
+        await logLeadActivity({
+          tipo: 'ligacao',
+          titulo: 'Ligação Iniciada',
+          descricao: 'Chamada telefônica iniciada pelo corretor através do painel do Inbox.'
+        });
+      } catch (e) {
+        console.error('Erro ao registrar ligação no histórico:', e);
+      }
+    }
+  };
 
   function formatActivityDate(value?: string | null) {
     if (!value) return '';
@@ -1882,6 +1914,9 @@ export default function BrokerInboxPage() {
  
                     {/* Header Action Icons Toolbar */}
                     <div className="flex items-center gap-1.5 border-l border-white/5 pl-2 ml-1">
+                      <button onClick={handleCallClick} className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Ligar para o lead">
+                        <Phone size={13} />
+                      </button>
                       <button onClick={handleShare} className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Compartilhar conversa">
                         <Share2 size={13} />
                       </button>
@@ -2324,6 +2359,26 @@ export default function BrokerInboxPage() {
                     </select>
                   )}
                 </div>
+
+                {/* Dados do Lead */}
+                {leadInfo && (
+                  <div className="space-y-3.5 shrink-0 border-b border-white/5 pb-4">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Dados do Lead</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <LeadInfoCard label="Idade" value={leadInfo.idades || '-'} />
+                      <LeadInfoCard label="Plano ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} />
+                      <LeadInfoCard label="Possui CNPJ?" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} />
+                      <LeadInfoCard label="CNPJ" value={leadInfo.cnpj || '-'} />
+                      <LeadInfoCard label="Plano atual" value={leadInfo.plano_atual || '-'} />
+                      <LeadInfoCard label="Investimento" value={leadInfo.investimento || '-'} />
+                      <LeadInfoCard label="Cidade" value={leadInfo.cidade || '-'} />
+                      <LeadInfoCard label="Pagina" value={leadInfo.operadora || '-'} />
+                      <LeadInfoCard label="E-mail" value={leadInfo.email || '-'} className="col-span-2" />
+                      <LeadInfoCard label="Motivo da busca" value={leadInfo.motivo_busca || '-'} className="col-span-2" />
+                      <LeadInfoCard label="Hospital/Região" value={leadInfo.hospital_preferencia || '-'} className="col-span-2" />
+                    </div>
+                  </div>
+                )}
 
 
                 {/* Tags manager */}
@@ -3129,5 +3184,34 @@ export default function BrokerInboxPage() {
       )}
 
     </InternalLayout>
+  );
+}
+
+function normalizeCnpjOwnership(value?: string | null) {
+  const normalized = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (normalized.includes('mei')) return 'Tenho MEI';
+  if (normalized.includes('sim') || normalized.includes('cnpj')) return 'Sim';
+  return 'Não';
+}
+
+function normalizePlanoAtivo(value?: string | null) {
+  const normalized = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (normalized.includes('sim')) return 'Sim';
+  if (normalized.includes('nao')) return 'Não';
+  return 'Não informado';
+}
+
+function LeadInfoCard({ label, value, className = '' }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={`rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
+      <p className="text-[8px] font-black uppercase tracking-wider text-slate-500 mb-0.5">{label}</p>
+      <p className="break-words text-xs font-black text-white">{value}</p>
+    </div>
   );
 }
