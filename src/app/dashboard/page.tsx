@@ -956,7 +956,7 @@ export default function DashboardPage() {
 
   const quickActions = [
     { icon: Users, label: 'Leads', desc: 'Veja todos os contatos recebidos.', href: '/leads', color: 'blue' },
-    { icon: LayoutDashboard, label: 'Kanban Comercial', desc: 'Organize seus leads por etapa.', href: '/kanban', color: 'indigo' },
+    { icon: LayoutDashboard, label: 'CRM / Kanban', desc: 'Organize seus leads por etapa.', href: '/crm', color: 'indigo' },
     { icon: Globe, label: 'Minha Página', desc: 'Acesse seu link de captação.', href: '/minha-pagina', color: 'purple' },
     { icon: HelpCircle, label: 'Ajuda Orion', desc: 'Solicite suporte ou alinhamento.', href: '/ajuda', color: 'slate' },
     { icon: GraduationCap, label: 'Treinamento', desc: 'Apoio para melhorar sua conversão.', href: '/ajuda?tipo=treinamento_comercial', color: 'green' },
@@ -1105,8 +1105,8 @@ export default function DashboardPage() {
           <Link href="/leads" className="bg-blue-600 text-white px-5 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-500/20 text-xs sm:text-sm whitespace-nowrap">
             Ver meus leads <ArrowRight size={16} />
           </Link>
-          <Link href="/kanban" className="bg-white/5 text-white border border-white/5 px-5 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-white/10 transition-all text-xs sm:text-sm whitespace-nowrap">
-            Abrir Kanban
+          <Link href="/crm" className="bg-white/5 text-white border border-white/5 px-5 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-white/10 transition-all text-xs sm:text-sm whitespace-nowrap">
+            Abrir CRM
           </Link>
         </div>
       </div>

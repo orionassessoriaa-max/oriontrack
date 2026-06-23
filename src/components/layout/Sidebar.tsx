@@ -253,7 +253,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
-    { icon: ClipboardList, label: 'Kanban', href: '/kanban' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Globe, label: 'Minha Pagina', href: '/minha-pagina' },
     { icon: Palette, label: 'Solicitar Criativo', href: '/criativos' },
