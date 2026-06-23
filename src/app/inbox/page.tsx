@@ -206,6 +206,7 @@ export default function BrokerInboxPage() {
   const audioStreamRef = useRef<MediaStream | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const selectedConversationRef = useRef<Conversation | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Audio Playback States
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -560,6 +561,22 @@ export default function BrokerInboxPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Auto-resize composer height
+  useEffect(() => {
+    const textarea = composerRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const isClaro = typeof document !== 'undefined' && (
+        document.documentElement.classList.contains('theme-claro') ||
+        document.body.classList.contains('theme-claro') ||
+        document.querySelector('.theme-claro') !== null
+      );
+      const minHeight = isClaro ? 38 : 44;
+      const scrollHeight = textarea.scrollHeight;
+      textarea.style.height = `${Math.min(Math.max(scrollHeight, minHeight), 160)}px`;
+    }
+  }, [messageText]);
+
 
   // Fetch Messages for Selected Conversation
   async function fetchMessages(conversationId: string) {
@@ -846,15 +863,26 @@ export default function BrokerInboxPage() {
       return;
     }
 
+    // Optimistically clear input to avoid double-sends and make the UI feel fast
+    const originalText = messageText;
+    const originalFile = selectedFile;
+    const originalPreview = filePreview;
+
+    if (!isAudio) {
+      setMessageText('');
+      setSelectedFile(null);
+      setFilePreview(null);
+    }
+
     setSendingMessage(true);
     setSendError(null);
     const isNew = selectedConversation.id.startsWith('new-');
 
     let mediatype = 'document';
-    if (selectedFile) {
-      if (selectedFile.type.startsWith('image/')) mediatype = 'image';
-      else if (selectedFile.type.startsWith('video/')) mediatype = 'video';
-      else if (selectedFile.type.startsWith('audio/')) mediatype = 'audio';
+    if (originalFile) {
+      if (originalFile.type.startsWith('image/')) mediatype = 'image';
+      else if (originalFile.type.startsWith('video/')) mediatype = 'video';
+      else if (originalFile.type.startsWith('audio/')) mediatype = 'audio';
     }
 
     const hasAudioData = isAudio && audioBase64Override;
@@ -875,10 +903,10 @@ export default function BrokerInboxPage() {
             lead_id: selectedConversation.lead_id,
             nome_contato: selectedConversation.nome_contato,
           } : {}),
-          ...((filePreview || hasAudioData) ? {
-            media: hasAudioData ? audioBase64Override : filePreview,
-            mimetype: hasAudioData ? (audioMimeType || 'audio/ogg') : selectedFile?.type,
-            fileName: hasAudioData ? (audioMimeType?.includes('ogg') ? 'audio.ogg' : 'audio.webm') : selectedFile?.name,
+          ...((originalPreview || hasAudioData) ? {
+            media: hasAudioData ? audioBase64Override : originalPreview,
+            mimetype: hasAudioData ? (audioMimeType || 'audio/ogg') : originalFile?.type,
+            fileName: hasAudioData ? (audioMimeType?.includes('ogg') ? 'audio.ogg' : 'audio.webm') : originalFile?.name,
             mediatype: hasAudioData ? 'audio' : mediatype,
           } : {}),
         }),
@@ -887,12 +915,14 @@ export default function BrokerInboxPage() {
 
       if (!response.ok) {
         setSendError(payload.error || 'Nao consegui enviar agora.');
+        // Restore input if it failed
+        if (!isAudio) {
+          setMessageText(originalText);
+          setSelectedFile(originalFile);
+          setFilePreview(originalPreview);
+        }
         return;
       }
-
-      setMessageText('');
-      setSelectedFile(null);
-      setFilePreview(null);
 
       // Local mock append for fast response
       let localMsg: InboxMessage = payload.message || {
@@ -947,6 +977,12 @@ export default function BrokerInboxPage() {
     } catch (err) {
       console.error(err);
       setSendError('Nao consegui enviar agora. Tente novamente em instantes.');
+      // Restore input if it failed
+      if (!isAudio) {
+        setMessageText(originalText);
+        setSelectedFile(originalFile);
+        setFilePreview(originalPreview);
+      }
     } finally {
       setSendingMessage(false);
     }
@@ -2233,9 +2269,9 @@ export default function BrokerInboxPage() {
                     </div>
                   ) : (
                     /* ENTRADA DE TEXTO COMUM */
-                    <div className="relative flex items-center gap-2 shrink-0">
+                    <div className="relative flex items-end gap-2 shrink-0 pb-1">
                       {/* Media/Tools Icons */}
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 mb-1">
                         <label className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 cursor-pointer flex items-center justify-center shrink-0">
                           <Paperclip size={16} />
                           <input
@@ -2282,17 +2318,19 @@ export default function BrokerInboxPage() {
 
                       {/* Text Input */}
                       <textarea
+                        ref={composerRef}
                         value={messageText}
                         onChange={(e) => setMessageText(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
+                          if ((e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey) {
                             e.preventDefault();
                             void sendMessage();
                           }
                         }}
                         rows={1}
                         placeholder='Digite "/" para respostas rápidas ou escreva uma'
-                        className="flex-1 bg-slate-950 border border-white/5 rounded-2xl px-4 py-3 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none min-h-[44px] max-h-[44px] transition-colors"
+                        className="flex-1 bg-slate-950 border border-white/5 rounded-2xl px-4 py-3 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto"
+                        style={{ height: '44px' }}
                       />
 
                       {/* Record Mic */}

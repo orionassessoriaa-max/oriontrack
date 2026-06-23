@@ -2013,8 +2013,6 @@ body.theme-claro {
 }
 
 .theme-claro .orion-inbox-composer textarea {
-  min-height: 38px !important;
-  max-height: 38px !important;
   border: 1px solid #cfd9e3 !important;
   border-radius: 4px !important;
   background: #ffffff !important;
