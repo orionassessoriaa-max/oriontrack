@@ -89,6 +89,7 @@ export default function TarefasPage() {
   const [leadsById, setLeadsById] = useState<Record<string, TaskLead>>({});
   const [brokersById, setBrokersById] = useState<Record<string, BrokerRow>>({});
   const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>({});
+  const [availableProfiles, setAvailableProfiles] = useState<ProfileRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -216,6 +217,29 @@ export default function TarefasPage() {
         profilesMap[item.id] = item;
       });
 
+      if (profile.tipo_usuario === 'admin') {
+        const { data: allProfiles, error: profilesErr } = await supabase
+          .from('profiles')
+          .select('id, nome, email')
+          .eq('status', 'ativo')
+          .order('nome', { ascending: true });
+        if (!profilesErr && allProfiles) {
+          const activeList = allProfiles as ProfileRow[];
+          profileIds.forEach((pid) => {
+            if (pid && !activeList.some((ap) => ap.id === pid)) {
+              const extraProfile = profilesMap[pid];
+              if (extraProfile) {
+                activeList.push(extraProfile);
+              }
+            }
+          });
+          setAvailableProfiles(activeList);
+          allProfiles.forEach((item) => {
+            profilesMap[item.id] = item as ProfileRow;
+          });
+        }
+      }
+
       setLeadsById(Object.fromEntries(nextLeads.map((lead) => [lead.id, lead])));
       setBrokersById(Object.fromEntries(((brokersResult.data || []) as BrokerRow[]).map((broker) => [broker.id, broker])));
       setProfilesById(profilesMap);
@@ -240,6 +264,21 @@ export default function TarefasPage() {
 
     if (updateError) {
       alert(updateError.message);
+      return;
+    }
+    await fetchTasks();
+  }
+
+  async function handleUpdateResponsible(taskId: string, newProfileId: string | null) {
+    setSavingId(taskId);
+    const { error: updateError } = await supabase
+      .from('lead_tarefas')
+      .update({ responsavel_profile_id: newProfileId, updated_at: new Date().toISOString() })
+      .eq('id', taskId);
+    setSavingId(null);
+
+    if (updateError) {
+      alert('Erro ao atualizar responsável: ' + updateError.message);
       return;
     }
     await fetchTasks();
@@ -432,11 +471,31 @@ export default function TarefasPage() {
                     </span>
                   </div>
                   <p className="font-black text-white">{formatDateTime(task.vencimento)}</p>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[10px] font-black text-cyan-200">
-                      {(responsible?.nome || 'NA').slice(0, 2).toUpperCase()}
-                    </span>
-                    <span className="truncate font-bold text-slate-300">{responsible?.nome || 'Sem responsavel'}</span>
+                  <div className="flex min-w-0 items-center gap-2" onClick={(event) => event.stopPropagation()}>
+                    {profile?.tipo_usuario === 'admin' ? (
+                      <select
+                        value={task.responsavel_profile_id || lead?.responsavel_profile_id || ''}
+                        disabled={savingId === task.id}
+                        onChange={(event) => {
+                          void handleUpdateResponsible(task.id, event.target.value || null);
+                        }}
+                        className="w-full truncate rounded-xl border border-white/10 bg-slate-900 px-3 py-1.5 text-xs font-black text-white outline-none focus:border-cyan-400/70"
+                      >
+                        <option value="">Sem responsável</option>
+                        {availableProfiles.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nome || p.email || 'Sem nome'}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <>
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[10px] font-black text-cyan-200">
+                          {(responsible?.nome || 'NA').slice(0, 2).toUpperCase()}
+                        </span>
+                        <span className="truncate font-bold text-slate-300">{responsible?.nome || 'Sem responsavel'}</span>
+                      </>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="truncate font-black text-cyan-300">{lead?.nome || 'Lead nao encontrado'}</p>

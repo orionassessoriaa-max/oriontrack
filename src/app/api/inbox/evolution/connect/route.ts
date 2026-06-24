@@ -89,7 +89,11 @@ async function fetchEvolutionInstanceState(instance: string) {
   const match = rows.find((row: any) => {
     const name = row?.instance?.instanceName || row?.instanceName || row?.name;
     return name === instance;
-  }) || rows[0];
+  });
+
+  if (!match) {
+    return 'close';
+  }
 
   return readEvolutionState(match);
 }
