@@ -15,10 +15,10 @@ export const ORION_TEAM_MEMBERS: OrionTeamMember[] = [
   { nome: 'Ewertton', cargo: 'Gestor de Tráfego' },
   { nome: 'Geovana', cargo: 'Gestora de Tráfego' },
   { nome: 'Lucas', cargo: 'Gestor de Projetos' },
-  { nome: 'Patrick', cargo: 'Diretor Operacional' },
+  { nome: 'Patrick', cargo: 'Coordenador Operacional' },
   { nome: 'Nataline', cargo: 'Designer' },
 ];
-
+// ...
 const TEAM_PHOTOS: Record<string, string> = {
   ewertton: '/fotos/EWERTTON DEVOPS.png',
   geovana: '/fotos/GEOVANNA GESTORA.png',
@@ -51,7 +51,6 @@ export function getTeamMemberPhoto(name?: string | null) {
 }
 
 export function isTrafficManagerMember(member: OrionTeamMember) {
-  if (member.tipo_usuario === 'gestor_trafego') return true;
   return member.cargo.toLowerCase().includes('tráfego') || ['ewertton', 'geovana', 'geovanna'].includes(normalizeTeamMemberName(member.nome));
 }
 
@@ -81,14 +80,17 @@ export function buildOperationalTeamMembers(
       const order = ['gestor_trafego', 'account_manager', 'designer', 'admin'];
       return order.indexOf(a.tipo_usuario) - order.indexOf(b.tipo_usuario) || a.nome.localeCompare(b.nome);
     })
-    .map((profile) => ({
-      nome: profile.nome,
-      cargo: getProfileRoleLabel(profile),
-      profile_id: profile.id,
-      foto_url: profile.foto_url || null,
-      tipo_usuario: profile.tipo_usuario,
-      email: profile.email || null,
-      email_real: profile.email_real || null,
-      is_admin_master: profile.is_admin_master || null,
-    }));
+    .map((profile) => {
+      const isPatrick = profile.nome.toLowerCase().includes('patrick');
+      return {
+        nome: profile.nome,
+        cargo: isPatrick ? 'Coordenador Operacional' : getProfileRoleLabel(profile),
+        profile_id: profile.id,
+        foto_url: profile.foto_url || null,
+        tipo_usuario: profile.tipo_usuario,
+        email: profile.email || null,
+        email_real: profile.email_real || null,
+        is_admin_master: profile.is_admin_master || null,
+      };
+    });
 }

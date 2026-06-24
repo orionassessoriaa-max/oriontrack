@@ -1641,7 +1641,9 @@ export default function DashboardPage() {
                     {/* Team Details */}
                     <div className="text-center pb-2">
                       <h3 className="font-black text-lg text-white mb-1 leading-tight group-hover:text-blue-400 transition-colors">{membro.nome}</h3>
-                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{membro.cargo}</p>
+                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                        {membro.nome.toLowerCase().includes('patrick') ? 'Coordenador Operacional' : membro.cargo}
+                      </p>
                     </div>
                   </div>
                 );
