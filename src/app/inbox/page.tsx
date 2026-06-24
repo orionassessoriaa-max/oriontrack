@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
@@ -1692,7 +1692,32 @@ export default function BrokerInboxPage() {
     );
   };
 
-  const filteredChatMessages = messages.filter(m => 
+  const mergedChatMessages = useMemo(() => {
+    if (!selectedConversation) return messages;
+
+    const callMessages: InboxMessage[] = leadActivities
+      .filter((act) => act.tipo === 'ligacao')
+      .map((act) => ({
+        id: act.id,
+        conversa_id: selectedConversation.id,
+        direction: 'outbound',
+        remetente: act.profiles?.nome || 'Corretor',
+        mensagem: `Ligação de voz iniciada por ${act.profiles?.nome || 'Corretor'}`,
+        created_at: act.created_at,
+        metadata: {
+          messageType: 'call',
+          isBrokerCall: true,
+          brokerName: act.profiles?.nome || 'Corretor',
+          descricao: act.descricao || 'Chamada efetuada.'
+        }
+      }));
+
+    return [...messages, ...callMessages].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  }, [messages, leadActivities, selectedConversation]);
+
+  const filteredChatMessages = mergedChatMessages.filter(m => 
     !searchChatQuery.trim() || 
     m.mensagem.toLowerCase().includes(searchChatQuery.toLowerCase().trim())
   );
@@ -2090,15 +2115,24 @@ export default function BrokerInboxPage() {
                                 {renderAudioWaveform(isPlaying)}
                               </div>
                             ) : mediaKind === 'call' ? (
-                              <div className="flex min-w-52 items-center gap-3">
-                                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                              <div className="flex min-w-56 items-center gap-3">
+                                <div className={`flex h-10 w-10 items-center justify-center rounded-full shrink-0 ${
                                   isMine ? 'bg-white text-cyan-700' : 'bg-cyan-500/20 text-cyan-300'
                                 }`}>
                                   <PhoneCall size={17} />
                                 </div>
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <p className="text-xs font-black">Ligação de voz</p>
-                                  <p className={`text-[10px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
+                                  {message.metadata?.isBrokerCall ? (
+                                    <p className={`text-[9px] font-bold leading-normal truncate ${isMine ? 'text-cyan-100/80' : 'text-slate-400'}`}>
+                                      Iniciada por {message.metadata.brokerName}
+                                    </p>
+                                  ) : (
+                                    <p className={`text-[9px] font-bold leading-normal ${isMine ? 'text-cyan-100/80' : 'text-slate-400'}`}>
+                                      Faça ligações com o app para Windows
+                                    </p>
+                                  )}
+                                  <p className={`text-[8px] font-semibold mt-0.5 ${isMine ? 'text-cyan-200/60' : 'text-slate-500'}`}>
                                     {formatHour(message.created_at)}
                                   </p>
                                 </div>
