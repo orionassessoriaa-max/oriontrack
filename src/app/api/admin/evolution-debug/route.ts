@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { evolutionFetch } from '@/lib/evolution';
+import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -11,33 +11,53 @@ export async function GET(request: Request) {
 
   const profileId = 'e1db6a41-8395-4c7d-b92d-70642f26edc0'; // Danilo's profile ID
   const instanceName = `orion_${profileId.replace(/-/g, '')}`;
+  const targetPhone = '5511970565216'; // Danilo's phone
 
   const debugInfo: any = {
-    checkedInstance: instanceName,
+    instanceName,
+    targetPhone,
+    instanceApiKey: null,
     connectionState: null,
-    instancesList: null,
-    error: null,
+    testSendResult: null,
+    globalApiKeyUsed: process.env.EVOLUTION_API_KEY ? 'present' : 'missing',
   };
 
   try {
-    // 1. Fetch connection state for Danilo's instance
+    // 1. Fetch connection state
     try {
       debugInfo.connectionState = await evolutionFetch(`/instance/connectionState/${instanceName}`);
     } catch (err: any) {
       debugInfo.connectionState = { error: err.message || err };
     }
 
-    // 2. Fetch all instances
+    // 2. Resolve Instance API Key
     try {
-      const fetched = await evolutionFetch('/instance/fetchInstances');
-      const list = Array.isArray(fetched) ? fetched : fetched?.data || [];
-      debugInfo.instancesList = list.map((inst: any) => ({
-        instanceName: inst.instanceName || inst.name,
-        connectionStatus: inst.status || inst.connectionStatus,
-        owner: inst.owner || inst.number,
-      }));
+      debugInfo.instanceApiKey = await getEvolutionInstanceApiKey(instanceName);
     } catch (err: any) {
-      debugInfo.instancesList = { error: err.message || err };
+      debugInfo.instanceApiKey = { error: err.message || err };
+    }
+
+    // 3. Test sending a message
+    try {
+      const apiKey = debugInfo.instanceApiKey;
+      const response = await fetch(`${String(process.env.EVOLUTION_API_URL).replace(/\/+$/, '')}/message/sendText/${instanceName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: apiKey,
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          number: targetPhone,
+          text: 'OrionTrack Teste de Diagnostico da IA',
+        }),
+      });
+
+      const status = response.status;
+      const body = await response.json().catch(() => ({}));
+      debugInfo.testSendResult = { status, body };
+    } catch (err: any) {
+      debugInfo.testSendResult = { error: err.message || err };
     }
 
     return NextResponse.json(debugInfo);
@@ -45,3 +65,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message || 'Erro no debug' }, { status: 500 });
   }
 }
+
