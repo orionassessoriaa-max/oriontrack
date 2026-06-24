@@ -1487,6 +1487,22 @@ export default function BrokerInboxPage() {
     setNewNote('');
   };
 
+  const handleDeleteActivity = async (id: string) => {
+    if (!window.confirm('Deseja realmente excluir esta anotação/ligação?')) return;
+    try {
+      const { error } = await supabase
+        .from('lead_atividades')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      setLeadActivities((current) => current.filter((act) => act.id !== id));
+      setHistoryActivities((current) => current.filter((act) => act.id !== id));
+    } catch (err) {
+      console.error('Erro ao excluir atividade:', err);
+      alert('Não foi possível excluir o registro.');
+    }
+  };
+
   const handleAddTag = async (tag: string) => {
     if (!selectedConversation || !tag) return;
     const nextTag = tag.trim();
@@ -2569,8 +2585,16 @@ export default function BrokerInboxPage() {
                   <div className="flex-1 overflow-y-auto bg-slate-950/40 border border-white/5 p-3 rounded-2xl space-y-2 max-h-[140px]">
                     {internalNotes.length > 0 ? (
                       internalNotes.map((note) => (
-                        <div key={note.id} className="bg-slate-950 p-2.5 rounded-xl border border-white/2 text-[10px] font-bold text-slate-300 leading-normal">
-                          <p>{note.text}</p>
+                        <div key={note.id} className="bg-slate-950 p-2.5 rounded-xl border border-white/2 text-[10px] font-bold text-slate-300 leading-normal relative group">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteActivity(note.id)}
+                            className="absolute top-2 right-2 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                            title="Excluir anotação"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                          <p className="pr-4">{note.text}</p>
                           <div className="flex items-center justify-between gap-2 mt-1">
                             <span className="text-[8px] font-black uppercase tracking-widest text-cyan-400">{formatActivityDate(note.createdAt)}</span>
                             {note.author && (
@@ -2597,8 +2621,16 @@ export default function BrokerInboxPage() {
                       leadActivities
                         .filter((act) => act.tipo === 'ligacao')
                         .map((act) => (
-                          <div key={act.id} className="bg-slate-950 p-2.5 rounded-xl border border-white/2 text-[10px] font-bold text-slate-300 leading-normal space-y-1">
-                            <div className="flex items-center justify-between gap-2">
+                          <div key={act.id} className="bg-slate-950 p-2.5 rounded-xl border border-white/2 text-[10px] font-bold text-slate-300 leading-normal space-y-1 relative group">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteActivity(act.id)}
+                              className="absolute top-2.5 right-2.5 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                              title="Excluir ligação"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                            <div className="flex items-center justify-between gap-2 pr-4">
                               <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Ligação Efetuada</span>
                               {act.profiles?.nome && (
                                 <span className="text-[8px] font-bold text-slate-400 bg-white/5 border border-white/5 px-2 py-0.5 rounded-full uppercase tracking-wider">
@@ -2606,7 +2638,7 @@ export default function BrokerInboxPage() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-3xs text-slate-400 leading-normal">{act.descricao || 'Chamada efetuada.'}</p>
+                            <p className="text-3xs text-slate-400 leading-normal pr-4">{act.descricao || 'Chamada efetuada.'}</p>
                             <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">{formatActivityDate(act.created_at)}</p>
                           </div>
                         ))
