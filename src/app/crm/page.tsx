@@ -60,10 +60,10 @@ const columns: { id: LeadStatus; label: string; desc: string }[] = [
   { id: 'Aguardando atendimento', label: 'Oportunidade', desc: 'Entrou e precisa de primeiro contato' },
   { id: 'Inicio', label: 'Inicio', desc: 'Primeira abordagem realizada' },
   { id: 'Contato feito', label: 'Contato feito', desc: 'Em atendimento' },
-  { id: 'Cotação enviada', label: 'Cotacao enviada', desc: 'Proposta enviada ao lead' },
-  { id: 'Em negociação', label: 'Negociacao', desc: 'Acompanhamento comercial ativo' },
+  { id: 'Cotação enviada', label: 'Cotação enviada', desc: 'Proposta enviada ao lead' },
+  { id: 'Em negociação', label: 'Em negociação', desc: 'Acompanhamento comercial ativo' },
   { id: 'Não tive retorno', label: 'Sem retorno', desc: 'Precisa de nova tentativa' },
-  { id: 'Venda realizada', label: 'Venda', desc: 'Conversao concluida' },
+  { id: 'Venda realizada', label: 'Venda realizada', desc: 'Conversão concluída' },
   { id: 'Sem interesse', label: 'Sem interesse', desc: 'Descartado comercialmente' },
 ];
 

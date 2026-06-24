@@ -8,10 +8,7 @@ export const LEAD_STATUSES: LeadStatus[] = [
   'Em negociação',
   'Não tive retorno',
   'Venda realizada',
-  'Sem interesse',
-  'Região sem comercialização',
-  'Chamou duas vezes',
-  'Telefone não existe'
+  'Sem interesse'
 ];
 
 export const LEGACY_LEAD_STATUS_MAP: Record<string, LeadStatus> = {
