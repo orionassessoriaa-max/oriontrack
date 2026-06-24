@@ -1475,6 +1475,17 @@ export default function BrokerInboxPage() {
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
     setNewNote('');
   };
+ 
+  const handleLogManualCall = async () => {
+    if (!selectedConversation) return;
+    const desc = newNote.trim() || 'Chamada telefônica efetuada pelo corretor.';
+    await logLeadActivity({
+      tipo: 'ligacao',
+      titulo: 'Ligação Efetuada (Manual)',
+      descricao: desc,
+    });
+    setNewNote('');
+  };
 
   const handleAddTag = async (tag: string) => {
     if (!selectedConversation || !tag) return;
@@ -2083,9 +2094,13 @@ export default function BrokerInboxPage() {
                           )}
                           <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
                           <div className={`max-w-[75%] rounded-[1.5rem] p-3.5 shadow-lg space-y-1.5 ${
-                            isMine 
-                              ? 'bg-cyan-600 text-white rounded-tr-none' 
-                              : 'bg-slate-900 border border-white/5 text-slate-100 rounded-tl-none'
+                            mediaKind === 'call'
+                              ? isMine
+                                ? 'bg-emerald-600 text-white rounded-tr-none'
+                                : 'bg-slate-900 border border-emerald-500/30 text-slate-100 rounded-tl-none'
+                              : isMine 
+                                ? 'bg-cyan-600 text-white rounded-tr-none' 
+                                : 'bg-slate-900 border border-white/5 text-slate-100 rounded-tl-none'
                           }`}>
                             {/* Se for áudio */}
                             {mediaKind === 'audio' ? (
@@ -2117,22 +2132,37 @@ export default function BrokerInboxPage() {
                             ) : mediaKind === 'call' ? (
                               <div className="flex min-w-56 items-center gap-3">
                                 <div className={`flex h-10 w-10 items-center justify-center rounded-full shrink-0 ${
-                                  isMine ? 'bg-white text-cyan-700' : 'bg-cyan-500/20 text-cyan-300'
+                                  isMine ? 'bg-white text-emerald-700' : 'bg-emerald-500/20 text-emerald-300'
                                 }`}>
                                   <PhoneCall size={17} />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-black">Ligação de voz</p>
+                                  <p className="text-xs font-black">
+                                    {message.mensagem.split('\n')[0] || 'Ligação de voz'}
+                                  </p>
+                                  {message.metadata?.descricao ? (
+                                    <p className={`text-[10px] font-semibold mt-0.5 leading-normal ${isMine ? 'text-emerald-100/95' : 'text-slate-350'}`}>
+                                      {message.metadata.descricao}
+                                    </p>
+                                  ) : message.mensagem.includes('\n') ? (
+                                    <p className={`text-[10px] font-bold mt-0.5 leading-normal ${isMine ? 'text-emerald-100/90' : 'text-slate-400'}`}>
+                                      {message.mensagem.split('\n').slice(1).join('\n')}
+                                    </p>
+                                  ) : null}
                                   {message.metadata?.isBrokerCall ? (
-                                    <p className={`text-[9px] font-bold leading-normal truncate ${isMine ? 'text-cyan-100/80' : 'text-slate-400'}`}>
+                                    <p className={`text-[9px] font-bold leading-normal truncate mt-0.5 ${isMine ? 'text-emerald-100/70' : 'text-slate-500'}`}>
                                       Iniciada por {message.metadata.brokerName}
                                     </p>
+                                  ) : !isMine ? (
+                                    <p className="text-[9px] font-bold leading-normal mt-0.5 text-slate-500">
+                                      Chamada recebida
+                                    </p>
                                   ) : (
-                                    <p className={`text-[9px] font-bold leading-normal ${isMine ? 'text-cyan-100/80' : 'text-slate-400'}`}>
+                                    <p className={`text-[9px] font-bold leading-normal mt-0.5 ${isMine ? 'text-emerald-100/70' : 'text-slate-400'}`}>
                                       Faça ligações com o app para Windows
                                     </p>
                                   )}
-                                  <p className={`text-[8px] font-semibold mt-0.5 ${isMine ? 'text-cyan-200/60' : 'text-slate-500'}`}>
+                                  <p className={`text-[8px] font-semibold mt-0.5 ${isMine ? 'text-emerald-200/60' : 'text-slate-500'}`}>
                                     {formatHour(message.created_at)}
                                   </p>
                                 </div>
@@ -2509,18 +2539,29 @@ export default function BrokerInboxPage() {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="digitar..."
+                      placeholder="Anotar ou registrar ligação..."
                       value={newNote}
                       onChange={(e) => setNewNote(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddNote(); }}
+                      onKeyDown={(e) => { 
+                        if (e.key === 'Enter') handleAddNote(); 
+                      }}
                       className="flex-1 bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs text-white focus:outline-none focus:border-cyan-500/50"
                     />
                     <button
                       type="button"
                       onClick={handleAddNote}
+                      title="Salvar como Anotação Interna"
                       className="h-8 w-8 bg-cyan-600/20 border border-cyan-500/20 hover:bg-cyan-600 hover:text-white text-cyan-400 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0"
                     >
                       <Plus size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogManualCall}
+                      title="Registrar Ligação Efetuada"
+                      className="h-8 w-8 bg-emerald-600/20 border border-emerald-500/20 hover:bg-emerald-600 hover:text-white text-emerald-400 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0"
+                    >
+                      <Phone size={13} />
                     </button>
                   </div>
 

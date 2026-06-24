@@ -33,18 +33,50 @@ function getAudioMessage(data: any) {
 
 function isCallEvent(body: any, data: any, event: string) {
   const messageType = String(body?.messageType || data?.messageType || data?.type || '').toLowerCase();
-  return event.includes('CALL') || messageType.includes('call') || Boolean(data?.call || body?.call);
+  const stubType = String(data?.messageStubType || body?.messageStubType || '').toLowerCase();
+  return (
+    event.includes('CALL') ||
+    messageType.includes('call') ||
+    stubType.includes('call') ||
+    Boolean(data?.call || body?.call)
+  );
 }
 
 function readCallText(body: any, data: any) {
+  const stubType = String(data?.messageStubType || body?.messageStubType || '').toUpperCase();
+  if (stubType) {
+    const isVideo = stubType.includes('VIDEO');
+    const typeLabel = isVideo ? 'Ligação de vídeo' : 'Ligação de voz';
+    if (stubType.includes('MISSED')) {
+      return `${typeLabel} perdida`;
+    }
+    if (stubType.includes('REJECT') || stubType.includes('DECLINE')) {
+      return `${typeLabel} recusada`;
+    }
+    if (stubType.includes('ACCEPT')) {
+      return `${typeLabel} atendida`;
+    }
+    return typeLabel;
+  }
+
   const duration = String(data?.call?.duration || body?.call?.duration || data?.duration || '').trim();
   const status = String(data?.call?.status || body?.call?.status || data?.status || '').trim();
+  
+  let statusText = status;
+  if (status === 'offer') statusText = 'chamando';
+  else if (status === 'accept') statusText = 'atendida';
+  else if (status === 'reject') statusText = 'recusada';
+  else if (status === 'timeout') statusText = 'sem resposta';
+  
   const suffix = [
     duration ? `Duração: ${duration}` : null,
-    status ? `Status: ${status}` : null,
+    statusText ? `Status: ${statusText}` : null,
   ].filter(Boolean).join(' | ');
 
-  return suffix ? `Ligação de voz\n${suffix}` : 'Ligação de voz';
+  const isVideoCall = Boolean(data?.call?.isVideo || body?.call?.isVideo || data?.isVideo || body?.isVideo);
+  const typeLabel = isVideoCall ? 'Ligação de vídeo' : 'Ligação de voz';
+
+  return suffix ? `${typeLabel}\n${suffix}` : typeLabel;
 }
 
 async function getMediaBase64(instance: string, providerId: string) {
@@ -215,7 +247,7 @@ export async function POST(request: Request) {
 
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa')
+      .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
       .eq('id', profileId)
       .maybeSingle();
 
@@ -263,7 +295,22 @@ export async function POST(request: Request) {
     }
 
     const remoteJid = readRemoteJid(data);
-    const phone = normalizePhone(remoteJid.split('@')[0]);
+    let phone = normalizePhone(remoteJid.split('@')[0]);
+
+    // Tratar quando a ligação de voz é efetuada pelo próprio corretor de fora do CRM.
+    // O webhook da Evolution API pode vir com 'from' sendo o telefone do corretor (o remetente da ligação).
+    // Identificamos isso e resolvemos para o telefone de destino (o lead/cliente).
+    let isOutboundCall = false;
+    const brokerPhone = profile?.telefone ? normalizePhone(profile.telefone) : '';
+    if (callEvent && brokerPhone && phone === brokerPhone) {
+      isOutboundCall = true;
+      const otherJid = String(data?.to || body?.to || data?.chatId || data?.remoteJid || body?.sender || '');
+      const otherPhone = normalizePhone(otherJid.split('@')[0]);
+      if (otherPhone && otherPhone !== brokerPhone) {
+        phone = otherPhone;
+      }
+    }
+
     if (!message || !phone) return NextResponse.json({ ok: true, ignored: true });
 
     if (!aiCustomerMessage) aiCustomerMessage = audioTranscript || message;
@@ -309,7 +356,7 @@ export async function POST(request: Request) {
         .eq('id', currentConversation.id);
     }
 
-    const fromMe = Boolean(data?.key?.fromMe || data?.fromMe);
+    const fromMe = Boolean(data?.key?.fromMe || data?.fromMe || isOutboundCall);
 
     if (fromMe && isAiOutbound(phone, message)) {
       console.log(`[evolution_webhook] Ignorando retorno de mensagem enviada pela propria IA: ${phone}`);
@@ -326,6 +373,8 @@ export async function POST(request: Request) {
         ...(body || {}),
         messageType: callEvent ? 'call' : body?.messageType,
         mediaType: callEvent ? 'call' : body?.mediaType,
+        isBrokerCall: callEvent ? fromMe : undefined,
+        brokerName: (callEvent && fromMe) ? (profile.nome || 'Orion') : undefined,
         audio_transcript: audioTranscript || undefined,
         ai_customer_message: aiCustomerMessage || undefined,
       },
