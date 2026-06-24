@@ -7,7 +7,14 @@ import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 
 function normalizeText(value: unknown, fallback = '') {
-  return String(value ?? fallback).trim();
+  if (value === undefined || value === null) return fallback;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item ?? '').trim())
+      .filter(Boolean)
+      .join(', ');
+  }
+  return String(value).trim();
 }
 
 function normalizeKey(value: string) {
