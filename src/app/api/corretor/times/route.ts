@@ -719,6 +719,69 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, membro: data });
     }
 
+    if (action === 'set_next_member') {
+      if (!['admin', 'corretor', 'corretor_admin'].includes(guard.profile.tipo_usuario)) {
+        return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+      }
+
+      const memberId = String(body.member_id || '').trim();
+      if (!memberId) return NextResponse.json({ error: 'Membro nao informado.' }, { status: 400 });
+
+      if (memberId.startsWith('profile:')) {
+        return NextResponse.json({ error: 'Salve este perfil no time antes de alterar o rodizio.' }, { status: 400 });
+      }
+
+      // Fetch all active members of this team who participate in rotation
+      const { data: members, error: fetchMembersError } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .select('id, ultimo_lead_at')
+        .eq('time_id', team.id)
+        .in('status', ['active', 'ativo', 'Ativo'])
+        .neq('participa_rodizio', false);
+
+      if (fetchMembersError) throw fetchMembersError;
+
+      const targetMember = (members || []).find((m) => m.id === memberId);
+      if (!targetMember) {
+        return NextResponse.json({ error: 'Membro nao encontrado ou nao participa do rodizio.' }, { status: 404 });
+      }
+
+      // Set target member's ultimo_lead_at to null (to be sorted first).
+      // If any other member currently has a null ultimo_lead_at, set it to an old non-null date (e.g. 1970)
+      // so they are pushed after the target member.
+      const updates = [];
+      for (const m of (members || [])) {
+        if (m.id === memberId) {
+          updates.push(
+            supabaseAdmin
+              .from('corretor_time_membros')
+              .update({ ultimo_lead_at: null })
+              .eq('id', m.id)
+          );
+        } else if (m.ultimo_lead_at === null) {
+          updates.push(
+            supabaseAdmin
+              .from('corretor_time_membros')
+              .update({ ultimo_lead_at: '1970-01-01T00:00:00.000Z' })
+              .eq('id', m.id)
+          );
+        }
+      }
+
+      if (updates.length > 0) {
+        await Promise.all(updates);
+      }
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.member.set_next',
+        entity_type: 'corretor_time_membro',
+        entity_id: memberId,
+        metadata: { corretor_id: corretorId },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
     if (action === 'update_member') {
       const memberId = String(body.member_id || '').trim();
       const nome = String(body.nome || '').trim();

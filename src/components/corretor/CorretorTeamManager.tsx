@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw, Clock, Table } from 'lucide-react';
@@ -29,6 +29,7 @@ type Membro = {
   ultimo_lead_at: string | null;
   participa_rodizio?: boolean;
   tipo_usuario?: string;
+  created_at?: string | null;
 };
 
 type Credentials = {
@@ -215,6 +216,29 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
   const ranking = useMemo(() => {
     return [...memberStats].sort((a, b) => b.vendas - a.vendas || b.totalLeads - a.totalLeads);
   }, [memberStats]);
+
+  const nextMemberId = useMemo(() => {
+    const activeQueue = membros
+      .filter((m) => m.participa_rodizio !== false && ['active', 'ativo', 'Ativo'].includes(m.status || '') && m.profile_id !== null)
+      .sort((a, b) => {
+        if (!a.ultimo_lead_at && b.ultimo_lead_at) return -1;
+        if (a.ultimo_lead_at && !b.ultimo_lead_at) return 1;
+        if (a.ultimo_lead_at && b.ultimo_lead_at) {
+          const aTime = new Date(a.ultimo_lead_at).getTime();
+          const bTime = new Date(b.ultimo_lead_at).getTime();
+          if (aTime !== bTime) return aTime - bTime;
+        }
+
+        const orderDiff = (a.ordem || 0) - (b.ordem || 0);
+        if (orderDiff !== 0) return orderDiff;
+
+        const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return aCreated - bCreated;
+      });
+
+    return activeQueue[0]?.id || null;
+  }, [membros]);
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
@@ -438,6 +462,26 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     try {
       await postTeam({ action: 'toggle_member_distribution', member_id: member.id, participa_rodizio: active });
       setMembros((current) => current.map((item) => item.id === member.id ? { ...item, participa_rodizio: active } : item));
+      await fetchTeam();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
+  async function setNextMember(member: Membro) {
+    const confirmed = await confirmDialog(`Definir ${member.nome} como o próximo da fila para receber novos leads?`, {
+      title: 'Alterar ordem do rodízio',
+      confirmLabel: 'Confirmar',
+      variant: 'info',
+    });
+    if (!confirmed) return;
+
+    setSettingsSaving(true);
+    setError(null);
+    try {
+      await postTeam({ action: 'set_next_member', member_id: member.id });
       await fetchTeam();
     } catch (err: any) {
       setError(err.message);
@@ -1249,19 +1293,36 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                             <span className={`inline-flex rounded-full border px-2.5 py-1 text-[8px] font-black uppercase tracking-widest leading-none ${member.participa_rodizio !== false ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300' : 'border-slate-500/20 bg-slate-500/10 text-slate-400'}`}>
                               {member.participa_rodizio !== false ? 'Participa do rodízio' : 'Fora do rodízio'}
                             </span>
+                            {nextMemberId === member.id && (
+                              <span className="inline-flex rounded-full bg-cyan-500/20 border border-cyan-500/30 px-2.5 py-1 text-[8px] font-black uppercase tracking-widest text-cyan-300 leading-none">
+                                Próximo a receber lead
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => removeMember(member)}
-                        disabled={isOwner(member.profile_id)}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-500/10 bg-red-500/5 px-3 py-2.5 text-xs font-black text-red-400 transition-all hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30 cursor-pointer shrink-0 self-start"
-                        title={isOwner(member.profile_id) ? 'Desative em Configurações do time.' : 'Remover integrante'}
-                      >
-                        <Trash2 size={13} /> <span className="hidden sm:inline">Remover</span>
-                      </button>
+                      <div className="flex gap-2 shrink-0 self-start">
+                        {nextMemberId !== member.id && member.participa_rodizio !== false && ['active', 'ativo', 'Ativo'].includes(member.status || '') && member.profile_id !== null && (
+                          <button
+                            type="button"
+                            disabled={saving || settingsSaving}
+                            onClick={() => setNextMember(member)}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-cyan-500/10 bg-cyan-500/5 px-3 py-2.5 text-xs font-black text-cyan-400 transition-all hover:bg-cyan-500/10 hover:text-cyan-300 cursor-pointer disabled:opacity-40"
+                          >
+                            <Target size={13} /> <span className="hidden sm:inline">Definir como próximo</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeMember(member)}
+                          disabled={isOwner(member.profile_id)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-500/10 bg-red-500/5 px-3 py-2.5 text-xs font-black text-red-400 transition-all hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30 cursor-pointer shrink-0"
+                          title={isOwner(member.profile_id) ? 'Desative em Configurações do time.' : 'Remover integrante'}
+                        >
+                          <Trash2 size={13} /> <span className="hidden sm:inline">Remover</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Bottom Row: 4 metrics side-by-side, fully responsive */}
