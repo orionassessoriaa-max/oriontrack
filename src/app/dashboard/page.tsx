@@ -810,48 +810,7 @@ export default function DashboardPage() {
   }, [timeOperacional.length]);
 
   const staleOpportunityCount = stats.stale;
-  const maxCurrentMonthMetric = Math.max(
-    stats.waiting,
-    stats.inicio,
-    stats.contactMade,
-    stats.inProgress,
-    stats.quoted,
-    stats.sold,
-    1
-  );
 
-  const performanceBars = [
-    { 
-      label: 'Início', 
-      value: stats.inicio, 
-      gradient: 'from-cyan-400 via-sky-400 to-blue-500', 
-      glowColor: 'rgba(34, 211, 238, 0.4)' 
-    },
-    { 
-      label: 'Contato feito', 
-      value: stats.contactMade, 
-      gradient: 'from-purple-500 via-pink-500 to-indigo-500', 
-      glowColor: 'rgba(168, 85, 247, 0.4)' 
-    },
-    { 
-      label: 'Em negociação', 
-      value: stats.inProgress, 
-      gradient: 'from-amber-500 via-orange-500 to-red-500', 
-      glowColor: 'rgba(249, 115, 22, 0.4)' 
-    },
-    { 
-      label: 'Cotações', 
-      value: stats.quoted, 
-      gradient: 'from-cyan-400 via-sky-500 to-blue-500', 
-      glowColor: 'rgba(34, 211, 238, 0.4)' 
-    },
-    { 
-      label: 'Vendas', 
-      value: stats.sold, 
-      gradient: 'from-emerald-400 via-teal-500 to-green-500', 
-      glowColor: 'rgba(16, 185, 129, 0.4)' 
-    },
-  ];
   const maxMonthlyLeads = Math.max(...monthlyPerformance.map((month) => month.leads), 1);
   const maxMonthlySpend = Math.max(...monthlyPerformance.map((month) => month.spend), 1);
   const currentMonth = monthlyPerformance[monthlyPerformance.length - 1] || { leads: 0, spend: 0 };
@@ -1574,37 +1533,8 @@ export default function DashboardPage() {
       </div>
 
       {/* 🚀 STEP 6: DYNAMIC WARNING & STALE LEADS BOX */}
-      <div className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="rounded-[2rem] border border-white/5 bg-[#090e1a] p-6 shadow-xl lg:col-span-2">
-          <h3 className="mb-6 text-sm font-black uppercase tracking-widest text-white">Estatísticas por Etapa</h3>
-          <div className="space-y-4">
-            {performanceBars.map((bar, index) => {
-              const barWidth = chartAnimate 
-                ? `${(bar.value / maxCurrentMonthMetric) * 100}%` 
-                : '0%';
-
-              return (
-                <div key={bar.label} className="group/stage">
-                  <div className="mb-2 flex justify-between text-xs font-bold text-slate-400">
-                    <span className="font-extrabold text-white">{bar.label}</span>
-                    <span>{bar.value}</span>
-                  </div>
-                  <div className="h-3.5 overflow-hidden rounded-full bg-[#070b13] border border-white/5 relative shadow-inner">
-                    <div
-                      className={`h-full rounded-full bg-gradient-to-r ${bar.gradient} transition-all duration-[1200ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/stage:brightness-110`}
-                      style={{
-                        width: barWidth,
-                        boxShadow: `0 0 10px ${bar.glowColor}`,
-                        transitionDelay: `${index * 80}ms`
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <Link href="/leads?status=Aguardando atendimento" className="rounded-[2rem] border border-amber-500/20 bg-amber-500/5 p-6 transition-all hover:bg-amber-500/10">
+      <div className="mb-10">
+        <Link href="/leads?status=Aguardando atendimento" className="block rounded-[2rem] border border-amber-500/20 bg-amber-500/5 p-6 transition-all hover:bg-amber-500/10">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 shadow-sm border border-amber-500/25">
             <AlertTriangle size={24} />
           </div>
