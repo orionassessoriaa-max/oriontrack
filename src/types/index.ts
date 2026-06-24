@@ -141,7 +141,9 @@ export interface LeadAtividade {
   titulo: string;
   descricao?: string | null;
   created_at: string;
+  profiles?: { nome: string } | null;
 }
+
 
 export interface LeadTarefa {
   id: string;

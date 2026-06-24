@@ -544,7 +544,7 @@ export default function CrmPage() {
   async function fetchTimeline(leadId: string) {
     const { data } = await supabase
       .from('lead_atividades')
-      .select('*')
+      .select('*, profiles:profile_id(nome)')
       .eq('lead_id', leadId)
       .order('created_at', { ascending: false })
       .limit(40);
@@ -1793,7 +1793,14 @@ export default function CrmPage() {
                     ) : atividades.map((activity) => (
                       <div key={activity.id} className="rounded-2xl border border-gray-100 p-4">
                         <div className="mb-1 flex items-center justify-between gap-3">
-                          <p className="font-black text-gray-900">{activity.titulo}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-black text-gray-900">{activity.titulo}</p>
+                            {activity.profiles?.nome && (
+                              <span className="rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">
+                                {activity.profiles.nome}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] font-bold text-slate-400">{format(new Date(activity.created_at), 'dd/MM HH:mm', { locale: ptBR })}</span>
                         </div>
                         {activity.descricao && (

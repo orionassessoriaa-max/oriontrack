@@ -660,7 +660,7 @@ export default function BrokerInboxPage() {
 
       const { data: activities } = await supabase
         .from('lead_atividades')
-        .select('*')
+        .select('*, profiles:profile_id(nome)')
         .eq('lead_id', leadId)
         .order('created_at', { ascending: false })
         .limit(80);
@@ -1360,7 +1360,7 @@ export default function BrokerInboxPage() {
       if (selectedConversation.lead_id) {
         const { data: activities } = await supabase
           .from('lead_atividades')
-          .select('*')
+          .select('*, profiles:profile_id(nome)')
           .eq('lead_id', selectedConversation.lead_id)
           .order('created_at', { ascending: false });
         setHistoryActivities(activities || []);
@@ -1621,6 +1621,7 @@ export default function BrokerInboxPage() {
       id: activity.id,
       text: activity.descricao || activity.titulo,
       createdAt: activity.created_at,
+      author: activity.profiles?.nome || null,
     }));
 
   const getFilterCount = (filter: 'chatting' | 'waiting' | 'closed' | 'alerts') => {
@@ -2495,12 +2496,48 @@ export default function BrokerInboxPage() {
                       internalNotes.map((note) => (
                         <div key={note.id} className="bg-slate-950 p-2.5 rounded-xl border border-white/2 text-[10px] font-bold text-slate-300 leading-normal">
                           <p>{note.text}</p>
-                          <p className="mt-1 text-[8px] font-black uppercase tracking-widest text-cyan-400">{formatActivityDate(note.createdAt)}</p>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-cyan-400">{formatActivityDate(note.createdAt)}</span>
+                            {note.author && (
+                              <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider">
+                                por {note.author}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ))
                     ) : (
                       <div className="h-full flex items-center justify-center text-center text-[10px] text-slate-500 uppercase tracking-widest font-black py-4">
                         Nenhuma anotação
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Histórico de Ligações */}
+                <div className="space-y-2 flex-1 flex flex-col min-h-[160px] border-t border-white/5 pt-4">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Histórico de Ligações</label>
+                  <div className="flex-1 overflow-y-auto bg-slate-950/40 border border-white/5 p-3 rounded-2xl space-y-2 max-h-[140px]">
+                    {leadActivities.filter((act) => act.tipo === 'ligacao').length > 0 ? (
+                      leadActivities
+                        .filter((act) => act.tipo === 'ligacao')
+                        .map((act) => (
+                          <div key={act.id} className="bg-slate-950 p-2.5 rounded-xl border border-white/2 text-[10px] font-bold text-slate-300 leading-normal space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Ligação Efetuada</span>
+                              {act.profiles?.nome && (
+                                <span className="text-[8px] font-bold text-slate-400 bg-white/5 border border-white/5 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                  {act.profiles.nome}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-3xs text-slate-400 leading-normal">{act.descricao || 'Chamada efetuada.'}</p>
+                            <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">{formatActivityDate(act.created_at)}</p>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-center text-[10px] text-slate-500 uppercase tracking-widest font-black py-4">
+                        Nenhuma ligação registrada
                       </div>
                     )}
                   </div>
@@ -3095,7 +3132,14 @@ export default function BrokerInboxPage() {
                       {historyActivities.length > 0 ? (
                         historyActivities.map((act) => (
                           <div key={act.id} className="bg-slate-950/50 border border-white/5 p-3 rounded-2xl space-y-1">
-                            <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">{act.titulo}</span>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">{act.titulo}</span>
+                              {act.profiles?.nome && (
+                                <span className="text-[8px] font-bold text-slate-400 bg-white/5 border border-white/5 px-2 py-0.5 rounded-full uppercase tracking-wider leading-none">
+                                  {act.profiles.nome}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-3xs text-slate-300 font-bold leading-normal">{act.descricao}</p>
                             <span className="text-[8px] font-semibold text-slate-500 block uppercase pt-0.5">
                               {new Date(act.created_at).toLocaleString('pt-BR')}
