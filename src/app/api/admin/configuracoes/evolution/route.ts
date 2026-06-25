@@ -6,9 +6,30 @@ const MASTER_INSTANCE = 'apolo_master_sender';
 
 function normalizeUazapiState(status?: string | null, connected?: boolean) {
   const value = String(status || '').toLowerCase();
-  if (connected || ['open', 'connected', 'online'].includes(value)) return 'open';
+  if (connected || ['open', 'connected', 'online', 'loggedin'].includes(value)) return 'open';
   if (['connecting', 'qrcode', 'qr', 'pairing'].includes(value)) return 'connecting';
   return 'close';
+}
+
+function readUazapiStatus(payload: any) {
+  return (
+    payload?.instance?.status ||
+    payload?.status?.status ||
+    payload?.state ||
+    ''
+  );
+}
+
+function readUazapiConnected(payload: any) {
+  return (
+    payload?.connected === true ||
+    payload?.loggedIn === true ||
+    payload?.instance?.connected === true ||
+    payload?.instance?.loggedIn === true ||
+    payload?.status?.connected === true ||
+    payload?.status?.loggedIn === true ||
+    Boolean(payload?.jid || payload?.status?.jid || payload?.instance?.jid || payload?.instance?.owner)
+  );
 }
 
 function extractUazapiQrCode(payload: any): string | null {
@@ -38,8 +59,8 @@ export async function GET(request: Request) {
     try {
       const statePayload = await uazapiFetch('/instance/status', { method: 'GET' }, { instanceName: MASTER_INSTANCE });
       const state = normalizeUazapiState(
-        statePayload?.status || statePayload?.instance?.status,
-        statePayload?.connected === true || statePayload?.instance?.connected === true
+        readUazapiStatus(statePayload),
+        readUazapiConnected(statePayload)
       );
       return NextResponse.json({
         success: true,

@@ -53,9 +53,30 @@ function targetPayload(profile: WhatsappTargetProfile) {
 function normalizeUazapiState(value?: unknown, connectedField?: boolean) {
   if (connectedField === true) return 'open';
   const raw = String(value || '').toLowerCase();
-  if (['open', 'connected', 'connectado', 'conectado', 'true'].includes(raw)) return 'open';
+  if (['open', 'connected', 'connectado', 'conectado', 'true', 'loggedin'].includes(raw)) return 'open';
   if (raw.includes('connecting') || raw.includes('qr') || raw.includes('pairing')) return 'connecting';
   return 'close';
+}
+
+function readUazapiStatus(payload: any) {
+  return (
+    payload?.instance?.status ||
+    payload?.status?.status ||
+    payload?.state ||
+    ''
+  );
+}
+
+function readUazapiConnected(payload: any) {
+  return (
+    payload?.connected === true ||
+    payload?.loggedIn === true ||
+    payload?.instance?.connected === true ||
+    payload?.instance?.loggedIn === true ||
+    payload?.status?.connected === true ||
+    payload?.status?.loggedIn === true ||
+    Boolean(payload?.jid || payload?.status?.jid || payload?.instance?.jid || payload?.instance?.owner)
+  );
 }
 
 function extractUazapiQrCode(payload: any): string | null {
@@ -77,8 +98,8 @@ function extractUazapiQrCode(payload: any): string | null {
 async function fetchUazapiInstanceState(instance: string) {
   try {
     const payload = await uazapiFetch('/instance/status', { method: 'GET' }, { instanceName: instance });
-    const statusStr = payload?.status || payload?.instance?.status || '';
-    const isConnected = payload?.instance?.connected === true || payload?.connected === true;
+    const statusStr = readUazapiStatus(payload);
+    const isConnected = readUazapiConnected(payload);
     return normalizeUazapiState(statusStr, isConnected);
   } catch (error) {
     console.warn(`[GET /api/inbox/uazapi/connect] status check failed for ${instance}. returning close.`, error);
