@@ -167,7 +167,7 @@ export async function configureUazapiWebhook(instanceName: string) {
   try {
     let webhookUrl = process.env.UAZAPI_WEBHOOK_URL;
     if (!webhookUrl) {
-      const isInternalDocker = String(process.env.UAZAPI_URL).includes('uazapi');
+      const isInternalDocker = String(process.env.UAZAPI_URL).includes('uazapi_uazapi');
       if (isInternalDocker) {
         webhookUrl = 'http://oriontrack_oriontrack:3000/api/inbox/uazapi/webhook';
       } else {
