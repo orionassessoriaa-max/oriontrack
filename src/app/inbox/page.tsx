@@ -309,7 +309,7 @@ export default function BrokerInboxPage() {
     if (!token) return;
 
     try {
-      const response = await fetch('/api/inbox/evolution/connect', {
+      const response = await fetch('/api/inbox/uazapi/connect', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -777,7 +777,7 @@ export default function BrokerInboxPage() {
     }
 
     try {
-      const response = await fetch('/api/inbox/evolution/connect', {
+      const response = await fetch('/api/inbox/uazapi/connect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -826,7 +826,7 @@ export default function BrokerInboxPage() {
     }
 
     try {
-      const response = await fetch('/api/inbox/evolution/connect', {
+      const response = await fetch('/api/inbox/uazapi/connect', {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,

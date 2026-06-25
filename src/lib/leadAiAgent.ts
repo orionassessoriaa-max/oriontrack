@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { evolutionFetch, evolutionInstanceName, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
+import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
@@ -314,12 +314,11 @@ async function insertMessage(conversaId: string, direction: 'inbound' | 'outboun
 }
 
 async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: string) {
-  const instance = evolutionInstanceName(adminProfile.id);
-  const instanceApiKey = await getEvolutionInstanceApiKey(instance);
-  return evolutionFetch(`/message/sendText/${instance}`, {
+  const instance = uazapiInstanceName(adminProfile.id);
+  return uazapiFetch('/send/text', {
     method: 'POST',
     body: JSON.stringify({ number: normalizePhone(phone), text }),
-  }, instanceApiKey);
+  }, { instanceName: instance });
 }
 
 function cleanTextForSpeech(text: string) {
@@ -459,23 +458,23 @@ async function textToSpeechBase64(text: string) {
 }
 
 async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: string) {
-  const instance = evolutionInstanceName(adminProfile.id);
-  const instanceApiKey = await getEvolutionInstanceApiKey(instance);
+  const instance = uazapiInstanceName(adminProfile.id);
   const { audio, provider, speechText } = await textToSpeechBase64(text);
 
-  const payload = await evolutionFetch(`/message/sendWhatsAppAudio/${instance}`, {
+  const dataUrl = audio.includes(';base64,') 
+    ? audio 
+    : `data:audio/mpeg;base64,${audio}`;
+
+  const payload = await uazapiFetch('/send/media', {
     method: 'POST',
     body: JSON.stringify({
       number: normalizePhone(phone),
-      audio,
-      delay: 2000,
-      options: {
-        delay: 1200,
-        presence: 'recording',
-        encoding: true,
-      },
+      path: dataUrl,
+      file: dataUrl,
+      type: 'audio',
+      caption: undefined,
     }),
-  }, instanceApiKey);
+  }, { instanceName: instance });
 
   return { ...(payload || {}), tts_provider: provider, tts_text: speechText };
 }
@@ -678,7 +677,7 @@ export async function startLeadAiIfEligible(leadId: string) {
     const payload = await sendAiAdminText(adminProfile, phone, intro);
     await insertMessage(conversation.id, 'outbound', aiConfig.persona, intro, {
       ...(payload || {}),
-      instance: evolutionInstanceName(adminProfile.id),
+      instance: uazapiInstanceName(adminProfile.id),
       ai_agent: aiConfig.persona,
     });
   } catch (error: any) {
@@ -760,7 +759,7 @@ export async function continueLeadAiFromIncoming(options: {
         const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', part);
         await insertMessage(options.conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
           ...(payload || {}),
-          instance: evolutionInstanceName(adminProfile.id),
+          instance: uazapiInstanceName(adminProfile.id),
           provider_message_id: providerMessageId(payload),
           ai_agent: aiConfig.persona,
           ai_text: part,
@@ -780,7 +779,7 @@ export async function continueLeadAiFromIncoming(options: {
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, part, {
       ...(payload || {}),
-      instance: evolutionInstanceName(adminProfile.id),
+      instance: uazapiInstanceName(adminProfile.id),
       ai_agent: aiConfig.persona,
     });
   }

@@ -77,7 +77,7 @@ export default function ProfilePage() {
         const token = sessionData.session?.access_token;
         if (!token) return;
 
-        const response = await fetch('/api/inbox/evolution/connect', {
+        const response = await fetch('/api/inbox/uazapi/connect', {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -176,7 +176,7 @@ export default function ProfilePage() {
     }
 
     try {
-      const response = await fetch('/api/inbox/evolution/connect', {
+      const response = await fetch('/api/inbox/uazapi/connect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,7 +210,7 @@ export default function ProfilePage() {
     if (!token) return;
 
     try {
-      const response = await fetch('/api/inbox/evolution/connect', {
+      const response = await fetch('/api/inbox/uazapi/connect', {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -234,7 +234,7 @@ export default function ProfilePage() {
         const token = await getToken();
         if (!token) return;
         try {
-          const response = await fetch('/api/inbox/evolution/connect', {
+          const response = await fetch('/api/inbox/uazapi/connect', {
             method: 'GET',
             headers: { Authorization: `Bearer ${token}` },
           });

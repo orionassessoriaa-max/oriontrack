@@ -1,0 +1,385 @@
+import { NextResponse } from 'next/server';
+import { normalizePhone, profileIdFromUazapiInstance } from '@/lib/uazapi';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { continueLeadAiFromIncoming, isAiOutbound } from '@/lib/leadAiAgent';
+
+function readText(body: any) {
+  return String(
+    body?.content ||
+    body?.text ||
+    body?.message ||
+    body?.messageText ||
+    body?.message?.conversation ||
+    body?.message?.extendedTextMessage?.text ||
+    body?.message?.imageMessage?.caption ||
+    body?.message?.videoMessage?.caption ||
+    ''
+  ).trim();
+}
+
+function isCallEvent(body: any, event: string) {
+  const messageType = String(body?.type || body?.messageType || '').toLowerCase();
+  return (
+    event.includes('CALL') ||
+    messageType.includes('call') ||
+    Boolean(body?.call)
+  );
+}
+
+function readCallText(body: any) {
+  const status = String(body?.status || body?.call?.status || '').trim();
+  let statusText = status;
+  if (status === 'offer') statusText = 'chamando';
+  else if (status === 'accept') statusText = 'atendida';
+  else if (status === 'reject') statusText = 'recusada';
+  else if (status === 'timeout') statusText = 'sem resposta';
+
+  const duration = String(body?.duration || body?.call?.duration || '').trim();
+  const suffix = [
+    duration ? `Duração: ${duration}` : null,
+    statusText ? `Status: ${statusText}` : null,
+  ].filter(Boolean).join(' | ');
+
+  const isVideoCall = Boolean(body?.isVideo || body?.call?.isVideo);
+  const typeLabel = isVideoCall ? 'Ligação de vídeo' : 'Ligação de voz';
+
+  return suffix ? `${typeLabel}\n${suffix}` : typeLabel;
+}
+
+async function transcribeAudio(base64: string, mimeType = 'audio/ogg') {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || !base64) return '';
+
+  const cleanBase64 = base64.includes(';base64,') ? base64.split(';base64,')[1] : base64;
+  const bytes = Buffer.from(cleanBase64, 'base64');
+  if (!bytes.length) return '';
+
+  const formData = new FormData();
+  const fileName = mimeType.includes('mpeg') || mimeType.includes('mp3') ? 'audio.mp3' : 'audio.ogg';
+  formData.append('file', new Blob([bytes], { type: mimeType }), fileName);
+  formData.append('model', process.env.ORION_LEAD_AI_TRANSCRIBE_MODEL || 'whisper-1');
+  formData.append('language', 'pt');
+
+  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: formData,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error('[uazapi_webhook] Audio transcription failed:', payload);
+    return '';
+  }
+
+  return String(payload?.text || '').trim();
+}
+
+async function transcribeUazapiAudio(body: any) {
+  if (body?.transcription || body?.audioText || body?.text_transcript) {
+    return String(body.transcription || body.audioText || body.text_transcript).trim();
+  }
+
+  let base64 = body?.base64 || body?.file || body?.audioMessage?.base64 || '';
+  if (!base64 && (body?.url || body?.fileUrl || body?.mediaUrl)) {
+    try {
+      const url = body.url || body.fileUrl || body.mediaUrl;
+      const res = await fetch(url);
+      if (res.ok) {
+        const buffer = await res.arrayBuffer();
+        base64 = Buffer.from(buffer).toString('base64');
+      }
+    } catch (e) {
+      console.error('[uazapi_webhook] Failed to download audio from url:', e);
+    }
+  }
+
+  if (base64) {
+    return transcribeAudio(base64, body?.mimetype || 'audio/ogg');
+  }
+
+  return '';
+}
+
+async function stopLeadAiForHumanOutbound(leadId: string, profileName?: string | null) {
+  const now = new Date().toISOString();
+  const actor = String(profileName || 'Atendente').trim();
+
+  const { data: session } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .select('id, summary')
+    .eq('lead_id', leadId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!session) return;
+
+  const suffix = `\n\nIA encerrada: ${actor} assumiu o atendimento em ${now}.`;
+
+  await supabaseAdmin
+    .from('lead_ai_sessions')
+    .update({
+      status: 'handoff',
+      summary: `${session.summary || ''}${suffix}`.trim(),
+      updated_at: now,
+    })
+    .eq('id', session.id);
+}
+
+async function resolveProfileCorretorScope(profile: any) {
+  const ids = new Set<string>();
+  if (profile?.corretor_id) ids.add(profile.corretor_id);
+
+  const brokerageName = String(profile?.nome_empresa || '').trim();
+  if (brokerageName) {
+    const { data } = await supabaseAdmin
+      .from('corretores')
+      .select('id')
+      .eq('nome_empresa', brokerageName);
+
+    for (const row of data || []) {
+      if (row?.id) ids.add(row.id);
+    }
+  }
+
+  return Array.from(ids);
+}
+
+async function findLead(profile: any, phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8) return null;
+
+  const last8 = digits.slice(-8);
+  const last8WithHyphen = `${last8.slice(0, 4)}-${last8.slice(4)}`;
+
+  let query = supabaseAdmin
+    .from('leads')
+    .select('id, nome, telefone, corretor_id, responsavel_profile_id')
+    .or(`telefone.ilike.%${last8}%,telefone.ilike.%${last8WithHyphen}%`);
+
+  if (profile.tipo_usuario === 'corretor_membro') {
+    query = query.eq('responsavel_profile_id', profile.id);
+  } else {
+    const scopeIds = await resolveProfileCorretorScope(profile);
+    if (scopeIds.length === 0) return null;
+    query = query.in('corretor_id', scopeIds);
+  }
+
+  const { data } = await query
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data;
+}
+
+async function findConversation(corretorId: string, phone: string, leadId?: string | null) {
+  if (leadId) {
+    const { data } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .select('*')
+      .eq('corretor_id', corretorId)
+      .eq('lead_id', leadId)
+      .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) return data;
+  }
+
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8) return null;
+  const last8 = digits.slice(-8);
+
+  const { data } = await supabaseAdmin
+    .from('whatsapp_conversas')
+    .select('*')
+    .eq('corretor_id', corretorId)
+    .or(`telefone.eq.${phone},telefone.ilike.%${last8}%`)
+    .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data;
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const event = String(body?.wook || body?.event || body?.type || '').toUpperCase();
+
+    const callEvent = isCallEvent(body, event);
+
+    // No UAZAPI, a mensagem recebida tem wook "RECEIVE_MESSAGE" ou tipo similar.
+    // Aceitamos qualquer evento que contenha MESSAGE, SEND, ou seja um Call.
+    if (event && !event.includes('MESSAGE') && !event.includes('SEND') && !callEvent) {
+      return NextResponse.json({ ok: true, ignored: true });
+    }
+
+    const instance = String(body?.session || body?.instance || body?.instanceName || '');
+    const profileId = profileIdFromUazapiInstance(instance);
+    if (!profileId) return NextResponse.json({ ok: true, ignored: true });
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
+      .eq('id', profileId)
+      .maybeSingle();
+
+    if (!profile?.corretor_id) return NextResponse.json({ ok: true, ignored: true });
+
+    let message = callEvent ? readCallText(body) : readText(body);
+    
+    const msgType = String(body?.type || body?.messageType || '').toLowerCase();
+    const hasAudio = msgType === 'audio' || msgType === 'voice' || msgType.includes('audio') || msgType.includes('voice');
+    const hasImage = msgType === 'image' || msgType.includes('image');
+    const hasVideo = msgType === 'video' || msgType.includes('video');
+    const hasDocument = msgType === 'document' || msgType.includes('document');
+    const hasMedia = hasAudio || hasImage || hasVideo || hasDocument;
+
+    const providerId = String(body?.id || body?.key?.id || '');
+    let audioTranscript = '';
+    let aiCustomerMessage = message;
+
+    if (providerId) {
+      const { data: existing } = await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .select('id')
+        .eq('provider_message_id', providerId)
+        .limit(1)
+        .maybeSingle();
+      if (existing) return NextResponse.json({ ok: true, duplicated: true });
+    }
+
+    if (hasAudio) {
+      try {
+        audioTranscript = await transcribeUazapiAudio(body);
+        if (audioTranscript) {
+          aiCustomerMessage = `Audio transcrito do cliente: ${audioTranscript}`;
+        }
+      } catch (audioErr) {
+        console.error('[uazapi_webhook] Failed processing inbound audio:', audioErr);
+      }
+    }
+
+    if (!message && hasMedia) {
+      if (hasAudio) message = '🎤 Mensagem de voz';
+      else if (hasImage) message = '📷 Imagem';
+      else if (hasVideo) message = '🎥 Vídeo';
+      else if (hasDocument) message = '📎 Arquivo';
+    }
+
+    const remoteJid = String(body?.phone || body?.sender || body?.from || body?.key?.remoteJid || '');
+    let phone = normalizePhone(remoteJid.split('@')[0]);
+
+    // Tratar quando a ligação de voz é efetuada pelo próprio corretor de fora do CRM.
+    let isOutboundCall = false;
+    const brokerPhone = profile?.telefone ? normalizePhone(profile.telefone) : '';
+    if (callEvent && brokerPhone && phone === brokerPhone) {
+      isOutboundCall = true;
+      const otherJid = String(body?.to || body?.chatId || body?.remoteJid || '');
+      const otherPhone = normalizePhone(otherJid.split('@')[0]);
+      if (otherPhone && otherPhone !== brokerPhone) {
+        phone = otherPhone;
+      }
+    }
+
+    if (!message || !phone) return NextResponse.json({ ok: true, ignored: true });
+
+    if (!aiCustomerMessage) aiCustomerMessage = audioTranscript || message;
+    const lead = await findLead(profile, phone);
+    const currentConversation = await findConversation(profile.corretor_id, phone, lead?.id || null);
+
+    // Ignorar mensagens de contatos pessoais
+    if (!lead && !currentConversation) {
+      console.log(`[uazapi_webhook] Ignorando contato pessoal: ${phone} (corretor: ${profile.corretor_id})`);
+      return NextResponse.json({ ok: true, ignored: true, reason: 'Not a CRM lead' });
+    }
+
+    const contactName = body?.pushName || body?.senderName || body?.name || lead?.nome || phone;
+
+    let conversation = currentConversation;
+    if (!conversation) {
+      const { data: created, error } = await supabaseAdmin
+        .from('whatsapp_conversas')
+        .insert([{
+          corretor_id: profile.corretor_id,
+          lead_id: lead?.id || null,
+          telefone: phone,
+          nome_contato: lead?.nome || contactName,
+          status: 'aberta',
+          ultima_mensagem_at: new Date().toISOString(),
+        }])
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      conversation = created;
+    } else {
+      await supabaseAdmin
+        .from('whatsapp_conversas')
+        .update({
+          lead_id: currentConversation.lead_id || lead?.id || null,
+          nome_contato: lead?.nome || currentConversation.nome_contato || contactName,
+          telefone: currentConversation.telefone || phone,
+          ultima_mensagem_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', currentConversation.id);
+    }
+
+    const fromMe = Boolean(
+      body?.fromMe === true ||
+      body?.key?.fromMe === true ||
+      event === 'SEND_MESSAGE' ||
+      event.includes('SEND') ||
+      isOutboundCall
+    );
+
+    if (fromMe && isAiOutbound(phone, message)) {
+      console.log(`[uazapi_webhook] Ignorando retorno de mensagem enviada pela propria IA: ${phone}`);
+      return NextResponse.json({ ok: true, ignored: true, ai_outbound: true });
+    }
+
+    await supabaseAdmin.from('whatsapp_mensagens').insert([{
+      conversa_id: conversation.id,
+      direction: fromMe ? 'outbound' : 'inbound',
+      remetente: fromMe ? (profile.nome || 'Orion') : contactName,
+      mensagem: message,
+      provider_message_id: providerId || null,
+      metadata: {
+        ...(body || {}),
+        messageType: callEvent ? 'call' : body?.type,
+        mediaType: callEvent ? 'call' : body?.type,
+        isBrokerCall: callEvent ? fromMe : undefined,
+        brokerName: (callEvent && fromMe) ? (profile.nome || 'Orion') : undefined,
+        audio_transcript: audioTranscript || undefined,
+        ai_customer_message: aiCustomerMessage || undefined,
+      },
+    }]);
+
+    if (fromMe && lead?.id) {
+      await stopLeadAiForHumanOutbound(lead.id, profile.nome);
+    }
+
+    if (!fromMe && lead?.id) {
+      try {
+        await continueLeadAiFromIncoming({
+          leadId: lead.id,
+          conversationId: conversation.id,
+          customerMessage: aiCustomerMessage || message,
+          incomingWasAudio: hasAudio,
+        });
+      } catch (aiErr) {
+        console.error('[uazapi_webhook] Failed continuing lead AI:', aiErr);
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    console.error('uazapi_webhook_error', error);
+    return NextResponse.json({ ok: false, error: 'Nao consegui registrar a mensagem.' }, { status: 500 });
+  }
+}

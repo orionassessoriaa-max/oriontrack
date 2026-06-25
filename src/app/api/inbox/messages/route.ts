@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { evolutionFetch, evolutionInstanceName, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
+import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
@@ -273,65 +273,35 @@ export async function POST(request: Request) {
       }
     }
 
-    const instance = evolutionInstanceName(senderProfileId);
-    const instanceApiKey = await getEvolutionInstanceApiKey(instance);
+    const instance = uazapiInstanceName(senderProfileId);
     
     let payload: any = null;
 
     if (mediaBase64) {
-      // Remove prefixo do data URI se houver
-      const base64Data = mediaBase64.includes(';base64,') 
-        ? mediaBase64.split(';base64,')[1] 
-        : mediaBase64;
+      const dataUrl = mediaBase64.includes(';base64,') 
+        ? mediaBase64 
+        : `data:${mimetype || 'application/octet-stream'};base64,${mediaBase64}`;
 
-      if (mediatype === 'audio') {
-        try {
-          payload = await evolutionFetch(`/message/sendWhatsAppAudio/${instance}`, {
-            method: 'POST',
-            body: JSON.stringify({
-              number: phone,
-              audio: base64Data,
-              options: {
-                delay: 1200,
-                presence: 'recording',
-                encoding: true
-              }
-            }),
-          }, instanceApiKey);
-        } catch (audioError) {
-          console.warn('[POST /api/inbox/messages] Audio endpoint failed, retrying as media:', audioError);
-          payload = await evolutionFetch(`/message/sendMedia/${instance}`, {
-            method: 'POST',
-            body: JSON.stringify({
-              number: phone,
-              mediatype: 'audio',
-              mimetype: mimetype || 'audio/webm',
-              media: base64Data,
-              fileName: fileName || 'audio.webm',
-            }),
-          }, instanceApiKey);
-        }
-      } else {
-        payload = await evolutionFetch(`/message/sendMedia/${instance}`, {
-          method: 'POST',
-          body: JSON.stringify({
-            number: phone,
-            mediatype: mediatype || 'document',
-            mimetype: mimetype || 'application/octet-stream',
-            media: base64Data,
-            fileName: fileName || 'arquivo',
-            caption: text || undefined,
-          }),
-        }, instanceApiKey);
-      }
+      const mediaTypeMapped = mediatype === 'audio' ? 'audio' : (mediatype || 'document');
+
+      payload = await uazapiFetch('/send/media', {
+        method: 'POST',
+        body: JSON.stringify({
+          number: phone,
+          path: dataUrl,
+          file: dataUrl,
+          type: mediaTypeMapped,
+          caption: text || undefined,
+        }),
+      }, { instanceName: instance });
     } else {
-      payload = await evolutionFetch(`/message/sendText/${instance}`, {
+      payload = await uazapiFetch('/send/text', {
         method: 'POST',
         body: JSON.stringify({
           number: phone,
           text,
         }),
-      }, instanceApiKey);
+      }, { instanceName: instance });
     }
 
     const providerId =

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
+import { uazapiFetch, normalizePhone } from '@/lib/uazapi';
 
 export const APOLO_MASTER_INSTANCE = 'apolo_master_sender';
 
@@ -60,34 +60,33 @@ export async function sendApoloWhatsApp({ type, title, message, profiles }: Send
   }
 
   const prefsByProfile = new Map((preferences || []).map((pref: any) => [pref.profile_id, pref]));
-  const instanceApiKey = await getEvolutionInstanceApiKey(APOLO_MASTER_INSTANCE);
   const results = [];
-
-  for (const profile of uniqueProfiles) {
-    const pref = prefsByProfile.get(profile.id) as any;
-    if (!pref?.whatsapp_enabled || !isTypeEnabled(pref.tipos, type)) {
-      results.push({ profile_id: profile.id, status: 'skipped', reason: 'Preferencia desativada.' });
-      continue;
-    }
-
-    const phone = normalizePhone(pref.telefone || profile.telefone);
-    if (!phone) {
-      results.push({ profile_id: profile.id, status: 'failed', reason: 'Telefone nao informado.' });
-      continue;
-    }
-
-    const text = `*${title}*\n\nOla, ${firstName(profile.nome)}!\n\n${message}\n\n_Apolo Notificador - Orion Track_`;
-    try {
-      await evolutionFetch(`/message/sendText/${APOLO_MASTER_INSTANCE}`, {
-        method: 'POST',
-        body: JSON.stringify({ number: phone, text }),
-      }, instanceApiKey);
-      results.push({ profile_id: profile.id, status: 'success', phone });
-    } catch (err: any) {
-      console.error(`[Apolo notifications] send failed for ${profile.id}:`, err);
-      results.push({ profile_id: profile.id, status: 'failed', reason: err.message || 'Erro Evolution API' });
-    }
-  }
+ 
+   for (const profile of uniqueProfiles) {
+     const pref = prefsByProfile.get(profile.id) as any;
+     if (!pref?.whatsapp_enabled || !isTypeEnabled(pref.tipos, type)) {
+       results.push({ profile_id: profile.id, status: 'skipped', reason: 'Preferencia desativada.' });
+       continue;
+     }
+ 
+     const phone = normalizePhone(pref.telefone || profile.telefone);
+     if (!phone) {
+       results.push({ profile_id: profile.id, status: 'failed', reason: 'Telefone nao informado.' });
+       continue;
+     }
+ 
+     const text = `*${title}*\n\nOla, ${firstName(profile.nome)}!\n\n${message}\n\n_Apolo Notificador - Orion Track_`;
+     try {
+       await uazapiFetch('/send/text', {
+         method: 'POST',
+         body: JSON.stringify({ number: phone, text }),
+       }, { instanceName: APOLO_MASTER_INSTANCE });
+       results.push({ profile_id: profile.id, status: 'success', phone });
+     } catch (err: any) {
+       console.error(`[Apolo notifications] send failed for ${profile.id}:`, err);
+       results.push({ profile_id: profile.id, status: 'failed', reason: err.message || 'Erro UAZAPI' });
+     }
+   }
 
   return results;
 }
