@@ -7,6 +7,7 @@ function readText(body: any) {
   return String(
     body?.content ||
     body?.text ||
+    body?.caption ||
     body?.message ||
     body?.messageText ||
     body?.message?.conversation ||
@@ -15,6 +16,92 @@ function readText(body: any) {
     body?.message?.videoMessage?.caption ||
     ''
   ).trim();
+}
+
+function pickString(...values: any[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+function stripDataUrl(value?: string | null) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return raw.includes(';base64,') ? raw.split(';base64,')[1] : raw;
+}
+
+function readUazapiMediaMetadata(body: any) {
+  const mediaMessage =
+    body?.audioMessage ||
+    body?.imageMessage ||
+    body?.videoMessage ||
+    body?.documentMessage ||
+    body?.message?.audioMessage ||
+    body?.message?.imageMessage ||
+    body?.message?.videoMessage ||
+    body?.message?.documentMessage ||
+    body?.data?.message?.audioMessage ||
+    body?.data?.message?.imageMessage ||
+    body?.data?.message?.videoMessage ||
+    body?.data?.message?.documentMessage ||
+    null;
+
+  const mediaUrl = pickString(
+    body?.media_url,
+    body?.mediaUrl,
+    body?.fileUrl,
+    body?.downloadUrl,
+    body?.url,
+    body?.data?.media_url,
+    body?.data?.mediaUrl,
+    body?.data?.fileUrl,
+    body?.data?.downloadUrl,
+    body?.data?.url,
+    mediaMessage?.mediaUrl,
+    mediaMessage?.fileUrl,
+    mediaMessage?.downloadUrl,
+    mediaMessage?.url
+  );
+
+  return {
+    media_base64: stripDataUrl(pickString(
+      body?.media_base64,
+      body?.mediaBase64,
+      body?.base64,
+      body?.file,
+      body?.media,
+      body?.data?.media_base64,
+      body?.data?.mediaBase64,
+      body?.data?.base64,
+      body?.data?.file,
+      body?.data?.media,
+      mediaMessage?.base64,
+      mediaMessage?.file,
+      mediaMessage?.media
+    )) || undefined,
+    media_url: mediaUrl && /^https?:\/\//i.test(mediaUrl) ? mediaUrl : undefined,
+    media_mimetype: pickString(
+      body?.media_mimetype,
+      body?.mimetype,
+      body?.mimeType,
+      body?.contentType,
+      body?.data?.mimetype,
+      body?.data?.mimeType,
+      mediaMessage?.mimetype,
+      mediaMessage?.mimeType
+    ) || undefined,
+    media_file_name: pickString(
+      body?.media_file_name,
+      body?.fileName,
+      body?.filename,
+      body?.name,
+      body?.data?.fileName,
+      body?.data?.filename,
+      mediaMessage?.fileName,
+      mediaMessage?.filename
+    ) || undefined,
+  };
 }
 
 function isCallEvent(body: any, event: string) {
@@ -351,6 +438,7 @@ export async function POST(request: Request) {
       provider_message_id: providerId || null,
       metadata: {
         ...(body || {}),
+        ...readUazapiMediaMetadata(body),
         messageType: callEvent ? 'call' : body?.type,
         mediaType: callEvent ? 'call' : body?.type,
         isBrokerCall: callEvent ? fromMe : undefined,

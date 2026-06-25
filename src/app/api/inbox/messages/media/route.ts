@@ -1,16 +1,19 @@
 import { NextResponse } from 'next/server';
 import { requireApiUser } from '@/lib/api/security';
-import { evolutionFetch, evolutionInstanceName, getEvolutionInstanceApiKey } from '@/lib/evolution';
+import { uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 
 function pickMediaMessage(metadata: any) {
   const roots = [
+    metadata,
     metadata?.message,
     metadata?.data?.message,
     metadata?.message?.message,
     metadata?.data?.message?.message,
+    metadata?.message?.ephemeralMessage?.message,
+    metadata?.data?.message?.ephemeralMessage?.message,
   ];
 
   for (const root of roots) {
@@ -27,20 +30,112 @@ function pickMediaMessage(metadata: any) {
   return null;
 }
 
+function pickString(...values: any[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function stripDataUrl(value?: string | null) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  return raw.includes(';base64,') ? raw.split(';base64,')[1] : raw;
+}
+
+function pickMediaBase64(metadata: any) {
+  const mediaMessage = pickMediaMessage(metadata);
+  return stripDataUrl(pickString(
+    metadata?.media_base64,
+    metadata?.mediaBase64,
+    metadata?.base64,
+    metadata?.file,
+    metadata?.media,
+    metadata?.data?.media_base64,
+    metadata?.data?.mediaBase64,
+    metadata?.data?.base64,
+    metadata?.data?.file,
+    metadata?.data?.media,
+    metadata?.message?.base64,
+    metadata?.message?.file,
+    metadata?.message?.media,
+    metadata?.audioMessage?.base64,
+    metadata?.imageMessage?.base64,
+    metadata?.videoMessage?.base64,
+    metadata?.documentMessage?.base64,
+    mediaMessage?.base64,
+    mediaMessage?.file,
+    mediaMessage?.media
+  ));
+}
+
 function pickMediaUrl(metadata: any) {
-  return (
-    metadata?.message?.audioMessage?.url ||
-    metadata?.data?.message?.audioMessage?.url ||
-    metadata?.message?.imageMessage?.url ||
-    metadata?.data?.message?.imageMessage?.url ||
-    metadata?.message?.videoMessage?.url ||
-    metadata?.data?.message?.videoMessage?.url ||
-    metadata?.message?.documentMessage?.url ||
-    metadata?.data?.message?.documentMessage?.url ||
-    metadata?.url ||
-    metadata?.data?.url ||
-    null
+  const mediaMessage = pickMediaMessage(metadata);
+  const value = pickString(
+    metadata?.media_url,
+    metadata?.mediaUrl,
+    metadata?.fileUrl,
+    metadata?.downloadUrl,
+    metadata?.url,
+    metadata?.path,
+    metadata?.data?.media_url,
+    metadata?.data?.mediaUrl,
+    metadata?.data?.fileUrl,
+    metadata?.data?.downloadUrl,
+    metadata?.data?.url,
+    metadata?.message?.mediaUrl,
+    metadata?.message?.fileUrl,
+    metadata?.message?.url,
+    metadata?.message?.audioMessage?.url,
+    metadata?.data?.message?.audioMessage?.url,
+    metadata?.message?.imageMessage?.url,
+    metadata?.data?.message?.imageMessage?.url,
+    metadata?.message?.videoMessage?.url,
+    metadata?.data?.message?.videoMessage?.url,
+    metadata?.message?.documentMessage?.url,
+    metadata?.data?.message?.documentMessage?.url,
+    mediaMessage?.url,
+    mediaMessage?.mediaUrl,
+    mediaMessage?.fileUrl,
+    mediaMessage?.downloadUrl
   );
+
+  return value && /^https?:\/\//i.test(value) ? value : null;
+}
+
+function pickProviderPayloadBase64(payload: any) {
+  return stripDataUrl(pickString(
+    payload?.base64,
+    payload?.media,
+    payload?.file,
+    payload?.data?.base64,
+    payload?.data?.media,
+    payload?.data?.file,
+    payload?.response?.base64,
+    payload?.response?.media,
+    payload?.response?.file
+  ));
+}
+
+function pickProviderPayloadUrl(payload: any) {
+  const value = pickString(
+    payload?.media_url,
+    payload?.mediaUrl,
+    payload?.fileUrl,
+    payload?.downloadUrl,
+    payload?.url,
+    payload?.data?.media_url,
+    payload?.data?.mediaUrl,
+    payload?.data?.fileUrl,
+    payload?.data?.downloadUrl,
+    payload?.data?.url,
+    payload?.response?.mediaUrl,
+    payload?.response?.fileUrl,
+    payload?.response?.downloadUrl,
+    payload?.response?.url
+  );
+
+  return value && /^https?:\/\//i.test(value) ? value : null;
 }
 
 async function getMessageAndConversation(messageId: string) {
@@ -114,31 +209,45 @@ export async function GET(request: Request) {
 
     const mediaMessage = pickMediaMessage(message.metadata);
     const mimeType =
+      message.metadata?.media_mimetype ||
+      message.metadata?.mediaMimeType ||
       mediaMessage?.mimetype ||
       mediaMessage?.mimeType ||
       message.metadata?.mimetype ||
       message.metadata?.mimeType ||
       'application/octet-stream';
     const fileName =
+      message.metadata?.media_file_name ||
+      message.metadata?.mediaFileName ||
       mediaMessage?.fileName ||
       mediaMessage?.filename ||
       message.metadata?.fileName ||
       message.metadata?.filename ||
       null;
 
-    const providerId = message.provider_message_id;
-    if (!providerId) {
-      const directUrl = pickMediaUrl(message.metadata);
-      if (directUrl) {
-        return NextResponse.json({ url: directUrl, mimeType, fileName });
-      }
-      return NextResponse.json({ error: 'Esta mensagem nao possui ID do provedor de WhatsApp.' }, { status: 400 });
+    const directBase64 = pickMediaBase64(message.metadata);
+    if (directBase64) {
+      return NextResponse.json({ base64: directBase64, mimeType, fileName });
     }
 
-    // Identificar a instancia correta
-    let instance = message.metadata?.instance || message.metadata?.instanceName || message.metadata?.data?.instance;
+    const directUrl = pickMediaUrl(message.metadata);
+    if (directUrl) {
+      return NextResponse.json({ url: directUrl, mimeType, fileName });
+    }
+
+    const providerId = message.provider_message_id;
+    if (!providerId) {
+      return NextResponse.json({ error: 'Esta mensagem nao possui arquivo salvo para abrir.' }, { status: 400 });
+    }
+
+    let instance =
+      message.metadata?.instance ||
+      message.metadata?.session ||
+      message.metadata?.instanceName ||
+      message.metadata?.data?.instance ||
+      message.metadata?.data?.session;
+
     if (!instance) {
-      // fallback: buscar o profile principal do corretor
       const { data: ownerProfile } = await supabaseAdmin
         .from('profiles')
         .select('id')
@@ -148,45 +257,71 @@ export async function GET(request: Request) {
         .maybeSingle();
 
       const profileIdForInstance = ownerProfile ? ownerProfile.id : conversation.corretor_id;
-      instance = evolutionInstanceName(profileIdForInstance);
+      instance = uazapiInstanceName(profileIdForInstance);
     }
 
-    const instanceApiKey = await getEvolutionInstanceApiKey(instance);
-
-    // Requisitar midia da Evolution API
-    try {
-      console.log(`[Media API] Solicitando base64 para providerId: ${providerId} na instancia: ${instance}`);
-      const payload = await evolutionFetch(`/chat/getBase64FromMediaMessage/${instance}`, {
-        method: 'POST',
-        body: JSON.stringify({
+    const attempts = [
+      {
+        path: '/message/download',
+        body: { id: providerId, messageId: providerId },
+      },
+      {
+        path: '/message/media',
+        body: { id: providerId, messageId: providerId },
+      },
+      {
+        path: '/chat/getBase64FromMediaMessage',
+        body: {
           message: {
             key: {
               id: providerId,
             },
           },
-        }),
-      }, instanceApiKey);
+        },
+      },
+    ];
 
-      const base64 = payload?.base64 || payload?.data?.base64 || payload?.media || payload?.data?.media;
-      if (base64) {
-        return NextResponse.json({
-          base64,
-          mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
-          fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
-        });
+    for (const attempt of attempts) {
+      try {
+        console.log(`[Media API] Solicitando midia UAZAPI para providerId: ${providerId} na instancia: ${instance} via ${attempt.path}`);
+        const payload = await uazapiFetch(attempt.path, {
+          method: 'POST',
+          body: JSON.stringify(attempt.body),
+        }, { instanceName: instance });
+
+        const base64 = pickProviderPayloadBase64(payload);
+        if (base64) {
+          return NextResponse.json({
+            base64,
+            mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
+            fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
+          });
+        }
+
+        const url = pickProviderPayloadUrl(payload);
+        if (url) {
+          return NextResponse.json({
+            url,
+            mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
+            fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
+          });
+        }
+      } catch (uazapiErr: any) {
+        console.warn(`[Media API] UAZAPI nao retornou midia via ${attempt.path}:`, uazapiErr?.message || uazapiErr);
       }
-    } catch (evoErr: any) {
-      console.error('[Media API Error calling Evolution]', evoErr);
     }
 
-    // Fallback: verificar se existe URL de midia no metadata
-    const directUrl = pickMediaUrl(message.metadata);
-
-    if (directUrl) {
-      return NextResponse.json({ url: directUrl, mimeType, fileName });
+    const fallbackBase64 = pickMediaBase64(message.metadata);
+    if (fallbackBase64) {
+      return NextResponse.json({ base64: fallbackBase64, mimeType, fileName });
     }
 
-    return NextResponse.json({ error: 'Nao consegui extrair a midia desta mensagem da Evolution API.' }, { status: 404 });
+    const fallbackUrl = pickMediaUrl(message.metadata);
+    if (fallbackUrl) {
+      return NextResponse.json({ url: fallbackUrl, mimeType, fileName });
+    }
+
+    return NextResponse.json({ error: 'Nao consegui extrair a midia desta mensagem pela UAZAPI.' }, { status: 404 });
   } catch (error: any) {
     console.error('[Media API Root Error]', error);
     return NextResponse.json({ error: error.message || 'Erro interno.' }, { status: 500 });

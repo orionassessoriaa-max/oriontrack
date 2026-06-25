@@ -276,6 +276,7 @@ export async function POST(request: Request) {
     const instance = uazapiInstanceName(senderProfileId);
     
     let payload: any = null;
+    let outboundMediaMetadata: Record<string, any> = {};
 
     if (mediaBase64) {
       const dataUrl = mediaBase64.includes(';base64,') 
@@ -283,6 +284,13 @@ export async function POST(request: Request) {
         : `data:${mimetype || 'application/octet-stream'};base64,${mediaBase64}`;
 
       const mediaTypeMapped = mediatype === 'audio' ? 'audio' : (mediatype || 'document');
+      const cleanBase64 = dataUrl.includes(';base64,') ? dataUrl.split(';base64,')[1] : dataUrl;
+      outboundMediaMetadata = {
+        media_base64: cleanBase64,
+        media_mimetype: mimetype || 'application/octet-stream',
+        media_file_name: fileName || null,
+        mediaType: mediaTypeMapped,
+      };
 
       payload = await uazapiFetch('/send/media', {
         method: 'POST',
@@ -325,7 +333,7 @@ export async function POST(request: Request) {
         remetente: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
         mensagem: messageTextDb,
         provider_message_id: providerId,
-        metadata: { ...(payload || {}), instance },
+        metadata: { ...(payload || {}), ...outboundMediaMetadata, instance },
       }])
       .select('*')
       .single();
