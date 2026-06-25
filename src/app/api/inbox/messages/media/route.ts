@@ -110,16 +110,21 @@ function pickMediaUrl(metadata: any) {
     metadata?.media_url,
     metadata?.mediaUrl,
     metadata?.fileUrl,
+    metadata?.fileURL,
     metadata?.downloadUrl,
+    metadata?.downloadURL,
     metadata?.url,
     metadata?.path,
     metadata?.data?.media_url,
     metadata?.data?.mediaUrl,
     metadata?.data?.fileUrl,
+    metadata?.data?.fileURL,
     metadata?.data?.downloadUrl,
+    metadata?.data?.downloadURL,
     metadata?.data?.url,
     metadata?.message?.mediaUrl,
     metadata?.message?.fileUrl,
+    metadata?.message?.fileURL,
     metadata?.message?.url,
     metadata?.message?.audioMessage?.url,
     metadata?.data?.message?.audioMessage?.url,
@@ -132,7 +137,9 @@ function pickMediaUrl(metadata: any) {
     mediaMessage?.url,
     mediaMessage?.mediaUrl,
     mediaMessage?.fileUrl,
-    mediaMessage?.downloadUrl
+    mediaMessage?.fileURL,
+    mediaMessage?.downloadUrl,
+    mediaMessage?.downloadURL
   );
 
   return isBrowserOpenableUrl(value) ? value : null;
@@ -157,16 +164,22 @@ function pickProviderPayloadUrl(payload: any) {
     payload?.media_url,
     payload?.mediaUrl,
     payload?.fileUrl,
+    payload?.fileURL,
     payload?.downloadUrl,
+    payload?.downloadURL,
     payload?.url,
     payload?.data?.media_url,
     payload?.data?.mediaUrl,
     payload?.data?.fileUrl,
+    payload?.data?.fileURL,
     payload?.data?.downloadUrl,
+    payload?.data?.downloadURL,
     payload?.data?.url,
     payload?.response?.mediaUrl,
     payload?.response?.fileUrl,
+    payload?.response?.fileURL,
     payload?.response?.downloadUrl,
+    payload?.response?.downloadURL,
     payload?.response?.url
   );
 

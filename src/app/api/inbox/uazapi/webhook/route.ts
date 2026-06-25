@@ -51,15 +51,18 @@ function readUazapiMediaMetadata(body: any) {
     body?.media_url,
     body?.mediaUrl,
     body?.fileUrl,
+    body?.fileURL,
     body?.downloadUrl,
     body?.url,
     body?.data?.media_url,
     body?.data?.mediaUrl,
     body?.data?.fileUrl,
+    body?.data?.fileURL,
     body?.data?.downloadUrl,
     body?.data?.url,
     mediaMessage?.mediaUrl,
     mediaMessage?.fileUrl,
+    mediaMessage?.fileURL,
     mediaMessage?.downloadUrl,
     mediaMessage?.url
   );
@@ -170,9 +173,9 @@ async function transcribeUazapiAudio(body: any) {
   }
 
   let base64 = body?.base64 || body?.file || body?.audioMessage?.base64 || '';
-  if (!base64 && (body?.url || body?.fileUrl || body?.mediaUrl)) {
+  if (!base64 && (body?.url || body?.fileUrl || body?.fileURL || body?.mediaUrl)) {
     try {
-      const url = body.url || body.fileUrl || body.mediaUrl;
+      const url = body.url || body.fileUrl || body.fileURL || body.mediaUrl;
       const res = await fetch(url);
       if (res.ok) {
         const buffer = await res.arrayBuffer();
