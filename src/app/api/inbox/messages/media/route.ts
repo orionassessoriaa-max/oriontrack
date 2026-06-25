@@ -43,6 +43,41 @@ function stripDataUrl(value?: string | null) {
   return raw.includes(';base64,') ? raw.split(';base64,')[1] : raw;
 }
 
+function isBrowserOpenableUrl(value?: string | null) {
+  const raw = String(value || '').trim();
+  if (!/^https?:\/\//i.test(raw)) return false;
+  // URLs do WhatsApp sao criptografadas e precisam ser baixadas/decriptadas pela UAZAPI.
+  return !/\/\/[^/]*whatsapp\.net\//i.test(raw);
+}
+
+function byteObjectToBase64(value: any) {
+  if (!value) return undefined;
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (Array.isArray(value)) return Buffer.from(value).toString('base64');
+  if (typeof value === 'object') {
+    const numericKeys = Object.keys(value)
+      .filter((key) => /^\d+$/.test(key))
+      .sort((a, b) => Number(a) - Number(b));
+
+    if (numericKeys.length) {
+      return Buffer.from(numericKeys.map((key) => Number(value[key]))).toString('base64');
+    }
+  }
+  return undefined;
+}
+
+function longToNumber(value: any) {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  if (value && typeof value === 'object' && typeof value.low === 'number') {
+    return value.low;
+  }
+  return undefined;
+}
+
 function pickMediaBase64(metadata: any) {
   const mediaMessage = pickMediaMessage(metadata);
   return stripDataUrl(pickString(
@@ -100,7 +135,7 @@ function pickMediaUrl(metadata: any) {
     mediaMessage?.downloadUrl
   );
 
-  return value && /^https?:\/\//i.test(value) ? value : null;
+  return isBrowserOpenableUrl(value) ? value : null;
 }
 
 function pickProviderPayloadBase64(payload: any) {
@@ -135,7 +170,54 @@ function pickProviderPayloadUrl(payload: any) {
     payload?.response?.url
   );
 
-  return value && /^https?:\/\//i.test(value) ? value : null;
+  return isBrowserOpenableUrl(value) ? value : null;
+}
+
+function buildUazapiDownloadBody(providerId: string, mediaMessage: any) {
+  const body: Record<string, any> = {
+    id: providerId,
+    messageId: providerId,
+  };
+
+  if (mediaMessage?.url) {
+    body.Url = mediaMessage.url;
+    body.url = mediaMessage.url;
+  }
+  if (mediaMessage?.mimetype || mediaMessage?.mimeType) {
+    body.Mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
+    body.mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
+  }
+
+  const mediaKey = byteObjectToBase64(mediaMessage?.mediaKey);
+  if (mediaKey) {
+    body.MediaKey = mediaKey;
+    body.mediaKey = mediaKey;
+  }
+
+  const fileSha256 = byteObjectToBase64(mediaMessage?.fileSha256);
+  if (fileSha256) {
+    body.FileSHA256 = fileSha256;
+    body.fileSha256 = fileSha256;
+  }
+
+  const fileEncSha256 = byteObjectToBase64(mediaMessage?.fileEncSha256);
+  if (fileEncSha256) {
+    body.FileEncSHA256 = fileEncSha256;
+    body.fileEncSha256 = fileEncSha256;
+  }
+
+  const fileLength = longToNumber(mediaMessage?.fileLength);
+  if (fileLength) {
+    body.FileLength = fileLength;
+    body.fileLength = fileLength;
+  }
+
+  if (mediaMessage?.directPath) {
+    body.DirectPath = mediaMessage.directPath;
+    body.directPath = mediaMessage.directPath;
+  }
+
+  return body;
 }
 
 async function getMessageAndConversation(messageId: string) {
@@ -263,21 +345,7 @@ export async function GET(request: Request) {
     const attempts = [
       {
         path: '/message/download',
-        body: { id: providerId, messageId: providerId },
-      },
-      {
-        path: '/message/media',
-        body: { id: providerId, messageId: providerId },
-      },
-      {
-        path: '/chat/getBase64FromMediaMessage',
-        body: {
-          message: {
-            key: {
-              id: providerId,
-            },
-          },
-        },
+        body: buildUazapiDownloadBody(providerId, mediaMessage),
       },
     ];
 
