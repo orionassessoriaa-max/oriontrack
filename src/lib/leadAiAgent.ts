@@ -486,10 +486,9 @@ async function textToSpeechBase64(text: string) {
 async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: string) {
   const instance = uazapiInstanceName(adminProfile.id);
   const { audio, provider, speechText } = await textToSpeechBase64(text);
+  const cleanAudioBase64 = audio.includes(';base64,') ? audio.split(';base64,')[1] : audio;
 
-  const dataUrl = audio.includes(';base64,') 
-    ? audio 
-    : `data:audio/mpeg;base64,${audio}`;
+  const dataUrl = `data:audio/mpeg;base64,${cleanAudioBase64}`;
 
   const payload = await uazapiFetch('/send/media', {
     method: 'POST',
@@ -502,7 +501,14 @@ async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: s
     }),
   }, { instanceName: instance });
 
-  return { ...(payload || {}), tts_provider: provider, tts_text: speechText };
+  return {
+    ...(payload || {}),
+    tts_provider: provider,
+    tts_text: speechText,
+    media_base64: cleanAudioBase64,
+    media_mimetype: 'audio/mpeg',
+    media_file_name: 'aline-resposta.mp3',
+  };
 }
 
 async function notifyResponsible(lead: LeadRow, summary: string) {
