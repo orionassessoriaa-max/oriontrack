@@ -85,6 +85,7 @@ export async function POST(request: Request) {
       createPayload = await uazapiFetch('/instance/init', {
         method: 'POST',
         body: JSON.stringify({
+          name: MASTER_INSTANCE,
           instance: MASTER_INSTANCE,
           instanceName: MASTER_INSTANCE,
         }),
