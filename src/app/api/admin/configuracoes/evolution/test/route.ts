@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
+import { uazapiFetch, normalizePhone } from '@/lib/uazapi';
 
 const MASTER_INSTANCE = 'apolo_master_sender';
 
@@ -25,15 +25,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Telefone inválido.' }, { status: 400 });
     }
 
-    const instanceApiKey = await getEvolutionInstanceApiKey(MASTER_INSTANCE);
-
-    const payload = await evolutionFetch(`/message/sendText/${MASTER_INSTANCE}`, {
+    const payload = await uazapiFetch('/send/text', {
       method: 'POST',
       body: JSON.stringify({
         number: phone,
         text: text,
       }),
-    }, instanceApiKey);
+    }, { instanceName: MASTER_INSTANCE });
 
     await writeAuditLog(request, guard.profile, {
       action: 'admin.whatsapp.master.test',

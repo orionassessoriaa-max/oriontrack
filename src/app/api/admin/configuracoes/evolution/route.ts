@@ -1,8 +1,27 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { configureEvolutionWebhook, evolutionFetch, extractEvolutionQrCode, getEvolutionInstanceApiKey } from '@/lib/evolution';
+import { configureUazapiWebhook, uazapiFetch } from '@/lib/uazapi';
 
 const MASTER_INSTANCE = 'apolo_master_sender';
+
+function normalizeUazapiState(status?: string | null, connected?: boolean) {
+  const value = String(status || '').toLowerCase();
+  if (connected || ['open', 'connected', 'online'].includes(value)) return 'open';
+  if (['connecting', 'qrcode', 'qr', 'pairing'].includes(value)) return 'connecting';
+  return 'close';
+}
+
+function extractUazapiQrCode(payload: any): string | null {
+  return (
+    payload?.qrcode ||
+    payload?.base64 ||
+    payload?.data?.qrcode ||
+    payload?.data?.base64 ||
+    payload?.qrcode?.base64 ||
+    payload?.qrcode?.code ||
+    null
+  );
+}
 
 export async function GET(request: Request) {
   try {
@@ -13,8 +32,11 @@ export async function GET(request: Request) {
     if ('error' in guard) return guard.error;
 
     try {
-      const statePayload = await evolutionFetch(`/instance/connectionState/${MASTER_INSTANCE}`, { method: 'GET' });
-      const state = statePayload?.instance?.state || statePayload?.state || 'close';
+      const statePayload = await uazapiFetch('/instance/status', { method: 'GET' }, { instanceName: MASTER_INSTANCE });
+      const state = normalizeUazapiState(
+        statePayload?.status || statePayload?.instance?.status,
+        statePayload?.connected === true || statePayload?.instance?.connected === true
+      );
       return NextResponse.json({
         success: true,
         instance: MASTER_INSTANCE,
@@ -60,14 +82,13 @@ export async function POST(request: Request) {
 
     let createPayload: any = null;
     try {
-      createPayload = await evolutionFetch('/instance/create', {
+      createPayload = await uazapiFetch('/instance/init', {
         method: 'POST',
         body: JSON.stringify({
+          instance: MASTER_INSTANCE,
           instanceName: MASTER_INSTANCE,
-          qrcode: true,
-          integration: 'WHATSAPP-BAILEYS',
         }),
-      });
+      }, { useAdminAuth: true });
     } catch (error: any) {
       const message = String(error.message || '').toLowerCase();
       if (!message.includes('already') && !message.includes('existe') && !message.includes('exist')) {
@@ -75,12 +96,13 @@ export async function POST(request: Request) {
       }
     }
 
-    const instanceApiKey = await getEvolutionInstanceApiKey(MASTER_INSTANCE, createPayload);
+    await configureUazapiWebhook(MASTER_INSTANCE);
 
-    await configureEvolutionWebhook(MASTER_INSTANCE, instanceApiKey);
-
-    const payload = await evolutionFetch(`/instance/connect/${MASTER_INSTANCE}`, { method: 'GET' }, instanceApiKey);
-    const qrcode = extractEvolutionQrCode(payload);
+    const payload = await uazapiFetch('/instance/connect', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }, { instanceName: MASTER_INSTANCE });
+    const qrcode = extractUazapiQrCode(payload);
 
     await writeAuditLog(request, guard.profile, {
       action: 'admin.whatsapp.master.connect.request',
@@ -108,16 +130,18 @@ export async function DELETE(request: Request) {
     const guard = await requireApiUser(request, ['admin']);
     if ('error' in guard) return guard.error;
 
-    const instanceApiKey = await getEvolutionInstanceApiKey(MASTER_INSTANCE);
-
     try {
-      await evolutionFetch(`/instance/logout/${MASTER_INSTANCE}`, { method: 'DELETE' }, instanceApiKey);
+      await uazapiFetch('/instance/logout', { method: 'POST' }, { instanceName: MASTER_INSTANCE });
     } catch (e) {
-      console.warn(`Logout failed or already logged out for ${MASTER_INSTANCE}:`, e);
+      try {
+        await uazapiFetch('/instance/logout', { method: 'DELETE' }, { instanceName: MASTER_INSTANCE });
+      } catch (fallbackError) {
+        console.warn(`Logout failed or already logged out for ${MASTER_INSTANCE}:`, fallbackError);
+      }
     }
 
     try {
-      await evolutionFetch(`/instance/delete/${MASTER_INSTANCE}`, { method: 'DELETE' }, instanceApiKey);
+      await uazapiFetch('/instance/delete', { method: 'DELETE' }, { useAdminAuth: true, instanceName: MASTER_INSTANCE });
     } catch (e) {
       console.warn(`Delete failed or already deleted for ${MASTER_INSTANCE}:`, e);
     }
