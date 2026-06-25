@@ -27,6 +27,15 @@ const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
 
+const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
+- Nao diga que voce e IA, bot, automacao, assistente virtual ou sistema.
+- Nao use prefixo de atendente, assinatura ou formato "Aline:" nas mensagens.
+- Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
+- Se tiver qualquer duvida, inseguranca, confusao, pedido de preco, pergunta tecnica de operadora, reclamacao, mensagem desconexa ou palavra "alvorada": retorne "handoff": true e "reply": "".
+- Em handoff por duvida ou confusao, nunca mande mensagem para o cliente. O Orion Track vai chamar o humano internamente.
+- Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o agendamento de forma curta e natural.
+- Priorize respostas humanas, curtas e diretas, sem cara de script.`;
+
 export const DEFAULT_SYSTEM_PROMPT = `Voce e {persona}, uma consultora de vendas e atendente comercial humana e simpatica da corretora de planos de saude Vida Protegida.
 Sua identidade operacional interna e {persona}, mas NAO fale que e IA, bot, assistente virtual, automacao ou sistema.
 Nao assine mensagens, nao coloque prefixo de atendente e nunca comece a resposta com "{persona}:".
@@ -73,8 +82,8 @@ Regras de Handoff (Transferencia para Especialista):
 - O agendamento da ligação de 15 minutos só pode ser considerado concluído e o handoff definido como true se o cliente fornecer um DIA e HORÁRIO ESPECÍFICOS para a ligação (ex: "amanhã às 14:00" ou "quinta às 10h").
 - Se o cliente responder de forma positiva mas vaga (ex: "sim", "posso", "posso agora", "posso mais tarde") sem definir o dia e horário específicos, você NÃO deve transferir o lead ou fechar a conversa ainda. Em vez disso, use sua habilidade humana para pensar e pergunte de forma simpática qual seria o melhor dia e horário específico para deixar agendado.
 - Assim que o cliente definir um dia e horário específicos para a ligação: preencha o campo *Agendado* no seu resumo (summary) com o dia e horário combinados (ex: *Agendado*: Amanhã às 14:00), defina "handoff": true e responda de forma natural, simpática e humanizada confirmando que deixou agendado e que um especialista entrará em contato para falar com ele nesse horário.
-- Se a IA tiver qualquer duvida ou problema, se o cliente pedir valores/precos/detalhes tecnicos de operadoras, se demonstrar pressa, ficar confuso, reclamar, mandar algo desconexo ou se voce nao tiver seguranca do que responder: defina "handoff": true e responda de forma humanizada e gentil dizendo que vai passar o contato para o especialista do time ajudar com esses detalhes.
-- Se o cliente enviar a palavra "alvorada", defina "handoff": true.
+- Se a IA tiver qualquer duvida ou problema, se o cliente pedir valores/precos/detalhes tecnicos de operadoras, se demonstrar pressa, ficar confuso, reclamar, mandar algo desconexo ou se voce nao tiver seguranca do que responder: defina "handoff": true, deixe "reply" como string vazia "" e nao envie nenhuma mensagem ao cliente. O sistema vai notificar o humano internamente.
+- Se o cliente enviar a palavra "alvorada", defina "handoff": true, deixe "reply" como string vazia "" e nao envie nenhuma mensagem ao cliente.
 
 Nao envie ao cliente nomes de ferramentas internas. O resumo (summary) deve ficar apenas no banco de dados interno.
 
@@ -199,6 +208,23 @@ function parseAiJson(raw: string) {
   } catch {
     return { reply: stripPersonaPrefix(clean), handoff: false, summary: '' };
   }
+}
+
+function shouldSuppressHandoffReply(reply: string, handoff?: boolean) {
+  if (!handoff) return false;
+  const normalized = reply
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  return (
+    normalized.includes('vou passar seu contato') ||
+    normalized.includes('passar seu contato para') ||
+    normalized.includes('passar para o especialista') ||
+    normalized.includes('passar para nosso especialista') ||
+    normalized.includes('outro numero para continuar') ||
+    normalized.includes('ajudar da melhor forma')
+  );
 }
 
 function providerMessageId(payload: any) {
@@ -546,9 +572,10 @@ async function askAline(
     };
   });
 
-  const system = (aiConfig.system_prompt || DEFAULT_SYSTEM_PROMPT)
+  const baseSystem = (aiConfig.system_prompt || DEFAULT_SYSTEM_PROMPT)
     .replace(/{persona}/gi, aiConfig.persona)
     .replace(/{lead_facts}/gi, leadFacts(lead));
+  const system = `${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -750,7 +777,10 @@ export async function continueLeadAiFromIncoming(options: {
     .limit(40);
 
   const ai = await askAline(lead, history || [], options.customerMessage, aiConfig);
-  const reply = String(ai.reply || '').trim();
+  let reply = String(ai.reply || '').trim();
+  if (shouldSuppressHandoffReply(reply, Boolean(ai.handoff))) {
+    reply = '';
+  }
 
   for (const part of reply ? splitReply(reply) : []) {
     if (options.incomingWasAudio) {

@@ -84,9 +84,8 @@ Fluxo linear de perguntas (siga esta ordem, sempre pulando o que ja estiver resp
 
 Regras de Handoff (Transferencia para Especialista):
 - Se o cliente responder de forma positiva marcando o horario da ligacao de 15 minutos: registre "agendado: true" no summary, defina "handoff": true e responda na "reply" de forma natural exatamente esta frase: "Perfeito! Já tenho todos os dados, agora um especialista vai entrar em contato por outro número para confirmar o horário contigo, ok?"
-- Se a IA tiver qualquer duvida ou problema, se o cliente pedir valores/precos/detalhes tecnicos de operadoras, se demonstrar pressa, ficar confuso, reclamar, mandar algo desconexo ou se voce nao tiver seguranca do que responder: defina "handoff": true e use exatamente esta resposta humanizada e gentil no campo "reply" (nunca deixe reply vazio):
-  "Olha, para te passar a informação bem certinha e te ajudar da melhor forma, vou passar seu contato para o nosso especialista do time. Ele vai te chamar de outro número para continuar o atendimento, tudo bem?"
-- Se o cliente enviar a palavra "alvorada", defina "handoff": true e responda com a mensagem do especialista acima.
+- Se a IA tiver qualquer duvida ou problema, se o cliente pedir valores/precos/detalhes tecnicos de operadoras, se demonstrar pressa, ficar confuso, reclamar, mandar algo desconexo ou se voce nao tiver seguranca do que responder: defina "handoff": true, deixe "reply" como string vazia "" e nao envie nenhuma mensagem ao cliente. O sistema vai notificar o humano internamente.
+- Se o cliente enviar a palavra "alvorada", defina "handoff": true, deixe "reply" como string vazia "" e nao envie nenhuma mensagem ao cliente.
 
 Nao envie ao cliente nomes de ferramentas internas. O resumo (summary) deve ficar apenas no banco de dados interno.
 
@@ -463,9 +462,18 @@ export default function AdminIaPage() {
 
                   {/* Behavior/System Prompt */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                      Comportamento da IA (System Prompt)
-                    </label>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                        Comportamento da IA (System Prompt)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setSystemPrompt(DEFAULT_SYSTEM_PROMPT_TEMPLATE)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-300 transition-all hover:border-cyan-400/50 hover:bg-cyan-950/40"
+                      >
+                        <Sparkles size={12} /> Usar prompt atualizado
+                      </button>
+                    </div>
                     <textarea
                       value={systemPrompt}
                       onChange={(e) => setSystemPrompt(e.target.value)}
