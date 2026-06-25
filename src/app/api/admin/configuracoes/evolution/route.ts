@@ -15,8 +15,12 @@ function extractUazapiQrCode(payload: any): string | null {
   return (
     payload?.qrcode ||
     payload?.base64 ||
+    payload?.instance?.qrcode ||
+    payload?.instance?.base64 ||
     payload?.data?.qrcode ||
     payload?.data?.base64 ||
+    payload?.data?.instance?.qrcode ||
+    payload?.data?.instance?.base64 ||
     payload?.qrcode?.base64 ||
     payload?.qrcode?.code ||
     null
