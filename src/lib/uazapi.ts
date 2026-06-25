@@ -4,6 +4,30 @@ function cleanBaseUrl(value?: string) {
   return String(value || '').replace(/\/+$/, '');
 }
 
+function getRequestTimeoutMs() {
+  const value = Number(process.env.UAZAPI_TIMEOUT_MS || 15000);
+  return Number.isFinite(value) && value > 0 ? value : 15000;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getRequestTimeoutMs());
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: init.signal || controller.signal,
+    });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Tempo esgotado ao falar com o UAZAPI. Verifique se o servidor e o token estao ativos.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function asArray(payload: any): any[] {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
@@ -49,7 +73,7 @@ export function profileIdFromUazapiInstance(instance?: string | null) {
 }
 
 async function getUazapiInstanceToken(baseUrl: string, globalToken: string, instanceName: string) {
-  const response = await fetch(`${baseUrl}/instance/all`, {
+  const response = await fetchWithTimeout(`${baseUrl}/instance/all`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -104,7 +128,7 @@ export async function uazapiFetch(
   const url = `${baseUrl}${path}`;
   console.log(`[uazapiFetch] Requesting: ${url} | Headers keys: ${Object.keys(headers).join(', ')}`);
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     ...init,
     headers,
     cache: 'no-store',

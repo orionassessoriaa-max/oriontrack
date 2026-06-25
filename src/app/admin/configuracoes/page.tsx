@@ -106,6 +106,8 @@ export default function AdminConfiguracoesPage() {
     }
 
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
       const response = await fetch('/api/admin/configuracoes/evolution', {
         method: 'POST',
         headers: {
@@ -115,7 +117,9 @@ export default function AdminConfiguracoesPage() {
         body: JSON.stringify({
           accepted_terms: acceptedTerms,
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
       const payload = await response.json().catch(() => ({}));
       setConnecting(false);
 
