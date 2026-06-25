@@ -4,6 +4,37 @@ function cleanBaseUrl(value?: string) {
   return String(value || '').replace(/\/+$/, '');
 }
 
+function asArray(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.instances)) return payload.instances;
+  if (Array.isArray(payload?.response)) return payload.response;
+  return [];
+}
+
+function readInstanceName(instance: any) {
+  return String(
+    instance?.name ||
+    instance?.instanceName ||
+    instance?.instance ||
+    instance?.session ||
+    instance?.sessionkey ||
+    ''
+  );
+}
+
+function readInstanceToken(instance: any) {
+  return String(
+    instance?.token ||
+    instance?.instanceToken ||
+    instance?.apikey ||
+    instance?.apiKey ||
+    instance?.key ||
+    instance?.credential?.token ||
+    ''
+  ).trim();
+}
+
 export function uazapiInstanceName(profileId: string) {
   const prefix = process.env.UAZAPI_INSTANCE_PREFIX || 'orion';
   return `${prefix}_${profileId.replace(/-/g, '')}`;
@@ -15,6 +46,30 @@ export function profileIdFromUazapiInstance(instance?: string | null) {
   const hex = raw.startsWith(`${prefix}_`) ? raw.slice(prefix.length + 1) : raw;
   if (!/^[a-f0-9]{32}$/i.test(hex)) return null;
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+async function getUazapiInstanceToken(baseUrl: string, globalToken: string, instanceName: string) {
+  const response = await fetch(`${baseUrl}/instance/all`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      admintoken: globalToken,
+    },
+    cache: 'no-store',
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error || 'Nao consegui listar instancias do UAZAPI.');
+  }
+
+  const instance = asArray(payload).find((item) => readInstanceName(item) === instanceName);
+  const token = readInstanceToken(instance);
+  if (!token) {
+    throw new Error(`Instancia UAZAPI ${instanceName} ainda nao foi criada ou nao possui token.`);
+  }
+
+  return token;
 }
 
 export async function uazapiFetch(
@@ -37,10 +92,12 @@ export async function uazapiFetch(
   if (options.useAdminAuth) {
     headers['admintoken'] = globalToken;
   } else {
-    headers['token'] = globalToken;
     if (options.instanceName) {
+      headers['token'] = await getUazapiInstanceToken(baseUrl, globalToken, options.instanceName);
       headers['sessionkey'] = options.instanceName;
       headers['session'] = options.instanceName;
+    } else {
+      headers['token'] = globalToken;
     }
   }
 
