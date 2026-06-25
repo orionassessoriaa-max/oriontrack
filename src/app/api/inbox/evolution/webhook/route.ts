@@ -181,7 +181,7 @@ async function findLead(profile: any, phone: string) {
   let query = supabaseAdmin
     .from('leads')
     .select('id, nome, telefone, corretor_id, responsavel_profile_id')
-    .or(`telefone.ilike.%${last8}%,telefone.ilike.%${last8WithHyphen}%`);
+    .or(`telefone.ilike.%${last8},telefone.ilike.%${last8WithHyphen}`);
 
   if (profile.tipo_usuario === 'corretor_membro') {
     query = query.eq('responsavel_profile_id', profile.id);
@@ -221,7 +221,7 @@ async function findConversation(corretorId: string, phone: string, leadId?: stri
     .from('whatsapp_conversas')
     .select('*')
     .eq('corretor_id', corretorId)
-    .or(`telefone.eq.${phone},telefone.ilike.%${last8}%`)
+    .or(`telefone.eq.${phone},telefone.ilike.%${last8}`)
     .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();

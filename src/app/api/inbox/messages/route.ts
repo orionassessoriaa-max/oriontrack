@@ -68,7 +68,7 @@ async function findExistingConversation(corretorId: string, phone: string, leadI
     .eq('corretor_id', corretorId);
 
   if (last8) {
-    query = query.or(`telefone.eq.${phone},telefone.ilike.%${last8}%`);
+    query = query.or(`telefone.eq.${phone},telefone.ilike.%${last8}`);
   } else {
     query = query.eq('telefone', phone);
   }
@@ -91,7 +91,7 @@ async function findAccessibleConversationIdsByPhone(profile: any, conversation: 
   const { data, error } = await supabaseAdmin
     .from('whatsapp_conversas')
     .select('id, lead_id, corretor_id, telefone')
-    .or(`telefone.eq.${phone},telefone.ilike.%${last8}%`)
+    .or(`telefone.eq.${phone},telefone.ilike.%${last8}`)
     .limit(50);
 
   if (error) throw error;
