@@ -2209,7 +2209,7 @@ export default function BrokerInboxPage() {
                                     <div>
                                       <p className="text-xs font-black">Imagem</p>
                                       <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
-                                        {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia antiga indisponivel. Tentar novamente' : 'Clique para visualizar'}
+                                        {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia indisponivel. Tentar novamente' : 'Clique para visualizar'}
                                       </p>
                                     </div>
                                   </div>
@@ -2233,7 +2233,7 @@ export default function BrokerInboxPage() {
                                     <div>
                                       <p className="text-xs font-black">Video</p>
                                       <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
-                                        {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia antiga indisponivel. Tentar novamente' : 'Clique para abrir'}
+                                        {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia indisponivel. Tentar novamente' : 'Clique para abrir'}
                                       </p>
                                     </div>
                                   </button>
@@ -2253,7 +2253,7 @@ export default function BrokerInboxPage() {
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate text-xs font-black">{fileName}</p>
                                   <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
-                                    {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia antiga indisponivel. Tentar novamente' : 'Clique para abrir arquivo'}
+                                    {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia indisponivel. Tentar novamente' : 'Clique para abrir arquivo'}
                                   </p>
                                 </div>
                                 <Download size={14} className="shrink-0 opacity-80" />

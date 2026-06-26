@@ -3,6 +3,7 @@ import { requireApiUser } from '@/lib/api/security';
 import { uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { evolutionFetch, getEvolutionInstanceApiKey } from '@/lib/evolution';
+import { createDecipheriv, hkdfSync } from 'crypto';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const MAX_CACHE_BASE64_BYTES = Number(process.env.INBOX_MEDIA_CACHE_MAX_BYTES || 15 * 1024 * 1024);
@@ -280,6 +281,46 @@ function buildUazapiDownloadPayloads(providerId: string, mediaMessage: any) {
   ];
 }
 
+function whatsappMediaInfo(mimeType?: string | null) {
+  const mime = String(mimeType || '').toLowerCase();
+  if (mime.startsWith('image/')) return 'WhatsApp Image Keys';
+  if (mime.startsWith('video/')) return 'WhatsApp Video Keys';
+  if (mime.startsWith('audio/')) return 'WhatsApp Audio Keys';
+  return 'WhatsApp Document Keys';
+}
+
+async function decryptWhatsAppMediaFromMetadata(mediaMessage: any, mimeType?: string | null) {
+  const encryptedUrl = pickString(mediaMessage?.url, mediaMessage?.mediaUrl, mediaMessage?.downloadUrl);
+  const mediaKeyBase64 = byteObjectToBase64(mediaMessage?.mediaKey);
+  if (!encryptedUrl || !mediaKeyBase64 || !/^https?:\/\//i.test(encryptedUrl)) return null;
+
+  const response = await fetch(encryptedUrl, { cache: 'no-store' });
+  if (!response.ok) {
+    console.warn('[Media API] Nao foi possivel baixar binario criptografado do WhatsApp:', response.status);
+    return null;
+  }
+
+  const encrypted = Buffer.from(await response.arrayBuffer());
+  if (encrypted.length <= 10) return null;
+
+  const mediaKey = Buffer.from(mediaKeyBase64, 'base64');
+  const expanded = Buffer.from(hkdfSync(
+    'sha256',
+    mediaKey,
+    Buffer.alloc(32),
+    Buffer.from(whatsappMediaInfo(mimeType)),
+    112
+  ));
+
+  const iv = expanded.subarray(0, 16);
+  const cipherKey = expanded.subarray(16, 48);
+  const ciphertext = encrypted.subarray(0, encrypted.length - 10);
+  const decipher = createDecipheriv('aes-256-cbc', cipherKey, iv);
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+
+  return decrypted.toString('base64');
+}
+
 function base64ByteLength(base64: string) {
   const clean = stripDataUrl(base64) || '';
   if (!clean) return 0;
@@ -519,6 +560,19 @@ export async function GET(request: Request) {
     const fallbackBase64 = pickMediaBase64(message.metadata);
     if (fallbackBase64) {
       return NextResponse.json({ base64: fallbackBase64, mimeType, fileName });
+    }
+
+    if (mediaMessage) {
+      try {
+        const decryptedBase64 = await decryptWhatsAppMediaFromMetadata(mediaMessage, mimeType);
+        if (decryptedBase64) {
+          const recovered = { base64: decryptedBase64, mimeType, fileName };
+          await cacheRecoveredMedia(message, recovered);
+          return NextResponse.json(recovered);
+        }
+      } catch (decryptErr: any) {
+        console.warn('[Media API] Fallback de descriptografia direta falhou:', decryptErr?.message || decryptErr);
+      }
     }
 
     const fallbackUrl = pickMediaUrl(message.metadata);
