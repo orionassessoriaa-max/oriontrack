@@ -369,8 +369,7 @@ async function findLead(profile: any, phone: string) {
 
   const rows = data || [];
   const exactRows = rows.filter((row) => normalizePhone(row?.telefone) === digits);
-  const candidateRows = digits.length >= 12 ? exactRows : rows;
-  const activeAiLead = await pickLeadWithActiveAiSession(candidateRows);
+  const activeAiLead = await pickLeadWithActiveAiSession(exactRows.length > 0 ? exactRows : rows);
   if (activeAiLead) return activeAiLead;
 
   const exact = exactRows[0];
