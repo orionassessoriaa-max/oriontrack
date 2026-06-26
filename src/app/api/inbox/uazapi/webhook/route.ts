@@ -368,9 +368,31 @@ async function findLead(profile: any, phone: string) {
     .limit(20);
 
   const rows = data || [];
-  const exact = rows.find((row) => normalizePhone(row?.telefone) === digits);
+  const exactRows = rows.filter((row) => normalizePhone(row?.telefone) === digits);
+  const candidateRows = digits.length >= 12 ? exactRows : rows;
+  const activeAiLead = await pickLeadWithActiveAiSession(candidateRows);
+  if (activeAiLead) return activeAiLead;
+
+  const exact = exactRows[0];
   if (digits.length >= 12) return exact || null;
   return exact || rows[0] || null;
+}
+
+async function pickLeadWithActiveAiSession(rows: any[]) {
+  const leadIds = Array.from(new Set((rows || []).map((row) => row?.id).filter(Boolean)));
+  if (!leadIds.length) return null;
+
+  const { data } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .select('lead_id, updated_at')
+    .in('lead_id', leadIds)
+    .eq('status', 'active')
+    .order('updated_at', { ascending: false })
+    .limit(1);
+
+  const activeLeadId = data?.[0]?.lead_id;
+  if (!activeLeadId) return null;
+  return rows.find((row) => row?.id === activeLeadId) || null;
 }
 
 async function findConversation(corretorId: string, phone: string, leadId?: string | null) {
