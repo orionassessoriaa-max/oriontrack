@@ -335,60 +335,68 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Esta mensagem nao possui arquivo salvo para abrir.' }, { status: 400 });
     }
 
-    let instance =
+    const metadataInstance =
       message.metadata?.instance ||
       message.metadata?.session ||
       message.metadata?.instanceName ||
       message.metadata?.data?.instance ||
       message.metadata?.data?.session;
 
-    if (!instance) {
-      const { data: ownerProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .eq('corretor_id', conversation.corretor_id)
-        .eq('tipo_usuario', 'corretor')
-        .limit(1)
-        .maybeSingle();
+    const { data: ownerProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('corretor_id', conversation.corretor_id)
+      .eq('tipo_usuario', 'corretor')
+      .limit(1)
+      .maybeSingle();
 
-      const profileIdForInstance = ownerProfile ? ownerProfile.id : conversation.corretor_id;
-      instance = uazapiInstanceName(profileIdForInstance);
-    }
+    const profileIdForInstance = ownerProfile ? ownerProfile.id : conversation.corretor_id;
+    const currentActiveInstance = uazapiInstanceName(profileIdForInstance);
 
-    const attempts = [
-      {
-        path: '/message/download',
-        body: buildUazapiDownloadBody(providerId, mediaMessage),
-      },
-    ];
+    const instancesToTry = Array.from(new Set([
+      metadataInstance,
+      currentActiveInstance,
+      'apolo_master_sender'
+    ].filter(Boolean) as string[]));
 
-    for (const attempt of attempts) {
-      try {
-        console.log(`[Media API] Solicitando midia UAZAPI para providerId: ${providerId} na instancia: ${instance} via ${attempt.path}`);
-        const payload = await uazapiFetch(attempt.path, {
-          method: 'POST',
-          body: JSON.stringify(attempt.body),
-        }, { instanceName: instance });
+    console.log(`[Media API] Instancias para tentar download da mensagem ${messageId}:`, instancesToTry);
 
-        const base64 = pickProviderPayloadBase64(payload);
-        if (base64) {
-          return NextResponse.json({
-            base64,
-            mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
-            fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
-          });
+    for (const inst of instancesToTry) {
+      const attempts = [
+        {
+          path: '/message/download',
+          body: buildUazapiDownloadBody(providerId, mediaMessage),
+        },
+      ];
+
+      for (const attempt of attempts) {
+        try {
+          console.log(`[Media API] Solicitando midia UAZAPI para providerId: ${providerId} na instancia: ${inst} via ${attempt.path}`);
+          const payload = await uazapiFetch(attempt.path, {
+            method: 'POST',
+            body: JSON.stringify(attempt.body),
+          }, { instanceName: inst });
+
+          const base64 = pickProviderPayloadBase64(payload);
+          if (base64) {
+            return NextResponse.json({
+              base64,
+              mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
+              fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
+            });
+          }
+
+          const url = pickProviderPayloadUrl(payload);
+          if (url) {
+            return NextResponse.json({
+              url,
+              mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
+              fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
+            });
+          }
+        } catch (uazapiErr: any) {
+          console.warn(`[Media API] UAZAPI nao retornou midia via ${attempt.path} na instancia ${inst}:`, uazapiErr?.message || uazapiErr);
         }
-
-        const url = pickProviderPayloadUrl(payload);
-        if (url) {
-          return NextResponse.json({
-            url,
-            mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
-            fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
-          });
-        }
-      } catch (uazapiErr: any) {
-        console.warn(`[Media API] UAZAPI nao retornou midia via ${attempt.path}:`, uazapiErr?.message || uazapiErr);
       }
     }
 
