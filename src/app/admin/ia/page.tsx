@@ -18,7 +18,8 @@ import {
   Building,
   ArrowLeft,
   Settings,
-  Loader2
+  Loader2,
+  Send
 } from 'lucide-react';
 
 interface Corretora {
@@ -123,6 +124,12 @@ export default function AdminIaPage() {
   
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [testConfigId, setTestConfigId] = useState('');
+  const [testPhone, setTestPhone] = useState('');
+  const [testName, setTestName] = useState('Teste IA');
+  const [testAges, setTestAges] = useState('32');
+  const [testingAi, setTestingAi] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   const isAdmin = actualProfile?.tipo_usuario === 'admin';
 
@@ -163,6 +170,12 @@ export default function AdminIaPage() {
   useEffect(() => {
     loadData();
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!testConfigId && activeConfigs[0]?.id) {
+      setTestConfigId(activeConfigs[0].id);
+    }
+  }, [activeConfigs, testConfigId]);
 
   const filteredConfigs = useMemo(() => {
     const term = search.toLowerCase().trim();
@@ -272,6 +285,53 @@ export default function AdminIaPage() {
     }
   };
 
+  const handleSendTest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testConfigId || !testPhone.trim()) {
+      setError('Selecione a concessionaria e informe o WhatsApp para teste.');
+      return;
+    }
+
+    setTestingAi(true);
+    setError(null);
+    setSuccess(null);
+    setTestResult(null);
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const response = await fetch('/api/admin/ia/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          config_id: testConfigId,
+          telefone: testPhone,
+          nome: testName,
+          idades: testAges,
+          cidade: 'Teste IA',
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.error || 'Erro ao enviar teste da IA.');
+        return;
+      }
+
+      const message = data.message || 'Teste enviado para o WhatsApp informado.';
+      setSuccess(message);
+      setTestResult(`Lead de teste: ${data.lead?.nome || testName}`);
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao conectar no servidor.');
+    } finally {
+      setTestingAi(false);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <InternalLayout>
@@ -327,6 +387,91 @@ export default function AdminIaPage() {
             <span>{success}</span>
           </div>
         )}
+
+        <form
+          onSubmit={handleSendTest}
+          className="rounded-3xl border border-cyan-500/20 bg-slate-950/30 p-5 shadow-sm shadow-cyan-500/5"
+        >
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/20 bg-cyan-950/40 text-cyan-300">
+                <Send size={18} />
+              </span>
+              <div>
+                <h2 className="text-sm font-black text-white">Enviar teste da IA</h2>
+                <p className="mt-1 max-w-2xl text-[11px] font-bold leading-relaxed text-slate-400">
+                  Cria um lead de teste, inicia a Aline pelo WhatsApp do admin da concessionaria e permite validar se a conversa continua pelo Inbox.
+                </p>
+                {testResult && (
+                  <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                    {testResult}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid flex-[2] gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">Concessionaria</span>
+                <select
+                  value={testConfigId}
+                  onChange={(e) => setTestConfigId(e.target.value)}
+                  className="h-12 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 text-xs font-black text-white outline-none transition-all focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                >
+                  {activeConfigs.length === 0 ? (
+                    <option value="">Nenhuma IA ativa</option>
+                  ) : (
+                    activeConfigs.map((config) => (
+                      <option key={config.id} value={config.id}>
+                        {config.corretoras?.nome || config.persona}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">WhatsApp destino</span>
+                <input
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  placeholder="Ex: 5561999999999"
+                  className="h-12 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 text-xs font-black text-white outline-none transition-all placeholder:text-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">Nome do lead</span>
+                <input
+                  value={testName}
+                  onChange={(e) => setTestName(e.target.value)}
+                  placeholder="Teste IA"
+                  className="h-12 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 text-xs font-black text-white outline-none transition-all placeholder:text-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                />
+              </label>
+
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">Idades</span>
+                  <input
+                    value={testAges}
+                    onChange={(e) => setTestAges(e.target.value)}
+                    placeholder="32"
+                    className="h-12 rounded-2xl border border-slate-800 bg-slate-900/60 px-3 text-xs font-black text-white outline-none transition-all placeholder:text-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={testingAi || activeConfigs.length === 0}
+                  className="mt-[18px] flex h-12 min-w-28 items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-4 text-xs font-black text-white shadow-lg shadow-cyan-600/15 transition-all hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {testingAi ? <Loader2 className="animate-spin" size={15} /> : <Send size={15} />}
+                  Testar
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
 
         <div className="grid gap-6 lg:grid-cols-3">
           
