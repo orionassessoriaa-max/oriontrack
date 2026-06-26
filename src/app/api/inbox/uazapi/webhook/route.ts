@@ -10,6 +10,14 @@ function readText(body: any) {
     body?.caption ||
     body?.message ||
     body?.messageText ||
+    body?.data?.content ||
+    body?.data?.text ||
+    body?.data?.caption ||
+    body?.data?.messageText ||
+    body?.data?.message?.conversation ||
+    body?.data?.message?.extendedTextMessage?.text ||
+    body?.data?.message?.imageMessage?.caption ||
+    body?.data?.message?.videoMessage?.caption ||
     body?.message?.conversation ||
     body?.message?.extendedTextMessage?.text ||
     body?.message?.imageMessage?.caption ||
@@ -23,6 +31,51 @@ function pickString(...values: any[]) {
     if (typeof value === 'string' && value.trim()) return value.trim();
   }
   return '';
+}
+
+function readWebhookInstanceName(body: any) {
+  return pickString(
+    body?.session,
+    body?.sessionkey,
+    body?.instanceName,
+    body?.instance,
+    body?.instance?.name,
+    body?.instance?.instanceName,
+    body?.data?.session,
+    body?.data?.sessionkey,
+    body?.data?.instanceName,
+    body?.data?.instance,
+    body?.data?.instance?.name,
+    body?.data?.instance?.instanceName
+  );
+}
+
+function readRemoteJid(body: any) {
+  return pickString(
+    body?.phone,
+    body?.sender,
+    body?.from,
+    body?.remoteJid,
+    body?.chatId,
+    body?.key?.remoteJid,
+    body?.data?.phone,
+    body?.data?.sender,
+    body?.data?.from,
+    body?.data?.remoteJid,
+    body?.data?.chatId,
+    body?.data?.key?.remoteJid
+  );
+}
+
+function readProviderId(body: any) {
+  return pickString(
+    body?.id,
+    body?.messageId,
+    body?.key?.id,
+    body?.data?.id,
+    body?.data?.messageId,
+    body?.data?.key?.id
+  );
 }
 
 function stripDataUrl(value?: string | null) {
@@ -429,7 +482,7 @@ async function findConversation(corretorId: string, phone: string, leadId?: stri
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const event = String(body?.wook || body?.event || body?.type || '').toUpperCase();
+    const event = String(body?.wook || body?.event || body?.type || body?.data?.wook || body?.data?.event || body?.data?.type || '').toUpperCase();
 
     const callEvent = isCallEvent(body, event);
 
@@ -439,7 +492,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true });
     }
 
-    const instance = String(body?.session || body?.instance || body?.instanceName || '');
+    const instance = readWebhookInstanceName(body);
     const profileId = profileIdFromUazapiInstance(instance);
     if (!profileId) return NextResponse.json({ ok: true, ignored: true });
 
@@ -453,14 +506,14 @@ export async function POST(request: Request) {
 
     let message = callEvent ? readCallText(body) : readText(body);
     
-    const msgType = String(body?.type || body?.messageType || '').toLowerCase();
+    const msgType = String(body?.type || body?.messageType || body?.data?.type || body?.data?.messageType || '').toLowerCase();
     const hasAudio = msgType === 'audio' || msgType === 'voice' || msgType.includes('audio') || msgType.includes('voice');
     const hasImage = msgType === 'image' || msgType.includes('image');
     const hasVideo = msgType === 'video' || msgType.includes('video');
     const hasDocument = msgType === 'document' || msgType.includes('document');
     const hasMedia = hasAudio || hasImage || hasVideo || hasDocument;
 
-    const providerId = String(body?.id || body?.key?.id || '');
+    const providerId = readProviderId(body);
     let audioTranscript = '';
     let aiCustomerMessage = message;
 
@@ -505,7 +558,7 @@ export async function POST(request: Request) {
       else if (hasDocument) message = '📎 Arquivo';
     }
 
-    const remoteJid = String(body?.phone || body?.sender || body?.from || body?.key?.remoteJid || '');
+    const remoteJid = readRemoteJid(body);
     let phone = normalizePhone(remoteJid.split('@')[0]);
 
     // Tratar quando a ligação de voz é efetuada pelo próprio corretor de fora do CRM.
@@ -513,7 +566,7 @@ export async function POST(request: Request) {
     const brokerPhone = profile?.telefone ? normalizePhone(profile.telefone) : '';
     if (callEvent && brokerPhone && phone === brokerPhone) {
       isOutboundCall = true;
-      const otherJid = String(body?.to || body?.chatId || body?.remoteJid || '');
+      const otherJid = pickString(body?.to, body?.chatId, body?.remoteJid, body?.data?.to, body?.data?.chatId, body?.data?.remoteJid);
       const otherPhone = normalizePhone(otherJid.split('@')[0]);
       if (otherPhone && otherPhone !== brokerPhone) {
         phone = otherPhone;
@@ -532,7 +585,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: 'Not a CRM lead' });
     }
 
-    const contactName = body?.pushName || body?.senderName || body?.name || lead?.nome || phone;
+    const contactName = body?.pushName || body?.senderName || body?.name || body?.data?.pushName || body?.data?.senderName || body?.data?.name || lead?.nome || phone;
 
     let conversation = currentConversation;
     if (!conversation) {
@@ -567,6 +620,8 @@ export async function POST(request: Request) {
     const fromMe = Boolean(
       body?.fromMe === true ||
       body?.key?.fromMe === true ||
+      body?.data?.fromMe === true ||
+      body?.data?.key?.fromMe === true ||
       event === 'SEND_MESSAGE' ||
       event.includes('SEND') ||
       isOutboundCall

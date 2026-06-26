@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
+import { configureUazapiWebhook, uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
@@ -725,6 +725,7 @@ export async function startLeadAiIfEligible(leadId: string) {
     }], { onConflict: 'lead_id' });
 
   try {
+    await configureUazapiWebhook(uazapiInstanceName(adminProfile.id));
     registerAiOutbound(phone, intro);
     const payload = await sendAiAdminText(adminProfile, phone, intro);
     await insertMessage(conversation.id, 'outbound', aiConfig.persona, intro, {
