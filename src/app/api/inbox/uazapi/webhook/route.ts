@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { normalizePhone, profileIdFromUazapiInstance } from '@/lib/uazapi';
+import { normalizePhone, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming, isAiOutbound } from '@/lib/leadAiAgent';
 
@@ -31,8 +31,30 @@ function stripDataUrl(value?: string | null) {
   return raw.includes(';base64,') ? raw.split(';base64,')[1] : raw;
 }
 
-function readUazapiMediaMetadata(body: any) {
-  const mediaMessage =
+function byteObjectToBase64(value: any) {
+  if (!value || typeof value !== 'object') return '';
+  const bytes = value?.data && typeof value.data === 'object' ? value.data : value;
+  const numbers = Object.keys(bytes)
+    .filter((key) => /^\d+$/.test(key))
+    .sort((a, b) => Number(a) - Number(b))
+    .map((key) => Number(bytes[key]));
+
+  if (!numbers.length || numbers.some((item) => Number.isNaN(item))) return '';
+  return Buffer.from(numbers).toString('base64');
+}
+
+function longToNumber(value: any) {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && value.trim()) return Number(value);
+  if (value && typeof value === 'object') {
+    if (typeof value.low === 'number') return value.low;
+    if (typeof value.low === 'string') return Number(value.low);
+  }
+  return undefined;
+}
+
+function pickMediaMessage(body: any) {
+  return (
     body?.audioMessage ||
     body?.imageMessage ||
     body?.videoMessage ||
@@ -45,7 +67,12 @@ function readUazapiMediaMetadata(body: any) {
     body?.data?.message?.imageMessage ||
     body?.data?.message?.videoMessage ||
     body?.data?.message?.documentMessage ||
-    null;
+    null
+  );
+}
+
+function readUazapiMediaMetadata(body: any) {
+  const mediaMessage = pickMediaMessage(body);
 
   const mediaUrl = pickString(
     body?.media_url,
@@ -105,6 +132,85 @@ function readUazapiMediaMetadata(body: any) {
       mediaMessage?.filename
     ) || undefined,
   };
+}
+
+function buildUazapiDownloadBody(providerId: string, mediaMessage: any) {
+  const mediaKey = pickString(mediaMessage?.mediaKey, byteObjectToBase64(mediaMessage?.mediaKey));
+  const fileSha256 = pickString(mediaMessage?.fileSha256, byteObjectToBase64(mediaMessage?.fileSha256));
+  const fileEncSha256 = pickString(mediaMessage?.fileEncSha256, byteObjectToBase64(mediaMessage?.fileEncSha256));
+  const fileLength = longToNumber(mediaMessage?.fileLength);
+
+  const message: any = {
+    key: { id: providerId },
+    message: {},
+  };
+
+  if (mediaMessage?.url) message.message.Url = mediaMessage.url;
+  if (mediaMessage?.mimetype) message.message.Mimetype = mediaMessage.mimetype;
+  if (mediaKey) message.message.MediaKey = mediaKey;
+  if (fileSha256) message.message.FileSHA256 = fileSha256;
+  if (fileEncSha256) message.message.FileEncSHA256 = fileEncSha256;
+  if (typeof fileLength === 'number' && !Number.isNaN(fileLength)) message.message.FileLength = fileLength;
+  if (mediaMessage?.directPath) message.message.DirectPath = mediaMessage.directPath;
+
+  return {
+    message,
+    convertToMp4: true,
+  };
+}
+
+function pickProviderPayloadBase64(payload: any) {
+  return stripDataUrl(pickString(
+    payload?.base64,
+    payload?.media_base64,
+    payload?.mediaBase64,
+    payload?.file,
+    payload?.data?.base64,
+    payload?.data?.media_base64,
+    payload?.data?.mediaBase64,
+    payload?.data?.file,
+    payload?.message?.base64,
+    payload?.message?.mediaBase64
+  ));
+}
+
+async function downloadUazapiMediaBase64(instance: string, providerId: string, body: any) {
+  const mediaMessage = pickMediaMessage(body);
+  if (!instance || !providerId || !mediaMessage) return null;
+
+  try {
+    const payload = await uazapiFetch('/message/download', {
+      method: 'POST',
+      body: JSON.stringify(buildUazapiDownloadBody(providerId, mediaMessage)),
+    }, { instanceName: instance });
+
+    const mediaBase64 = pickProviderPayloadBase64(payload);
+    if (!mediaBase64) return null;
+
+    return {
+      media_base64: mediaBase64,
+      media_mimetype: pickString(
+        payload?.mimetype,
+        payload?.mimeType,
+        payload?.data?.mimetype,
+        payload?.data?.mimeType,
+        mediaMessage?.mimetype,
+        mediaMessage?.mimeType
+      ) || undefined,
+      media_file_name: pickString(
+        payload?.fileName,
+        payload?.filename,
+        payload?.name,
+        payload?.data?.fileName,
+        payload?.data?.filename,
+        mediaMessage?.fileName,
+        mediaMessage?.filename
+      ) || undefined,
+    };
+  } catch (error) {
+    console.error('[uazapi_webhook] Failed to cache media from UAZAPI:', error);
+    return null;
+  }
 }
 
 function isCallEvent(body: any, event: string) {
@@ -343,9 +449,22 @@ export async function POST(request: Request) {
       if (existing) return NextResponse.json({ ok: true, duplicated: true });
     }
 
+    let mediaMetadata = readUazapiMediaMetadata(body);
+    if (hasMedia && !mediaMetadata.media_base64 && providerId && instance) {
+      const downloadedMedia = await downloadUazapiMediaBase64(instance, providerId, body);
+      if (downloadedMedia?.media_base64) {
+        mediaMetadata = {
+          ...mediaMetadata,
+          ...downloadedMedia,
+        };
+      }
+    }
+
     if (hasAudio) {
       try {
-        audioTranscript = await transcribeUazapiAudio(body);
+        audioTranscript = mediaMetadata.media_base64
+          ? await transcribeAudio(mediaMetadata.media_base64, mediaMetadata.media_mimetype || 'audio/ogg')
+          : await transcribeUazapiAudio(body);
         if (audioTranscript) {
           aiCustomerMessage = `Audio transcrito do cliente: ${audioTranscript}`;
         }
@@ -441,7 +560,7 @@ export async function POST(request: Request) {
       provider_message_id: providerId || null,
       metadata: {
         ...(body || {}),
-        ...readUazapiMediaMetadata(body),
+        ...mediaMetadata,
         messageType: callEvent ? 'call' : body?.type,
         mediaType: callEvent ? 'call' : body?.type,
         isBrokerCall: callEvent ? fromMe : undefined,
