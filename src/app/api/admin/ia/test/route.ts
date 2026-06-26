@@ -27,15 +27,21 @@ async function findAdminForCorretora(corretoraName: string) {
   const { data: admins, error } = await supabaseAdmin
     .from('profiles')
     .select('id, nome, email, tipo_usuario, corretor_id, nome_empresa, telefone, status')
-    .eq('tipo_usuario', 'corretor_admin')
+    .in('tipo_usuario', ['corretor_admin', 'corretor'])
     .ilike('nome_empresa', corretoraName)
     .in('status', ['active', 'ativo', 'Ativo'])
+    .order('tipo_usuario', { ascending: true })
     .order('created_at', { ascending: true })
     .limit(10);
 
   if (error) throw error;
 
-  return (admins || []).find((profile) => profile.corretor_id) || null;
+  const activeAdmins = admins || [];
+  return (
+    activeAdmins.find((profile) => profile.tipo_usuario === 'corretor_admin' && profile.corretor_id) ||
+    activeAdmins.find((profile) => profile.tipo_usuario === 'corretor' && profile.corretor_id) ||
+    null
+  );
 }
 
 async function findBrokerForCorretora(corretoraName: string) {

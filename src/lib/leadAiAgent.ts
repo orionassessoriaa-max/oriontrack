@@ -271,8 +271,9 @@ async function findAiAdmin(corretorId: string): Promise<ProfileRow | null> {
     .from('profiles')
     .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
     .eq('corretor_id', corretorId)
-    .eq('tipo_usuario', 'corretor_admin')
+    .in('tipo_usuario', ['corretor_admin', 'corretor'])
     .in('status', ['active', 'ativo', 'Ativo'])
+    .order('tipo_usuario', { ascending: true })
     .order('created_at', { ascending: true })
     .limit(10);
 
@@ -280,7 +281,14 @@ async function findAiAdmin(corretorId: string): Promise<ProfileRow | null> {
   const configuredPhone = normalizePhone(process.env.ORION_TEST_AI_ADMIN_PHONE || '556181625459');
   const phoneMatch = activeAdmins.find((profile) => normalizePhone(profile.telefone) === configuredPhone);
 
-  return phoneMatch || activeAdmins.find((profile) => normalizePhone(profile.telefone)) || activeAdmins[0] || null;
+  return (
+    phoneMatch ||
+    activeAdmins.find((profile) => profile.tipo_usuario === 'corretor_admin' && normalizePhone(profile.telefone)) ||
+    activeAdmins.find((profile) => profile.tipo_usuario === 'corretor' && normalizePhone(profile.telefone)) ||
+    activeAdmins.find((profile) => profile.tipo_usuario === 'corretor_admin') ||
+    activeAdmins[0] ||
+    null
+  );
 }
 
 async function findResponsibleProfile(profileId?: string | null) {
