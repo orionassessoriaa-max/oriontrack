@@ -67,6 +67,31 @@ function readRemoteJid(body: any) {
   );
 }
 
+function readOwnerJid(body: any) {
+  return pickString(
+    body?.owner,
+    body?.ownerJid,
+    body?.connectedPhone,
+    body?.sessionPhone,
+    body?.me,
+    body?.me?.id,
+    body?.me?.jid,
+    body?.instance?.owner,
+    body?.instance?.phone,
+    body?.instance?.jid,
+    body?.data?.owner,
+    body?.data?.ownerJid,
+    body?.data?.connectedPhone,
+    body?.data?.sessionPhone,
+    body?.data?.me,
+    body?.data?.me?.id,
+    body?.data?.me?.jid,
+    body?.data?.instance?.owner,
+    body?.data?.instance?.phone,
+    body?.data?.instance?.jid
+  );
+}
+
 function readProviderId(body: any) {
   return pickString(
     body?.id,
@@ -396,6 +421,34 @@ async function resolveProfileCorretorScope(profile: any) {
   return Array.from(ids);
 }
 
+async function findProfileFromWebhook(body: any, instance: string) {
+  const profileId = profileIdFromUazapiInstance(instance);
+  if (profileId) {
+    const { data } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
+      .eq('id', profileId)
+      .maybeSingle();
+
+    if (data?.corretor_id) return data;
+  }
+
+  const ownerPhone = normalizePhone(readOwnerJid(body).split('@')[0]);
+  if (!ownerPhone || ownerPhone.length < 8) return null;
+
+  const last8 = ownerPhone.slice(-8);
+  const last8WithHyphen = `${last8.slice(0, 4)}-${last8.slice(4)}`;
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
+    .not('telefone', 'is', null)
+    .or(`telefone.ilike.%${last8},telefone.ilike.%${last8WithHyphen}`)
+    .limit(20);
+
+  const rows = data || [];
+  return rows.find((row) => normalizePhone(row?.telefone) === ownerPhone) || rows[0] || null;
+}
+
 async function findLead(profile: any, phone: string) {
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 8) return null;
@@ -493,16 +546,16 @@ export async function POST(request: Request) {
     }
 
     const instance = readWebhookInstanceName(body);
-    const profileId = profileIdFromUazapiInstance(instance);
-    if (!profileId) return NextResponse.json({ ok: true, ignored: true });
+    const profile = await findProfileFromWebhook(body, instance);
 
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
-      .eq('id', profileId)
-      .maybeSingle();
-
-    if (!profile?.corretor_id) return NextResponse.json({ ok: true, ignored: true });
+    if (!profile?.corretor_id) {
+      console.warn('[uazapi_webhook] Ignorado: nao consegui resolver profile da instancia/owner.', {
+        instance,
+        owner: readOwnerJid(body),
+        event,
+      });
+      return NextResponse.json({ ok: true, ignored: true, reason: 'profile_not_found' });
+    }
 
     let message = callEvent ? readCallText(body) : readText(body);
     
@@ -573,7 +626,16 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!message || !phone) return NextResponse.json({ ok: true, ignored: true });
+    if (!message || !phone) {
+      console.warn('[uazapi_webhook] Ignorado: mensagem ou telefone ausente.', {
+        instance,
+        profile: profile.id,
+        event,
+        hasMessage: Boolean(message),
+        remoteJid: readRemoteJid(body),
+      });
+      return NextResponse.json({ ok: true, ignored: true, reason: 'missing_message_or_phone' });
+    }
 
     if (!aiCustomerMessage) aiCustomerMessage = audioTranscript || message;
     const lead = await findLead(profile, phone);
