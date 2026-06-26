@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { evolutionFetch, getEvolutionInstanceApiKey } from '@/lib/evolution';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
+const MAX_CACHE_BASE64_BYTES = Number(process.env.INBOX_MEDIA_CACHE_MAX_BYTES || 15 * 1024 * 1024);
 
 async function getEvolutionMediaBase64(instance: string, providerId: string) {
   if (!providerId) return '';
@@ -256,6 +257,35 @@ function buildUazapiDownloadBody(providerId: string, mediaMessage: any) {
   return body;
 }
 
+function base64ByteLength(base64: string) {
+  const clean = stripDataUrl(base64) || '';
+  if (!clean) return 0;
+  const padding = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
+  return Math.floor((clean.length * 3) / 4) - padding;
+}
+
+async function cacheRecoveredMedia(message: any, payload: { base64?: string | null; url?: string | null; mimeType?: string | null; fileName?: string | null }) {
+  const base64 = stripDataUrl(payload.base64);
+  const shouldCacheBase64 = base64 && base64ByteLength(base64) <= MAX_CACHE_BASE64_BYTES;
+  const metadata = {
+    ...(message.metadata || {}),
+    ...(shouldCacheBase64 ? { media_base64: base64 } : {}),
+    ...(payload.url ? { media_url: payload.url } : {}),
+    ...(payload.mimeType ? { media_mimetype: payload.mimeType } : {}),
+    ...(payload.fileName ? { media_file_name: payload.fileName } : {}),
+    media_cached_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .update({ metadata })
+    .eq('id', message.id);
+
+  if (error) {
+    console.warn('[Media API] Nao foi possivel cachear midia recuperada:', error.message);
+  }
+}
+
 async function getMessageAndConversation(messageId: string) {
   const { data: message, error: msgError } = await supabaseAdmin
     .from('whatsapp_mensagens')
@@ -393,7 +423,9 @@ export async function GET(request: Request) {
         try {
           const evoBase64 = await getEvolutionMediaBase64(evoInstance, providerId);
           if (evoBase64) {
-            return NextResponse.json({ base64: evoBase64, mimeType, fileName });
+            const recovered = { base64: evoBase64, mimeType, fileName };
+            await cacheRecoveredMedia(message, recovered);
+            return NextResponse.json(recovered);
           }
         } catch (evoErr: any) {
           console.warn(`[Media API] Evolution API falhou em descriptografar:`, evoErr?.message || evoErr);
@@ -421,20 +453,24 @@ export async function GET(request: Request) {
 
           const base64 = pickProviderPayloadBase64(payload);
           if (base64) {
-            return NextResponse.json({
+            const recovered = {
               base64,
               mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
               fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
-            });
+            };
+            await cacheRecoveredMedia(message, recovered);
+            return NextResponse.json(recovered);
           }
 
           const url = pickProviderPayloadUrl(payload);
           if (url) {
-            return NextResponse.json({
+            const recovered = {
               url,
               mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
               fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
-            });
+            };
+            await cacheRecoveredMedia(message, recovered);
+            return NextResponse.json(recovered);
           }
         } catch (uazapiErr: any) {
           console.warn(`[Media API] UAZAPI nao retornou midia via ${attempt.path} na instancia ${inst}:`, uazapiErr?.message || uazapiErr);
@@ -449,7 +485,9 @@ export async function GET(request: Request) {
           console.log(`[Media API] UAZAPI falhou. Tentando Evolution API como fallback secundario.`);
           const evoBase64 = await getEvolutionMediaBase64(evoInstance, providerId);
           if (evoBase64) {
-            return NextResponse.json({ base64: evoBase64, mimeType, fileName });
+            const recovered = { base64: evoBase64, mimeType, fileName };
+            await cacheRecoveredMedia(message, recovered);
+            return NextResponse.json(recovered);
           }
         } catch (evoErr: any) {
           console.warn(`[Media API] Evolution API fallback secundario falhou:`, evoErr?.message || evoErr);

@@ -1141,6 +1141,9 @@ export default function BrokerInboxPage() {
       const media = { url, mimeType, fileName };
       setMediaUrls(prev => ({ ...prev, [message.id]: media }));
       return media;
+    } catch (err) {
+      setMediaLoadErrors(prev => ({ ...prev, [message.id]: true }));
+      throw err;
     } finally {
       setLoadingMediaId(null);
     }
@@ -2096,6 +2099,7 @@ export default function BrokerInboxPage() {
                       const mediaKind = getMessageMediaKind(message);
                       const media = mediaUrls[message.id];
                       const isMediaLoading = loadingMediaId === message.id;
+                      const mediaError = Boolean(mediaLoadErrors[message.id]);
                       const fileName = media?.fileName || getMessageFileName(message) || message.mensagem.replace(/^.*?(Imagem|Arquivo|Video|Vídeo)\s*:?\s*/i, '').replace(/[()]/g, '').trim() || 'Arquivo recebido';
                       const previousMessage = filteredChatMessages[index - 1];
                       const showDaySeparator = !previousMessage || messageDayKey(previousMessage.created_at) !== messageDayKey(message.created_at);
@@ -2205,7 +2209,7 @@ export default function BrokerInboxPage() {
                                     <div>
                                       <p className="text-xs font-black">Imagem</p>
                                       <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
-                                        {isMediaLoading ? 'Carregando...' : 'Clique para visualizar'}
+                                        {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia antiga indisponivel. Tentar novamente' : 'Clique para visualizar'}
                                       </p>
                                     </div>
                                   </div>
@@ -2229,7 +2233,7 @@ export default function BrokerInboxPage() {
                                     <div>
                                       <p className="text-xs font-black">Video</p>
                                       <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
-                                        {isMediaLoading ? 'Carregando...' : 'Clique para abrir'}
+                                        {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia antiga indisponivel. Tentar novamente' : 'Clique para abrir'}
                                       </p>
                                     </div>
                                   </button>
@@ -2249,7 +2253,7 @@ export default function BrokerInboxPage() {
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate text-xs font-black">{fileName}</p>
                                   <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
-                                    Clique para abrir arquivo
+                                    {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia antiga indisponivel. Tentar novamente' : 'Clique para abrir arquivo'}
                                   </p>
                                 </div>
                                 <Download size={14} className="shrink-0 opacity-80" />
