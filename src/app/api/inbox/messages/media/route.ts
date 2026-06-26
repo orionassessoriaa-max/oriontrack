@@ -2,8 +2,31 @@ import { NextResponse } from 'next/server';
 import { requireApiUser } from '@/lib/api/security';
 import { uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { evolutionFetch, getEvolutionInstanceApiKey } from '@/lib/evolution';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
+
+async function getEvolutionMediaBase64(instance: string, providerId: string) {
+  if (!providerId) return '';
+  try {
+    const instanceApiKey = await getEvolutionInstanceApiKey(instance);
+    const payload = await evolutionFetch(`/chat/getBase64FromMediaMessage/${instance}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        message: {
+          key: {
+            id: providerId,
+          },
+        },
+      }),
+    }, instanceApiKey);
+
+    return String(payload?.base64 || payload?.data?.base64 || payload?.media || payload?.data?.media || '').trim();
+  } catch (err: any) {
+    console.error(`[getEvolutionMediaBase64 ERROR]`, err?.message || err);
+    return '';
+  }
+}
 
 function pickMediaMessage(metadata: any) {
   const roots = [
@@ -359,7 +382,26 @@ export async function GET(request: Request) {
       'apolo_master_sender'
     ].filter(Boolean) as string[]));
 
-    console.log(`[Media API] Instancias para tentar download da mensagem ${messageId}:`, instancesToTry);
+    const isEvolution =
+      message.metadata?.event === 'messages.upsert' ||
+      String(message.metadata?.destination || '').includes('evolution');
+
+    if (isEvolution) {
+      console.log(`[Media API] Mensagem identificada como Evolution API. Tentando Evolution primeiro.`);
+      const evoInstance = metadataInstance || currentActiveInstance;
+      if (evoInstance) {
+        try {
+          const evoBase64 = await getEvolutionMediaBase64(evoInstance, providerId);
+          if (evoBase64) {
+            return NextResponse.json({ base64: evoBase64, mimeType, fileName });
+          }
+        } catch (evoErr: any) {
+          console.warn(`[Media API] Evolution API falhou em descriptografar:`, evoErr?.message || evoErr);
+        }
+      }
+    }
+
+    console.log(`[Media API] Instancias para tentar download UAZAPI da mensagem ${messageId}:`, instancesToTry);
 
     for (const inst of instancesToTry) {
       const attempts = [
@@ -400,6 +442,21 @@ export async function GET(request: Request) {
       }
     }
 
+    if (!isEvolution) {
+      const evoInstance = metadataInstance || currentActiveInstance;
+      if (evoInstance) {
+        try {
+          console.log(`[Media API] UAZAPI falhou. Tentando Evolution API como fallback secundario.`);
+          const evoBase64 = await getEvolutionMediaBase64(evoInstance, providerId);
+          if (evoBase64) {
+            return NextResponse.json({ base64: evoBase64, mimeType, fileName });
+          }
+        } catch (evoErr: any) {
+          console.warn(`[Media API] Evolution API fallback secundario falhou:`, evoErr?.message || evoErr);
+        }
+      }
+    }
+
     const fallbackBase64 = pickMediaBase64(message.metadata);
     if (fallbackBase64) {
       return NextResponse.json({ base64: fallbackBase64, mimeType, fileName });
@@ -410,7 +467,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ url: fallbackUrl, mimeType, fileName });
     }
 
-    return NextResponse.json({ error: 'Nao consegui extrair a midia desta mensagem pela UAZAPI.' }, { status: 404 });
+    return NextResponse.json({ error: 'Nao consegui extrair a midia desta mensagem pelo UAZAPI ou Evolution API.' }, { status: 404 });
   } catch (error: any) {
     console.error('[Media API Root Error]', error);
     return NextResponse.json({ error: error.message || 'Erro interno.' }, { status: 500 });
