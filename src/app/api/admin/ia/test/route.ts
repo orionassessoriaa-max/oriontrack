@@ -152,13 +152,20 @@ export async function POST(request: Request) {
       },
     });
 
+    if (!ai?.started) {
+      return NextResponse.json({
+        ok: false,
+        lead,
+        ai,
+        error: ai?.reason || 'Lead de teste criado, mas a IA nao iniciou.',
+      }, { status: 400 });
+    }
+
     return NextResponse.json({
       ok: true,
       lead,
       ai,
-      message: ai?.started
-        ? 'Teste enviado. A IA iniciou a conversa pelo WhatsApp.'
-        : ai?.reason || 'Lead de teste criado, mas a IA nao iniciou.',
+      message: 'Teste enviado. A IA iniciou a conversa pelo WhatsApp.',
     });
   } catch (error: any) {
     console.error('[api_admin_ia_test] POST error:', error);
