@@ -172,12 +172,18 @@ function pickMediaUrl(metadata: any) {
 function pickProviderPayloadBase64(payload: any) {
   return stripDataUrl(pickString(
     payload?.base64,
+    payload?.media_base64,
+    payload?.mediaBase64,
     payload?.media,
     payload?.file,
     payload?.data?.base64,
+    payload?.data?.media_base64,
+    payload?.data?.mediaBase64,
     payload?.data?.media,
     payload?.data?.file,
     payload?.response?.base64,
+    payload?.response?.media_base64,
+    payload?.response?.mediaBase64,
     payload?.response?.media,
     payload?.response?.file
   ));
@@ -210,51 +216,68 @@ function pickProviderPayloadUrl(payload: any) {
   return isBrowserOpenableUrl(value) ? value : null;
 }
 
-function buildUazapiDownloadBody(providerId: string, mediaMessage: any) {
+function buildUazapiDownloadPayloads(providerId: string, mediaMessage: any) {
   const body: Record<string, any> = {
     id: providerId,
     messageId: providerId,
   };
+  const wrappedMessage: Record<string, any> = {};
 
   if (mediaMessage?.url) {
     body.Url = mediaMessage.url;
     body.url = mediaMessage.url;
+    wrappedMessage.Url = mediaMessage.url;
   }
   if (mediaMessage?.mimetype || mediaMessage?.mimeType) {
     body.Mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
     body.mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
+    wrappedMessage.Mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
   }
 
   const mediaKey = byteObjectToBase64(mediaMessage?.mediaKey);
   if (mediaKey) {
     body.MediaKey = mediaKey;
     body.mediaKey = mediaKey;
+    wrappedMessage.MediaKey = mediaKey;
   }
 
   const fileSha256 = byteObjectToBase64(mediaMessage?.fileSha256);
   if (fileSha256) {
     body.FileSHA256 = fileSha256;
     body.fileSha256 = fileSha256;
+    wrappedMessage.FileSHA256 = fileSha256;
   }
 
   const fileEncSha256 = byteObjectToBase64(mediaMessage?.fileEncSha256);
   if (fileEncSha256) {
     body.FileEncSHA256 = fileEncSha256;
     body.fileEncSha256 = fileEncSha256;
+    wrappedMessage.FileEncSHA256 = fileEncSha256;
   }
 
   const fileLength = longToNumber(mediaMessage?.fileLength);
   if (fileLength) {
     body.FileLength = fileLength;
     body.fileLength = fileLength;
+    wrappedMessage.FileLength = fileLength;
   }
 
   if (mediaMessage?.directPath) {
     body.DirectPath = mediaMessage.directPath;
     body.directPath = mediaMessage.directPath;
+    wrappedMessage.DirectPath = mediaMessage.directPath;
   }
 
-  return body;
+  return [
+    {
+      message: {
+        key: { id: providerId },
+        message: wrappedMessage,
+      },
+      convertToMp4: true,
+    },
+    body,
+  ];
 }
 
 function base64ByteLength(base64: string) {
@@ -436,12 +459,10 @@ export async function GET(request: Request) {
     console.log(`[Media API] Instancias para tentar download UAZAPI da mensagem ${messageId}:`, instancesToTry);
 
     for (const inst of instancesToTry) {
-      const attempts = [
-        {
-          path: '/message/download',
-          body: buildUazapiDownloadBody(providerId, mediaMessage),
-        },
-      ];
+      const attempts = buildUazapiDownloadPayloads(providerId, mediaMessage).map((body) => ({
+        path: '/message/download',
+        body,
+      }));
 
       for (const attempt of attempts) {
         try {
