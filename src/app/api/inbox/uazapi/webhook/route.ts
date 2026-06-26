@@ -369,6 +369,7 @@ async function findLead(profile: any, phone: string) {
 
   const rows = data || [];
   const exact = rows.find((row) => normalizePhone(row?.telefone) === digits);
+  if (digits.length >= 12) return exact || null;
   return exact || rows[0] || null;
 }
 
@@ -400,6 +401,7 @@ async function findConversation(corretorId: string, phone: string, leadId?: stri
 
   const rows = data || [];
   const exact = rows.find((row) => normalizePhone(row?.telefone) === digits);
+  if (digits.length >= 12) return exact || null;
   return exact || rows[0] || null;
 }
 
