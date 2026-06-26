@@ -213,6 +213,17 @@ function normalizeLeadNotificationMode(value: unknown) {
     : 'responsavel_e_admin_se_integrante';
 }
 
+async function tryStartLeadAiForWebhook(leadId?: string | null) {
+  if (!leadId) return null;
+
+  try {
+    return await startLeadAiIfEligible(leadId);
+  } catch (aiErr) {
+    console.error('[Webhook n8n] Failed starting lead AI:', aiErr);
+    return null;
+  }
+}
+
 async function resolveCorretorId(body: any) {
   let resolvedId: string | null = null;
 
@@ -482,6 +493,7 @@ export async function POST(request: Request) {
             duplicate: true,
             enriched: true,
             lead: enrichedLead,
+            ai: await tryStartLeadAiForWebhook(enrichedLead.id),
             message: 'Lead existente enriquecido com dados novos.',
           });
         }
@@ -493,6 +505,7 @@ export async function POST(request: Request) {
           success: true,
           duplicate: true,
           lead: duplicate,
+          ai: await tryStartLeadAiForWebhook(duplicate.id),
           message: 'Lead duplicado ignorado.',
         });
       }
@@ -523,14 +536,8 @@ export async function POST(request: Request) {
       .eq('id', data.id)
       .maybeSingle();
 
-    let suppressStandardLeadNotifications = false;
-    try {
-      const aiStart = await startLeadAiIfEligible(data.id);
-      suppressStandardLeadNotifications = Boolean(aiStart?.eligible);
-    } catch (aiErr) {
-      suppressStandardLeadNotifications = true;
-      console.error('[Webhook n8n] Failed starting lead AI:', aiErr);
-    }
+    const aiStart = await tryStartLeadAiForWebhook(data.id);
+    const suppressStandardLeadNotifications = Boolean(aiStart?.eligible);
 
     if (finalLead && !suppressStandardLeadNotifications) {
       const { data: leadBroker } = await supabaseAdmin

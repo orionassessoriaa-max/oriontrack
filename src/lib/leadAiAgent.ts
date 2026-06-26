@@ -23,6 +23,17 @@ export function isAiOutbound(phone: string, text: string) {
   return recentAiOutboundMessages.has(signature);
 }
 
+function sessionContextStart(session: any) {
+  return (
+    session?.created_at ||
+    session?.started_at ||
+    session?.last_customer_message_at ||
+    session?.last_ai_message_at ||
+    session?.updated_at ||
+    null
+  );
+}
+
 const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
@@ -775,11 +786,18 @@ export async function continueLeadAiFromIncoming(options: {
   const adminProfile = await findAiAdmin(lead.corretor_id);
   if (!adminProfile) return { handled: false, reason: 'Admin IA da concessionaria nao encontrado.' };
 
-  const { data: history } = await supabaseAdmin
+  let historyQuery = supabaseAdmin
     .from('whatsapp_mensagens')
     .select('direction, remetente, mensagem, metadata, created_at')
     .eq('conversa_id', options.conversationId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  const contextStart = sessionContextStart(session);
+  if (contextStart) {
+    historyQuery = historyQuery.gte('created_at', contextStart);
+  }
+
+  const { data: history } = await historyQuery
     .limit(40);
 
   const ai = await askAline(lead, history || [], options.customerMessage, aiConfig);
