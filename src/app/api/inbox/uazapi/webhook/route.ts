@@ -365,10 +365,11 @@ async function findLead(profile: any, phone: string) {
 
   const { data } = await query
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(20);
 
-  return data;
+  const rows = data || [];
+  const exact = rows.find((row) => normalizePhone(row?.telefone) === digits);
+  return exact || rows[0] || null;
 }
 
 async function findConversation(corretorId: string, phone: string, leadId?: string | null) {
@@ -395,10 +396,11 @@ async function findConversation(corretorId: string, phone: string, leadId?: stri
     .eq('corretor_id', corretorId)
     .or(`telefone.eq.${phone},telefone.ilike.%${last8}`)
     .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(20);
 
-  return data;
+  const rows = data || [];
+  const exact = rows.find((row) => normalizePhone(row?.telefone) === digits);
+  return exact || rows[0] || null;
 }
 
 export async function POST(request: Request) {
