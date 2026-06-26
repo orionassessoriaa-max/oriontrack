@@ -79,6 +79,35 @@ function readUazapiConnected(payload: any) {
   );
 }
 
+function asArray(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.instances)) return payload.instances;
+  if (Array.isArray(payload?.response)) return payload.response;
+  return [];
+}
+
+function readInstanceName(instance: any) {
+  return String(
+    instance?.name ||
+    instance?.instanceName ||
+    instance?.instance ||
+    instance?.session ||
+    instance?.sessionkey ||
+    ''
+  );
+}
+
+async function fetchUazapiInstanceStateFromList(instance: string) {
+  const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
+  const found = asArray(payload).find((item) => readInstanceName(item) === instance);
+  if (!found) return 'close';
+  return normalizeUazapiState(
+    found?.status || found?.state || found?.connectionStatus || found?.sessionStatus,
+    Boolean(found?.connected || found?.isConnected || found?.loggedIn || found?.owner || found?.jid)
+  );
+}
+
 function extractUazapiQrCode(payload: any): string | null {
   return (
     payload?.qrcode ||
@@ -100,10 +129,20 @@ async function fetchUazapiInstanceState(instance: string) {
     const payload = await uazapiFetch('/instance/status', { method: 'GET' }, { instanceName: instance });
     const statusStr = readUazapiStatus(payload);
     const isConnected = readUazapiConnected(payload);
-    return normalizeUazapiState(statusStr, isConnected);
+    const state = normalizeUazapiState(statusStr, isConnected);
+    if (state !== 'close') return state;
+
+    // Alguns retornos do UAZAPI podem vir incompletos no endpoint de status.
+    // Antes de mostrar desconectado, confirme na lista geral de instancias.
+    return await fetchUazapiInstanceStateFromList(instance);
   } catch (error) {
-    console.warn(`[GET /api/inbox/uazapi/connect] status check failed for ${instance}. returning close.`, error);
-    return 'close';
+    console.warn(`[GET /api/inbox/uazapi/connect] status check failed for ${instance}. Trying instance/all fallback.`, error);
+    try {
+      return await fetchUazapiInstanceStateFromList(instance);
+    } catch (fallbackError) {
+      console.warn(`[GET /api/inbox/uazapi/connect] instance/all fallback failed for ${instance}. returning close.`, fallbackError);
+      return 'close';
+    }
   }
 }
 
