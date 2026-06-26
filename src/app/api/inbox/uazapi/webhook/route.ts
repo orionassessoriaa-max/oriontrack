@@ -56,14 +56,30 @@ function readRemoteJid(body: any) {
     body?.sender,
     body?.from,
     body?.remoteJid,
+    body?.remotejid,
     body?.chatId,
+    body?.chatid,
+    body?.chat_id,
+    body?.jid,
+    body?.participant,
     body?.key?.remoteJid,
+    body?.key?.participant,
+    body?.message?.key?.remoteJid,
+    body?.message?.key?.participant,
     body?.data?.phone,
     body?.data?.sender,
     body?.data?.from,
     body?.data?.remoteJid,
+    body?.data?.remotejid,
     body?.data?.chatId,
-    body?.data?.key?.remoteJid
+    body?.data?.chatid,
+    body?.data?.chat_id,
+    body?.data?.jid,
+    body?.data?.participant,
+    body?.data?.key?.remoteJid,
+    body?.data?.key?.participant,
+    body?.data?.message?.key?.remoteJid,
+    body?.data?.message?.key?.participant
   );
 }
 
@@ -611,7 +627,10 @@ export async function POST(request: Request) {
       else if (hasDocument) message = '📎 Arquivo';
     }
 
-    const remoteJid = readRemoteJid(body);
+    let remoteJid = readRemoteJid(body);
+    if (!remoteJid && providerId.includes(':')) {
+      remoteJid = providerId.split(':')[0];
+    }
     let phone = normalizePhone(remoteJid.split('@')[0]);
 
     // Tratar quando a ligação de voz é efetuada pelo próprio corretor de fora do CRM.
@@ -633,6 +652,9 @@ export async function POST(request: Request) {
         event,
         hasMessage: Boolean(message),
         remoteJid: readRemoteJid(body),
+        providerId,
+        bodyKeys: Object.keys(body || {}).slice(0, 30),
+        dataKeys: Object.keys(body?.data || {}).slice(0, 30),
       });
       return NextResponse.json({ ok: true, ignored: true, reason: 'missing_message_or_phone' });
     }
