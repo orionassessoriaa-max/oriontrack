@@ -9,6 +9,8 @@ function readText(body: any) {
     body?.text ||
     body?.caption ||
     body?.messageText ||
+    body?.message?.content ||
+    body?.message?.caption ||
     body?.message?.text ||
     body?.message?.conversation ||
     body?.message?.extendedTextMessage?.text ||
@@ -18,6 +20,8 @@ function readText(body: any) {
     body?.data?.text ||
     body?.data?.caption ||
     body?.data?.messageText ||
+    body?.data?.message?.content ||
+    body?.data?.message?.caption ||
     body?.data?.message?.text ||
     body?.data?.message?.conversation ||
     body?.data?.message?.extendedTextMessage?.text ||
@@ -88,6 +92,8 @@ function readRemoteJid(body: any) {
     body?.chatId,
     body?.chatid,
     body?.chat_id,
+    body?.chat,
+    body?.chatSource,
     body?.jid,
     body?.participant,
     body?.key?.remoteJid,
@@ -102,6 +108,8 @@ function readRemoteJid(body: any) {
     body?.data?.chatId,
     body?.data?.chatid,
     body?.data?.chat_id,
+    body?.data?.chat,
+    body?.data?.chatSource,
     body?.data?.jid,
     body?.data?.participant,
     body?.data?.key?.remoteJid,
@@ -110,6 +118,8 @@ function readRemoteJid(body: any) {
     body?.data?.message?.key?.participant,
     body?.message?.chatid,
     body?.message?.chatId,
+    body?.message?.chat,
+    body?.message?.chatSource,
     body?.message?.remoteJid,
     body?.message?.remotejid,
     body?.message?.sender,
@@ -117,12 +127,14 @@ function readRemoteJid(body: any) {
     body?.message?.jid,
     body?.data?.message?.chatid,
     body?.data?.message?.chatId,
+    body?.data?.message?.chat,
+    body?.data?.message?.chatSource,
     body?.data?.message?.remoteJid,
     body?.data?.message?.remotejid,
     body?.data?.message?.sender,
     body?.data?.message?.from,
     body?.data?.message?.jid,
-    deepPickStringByKey(body, ['remoteJid', 'remotejid', 'chatId', 'chatid', 'chat_id', 'sender', 'from', 'phone', 'jid'])
+    deepPickStringByKey(body, ['remoteJid', 'remotejid', 'chatId', 'chatid', 'chat_id', 'chat', 'chatSource', 'sender', 'from', 'phone', 'jid'])
   );
 }
 
@@ -662,7 +674,19 @@ async function findConversation(corretorId: string, phone: string, leadId?: stri
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const event = String(body?.wook || body?.event || body?.type || body?.data?.wook || body?.data?.event || body?.data?.type || '').toUpperCase();
+    const event = String(
+      body?.wook ||
+      body?.event ||
+      body?.EventType ||
+      body?.eventType ||
+      body?.type ||
+      body?.data?.wook ||
+      body?.data?.event ||
+      body?.data?.EventType ||
+      body?.data?.eventType ||
+      body?.data?.type ||
+      ''
+    ).toUpperCase();
 
     const callEvent = isCallEvent(body, event);
 
