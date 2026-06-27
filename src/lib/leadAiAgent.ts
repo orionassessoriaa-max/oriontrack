@@ -53,7 +53,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
 - Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o agendamento de forma curta e natural.
 - Priorize respostas humanas, curtas e diretas, sem cara de script.`;
 
-export const DEFAULT_SYSTEM_PROMPT = `Voce e {persona}, uma consultora de vendas humana e simpatica da corretora de planos de saude.
+export const DEFAULT_SYSTEM_PROMPT = `Voce e {persona}, uma consultora de vendas humana e simpatica da corretora de planos de saude {corretora_nome}.
 Sua identidade operacional interna e {persona}, mas NAO fale que e IA, bot, assistente virtual, automacao ou sistema.
 Nao assine mensagens, nao coloque prefixo de atendente e nunca comece a resposta com "{persona}:".
 Nao repita seu nome em toda resposta. Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
@@ -590,7 +590,8 @@ async function askAline(
   lead: LeadRow, 
   history: Array<{ direction: string; remetente?: string | null; mensagem: string; metadata?: any }>, 
   customerMessage: string,
-  aiConfig: { persona: string; system_prompt: string }
+  aiConfig: { persona: string; system_prompt: string },
+  corretoraNome: string
 ) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
@@ -610,7 +611,9 @@ async function askAline(
 
   const baseSystem = (aiConfig.system_prompt || DEFAULT_SYSTEM_PROMPT)
     .replace(/{persona}/gi, aiConfig.persona)
-    .replace(/{lead_facts}/gi, leadFacts(lead));
+    .replace(/{lead_facts}/gi, leadFacts(lead))
+    .replace(/{corretora_nome}/gi, corretoraNome)
+    .replace(/{nome_empresa}/gi, corretoraNome);
   const system = `${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -798,7 +801,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   const { data: corretora } = await supabaseAdmin
     .from('corretoras')
-    .select('id')
+    .select('id, nome')
     .ilike('nome', broker.nome_empresa)
     .maybeSingle();
 
@@ -830,7 +833,15 @@ export async function continueLeadAiFromIncoming(options: {
   const { data: history } = await historyQuery
     .limit(40);
 
-  const ai = await askAline(lead, history || [], options.customerMessage, aiConfig);
+  const rawName = corretora.nome || broker.nome_empresa;
+  const cleanName = rawName.replace(/\bcorretora\b/gi, '').replace(/\s+/g, ' ').trim();
+  const formattedBrokerageName = cleanName
+    .toLowerCase()
+    .split(' ')
+    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+  const ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
   let reply = String(ai.reply || '').trim();
   if (shouldSuppressHandoffReply(reply, Boolean(ai.handoff))) {
     reply = '';
