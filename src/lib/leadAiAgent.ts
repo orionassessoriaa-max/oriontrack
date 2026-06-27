@@ -4,6 +4,11 @@ import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
 
+// Lock in-memory por leadId para evitar duplo disparo quando UAZAPI
+// entrega o mesmo webhook duas vezes ao mesmo tempo
+const processingLeadLocks = new Map<string, number>();
+const AI_LOCK_TTL_MS = 30_000;
+
 function cleanSignatureText(text: string) {
   return String(text || '').replace(/\s+/g, '').replace(/[\u{1F300}-\u{1FAFF}]/gu, '').toLowerCase();
 }
@@ -42,8 +47,9 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
 - Nao diga que voce e IA, bot, automacao, assistente virtual ou sistema.
 - Nao use prefixo de atendente, assinatura ou formato "Aline:" nas mensagens.
 - Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
-- Se tiver qualquer duvida, inseguranca, confusao, pedido de preco, pergunta tecnica de operadora, reclamacao, mensagem desconexa ou palavra "alvorada": retorne "handoff": true e "reply": "".
-- Em handoff por duvida ou confusao, nunca mande mensagem para o cliente. O Orion Track vai chamar o humano internamente.
+- Se o cliente pedir esclarecimento sobre algo que voce acabou de perguntar (ex: "como assim?", "nao entendi", "que isso?", "pq?", "explica", "o que e isso"), reexplique de forma simples, curta e natural como uma humana faria — NAO faca handoff nesses casos.
+- So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar a palavra "alvorada".
+- Em handoff por duvida ou confusao real, nunca mande mensagem para o cliente. O Orion Track vai chamar o humano internamente.
 - Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o agendamento de forma curta e natural.
 - Priorize respostas humanas, curtas e diretas, sem cara de script.`;
 
@@ -755,6 +761,16 @@ export async function continueLeadAiFromIncoming(options: {
   customerMessage: string;
   incomingWasAudio?: boolean;
 }) {
+  // Lock in-memory: se ja esta processando para este lead, ignora duplicata
+  const now = Date.now();
+  const existingLock = processingLeadLocks.get(options.leadId);
+  if (existingLock && now - existingLock < AI_LOCK_TTL_MS) {
+    console.log(`[lead_ai_agent] Lock ativo para lead ${options.leadId}, ignorando chamada duplicada.`);
+    return { handled: false, reason: 'Duplicate call blocked by lock.' };
+  }
+  processingLeadLocks.set(options.leadId, now);
+
+  try {
   const { data: session } = await supabaseAdmin
     .from('lead_ai_sessions')
     .select('*')
@@ -762,7 +778,7 @@ export async function continueLeadAiFromIncoming(options: {
     .eq('status', 'active')
     .maybeSingle();
 
-  if (!session) return { handled: false, reason: 'Sem sessao ativa.' };
+  if (!session) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Sem sessao ativa.' }; }
 
   const { data: lead } = await supabaseAdmin
     .from('leads')
@@ -770,10 +786,10 @@ export async function continueLeadAiFromIncoming(options: {
     .eq('id', options.leadId)
     .maybeSingle();
 
-  if (!lead) return { handled: false, reason: 'Lead nao encontrado.' };
+  if (!lead) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Lead nao encontrado.' }; }
 
   const broker = await findBroker(lead.corretor_id);
-  if (!broker?.nome_empresa) return { handled: false, reason: 'Lead sem concessionaria.' };
+  if (!broker?.nome_empresa) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Lead sem concessionaria.' }; }
 
   const { data: corretora } = await supabaseAdmin
     .from('corretoras')
@@ -781,7 +797,7 @@ export async function continueLeadAiFromIncoming(options: {
     .ilike('nome', broker.nome_empresa)
     .maybeSingle();
 
-  if (!corretora) return { handled: false, reason: 'Concessionaria nao cadastrada no registro.' };
+  if (!corretora) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Concessionaria nao cadastrada no registro.' }; }
 
   const { data: aiConfig } = await supabaseAdmin
     .from('corretora_ai_configs')
@@ -790,10 +806,10 @@ export async function continueLeadAiFromIncoming(options: {
     .eq('status', 'ativo')
     .maybeSingle();
 
-  if (!aiConfig) return { handled: false, reason: 'IA desativada para esta concessionaria.' };
+  if (!aiConfig) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'IA desativada para esta concessionaria.' }; }
 
   const adminProfile = await findAiAdmin(lead.corretor_id);
-  if (!adminProfile) return { handled: false, reason: 'Admin IA da concessionaria nao encontrado.' };
+  if (!adminProfile) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Admin IA da concessionaria nao encontrado.' }; }
 
   let historyQuery = supabaseAdmin
     .from('whatsapp_mensagens')
@@ -875,6 +891,10 @@ export async function continueLeadAiFromIncoming(options: {
   }
 
   return { handled: true, handoff: Boolean(ai.handoff) };
+  } finally {
+    // Libera o lock apos processamento (seja sucesso ou erro)
+    processingLeadLocks.delete(options.leadId);
+  }
 }
 
 export async function checkLeadAiTimeouts() {
