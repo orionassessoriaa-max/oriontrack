@@ -4,32 +4,60 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming, isAiOutbound } from '@/lib/leadAiAgent';
 
 function readText(body: any) {
-  return String(
+  return pickString(
     body?.content ||
     body?.text ||
     body?.caption ||
-    body?.message ||
     body?.messageText ||
-    body?.data?.content ||
-    body?.data?.text ||
-    body?.data?.caption ||
-    body?.data?.messageText ||
-    body?.data?.message?.conversation ||
-    body?.data?.message?.extendedTextMessage?.text ||
-    body?.data?.message?.imageMessage?.caption ||
-    body?.data?.message?.videoMessage?.caption ||
+    body?.message?.text ||
     body?.message?.conversation ||
     body?.message?.extendedTextMessage?.text ||
     body?.message?.imageMessage?.caption ||
     body?.message?.videoMessage?.caption ||
-    ''
-  ).trim();
+    body?.data?.content ||
+    body?.data?.text ||
+    body?.data?.caption ||
+    body?.data?.messageText ||
+    body?.data?.message?.text ||
+    body?.data?.message?.conversation ||
+    body?.data?.message?.extendedTextMessage?.text ||
+    body?.data?.message?.imageMessage?.caption ||
+    body?.data?.message?.videoMessage?.caption ||
+    deepPickStringByKey(body, ['text', 'conversation', 'caption', 'messageText', 'body'])
+  );
 }
 
 function pickString(...values: any[]) {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) return value.trim();
   }
+  return '';
+}
+
+function deepPickStringByKey(value: any, wantedKeys: string[], depth = 0): string {
+  if (!value || depth > 4) return '';
+  if (Array.isArray(value)) {
+    for (const item of value.slice(0, 20)) {
+      const found = deepPickStringByKey(item, wantedKeys, depth + 1);
+      if (found) return found;
+    }
+    return '';
+  }
+  if (typeof value !== 'object') return '';
+
+  const wanted = new Set(wantedKeys.map((key) => key.toLowerCase()));
+  for (const [key, item] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase();
+    if (wanted.has(normalizedKey) && typeof item === 'string' && item.trim()) {
+      return item.trim();
+    }
+  }
+
+  for (const item of Object.values(value)) {
+    const found = deepPickStringByKey(item, wantedKeys, depth + 1);
+    if (found) return found;
+  }
+
   return '';
 }
 
@@ -79,7 +107,22 @@ function readRemoteJid(body: any) {
     body?.data?.key?.remoteJid,
     body?.data?.key?.participant,
     body?.data?.message?.key?.remoteJid,
-    body?.data?.message?.key?.participant
+    body?.data?.message?.key?.participant,
+    body?.message?.chatid,
+    body?.message?.chatId,
+    body?.message?.remoteJid,
+    body?.message?.remotejid,
+    body?.message?.sender,
+    body?.message?.from,
+    body?.message?.jid,
+    body?.data?.message?.chatid,
+    body?.data?.message?.chatId,
+    body?.data?.message?.remoteJid,
+    body?.data?.message?.remotejid,
+    body?.data?.message?.sender,
+    body?.data?.message?.from,
+    body?.data?.message?.jid,
+    deepPickStringByKey(body, ['remoteJid', 'remotejid', 'chatId', 'chatid', 'chat_id', 'sender', 'from', 'phone', 'jid'])
   );
 }
 
@@ -465,6 +508,74 @@ async function findProfileFromWebhook(body: any, instance: string) {
   return rows.find((row) => normalizePhone(row?.telefone) === ownerPhone) || rows[0] || null;
 }
 
+async function findProfileByCorretorId(corretorId?: string | null) {
+  if (!corretorId) return null;
+
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
+    .eq('corretor_id', corretorId)
+    .in('tipo_usuario', ['corretor_membro', 'corretor', 'corretor_admin'])
+    .order('tipo_usuario', { ascending: true })
+    .limit(10);
+
+  const rows = data || [];
+  return (
+    rows.find((row) => row.tipo_usuario === 'corretor_membro') ||
+    rows.find((row) => row.tipo_usuario === 'corretor') ||
+    rows.find((row) => row.tipo_usuario === 'corretor_admin') ||
+    rows[0] ||
+    null
+  );
+}
+
+async function findProfileFromCrmPhone(phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8) return null;
+
+  const last8 = digits.slice(-8);
+  const last8WithHyphen = `${last8.slice(0, 4)}-${last8.slice(4)}`;
+
+  const { data: leads } = await supabaseAdmin
+    .from('leads')
+    .select('id, corretor_id, responsavel_profile_id, telefone, created_at')
+    .or(`telefone.ilike.%${last8},telefone.ilike.%${last8WithHyphen}`)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  const leadRows = leads || [];
+  const exactLeadRows = leadRows.filter((row) => normalizePhone(row?.telefone) === digits);
+  const activeAiLead = await pickLeadWithActiveAiSession(exactLeadRows.length > 0 ? exactLeadRows : leadRows);
+  const lead = activeAiLead || exactLeadRows[0] || leadRows[0] || null;
+
+  if (lead?.responsavel_profile_id) {
+    const { data: responsibleProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
+      .eq('id', lead.responsavel_profile_id)
+      .maybeSingle();
+
+    if (responsibleProfile?.corretor_id) return responsibleProfile;
+  }
+
+  const { data: conversations } = await supabaseAdmin
+    .from('whatsapp_conversas')
+    .select('corretor_id, lead_id, telefone, ultima_mensagem_at')
+    .or(`telefone.eq.${phone},telefone.ilike.%${last8},telefone.ilike.%${last8WithHyphen}`)
+    .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
+    .limit(20);
+
+  const conversationRows = conversations || [];
+  const exactConversation = conversationRows.find((row) => normalizePhone(row?.telefone) === digits);
+  const conversation = exactConversation || conversationRows[0];
+  if (conversation?.corretor_id) {
+    const profile = await findProfileByCorretorId(conversation.corretor_id);
+    if (profile) return profile;
+  }
+
+  return findProfileByCorretorId(lead?.corretor_id);
+}
+
 async function findLead(profile: any, phone: string) {
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 8) return null;
@@ -562,13 +673,24 @@ export async function POST(request: Request) {
     }
 
     const instance = readWebhookInstanceName(body);
-    const profile = await findProfileFromWebhook(body, instance);
+    const providerId = readProviderId(body);
+    let remoteJid = readRemoteJid(body);
+    if (!remoteJid && providerId.includes(':')) {
+      remoteJid = providerId.split(':')[0];
+    }
+    let phone = normalizePhone(remoteJid.split('@')[0]);
+    const profile = await findProfileFromWebhook(body, instance) || await findProfileFromCrmPhone(phone);
 
     if (!profile?.corretor_id) {
       console.warn('[uazapi_webhook] Ignorado: nao consegui resolver profile da instancia/owner.', {
         instance,
         owner: readOwnerJid(body),
         event,
+        phone,
+        remoteJid,
+        providerId,
+        bodyKeys: Object.keys(body || {}).slice(0, 30),
+        dataKeys: Object.keys(body?.data || {}).slice(0, 30),
       });
       return NextResponse.json({ ok: true, ignored: true, reason: 'profile_not_found' });
     }
@@ -582,7 +704,6 @@ export async function POST(request: Request) {
     const hasDocument = msgType === 'document' || msgType.includes('document');
     const hasMedia = hasAudio || hasImage || hasVideo || hasDocument;
 
-    const providerId = readProviderId(body);
     let audioTranscript = '';
     let aiCustomerMessage = message;
 
@@ -626,12 +747,6 @@ export async function POST(request: Request) {
       else if (hasVideo) message = '🎥 Vídeo';
       else if (hasDocument) message = '📎 Arquivo';
     }
-
-    let remoteJid = readRemoteJid(body);
-    if (!remoteJid && providerId.includes(':')) {
-      remoteJid = providerId.split(':')[0];
-    }
-    let phone = normalizePhone(remoteJid.split('@')[0]);
 
     // Tratar quando a ligação de voz é efetuada pelo próprio corretor de fora do CRM.
     let isOutboundCall = false;
