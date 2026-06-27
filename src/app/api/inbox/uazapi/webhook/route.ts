@@ -9,9 +9,19 @@ function readText(body: any) {
     body?.text ||
     body?.caption ||
     body?.messageText ||
+    body?.message ||
+    body?.body ||
+    body?.message?.body ||
+    body?.message?.message ||
+    body?.message?.textMessage ||
     body?.message?.content ||
+    body?.message?.content?.text ||
+    body?.message?.content?.body ||
+    body?.message?.content?.caption ||
     body?.message?.caption ||
     body?.message?.text ||
+    body?.message?.text?.body ||
+    body?.message?.text?.content ||
     body?.message?.conversation ||
     body?.message?.extendedTextMessage?.text ||
     body?.message?.imageMessage?.caption ||
@@ -20,14 +30,24 @@ function readText(body: any) {
     body?.data?.text ||
     body?.data?.caption ||
     body?.data?.messageText ||
+    body?.data?.message ||
+    body?.data?.body ||
+    body?.data?.message?.body ||
+    body?.data?.message?.message ||
+    body?.data?.message?.textMessage ||
     body?.data?.message?.content ||
+    body?.data?.message?.content?.text ||
+    body?.data?.message?.content?.body ||
+    body?.data?.message?.content?.caption ||
     body?.data?.message?.caption ||
     body?.data?.message?.text ||
+    body?.data?.message?.text?.body ||
+    body?.data?.message?.text?.content ||
     body?.data?.message?.conversation ||
     body?.data?.message?.extendedTextMessage?.text ||
     body?.data?.message?.imageMessage?.caption ||
     body?.data?.message?.videoMessage?.caption ||
-    deepPickStringByKey(body, ['text', 'conversation', 'caption', 'messageText', 'body'])
+    deepPickStringByKey(body, ['text', 'conversation', 'caption', 'messageText', 'textMessage', 'body'])
   );
 }
 
@@ -65,6 +85,54 @@ function deepPickStringByKey(value: any, wantedKeys: string[], depth = 0): strin
   return '';
 }
 
+function isRemoteCandidate(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  const normalized = trimmed.toLowerCase();
+  if (['updated', 'received', 'sent', 'messages', 'message', 'status', 'open', 'closed'].includes(normalized)) {
+    return false;
+  }
+
+  if (/@(s\.whatsapp\.net|c\.us|g\.us|lid)$/.test(normalized)) return true;
+  const digits = trimmed.replace(/\D/g, '');
+  return digits.length >= 10 && digits.length <= 16;
+}
+
+function pickRemoteString(...values: any[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && isRemoteCandidate(value)) return value.trim();
+  }
+  return '';
+}
+
+function deepPickRemoteByKey(value: any, wantedKeys: string[], depth = 0): string {
+  if (!value || depth > 4) return '';
+  if (Array.isArray(value)) {
+    for (const item of value.slice(0, 20)) {
+      const found = deepPickRemoteByKey(item, wantedKeys, depth + 1);
+      if (found) return found;
+    }
+    return '';
+  }
+  if (typeof value !== 'object') return '';
+
+  const wanted = new Set(wantedKeys.map((key) => key.toLowerCase()));
+  for (const [key, item] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase();
+    if (wanted.has(normalizedKey) && typeof item === 'string' && isRemoteCandidate(item)) {
+      return item.trim();
+    }
+  }
+
+  for (const item of Object.values(value)) {
+    const found = deepPickRemoteByKey(item, wantedKeys, depth + 1);
+    if (found) return found;
+  }
+
+  return '';
+}
+
 function readWebhookInstanceName(body: any) {
   return pickString(
     body?.session,
@@ -83,7 +151,7 @@ function readWebhookInstanceName(body: any) {
 }
 
 function readRemoteJid(body: any) {
-  return pickString(
+  return pickRemoteString(
     body?.phone,
     body?.sender,
     body?.from,
@@ -93,13 +161,34 @@ function readRemoteJid(body: any) {
     body?.chatid,
     body?.chat_id,
     body?.chat,
+    body?.chat?.id,
+    body?.chat?.jid,
+    body?.chat?.phone,
+    body?.chat?.phoneNumber,
+    body?.chat?.remoteJid,
+    body?.chat?.chatId,
     body?.chatSource,
+    body?.chatSource?.id,
+    body?.chatSource?.jid,
+    body?.chatSource?.phone,
+    body?.chatSource?.phoneNumber,
+    body?.chatSource?.remoteJid,
+    body?.chatSource?.chatId,
     body?.jid,
     body?.participant,
     body?.key?.remoteJid,
     body?.key?.participant,
     body?.message?.key?.remoteJid,
     body?.message?.key?.participant,
+    body?.message?.chat?.id,
+    body?.message?.chat?.jid,
+    body?.message?.chat?.phone,
+    body?.message?.chat?.phoneNumber,
+    body?.message?.chatSource?.id,
+    body?.message?.chatSource?.jid,
+    body?.message?.sender?.id,
+    body?.message?.sender?.phone,
+    body?.message?.sender?.phoneNumber,
     body?.data?.phone,
     body?.data?.sender,
     body?.data?.from,
@@ -109,7 +198,19 @@ function readRemoteJid(body: any) {
     body?.data?.chatid,
     body?.data?.chat_id,
     body?.data?.chat,
+    body?.data?.chat?.id,
+    body?.data?.chat?.jid,
+    body?.data?.chat?.phone,
+    body?.data?.chat?.phoneNumber,
+    body?.data?.chat?.remoteJid,
+    body?.data?.chat?.chatId,
     body?.data?.chatSource,
+    body?.data?.chatSource?.id,
+    body?.data?.chatSource?.jid,
+    body?.data?.chatSource?.phone,
+    body?.data?.chatSource?.phoneNumber,
+    body?.data?.chatSource?.remoteJid,
+    body?.data?.chatSource?.chatId,
     body?.data?.jid,
     body?.data?.participant,
     body?.data?.key?.remoteJid,
@@ -125,6 +226,15 @@ function readRemoteJid(body: any) {
     body?.message?.sender,
     body?.message?.from,
     body?.message?.jid,
+    body?.data?.message?.chat?.id,
+    body?.data?.message?.chat?.jid,
+    body?.data?.message?.chat?.phone,
+    body?.data?.message?.chat?.phoneNumber,
+    body?.data?.message?.chatSource?.id,
+    body?.data?.message?.chatSource?.jid,
+    body?.data?.message?.sender?.id,
+    body?.data?.message?.sender?.phone,
+    body?.data?.message?.sender?.phoneNumber,
     body?.data?.message?.chatid,
     body?.data?.message?.chatId,
     body?.data?.message?.chat,
@@ -134,7 +244,7 @@ function readRemoteJid(body: any) {
     body?.data?.message?.sender,
     body?.data?.message?.from,
     body?.data?.message?.jid,
-    deepPickStringByKey(body, ['remoteJid', 'remotejid', 'chatId', 'chatid', 'chat_id', 'chat', 'chatSource', 'sender', 'from', 'phone', 'jid'])
+    deepPickRemoteByKey(body, ['remoteJid', 'remotejid', 'chatId', 'chatid', 'chat_id', 'chat', 'chatSource', 'sender', 'from', 'phone', 'phoneNumber', 'jid'])
   );
 }
 
@@ -168,9 +278,15 @@ function readProviderId(body: any) {
     body?.id,
     body?.messageId,
     body?.key?.id,
+    body?.message?.id,
+    body?.message?.messageId,
+    body?.message?.key?.id,
     body?.data?.id,
     body?.data?.messageId,
-    body?.data?.key?.id
+    body?.data?.key?.id,
+    body?.data?.message?.id,
+    body?.data?.message?.messageId,
+    body?.data?.message?.key?.id
   );
 }
 
@@ -715,6 +831,12 @@ export async function POST(request: Request) {
         providerId,
         bodyKeys: Object.keys(body || {}).slice(0, 30),
         dataKeys: Object.keys(body?.data || {}).slice(0, 30),
+        chatType: typeof body?.chat,
+        chatKeys: body?.chat && typeof body.chat === 'object' ? Object.keys(body.chat).slice(0, 20) : [],
+        chatSourceType: typeof body?.chatSource,
+        chatSourceKeys: body?.chatSource && typeof body.chatSource === 'object' ? Object.keys(body.chatSource).slice(0, 20) : [],
+        messageType: typeof body?.message,
+        messageKeys: body?.message && typeof body.message === 'object' ? Object.keys(body.message).slice(0, 30) : [],
       });
       return NextResponse.json({ ok: true, ignored: true, reason: 'profile_not_found' });
     }
