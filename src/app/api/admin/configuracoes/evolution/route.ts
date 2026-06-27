@@ -6,6 +6,14 @@ const MASTER_INSTANCE = 'apolo_master_sender';
 
 function normalizeUazapiState(status?: string | null, connected?: boolean) {
   const value = String(status || '').toLowerCase();
+  if (
+    !value ||
+    value.includes('disconnect') ||
+    value.includes('disconnected') ||
+    value.includes('close') ||
+    value.includes('logout') ||
+    value.includes('loggedout')
+  ) return 'close';
   if (connected || ['open', 'connected', 'online', 'loggedin'].includes(value)) return 'open';
   if (['connecting', 'qrcode', 'qr', 'pairing'].includes(value)) return 'connecting';
   return 'close';

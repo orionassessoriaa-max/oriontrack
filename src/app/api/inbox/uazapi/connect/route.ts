@@ -51,8 +51,16 @@ function targetPayload(profile: WhatsappTargetProfile) {
 }
 
 function normalizeUazapiState(value?: unknown, connectedField?: boolean) {
-  if (connectedField === true) return 'open';
   const raw = String(value || '').toLowerCase();
+  if (
+    !raw ||
+    raw.includes('disconnect') ||
+    raw.includes('disconnected') ||
+    raw.includes('close') ||
+    raw.includes('logout') ||
+    raw.includes('loggedout')
+  ) return 'close';
+  if (connectedField === true) return 'open';
   if (['open', 'connected', 'connectado', 'conectado', 'true', 'loggedin'].includes(raw)) return 'open';
   if (raw.includes('connecting') || raw.includes('qr') || raw.includes('pairing')) return 'connecting';
   return 'close';
@@ -106,6 +114,48 @@ async function fetchUazapiInstanceStateFromList(instance: string) {
     found?.status || found?.state || found?.connectionStatus || found?.sessionStatus,
     Boolean(found?.connected || found?.isConnected || found?.loggedIn || found?.owner || found?.jid)
   );
+}
+
+async function disconnectUazapiInstanceEverywhere(instance: string) {
+  const body = JSON.stringify({
+    instance,
+    instanceName: instance,
+    name: instance,
+    session: instance,
+    sessionkey: instance,
+  });
+
+  const attempts: Array<{
+    label: string;
+    path: string;
+    init: RequestInit;
+    options?: { useAdminAuth?: boolean; instanceName?: string };
+  }> = [
+    { label: 'logout-token-post', path: '/instance/logout', init: { method: 'POST' }, options: { instanceName: instance } },
+    { label: 'logout-token-delete', path: '/instance/logout', init: { method: 'DELETE' }, options: { instanceName: instance } },
+    { label: 'disconnect-token-post', path: '/instance/disconnect', init: { method: 'POST' }, options: { instanceName: instance } },
+    { label: 'disconnect-token-delete', path: '/instance/disconnect', init: { method: 'DELETE' }, options: { instanceName: instance } },
+    { label: 'logout-admin-post-body', path: '/instance/logout', init: { method: 'POST', body }, options: { useAdminAuth: true } },
+    { label: 'logout-admin-delete-body', path: '/instance/logout', init: { method: 'DELETE', body }, options: { useAdminAuth: true } },
+    { label: 'disconnect-admin-post-body', path: '/instance/disconnect', init: { method: 'POST', body }, options: { useAdminAuth: true } },
+    { label: 'delete-admin-delete-body', path: '/instance/delete', init: { method: 'DELETE', body }, options: { useAdminAuth: true } },
+    { label: 'logout-admin-post-path', path: `/instance/logout/${instance}`, init: { method: 'POST' }, options: { useAdminAuth: true } },
+    { label: 'logout-admin-delete-path', path: `/instance/logout/${instance}`, init: { method: 'DELETE' }, options: { useAdminAuth: true } },
+    { label: 'disconnect-admin-post-path', path: `/instance/disconnect/${instance}`, init: { method: 'POST' }, options: { useAdminAuth: true } },
+    { label: 'delete-admin-delete-path', path: `/instance/delete/${instance}`, init: { method: 'DELETE' }, options: { useAdminAuth: true } },
+  ];
+
+  const results: Array<{ label: string; ok: boolean; error?: string }> = [];
+  for (const attempt of attempts) {
+    try {
+      await uazapiFetch(attempt.path, attempt.init, attempt.options || {});
+      results.push({ label: attempt.label, ok: true });
+    } catch (error: any) {
+      results.push({ label: attempt.label, ok: false, error: error?.message || String(error) });
+    }
+  }
+
+  return results;
 }
 
 function extractUazapiQrCode(payload: any): string | null {
@@ -299,7 +349,13 @@ export async function DELETE(request: Request) {
 
     const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
     const instance = uazapiInstanceName(targetProfile.id);
+    const disconnectResults = await disconnectUazapiInstanceEverywhere(instance);
+    const finalState = await fetchUazapiInstanceStateFromList(instance).catch((error) => {
+      console.warn(`[DELETE /api/inbox/uazapi/connect] Status check failed after disconnect for ${instance}:`, error);
+      return 'unknown';
+    });
 
+    /*
     // 1. Desconecta o WhatsApp da UAZAPI
     try {
       await uazapiFetch('/instance/logout', { method: 'POST' }, { instanceName: instance });
@@ -317,6 +373,7 @@ export async function DELETE(request: Request) {
     } catch (e) {
       console.warn(`[DELETE /api/inbox/uazapi/connect] Delete failed or already deleted for ${instance}:`, e);
     }
+    */
 
     await writeAuditLog(request, guard.profile, {
       action: 'whatsapp.disconnect',
@@ -326,13 +383,17 @@ export async function DELETE(request: Request) {
         target_profile_id: targetProfile.id, 
         target_role: targetProfile.tipo_usuario,
         disconnected_by: guard.profile.id,
-        disconnected_by_role: guard.profile.tipo_usuario
+        disconnected_by_role: guard.profile.tipo_usuario,
+        final_state: finalState,
+        attempts: disconnectResults,
       },
     });
 
     return NextResponse.json({
       success: true,
       targetProfile: targetPayload(targetProfile),
+      state: finalState,
+      attempts: disconnectResults,
       message: 'WhatsApp desconectado com sucesso.'
     });
   } catch (error: any) {
