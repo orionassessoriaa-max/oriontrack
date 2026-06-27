@@ -95,6 +95,7 @@ function isRemoteCandidate(value: string) {
   }
 
   if (/@(s\.whatsapp\.net|c\.us|g\.us|lid)$/.test(normalized)) return true;
+  if (/[a-z]/i.test(trimmed)) return false;
   const digits = trimmed.replace(/\D/g, '');
   return digits.length >= 10 && digits.length <= 16;
 }
@@ -815,8 +816,9 @@ export async function POST(request: Request) {
     const instance = readWebhookInstanceName(body);
     const providerId = readProviderId(body);
     let remoteJid = readRemoteJid(body);
-    if (!remoteJid && providerId.includes(':')) {
-      remoteJid = providerId.split(':')[0];
+    const providerPhone = providerId.includes(':') ? providerId.split(':')[0] : '';
+    if ((!remoteJid || !isRemoteCandidate(remoteJid)) && isRemoteCandidate(providerPhone)) {
+      remoteJid = providerPhone;
     }
     let phone = normalizePhone(remoteJid.split('@')[0]);
     const profile = await findProfileFromWebhook(body, instance) || await findProfileFromCrmPhone(phone);
