@@ -5,49 +5,59 @@ import { continueLeadAiFromIncoming, isAiOutbound } from '@/lib/leadAiAgent';
 
 function readText(body: any) {
   return pickString(
-    body?.content ||
-    body?.text ||
-    body?.caption ||
-    body?.messageText ||
-    body?.message ||
-    body?.body ||
-    body?.message?.body ||
-    body?.message?.message ||
-    body?.message?.textMessage ||
-    body?.message?.content ||
-    body?.message?.content?.text ||
-    body?.message?.content?.body ||
-    body?.message?.content?.caption ||
-    body?.message?.caption ||
-    body?.message?.text ||
-    body?.message?.text?.body ||
-    body?.message?.text?.content ||
-    body?.message?.conversation ||
-    body?.message?.extendedTextMessage?.text ||
-    body?.message?.imageMessage?.caption ||
-    body?.message?.videoMessage?.caption ||
-    body?.data?.content ||
-    body?.data?.text ||
-    body?.data?.caption ||
-    body?.data?.messageText ||
-    body?.data?.message ||
-    body?.data?.body ||
-    body?.data?.message?.body ||
-    body?.data?.message?.message ||
-    body?.data?.message?.textMessage ||
-    body?.data?.message?.content ||
-    body?.data?.message?.content?.text ||
-    body?.data?.message?.content?.body ||
-    body?.data?.message?.content?.caption ||
-    body?.data?.message?.caption ||
-    body?.data?.message?.text ||
-    body?.data?.message?.text?.body ||
-    body?.data?.message?.text?.content ||
-    body?.data?.message?.conversation ||
-    body?.data?.message?.extendedTextMessage?.text ||
-    body?.data?.message?.imageMessage?.caption ||
-    body?.data?.message?.videoMessage?.caption ||
-    deepPickStringByKey(body, ['text', 'conversation', 'caption', 'messageText', 'textMessage', 'body'])
+    body?.content,
+    body?.text,
+    body?.caption,
+    body?.messageText,
+    body?.body,
+    // body.message paths (body.message is usually an object in UAZAPI)
+    body?.message?.conversation,
+    body?.message?.body,
+    body?.message?.text,
+    body?.message?.caption,
+    body?.message?.content,
+    body?.message?.textMessage,
+    body?.message?.extendedTextMessage?.text,
+    body?.message?.imageMessage?.caption,
+    body?.message?.videoMessage?.caption,
+    body?.message?.content?.text,
+    body?.message?.content?.body,
+    body?.message?.content?.caption,
+    body?.message?.text?.body,
+    body?.message?.text?.content,
+    // body.message.message paths (UAZAPI nests message inside message)
+    body?.message?.message?.conversation,
+    body?.message?.message?.body,
+    body?.message?.message?.text,
+    body?.message?.message?.extendedTextMessage?.text,
+    body?.message?.message?.imageMessage?.caption,
+    body?.message?.message?.videoMessage?.caption,
+    // body.data paths
+    body?.data?.content,
+    body?.data?.text,
+    body?.data?.caption,
+    body?.data?.messageText,
+    body?.data?.body,
+    body?.data?.message?.conversation,
+    body?.data?.message?.body,
+    body?.data?.message?.text,
+    body?.data?.message?.caption,
+    body?.data?.message?.content,
+    body?.data?.message?.textMessage,
+    body?.data?.message?.extendedTextMessage?.text,
+    body?.data?.message?.imageMessage?.caption,
+    body?.data?.message?.videoMessage?.caption,
+    body?.data?.message?.content?.text,
+    body?.data?.message?.content?.body,
+    body?.data?.message?.content?.caption,
+    body?.data?.message?.text?.body,
+    body?.data?.message?.text?.content,
+    body?.data?.message?.message?.conversation,
+    body?.data?.message?.message?.body,
+    body?.data?.message?.message?.text,
+    body?.data?.message?.message?.extendedTextMessage?.text,
+    // fallback: deep recursive search
+    deepPickStringByKey(body, ['conversation', 'text', 'caption', 'messageText', 'textMessage', 'body'])
   );
 }
 
@@ -845,7 +855,7 @@ export async function POST(request: Request) {
 
     let message = callEvent ? readCallText(body) : readText(body);
     
-    const msgType = String(body?.type || body?.messageType || body?.data?.type || body?.data?.messageType || '').toLowerCase();
+    const msgType = String(body?.type || body?.messageType || body?.message?.type || body?.message?.messageType || body?.data?.type || body?.data?.messageType || body?.data?.message?.type || body?.data?.message?.messageType || '').toLowerCase();
     const hasAudio = msgType === 'audio' || msgType === 'voice' || msgType.includes('audio') || msgType.includes('voice');
     const hasImage = msgType === 'image' || msgType.includes('image');
     const hasVideo = msgType === 'video' || msgType.includes('video');
@@ -914,10 +924,15 @@ export async function POST(request: Request) {
         profile: profile.id,
         event,
         hasMessage: Boolean(message),
+        hasPhone: Boolean(phone),
+        phone,
         remoteJid: readRemoteJid(body),
         providerId,
         bodyKeys: Object.keys(body || {}).slice(0, 30),
         dataKeys: Object.keys(body?.data || {}).slice(0, 30),
+        messageType: typeof body?.message,
+        messageKeys: body?.message && typeof body.message === 'object' ? Object.keys(body.message).slice(0, 30) : [],
+        messageMessageKeys: body?.message?.message && typeof body.message.message === 'object' ? Object.keys(body.message.message).slice(0, 20) : [],
       });
       return NextResponse.json({ ok: true, ignored: true, reason: 'missing_message_or_phone' });
     }
@@ -967,8 +982,11 @@ export async function POST(request: Request) {
     const fromMe = Boolean(
       body?.fromMe === true ||
       body?.key?.fromMe === true ||
+      body?.message?.key?.fromMe === true ||
+      body?.message?.fromMe === true ||
       body?.data?.fromMe === true ||
       body?.data?.key?.fromMe === true ||
+      body?.data?.message?.key?.fromMe === true ||
       event === 'SEND_MESSAGE' ||
       event.includes('SEND') ||
       isOutboundCall
