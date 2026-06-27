@@ -798,6 +798,29 @@ async function findConversation(corretorId: string, phone: string, leadId?: stri
   return exact || rows[0] || null;
 }
 
+async function hasRecentDuplicateMessage(conversationId: string, direction: 'inbound' | 'outbound', message: string) {
+  const normalizedMessage = message.trim();
+  if (!conversationId || !normalizedMessage) return false;
+
+  const recentWindow = new Date(Date.now() - 30_000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('id')
+    .eq('conversa_id', conversationId)
+    .eq('direction', direction)
+    .eq('mensagem', normalizedMessage)
+    .gte('created_at', recentWindow)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[uazapi_webhook] Failed checking recent duplicate message:', error);
+    return false;
+  }
+
+  return Boolean(data?.id);
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -997,9 +1020,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, ai_outbound: true });
     }
 
+    const direction = fromMe ? 'outbound' : 'inbound';
+    if (await hasRecentDuplicateMessage(conversation.id, direction, message)) {
+      console.log('[uazapi_webhook] Ignorando mensagem duplicada recente.', {
+        conversationId: conversation.id,
+        direction,
+        providerId,
+        phone,
+      });
+      return NextResponse.json({ ok: true, duplicated: true, reason: 'recent_duplicate' });
+    }
+
     await supabaseAdmin.from('whatsapp_mensagens').insert([{
       conversa_id: conversation.id,
-      direction: fromMe ? 'outbound' : 'inbound',
+      direction,
       remetente: fromMe ? (profile.nome || 'Orion') : contactName,
       mensagem: message,
       provider_message_id: providerId || null,

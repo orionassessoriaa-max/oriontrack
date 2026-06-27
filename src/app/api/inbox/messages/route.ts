@@ -5,6 +5,36 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 
+function dedupeMessages(messages: any[]) {
+  const seenProviderIds = new Set<string>();
+  const seenRecentContent = new Set<string>();
+  const result: any[] = [];
+
+  for (const message of messages || []) {
+    const providerId = String(message?.provider_message_id || '').trim();
+    if (providerId) {
+      if (seenProviderIds.has(providerId)) continue;
+      seenProviderIds.add(providerId);
+    }
+
+    const createdAt = message?.created_at ? new Date(message.created_at).getTime() : 0;
+    const bucket = createdAt ? Math.floor(createdAt / 30_000) : 0;
+    const contentKey = [
+      message?.conversa_id || '',
+      message?.direction || '',
+      message?.remetente || '',
+      String(message?.mensagem || '').trim(),
+      bucket,
+    ].join('|');
+
+    if (contentKey.trim() && seenRecentContent.has(contentKey)) continue;
+    seenRecentContent.add(contentKey);
+    result.push(message);
+  }
+
+  return result;
+}
+
 async function getConversation(id: string) {
   const { data, error } = await supabaseAdmin
     .from('whatsapp_conversas')
@@ -135,7 +165,7 @@ export async function GET(request: Request) {
       .limit(300);
 
     if (error) throw error;
-    return NextResponse.json({ messages: data || [] });
+    return NextResponse.json({ messages: dedupeMessages(data || []) });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao consegui carregar as mensagens.' }, { status: 500 });
   }

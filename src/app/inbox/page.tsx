@@ -533,6 +533,18 @@ export default function BrokerInboxPage() {
               if (prev.some((m) => m.id === mappedMsg.id)) {
                 return prev;
               }
+              const newMessageTime = mappedMsg.created_at ? new Date(mappedMsg.created_at).getTime() : Date.now();
+              const hasRecentDuplicate = prev.some((m) => {
+                const oldMessageTime = m.created_at ? new Date(m.created_at).getTime() : 0;
+                return m.conversa_id === mappedMsg.conversa_id
+                  && m.direction === mappedMsg.direction
+                  && String(m.remetente || '') === String(mappedMsg.remetente || '')
+                  && String(m.mensagem || '').trim() === String(mappedMsg.mensagem || '').trim()
+                  && Math.abs(newMessageTime - oldMessageTime) <= 30_000;
+              });
+              if (hasRecentDuplicate) {
+                return prev;
+              }
               return [...prev, mappedMsg];
             });
           }
