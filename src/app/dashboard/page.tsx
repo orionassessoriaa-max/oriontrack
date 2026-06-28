@@ -1366,8 +1366,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid gap-6 grid-cols-1 xl:grid-cols-[1.35fr_0.65fr] p-4 sm:p-6">
-          {/* Left: Responsive 3D Glass Interactive Funnel */}
+        <div className="p-4 sm:p-6">
+          {/* Responsive 3D Glass Interactive Funnel */}
           <div className="rounded-[1.5rem] border border-white/5 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-7 flex flex-col justify-between">
             <div className="mb-6 flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
@@ -1385,50 +1385,6 @@ export default function DashboardPage() {
               quotedAndSold={stats.quoted + stats.sold}
               sold={stats.sold}
             />
-          </div>
-
-          {/* Right: Monthly Commercial Context & Connected Broker */}
-          <div className="rounded-[1.5rem] border border-white/5 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-7 flex flex-col justify-between">
-            <div>
-              <div className="mb-6 flex items-start justify-between gap-4">
-                <div>
-                  <p className="mb-1 text-xs font-black uppercase tracking-widest text-cyan-400">Resumo {periodLabelText}</p>
-                  <h2 className="text-xl font-black text-white">Perfil comercial</h2>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
-                  <BarChart3 size={20} />
-                </div>
-              </div>
-              {profile?.tipo_usuario === 'corretor_membro' ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
-                  <MiniMetric icon={Clock} label="Aguardando Resposta" value={stats.waiting} />
-                  <MiniMetric icon={CalendarDays} label="Follow up" value={stats.tasksOpen} />
-                  <MiniMetric icon={TrendingUp} label={`Conversão ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
-                  <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
-                  <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
-                  <MiniMetric icon={DollarSign} label={`Investido ${periodLabelText}`} value={formatCurrency(periodSpend)} />
-                  <MiniMetric icon={Target} label={`CPL ${periodLabelText}`} value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
-                  <MiniMetric icon={TrendingUp} label={`Conversão ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
-                  <MiniMetric icon={Clock} label="Em negociação" value={stats.inProgress} />
-                  <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
-                </div>
-              )}
-            </div>
-            <div className="mt-8 rounded-2xl bg-[#0b1324] border border-white/5 p-4 text-left">
-              <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">Corretor Conectado</p>
-              <p className="text-sm font-black text-white">{corretorData?.nome || profile?.nome || '-'}</p>
-              {(corretorData?.nome_empresa || profile?.nome_empresa) && (
-                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-cyan-300">
-                  {corretorData?.nome_empresa || profile?.nome_empresa}
-                </p>
-              )}
-              <p className="mt-1 text-xs font-bold text-slate-400">{corretorData?.email || profile?.email || '-'}</p>
-            </div>
           </div>
         </div>
       </div>
