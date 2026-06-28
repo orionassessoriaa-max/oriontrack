@@ -329,8 +329,42 @@ function longToNumber(value: any) {
   return undefined;
 }
 
+function deepHasKey(value: any, wantedKeys: string[], depth = 0): boolean {
+  if (!value || depth > 6) return false;
+  if (Array.isArray(value)) {
+    return value.slice(0, 30).some((item) => deepHasKey(item, wantedKeys, depth + 1));
+  }
+  if (typeof value !== 'object') return false;
+
+  const wanted = new Set(wantedKeys.map((key) => key.toLowerCase()));
+  for (const key of Object.keys(value)) {
+    if (wanted.has(key.toLowerCase())) return true;
+  }
+
+  return Object.values(value).some((item) => deepHasKey(item, wantedKeys, depth + 1));
+}
+
+function looksLikeMediaMessage(value: any) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return Boolean(
+    value?.mimetype ||
+    value?.mimeType ||
+    value?.mediaKey ||
+    value?.fileSha256 ||
+    value?.fileEncSha256 ||
+    value?.directPath ||
+    value?.url ||
+    value?.mediaUrl ||
+    value?.fileUrl ||
+    value?.downloadUrl ||
+    value?.base64 ||
+    value?.file ||
+    value?.media
+  );
+}
+
 function pickMediaMessage(body: any) {
-  return (
+  const direct =
     body?.audioMessage ||
     body?.imageMessage ||
     body?.videoMessage ||
@@ -339,12 +373,37 @@ function pickMediaMessage(body: any) {
     body?.message?.imageMessage ||
     body?.message?.videoMessage ||
     body?.message?.documentMessage ||
+    body?.message?.message?.audioMessage ||
+    body?.message?.message?.imageMessage ||
+    body?.message?.message?.videoMessage ||
+    body?.message?.message?.documentMessage ||
+    body?.message?.content?.audioMessage ||
+    body?.message?.content?.imageMessage ||
+    body?.message?.content?.videoMessage ||
+    body?.message?.content?.documentMessage ||
     body?.data?.message?.audioMessage ||
     body?.data?.message?.imageMessage ||
     body?.data?.message?.videoMessage ||
     body?.data?.message?.documentMessage ||
-    null
-  );
+    body?.data?.message?.message?.audioMessage ||
+    body?.data?.message?.message?.imageMessage ||
+    body?.data?.message?.message?.videoMessage ||
+    body?.data?.message?.message?.documentMessage ||
+    body?.data?.message?.content?.audioMessage ||
+    body?.data?.message?.content?.imageMessage ||
+    body?.data?.message?.content?.videoMessage ||
+    body?.data?.message?.content?.documentMessage;
+
+  if (direct) return direct;
+
+  return [
+    body?.message,
+    body?.message?.message,
+    body?.message?.content,
+    body?.data?.message,
+    body?.data?.message?.message,
+    body?.data?.message?.content,
+  ].find(looksLikeMediaMessage) || null;
 }
 
 function readUazapiMediaMetadata(body: any) {
@@ -554,11 +613,13 @@ async function transcribeUazapiAudio(body: any) {
     return String(body.transcription || body.audioText || body.text_transcript).trim();
   }
 
-  let base64 = body?.base64 || body?.file || body?.audioMessage?.base64 || '';
-  if (!base64 && (body?.url || body?.fileUrl || body?.fileURL || body?.mediaUrl)) {
+  const metadata = readUazapiMediaMetadata(body);
+  let base64 = metadata.media_base64 || '';
+  const mediaUrl = metadata.media_url || pickString(body?.url, body?.fileUrl, body?.fileURL, body?.mediaUrl);
+
+  if (!base64 && mediaUrl) {
     try {
-      const url = body.url || body.fileUrl || body.fileURL || body.mediaUrl;
-      const res = await fetch(url);
+      const res = await fetch(mediaUrl);
       if (res.ok) {
         const buffer = await res.arrayBuffer();
         base64 = Buffer.from(buffer).toString('base64');
@@ -569,7 +630,7 @@ async function transcribeUazapiAudio(body: any) {
   }
 
   if (base64) {
-    return transcribeAudio(base64, body?.mimetype || 'audio/ogg');
+    return transcribeAudio(base64, metadata.media_mimetype || body?.mimetype || 'audio/ogg');
   }
 
   return '';
@@ -878,11 +939,40 @@ export async function POST(request: Request) {
 
     let message = callEvent ? readCallText(body) : readText(body);
     
-    const msgType = String(body?.type || body?.messageType || body?.message?.type || body?.message?.messageType || body?.data?.type || body?.data?.messageType || body?.data?.message?.type || body?.data?.message?.messageType || '').toLowerCase();
-    const hasAudio = msgType === 'audio' || msgType === 'voice' || msgType.includes('audio') || msgType.includes('voice');
-    const hasImage = msgType === 'image' || msgType.includes('image');
-    const hasVideo = msgType === 'video' || msgType.includes('video');
-    const hasDocument = msgType === 'document' || msgType.includes('document');
+    const msgType = String(
+      body?.type ||
+      body?.messageType ||
+      body?.message?.type ||
+      body?.message?.messageType ||
+      body?.message?.message?.type ||
+      body?.message?.message?.messageType ||
+      body?.data?.type ||
+      body?.data?.messageType ||
+      body?.data?.message?.type ||
+      body?.data?.message?.messageType ||
+      body?.data?.message?.message?.type ||
+      body?.data?.message?.message?.messageType ||
+      ''
+    ).toLowerCase();
+    const mediaMessage = pickMediaMessage(body);
+    const mediaMime = pickString(
+      body?.media_mimetype,
+      body?.mimetype,
+      body?.mimeType,
+      body?.contentType,
+      body?.data?.mimetype,
+      body?.data?.mimeType,
+      mediaMessage?.mimetype,
+      mediaMessage?.mimeType
+    ).toLowerCase();
+    const hasAudioKey = deepHasKey(body, ['audioMessage', 'ptt', 'voiceMessage']);
+    const hasImageKey = deepHasKey(body, ['imageMessage']);
+    const hasVideoKey = deepHasKey(body, ['videoMessage']);
+    const hasDocumentKey = deepHasKey(body, ['documentMessage']);
+    const hasAudio = msgType === 'audio' || msgType === 'voice' || msgType.includes('audio') || msgType.includes('voice') || mediaMime.startsWith('audio/') || hasAudioKey;
+    const hasImage = msgType === 'image' || msgType.includes('image') || mediaMime.startsWith('image/') || hasImageKey;
+    const hasVideo = msgType === 'video' || msgType.includes('video') || mediaMime.startsWith('video/') || hasVideoKey;
+    const hasDocument = msgType === 'document' || msgType.includes('document') || mediaMime.includes('pdf') || hasDocumentKey;
     const hasMedia = hasAudio || hasImage || hasVideo || hasDocument;
 
     let audioTranscript = '';
