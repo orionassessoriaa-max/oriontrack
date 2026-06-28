@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { normalizePhone, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { continueLeadAiFromIncoming, isAiOutbound } from '@/lib/leadAiAgent';
+import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound } from '@/lib/leadAiAgent';
 
 function readText(body: any) {
   return pickString(
@@ -494,6 +494,50 @@ function buildUazapiDownloadBody(providerId: string, mediaMessage: any) {
   };
 }
 
+function buildUazapiDownloadPayloads(providerId: string, mediaMessage: any) {
+  const wrapped = buildUazapiDownloadBody(providerId, mediaMessage);
+  const body: Record<string, any> = {
+    id: providerId,
+    messageId: providerId,
+  };
+
+  const mediaKey = pickString(mediaMessage?.mediaKey, byteObjectToBase64(mediaMessage?.mediaKey));
+  const fileSha256 = pickString(mediaMessage?.fileSha256, byteObjectToBase64(mediaMessage?.fileSha256));
+  const fileEncSha256 = pickString(mediaMessage?.fileEncSha256, byteObjectToBase64(mediaMessage?.fileEncSha256));
+  const fileLength = longToNumber(mediaMessage?.fileLength);
+
+  if (mediaMessage?.url) {
+    body.Url = mediaMessage.url;
+    body.url = mediaMessage.url;
+  }
+  if (mediaMessage?.mimetype || mediaMessage?.mimeType) {
+    body.Mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
+    body.mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
+  }
+  if (mediaKey) {
+    body.MediaKey = mediaKey;
+    body.mediaKey = mediaKey;
+  }
+  if (fileSha256) {
+    body.FileSHA256 = fileSha256;
+    body.fileSha256 = fileSha256;
+  }
+  if (fileEncSha256) {
+    body.FileEncSHA256 = fileEncSha256;
+    body.fileEncSha256 = fileEncSha256;
+  }
+  if (typeof fileLength === 'number' && !Number.isNaN(fileLength)) {
+    body.FileLength = fileLength;
+    body.fileLength = fileLength;
+  }
+  if (mediaMessage?.directPath) {
+    body.DirectPath = mediaMessage.directPath;
+    body.directPath = mediaMessage.directPath;
+  }
+
+  return [wrapped, body];
+}
+
 function pickProviderPayloadBase64(payload: any) {
   return stripDataUrl(pickString(
     payload?.base64,
@@ -514,12 +558,22 @@ async function downloadUazapiMediaBase64(instance: string, providerId: string, b
   if (!instance || !providerId || !mediaMessage) return null;
 
   try {
-    const payload = await uazapiFetch('/message/download', {
-      method: 'POST',
-      body: JSON.stringify(buildUazapiDownloadBody(providerId, mediaMessage)),
-    }, { instanceName: instance });
+    let payload: any = null;
+    let mediaBase64 = '';
+    for (const bodyPayload of buildUazapiDownloadPayloads(providerId, mediaMessage)) {
+      try {
+        payload = await uazapiFetch('/message/download', {
+          method: 'POST',
+          body: JSON.stringify(bodyPayload),
+        }, { instanceName: instance });
 
-    const mediaBase64 = pickProviderPayloadBase64(payload);
+        mediaBase64 = pickProviderPayloadBase64(payload);
+        if (mediaBase64) break;
+      } catch (attemptError: any) {
+        console.warn('[uazapi_webhook] UAZAPI media download attempt failed:', attemptError?.message || attemptError);
+      }
+    }
+
     if (!mediaBase64) return null;
 
     return {
@@ -976,6 +1030,7 @@ export async function POST(request: Request) {
     const hasMedia = hasAudio || hasImage || hasVideo || hasDocument;
 
     let audioTranscript = '';
+    let audioTranscriptionFailed = false;
     let aiCustomerMessage = message;
 
     if (providerId) {
@@ -1008,7 +1063,11 @@ export async function POST(request: Request) {
           aiCustomerMessage = `Audio transcrito do cliente: ${audioTranscript}`;
         }
       } catch (audioErr) {
+        audioTranscriptionFailed = true;
         console.error('[uazapi_webhook] Failed processing inbound audio:', audioErr);
+      }
+      if (!audioTranscript) {
+        audioTranscriptionFailed = true;
       }
     }
 
@@ -1136,11 +1195,24 @@ export async function POST(request: Request) {
         brokerName: (callEvent && fromMe) ? (profile.nome || 'Orion') : undefined,
         audio_transcript: audioTranscript || undefined,
         ai_customer_message: aiCustomerMessage || undefined,
+        audio_transcription_failed: hasAudio ? audioTranscriptionFailed : undefined,
       },
     }]);
 
     if (fromMe && lead?.id) {
       await stopLeadAiForHumanOutbound(lead.id, profile.nome);
+    }
+
+    if (!fromMe && lead?.id && hasAudio && !audioTranscript) {
+      try {
+        await handoffLeadAiToResponsible(
+          lead.id,
+          'audio recebido, mas nao foi possivel transcrever automaticamente. Responsavel deve assumir sem resposta automatica ao cliente.'
+        );
+      } catch (handoffErr) {
+        console.error('[uazapi_webhook] Failed handing off lead after audio transcription failure:', handoffErr);
+      }
+      return NextResponse.json({ ok: true, audio_transcription_failed: true, ai_handoff: true });
     }
 
     if (!fromMe && lead?.id) {

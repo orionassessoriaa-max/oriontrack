@@ -65,7 +65,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
 - Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
 - Os "Dados ja conhecidos do lead" vieram do formulario. Trate esses dados como respostas ja dadas pelo cliente.
 - Nunca pergunte novamente CNPJ/MEI, idades, cidade, investimento, plano ativo ou plano atual quando esses campos ja tiverem valor diferente de vazio, "-" ou "Nao informado" nos dados conhecidos.
-- Depois que o cliente confirmar a cotacao/idades, siga o fluxo do atendimento antigo: pergunte apenas a proxima informacao realmente ausente, nesta prioridade: hospital/regiao, motivo da busca, cobertura nacional ou regional, investimento se nao veio no formulario, e-mail, agendamento de ligacao de 15 minutos.
+- Depois que o cliente confirmar a cotacao/idades, a segunda pergunta obrigatoria deve ser a confirmacao do CNPJ/MEI/CPF do formulario. So depois disso siga para hospital/regiao, motivo da busca, cobertura nacional ou regional, investimento se nao veio no formulario, e-mail e agendamento de ligacao de 15 minutos.
 - Se o formulario ja trouxe as principais informacoes comerciais, avance para hospital/regiao ou diretamente para e-mail/agendamento. Nao aja como se o formulario nao existisse.
 - Se o cliente pedir esclarecimento sobre algo que voce acabou de perguntar (ex: "como assim?", "nao entendi", "que isso?", "pq?", "explica", "o que e isso"), reexplique de forma simples, curta e natural como uma humana faria — NAO faca handoff nesses casos.
 - So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar a palavra "alvorada".
@@ -73,6 +73,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
 - Quando for pedir o agendamento, nunca use "funciona melhor". Pergunte: "Que dia e horario voce esta mais confortavel pra voce?"
 - Quando o cliente responder com dia e horario, responda apenas que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradeca pelo atendimento, defina handoff true e nao faca mais nenhuma pergunta.
 - Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o encaminhamento de forma curta e natural.
+- Nunca diga "pode mandar audio" depois que o cliente ja enviou audio ou quando a mensagem atual vier como "Audio transcrito do cliente".
 - Priorize respostas humanas, curtas e diretas, sem cara de script.`;
 
 export const DEFAULT_SYSTEM_PROMPT = `Voce e {persona}, uma consultora de vendas humana e simpatica da corretora de planos de saude {corretora_nome}.
@@ -124,6 +125,7 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 - Nao comece toda resposta com "Perfeito", "Entendi" ou "Certo". Varie ou va direto ao ponto.
 - Tom conversado: "Boa", "show", "me diz uma coisa", "pra eu te direcionar melhor", sem exagerar em girias.
 - Nao use ponto de exclamacao em toda mensagem.
+- Depois da primeira confirmacao da cotacao/idades, confirme se a simulacao sera empresarial (CNPJ/MEI) ou pelo CPF antes de perguntar hospital/regiao.
 
 == HANDOFF (Transferencia para Especialista) ==
 - Agendamento so e concluido com DIA e HORARIO ESPECIFICOS (ex: "amanha as 14h", "quinta as 10h").
@@ -287,6 +289,47 @@ function isInitialConfirmationQuestion(text?: string | null) {
     normalized.includes('voce gostaria de receber uma cotacao') &&
     normalized.includes('correto')
   );
+}
+
+function isAffirmativeAnswer(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return /\b(sim|isso|correto|certo|ok|okay|pode|quero|gostaria|confirmo|perfeito|ta certo|esta certo)\b/.test(normalized);
+}
+
+function isCnpjConfirmationQuestion(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return (
+    normalized.includes('simulacao empresarial') ||
+    normalized.includes('simulacao pelo cpf') ||
+    normalized.includes('cnpj/mei ou pelo cpf')
+  );
+}
+
+function cnpjModeFromLead(lead: LeadRow) {
+  const normalized = normalizeAiText(lead.possui_cnpj);
+  if (!hasKnownValue(lead.possui_cnpj)) return 'unknown';
+  if (normalized.includes('mei')) return 'mei';
+  if (normalized.includes('nao') || normalized.includes('sem cnpj') || normalized.includes('cpf')) return 'cpf';
+  return 'business';
+}
+
+function cnpjConfirmationReply(lead: LeadRow) {
+  const firstName = plain(lead.nome, 'tudo bem').split(/\s+/)[0];
+  const mode = cnpjModeFromLead(lead);
+
+  if (mode === 'mei') {
+    return `Legal, ${firstName}! Vi aqui que voce mencionou que tem MEI, esta certinho? So para confirmar se fazemos a simulacao empresarial.\n\nSe preferir, pode me responder por audio tambem.`;
+  }
+
+  if (mode === 'business') {
+    return `Legal, ${firstName}! Vi aqui que voce mencionou que tem CNPJ, esta certinho? So para confirmar se fazemos a simulacao empresarial.\n\nSe preferir, pode me responder por audio tambem.`;
+  }
+
+  if (mode === 'cpf') {
+    return `Legal, ${firstName}! Vi aqui que voce mencionou que nao tem CNPJ, esta certinho? So para confirmar se fazemos a simulacao pelo CPF.\n\nSe preferir, pode me responder por audio tambem.`;
+  }
+
+  return `Legal, ${firstName}! So para eu te direcionar certinho: a simulacao seria pelo CNPJ/MEI ou pelo CPF?\n\nSe preferir, pode me responder por audio tambem.`;
 }
 
 function isSchedulePrompt(text?: string | null) {
@@ -903,12 +946,40 @@ export async function continueLeadAiFromIncoming(options: {
 
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
 
-  const ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
   const previousOutbound = [...(history || [])]
     .reverse()
     .find((item) => item.direction === 'outbound');
   const previousOutboundText = previousOutbound?.metadata?.ai_text || previousOutbound?.mensagem || '';
   const scheduleConfirmed = isSchedulePrompt(previousOutboundText) && looksLikeScheduleAnswer(options.customerMessage);
+
+  if (
+    isInitialConfirmationQuestion(previousOutboundText) &&
+    isAffirmativeAnswer(options.customerMessage) &&
+    !isCnpjConfirmationQuestion(previousOutboundText)
+  ) {
+    const reply = cnpjConfirmationReply(lead);
+    registerAiOutbound(lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+      ...(payload || {}),
+      instance: uazapiInstanceName(adminProfile.id),
+      ai_agent: aiConfig.persona,
+    });
+
+    await supabaseAdmin
+      .from('lead_ai_sessions')
+      .update({
+        summary: appendSummaryLine(session.summary || leadFacts(lead), '*Pendente*: Confirmar se a simulacao sera por CNPJ/MEI ou CPF.'),
+        last_customer_message_at: new Date().toISOString(),
+        last_ai_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', session.id);
+
+    return { handled: true, handoff: false, deterministic: 'cnpj_confirmation' };
+  }
+
+  const ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
 
   let handoff = Boolean(ai.handoff);
   let summary = ai.summary || session.summary || null;
@@ -989,6 +1060,42 @@ export async function continueLeadAiFromIncoming(options: {
     // Libera o lock apos processamento (seja sucesso ou erro)
     processingLeadLocks.delete(options.leadId);
   }
+}
+
+export async function handoffLeadAiToResponsible(leadId: string, reason: string) {
+  const { data: session } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .select('*')
+    .eq('lead_id', leadId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!session) return { handled: false, reason: 'Sem sessao ativa.' };
+
+  const { data: lead } = await supabaseAdmin
+    .from('leads')
+    .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id')
+    .eq('id', leadId)
+    .maybeSingle();
+
+  if (!lead) return { handled: false, reason: 'Lead nao encontrado.' };
+
+  const summary = appendSummaryLine(
+    session.summary || leadFacts(lead),
+    `IA encerrada: ${reason}`
+  );
+
+  await supabaseAdmin
+    .from('lead_ai_sessions')
+    .update({
+      status: 'handoff',
+      summary,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', session.id);
+
+  await notifyResponsible(lead, summary);
+  return { handled: true, handoff: true };
 }
 
 export async function checkLeadAiTimeouts() {
