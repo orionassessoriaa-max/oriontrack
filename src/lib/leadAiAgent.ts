@@ -70,7 +70,9 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
 - Se o cliente pedir esclarecimento sobre algo que voce acabou de perguntar (ex: "como assim?", "nao entendi", "que isso?", "pq?", "explica", "o que e isso"), reexplique de forma simples, curta e natural como uma humana faria — NAO faca handoff nesses casos.
 - So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar a palavra "alvorada".
 - Em handoff por duvida ou confusao real, nunca mande mensagem para o cliente. O Orion Track vai chamar o humano internamente.
-- Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o agendamento de forma curta e natural.
+- Quando for pedir o agendamento, nunca use "funciona melhor". Pergunte: "Que dia e horario voce esta mais confortavel pra voce?"
+- Quando o cliente responder com dia e horario, responda apenas que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradeca pelo atendimento, defina handoff true e nao faca mais nenhuma pergunta.
+- Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o encaminhamento de forma curta e natural.
 - Priorize respostas humanas, curtas e diretas, sem cara de script.`;
 
 export const DEFAULT_SYSTEM_PROMPT = `Voce e {persona}, uma consultora de vendas humana e simpatica da corretora de planos de saude {corretora_nome}.
@@ -113,7 +115,7 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 - Investimento pretendido: quanto estao dispostos a investir?
   Pergunte somente se "Investimento pretendido" estiver vazio, "-" ou "Nao informado".
 - E-mail para envio da proposta.
-- Agendamento de ligacao rapida de 15 minutos: peca dia e horario especificos.
+- Agendamento de ligacao rapida de 15 minutos: peca dia e horario especificos usando exatamente a ideia "Que dia e horario voce esta mais confortavel pra voce?".
 
 == TOM E ESTILO ==
 - Respostas curtas: 1 a 3 frases no maximo. Evite textao.
@@ -126,7 +128,8 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 == HANDOFF (Transferencia para Especialista) ==
 - Agendamento so e concluido com DIA e HORARIO ESPECIFICOS (ex: "amanha as 14h", "quinta as 10h").
 - Se o cliente disser "sim", "posso" ou algo vago: pergunte qual dia e horario especificos.
-- Ao confirmar dia e horario: preencha *Agendado* no summary, defina "handoff": true e confirme naturalmente ao cliente.
+- Ao pedir dia e horario, nao escreva "funciona melhor". Escreva de forma humana: "Que dia e horario voce esta mais confortavel pra voce?"
+- Ao cliente responder dia e horario: preencha *Agendado* no summary, defina "handoff": true e responda somente que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradecendo pelo atendimento. Depois disso nao pergunte mais nada.
 - Handoff silencioso ("handoff": true, "reply": "") se: cliente pedir preco exato, detalhes tecnicos de operadora, reclamar, pedir para falar com humano, ou enviar "alvorada".
 - Se o cliente pedir esclarecimento ("como assim?", "nao entendi", "pq?"): reexplique de forma simples e natural — NAO faca handoff.
 
@@ -267,9 +270,57 @@ function shouldSuppressHandoffReply(reply: string, handoff?: boolean) {
     normalized.includes('passar seu contato para') ||
     normalized.includes('passar para o especialista') ||
     normalized.includes('passar para nosso especialista') ||
-    normalized.includes('outro numero para continuar') ||
     normalized.includes('ajudar da melhor forma')
   );
+}
+
+function normalizeAiText(text?: string | null) {
+  return String(text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function isInitialConfirmationQuestion(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return (
+    normalized.includes('voce gostaria de receber uma cotacao') &&
+    normalized.includes('correto')
+  );
+}
+
+function isSchedulePrompt(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return (
+    normalized.includes('ligacao rapida de 15 minutos') ||
+    normalized.includes('dia e horario') ||
+    normalized.includes('horario voce esta mais confortavel') ||
+    normalized.includes('disponibilidade para uma ligacao')
+  );
+}
+
+function looksLikeScheduleAnswer(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  if (!normalized.trim()) return false;
+
+  const hasDay =
+    /\b(hoje|amanha|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b/.test(normalized) ||
+    /\b\d{1,2}\/\d{1,2}\b/.test(normalized);
+  const hasTime =
+    /\b\d{1,2}\s*h(?:oras?)?\b/.test(normalized) ||
+    /\b\d{1,2}:\d{2}\b/.test(normalized) ||
+    /\b(?:as|às)\s*\d{1,2}\b/.test(normalized);
+
+  return hasDay && hasTime;
+}
+
+function handoffScheduleReply(lead: LeadRow) {
+  return `Perfeito, ${plain(lead.nome, 'tudo bem')}. Um especialista vai entrar em contato por outro numero para confirmar esse agendamento. Obrigada pelo atendimento.`;
+}
+
+function appendSummaryLine(summary: string | null | undefined, line: string) {
+  const base = String(summary || '').trim();
+  return base ? `${base}\n${line}` : line;
 }
 
 function providerMessageId(payload: any) {
@@ -853,8 +904,24 @@ export async function continueLeadAiFromIncoming(options: {
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
 
   const ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
+  const previousOutbound = [...(history || [])]
+    .reverse()
+    .find((item) => item.direction === 'outbound');
+  const previousOutboundText = previousOutbound?.metadata?.ai_text || previousOutbound?.mensagem || '';
+  const scheduleConfirmed = isSchedulePrompt(previousOutboundText) && looksLikeScheduleAnswer(options.customerMessage);
+
+  let handoff = Boolean(ai.handoff);
+  let summary = ai.summary || session.summary || null;
   let reply = String(ai.reply || '').trim();
-  if (shouldSuppressHandoffReply(reply, Boolean(ai.handoff))) {
+
+  if (scheduleConfirmed) {
+    handoff = true;
+    reply = handoffScheduleReply(lead);
+    summary = appendSummaryLine(summary || leadFacts(lead), `*Agendado*: ${options.customerMessage.trim()}`);
+    summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
+  }
+
+  if (shouldSuppressHandoffReply(reply, handoff)) {
     reply = '';
   }
 
@@ -890,10 +957,10 @@ export async function continueLeadAiFromIncoming(options: {
     });
   }
 
-  if (!reply && !ai.handoff) return { handled: false, reason: 'IA sem resposta.' };
+  if (!reply && !handoff) return { handled: false, reason: 'IA sem resposta.' };
 
-  const status = ai.handoff ? 'handoff' : 'active';
-  const currentSummary = ai.summary || session.summary || null;
+  const status = handoff ? 'handoff' : 'active';
+  const currentSummary = summary;
   await supabaseAdmin
     .from('lead_ai_sessions')
     .update({
@@ -909,15 +976,15 @@ export async function continueLeadAiFromIncoming(options: {
     await updateLeadFromSummary(lead.id, currentSummary);
   }
 
-  if (ai.handoff) {
-    await notifyResponsible(lead, ai.summary || '');
-    const scheduledVal = extractAgendadoValue(ai.summary);
+  if (handoff) {
+    await notifyResponsible(lead, currentSummary || '');
+    const scheduledVal = extractAgendadoValue(currentSummary);
     if (scheduledVal) {
       await createAutoScheduledTask(lead, scheduledVal, adminProfile.id);
     }
   }
 
-  return { handled: true, handoff: Boolean(ai.handoff) };
+  return { handled: true, handoff };
   } finally {
     // Libera o lock apos processamento (seja sucesso ou erro)
     processingLeadLocks.delete(options.leadId);
@@ -925,14 +992,14 @@ export async function continueLeadAiFromIncoming(options: {
 }
 
 export async function checkLeadAiTimeouts() {
-  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
   
   // Find all active sessions where the last AI message was sent more than 15 minutes ago
   const { data: activeSessions, error } = await supabaseAdmin
     .from('lead_ai_sessions')
     .select('*')
     .eq('status', 'active')
-    .lte('last_ai_message_at', fifteenMinutesAgo);
+    .lte('last_ai_message_at', twentyMinutesAgo);
     
   if (error) {
     console.error('[cron_timeout] Error fetching active sessions:', error);
@@ -965,12 +1032,14 @@ export async function checkLeadAiTimeouts() {
     // - if the last message is outbound (sent by AI)
     // - if it contains the keywords from the schedule question (Step 9)
     const isLastMessageOutbound = lastMsg.direction === 'outbound';
-    const msgText = String(lastMsg.mensagem || '').toLowerCase();
+    const msgText = String(lastMsg.metadata?.ai_text || lastMsg.mensagem || '');
     const isScheduleQuestion = msgText.includes('disponibilidade de uma ligação') || 
                                msgText.includes('ligação rápida de 15 minutos') || 
                                msgText.includes('melhor horário para eu deixar agendado');
                                
-    if (isLastMessageOutbound && isScheduleQuestion) {
+    const isWaitingForInitialConfirmation = isInitialConfirmationQuestion(msgText);
+
+    if (isLastMessageOutbound && (isWaitingForInitialConfirmation || isScheduleQuestion || isSchedulePrompt(msgText))) {
       console.log(`[cron_timeout] Lead ${session.lead_id} timed out on schedule question.`);
       
       const { data: lead } = await supabaseAdmin
