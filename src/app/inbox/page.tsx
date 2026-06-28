@@ -1778,7 +1778,7 @@ export default function BrokerInboxPage() {
 
   return (
     <InternalLayout>
-      <div className="orion-inbox-shell space-y-6 h-[calc(100vh-120px)] flex flex-col">
+      <div className="orion-inbox-shell h-[calc(100vh-92px)] min-h-0 flex flex-col gap-4 overflow-hidden">
         
         {/* Connection status header bar */}
         {isWhatsAppConnected ? (
@@ -1854,7 +1854,7 @@ export default function BrokerInboxPage() {
         )}
 
         {/* MAIN 3-COLUMN LAYOUT PANEL */}
-        <div className="orion-inbox-panel bg-slate-950/20 border border-white/5 rounded-3xl overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_1fr_300px] h-[550px] min-h-[550px]">
+        <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
           <div className="orion-inbox-list border-r border-white/5 flex flex-col bg-slate-900/20 h-full overflow-hidden">
@@ -1966,7 +1966,7 @@ export default function BrokerInboxPage() {
           </div>
 
           {/* COLUMN 2: MIDDLE CHAT CONVERSATION WINDOW */}
-          <div className="orion-inbox-chat flex flex-col bg-[#050b16] border-r border-white/5 h-full overflow-hidden">
+          <div className="orion-inbox-chat flex min-w-0 flex-col bg-[#050b16] border-r border-white/5 h-full overflow-hidden">
             {selectedConversation ? (
               <>
                 {/* Header do chat */}
@@ -2512,6 +2512,65 @@ export default function BrokerInboxPage() {
                   </div>
                 )}
 
+
+                {/* Follow-up / Tasks */}
+                <div className="space-y-3 shrink-0 border-b border-white/5 pb-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Follow-up</label>
+                    <button
+                      type="button"
+                      onClick={() => { window.location.href = '/tarefas'; }}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/20 transition-all cursor-pointer"
+                    >
+                      <Calendar size={11} />
+                      Ver tarefas
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleScheduleTask} className="rounded-2xl border border-white/5 bg-slate-950/45 p-3 space-y-2.5">
+                    <input
+                      type="text"
+                      placeholder="Ex: Retornar cotacao"
+                      value={taskTitle}
+                      onChange={(e) => setTaskTitle(e.target.value)}
+                      className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
+                    />
+                    <div className="grid grid-cols-[1fr_92px] gap-2">
+                      <input
+                        type="date"
+                        value={taskDueDate}
+                        onChange={(e) => setTaskDueDate(e.target.value)}
+                        className="min-w-0 bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                      />
+                      <input
+                        type="time"
+                        value={taskDueTime}
+                        onChange={(e) => setTaskDueTime(e.target.value)}
+                        className="min-w-0 bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                      />
+                    </div>
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <select
+                        value={taskPriority}
+                        onChange={(e) => setTaskPriority(e.target.value)}
+                        className="min-w-0 bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                      >
+                        <option value="normal">Normal</option>
+                        <option value="alta">Alta</option>
+                        <option value="baixa">Baixa</option>
+                      </select>
+                      <button
+                        type="submit"
+                        disabled={savingTask || !selectedConversation?.lead_id}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-cyan-600 px-3 text-[9px] font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-950/20 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                        title={!selectedConversation?.lead_id ? 'Esta conversa nao possui lead associado' : 'Criar tarefa'}
+                      >
+                        {savingTask ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                        Criar
+                      </button>
+                    </div>
+                  </form>
+                </div>
 
                 {/* Tags manager */}
                 <div className="space-y-2 shrink-0">
