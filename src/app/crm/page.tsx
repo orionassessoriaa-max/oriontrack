@@ -2137,21 +2137,6 @@ export default function CrmPage() {
         </div>
       )}
 
-      {conversas.length > 0 && (
-        <div className="mt-4 rounded-[2rem] border border-emerald-100 bg-emerald-50 p-5">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-emerald-950">
-            <MessageSquare size={16} /> Inbox WhatsApp
-          </h3>
-          <div className="flex gap-3 overflow-x-auto">
-            {conversas.slice(0, 8).map((conversation) => (
-              <div key={conversation.id} className="min-w-52 rounded-2xl bg-white p-3 text-sm font-bold text-emerald-950">
-                {conversation.nome_contato || conversation.telefone}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {commercialModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm overflow-y-auto">
           <form
