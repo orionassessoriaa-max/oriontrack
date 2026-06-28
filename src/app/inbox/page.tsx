@@ -257,6 +257,7 @@ export default function BrokerInboxPage() {
   const [taskDueDate, setTaskDueDate] = useState('');
   const [taskDueTime, setTaskDueTime] = useState('09:00');
   const [taskPriority, setTaskPriority] = useState('normal');
+  const [taskResponsibleProfileId, setTaskResponsibleProfileId] = useState('');
   const [savingTask, setSavingTask] = useState(false);
 
   // History states
@@ -275,6 +276,8 @@ export default function BrokerInboxPage() {
       .filter((member) => member.profile_id)
       .map((member) => [String(member.profile_id), member])
   );
+  const canManageTaskResponsible = ['admin', 'dev', 'corretor_admin'].includes(profile?.tipo_usuario || '');
+  const taskResponsibleOptions = teamMembers.filter((member) => member.profile_id);
 
   // Load configuration from localStorage on mount
   useEffect(() => {
@@ -652,7 +655,7 @@ export default function BrokerInboxPage() {
       const { data, error } = await supabase
         .from('leads')
         .select(`
-          status, etiqueta, observacoes, nome, telefone, idades, possui_cnpj, cnpj,
+          status, etiqueta, observacoes, nome, telefone, idades, possui_cnpj, cnpj, responsavel_profile_id,
           tem_plano_ativo, plano_atual, investimento, cidade, operadora, email,
           motivo_busca, hospital_preferencia, valor_negociacao, operadora_negociacao
         `)
@@ -773,6 +776,36 @@ export default function BrokerInboxPage() {
     } finally {
       setUpdatingStatus(false);
     }
+  };
+
+  const handleUpdateLeadField = async (field: string, rawValue: string) => {
+    if (!selectedConversation?.lead_id || !leadInfo) return;
+    const nextValue = rawValue.trim();
+    const currentValue = String(leadInfo[field] || '').trim();
+    if (nextValue === currentValue) return;
+
+    const previous = leadInfo;
+    setLeadInfo((current: any) => current ? { ...current, [field]: nextValue || null } : current);
+
+    const { error } = await supabase
+      .from('leads')
+      .update({
+        [field]: nextValue || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', selectedConversation.lead_id);
+
+    if (error) {
+      setLeadInfo(previous);
+      alert('Erro ao atualizar dados do lead: ' + error.message);
+      return;
+    }
+
+    await logLeadActivity({
+      tipo: 'edicao',
+      titulo: 'Dados do lead atualizados',
+      descricao: `${field}: ${nextValue || '-'}`,
+    }).catch(() => null);
   };
 
   // Connect WhatsApp
@@ -1337,10 +1370,11 @@ export default function BrokerInboxPage() {
 
     setSavingTask(true);
     try {
+      const responsibleProfileId = taskResponsibleProfileId || leadInfo?.responsavel_profile_id || profile?.id || null;
       const { error } = await supabase.from('lead_tarefas').insert([{
         lead_id: selectedConversation.lead_id,
         corretor_id: selectedConversation.corretor_id,
-        responsavel_profile_id: profile?.id,
+        responsavel_profile_id: responsibleProfileId,
         titulo: taskTitle.trim(),
         vencimento: vencimentoDate ? vencimentoDate.toISOString() : null,
         prioridade: taskPriority,
@@ -1360,6 +1394,7 @@ export default function BrokerInboxPage() {
       setTaskDueDate('');
       setTaskDueTime('09:00');
       setTaskPriority('normal');
+      setTaskResponsibleProfileId('');
     } catch (err: any) {
       console.error('Erro ao agendar tarefa:', err);
       alert('Erro ao agendar tarefa: ' + err.message);
@@ -2497,17 +2532,18 @@ export default function BrokerInboxPage() {
                   <div className="space-y-3.5 shrink-0 border-b border-white/5 pb-4">
                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Dados do Lead</label>
                     <div className="grid grid-cols-2 gap-2">
-                      <LeadInfoCard label="Idade" value={leadInfo.idades || '-'} />
-                      <LeadInfoCard label="Plano ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} />
-                      <LeadInfoCard label="Possui CNPJ?" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} />
-                      <LeadInfoCard label="CNPJ" value={leadInfo.cnpj || '-'} />
-                      <LeadInfoCard label="Plano atual" value={leadInfo.plano_atual || '-'} />
-                      <LeadInfoCard label="Investimento" value={leadInfo.investimento || '-'} />
-                      <LeadInfoCard label="Cidade" value={leadInfo.cidade || '-'} />
-                      <LeadInfoCard label="Pagina" value={leadInfo.operadora || '-'} />
-                      <LeadInfoCard label="E-mail" value={leadInfo.email || '-'} className="col-span-2" />
-                      <LeadInfoCard label="Motivo da busca" value={leadInfo.motivo_busca || '-'} className="col-span-2" />
-                      <LeadInfoCard label="Hospital/Região" value={leadInfo.hospital_preferencia || '-'} className="col-span-2" />
+                      <EditableLeadInfoCard label="Idade" field="idades" value={leadInfo.idades || ''} onSave={handleUpdateLeadField} />
+                      <EditableLeadInfoCard label="Plano ativo" field="tem_plano_ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Nao informado']} />
+                      <EditableLeadInfoCard label="Possui CNPJ?" field="possui_cnpj" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Tenho MEI', 'Nao informado']} />
+                      <EditableLeadInfoCard label="CNPJ" field="cnpj" value={leadInfo.cnpj || ''} onSave={handleUpdateLeadField} />
+                      <EditableLeadInfoCard label="Plano atual" field="plano_atual" value={leadInfo.plano_atual || ''} onSave={handleUpdateLeadField} />
+                      <EditableLeadInfoCard label="Investimento" field="investimento" value={leadInfo.investimento || ''} onSave={handleUpdateLeadField} />
+                      <EditableLeadInfoCard label="Cidade" field="cidade" value={leadInfo.cidade || ''} onSave={handleUpdateLeadField} />
+                      <EditableLeadInfoCard label="Pagina" field="operadora" value={leadInfo.operadora || ''} onSave={handleUpdateLeadField} />
+                      <EditableLeadInfoCard label="E-mail" field="email" value={leadInfo.email || ''} onSave={handleUpdateLeadField} className="col-span-2" />
+                      <EditableLeadInfoCard label="Motivo da busca" field="motivo_busca" value={leadInfo.motivo_busca || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
+                      <EditableLeadInfoCard label="Hospital/Regiao" field="hospital_preferencia" value={leadInfo.hospital_preferencia || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
+                      <EditableLeadInfoCard label="Observacoes" field="observacoes" value={leadInfo.observacoes || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
                     </div>
                   </div>
                 )}
@@ -2549,7 +2585,7 @@ export default function BrokerInboxPage() {
                         className="min-w-0 bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
                       />
                     </div>
-                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <div className="grid grid-cols-1 gap-2">
                       <select
                         value={taskPriority}
                         onChange={(e) => setTaskPriority(e.target.value)}
@@ -2559,10 +2595,22 @@ export default function BrokerInboxPage() {
                         <option value="alta">Alta</option>
                         <option value="baixa">Baixa</option>
                       </select>
+                      {canManageTaskResponsible && taskResponsibleOptions.length > 0 && (
+                        <select
+                          value={taskResponsibleProfileId || leadInfo?.responsavel_profile_id || profile?.id || ''}
+                          onChange={(e) => setTaskResponsibleProfileId(e.target.value)}
+                          className="min-w-0 bg-slate-950 border border-white/5 rounded-xl px-3 py-2 text-2xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                        >
+                          <option value="">Sem responsavel</option>
+                          {taskResponsibleOptions.map((member) => (
+                            <option key={member.profile_id} value={member.profile_id}>{member.nome || member.email || 'Sem nome'}</option>
+                          ))}
+                        </select>
+                      )}
                       <button
                         type="submit"
                         disabled={savingTask || !selectedConversation?.lead_id}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-cyan-600 px-3 text-[9px] font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-950/20 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-cyan-600 px-3 text-[9px] font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-950/20 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
                         title={!selectedConversation?.lead_id ? 'Esta conversa nao possui lead associado' : 'Criar tarefa'}
                       >
                         {savingTask ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
@@ -3257,6 +3305,22 @@ export default function BrokerInboxPage() {
                   <option value="baixa">Baixa ⚪</option>
                 </select>
               </div>
+
+              {canManageTaskResponsible && taskResponsibleOptions.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Responsavel</label>
+                  <select
+                    value={taskResponsibleProfileId || leadInfo?.responsavel_profile_id || profile?.id || ''}
+                    onChange={(e) => setTaskResponsibleProfileId(e.target.value)}
+                    className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
+                  >
+                    <option value="">Sem responsavel</option>
+                    {taskResponsibleOptions.map((member) => (
+                      <option key={member.profile_id} value={member.profile_id}>{member.nome || member.email || 'Sem nome'}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="p-6 border-t border-white/5 bg-slate-950/20 flex gap-3 justify-end shrink-0">
@@ -3453,9 +3517,10 @@ function normalizeCnpjOwnership(value?: string | null) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+  if (!normalized || normalized.includes('informado')) return 'Nao informado';
   if (normalized.includes('mei')) return 'Tenho MEI';
   if (normalized.includes('sim') || normalized.includes('cnpj')) return 'Sim';
-  return 'Não';
+  return 'Nao';
 }
 
 function normalizePlanoAtivo(value?: string | null) {
@@ -3464,15 +3529,81 @@ function normalizePlanoAtivo(value?: string | null) {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
   if (normalized.includes('sim')) return 'Sim';
-  if (normalized.includes('nao')) return 'Não';
-  return 'Não informado';
+  if (normalized.includes('nao')) return 'Nao';
+  return 'Nao informado';
 }
 
-function LeadInfoCard({ label, value, className = '' }: { label: string; value: string; className?: string }) {
+function EditableLeadInfoCard({
+  label,
+  field,
+  value,
+  onSave,
+  className = '',
+  options,
+  multiline = false,
+}: {
+  label: string;
+  field: string;
+  value: string;
+  onSave: (field: string, value: string) => void;
+  className?: string;
+  options?: string[];
+  multiline?: boolean;
+}) {
+  const [draft, setDraft] = useState(value || '');
+
+  useEffect(() => {
+    setDraft(value || '');
+  }, [value]);
+
+  const save = (nextValue = draft) => {
+    onSave(field, nextValue);
+  };
+
+  if (options?.length) {
+    return (
+      <label className={`block rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
+        <span className="mb-1 block text-[8px] font-black uppercase tracking-wider text-slate-500">{label}</span>
+        <select
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            save(event.target.value);
+          }}
+          className="w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs font-black text-white outline-none focus:border-cyan-500/60"
+        >
+          {options.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
   return (
-    <div className={`rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
-      <p className="text-[8px] font-black uppercase tracking-wider text-slate-500 mb-0.5">{label}</p>
-      <p className="break-words text-xs font-black text-white">{value}</p>
-    </div>
+    <label className={`block rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
+      <span className="mb-1 block text-[8px] font-black uppercase tracking-wider text-slate-500">{label}</span>
+      {multiline ? (
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => save()}
+          placeholder="-"
+          rows={3}
+          className="w-full resize-y rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs font-black text-white outline-none placeholder:text-slate-600 focus:border-cyan-500/60"
+        />
+      ) : (
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => save()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+          }}
+          placeholder="-"
+          className="w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs font-black text-white outline-none placeholder:text-slate-600 focus:border-cyan-500/60"
+        />
+      )}
+    </label>
   );
 }

@@ -96,6 +96,7 @@ export default function TarefasPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<TaskFilter>('pendentes');
   const [responsibleFilter, setResponsibleFilter] = useState<ResponsibleFilter>('todos');
+  const canManageTaskResponsible = ['admin', 'dev', 'corretor_admin'].includes(profile?.tipo_usuario || '');
 
   async function resolveBrokerScope() {
     const simulatedId = typeof window !== 'undefined' ? window.sessionStorage.getItem('orion:viewing_corretor_id') : null;
@@ -472,7 +473,7 @@ export default function TarefasPage() {
                   </div>
                   <p className="font-black text-white">{formatDateTime(task.vencimento)}</p>
                   <div className="flex min-w-0 items-center gap-2" onClick={(event) => event.stopPropagation()}>
-                    {profile?.tipo_usuario === 'admin' ? (
+                    {canManageTaskResponsible ? (
                       <select
                         value={task.responsavel_profile_id || lead?.responsavel_profile_id || ''}
                         disabled={savingId === task.id}

@@ -830,7 +830,6 @@ export default function DashboardPage() {
   const displayPeriodCpl = stats.total > 0 ? periodCpl : null;
 
   const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
-  const allTimeSalesConversionRate = allTimeStats.total > 0 ? (allTimeStats.sold / allTimeStats.total) * 100 : 0;
   const chartHeight = 176;
   const maxWeeklyLeads = Math.max(...weeklyLeads.map((day) => day.leads), 1);
   const weeklyTotal = weeklyLeads.reduce((sum, day) => sum + day.leads, 0);
@@ -1207,37 +1206,45 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Column 2: Gorgeous concentric glowing SVG Pizza (Donut) Chart */}
+        {/* Column 2: Commercial profile for the selected period */}
         <div className={`rounded-[1.5rem] border border-slate-100 bg-[#090e1a] p-5 shadow-xl sm:rounded-[2rem] sm:p-6 ${
           profile?.tipo_usuario === 'corretor_membro' ? 'lg:col-span-5' : 'lg:col-span-2'
         }`}>
-          <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="mb-6 flex items-start justify-between gap-4">
             <div>
-              <p className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">Distribuição de Leads</p>
-              <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">Leads por Etapa</h2>
+              <p className="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400">Resumo {periodLabelText}</p>
+              <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">Perfil comercial</h2>
             </div>
             <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-2.5 text-right shrink-0">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Total Geral</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Leads no periodo</p>
               <p className="mt-1.5 text-lg font-black text-white leading-none">
-                {stats.waiting + stats.inicio + stats.contactMade + stats.inProgress + stats.quoted + stats.sold + stats.lost}
+                {stats.total}
               </p>
             </div>
           </div>
-          <div className="min-h-[220px] flex items-center justify-center">
+          <div className="min-h-[220px]">
             {isDataLoading ? (
-              <Loader2 className="animate-spin text-purple-500" size={32} />
+              <div className="flex h-56 items-center justify-center">
+                <Loader2 className="animate-spin text-cyan-500" size={32} />
+              </div>
+            ) : profile?.tipo_usuario === 'corretor_membro' ? (
+              <div className="grid grid-cols-2 gap-3">
+                <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
+                <MiniMetric icon={Clock} label="Aguardando resposta" value={stats.waiting} />
+                <MiniMetric icon={CalendarDays} label="Follow up" value={stats.tasksOpen} />
+                <MiniMetric icon={TrendingUp} label={`Conversao ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
+                <MiniMetric icon={Clock} label="Em negociacao" value={stats.inProgress} />
+                <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
+              </div>
             ) : (
-              <CustomDonutPizzaChart
-                oportunidade={stats.waiting}
-                inicio={stats.inicio}
-                contactMade={stats.contactMade}
-                inProgress={stats.inProgress}
-                quoted={stats.quoted}
-                sold={stats.sold}
-                lost={stats.lost}
-                invalid={stats.invalid}
-                unavailableRegion={stats.unavailableRegion}
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
+                <MiniMetric icon={DollarSign} label={`Investido ${periodLabelText}`} value={formatCurrency(periodSpend)} />
+                <MiniMetric icon={Target} label={`CPL ${periodLabelText}`} value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
+                <MiniMetric icon={TrendingUp} label={`Conversao ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
+                <MiniMetric icon={Clock} label="Em negociacao" value={stats.inProgress} />
+                <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
+              </div>
             )}
           </div>
         </div>
@@ -1310,10 +1317,10 @@ export default function DashboardPage() {
                 <Target size={16} />
               </div>
             </div>
-            <p className="text-3xl font-black text-white">{allTimeSalesConversionRate.toFixed(1).replace('.', ',')}%</p>
+            <p className="text-3xl font-black text-white">{periodConversion.toFixed(1).replace('.', ',')}%</p>
             <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-400 border-t border-white/5 pt-2">
-              <span>✓ {allTimeStats.sold} vendas</span>
-              <span>{allTimeStats.total} leads</span>
+              <span>✓ {stats.sold} vendas</span>
+              <span>{stats.total} leads</span>
             </div>
           </div>
 
@@ -1324,9 +1331,9 @@ export default function DashboardPage() {
                 <TrendingUp size={16} />
               </div>
             </div>
-            <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.salesPotential)}</p>
+            <p className="text-3xl font-black text-white">{formatCurrency(stats.salesPotential)}</p>
             <div className="mt-2.5 text-[10px] font-bold text-slate-500 border-t border-white/5 pt-2">
-              valor previsto dos leads ativos
+              valor previsto dos leads ativos no periodo
             </div>
           </div>
 
@@ -1337,9 +1344,9 @@ export default function DashboardPage() {
                 <BarChart3 size={16} />
               </div>
             </div>
-            <p className="text-3xl font-black text-white">{formatCurrency(allTimeStats.salesRealized)}</p>
+            <p className="text-3xl font-black text-white">{formatCurrency(stats.salesRealized)}</p>
             <div className="mt-2.5 text-[10px] font-bold text-blue-400 border-t border-white/5 pt-2">
-              soma das vendas realizadas
+              soma das vendas realizadas no periodo
             </div>
           </div>
         </div>

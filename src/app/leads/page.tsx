@@ -506,6 +506,32 @@ export default function BrokerLeadsPage() {
     setSavingStatusId(null);
   };
 
+  const updateLeadTextField = async (lead: Lead, field: 'cnpj' | 'observacoes', rawValue: string) => {
+    const nextValue = rawValue.trim();
+    const currentValue = String((lead as any)[field] || '').trim();
+    if (nextValue === currentValue) return;
+
+    setSavingStatusId(lead.id);
+    setLeads((current) => current.map((item) => item.id === lead.id ? {
+      ...item,
+      [field]: nextValue || null,
+    } : item));
+
+    const { error } = await supabase
+      .from('leads')
+      .update({
+        [field]: nextValue || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', lead.id);
+
+    if (error) {
+      alert('Erro ao atualizar lead: ' + error.message);
+      await fetchLeads(0, false);
+    }
+    setSavingStatusId(null);
+  };
+
   const deleteLead = async (lead: Lead) => {
     if (!isViewingAsCorretor) return;
     const confirmed = await confirmDialog(`Remover o lead ${lead.nome}? Essa acao so deve ser usada por admin.`, {
@@ -1102,7 +1128,17 @@ export default function BrokerLeadsPage() {
                         {cnpjLabel(lead.possui_cnpj)}
                       </span>
                     </td>
-                    <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">{lead.cnpj || '-'}</td>
+                    <td className="border border-slate-100 px-3 py-3">
+                      <input
+                        defaultValue={lead.cnpj || ''}
+                        onBlur={(event) => updateLeadTextField(lead, 'cnpj', event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') event.currentTarget.blur();
+                        }}
+                        placeholder="Inserir CNPJ"
+                        className="w-36 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </td>
                     <td className="border border-slate-100 px-3 py-3">
                       <span className={`inline-flex min-w-[190px] max-w-[240px] whitespace-normal rounded-lg px-3 py-2 text-[11px] font-black uppercase leading-relaxed tracking-widest ${
                         normalizeText(lead.tem_plano_ativo).includes('sim') ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' :
@@ -1185,9 +1221,13 @@ export default function BrokerLeadsPage() {
                     <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadAdset(lead)}</td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadAd(lead)}</td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-medium leading-relaxed text-slate-600">
-                      <div className="max-w-[300px] whitespace-normal">
-                        {cleanObservacoes || '-'}
-                      </div>
+                      <textarea
+                        defaultValue={cleanObservacoes || ''}
+                        onBlur={(event) => updateLeadTextField(lead, 'observacoes', event.target.value)}
+                        placeholder="Adicionar observacao"
+                        rows={2}
+                        className="min-w-[260px] max-w-[320px] resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold leading-relaxed text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      />
                     </td>
                     {isViewingAsCorretor && (
                       <td className="border border-slate-100 px-3 py-3">
