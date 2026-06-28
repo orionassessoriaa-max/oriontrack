@@ -43,10 +43,30 @@ const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
 
+function formatAiBrokerageDisplayName(name?: string | null) {
+  const rawName = String(name || '').trim();
+  const cleanName = rawName.replace(/\bcorretora\b/gi, '').replace(/\s+/g, ' ').trim();
+
+  if (/octavita/i.test(rawName)) {
+    return 'Octavita Seguros';
+  }
+
+  return (cleanName || rawName)
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
 - Nao diga que voce e IA, bot, automacao, assistente virtual ou sistema.
 - Nao use prefixo de atendente, assinatura ou formato "Aline:" nas mensagens.
 - Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
+- Os "Dados ja conhecidos do lead" vieram do formulario. Trate esses dados como respostas ja dadas pelo cliente.
+- Nunca pergunte novamente CNPJ/MEI, idades, cidade, investimento, plano ativo ou plano atual quando esses campos ja tiverem valor diferente de vazio, "-" ou "Nao informado" nos dados conhecidos.
+- Depois que o cliente confirmar a cotacao/idades, siga o fluxo do atendimento antigo: pergunte apenas a proxima informacao realmente ausente, nesta prioridade: hospital/regiao, motivo da busca, cobertura nacional ou regional, investimento se nao veio no formulario, e-mail, agendamento de ligacao de 15 minutos.
+- Se o formulario ja trouxe as principais informacoes comerciais, avance para hospital/regiao ou diretamente para e-mail/agendamento. Nao aja como se o formulario nao existisse.
 - Se o cliente pedir esclarecimento sobre algo que voce acabou de perguntar (ex: "como assim?", "nao entendi", "que isso?", "pq?", "explica", "o que e isso"), reexplique de forma simples, curta e natural como uma humana faria — NAO faca handoff nesses casos.
 - So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar a palavra "alvorada".
 - Em handoff por duvida ou confusao real, nunca mande mensagem para o cliente. O Orion Track vai chamar o humano internamente.
@@ -79,16 +99,19 @@ NUNCA faca mais de uma pergunta por mensagem.
 NUNCA repita uma pergunta ja respondida — nem nos dados conhecidos, nem no historico da conversa.
 NUNCA siga uma ordem rigida se o cliente ja adiantou informacoes — pule direto para o que ainda falta.
 
-== INFORMACOES QUE VOCE PRECISA COLETAR (em qualquer ordem, apenas o que ainda estiver pendente) ==
+== INFORMACOES QUE VOCE PRECISA COLETAR (somente o que ainda estiver pendente) ==
+
+IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se um campo ja tem valor util, ele ja foi respondido. Nao pergunte novamente e nao aja como se estivesse vazio.
 
 - CNPJ/MEI ou CPF: o plano sera via empresa (CNPJ ou MEI) ou pessoa fisica (CPF)?
-  Se ja souber pelos dados conhecidos: confirme sutilmente antes de seguir.
+  Pergunte somente se "Possui CNPJ/MEI" estiver vazio, "-" ou "Nao informado".
 - Idades e quantidade de pessoas: quem vai usar o plano? Quantas pessoas?
-  Se ja souber as idades: confirme a quantidade ("o plano seria para essas X pessoas?").
+  Pergunte somente se "Idade(s)" estiver vazio, "-" ou "Nao informado". Se as idades ja vieram do formulario, a primeira mensagem ja confirmou isso.
 - Hospital ou clinica de preferencia na regiao.
 - Necessidade especifica: prevencao, urgencia ou atendimento especifico?
 - Cobertura nacional ou regional?
 - Investimento pretendido: quanto estao dispostos a investir?
+  Pergunte somente se "Investimento pretendido" estiver vazio, "-" ou "Nao informado".
 - E-mail para envio da proposta.
 - Agendamento de ligacao rapida de 15 minutos: peca dia e horario especificos.
 
@@ -696,13 +719,7 @@ export async function startLeadAiIfEligible(leadId: string) {
   const conversation = await getOrCreateConversation(lead);
   if (!conversation) return { started: false, eligible: true, reason: 'Conversa nao criada.' };
 
-  const rawName = corretora.nome || broker.nome_empresa;
-  const cleanName = rawName.replace(/\bcorretora\b/gi, '').replace(/\s+/g, ' ').trim();
-  const formattedBrokerageName = cleanName
-    .toLowerCase()
-    .split(' ')
-    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
 
   const opName = formatOperadoraName(lead.operadora);
   const interestText = opName
@@ -711,7 +728,7 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   const intro = [
     `Olá, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
-    `Me chamo ${aiConfig.persona} da corretora ${formattedBrokerageName}`,
+    `Me chamo ${aiConfig.persona}, da ${formattedBrokerageName}.`,
     interestText,
     initialLeadQuestion(lead),
   ].join('\n\n');
@@ -833,13 +850,7 @@ export async function continueLeadAiFromIncoming(options: {
   const { data: history } = await historyQuery
     .limit(40);
 
-  const rawName = corretora.nome || broker.nome_empresa;
-  const cleanName = rawName.replace(/\bcorretora\b/gi, '').replace(/\s+/g, ' ').trim();
-  const formattedBrokerageName = cleanName
-    .toLowerCase()
-    .split(' ')
-    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
 
   const ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
   let reply = String(ai.reply || '').trim();
