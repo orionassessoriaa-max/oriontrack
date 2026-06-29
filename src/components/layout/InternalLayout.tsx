@@ -46,8 +46,8 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isCreativeRoute = pathname.startsWith('/criativos');
         const isTeamRoute = pathname.startsWith('/equipe');
         const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/simulador') || pathname.startsWith('/apolo-one') || pathname.startsWith('/ajuda');
-        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/inbox', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || isCreativeRoute;
-        const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/minha-pagina', '/simulador', '/inbox', '/time', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
+        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/inbox', '/historico', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || isCreativeRoute;
+        const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/historico', '/minha-pagina', '/simulador', '/inbox', '/time', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
 
         if (pathname.startsWith('/financeiro')) {
           router.push('/dashboard');
@@ -68,7 +68,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
           if (!isLimitedBrokerRoute) router.push('/dashboard');
         }
         else if (isCorretorMember) {
-          const isMemberRoute = ['/dashboard', '/crm', '/tarefas', '/leads', '/simulador', '/inbox', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
+          const isMemberRoute = ['/dashboard', '/crm', '/tarefas', '/leads', '/historico', '/simulador', '/inbox', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
           if (!isMemberRoute) router.push('/dashboard');
         }
         // 2. Traffic Manager Access: Traffic routes + Broker List (to select for reports)
