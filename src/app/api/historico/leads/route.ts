@@ -51,7 +51,12 @@ export async function GET(request: Request) {
 
     let leadsQuery = supabaseAdmin
       .from('leads')
-      .select('id,nome,telefone,status,cidade,corretor_id,responsavel_profile_id')
+      .select(`
+        id,nome,telefone,email,status,cidade,corretor_id,responsavel_profile_id,
+        data_entrada,created_at,updated_at,idades,possui_cnpj,cnpj,tem_plano_ativo,
+        plano_atual,investimento,operadora,etiqueta,observacoes,motivo_busca,
+        hospital_preferencia,valor_negociacao,operadora_negociacao
+      `)
       .order('data_entrada', { ascending: false, nullsFirst: false })
       .limit(1500);
 
@@ -72,17 +77,28 @@ export async function GET(request: Request) {
     const leadIds = leadRows.map((lead) => lead.id).filter(Boolean);
 
     let activities: any[] = [];
+    let tasks: any[] = [];
     if (leadIds.length > 0) {
       for (const ids of chunk(leadIds, 250)) {
-        const { data, error } = await supabaseAdmin
-          .from('lead_atividades')
-          .select('*')
-          .in('lead_id', ids)
-          .order('created_at', { ascending: false })
-          .limit(1000);
+        const [{ data, error }, { data: taskRows, error: taskError }] = await Promise.all([
+          supabaseAdmin
+            .from('lead_atividades')
+            .select('*')
+            .in('lead_id', ids)
+            .order('created_at', { ascending: false })
+            .limit(1000),
+          supabaseAdmin
+            .from('lead_tarefas')
+            .select('*')
+            .in('lead_id', ids)
+            .order('created_at', { ascending: false })
+            .limit(1000),
+        ]);
 
         if (error) throw error;
+        if (taskError) throw taskError;
         activities = activities.concat(data || []);
+        tasks = tasks.concat(taskRows || []);
       }
     }
 
@@ -93,6 +109,7 @@ export async function GET(request: Request) {
     const profileIds = Array.from(new Set([
       ...leadRows.map((lead) => lead.responsavel_profile_id).filter(Boolean),
       ...activities.map((activity) => activity.profile_id).filter(Boolean),
+      ...tasks.map((task) => task.responsavel_profile_id).filter(Boolean),
     ])) as string[];
 
     const { data: profiles, error: profilesError } = profileIds.length
@@ -105,6 +122,7 @@ export async function GET(request: Request) {
       activities,
       leads: leadRows,
       profiles: profiles || [],
+      tasks,
     });
   } catch (error: any) {
     console.error('[GET /api/historico/leads]', error);
