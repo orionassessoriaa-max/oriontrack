@@ -1415,9 +1415,9 @@ export default function CrmPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className={`h-3 w-3 shrink-0 rounded-full shadow-[0_0_12px_currentColor] ${statusStyle.dot}`} />
-                                <h3 className="truncate text-[15px] font-black uppercase tracking-widest text-white drop-shadow-sm">{column.label}</h3>
+                                <h3 className="truncate text-[15px] font-black uppercase tracking-widest !text-white drop-shadow-sm">{column.label}</h3>
                               </div>
-                              <p className="mt-1 text-[11px] font-black text-cyan-200">{column.desc}</p>
+                              <p className="mt-1 text-[11px] font-black !text-white/85">{column.desc}</p>
                             </div>
                             <span className="rounded-full border border-blue-400/20 bg-blue-600/20 px-2.5 py-1 text-[10px] font-black text-blue-100">
                               {columnLeads.length}
