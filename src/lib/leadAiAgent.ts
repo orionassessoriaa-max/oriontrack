@@ -197,6 +197,24 @@ function plain(value?: unknown, fallback = 'Nao informado') {
   return text || fallback;
 }
 
+function leadFirstName(lead: LeadRow, fallback = 'tudo bem') {
+  const fullName = plain(lead.nome, fallback).replace(/\s+/g, ' ').trim();
+  const first = fullName.split(/\s+/)[0]?.trim();
+  return first || fallback;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function customerFacingNameOnly(text: string, lead: LeadRow) {
+  const fullName = plain(lead.nome, '').replace(/\s+/g, ' ').trim();
+  const firstName = leadFirstName(lead, '');
+  if (!fullName || !firstName || fullName.toLowerCase() === firstName.toLowerCase()) return text;
+
+  return text.replace(new RegExp(escapeRegExp(fullName), 'gi'), firstName);
+}
+
 function hasKnownValue(value?: unknown) {
   const text = String(value ?? '').trim();
   if (!text) return false;
@@ -314,7 +332,7 @@ function cnpjModeFromLead(lead: LeadRow) {
 }
 
 function cnpjConfirmationReply(lead: LeadRow) {
-  const firstName = plain(lead.nome, 'tudo bem').split(/\s+/)[0];
+  const firstName = leadFirstName(lead);
   const mode = cnpjModeFromLead(lead);
 
   if (mode === 'mei') {
@@ -358,7 +376,7 @@ function looksLikeScheduleAnswer(text?: string | null) {
 }
 
 function handoffScheduleReply(lead: LeadRow) {
-  return `Perfeito, ${plain(lead.nome, 'tudo bem')}. Um especialista vai entrar em contato por outro numero para confirmar esse agendamento. Obrigada pelo atendimento.`;
+  return `Perfeito, ${leadFirstName(lead)}. Um especialista vai entrar em contato por outro numero para confirmar esse agendamento. Obrigada pelo atendimento.`;
 }
 
 function appendSummaryLine(summary: string | null | undefined, line: string) {
@@ -590,32 +608,37 @@ async function elevenLabsTextToSpeechBase64(text: string) {
   if (!apiKey || !voiceId) return null;
 
   const outputFormat = process.env.ORION_LEAD_AI_ELEVEN_OUTPUT_FORMAT || 'mp3_44100_128';
-  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=${outputFormat}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'xi-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      text,
-      model_id: process.env.ORION_LEAD_AI_ELEVEN_MODEL || 'eleven_multilingual_v2',
-      voice_settings: {
-        stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.50),
-        similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.75),
-        style: Number(process.env.ORION_LEAD_AI_ELEVEN_STYLE || 0.0),
-        speed: Number(process.env.ORION_LEAD_AI_ELEVEN_SPEED || 1.0),
-        use_speaker_boost: String(process.env.ORION_LEAD_AI_ELEVEN_SPEAKER_BOOST || 'true').toLowerCase() === 'true',
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=${outputFormat}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': apiKey,
       },
-    }),
-  });
+      body: JSON.stringify({
+        text,
+        model_id: process.env.ORION_LEAD_AI_ELEVEN_MODEL || 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: Number(process.env.ORION_LEAD_AI_ELEVEN_STABILITY || 0.50),
+          similarity_boost: Number(process.env.ORION_LEAD_AI_ELEVEN_SIMILARITY || 0.75),
+          style: Number(process.env.ORION_LEAD_AI_ELEVEN_STYLE || 0.0),
+          speed: Number(process.env.ORION_LEAD_AI_ELEVEN_SPEED || 1.0),
+          use_speaker_boost: String(process.env.ORION_LEAD_AI_ELEVEN_SPEAKER_BOOST || 'true').toLowerCase() === 'true',
+        },
+      }),
+    });
 
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload?.detail?.message || payload?.message || 'Erro ao gerar audio no ElevenLabs.');
+    if (!response.ok) {
+      console.error('[lead_ai_agent] ElevenLabs TTS unavailable, using OpenAI fallback:', response.status);
+      return null;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return buffer.toString('base64');
+  } catch (error) {
+    console.error('[lead_ai_agent] ElevenLabs TTS failed, using OpenAI fallback:', error);
+    return null;
   }
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return buffer.toString('base64');
 }
 
 async function textToSpeechBase64(text: string) {
@@ -731,7 +754,14 @@ async function askAline(
     .replace(/{lead_facts}/gi, leadFacts(lead))
     .replace(/{corretora_nome}/gi, corretoraNome)
     .replace(/{nome_empresa}/gi, corretoraNome);
-  const system = `${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}`;
+  const nameRule = [
+    'Regra obrigatoria de tratamento pelo nome:',
+    `- Nome completo do lead: ${plain(lead.nome)}.`,
+    `- Nas mensagens enviadas ao cliente, chame sempre somente pelo primeiro nome: ${leadFirstName(lead)}.`,
+    '- Nunca use nome completo falando com o cliente.',
+    '- O nome completo so deve aparecer em resumo interno, banco de dados ou notificacao para o responsavel.',
+  ].join('\n');
+  const system = `${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}\n\n${nameRule}`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -821,7 +851,7 @@ export async function startLeadAiIfEligible(leadId: string) {
     : 'Você clicou em um anúncio nosso e preencheu o formulário de interesse em nossos planos de saúde.';
 
   const intro = [
-    `Olá, ${plain(lead.nome, 'tudo bem')}! Tudo bem?`,
+    `Olá, ${leadFirstName(lead)}! Tudo bem?`,
     `Me chamo ${aiConfig.persona}, da ${formattedBrokerageName}.`,
     interestText,
     initialLeadQuestion(lead),
@@ -983,7 +1013,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   let handoff = Boolean(ai.handoff);
   let summary = ai.summary || session.summary || null;
-  let reply = String(ai.reply || '').trim();
+  let reply = customerFacingNameOnly(String(ai.reply || '').trim(), lead);
 
   if (scheduleConfirmed) {
     handoff = true;

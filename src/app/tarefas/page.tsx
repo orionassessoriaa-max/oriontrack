@@ -218,14 +218,14 @@ export default function TarefasPage() {
         profilesMap[item.id] = item;
       });
 
-      if (profile.tipo_usuario === 'admin') {
+      if (['admin', 'dev'].includes(profile.tipo_usuario || '')) {
         const { data: allProfiles, error: profilesErr } = await supabase
           .from('profiles')
           .select('id, nome, email')
           .eq('status', 'ativo')
           .order('nome', { ascending: true });
         if (!profilesErr && allProfiles) {
-          const activeList = allProfiles as ProfileRow[];
+          const activeList = [...(allProfiles as ProfileRow[])];
           profileIds.forEach((pid) => {
             if (pid && !activeList.some((ap) => ap.id === pid)) {
               const extraProfile = profilesMap[pid];
@@ -239,6 +239,11 @@ export default function TarefasPage() {
             profilesMap[item.id] = item as ProfileRow;
           });
         }
+      } else {
+        const scopedProfiles = Array.from(
+          new Map(Object.values(profilesMap).filter(Boolean).map((item) => [item.id, item])).values(),
+        ).sort((a, b) => String(a.nome || a.email || '').localeCompare(String(b.nome || b.email || ''), 'pt-BR'));
+        setAvailableProfiles(scopedProfiles);
       }
 
       setLeadsById(Object.fromEntries(nextLeads.map((lead) => [lead.id, lead])));
@@ -379,7 +384,7 @@ export default function TarefasPage() {
       </div>
 
       <div className="mb-6 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
-        <div className="grid gap-3 lg:grid-cols-[1fr_240px_220px]">
+        <div className="grid gap-3 lg:grid-cols-[1fr_210px_190px]">
           <label className="relative block">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={17} />
             <input
@@ -415,7 +420,7 @@ export default function TarefasPage() {
       </div>
 
       <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/40 shadow-2xl">
-        <div className="grid grid-cols-[42px_minmax(260px,1.4fr)_130px_190px_minmax(160px,0.8fr)_minmax(180px,0.9fr)_150px] border-b border-white/10 bg-slate-900/80 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+        <div className="grid grid-cols-[42px_minmax(260px,1.4fr)_120px_170px_190px_minmax(190px,1fr)_140px] border-b border-white/10 bg-slate-900/80 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
           <span />
           <span>Tarefa</span>
           <span>Status</span>
@@ -455,7 +460,7 @@ export default function TarefasPage() {
                   onClick={() => {
                     if (task.lead_id) window.location.href = `/crm?lead=${task.lead_id}`;
                   }}
-                  className="grid cursor-pointer grid-cols-[42px_minmax(260px,1.4fr)_130px_190px_minmax(160px,0.8fr)_minmax(180px,0.9fr)_150px] items-center px-4 py-4 text-sm transition hover:bg-white/5"
+                  className="grid cursor-pointer grid-cols-[42px_minmax(260px,1.4fr)_120px_170px_190px_minmax(190px,1fr)_140px] items-center px-4 py-4 text-sm transition hover:bg-white/5"
                 >
                   <div>
                     <span className="block h-4 w-4 rounded border border-slate-600 bg-slate-950" />
@@ -480,7 +485,7 @@ export default function TarefasPage() {
                         onChange={(event) => {
                           void handleUpdateResponsible(task.id, event.target.value || null);
                         }}
-                        className="w-full truncate rounded-xl border border-white/10 bg-slate-900 px-3 py-1.5 text-xs font-black text-white outline-none focus:border-cyan-400/70"
+                        className="w-[180px] max-w-full truncate rounded-xl border border-white/10 bg-slate-900 px-3 py-1.5 text-xs font-black text-white outline-none focus:border-cyan-400/70"
                       >
                         <option value="">Sem responsável</option>
                         {availableProfiles.map((p) => (
