@@ -1394,7 +1394,7 @@ export default function CrmPage() {
               ) : (
                 <>
                 <div
-                  className="scrollbar-visible flex h-[calc(100dvh-360px)] min-h-[560px] snap-x gap-4 overflow-x-auto pb-4 sm:gap-5"
+                  className="scrollbar-visible flex h-[calc(100dvh-360px)] min-h-[560px] gap-4 overflow-x-auto overscroll-x-contain scroll-smooth pb-4 pr-2 sm:gap-5 [scrollbar-gutter:stable] [touch-action:pan-x_pan-y]"
                 >
                   {columns.map((column) => {
                     const columnLeads = getLeadsByStatus(column.id);
@@ -1408,16 +1408,16 @@ export default function CrmPage() {
                         key={column.id}
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={() => handleDrop(column.id)}
-                        className={`flex h-full min-w-[285px] flex-1 snap-start flex-col overflow-hidden rounded-[1.35rem] border transition-colors sm:min-w-[310px] ${draggedLeadId ? 'border-blue-300 bg-blue-950/20' : 'border-white/10 bg-white/5'}`}
+                        className={`flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-colors sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId ? 'border-blue-300 bg-blue-950/20' : 'border-white/10 bg-white/5'}`}
                       >
-                        <header className="shrink-0 border-b border-white/10 bg-[#07111f]/95 p-3 backdrop-blur">
+                        <header className="shrink-0 border-b border-cyan-400/20 bg-[#06111f] p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.28)]">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
-                                <h3 className="truncate text-sm font-black uppercase tracking-widest text-white">{column.label}</h3>
+                                <span className={`h-3 w-3 shrink-0 rounded-full shadow-[0_0_12px_currentColor] ${statusStyle.dot}`} />
+                                <h3 className="truncate text-[15px] font-black uppercase tracking-widest text-white drop-shadow-sm">{column.label}</h3>
                               </div>
-                              <p className="mt-1 text-xs font-bold text-sky-300">{column.desc}</p>
+                              <p className="mt-1 text-[11px] font-black text-cyan-200">{column.desc}</p>
                             </div>
                             <span className="rounded-full border border-blue-400/20 bg-blue-600/20 px-2.5 py-1 text-[10px] font-black text-blue-100">
                               {columnLeads.length}
@@ -1436,9 +1436,7 @@ export default function CrmPage() {
                           className={`scrollbar-visible flex-1 space-y-3 overflow-y-auto p-3 transition-colors ${draggedLeadId ? 'bg-blue-950/10' : statusStyle.column}`}
                         >
                           {visibleLeads.map((lead) => {
-                            const qualification = getLeadQualification(lead, tipoCampanha);
                             const selected = selectedLead?.id === lead.id;
-                            const importWarnings = getLeadImportWarnings(lead);
                             return (
                               <button
                                 key={lead.id}
@@ -1446,52 +1444,28 @@ export default function CrmPage() {
                                 onDragStart={() => setDraggedLeadId(lead.id)}
                                 onDragEnd={() => setDraggedLeadId(null)}
                                 onClick={() => openLeadDetails(lead)}
-                                className={`w-full rounded-[1.5rem] border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-blue-300 ring-4 ring-blue-100' : 'border-white'}`}
+                                className={`w-full rounded-2xl border bg-white px-3 py-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-blue-300 ring-4 ring-blue-100' : 'border-white'}`}
                               >
-                                <div className="mb-3 flex items-start justify-between gap-3">
-                                  <div>
-                                    <p className="font-black text-gray-900">{lead.nome}</p>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-[15px] font-black text-gray-950">{lead.nome}</p>
                                     <p className="mt-1 flex items-center gap-2 text-xs font-bold text-slate-500">
                                       <Phone size={13} /> {lead.telefone}
                                     </p>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    {importWarnings.length > 0 && (
-                                      <AlertTriangle
-                                        size={17}
-                                        className="text-orange-500"
-                                        aria-label="Lead com dados incompletos"
-                                      />
-                                    )}
-                                    {isStale(lead) && <AlertTriangle size={17} className="text-amber-500" />}
-                                  </div>
+                                  {isStale(lead) && <AlertTriangle size={16} className="shrink-0 text-amber-500" />}
                                 </div>
-                                {importWarnings.length > 0 && (
-                                  <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                                    Dados incompletos: {importWarnings.join(', ')}
-                                  </div>
-                                )}
-                                <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
-                                  <span>CNPJ: {normalizeCnpjOwnership(lead.possui_cnpj)}</span>
-                                  <span>Idade: {lead.idades || '-'}</span>
-                                  <span className="col-span-2 rounded-xl bg-blue-50 px-2 py-1 text-blue-700">Pagina: {lead.operadora || 'Sem pagina'}</span>
-                                  {lead.responsavel_membro?.nome && (
-                                    <span className="col-span-2 rounded-xl bg-emerald-50 px-2 py-1 text-emerald-700">Responsavel: {lead.responsavel_membro.nome}</span>
-                                  )}
-                                  <span className="col-span-2 rounded-xl border border-fuchsia-200 bg-fuchsia-100 text-fuchsia-800 px-2 py-1 font-black shadow-[0_0_14px_rgba(217,70,239,0.15)]">
-                                    Cadencia: dia {getCadenceDays(lead)}
+                                <div className="mt-3 space-y-2 text-[11px] font-bold text-slate-500">
+                                  <span className="block rounded-xl border border-fuchsia-200 bg-fuchsia-100 px-2 py-1 font-black text-fuchsia-800 shadow-[0_0_14px_rgba(217,70,239,0.15)]">
+                                    Cadência: dia {getCadenceDays(lead)}
                                   </span>
-                                  <span>{lead.cidade || 'Cidade nao informada'}</span>
-                                  <span>{lead.investimento || 'Sem investimento'}</span>
-                                  {requiresCommercialData(normalizeLeadStatus(lead.status)) && (
-                                    <>
-                                      <span>Negociação: {formatCurrencyValue(lead.valor_negociacao)}</span>
-                                    </>
-                                  )}
+                                  <span className="flex items-center gap-2 rounded-xl bg-slate-50 px-2 py-1 text-slate-600">
+                                    <Calendar size={13} />
+                                    {lead.data_entrada
+                                      ? format(new Date(lead.data_entrada), "dd/MM/yyyy 'as' HH:mm", { locale: ptBR })
+                                      : 'Data não informada'}
+                                  </span>
                                 </div>
-                                <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-widest ${qualificationClass(qualification.tone)}`}>
-                                  {qualification.label}
-                                </span>
                               </button>
                             );
                           })}
