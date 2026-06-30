@@ -4,6 +4,106 @@ import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
+const WHATSAPP_REJECTION_RE = /whatsapp server rejected|rejected this message|not an internal api error|server rejected/i;
+
+function normalizeOutboundText(text: string) {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim();
+}
+
+function splitSequenceText(text: string, maxChars = 650) {
+  const normalized = normalizeOutboundText(text);
+  if (!normalized) return [];
+
+  const primaryParts = normalized.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+  const parts = primaryParts.length > 1
+    ? primaryParts
+    : normalized.split(/\n+/).map((part) => part.trim()).filter(Boolean);
+
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const part of parts) {
+    if (part.length > maxChars) {
+      if (current) {
+        chunks.push(current);
+        current = '';
+      }
+
+      const words = part.split(/\s+/).filter(Boolean);
+      let wordChunk = '';
+      for (const word of words) {
+        const next = wordChunk ? `${wordChunk} ${word}` : word;
+        if (next.length > maxChars && wordChunk) {
+          chunks.push(wordChunk);
+          wordChunk = word;
+        } else {
+          wordChunk = next;
+        }
+      }
+      if (wordChunk) chunks.push(wordChunk);
+      continue;
+    }
+
+    const next = current ? `${current}\n\n${part}` : part;
+    if (next.length > maxChars && current) {
+      chunks.push(current);
+      current = part;
+    } else {
+      current = next;
+    }
+  }
+
+  if (current) chunks.push(current);
+  return chunks.length ? chunks : [normalized];
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendTextWithSequenceFallback(instance: string, phone: string, text: string) {
+  const cleanText = normalizeOutboundText(text);
+  const send = (message: string) => uazapiFetch('/send/text', {
+    method: 'POST',
+    body: JSON.stringify({
+      number: phone,
+      text: message,
+    }),
+  }, { instanceName: instance });
+
+  try {
+    const payload = await send(cleanText);
+    return { payload, text: cleanText, split: false, count: 1 };
+  } catch (error: any) {
+    const message = String(error?.message || '');
+    const chunks = splitSequenceText(cleanText);
+    const shouldRetryAsSequence = WHATSAPP_REJECTION_RE.test(message) && chunks.length > 1;
+
+    if (!shouldRetryAsSequence) {
+      throw error;
+    }
+
+    const payloads: any[] = [];
+    for (const chunk of chunks) {
+      payloads.push(await send(chunk));
+      await wait(850);
+    }
+
+    return {
+      payload: payloads[payloads.length - 1] || null,
+      text: cleanText,
+      split: true,
+      count: payloads.length,
+      payloads,
+    };
+  }
+}
 
 function dedupeMessages(messages: any[]) {
   const seenProviderIds = new Set<string>();
@@ -333,13 +433,13 @@ export async function POST(request: Request) {
         }),
       }, { instanceName: instance });
     } else {
-      payload = await uazapiFetch('/send/text', {
-        method: 'POST',
-        body: JSON.stringify({
-          number: phone,
-          text,
-        }),
-      }, { instanceName: instance });
+      const result = await sendTextWithSequenceFallback(instance, phone, text);
+      payload = {
+        ...(result.payload || {}),
+        orion_sequence_sent: result.split,
+        orion_sequence_count: result.count,
+        orion_sequence_payloads: result.payloads,
+      };
     }
 
     const providerId =
@@ -385,6 +485,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, message: inserted, conversation });
   } catch (error: any) {
     console.error('[POST /api/inbox/messages] ERROR:', error);
-    return NextResponse.json({ error: error.message || 'Nao consegui enviar a mensagem agora.' }, { status: 500 });
+    const rawMessage = String(error?.message || '');
+    if (WHATSAPP_REJECTION_RE.test(rawMessage)) {
+      return NextResponse.json({
+        error: 'O WhatsApp recusou essa mensagem. Tente enviar em partes menores ou confirme se o numero tem WhatsApp ativo.',
+      }, { status: 422 });
+    }
+    return NextResponse.json({ error: rawMessage || 'Nao consegui enviar a mensagem agora.' }, { status: 500 });
   }
 }
