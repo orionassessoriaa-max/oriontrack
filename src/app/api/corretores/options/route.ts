@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
 
 async function requireUser(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -15,7 +16,7 @@ async function requireUser(request: Request) {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('id, tipo_usuario, corretor_id')
+    .select('id, tipo_usuario, corretor_id, nome, email, email_real')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -37,12 +38,8 @@ export async function GET(request: Request) {
 
   let query = supabaseAdmin
     .from('corretores')
-    .select('id, nome, nome_empresa, email, telefone, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name, operadoras_info, status')
+    .select('id, nome, nome_empresa, email, telefone, gestor_trafego_id, time_operacional, meta_ad_account_id, meta_ad_account_name, operadoras_info, status')
     .order('nome', { ascending: true });
-
-  if (guard.profile.tipo_usuario === 'gestor_trafego') {
-    query = query.eq('gestor_trafego_id', guard.profile.id);
-  }
 
   if (guard.profile.tipo_usuario === 'corretor') {
     query = query.eq('id', guard.profile.corretor_id);
@@ -53,5 +50,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ corretores: data || [] });
+  const corretores = guard.profile.tipo_usuario === 'gestor_trafego'
+    ? (data || []).filter((corretor) => isGestorLinkedToCorretor(corretor, guard.profile))
+    : (data || []);
+
+  return NextResponse.json({ corretores });
 }

@@ -18,6 +18,7 @@ import { Corretor } from '@/types';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { getOnboardingStatus } from '@/lib/onboarding';
+import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
 
 export default function TrafficCorretoresPage() {
   const { profile, startViewingAsCorretor } = useAuth();
@@ -56,11 +57,7 @@ export default function TrafficCorretoresPage() {
 
       let filtered = data || [];
       if (profile.tipo_usuario === 'gestor_trafego') {
-        filtered = filtered.filter(c => {
-          if (c.gestor_trafego_id === profile.id) return true;
-          const team = Array.isArray(c.time_operacional) ? c.time_operacional : [];
-          return team.some((member: any) => member?.profile_id === profile.id || member?.id === profile.id);
-        });
+        filtered = filtered.filter(c => isGestorLinkedToCorretor(c, profile));
       }
 
       setCorretores(filtered);

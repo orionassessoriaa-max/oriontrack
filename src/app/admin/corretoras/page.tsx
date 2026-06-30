@@ -28,6 +28,7 @@ import { Corretor, Profile } from '@/types';
 import Link from 'next/link';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
+import { getGestorConcessionariaNames, isGestorLinkedToCorretor, normalizeAccessText } from '@/lib/gestorAccess';
 
 interface CorretoraGroup {
   id: string; // ID of the first corretor/profile in the group
@@ -245,6 +246,7 @@ function CorretorasContent() {
   const [savingOperationMode, setSavingOperationMode] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [deletingBrokerageId, setDeletingBrokerageId] = useState<string | null>(null);
+  const isAdmin = profile?.tipo_usuario === 'admin';
 
   useEffect(() => {
     setMounted(true);
@@ -298,9 +300,26 @@ function CorretorasContent() {
         }
       }
 
+      let loadedCorretores = corretoresRes.data || [];
+      let loadedProfiles = profilesRes.data || [];
+
+      if (profile?.tipo_usuario === 'gestor_trafego') {
+        loadedCorretores = loadedCorretores.filter((corretor) => isGestorLinkedToCorretor(corretor, profile));
+        const concessionariaNames = getGestorConcessionariaNames(loadedCorretores, profile);
+        const linkedCorretorIds = new Set(loadedCorretores.map((corretor) => corretor.id));
+
+        loadedProfiles = loadedProfiles.filter((item) => {
+          const profileCompany = normalizeAccessText(item.nome_empresa);
+          return (item.corretor_id && linkedCorretorIds.has(item.corretor_id))
+            || (Boolean(profileCompany) && concessionariaNames.has(profileCompany));
+        });
+
+        loadedCorretoras = loadedCorretoras.filter((item) => concessionariaNames.has(normalizeAccessText(item.nome)));
+      }
+
       setCorretorasCadastradas(loadedCorretoras);
-      setCorretores(corretoresRes.data || []);
-      setProfiles(profilesRes.data || []);
+      setCorretores(loadedCorretores);
+      setProfiles(loadedProfiles);
     } catch (err: unknown) {
       console.error('Error fetching data:', err);
       setError("Erro ao carregar dados do banco de dados.");
@@ -310,12 +329,8 @@ function CorretorasContent() {
   }
 
   useEffect(() => {
-    if (profile && profile.tipo_usuario !== 'admin') {
-      if (profile.tipo_usuario === 'gestor_trafego') {
-        router.push('/trafego/corretores');
-      } else {
-        router.push('/dashboard');
-      }
+    if (profile && profile.tipo_usuario !== 'admin' && profile.tipo_usuario !== 'gestor_trafego') {
+      router.push('/dashboard');
       return;
     }
     
@@ -514,21 +529,23 @@ function CorretorasContent() {
           </h1>
           <p className="text-gray-500 font-medium">Visualizacao agrupada de concessionarias e corretores associados.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            type="button"
-            onClick={() => setCreateModalOpen(true)}
-            className="bg-cyan-500 text-slate-950 px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-cyan-400 transition-all shadow-xl shadow-cyan-500/20"
-          >
-            <Plus size={20} /> Nova Concessionaria
-          </button>
-          <Link
-            href="/admin/usuarios?tipo=corretor"
-            className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
-          >
-            <UserPlus size={20} /> Novo Corretor
-          </Link>
-        </div>
+        {isAdmin && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={() => setCreateModalOpen(true)}
+              className="bg-cyan-500 text-slate-950 px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-cyan-400 transition-all shadow-xl shadow-cyan-500/20"
+            >
+              <Plus size={20} /> Nova Concessionaria
+            </button>
+            <Link
+              href="/admin/usuarios?tipo=corretor"
+              className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
+            >
+              <UserPlus size={20} /> Novo Corretor
+            </Link>
+          </div>
+        )}
       </div>
 
       {migrationPending && (
@@ -537,7 +554,7 @@ function CorretorasContent() {
         </div>
       )}
 
-      {mounted && createModalOpen && createPortal(
+      {isAdmin && mounted && createModalOpen && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-[#020617]/95 px-4 pb-8 pt-24 backdrop-blur-md sm:items-center sm:py-8">
           <form onSubmit={createBrokerage} className="w-full max-w-xl max-h-[calc(100vh-7rem)] overflow-y-auto rounded-[2rem] border border-cyan-400/20 bg-[#090e1a] p-6 shadow-2xl shadow-cyan-950/50">
             <div className="mb-6 flex items-start justify-between gap-4">
@@ -660,7 +677,9 @@ function CorretorasContent() {
               <Building2 size={40} />
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-1">Nenhuma concessionaria encontrada</h3>
-            <p className="text-gray-500 font-medium">Ajuste os filtros ou crie uma nova concessionaria.</p>
+            <p className="text-gray-500 font-medium">
+              {isAdmin ? 'Ajuste os filtros ou crie uma nova concessionaria.' : 'Nenhuma concessionaria foi vinculada a sua gestao.'}
+            </p>
           </div>
         ) : (
           filteredCorretoras.map((c) => {
@@ -713,27 +732,35 @@ function CorretorasContent() {
                       className="flex min-w-[230px] flex-col gap-1"
                     >
                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Modo de operacao</span>
-                      <select
-                        value={normalizeOperationMode(c.modo_operacao)}
-                        disabled={savingOperationMode === c.id || !c.corretora_id}
-                        onChange={(event) => updateOperationMode(c, event.target.value as OperationMode)}
-                        className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-700 outline-none transition focus:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300"
-                      >
-                        {Object.entries(operationModeLabels).map(([value, label]) => (
-                          <option key={value} value={value}>{label}</option>
-                        ))}
-                      </select>
+                      {isAdmin ? (
+                        <select
+                          value={normalizeOperationMode(c.modo_operacao)}
+                          disabled={savingOperationMode === c.id || !c.corretora_id}
+                          onChange={(event) => updateOperationMode(c, event.target.value as OperationMode)}
+                          className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-700 outline-none transition focus:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300"
+                        >
+                          {Object.entries(operationModeLabels).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-300">
+                          {operationModeLabels[normalizeOperationMode(c.modo_operacao)]}
+                        </span>
+                      )}
                     </div>
 
-                    <Link
-                      href={newCorretorHref(c.nome)}
-                      onClick={(event) => event.stopPropagation()}
-                      className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3.5 py-1.5 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-500"
-                    >
-                      <UserPlus size={13} /> Adicionar corretor
-                    </Link>
+                    {isAdmin && (
+                      <Link
+                        href={newCorretorHref(c.nome)}
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3.5 py-1.5 text-xs font-black uppercase tracking-widest text-white transition hover:bg-blue-500"
+                      >
+                        <UserPlus size={13} /> Adicionar corretor
+                      </Link>
+                    )}
 
-                    {c.corretora_id && (
+                    {isAdmin && c.corretora_id && (
                       <button
                         type="button"
                         onClick={(event) => {

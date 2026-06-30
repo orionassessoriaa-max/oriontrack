@@ -28,6 +28,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getOnboardingStatus } from '@/lib/onboarding';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
+import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
 
 type Corretor = {
   id: string;
@@ -83,11 +84,7 @@ export default function GestorDashboardPage() {
       // Filter brokers where current user is their traffic manager
       let filteredCorretores: Corretor[] = corretoresData || [];
       if (profile.tipo_usuario === 'gestor_trafego') {
-        filteredCorretores = filteredCorretores.filter(c => {
-          if (c.gestor_trafego_id === profile.id) return true;
-          const team = Array.isArray(c.time_operacional) ? c.time_operacional : [];
-          return team.some((member: any) => member?.profile_id === profile.id || member?.id === profile.id);
-        });
+        filteredCorretores = filteredCorretores.filter(c => isGestorLinkedToCorretor(c, profile));
       }
       setCorretores(filteredCorretores);
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { getGestorConcessionariaNames, isGestorLinkedToCorretor, normalizeAccessText } from '@/lib/gestorAccess';
 
 function normalizeName(value: unknown) {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -32,6 +33,29 @@ export async function GET(request: Request) {
         return NextResponse.json({ corretoras: [], migration_pending: true });
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (guard.profile.tipo_usuario === 'gestor_trafego') {
+      const { data: gestor } = await supabaseAdmin
+        .from('profiles')
+        .select('id, nome, email, email_real')
+        .eq('id', guard.profile.id)
+        .maybeSingle();
+
+      const { data: corretoresData, error: corretoresError } = await supabaseAdmin
+        .from('corretores')
+        .select('gestor_trafego_id, time_operacional, nome_empresa')
+        .in('status', ['active', 'ativo', 'Ativo']);
+
+      if (corretoresError) {
+        return NextResponse.json({ error: corretoresError.message }, { status: 500 });
+      }
+
+      const linkedCorretores = (corretoresData || []).filter((corretor) => isGestorLinkedToCorretor(corretor, gestor));
+      const concessionariaNames = getGestorConcessionariaNames(linkedCorretores, gestor);
+      const corretoras = (data || []).filter((corretora) => concessionariaNames.has(normalizeAccessText(corretora.nome)));
+
+      return NextResponse.json({ corretoras });
     }
 
     return NextResponse.json({ corretoras: data || [] });

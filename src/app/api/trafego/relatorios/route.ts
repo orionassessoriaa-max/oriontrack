@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
 
 export async function POST(request: Request) {
   try {
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
 
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('id, tipo_usuario')
+      .select('id, tipo_usuario, nome, email, email_real')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -39,12 +40,11 @@ export async function POST(request: Request) {
     if (profile.tipo_usuario === 'gestor_trafego') {
       const { data: corretor } = await supabaseAdmin
         .from('corretores')
-        .select('id')
+        .select('id, gestor_trafego_id, time_operacional')
         .eq('id', corretorId)
-        .eq('gestor_trafego_id', profile.id)
         .maybeSingle();
 
-      if (!corretor) {
+      if (!corretor || !isGestorLinkedToCorretor(corretor, profile)) {
         return NextResponse.json({ error: 'Corretor nÃ£o vinculado ao gestor.' }, { status: 403 });
       }
     }

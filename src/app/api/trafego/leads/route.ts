@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireApiUser } from '@/lib/api/security';
+import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
 
 type CorretorRecord = {
   id: string;
@@ -8,32 +9,6 @@ type CorretorRecord = {
   gestor_trafego_id: string | null;
   time_operacional: unknown;
 };
-
-function normalizeText(value?: string | null) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
-}
-
-function isLinkedToGestor(corretor: CorretorRecord, gestor: { id: string; nome?: string | null }) {
-  if (corretor.gestor_trafego_id === gestor.id) return true;
-
-  const team = Array.isArray(corretor.time_operacional) ? corretor.time_operacional : [];
-  const gestorName = normalizeText(gestor.nome);
-
-  return team.some((member: any) => {
-    const profileId = String(member?.profile_id || '');
-    const role = normalizeText(member?.tipo_usuario);
-    const cargo = normalizeText(member?.cargo);
-    const nome = normalizeText(member?.nome);
-
-    return profileId === gestor.id
-      || (Boolean(gestorName) && nome === gestorName)
-      || (nome === gestorName && (role === 'gestor_trafego' || cargo.includes('trafego')));
-  });
-}
 
 export async function GET(request: Request) {
   const guard = await requireApiUser(request, ['admin', 'gestor_trafego']);
@@ -52,7 +27,7 @@ export async function GET(request: Request) {
 
   const { data: gestor, error: gestorError } = await supabaseAdmin
     .from('profiles')
-    .select('id, nome, email')
+    .select('id, nome, email, email_real')
     .eq('id', gestorId)
     .eq('tipo_usuario', 'gestor_trafego')
     .maybeSingle();
@@ -75,7 +50,7 @@ export async function GET(request: Request) {
   }
 
   const corretores = ((corretoresData || []) as CorretorRecord[])
-    .filter((corretor) => isLinkedToGestor(corretor, gestor))
+    .filter((corretor) => isGestorLinkedToCorretor(corretor, gestor))
     .map((corretor) => ({ id: corretor.id, nome: corretor.nome }));
 
   const corretorIds = corretores.map((corretor) => corretor.id);
