@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireApiUser } from '@/lib/api/security';
-import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
+import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 type CorretorRecord = {
   id: string;
   nome: string;
   gestor_trafego_id: string | null;
   time_operacional: unknown;
+  nome_empresa: string | null;
 };
 
 export async function GET(request: Request) {
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
 
   const { data: corretoresData, error: corretoresError } = await supabaseAdmin
     .from('corretores')
-    .select('id, nome, gestor_trafego_id, time_operacional')
+    .select('id, nome, gestor_trafego_id, time_operacional, nome_empresa')
     .order('nome', { ascending: true });
 
   if (corretoresError) {
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
   }
 
   const corretores = ((corretoresData || []) as CorretorRecord[])
-    .filter((corretor) => isGestorLinkedToCorretor(corretor, gestor))
+    .filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, gestor))
     .map((corretor) => ({ id: corretor.id, nome: corretor.nome }));
 
   const corretorIds = corretores.map((corretor) => corretor.id);

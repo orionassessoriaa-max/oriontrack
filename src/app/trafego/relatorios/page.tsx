@@ -19,7 +19,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { format } from 'date-fns';
-import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
+import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 type ReportCorretor = {
   id: string;
@@ -89,7 +89,7 @@ export default function TrafficReportsPage() {
     try {
       const corretoresQuery = supabase
         .from('corretores')
-        .select('id, nome, gestor_trafego_id, time_operacional')
+        .select('id, nome, gestor_trafego_id, time_operacional, nome_empresa')
         .in('status', ['active', 'ativo', 'Ativo'])
         .order('nome', { ascending: true });
 
@@ -120,7 +120,7 @@ export default function TrafficReportsPage() {
 
       let filteredCorretores = corretoresData || [];
       if (profile.tipo_usuario === 'gestor_trafego') {
-        filteredCorretores = filteredCorretores.filter(c => isGestorLinkedToCorretor(c, profile));
+        filteredCorretores = filteredCorretores.filter(c => isGestorLinkedToConcessionariaCorretor(c, profile));
       }
 
       setCorretores(filteredCorretores);

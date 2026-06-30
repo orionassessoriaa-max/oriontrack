@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
+import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 async function requireUser(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
   }
 
   const corretores = guard.profile.tipo_usuario === 'gestor_trafego'
-    ? (data || []).filter((corretor) => isGestorLinkedToCorretor(corretor, guard.profile))
+    ? (data || []).filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, guard.profile))
     : (data || []);
 
   return NextResponse.json({ corretores });

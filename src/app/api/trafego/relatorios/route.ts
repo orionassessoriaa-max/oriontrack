@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
+import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 export async function POST(request: Request) {
   try {
@@ -40,11 +40,11 @@ export async function POST(request: Request) {
     if (profile.tipo_usuario === 'gestor_trafego') {
       const { data: corretor } = await supabaseAdmin
         .from('corretores')
-        .select('id, gestor_trafego_id, time_operacional')
+        .select('id, gestor_trafego_id, time_operacional, nome_empresa')
         .eq('id', corretorId)
         .maybeSingle();
 
-      if (!corretor || !isGestorLinkedToCorretor(corretor, profile)) {
+      if (!corretor || !isGestorLinkedToConcessionariaCorretor(corretor, profile)) {
         return NextResponse.json({ error: 'Corretor nÃ£o vinculado ao gestor.' }, { status: 403 });
       }
     }

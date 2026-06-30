@@ -43,6 +43,17 @@ export function isGestorLinkedToCorretor(corretor: CorretorLike, gestor: GestorP
   });
 }
 
+export function hasConcessionaria(corretor: CorretorLike) {
+  return Boolean(String(corretor.nome_empresa || '').trim());
+}
+
+export function isGestorLinkedToConcessionariaCorretor(
+  corretor: CorretorLike,
+  gestor: GestorProfileLike | null | undefined
+) {
+  return hasConcessionaria(corretor) && isGestorLinkedToCorretor(corretor, gestor);
+}
+
 export function getGestorConcessionariaNames(corretores: CorretorLike[], gestor: GestorProfileLike | null | undefined) {
   const names = new Set<string>();
 

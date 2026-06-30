@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { getGestorConcessionariaNames, isGestorLinkedToCorretor, normalizeAccessText } from '@/lib/gestorAccess';
+import { getGestorConcessionariaNames, isGestorLinkedToConcessionariaCorretor, normalizeAccessText } from '@/lib/gestorAccess';
 
 function normalizeName(value: unknown) {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: corretoresError.message }, { status: 500 });
       }
 
-      const linkedCorretores = (corretoresData || []).filter((corretor) => isGestorLinkedToCorretor(corretor, gestor));
+      const linkedCorretores = (corretoresData || []).filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, gestor));
       const concessionariaNames = getGestorConcessionariaNames(linkedCorretores, gestor);
       const corretoras = (data || []).filter((corretora) => concessionariaNames.has(normalizeAccessText(corretora.nome)));
 

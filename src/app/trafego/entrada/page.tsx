@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor } from '@/types';
 import { getOnboardingStatus, OPERADORAS_ONBOARDING } from '@/lib/onboarding';
 import { CheckCircle2, Loader2, Save, Search, ShieldAlert, UserPlus } from 'lucide-react';
-import { isGestorLinkedToCorretor } from '@/lib/gestorAccess';
+import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 type EntradaForm = {
   facebook_login: string;
@@ -73,7 +73,7 @@ export default function EntradaGestorPage() {
 
       let filtered = data || [];
       if (profile.tipo_usuario === 'gestor_trafego') {
-        filtered = filtered.filter(c => isGestorLinkedToCorretor(c, profile));
+        filtered = filtered.filter(c => isGestorLinkedToConcessionariaCorretor(c, profile));
       }
 
       setCorretores(filtered);

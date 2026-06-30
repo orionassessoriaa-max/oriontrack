@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  AlertTriangle,
   Bell,
   Bot,
   Building2,
@@ -225,7 +224,6 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Building2, label: 'Concessionarias', href: '/admin/corretoras' },
     { icon: FileSearch, label: 'Leads dos corretores', href: '/trafego/leads' },
     { icon: UserPlus, label: 'Entrada', href: '/trafego/entrada' },
-    { icon: AlertTriangle, label: 'Avisos Meta', href: '/trafego/avisos-meta' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
     { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
     { icon: Users, label: 'Corretores', href: '/trafego/corretores' },
@@ -298,7 +296,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
         ];
       }
     } else if (profile?.tipo_usuario === 'gestor_trafego') {
-      items = adminMenu.filter((item) => item.href !== '/admin/configuracoes' && item.href !== '/admin/usuarios');
+      items = trafficMenu;
     } else if (profile?.tipo_usuario === 'admin') {
       items = adminMenu;
     } else if (profile?.tipo_usuario === 'designer') {

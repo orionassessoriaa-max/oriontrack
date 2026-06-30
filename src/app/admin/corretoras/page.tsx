@@ -28,7 +28,7 @@ import { Corretor, Profile } from '@/types';
 import Link from 'next/link';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
-import { getGestorConcessionariaNames, isGestorLinkedToCorretor, normalizeAccessText } from '@/lib/gestorAccess';
+import { getGestorConcessionariaNames, isGestorLinkedToConcessionariaCorretor, normalizeAccessText } from '@/lib/gestorAccess';
 
 interface CorretoraGroup {
   id: string; // ID of the first corretor/profile in the group
@@ -304,7 +304,7 @@ function CorretorasContent() {
       let loadedProfiles = profilesRes.data || [];
 
       if (profile?.tipo_usuario === 'gestor_trafego') {
-        loadedCorretores = loadedCorretores.filter((corretor) => isGestorLinkedToCorretor(corretor, profile));
+        loadedCorretores = loadedCorretores.filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, profile));
         const concessionariaNames = getGestorConcessionariaNames(loadedCorretores, profile);
         const linkedCorretorIds = new Set(loadedCorretores.map((corretor) => corretor.id));
 

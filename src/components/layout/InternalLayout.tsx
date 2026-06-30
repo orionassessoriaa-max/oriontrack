@@ -45,7 +45,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isAccountRoute = pathname.startsWith('/account');
         const isCreativeRoute = pathname.startsWith('/criativos');
         const isTeamRoute = pathname.startsWith('/equipe');
-        const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/simulador') || pathname.startsWith('/apolo-one') || pathname.startsWith('/ajuda');
+        const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/apolo-one') || pathname.startsWith('/ajuda');
         const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/inbox', '/historico', '/minha-pagina', '/time'].some(p => pathname.startsWith(p)) || isCreativeRoute;
         const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/historico', '/minha-pagina', '/simulador', '/inbox', '/time', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
 
@@ -75,9 +75,19 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         // But NO /admin dashboard or system settings
         else if (isTrafficManager) {
           if (isViewingAsCorretor && isBrokerRoute) return;
-          if (isAdminRoute) return;
-          if (isBrokerRoute || isDesignerRoute || isAccountRoute) {
-             router.push('/trafego');
+          const isAllowedTrafficAdminRoute = pathname.startsWith('/admin/corretoras');
+          const isBlockedTrafficMetaRoute = pathname.startsWith('/trafego/avisos-meta');
+          if (isBlockedTrafficMetaRoute) {
+            router.push('/trafego');
+            return;
+          }
+          if (isAdminRoute && !isAllowedTrafficAdminRoute) {
+            router.push('/trafego');
+            return;
+          }
+          if (isAllowedTrafficAdminRoute || isTrafficRoute || isTeamRoute || pathname === '/tarefas') return;
+          if (isBrokerRoute || isDesignerRoute || isAccountRoute || pathname.startsWith('/simulador')) {
+            router.push('/trafego');
           }
         }
         else if (isDesigner) {
