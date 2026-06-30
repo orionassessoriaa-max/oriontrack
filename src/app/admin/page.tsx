@@ -154,12 +154,18 @@ export default function AdminCentralPage() {
       setCorretoresList(corretores);
       setCorretorasList(corretorasCadastradas);
 
+      const activeCorretores = corretores.filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''));
       const statsPorGestor = gestores.map(g => {
-        const count = corretores.filter(c => c.gestor_resolvido_id === g.id).length;
-        return { ...g, count };
+        const concessionarias = new Set(
+          activeCorretores
+            .filter(c => c.gestor_resolvido_id === g.id)
+            .map(c => String(c.nome_empresa || '').trim())
+            .filter(Boolean)
+            .map(nome => normalizeText(nome))
+        );
+        return { ...g, count: concessionarias.size };
       });
 
-      const activeCorretores = corretores.filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''));
       const corretorasAtivas = new Set(
         corretorasCadastradas
           .filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''))
@@ -172,7 +178,13 @@ export default function AdminCentralPage() {
         .filter(Boolean)
         .map(nome => normalizeText(nome))
         .forEach(nome => corretorasAtivas.add(nome));
-      const semGestor = activeCorretores.filter(c => !c.gestor_resolvido_id).length;
+      const semGestor = new Set(
+        activeCorretores
+          .filter(c => !c.gestor_resolvido_id)
+          .map(c => String(c.nome_empresa || '').trim())
+          .filter(Boolean)
+          .map(nome => normalizeText(nome))
+      ).size;
       const semCorretora = activeCorretores.filter(c => !String(c.nome_empresa || '').trim()).length;
 
       setStats({
@@ -665,10 +677,10 @@ export default function AdminCentralPage() {
         </div>
       </div>
 
-      {/* Corretores por Gestor Section */}
+      {/* Concessionarias por Gestor Section */}
       <div className="mb-12">
         <div className="flex items-center gap-4 mb-6">
-          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Corretores por Gestor</h2>
+          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Concessionarias por Gestor</h2>
           <div className="h-px flex-1 bg-white/5" />
         </div>
         
@@ -692,15 +704,15 @@ export default function AdminCentralPage() {
                       </div>
                     </div>
                     <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Corretores Vinculados</p>
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Concessionarias Vinculadas</p>
                       <p className="text-3xl font-black text-white group-hover:scale-105 origin-left transition-transform">{gestor.count}</p>
                     </div>
                   </div>
                   <Link 
-                    href={`/admin/corretores?gestor=${gestor.id}`}
+                    href={`/admin/corretoras?gestor=${gestor.id}`}
                     className="mt-5 w-full py-2.5 bg-white/5 border border-white/5 text-white font-extrabold text-[10px] uppercase tracking-widest rounded-xl hover:bg-gradient-to-r hover:from-blue-600 hover:to-cyan-500 hover:border-blue-600 hover:shadow-lg hover:shadow-blue-500/10 transition-all flex items-center justify-center gap-2"
                   >
-                    Ver corretores <ArrowRight size={12} />
+                    Ver concessionarias <ArrowRight size={12} />
                   </Link>
                 </div>
               ))}
@@ -717,15 +729,15 @@ export default function AdminCentralPage() {
                     </div>
                   </div>
                   <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Corretores Livres</p>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Concessionarias Livres</p>
                     <p className="text-3xl font-black text-white group-hover:scale-105 origin-left transition-transform">{corretoresSemGestor}</p>
                   </div>
                 </div>
                 <Link 
-                  href="/admin/corretores?gestor=sem-gestor"
+                  href="/admin/corretoras?gestor=sem-gestor"
                   className="mt-5 w-full py-2.5 bg-white/5 border border-white/5 text-white font-extrabold text-[10px] uppercase tracking-widest rounded-xl hover:bg-gradient-to-r hover:from-orange-600 hover:to-amber-500 hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/10 transition-all flex items-center justify-center gap-2"
                 >
-                  Ver corretores <ArrowRight size={12} />
+                  Ver concessionarias <ArrowRight size={12} />
                 </Link>
               </div>
             </>
