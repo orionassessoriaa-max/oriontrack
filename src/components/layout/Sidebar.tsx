@@ -30,6 +30,7 @@ import {
   RotateCcw,
   Settings,
   Shield,
+  Sparkles,
   Sun,
   TrendingUp,
   Trophy,
@@ -40,6 +41,7 @@ import {
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { canUseFerramentasPreview } from '@/lib/ferramentasAccess';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -200,6 +202,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Shield, label: 'Usuarios', href: '/admin/usuarios' },
     { icon: Building2, label: 'Concessionarias', href: '/admin/corretoras' },
     { icon: Cpu, label: 'IA', href: '/admin/ia' },
+    { icon: Sparkles, label: 'Ferramentas', href: '/admin/ferramentas' },
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
     { icon: UserCog, label: 'Gestores de Trafego', href: '/admin/gestores' },
     { icon: Palette, label: 'Designer', href: '/admin/designers' },
@@ -252,6 +255,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
+  const canSeeFerramentas = canUseFerramentasPreview(profile as any);
+
   const corretorMenu = [
     { icon: Home, label: 'Inicio', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
@@ -260,6 +265,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
     { icon: Globe, label: 'Minha Pagina', href: '/minha-pagina' },
     { icon: Palette, label: 'Solicitar Criativo', href: '/criativos' },
+    ...(canSeeFerramentas ? [{ icon: Sparkles, label: 'Ferramentas', href: '/ferramentas' }] : []),
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Trophy, label: 'Meu time', href: '/time' },
     { icon: ClipboardList, label: 'Historico', href: '/historico' },
@@ -273,6 +279,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
+    ...(canSeeFerramentas ? [{ icon: Sparkles, label: 'Ferramentas', href: '/ferramentas' }] : []),
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: ClipboardList, label: 'Historico', href: '/historico' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },

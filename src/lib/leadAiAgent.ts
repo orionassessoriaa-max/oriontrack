@@ -354,15 +354,34 @@ function isSchedulePrompt(text?: string | null) {
   const normalized = normalizeAiText(text);
   return (
     normalized.includes('ligacao rapida de 15 minutos') ||
+    normalized.includes('ligacao de 15 minutos') ||
+    normalized.includes('ligacao rapida') ||
     normalized.includes('dia e horario') ||
+    normalized.includes('dia e hora') ||
     normalized.includes('horario voce esta mais confortavel') ||
-    normalized.includes('disponibilidade para uma ligacao')
+    normalized.includes('mais confortavel pra voce') ||
+    normalized.includes('mais confortavel para voce') ||
+    normalized.includes('disponibilidade para uma ligacao') ||
+    normalized.includes('quando fica melhor') ||
+    normalized.includes('qual melhor horario') ||
+    normalized.includes('melhor horario')
   );
 }
 
 function looksLikeScheduleAnswer(text?: string | null) {
   const normalized = normalizeAiText(text);
   if (!normalized.trim()) return false;
+
+  const hasFlexibleDay =
+    /\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(normalized) ||
+    /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/.test(normalized);
+  const hasFlexibleTime =
+    /\b\d{1,2}\s*h(?:oras?)?\b/.test(normalized) ||
+    /\b\d{1,2}:\d{2}\b/.test(normalized) ||
+    /\b(?:as|a partir das|depois das|antes das)\s*\d{1,2}\b/.test(normalized) ||
+    /\b(manha|tarde|noite)\b/.test(normalized);
+
+  if (hasFlexibleDay && hasFlexibleTime) return true;
 
   const hasDay =
     /\b(hoje|amanha|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b/.test(normalized) ||
@@ -382,6 +401,77 @@ function handoffScheduleReply(lead: LeadRow) {
 function appendSummaryLine(summary: string | null | undefined, line: string) {
   const base = String(summary || '').trim();
   return base ? `${base}\n${line}` : line;
+}
+
+async function finalizeScheduledHandoff(params: {
+  session: any;
+  lead: LeadRow;
+  conversationId: string;
+  adminProfile: ProfileRow;
+  aiConfig: any;
+  customerMessage: string;
+  incomingWasAudio?: boolean;
+}) {
+  const { session, lead, conversationId, adminProfile, aiConfig, customerMessage, incomingWasAudio } = params;
+  let summary = appendSummaryLine(session.summary || leadFacts(lead), `*Agendado*: ${customerMessage.trim()}`);
+  summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
+  const reply = handoffScheduleReply(lead);
+
+  if (incomingWasAudio) {
+    try {
+      registerAiOutbound(lead.telefone || '', 'Mensagem de voz');
+      const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', reply);
+      await insertMessage(conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
+        ...(payload || {}),
+        instance: uazapiInstanceName(adminProfile.id),
+        provider_message_id: providerMessageId(payload),
+        ai_agent: aiConfig.persona,
+        ai_text: reply,
+        messageType: 'audioMessage',
+        mediaType: 'audio',
+        mediatype: 'audio',
+        mimetype: 'audio/mpeg',
+        fileName: 'aline-resposta.mp3',
+      });
+    } catch (audioErr) {
+      console.error('[lead_ai_agent] Failed sending scheduled handoff audio, falling back to text:', audioErr);
+      registerAiOutbound(lead.telefone || '', reply);
+      const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+      await insertMessage(conversationId, 'outbound', aiConfig.persona, reply, {
+        ...(payload || {}),
+        instance: uazapiInstanceName(adminProfile.id),
+        ai_agent: aiConfig.persona,
+      });
+    }
+  } else {
+    registerAiOutbound(lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    await insertMessage(conversationId, 'outbound', aiConfig.persona, reply, {
+      ...(payload || {}),
+      instance: uazapiInstanceName(adminProfile.id),
+      ai_agent: aiConfig.persona,
+    });
+  }
+
+  await supabaseAdmin
+    .from('lead_ai_sessions')
+    .update({
+      status: 'handoff',
+      summary,
+      last_customer_message_at: new Date().toISOString(),
+      last_ai_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', session.id);
+
+  await updateLeadFromSummary(lead.id, summary);
+  await notifyResponsible(lead, summary);
+  const scheduledVal = extractAgendadoValue(summary);
+  if (scheduledVal) {
+    await createAutoScheduledTask(lead, scheduledVal, adminProfile.id);
+  }
+
+  return { handled: true, handoff: true, deterministic: 'scheduled_handoff' };
 }
 
 function providerMessageId(payload: any) {
@@ -762,6 +852,13 @@ async function askAline(
     '- O nome completo so deve aparecer em resumo interno, banco de dados ou notificacao para o responsavel.',
   ].join('\n');
   const system = `${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}\n\n${nameRule}`;
+  const lastMessage = messages[messages.length - 1];
+  const alreadyHasCustomerMessage =
+    lastMessage?.role === 'user' &&
+    normalizeAiText(String(lastMessage.content || '')) === normalizeAiText(customerMessage);
+  const promptMessages = alreadyHasCustomerMessage
+    ? messages
+    : [...messages, { role: 'user', content: customerMessage }];
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -775,8 +872,7 @@ async function askAline(
       max_tokens: 650,
       messages: [
         { role: 'system', content: system },
-        ...messages,
-        { role: 'user', content: customerMessage },
+        ...promptMessages,
       ],
       response_format: { type: 'json_object' },
     }),
@@ -931,7 +1027,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id')
+    .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, email, motivo_busca, hospital_preferencia, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id')
     .eq('id', options.leadId)
     .maybeSingle();
 
@@ -980,7 +1076,13 @@ export async function continueLeadAiFromIncoming(options: {
     .reverse()
     .find((item) => item.direction === 'outbound');
   const previousOutboundText = previousOutbound?.metadata?.ai_text || previousOutbound?.mensagem || '';
-  const scheduleConfirmed = isSchedulePrompt(previousOutboundText) && looksLikeScheduleAnswer(options.customerMessage);
+  const recentOutboundTexts = [...(history || [])]
+    .filter((item) => item.direction === 'outbound')
+    .slice(-5)
+    .map((item) => String(item.metadata?.ai_text || item.mensagem || ''));
+  const scheduleConfirmed =
+    looksLikeScheduleAnswer(options.customerMessage) &&
+    (isSchedulePrompt(previousOutboundText) || recentOutboundTexts.some(isSchedulePrompt));
 
   if (
     isInitialConfirmationQuestion(previousOutboundText) &&
@@ -1007,6 +1109,18 @@ export async function continueLeadAiFromIncoming(options: {
       .eq('id', session.id);
 
     return { handled: true, handoff: false, deterministic: 'cnpj_confirmation' };
+  }
+
+  if (scheduleConfirmed) {
+    return await finalizeScheduledHandoff({
+      session,
+      lead,
+      conversationId: options.conversationId,
+      adminProfile,
+      aiConfig,
+      customerMessage: options.customerMessage,
+      incomingWasAudio: options.incomingWasAudio,
+    });
   }
 
   const ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
