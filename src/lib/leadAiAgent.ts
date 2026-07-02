@@ -350,6 +350,24 @@ function cnpjConfirmationReply(lead: LeadRow) {
   return `Legal, ${firstName}! So para eu te direcionar certinho: a simulacao seria pelo CNPJ/MEI ou pelo CPF?\n\nSe preferir, pode me responder por audio tambem.`;
 }
 
+function nextQuestionAfterCnpjConfirmation(lead: LeadRow) {
+  const firstName = leadFirstName(lead);
+
+  if (!hasKnownValue(lead.hospital_preferencia)) {
+    return `Perfeito, ${firstName}! Tem algum hospital ou clinica de preferencia na sua regiao?`;
+  }
+
+  if (!hasKnownValue(lead.motivo_busca)) {
+    return `Perfeito, ${firstName}! E qual e o motivo da sua busca por um novo plano de saude? E algo mais preventivo, urgente ou tem algum atendimento especifico?`;
+  }
+
+  if (!hasKnownValue(lead.email)) {
+    return `Perfeito, ${firstName}! Qual o melhor e-mail para eu deixar a proposta organizada?`;
+  }
+
+  return `Perfeito, ${firstName}. Com essas informacoes, consigo analisar seu perfil e te apresentar as melhores opcoes com mais clareza.\n\nQue dia e horario voce esta mais confortavel para uma ligacao rapida de 15 minutos?`;
+}
+
 function isSchedulePrompt(text?: string | null) {
   const normalized = normalizeAiText(text);
   return (
@@ -472,6 +490,32 @@ async function finalizeScheduledHandoff(params: {
   }
 
   return { handled: true, handoff: true, deterministic: 'scheduled_handoff' };
+}
+
+async function handoffAiFailure(params: {
+  session: any;
+  lead: LeadRow;
+  reason: string;
+}) {
+  const { session, lead, reason } = params;
+  const summary = appendSummaryLine(
+    session.summary || leadFacts(lead),
+    `IA encerrada: ${reason}`
+  );
+
+  await supabaseAdmin
+    .from('lead_ai_sessions')
+    .update({
+      status: 'handoff',
+      summary,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', session.id);
+
+  await updateLeadFromSummary(lead.id, summary);
+  await notifyResponsible(lead, summary);
+
+  return { handled: true, handoff: true, reason };
 }
 
 function providerMessageId(payload: any) {
@@ -1111,6 +1155,60 @@ export async function continueLeadAiFromIncoming(options: {
     return { handled: true, handoff: false, deterministic: 'cnpj_confirmation' };
   }
 
+  if (
+    isCnpjConfirmationQuestion(previousOutboundText) &&
+    isAffirmativeAnswer(options.customerMessage)
+  ) {
+    const reply = nextQuestionAfterCnpjConfirmation(lead);
+    if (options.incomingWasAudio) {
+      try {
+        registerAiOutbound(lead.telefone || '', 'Mensagem de voz');
+        const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', reply);
+        await insertMessage(options.conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
+          ...(payload || {}),
+          instance: uazapiInstanceName(adminProfile.id),
+          provider_message_id: providerMessageId(payload),
+          ai_agent: aiConfig.persona,
+          ai_text: reply,
+          messageType: 'audioMessage',
+          mediaType: 'audio',
+          mediatype: 'audio',
+          mimetype: 'audio/mpeg',
+          fileName: 'aline-resposta.mp3',
+        });
+      } catch (audioErr) {
+        console.error('[lead_ai_agent] Failed sending CNPJ confirmation audio, falling back to text:', audioErr);
+        registerAiOutbound(lead.telefone || '', reply);
+        const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+        await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+          ...(payload || {}),
+          instance: uazapiInstanceName(adminProfile.id),
+          ai_agent: aiConfig.persona,
+        });
+      }
+    } else {
+      registerAiOutbound(lead.telefone || '', reply);
+      const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+      await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+        ...(payload || {}),
+        instance: uazapiInstanceName(adminProfile.id),
+        ai_agent: aiConfig.persona,
+      });
+    }
+
+    await supabaseAdmin
+      .from('lead_ai_sessions')
+      .update({
+        summary: appendSummaryLine(session.summary || leadFacts(lead), `*CNPJ/CPF confirmado*: ${options.customerMessage.trim()}`),
+        last_customer_message_at: new Date().toISOString(),
+        last_ai_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', session.id);
+
+    return { handled: true, handoff: false, deterministic: 'cnpj_confirmed_next_step' };
+  }
+
   if (scheduleConfirmed) {
     return await finalizeScheduledHandoff({
       session,
@@ -1123,7 +1221,17 @@ export async function continueLeadAiFromIncoming(options: {
     });
   }
 
-  const ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
+  let ai: any;
+  try {
+    ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
+  } catch (error) {
+    console.error('[lead_ai_agent] IA falhou ao continuar atendimento. Fazendo handoff:', error);
+    return await handoffAiFailure({
+      session,
+      lead,
+      reason: 'falha tecnica ao gerar a proxima resposta da IA.',
+    });
+  }
 
   let handoff = Boolean(ai.handoff);
   let summary = ai.summary || session.summary || null;
@@ -1172,7 +1280,13 @@ export async function continueLeadAiFromIncoming(options: {
     });
   }
 
-  if (!reply && !handoff) return { handled: false, reason: 'IA sem resposta.' };
+  if (!reply && !handoff) {
+    return await handoffAiFailure({
+      session,
+      lead,
+      reason: 'a IA nao retornou uma resposta para continuar a conversa.',
+    });
+  }
 
   const status = handoff ? 'handoff' : 'active';
   const currentSummary = summary;
