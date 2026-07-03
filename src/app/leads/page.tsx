@@ -220,7 +220,12 @@ export default function BrokerLeadsPage() {
     actualProfile?.tipo_usuario === 'admin'
   );
   const canManageLeadResponsible = canAssignTeamLeads;
-  const canCreateManualLead = profile?.tipo_usuario === 'corretor_admin';
+  const leadCreatorRoles = ['corretor', 'corretor_admin', 'corretor_membro', 'corretor_integrante', 'corretor_parceiro'];
+  const canCreateManualLead = Boolean(
+    profile?.corretor_id &&
+    profile?.tipo_usuario &&
+    leadCreatorRoles.includes(profile.tipo_usuario)
+  );
 
   function openLeadInCrm(leadId: string) {
     window.location.href = `/crm?lead=${encodeURIComponent(leadId)}`;

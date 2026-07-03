@@ -9,6 +9,12 @@ const defaultFlow = [
   { id: 'notify_broker', type: 'action', label: 'Acionar corretor', description: 'Chama o responsavel quando precisar de atendimento humano' },
 ];
 
+function normalizeFlow(fluxo: unknown) {
+  if (Array.isArray(fluxo) && fluxo.length) return fluxo;
+  if (fluxo && typeof fluxo === 'object') return fluxo;
+  return defaultFlow;
+}
+
 export async function GET(request: Request) {
   try {
     const guard = await requireApiUser(request, ['admin']);
@@ -63,7 +69,7 @@ export async function POST(request: Request) {
         nome,
         trigger_key: trigger_key || 'crm',
         primeira_mensagem,
-        fluxo: Array.isArray(fluxo) && fluxo.length ? fluxo : defaultFlow,
+        fluxo: normalizeFlow(fluxo),
         status: status || 'ativo',
         updated_at: new Date().toISOString(),
       }, { onConflict: 'corretora_id' })

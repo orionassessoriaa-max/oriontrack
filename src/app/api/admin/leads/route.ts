@@ -6,6 +6,21 @@ import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
 
 const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
+const LEAD_CREATOR_PROFILE_TYPES = [
+  'admin',
+  'corretor',
+  'corretor_admin',
+  'corretor_membro',
+  'corretor_integrante',
+  'corretor_parceiro',
+];
+const ASSIGNABLE_PROFILE_TYPES = [
+  'corretor',
+  'corretor_admin',
+  'corretor_membro',
+  'corretor_integrante',
+  'corretor_parceiro',
+];
 
 async function requireLeadCreator(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -25,7 +40,7 @@ async function requireLeadCreator(request: Request) {
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!profile || !['admin', 'corretor_admin'].includes(profile.tipo_usuario)) {
+  if (!profile || !LEAD_CREATOR_PROFILE_TYPES.includes(profile.tipo_usuario)) {
     return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
   }
 
@@ -79,7 +94,7 @@ async function resolveResponsibleMember(corretorId: string, corretorIds: string[
       .select('id, nome, email, email_real')
       .eq('id', profileId)
       .in('corretor_id', corretorIds)
-      .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
+      .in('tipo_usuario', ASSIGNABLE_PROFILE_TYPES)
       .in('status', ACTIVE_PROFILE_STATUSES)
       .maybeSingle();
 
