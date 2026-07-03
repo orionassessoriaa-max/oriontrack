@@ -171,7 +171,9 @@ async function resolveResponsibleMember(corretorId: string, corretorIds: string[
 
 function buildManualLeadMessage(lead: any, responsibleName?: string | null) {
   const lines = [
-    responsibleName ? `Novo lead criado para ${responsibleName}.` : 'Novo lead criado manualmente.',
+    responsibleName
+      ? `Novo lead pronto para atendimento.\n\nEsse lead foi criado no CRM e esta sob responsabilidade de ${responsibleName}. Responda o quanto antes para aproveitar o momento de interesse.`
+      : 'Novo lead criado manualmente.',
     '',
     `Nome: ${lead.nome}`,
     `Telefone: ${lead.telefone}`,
@@ -263,7 +265,7 @@ export async function POST(request: Request) {
       if (responsibleProfile?.id) {
         const message = buildManualLeadMessage(data, responsibleMember.nome);
         await supabaseAdmin.from('notificacoes').insert([{
-          titulo: 'Novo lead atribuido',
+          titulo: 'Novo lead pronto para atendimento',
           mensagem: message,
           destinatario_profile_id: responsibleProfile.id,
           remetente_profile_id: guard.profile.id,
@@ -273,7 +275,7 @@ export async function POST(request: Request) {
         try {
           await sendApoloWhatsApp({
             type: 'novo_lead',
-            title: 'Novo lead atribuido',
+            title: 'Novo lead pronto para atendimento',
             message,
             profiles: [responsibleProfile],
           });

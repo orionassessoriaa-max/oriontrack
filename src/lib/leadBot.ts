@@ -5,6 +5,7 @@ import { configureUazapiWebhook, normalizePhone, uazapiFetch, uazapiInstanceName
 type LeadRow = {
   id: string;
   corretor_id: string | null;
+  responsavel_profile_id?: string | null;
   nome: string | null;
   telefone: string | null;
   idades?: string | null;
@@ -123,11 +124,28 @@ async function findBotConfig(nomeEmpresa?: string | null) {
   return data as BotConfig | null;
 }
 
-async function findBotSender(corretorId?: string | null, nomeEmpresa?: string | null) {
+async function findBotSender(params: {
+  responsavelProfileId?: string | null;
+  corretorId?: string | null;
+  nomeEmpresa?: string | null;
+}) {
+  const { responsavelProfileId, corretorId, nomeEmpresa } = params;
+
+  if (responsavelProfileId) {
+    const { data: responsibleProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nome, email, tipo_usuario, telefone, corretor_id, nome_empresa, status')
+      .eq('id', responsavelProfileId)
+      .in('status', ['active', 'ativo', 'Ativo'])
+      .maybeSingle();
+
+    if (responsibleProfile?.id) return responsibleProfile as ProfileRow;
+  }
+
   let query = supabaseAdmin
     .from('profiles')
     .select('id, nome, email, tipo_usuario, telefone, corretor_id, nome_empresa, status')
-    .in('tipo_usuario', ['corretor_admin', 'corretor'])
+    .in('tipo_usuario', ['corretor_admin', 'corretor', 'corretor_membro'])
     .in('status', ['active', 'ativo', 'Ativo']);
 
   if (nomeEmpresa) {
@@ -254,7 +272,7 @@ async function sendBotText(sender: ProfileRow, phone: string, text: string) {
 export async function startLeadBotIfEligible(leadId: string) {
   const { data: lead, error } = await supabaseAdmin
     .from('leads')
-    .select('id, corretor_id, nome, telefone, idades, cidade, operadora, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, utm_source, utm_medium, utm_campaign, utm_term, utm_content')
+    .select('id, corretor_id, responsavel_profile_id, nome, telefone, idades, cidade, operadora, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, utm_source, utm_medium, utm_campaign, utm_term, utm_content')
     .eq('id', leadId)
     .maybeSingle();
 
@@ -267,7 +285,11 @@ export async function startLeadBotIfEligible(leadId: string) {
   const config = await findBotConfig(broker?.nome_empresa);
   if (!config?.id) return { eligible: false, started: false, reason: 'Bot nao configurado para a concessionaria.' };
 
-  const sender = await findBotSender(lead.corretor_id, broker?.nome_empresa);
+  const sender = await findBotSender({
+    responsavelProfileId: lead.responsavel_profile_id,
+    corretorId: lead.corretor_id,
+    nomeEmpresa: broker?.nome_empresa,
+  });
   if (!sender?.id) return { eligible: false, started: false, reason: 'Admin do bot nao encontrado.' };
 
   const conversation = await getOrCreateConversation(lead as LeadRow);

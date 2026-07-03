@@ -638,10 +638,13 @@ export async function POST(request: Request) {
 
       // 2. Notify assigned member broker
       if (memberProfile) {
-        const memberMsg = buildLeadDetailsMessage(finalLead, 'Novo lead para voce.');
+        const memberMsg = buildLeadDetailsMessage(
+          finalLead,
+          'Novo lead pronto para atendimento.\n\nEsse lead acabou de entrar em contato com voce pelo CRM. Responda o quanto antes para aproveitar o momento de interesse.'
+        );
 
         await supabaseAdmin.from('notificacoes').insert([{
-          titulo: 'Novo lead atribuído',
+          titulo: 'Novo lead pronto para atendimento',
           mensagem: memberMsg,
           destinatario_profile_id: memberProfile.id,
           lida: false,
@@ -650,7 +653,7 @@ export async function POST(request: Request) {
         try {
           await sendApoloWhatsApp({
             type: 'novo_lead',
-            title: 'Novo lead atribuído',
+            title: 'Novo lead pronto para atendimento',
             message: memberMsg,
             profiles: [memberProfile],
           });
