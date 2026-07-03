@@ -207,10 +207,10 @@ export default function NotificacoesPage() {
 
   const savePreferences = async () => {
     const confirmed = await confirmDialog(
-      `Salvar este numero e preferencias de WhatsApp para ${preferencesTargetLabel}?`,
+      `Salvar este numero e as preferencias de notificacao para ${preferencesTargetLabel}?`,
       {
-        title: 'Confirmar notificacoes',
-        confirmLabel: 'Salvar',
+        title: 'Salvar preferencias',
+        confirmLabel: 'Salvar preferencias',
         cancelLabel: 'Cancelar',
       }
     );
@@ -337,9 +337,9 @@ export default function NotificacoesPage() {
               <Smartphone size={20} />
             </div>
             <div>
-              <h3 className={`text-base font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>Receber notificacoes pelo WhatsApp</h3>
+              <h3 className={`text-base font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>Preferencias de notificacoes</h3>
               <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
-                O Apolo Notificador usa o WhatsApp oficial configurado pelo Dev. Informe o numero que vai receber os avisos.
+                Escolha quais avisos chegam no WhatsApp. A conexao da conta fica no Inbox; a Chave Mestra do Apolo continua nas configuracoes do sistema.
               </p>
             </div>
           </div>
@@ -350,13 +350,13 @@ export default function NotificacoesPage() {
               onChange={(event) => setPreferences((current) => ({ ...current, whatsapp_enabled: event.target.checked }))}
               className="h-4 w-4 rounded border-emerald-500/30 bg-transparent text-emerald-500 focus:ring-emerald-500"
             />
-            Ativar WhatsApp
+            Receber avisos
           </label>
         </div>
 
         <div className={`grid gap-5 ${isTeamMemberProfile ? 'lg:grid-cols-[minmax(0,360px)_160px]' : 'lg:grid-cols-[320px_minmax(0,1fr)_160px]'} lg:items-end`}>
           <div className="space-y-2">
-            <label className={`ml-1 text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Telefone receptor</label>
+            <label className={`ml-1 text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Numero que recebe os avisos</label>
             <input
               value={preferences.telefone}
               onChange={(event) => setPreferences((current) => ({ ...current, telefone: event.target.value }))}
@@ -403,7 +403,7 @@ export default function NotificacoesPage() {
               preferencesSaved ? 'bg-emerald-600' : 'bg-blue-600 hover:bg-blue-700'
             } disabled:opacity-60`}
           >
-            {savingPreferences ? <Loader2 className="animate-spin" size={16} /> : preferencesSaved ? 'Salvo' : 'Salvar'}
+            {savingPreferences ? <Loader2 className="animate-spin" size={16} /> : preferencesSaved ? 'Preferencias salvas' : 'Salvar preferencias'}
           </button>
         </div>
       </div>
