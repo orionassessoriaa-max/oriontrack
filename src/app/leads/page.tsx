@@ -37,6 +37,11 @@ function normalizeText(value?: string | null) {
     .toLowerCase();
 }
 
+function isInteractiveTableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest('button,a,input,select,textarea,label,[role="button"],[data-row-action]'));
+}
+
 function cnpjCategory(value?: string | null) {
   const normalized = normalizeText(value);
   if (!normalized || normalized.includes('nao informado')) return 'nao_informado';
@@ -216,6 +221,10 @@ export default function BrokerLeadsPage() {
   );
   const canManageLeadResponsible = canAssignTeamLeads;
   const canCreateManualLead = profile?.tipo_usuario === 'corretor_admin';
+
+  function openLeadInCrm(leadId: string) {
+    window.location.href = `/crm?lead=${encodeURIComponent(leadId)}`;
+  }
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');
@@ -1101,7 +1110,15 @@ export default function BrokerLeadsPage() {
                   const cleanObservacoes = cleanLeadObservationText(lead.observacoes);
 
                   return (
-                  <tr key={lead.id} className="transition-colors border-b border-slate-100 dark:border-white/5 hover:bg-blue-50/50 dark:hover:bg-blue-500/10">
+                  <tr
+                    key={lead.id}
+                    onClick={(event) => {
+                      if (isInteractiveTableTarget(event.target)) return;
+                      openLeadInCrm(lead.id);
+                    }}
+                    title="Abrir lead no CRM"
+                    className="cursor-pointer transition-colors border-b border-slate-100 dark:border-white/5 hover:bg-blue-50/50 dark:hover:bg-blue-500/10"
+                  >
                     <td className="border border-slate-100 bg-slate-50 px-3 py-3 text-center text-xs font-black text-slate-400">{index + 1}</td>
                     <td className="border border-slate-100 px-3 py-3 font-bold text-slate-600">
                       {lead.data_entrada ? format(new Date(lead.data_entrada), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '-'}

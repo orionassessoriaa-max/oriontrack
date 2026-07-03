@@ -112,6 +112,17 @@ function normalizeCnpjOwnership(value?: string | null) {
   return 'Não';
 }
 
+function cnpjCardBadgeStyle(value?: string | null) {
+  const label = normalizeCnpjOwnership(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (label.includes('mei') || label.includes('sim')) {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  }
+  return 'border-amber-200 bg-amber-50 text-amber-700';
+}
+
 function normalizePlanoAtivo(value?: string | null) {
   const normalized = String(value || '')
     .normalize('NFD')
@@ -215,6 +226,7 @@ export default function CrmPage() {
   const [atividades, setAtividades] = useState<LeadAtividade[]>([]);
   const [conversas, setConversas] = useState<WhatsAppConversa[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [openedLeadParam, setOpenedLeadParam] = useState<string | null>(null);
   const [tipoCampanha, setTipoCampanha] = useState<TipoCampanha | null>('ambos');
   const [search, setSearch] = useState('');
   const [pageFilter, setPageFilter] = useState('todas');
@@ -555,6 +567,15 @@ export default function CrmPage() {
   useEffect(() => {
     void fetchCrm();
   }, [profile?.id, profile?.tipo_usuario, profile?.corretor_id]);
+
+  useEffect(() => {
+    const leadId = new URLSearchParams(window.location.search).get('lead');
+    if (!leadId || openedLeadParam === leadId || leads.length === 0) return;
+    const lead = leads.find((item) => item.id === leadId);
+    if (!lead) return;
+    setOpenedLeadParam(leadId);
+    openLeadDetails(lead);
+  }, [leads, openedLeadParam]);
 
   useEffect(() => {
     if (commercialModal) {
@@ -1452,6 +1473,9 @@ export default function CrmPage() {
                                     <p className="mt-1 flex items-center gap-2 text-xs font-bold text-slate-500">
                                       <Phone size={13} /> {lead.telefone}
                                     </p>
+                                    <span className={`mt-2 inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-widest ${cnpjCardBadgeStyle(lead.possui_cnpj)}`}>
+                                      CNPJ: {normalizeCnpjOwnership(lead.possui_cnpj)}
+                                    </span>
                                   </div>
                                   {isStale(lead) && <AlertTriangle size={16} className="shrink-0 text-amber-500" />}
                                 </div>
