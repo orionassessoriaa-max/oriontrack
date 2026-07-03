@@ -54,3 +54,5 @@ create policy "Authenticated can read bot configs"
   for select
   to authenticated
   using (true);
+
+notify pgrst, 'reload schema';
