@@ -5,6 +5,7 @@ import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
+import { startLeadBotIfEligible } from '@/lib/leadBot';
 
 function normalizeText(value: unknown, fallback = '') {
   if (value === undefined || value === null) return fallback;
@@ -220,6 +221,17 @@ async function tryStartLeadAiForWebhook(leadId?: string | null) {
     return await startLeadAiIfEligible(leadId);
   } catch (aiErr) {
     console.error('[Webhook n8n] Failed starting lead AI:', aiErr);
+    return null;
+  }
+}
+
+async function tryStartLeadBotForWebhook(leadId?: string | null) {
+  if (!leadId) return null;
+
+  try {
+    return await startLeadBotIfEligible(leadId);
+  } catch (botErr) {
+    console.error('[Webhook n8n] Failed starting lead bot:', botErr);
     return null;
   }
 }
@@ -537,6 +549,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     const aiStart = await tryStartLeadAiForWebhook(data.id);
+    const botStart = aiStart?.eligible ? null : await tryStartLeadBotForWebhook(data.id);
     const suppressStandardLeadNotifications = Boolean(aiStart?.eligible);
 
     if (finalLead && !suppressStandardLeadNotifications) {
@@ -655,10 +668,12 @@ export async function POST(request: Request) {
         corretor_id: corretorId,
         assigned_member_id: assignedMemberId,
         source: 'n8n',
+        ai_start: aiStart,
+        bot_start: botStart,
       },
     });
 
-    return NextResponse.json({ success: true, lead: data, responsavel_membro_id: assignedMemberId });
+    return NextResponse.json({ success: true, lead: data, responsavel_membro_id: assignedMemberId, ai: aiStart, bot: botStart });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao receber lead do n8n.' }, { status: 500 });
   }

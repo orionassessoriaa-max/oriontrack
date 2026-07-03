@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeLeadStatus } from '@/lib/leadStatus';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
+import { startLeadBotIfEligible } from '@/lib/leadBot';
 
 const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
 
@@ -267,7 +268,14 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, lead_id: data.id, lead: data });
+    let botStart = null;
+    try {
+      botStart = await startLeadBotIfEligible(data.id);
+    } catch (botErr) {
+      console.error('[Manual lead] Failed starting lead bot:', botErr);
+    }
+
+    return NextResponse.json({ ok: true, lead_id: data.id, lead: data, bot: botStart });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Erro ao salvar lead.' }, { status: 500 });
   }
