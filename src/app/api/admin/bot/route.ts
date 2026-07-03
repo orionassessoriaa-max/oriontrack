@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         trigger_key: trigger_key || 'crm',
         primeira_mensagem,
         fluxo: normalizeFlow(fluxo),
-        status: status || 'ativo',
+        status: status || 'inativo',
         updated_at: new Date().toISOString(),
       }, { onConflict: 'corretora_id' })
       .select('*')

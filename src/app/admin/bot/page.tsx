@@ -134,7 +134,7 @@ function buildForm(config?: BotConfig): BotFormState {
     nome: config?.nome || 'Primeiro atendimento',
     categoria: meta.categoria || 'Atendimento',
     prompt: config?.primeira_mensagem || DEFAULT_PROMPT,
-    status: config?.status === 'inativo' ? 'inativo' : 'ativo',
+    status: config?.status === 'ativo' ? 'ativo' : 'inativo',
   };
 }
 
@@ -275,7 +275,7 @@ export default function AdminBotPage() {
       nome: 'Novo modelo',
       categoria: 'Atendimento',
       prompt: DEFAULT_PROMPT,
-      status: 'ativo',
+      status: 'inativo',
     });
     setFeedback(null);
   }

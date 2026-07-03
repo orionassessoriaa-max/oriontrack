@@ -14,7 +14,7 @@ Logo um de nossos especialistas entrara em contato para te ajudar.',
     {"id":"condition_response","type":"condition","label":"Resposta do lead","description":"True/false para continuar"},
     {"id":"notify_broker","type":"action","label":"Acionar corretor","description":"Chama o responsavel quando precisar de atendimento humano"}
   ]'::jsonb,
-  status text not null default 'ativo',
+  status text not null default 'inativo',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint corretora_bot_configs_status_check check (status in ('ativo', 'inativo')),
