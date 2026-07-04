@@ -68,6 +68,8 @@ interface BotFormState {
   status: 'ativo' | 'inativo';
 }
 
+type WorkspaceMode = 'empty' | 'summary' | 'editor';
+
 const DEFAULT_PROMPT = `Ola, {primeiro_nome}! Tudo bem?
 
 Voce acabou de preencher o nosso formulario para planos de saude.
@@ -142,12 +144,83 @@ function snapshot(form: BotFormState) {
   return JSON.stringify(form);
 }
 
+function cleanBrief(value: string) {
+  return value
+    .replace(/[<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 700);
+}
+
+function buildPromptFromBrief(brief: string) {
+  const safeBrief = cleanBrief(brief);
+  const context = safeBrief || 'planos de saude';
+
+  return `Ola, {primeiro_nome}! Tudo bem?
+
+Voce acabou de preencher o nosso formulario para ${context}.
+
+Logo um dos nossos especialistas vai entrar em contato para te atender com mais detalhes.`;
+}
+
+function buildPromptRevision(prompt: string, revision: string) {
+  const cleanRevision = cleanBrief(revision);
+  if (!cleanRevision) return prompt;
+
+  const lowerRevision = cleanRevision.toLowerCase();
+  if (lowerRevision.includes('curt') || lowerRevision.includes('menor') || lowerRevision.includes('objetiv')) {
+    return `Ola, {primeiro_nome}! Tudo bem?
+
+Recebemos seu formulario.
+
+Um especialista vai te chamar em breve para continuar o atendimento.`;
+  }
+
+  if (lowerRevision.includes('formal')) {
+    return `Ola, {primeiro_nome}. Tudo bem?
+
+Recebemos seu formulario para planos de saude.
+
+Em breve, um especialista entrara em contato para dar continuidade ao seu atendimento.`;
+  }
+
+  if (lowerRevision.includes('human') || lowerRevision.includes('natural')) {
+    return `Ola, {primeiro_nome}! Tudo bem?
+
+Vi aqui que voce acabou de preencher nosso formulario.
+
+Ja deixei tudo encaminhado e um especialista vai te chamar para seguir com seu atendimento.`;
+  }
+
+  return `${prompt.trim()}
+
+Observacao para o atendimento: ${cleanRevision}`;
+}
+
+function previewPrompt(prompt: string, selectedItem?: BotWorkspaceItem) {
+  return prompt
+    .replaceAll('{primeiro_nome}', 'Teste')
+    .replaceAll('{nome}', 'Teste do Bot')
+    .replaceAll('{telefone}', '5561999999999')
+    .replaceAll('{idades}', '32')
+    .replaceAll('{cidade}', 'Brasilia')
+    .replaceAll('{operadora}', 'Hapvida')
+    .replaceAll('{concessionaria}', selectedItem?.nome || 'sua concessionaria');
+}
+
 export default function AdminBotPage() {
   const { actualProfile } = useAuth();
   const [items, setItems] = useState<BotWorkspaceItem[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [form, setForm] = useState<BotFormState>(() => buildForm());
   const [savedSnapshot, setSavedSnapshot] = useState(() => snapshot(buildForm()));
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('empty');
+  const [botBrief, setBotBrief] = useState('');
+  const [revisionBrief, setRevisionBrief] = useState('');
+  const [showRevision, setShowRevision] = useState(false);
+  const [showTest, setShowTest] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [testing, setTesting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -211,8 +284,9 @@ export default function AdminBotPage() {
 
       const nextSelected = selectedId && merged.some((item) => item.id === selectedId)
         ? selectedId
-        : merged[0]?.id || '';
+        : '';
       setSelectedId(nextSelected);
+      if (!nextSelected) setWorkspaceMode('empty');
 
       const nextItem = merged.find((item) => item.id === nextSelected);
       const nextForm = buildForm(nextItem?.config);
@@ -257,6 +331,11 @@ export default function AdminBotPage() {
     setSelectedId(id);
     setForm(nextForm);
     setSavedSnapshot(snapshot(nextForm));
+    setWorkspaceMode('summary');
+    setBotBrief('');
+    setRevisionBrief('');
+    setShowRevision(false);
+    setShowTest(false);
     setFeedback(null);
   }
 
@@ -267,17 +346,112 @@ export default function AdminBotPage() {
       categoria: template.categoria,
       prompt: template.prompt,
     }));
+    setWorkspaceMode('editor');
+    setShowRevision(false);
+    setShowTest(false);
     setFeedback(null);
   }
 
   function createModel() {
+    if (!selectedItem?.id) {
+      setFeedback({ type: 'error', message: 'Selecione uma concessionaria antes de criar um modelo.' });
+      return;
+    }
+
     setForm({
       nome: 'Novo modelo',
       categoria: 'Atendimento',
-      prompt: DEFAULT_PROMPT,
+      prompt: '',
       status: 'inativo',
     });
+    setWorkspaceMode('editor');
+    setBotBrief('');
+    setRevisionBrief('');
+    setShowRevision(false);
+    setShowTest(false);
     setFeedback(null);
+  }
+
+  function generatePrompt() {
+    if (!botBrief.trim()) {
+      setFeedback({ type: 'error', message: 'Descreva o fluxo que voce quer criar antes de gerar o prompt.' });
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      nome: current.nome === 'Novo modelo' ? 'Primeiro atendimento' : current.nome,
+      categoria: current.categoria || 'Atendimento',
+      prompt: buildPromptFromBrief(botBrief),
+    }));
+    setShowRevision(false);
+    setShowTest(false);
+    setFeedback({ type: 'success', message: 'Prompt gerado localmente. Revise antes de salvar ou testar.' });
+  }
+
+  function revisePrompt() {
+    if (!form.prompt.trim()) {
+      setFeedback({ type: 'error', message: 'Gere um prompt antes de revisar.' });
+      return;
+    }
+    if (!revisionBrief.trim()) {
+      setFeedback({ type: 'error', message: 'Escreva o que voce quer revisar no prompt.' });
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      prompt: buildPromptRevision(current.prompt, revisionBrief),
+    }));
+    setRevisionBrief('');
+    setFeedback({ type: 'success', message: 'Prompt revisado. Confira o texto antes de salvar.' });
+  }
+
+  async function testModel() {
+    if (!form.prompt.trim()) {
+      setFeedback({ type: 'error', message: 'Gere ou escreva um prompt antes de testar.' });
+      return;
+    }
+    if (!testPhone.trim()) {
+      setFeedback({ type: 'error', message: 'Informe o WhatsApp de destino para o teste.' });
+      return;
+    }
+
+    setTesting(true);
+    setFeedback(null);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setFeedback({ type: 'error', message: 'Sessao expirada. Faca login novamente.' });
+        return;
+      }
+
+      const response = await fetch('/api/admin/configuracoes/evolution/test', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          telefone: testPhone,
+          mensagem: previewPrompt(form.prompt, selectedItem),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setFeedback({ type: 'error', message: data.error || 'Erro ao enviar teste pelo Apolo.' });
+        return;
+      }
+
+      setFeedback({ type: 'success', message: 'Teste enviado pelo Apolo com o prompt atual.' });
+    } catch (error: any) {
+      setFeedback({ type: 'error', message: error?.message || 'Erro ao testar bot.' });
+    } finally {
+      setTesting(false);
+    }
   }
 
   async function saveModel(event: React.FormEvent) {
@@ -336,6 +510,7 @@ export default function AdminBotPage() {
       const nextForm = { ...form, nome: form.nome.trim(), prompt: form.prompt.trim() };
       setForm(nextForm);
       setSavedSnapshot(snapshot(nextForm));
+      setWorkspaceMode('summary');
       await loadData();
     } catch (error: any) {
       setFeedback({ type: 'error', message: error?.message || 'Erro ao salvar modelo.' });
@@ -466,55 +641,76 @@ export default function AdminBotPage() {
             </aside>
 
             <section className="p-5 lg:p-7">
-              {selectedItem ? (
-                <form onSubmit={saveModel} className="grid gap-6 2xl:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
-                  <div>
-                    <div className="mb-5 rounded-[24px] border border-slate-800 bg-[#050b16] p-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-300">Concessionaria selecionada</p>
-                          <h2 className="mt-2 text-2xl font-black">{selectedItem.nome}</h2>
-                          <p className="mt-2 text-sm font-bold text-slate-400">
-                            O bot desta concessionaria sera disparado quando o lead cair no CRM.
-                          </p>
-                        </div>
-                        <span className={`rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] ${
-                          form.status === 'ativo' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700 text-slate-300'
-                        }`}
-                        >
-                          {form.status}
-                        </span>
-                      </div>
+              {!selectedItem || workspaceMode === 'empty' ? (
+                <div className="flex min-h-[520px] flex-col items-center justify-center rounded-[24px] border border-slate-800 bg-slate-900/30 text-center">
+                  <Building2 className="mb-4 h-10 w-10 text-slate-600" />
+                  <h2 className="text-2xl font-black">
+                    {items.length ? 'Selecione uma concessionaria' : 'Nenhuma concessionaria encontrada'}
+                  </h2>
+                  <p className="mt-2 max-w-md text-sm font-bold text-slate-500">
+                    {items.length
+                      ? 'Clique em uma concessionaria na coluna ao lado para ver ou criar o bot dela.'
+                      : 'Crie uma concessionaria primeiro para configurar o bot de primeiro atendimento.'}
+                  </p>
+                </div>
+              ) : workspaceMode === 'editor' ? (
+                <form onSubmit={saveModel} className="grid gap-6 2xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+                  <div className="space-y-5">
+                    <div className="rounded-[24px] border border-cyan-500/20 bg-[#050b16] p-5">
+                      <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-300">Concessionaria selecionada</p>
+                      <h2 className="mt-2 text-2xl font-black">{selectedItem.nome}</h2>
+                      <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+                        Descreva o fluxo em linguagem simples. A geracao e local e nao envia dados sensiveis para IA externa.
+                      </p>
                     </div>
 
                     <div className="rounded-[24px] border border-slate-800 bg-slate-900/40 p-5">
                       <div className="mb-5 flex items-center gap-2 text-cyan-300">
                         <Sparkles className="h-5 w-5" />
-                        <h3 className="text-lg font-black text-white">Modelos prontos</h3>
+                        <h3 className="text-lg font-black text-white">Criar bot</h3>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
-                        {BOT_TEMPLATES.map((template) => (
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-black uppercase tracking-[0.24em] text-slate-400">
+                          O que voce quer criar?
+                        </span>
+                        <textarea
+                          value={botBrief}
+                          onChange={(event) => setBotBrief(event.target.value)}
+                          rows={8}
+                          placeholder="Ex: Quero um bot de primeiro contato que avise que o lead preencheu o formulario e diga que um especialista vai chamar em breve."
+                          className="w-full resize-y rounded-2xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm font-bold leading-6 text-white outline-none transition focus:border-cyan-400"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={generatePrompt}
+                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-5 py-4 text-sm font-black text-white shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-400"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                        Gerar prompt
+                      </button>
+
+                      <p className="mt-3 text-xs font-bold leading-5 text-slate-500">
+                        O prompt gerado usa apenas texto local e variaveis seguras do CRM.
+                      </p>
+                    </div>
+
+                    <div className="rounded-[24px] border border-slate-800 bg-slate-900/30 p-5">
+                      <div className="mb-4 flex items-center gap-2 text-cyan-300">
+                        <MessageSquare className="h-5 w-5" />
+                        <h3 className="text-sm font-black uppercase tracking-[0.18em] text-white">Modelos prontos</h3>
+                      </div>
+                      <div className="grid gap-2">
+                        {BOT_TEMPLATES.slice(0, 3).map((template) => (
                           <button
                             key={template.id}
                             type="button"
                             onClick={() => useTemplate(template)}
-                            className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left transition hover:border-cyan-500/50 hover:bg-cyan-500/10"
+                            className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-left text-xs font-black text-slate-200 transition hover:border-cyan-500/50 hover:bg-cyan-500/10"
                           >
-                            <div className="mb-3 flex items-center justify-between gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-300">
-                                <MessageSquare className="h-5 w-5" />
-                              </div>
-                              <span className="rounded-full bg-slate-800 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-300">
-                                {template.categoria}
-                              </span>
-                            </div>
-                            <p className="text-sm font-black text-white">{template.nome}</p>
-                            <p className="mt-2 text-xs font-bold leading-5 text-slate-400">{template.descricao}</p>
-                            <div className="mt-4 inline-flex items-center gap-2 text-xs font-black text-cyan-300">
-                              Usar modelo
-                              <Edit3 className="h-3.5 w-3.5" />
-                            </div>
+                            {template.nome}
                           </button>
                         ))}
                       </div>
@@ -530,14 +726,12 @@ export default function AdminBotPage() {
                         </div>
                         <h3 className="mt-1 text-2xl font-black">Criar ou editar modelo</h3>
                       </div>
-                      <button
-                        type="button"
-                        onClick={createModel}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/40 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-cyan-200 transition hover:bg-cyan-500/10"
+                      <span className={`rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] ${
+                        form.status === 'ativo' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700 text-slate-300'
+                      }`}
                       >
-                        <Plus className="h-4 w-4" />
-                        Novo modelo
-                      </button>
+                        {form.status}
+                      </span>
                     </div>
 
                     <div className="grid gap-4 lg:grid-cols-[1fr_180px]">
@@ -557,8 +751,8 @@ export default function AdminBotPage() {
                           onChange={(event) => setFormField('status', event.target.value as BotFormState['status'])}
                           className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm font-black text-white outline-none focus:border-cyan-400"
                         >
-                          <option value="ativo">Ativo</option>
                           <option value="inativo">Inativo</option>
+                          <option value="ativo">Ativo</option>
                         </select>
                       </label>
                     </div>
@@ -577,7 +771,8 @@ export default function AdminBotPage() {
                       <textarea
                         value={form.prompt}
                         onChange={(event) => setFormField('prompt', event.target.value)}
-                        rows={16}
+                        rows={14}
+                        placeholder="Gere um prompt a partir da descricao ou escreva aqui manualmente."
                         className="w-full resize-y rounded-2xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm font-bold leading-6 text-white outline-none focus:border-cyan-400"
                       />
                     </label>
@@ -586,25 +781,178 @@ export default function AdminBotPage() {
                       Variaveis disponiveis: {'{primeiro_nome}'}, {'{nome}'}, {'{telefone}'}, {'{idades}'}, {'{cidade}'}, {'{operadora}'}, {'{concessionaria}'}.
                     </div>
 
-                    <div className="mt-6 flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={saving}
-                        className="inline-flex min-w-[190px] items-center justify-center gap-2 rounded-2xl bg-blue-600 px-8 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-wait disabled:opacity-70"
-                      >
-                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        Salvar modelo
-                      </button>
-                    </div>
+                    {form.prompt.trim() && (
+                      <div className="mt-6 grid gap-3 lg:grid-cols-3">
+                        <button
+                          type="submit"
+                          disabled={saving}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-wait disabled:opacity-70"
+                        >
+                          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          Criar bot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowRevision((current) => !current)}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/40 px-5 py-4 text-sm font-black text-cyan-200 transition hover:bg-cyan-500/10"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                          Revisar prompt
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowTest((current) => !current)}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/40 px-5 py-4 text-sm font-black text-emerald-200 transition hover:bg-emerald-500/10"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          Testar bot
+                        </button>
+                      </div>
+                    )}
+
+                    {showRevision && (
+                      <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                        <label className="block">
+                          <span className="mb-2 block text-xs font-black uppercase tracking-[0.24em] text-cyan-200">
+                            O que voce quer revisar?
+                          </span>
+                          <textarea
+                            value={revisionBrief}
+                            onChange={(event) => setRevisionBrief(event.target.value)}
+                            rows={4}
+                            placeholder="Ex: deixa mais curto, mais humano, mais formal..."
+                            className="w-full resize-y rounded-2xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm font-bold leading-6 text-white outline-none focus:border-cyan-400"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={revisePrompt}
+                          className="mt-3 rounded-2xl bg-cyan-500 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition hover:bg-cyan-400"
+                        >
+                          Aplicar revisao
+                        </button>
+                      </div>
+                    )}
+
+                    {showTest && (
+                      <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                        <label className="block">
+                          <span className="mb-2 block text-xs font-black uppercase tracking-[0.24em] text-emerald-200">
+                            WhatsApp para testar
+                          </span>
+                          <input
+                            value={testPhone}
+                            onChange={(event) => setTestPhone(event.target.value)}
+                            placeholder="5561999999999"
+                            className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm font-black text-white outline-none focus:border-emerald-400"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={testModel}
+                          disabled={testing}
+                          className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-70"
+                        >
+                          {testing && <Loader2 className="h-4 w-4 animate-spin" />}
+                          Enviar teste pelo Apolo
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </form>
               ) : (
-                <div className="flex min-h-[520px] flex-col items-center justify-center rounded-[24px] border border-slate-800 bg-slate-900/30 text-center">
-                  <Building2 className="mb-4 h-10 w-10 text-slate-600" />
-                  <h2 className="text-2xl font-black">Nenhuma concessionaria encontrada</h2>
-                  <p className="mt-2 max-w-md text-sm font-bold text-slate-500">
-                    Crie uma concessionaria primeiro para configurar o bot de primeiro atendimento.
-                  </p>
+                <div className="space-y-5">
+                  <div className="rounded-[24px] border border-cyan-500/20 bg-[#050b16] p-6">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-300">Concessionaria selecionada</p>
+                        <h2 className="mt-2 text-3xl font-black">{selectedItem.nome}</h2>
+                        <p className="mt-2 text-sm font-bold text-slate-400">
+                          {selectedItem.config
+                            ? 'Esta concessionaria ja tem um bot configurado.'
+                            : 'Esta concessionaria ainda nao tem bot de primeiro atendimento.'}
+                        </p>
+                      </div>
+                      <span className={`w-fit rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] ${
+                        selectedItem.config?.status === 'ativo' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700 text-slate-300'
+                      }`}
+                      >
+                        {selectedItem.config?.status || 'sem bot'}
+                      </span>
+                    </div>
+
+                    {selectedItem.config ? (
+                      <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                          <div>
+                            <h3 className="text-xl font-black">{selectedItem.config.nome}</h3>
+                            <p className="mt-1 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                              Gatilho: CRM
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setWorkspaceMode('editor')}
+                              className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/40 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-cyan-200 transition hover:bg-cyan-500/10"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                              Editar modelo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={createModel}
+                              className="inline-flex items-center gap-2 rounded-2xl bg-cyan-500 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition hover:bg-cyan-400"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Criar novo
+                            </button>
+                          </div>
+                        </div>
+                        <pre className="mt-5 whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm font-bold leading-6 text-slate-200">
+                          {selectedItem.config.primeira_mensagem}
+                        </pre>
+                      </div>
+                    ) : (
+                      <div className="mt-6 rounded-2xl border border-dashed border-cyan-500/30 bg-cyan-500/5 p-6">
+                        <h3 className="text-xl font-black">Criar bot</h3>
+                        <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+                          Crie um modelo por prompt para enviar a primeira mensagem quando o lead cair no CRM.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={createModel}
+                          className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-cyan-500 px-6 py-4 text-sm font-black text-white transition hover:bg-cyan-400"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Criar bot
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-[24px] border border-slate-800 bg-slate-900/30 p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-cyan-300">
+                        <Sparkles className="h-5 w-5" />
+                        <h3 className="text-sm font-black uppercase tracking-[0.18em] text-white">Modelos prontos</h3>
+                      </div>
+                      <span className="text-xs font-bold text-slate-500">Opcional</span>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      {BOT_TEMPLATES.map((template) => (
+                        <button
+                          key={template.id}
+                          type="button"
+                          onClick={() => useTemplate(template)}
+                          className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left transition hover:border-cyan-500/50 hover:bg-cyan-500/10"
+                        >
+                          <p className="text-sm font-black text-white">{template.nome}</p>
+                          <p className="mt-2 line-clamp-2 text-xs font-bold leading-5 text-slate-500">{template.descricao}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </section>
