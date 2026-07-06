@@ -503,14 +503,26 @@ async function handoffAiFailure(params: {
     `IA encerrada: ${reason}`
   );
 
-  await supabaseAdmin
+  const { data: updatedSession, error: updateError } = await supabaseAdmin
     .from('lead_ai_sessions')
     .update({
       status: 'handoff',
       summary,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', session.id);
+    .eq('id', session.id)
+    .eq('status', 'active')
+    .select('id')
+    .maybeSingle();
+
+  if (updateError) {
+    console.error('[lead_ai_agent] Failed to mark failed AI session as handoff:', updateError);
+    return { handled: true, handoff: true, reason, error: updateError };
+  }
+
+  if (!updatedSession) {
+    return { handled: true, handoff: true, reason, alreadyClosed: true };
+  }
 
   await updateLeadFromSummary(lead.id, summary);
   await notifyResponsible(lead, summary);
@@ -1357,88 +1369,89 @@ export async function handoffLeadAiToResponsible(leadId: string, reason: string)
 }
 
 export async function checkLeadAiTimeouts() {
-  const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
-  
-  // Find all active sessions where the last AI message was sent more than 15 minutes ago
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+
+  // Find active sessions where the last AI message has been unanswered for 15 minutes.
   const { data: activeSessions, error } = await supabaseAdmin
     .from('lead_ai_sessions')
     .select('*')
     .eq('status', 'active')
-    .lte('last_ai_message_at', twentyMinutesAgo);
-    
+    .lte('last_ai_message_at', fifteenMinutesAgo);
+
   if (error) {
     console.error('[cron_timeout] Error fetching active sessions:', error);
     return { count: 0, error };
   }
-  
+
   let handoffCount = 0;
-  
+
   for (const session of activeSessions || []) {
-    // 1. Get the last message of the conversation to see if it was the schedule question
+    const lastAiMessageAt = session.last_ai_message_at ? new Date(session.last_ai_message_at).getTime() : 0;
+    const lastCustomerMessageAt = session.last_customer_message_at ? new Date(session.last_customer_message_at).getTime() : 0;
+
+    if (!lastAiMessageAt || lastCustomerMessageAt > lastAiMessageAt) {
+      continue;
+    }
+
     const { data: conv } = await supabaseAdmin
       .from('whatsapp_conversas')
       .select('id')
       .eq('lead_id', session.lead_id)
       .maybeSingle();
-      
+
     if (!conv) continue;
-    
+
     const { data: lastMsg } = await supabaseAdmin
       .from('whatsapp_mensagens')
-      .select('*')
+      .select('id, direction')
       .eq('conversa_id', conv.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-      
-    if (!lastMsg) continue;
-    
-    // We check:
-    // - if the last message is outbound (sent by AI)
-    // - if it contains the keywords from the schedule question (Step 9)
-    const isLastMessageOutbound = lastMsg.direction === 'outbound';
-    const msgText = String(lastMsg.metadata?.ai_text || lastMsg.mensagem || '');
-    const isScheduleQuestion = msgText.includes('disponibilidade de uma ligação') || 
-                               msgText.includes('ligação rápida de 15 minutos') || 
-                               msgText.includes('melhor horário para eu deixar agendado');
-                               
-    const isWaitingForInitialConfirmation = isInitialConfirmationQuestion(msgText);
 
-    if (isLastMessageOutbound && (isWaitingForInitialConfirmation || isScheduleQuestion || isSchedulePrompt(msgText))) {
-      console.log(`[cron_timeout] Lead ${session.lead_id} timed out on schedule question.`);
-      
-      const { data: lead } = await supabaseAdmin
-        .from('leads')
-        .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id')
-        .eq('id', session.lead_id)
-        .maybeSingle();
-        
-      if (!lead) continue;
-      
-      const suffix = '\n\nIA encerrada: Lead não respondeu à pergunta de agendamento por mais de 15 minutos.';
-      const newSummary = `${session.summary || leadFacts(lead)}${suffix}`.trim();
-      
-      // Update session status to handoff
-      await supabaseAdmin
-        .from('lead_ai_sessions')
-        .update({
-          status: 'handoff',
-          summary: newSummary,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', session.id);
-        
-      await updateLeadFromSummary(lead.id, newSummary);
-        
-      // Notify responsible broker
-      await notifyResponsible(lead, newSummary);
-      handoffCount++;
+    if (!lastMsg || lastMsg.direction !== 'outbound') continue;
+
+    console.log(`[cron_timeout] Lead ${session.lead_id} timed out after unanswered AI message.`);
+
+    const { data: lead } = await supabaseAdmin
+      .from('leads')
+      .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id')
+      .eq('id', session.lead_id)
+      .maybeSingle();
+
+    if (!lead) continue;
+
+    const suffix = '\n\nIA encerrada: lead nao respondeu a ultima mensagem da IA por mais de 15 minutos.';
+    const newSummary = `${session.summary || leadFacts(lead)}${suffix}`.trim();
+
+    const { data: updatedSession, error: updateError } = await supabaseAdmin
+      .from('lead_ai_sessions')
+      .update({
+        status: 'handoff',
+        summary: newSummary,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', session.id)
+      .eq('status', 'active')
+      .select('id')
+      .maybeSingle();
+
+    if (updateError) {
+      console.error('[cron_timeout] Error handing off timed out AI session:', updateError);
+      continue;
     }
+
+    if (!updatedSession) {
+      continue;
+    }
+
+    await updateLeadFromSummary(lead.id, newSummary);
+    await notifyResponsible(lead, newSummary);
+    handoffCount++;
   }
-  
+
   return { count: handoffCount };
 }
-
 function extractAgendadoValue(summary?: string | null): string | null {
   if (!summary) return null;
   const match = summary.match(/(?:\*?Agendado\*?:?\s*)([^\r\n]+)/i);
