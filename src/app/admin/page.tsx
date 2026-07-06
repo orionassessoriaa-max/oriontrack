@@ -251,16 +251,22 @@ export default function AdminCentralPage() {
     });
     return rawNoBalance.map(a => {
       const cObj = corretoresList.find(c => c.id === a.corretor_id);
+      const linkedCorretora = corretorasList.find(c => {
+        const sameMetaId = a.meta_ad_account_id && c.meta_ad_account_id === a.meta_ad_account_id;
+        const sameMetaName = a.meta_ad_account_name && c.meta_ad_account_name === a.meta_ad_account_name;
+        const sameName = cObj?.nome_empresa && normalizeText(c.nome) === normalizeText(cObj.nome_empresa);
+        return sameMetaId || sameMetaName || sameName;
+      });
       const gestorId = cObj ? inferGestorIdFromTeam(cObj, gestoresList) : null;
       const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
       return {
         corretor_id: a.corretor_id,
-        corretor_nome: a.corretor_nome,
+        corretora_nome: linkedCorretora?.nome || cObj?.nome_empresa || a.meta_ad_account_name || 'Concessionaria nao identificada',
         meta_ad_account_name: a.meta_ad_account_name || `act_${a.meta_ad_account_id}`,
         gestor_nome: gestorNome
       };
     });
-  }, [alertsList, corretoresList, gestoresList]);
+  }, [alertsList, corretoresList, corretorasList, gestoresList]);
 
   const pendingOnboardingList = useMemo(() => {
     const rawPending = corretoresList.filter(c => 
@@ -793,7 +799,7 @@ export default function AdminCentralPage() {
                 noBalanceList.map((item) => (
                   <div key={item.corretor_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
                     <div>
-                      <p className="font-extrabold text-white">{item.corretor_nome}</p>
+                      <p className="font-extrabold text-white">{item.corretora_nome}</p>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Gestor: {item.gestor_nome}</p>
                       <p className="text-[9px] font-semibold text-slate-600 mt-1">Conta: {item.meta_ad_account_name}</p>
                     </div>
