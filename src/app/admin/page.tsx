@@ -579,13 +579,13 @@ export default function AdminCentralPage() {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          {/* Card: Corretores Sem Saldo */}
+          {/* Card: Concessionarias Sem Saldo */}
           <div 
             onClick={() => setShowNoBalanceModal(true)}
             className="group relative bg-[#090e1a]/85 border border-red-500/10 hover:border-red-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(239,68,68,0.1)] transition-all duration-300 cursor-pointer"
           >
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Corretores Sem Saldo</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Concessionarias Sem Saldo</p>
               <div className="p-2.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 group-hover:scale-110 transition-transform">
                 <AlertTriangle size={18} />
               </div>
@@ -777,18 +777,18 @@ export default function AdminCentralPage() {
         </div>
       </div>
 
-      {/* Modal: Corretores Sem Saldo */}
+      {/* Modal: Concessionarias Sem Saldo */}
       {mounted && showNoBalanceModal && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-[#090e1a]/95 border border-red-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
             <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> Corretores Sem Saldo
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> Concessionarias Sem Saldo
             </h3>
             <p className="text-xs font-semibold text-slate-500 mb-6">Contas no Meta Ads com saldo zerado ou esgotado.</p>
             
             <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
               {noBalanceList.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhum corretor sem saldo.</p>
+                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhuma concessionaria sem saldo.</p>
               ) : (
                 noBalanceList.map((item) => (
                   <div key={item.corretor_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
