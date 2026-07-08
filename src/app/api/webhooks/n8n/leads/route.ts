@@ -102,12 +102,38 @@ function normalizePhoneKey(value: string | null) {
 }
 
 function buildLeadIdentityKey(lead: Pick<any, 'corretor_id' | 'data_entrada' | 'nome' | 'telefone'>) {
+  const phone = normalizePhoneKey(lead.telefone || '');
+  if (phone.length >= 8) {
+    return [
+      lead.corretor_id || '',
+      phone.slice(-11),
+    ].join('|');
+  }
+
   return [
     lead.corretor_id || '',
     normalizeDateKey(lead.data_entrada),
     normalizeKey(lead.nome || ''),
     normalizePhoneKey(lead.telefone || ''),
   ].join('|');
+}
+
+function parseLeadDate(value: unknown) {
+  const raw = normalizeText(value);
+  if (!raw) return new Date().toISOString();
+
+  const direct = new Date(raw);
+  if (!Number.isNaN(direct.getTime())) return direct.toISOString();
+
+  const brazilian = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2})(?::(\d{2}))?)?/);
+  if (brazilian) {
+    const [, day, month, year, hour = '0', minute = '0'] = brazilian;
+    const fullYear = year.length === 2 ? `20${year}` : year;
+    const parsed = new Date(Number(fullYear), Number(month) - 1, Number(day), Number(hour), Number(minute));
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+
+  return new Date().toISOString();
 }
 
 function isBlankStored(value: unknown) {
@@ -421,9 +447,7 @@ export async function POST(request: Request) {
     }
 
     const rawDate = field(body, ['data_entrada', 'data entrada', 'data', 'created_time', 'timestamp', 'data do lead']);
-    const dataEntrada = rawDate
-      ? new Date(rawDate).toISOString()
-      : new Date().toISOString();
+    const dataEntrada = parseLeadDate(rawDate);
 
     const valorNegociacao = parseCurrencyValue(field(body, [
       'valor_negociacao',

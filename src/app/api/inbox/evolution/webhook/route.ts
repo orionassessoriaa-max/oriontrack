@@ -79,6 +79,16 @@ function readCallText(body: any, data: any) {
   return suffix ? `${typeLabel}\n${suffix}` : typeLabel;
 }
 
+function cleanContactDisplayName(value: any, fallback = 'Lead') {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+
+  const firstField = text.search(/\s+\*(?:Telefone|Idades?|CNPJ\/MEI|Cidade|Investimento|Plano Atual|Motivo|Hospital\/Regiao|E-?mail|Agendado|Pendente)\*\s*:/i);
+  const cleaned = firstField >= 0 ? text.slice(0, firstField).trim() : text;
+
+  return cleaned || fallback;
+}
+
 async function getMediaBase64(instance: string, providerId: string) {
   if (!providerId) return '';
   const instanceApiKey = await getEvolutionInstanceApiKey(instance);
@@ -324,7 +334,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: 'Not a CRM lead' });
     }
 
-    const contactName = data?.pushName || data?.senderName || data?.name || lead?.nome || phone;
+    const providerContactName = data?.pushName || data?.senderName || data?.name;
+    const contactName = cleanContactDisplayName(lead?.nome || providerContactName, phone);
 
     let conversation = currentConversation;
     if (!conversation) {
@@ -334,7 +345,7 @@ export async function POST(request: Request) {
           corretor_id: profile.corretor_id,
           lead_id: lead?.id || null,
           telefone: phone,
-          nome_contato: lead?.nome || contactName,
+          nome_contato: contactName,
           status: 'aberta',
           ultima_mensagem_at: new Date().toISOString(),
         }])
@@ -348,7 +359,7 @@ export async function POST(request: Request) {
         .from('whatsapp_conversas')
         .update({
           lead_id: currentConversation.lead_id || lead?.id || null,
-          nome_contato: lead?.nome || currentConversation.nome_contato || contactName,
+          nome_contato: cleanContactDisplayName(lead?.nome || currentConversation.nome_contato || contactName, contactName),
           telefone: currentConversation.telefone || phone,
           ultima_mensagem_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -389,7 +400,9 @@ export async function POST(request: Request) {
         await continueLeadAiFromIncoming({
           leadId: lead.id,
           conversationId: conversation.id,
-          customerMessage: aiCustomerMessage || message,
+          customerMessage: hasAudio && !audioTranscript
+            ? 'O cliente enviou um audio, mas nao foi possivel transcrever. Responda em uma frase curta dizendo que nao conseguiu ouvir direitinho e peca para enviar a informacao por texto.'
+            : aiCustomerMessage || message,
           incomingWasAudio: hasAudio,
         });
       } catch (aiErr) {

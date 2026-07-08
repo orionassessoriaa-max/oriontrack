@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "orion-track",
-  "main": ".open-next/worker.js",
+  "main": "worker.js",
   "compatibility_date": "2026-05-11",
   "compatibility_flags": [
     "nodejs_compat"
@@ -12,5 +12,10 @@
   },
   "observability": {
     "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
   }
 }

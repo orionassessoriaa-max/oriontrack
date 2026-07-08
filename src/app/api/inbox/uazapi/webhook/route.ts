@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { normalizePhone, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound } from '@/lib/leadAiAgent';
+import { continueLeadAiFromIncoming, isAiOutbound } from '@/lib/leadAiAgent';
 
 function readText(body: any) {
   return pickString(
@@ -631,6 +631,16 @@ function readCallText(body: any) {
   return suffix ? `${typeLabel}\n${suffix}` : typeLabel;
 }
 
+function cleanContactDisplayName(value: any, fallback = 'Lead') {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+
+  const firstField = text.search(/\s+\*(?:Telefone|Idades?|CNPJ\/MEI|Cidade|Investimento|Plano Atual|Motivo|Hospital\/Regiao|E-?mail|Agendado|Pendente)\*\s*:/i);
+  const cleaned = firstField >= 0 ? text.slice(0, firstField).trim() : text;
+
+  return cleaned || fallback;
+}
+
 async function transcribeAudio(base64: string, mimeType = 'audio/ogg') {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || !base64) return '';
@@ -1119,7 +1129,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: 'Not a CRM lead' });
     }
 
-    const contactName = body?.pushName || body?.senderName || body?.name || body?.data?.pushName || body?.data?.senderName || body?.data?.name || lead?.nome || phone;
+    const providerContactName = body?.pushName || body?.senderName || body?.name || body?.data?.pushName || body?.data?.senderName || body?.data?.name;
+    const contactName = cleanContactDisplayName(lead?.nome || providerContactName, phone);
 
     let conversation = currentConversation;
     if (!conversation) {
@@ -1129,7 +1140,7 @@ export async function POST(request: Request) {
           corretor_id: profile.corretor_id,
           lead_id: lead?.id || null,
           telefone: phone,
-          nome_contato: lead?.nome || contactName,
+          nome_contato: contactName,
           status: 'aberta',
           ultima_mensagem_at: new Date().toISOString(),
         }])
@@ -1143,7 +1154,7 @@ export async function POST(request: Request) {
         .from('whatsapp_conversas')
         .update({
           lead_id: currentConversation.lead_id || lead?.id || null,
-          nome_contato: lead?.nome || currentConversation.nome_contato || contactName,
+          nome_contato: cleanContactDisplayName(lead?.nome || currentConversation.nome_contato || contactName, contactName),
           telefone: currentConversation.telefone || phone,
           ultima_mensagem_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -1203,24 +1214,14 @@ export async function POST(request: Request) {
       await stopLeadAiForHumanOutbound(lead.id, profile.nome);
     }
 
-    if (!fromMe && lead?.id && hasAudio && !audioTranscript) {
-      try {
-        await handoffLeadAiToResponsible(
-          lead.id,
-          'audio recebido, mas nao foi possivel transcrever automaticamente. Responsavel deve assumir sem resposta automatica ao cliente.'
-        );
-      } catch (handoffErr) {
-        console.error('[uazapi_webhook] Failed handing off lead after audio transcription failure:', handoffErr);
-      }
-      return NextResponse.json({ ok: true, audio_transcription_failed: true, ai_handoff: true });
-    }
-
     if (!fromMe && lead?.id) {
       try {
         await continueLeadAiFromIncoming({
           leadId: lead.id,
           conversationId: conversation.id,
-          customerMessage: aiCustomerMessage || message,
+          customerMessage: hasAudio && !audioTranscript
+            ? 'O cliente enviou um audio, mas nao foi possivel transcrever. Responda em uma frase curta dizendo que nao conseguiu ouvir direitinho e peça para enviar a informacao por texto.'
+            : aiCustomerMessage || message,
           incomingWasAudio: hasAudio,
         });
       } catch (aiErr) {

@@ -76,6 +76,30 @@ type InboxMessage = {
 };
 
 type MessageMediaKind = 'audio' | 'image' | 'video' | 'file' | 'call' | null;
+type SelectedAttachment = {
+  id: string;
+  file: File;
+  preview: string;
+};
+
+function cleanInboxDisplayName(value?: string | null, fallback = 'Contato') {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+
+  const firstField = text.search(/\s+\*?(?:Telefone|Idades?|CNPJ\/MEI|Cidade|Investimento|Plano Atual|Motivo|Hospital\/Regiao|E-?mail|Agendado|Pendente)\*?\s*:/i);
+  const cleaned = firstField >= 0 ? text.slice(0, firstField).trim() : text;
+
+  return cleaned || fallback;
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Nao consegui ler o arquivo.'));
+    reader.readAsDataURL(file);
+  });
+}
 
 function readNestedMedia(message: InboxMessage) {
   const metadata = message.metadata || {};
@@ -189,8 +213,7 @@ export default function BrokerInboxPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   // File states
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [selectedAttachments, setSelectedAttachments] = useState<SelectedAttachment[]>([]);
 
   // Tab Filtering & Search
   const [activeFilter, setActiveFilter] = useState<'chatting' | 'waiting' | 'closed' | 'alerts'>('chatting');
@@ -900,7 +923,7 @@ export default function BrokerInboxPage() {
   async function sendMessage(textOverride?: string, isAudio = false, audioDuration = '', audioBase64Override?: string, audioMimeType?: string) {
     if (!selectedConversation) return;
     const finalMsg = textOverride || messageText.trim();
-    if (!finalMsg && !filePreview && !isAudio) return;
+    if (!finalMsg && selectedAttachments.length === 0 && !isAudio) return;
 
     const token = await getToken();
     if (!token) {
@@ -908,99 +931,110 @@ export default function BrokerInboxPage() {
       return;
     }
 
-    // Optimistically clear input to avoid double-sends and make the UI feel fast
     const originalText = messageText;
-    const originalFile = selectedFile;
-    const originalPreview = filePreview;
+    const originalAttachments = selectedAttachments;
 
     if (!isAudio) {
       setMessageText('');
-      setSelectedFile(null);
-      setFilePreview(null);
+      setSelectedAttachments([]);
     }
 
     setSendingMessage(true);
     setSendError(null);
     const isNew = selectedConversation.id.startsWith('new-');
-
-    let mediatype = 'document';
-    if (originalFile) {
-      if (originalFile.type.startsWith('image/')) mediatype = 'image';
-      else if (originalFile.type.startsWith('video/')) mediatype = 'video';
-      else if (originalFile.type.startsWith('audio/')) mediatype = 'audio';
-    }
-
     const hasAudioData = isAudio && audioBase64Override;
 
     try {
-      const response = await fetch('/api/inbox/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
-        },
-        body: JSON.stringify({
-          conversation_id: selectedConversation.id,
-          mensagem: isAudio ? '[Áudio Gravado]' : finalMsg,
-          ...(isNew ? {
-            telefone: selectedConversation.telefone,
-            lead_id: selectedConversation.lead_id,
-            nome_contato: selectedConversation.nome_contato,
-          } : {}),
-          ...((originalPreview || hasAudioData) ? {
-            media: hasAudioData ? audioBase64Override : originalPreview,
-            mimetype: hasAudioData ? (audioMimeType || 'audio/ogg') : originalFile?.type,
-            fileName: hasAudioData ? (audioMimeType?.includes('ogg') ? 'audio.ogg' : 'audio.webm') : originalFile?.name,
-            mediatype: hasAudioData ? 'audio' : mediatype,
-          } : {}),
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
+      const jobs = hasAudioData
+        ? [{ preview: audioBase64Override, file: null as File | null, isAudio: true }]
+        : originalAttachments.length
+          ? originalAttachments.map((attachment) => ({ preview: attachment.preview, file: attachment.file, isAudio: false }))
+          : [{ preview: '', file: null as File | null, isAudio: false }];
 
-      if (!response.ok) {
-        setSendError(payload.error || 'Nao consegui enviar agora.');
-        // Restore input if it failed
-        if (!isAudio) {
-          setMessageText(originalText);
-          setSelectedFile(originalFile);
-          setFilePreview(originalPreview);
+      const insertedMessages: InboxMessage[] = [];
+      let realConversation: Conversation | null = null;
+
+      for (let index = 0; index < jobs.length; index += 1) {
+        const job = jobs[index];
+        const file = job.file;
+        let mediatype = 'document';
+        if (file?.type.startsWith('image/')) mediatype = 'image';
+        else if (file?.type.startsWith('video/')) mediatype = 'video';
+        else if (file?.type.startsWith('audio/')) mediatype = 'audio';
+
+        const response = await fetch('/api/inbox/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+          },
+          body: JSON.stringify({
+            conversation_id: realConversation?.id || selectedConversation.id,
+            mensagem: job.isAudio ? '[Audio Gravado]' : (index === 0 ? finalMsg : ''),
+            ...(isNew && !realConversation ? {
+              telefone: selectedConversation.telefone,
+              lead_id: selectedConversation.lead_id,
+              nome_contato: selectedConversation.nome_contato,
+            } : {}),
+            ...(job.preview ? {
+              media: job.preview,
+              mimetype: job.isAudio ? (audioMimeType || 'audio/ogg') : file?.type,
+              fileName: job.isAudio ? (audioMimeType?.includes('ogg') ? 'audio.ogg' : 'audio.webm') : file?.name,
+              mediatype: job.isAudio ? 'audio' : mediatype,
+            } : {}),
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          setSendError(payload.error || 'Nao consegui enviar agora.');
+          if (!isAudio) {
+            setMessageText(originalText);
+            setSelectedAttachments(originalAttachments);
+          }
+          return;
         }
-        return;
+
+        if (payload.message) insertedMessages.push(payload.message);
+        if (payload.success && payload.conversation) realConversation = payload.conversation as Conversation;
       }
 
-      // Local mock append for fast response
-      let localMsg: InboxMessage = payload.message || {
-        id: `local_${Date.now()}`,
-        conversa_id: selectedConversation.id,
-        direction: 'outbound',
-        remetente: profile?.nome || 'Bianca Alves',
-        mensagem: isAudio ? '🎤 Mensagem de voz' : finalMsg,
-        created_at: new Date().toISOString(),
-        isAudio,
-        audioDuration
-      };
+      if (insertedMessages.length === 0) {
+        insertedMessages.push({
+          id: `local_${Date.now()}`,
+          conversa_id: selectedConversation.id,
+          direction: 'outbound',
+          remetente: profile?.nome || 'Bianca Alves',
+          mensagem: isAudio ? 'Mensagem de voz' : finalMsg,
+          created_at: new Date().toISOString(),
+          isAudio,
+          audioDuration,
+        });
+      }
 
-      if (payload.message) {
-        const isMsgAudio = 
-          payload.message.mensagem?.includes('[Áudio Gravado]') || 
-          payload.message.mensagem?.includes('🎤 Mensagem de voz') || 
-          payload.message.mensagem?.includes('🎵 Áudio') || 
-          Boolean(payload.message.metadata?.message?.audioMessage || payload.message.metadata?.audioMessage || payload.message.metadata?.data?.message?.audioMessage);
-        
-        localMsg = {
-          ...payload.message,
+      const localMessages = insertedMessages.map((message) => {
+        const isMsgAudio =
+          message.mensagem?.includes('[Audio Gravado]') ||
+          message.mensagem?.includes('Mensagem de voz') ||
+          message.mensagem?.includes('Audio') ||
+          Boolean(message.metadata?.message?.audioMessage || message.metadata?.audioMessage || message.metadata?.data?.message?.audioMessage);
+
+        return {
+          ...message,
           isAudio: isMsgAudio || isAudio,
-          audioDuration: audioDuration || payload.message.audioDuration
+          audioDuration: audioDuration || message.audioDuration,
         };
-      }
-
-      setMessages(current => {
-        if (current.some(m => m.id === localMsg.id)) return current;
-        return [...current, localMsg];
       });
 
-      // If AI is active, simulate a response from Apolo AI
+      setMessages((current) => {
+        const next = [...current];
+        for (const localMsg of localMessages) {
+          if (!next.some((message) => message.id === localMsg.id)) next.push(localMsg);
+        }
+        return next;
+      });
+
       if (selectedConversation.aiActive) {
         setTimeout(() => {
           const aiMsg: InboxMessage = {
@@ -1008,25 +1042,22 @@ export default function BrokerInboxPage() {
             conversa_id: selectedConversation.id,
             direction: 'inbound',
             remetente: selectedConversation.nome_contato,
-            mensagem: `🤖 *[Apolo Co-Piloto]*: Entendi sua mensagem! Vou simular uma resposta com base nas tabelas de saúde que analisamos no Simulador.`,
-            created_at: new Date().toISOString()
+            mensagem: '[Apolo Co-Piloto]: Entendi sua mensagem! Vou simular uma resposta com base nas tabelas de saude que analisamos no Simulador.',
+            created_at: new Date().toISOString(),
           };
-          setMessages(current => [...current, aiMsg]);
+          setMessages((current) => [...current, aiMsg]);
         }, 1500);
       }
 
-      if (payload.success && payload.conversation) {
-        const realConv = payload.conversation as Conversation;
-        setSelectedConversation(realConv);
+      if (realConversation) {
+        setSelectedConversation(realConversation);
       }
     } catch (err) {
       console.error(err);
       setSendError('Nao consegui enviar agora. Tente novamente em instantes.');
-      // Restore input if it failed
       if (!isAudio) {
         setMessageText(originalText);
-        setSelectedFile(originalFile);
-        setFilePreview(originalPreview);
+        setSelectedAttachments(originalAttachments);
       }
     } finally {
       setSendingMessage(false);
@@ -1639,13 +1670,24 @@ export default function BrokerInboxPage() {
   };
 
   // Handlers for attachments
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => setFilePreview(reader.result as string);
-    reader.readAsDataURL(file);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+
+    try {
+      const attachments = await Promise.all(
+        files.map(async (file) => ({
+          id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+          file,
+          preview: await readFileAsDataUrl(file),
+        }))
+      );
+      setSelectedAttachments((current) => [...current, ...attachments]);
+    } catch (err) {
+      console.error(err);
+      setSendError('Nao consegui carregar um dos arquivos selecionados.');
+    }
   };
 
   // Tab Filtering logic
@@ -1967,13 +2009,13 @@ export default function BrokerInboxPage() {
                     >
                       {/* Avatar */}
                       <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 border border-white/10 flex items-center justify-center text-xs font-black uppercase text-white shrink-0 shadow-lg">
-                        {c.nome_contato?.slice(0, 2) || 'CT'}
+                        {cleanInboxDisplayName(c.nome_contato, c.telefone).slice(0, 2) || 'CT'}
                       </div>
 
                       {/* Content */}
                       <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex justify-between items-baseline">
-                          <span className="text-xs font-black text-white truncate block">{c.nome_contato || c.telefone}</span>
+                          <span className="text-xs font-black text-white truncate block">{cleanInboxDisplayName(c.nome_contato, c.telefone)}</span>
                           <span className="text-[9px] font-bold text-slate-500 shrink-0">
                             {c.ultima_mensagem_at ? formatHour(c.ultima_mensagem_at) : ''}
                           </span>
@@ -2008,7 +2050,7 @@ export default function BrokerInboxPage() {
                 <div className="orion-inbox-chat-header p-4 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/30 shrink-0">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-black text-white">{selectedConversation.nome_contato || selectedConversation.telefone}</h2>
+                      <h2 className="text-sm font-black text-white">{cleanInboxDisplayName(selectedConversation.nome_contato, selectedConversation.telefone)}</h2>
                       <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[8px] font-black uppercase text-emerald-400 tracking-wider">
                         Expira em {selectedConversation.expirationTime}
                       </span>
@@ -2310,7 +2352,7 @@ export default function BrokerInboxPage() {
                             )}
                             <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-wider">
                               <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>
-                                {message.remetente || selectedConversation.nome_contato}
+                                {cleanInboxDisplayName(message.remetente || selectedConversation.nome_contato, selectedConversation.telefone)}
                               </span>
                               <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>
                                 {formatHour(message.created_at)}
@@ -2337,30 +2379,34 @@ export default function BrokerInboxPage() {
                 <div className="orion-inbox-composer p-4 border-t border-white/5 bg-[#050b16] shrink-0">
                   
                   {/* Visualizadores de Anexos */}
-                  {filePreview && (
-                    <div className="mb-3 flex items-center justify-between rounded-2xl border border-cyan-500/10 bg-cyan-950/20 p-3 shadow-md animate-in fade-in-50">
-                      <div className="flex items-center gap-3">
-                        {selectedFile?.type.startsWith('image/') ? (
-                          <img src={filePreview} alt="Preview" className="h-10 w-10 rounded-xl object-cover" />
-                        ) : (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-cyan-400 border border-white/5">
-                            <Paperclip size={16} />
+                  {selectedAttachments.length > 0 && (
+                    <div className="mb-3 grid gap-2">
+                      {selectedAttachments.map((attachment) => (
+                        <div key={attachment.id} className="flex items-center justify-between rounded-2xl border border-cyan-500/10 bg-cyan-950/20 p-3 shadow-md animate-in fade-in-50">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {attachment.file.type.startsWith('image/') ? (
+                              <img src={attachment.preview} alt="Preview" className="h-10 w-10 rounded-xl object-cover" />
+                            ) : (
+                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-cyan-400 border border-white/5">
+                                <Paperclip size={16} />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs font-black text-white truncate max-w-[260px]">{attachment.file.name}</p>
+                              <p className="text-[9px] font-bold text-slate-500 uppercase">
+                                {(attachment.file.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
                           </div>
-                        )}
-                        <div>
-                          <p className="text-xs font-black text-white truncate max-w-[200px]">{selectedFile?.name}</p>
-                          <p className="text-[9px] font-bold text-slate-500 uppercase">
-                            {selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB' : ''}
-                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                            className="p-1 bg-white/5 hover:bg-rose-500/10 hover:text-rose-400 rounded-full text-slate-400 transition-all cursor-pointer"
+                          >
+                            <X size={14} />
+                          </button>
                         </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => { setSelectedFile(null); setFilePreview(null); }}
-                        className="p-1 bg-white/5 hover:bg-rose-500/10 hover:text-rose-400 rounded-full text-slate-400 transition-all cursor-pointer"
-                      >
-                        <X size={14} />
-                      </button>
+                      ))}
                     </div>
                   )}
 
@@ -2408,6 +2454,7 @@ export default function BrokerInboxPage() {
                           <Paperclip size={16} />
                           <input
                             type="file"
+                            multiple
                             onChange={handleFileChange}
                             className="hidden"
                             accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
@@ -2478,7 +2525,7 @@ export default function BrokerInboxPage() {
                       {/* Send Button */}
                       <button
                         onClick={() => sendMessage()}
-                        disabled={sendingMessage || (!messageText.trim() && !filePreview)}
+                        disabled={sendingMessage || (!messageText.trim() && selectedAttachments.length === 0)}
                         className="p-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl flex items-center justify-center cursor-pointer shrink-0 shadow-lg shadow-cyan-950/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
                       >
                         {sendingMessage ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
@@ -3413,7 +3460,7 @@ export default function BrokerInboxPage() {
                                 {conv.status === 'resolvida' ? 'Finalizado' : 'Ativo'}
                               </span>
                             </div>
-                            <span className="text-2xs font-bold text-white block mt-1">Contato: {conv.nome_contato || conv.telefone}</span>
+                            <span className="text-2xs font-bold text-white block mt-1">Contato: {cleanInboxDisplayName(conv.nome_contato, conv.telefone)}</span>
                             <span className="text-[8px] font-semibold text-slate-500 block uppercase pt-0.5">
                               Última Mensagem: {conv.ultima_mensagem_at ? new Date(conv.ultima_mensagem_at).toLocaleString('pt-BR') : 'Sem mensagens'}
                             </span>

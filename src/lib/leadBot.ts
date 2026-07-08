@@ -67,6 +67,15 @@ function firstName(value?: string | null) {
   return String(value || 'tudo bem').trim().split(/\s+/)[0] || 'tudo bem';
 }
 
+function normalizeNameKey(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 function readCorretoraName(config?: BotConfig | null) {
   const raw = config?.corretoras;
   if (Array.isArray(raw)) return raw[0]?.nome || '';
@@ -105,12 +114,14 @@ async function findBroker(corretorId?: string | null) {
 
 async function findBotConfig(nomeEmpresa?: string | null) {
   if (!nomeEmpresa) return null;
+  const targetName = normalizeNameKey(nomeEmpresa);
 
-  const { data: corretora } = await supabaseAdmin
+  const { data: corretoras } = await supabaseAdmin
     .from('corretoras')
     .select('id, nome')
-    .ilike('nome', nomeEmpresa)
-    .maybeSingle();
+    .eq('status', 'ativo');
+
+  const corretora = (corretoras || []).find((item) => normalizeNameKey(item.nome) === targetName);
 
   if (!corretora?.id) return null;
 
@@ -170,6 +181,8 @@ async function getOrCreateConversation(lead: LeadRow) {
     .from('whatsapp_conversas')
     .select('id, lead_id, corretor_id')
     .eq('lead_id', lead.id)
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (existing?.id) return existing as ConversationRow;
@@ -179,6 +192,8 @@ async function getOrCreateConversation(lead: LeadRow) {
     .select('id, lead_id, corretor_id')
     .eq('telefone', phone)
     .eq('corretor_id', lead.corretor_id)
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (byPhone?.id) {

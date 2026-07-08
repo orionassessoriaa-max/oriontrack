@@ -240,11 +240,19 @@ function normalizeDateKey(value: string | null) {
 }
 
 function buildLeadIdentityKey(lead: Pick<LeadInsert, 'corretor_id' | 'data_entrada' | 'nome' | 'telefone'>) {
+  const phone = normalizePhoneKey(lead.telefone || '');
+  if (phone.length >= 8) {
+    return [
+      lead.corretor_id || '',
+      phone.slice(-11),
+    ].join('|');
+  }
+
   return [
     lead.corretor_id || '',
     normalizeDateKey(lead.data_entrada),
     normalizeHeader(lead.nome || ''),
-    normalizePhoneKey(lead.telefone || ''),
+    phone,
   ].join('|');
 }
 
@@ -284,6 +292,16 @@ function buildEnrichmentUpdate(existing: any, incoming: LeadInsert) {
   });
 
   return update;
+}
+
+function mergeLeadImportData(existing: LeadInsert, incoming: LeadInsert) {
+  const update = buildEnrichmentUpdate(existing, incoming);
+  if (Object.keys(update).length > 0) {
+    Object.assign(existing, update);
+  }
+  if (incoming.observacoes && !String(existing.observacoes || '').includes(incoming.observacoes)) {
+    existing.observacoes = mergeNotes(existing.observacoes, incoming.observacoes);
+  }
 }
 
 function orderedCells(row: CsvRow) {
@@ -685,6 +703,7 @@ export async function POST(request: Request) {
     let incomplete = 0;
     const leads: LeadInsert[] = [];
     const incomingKeys = new Set<string>();
+    const incomingIdentity = new Map<string, LeadInsert>();
 
     for (const source of sources) {
       const response = await fetch(source.csvUrl, { cache: 'no-store' });
@@ -743,6 +762,15 @@ export async function POST(request: Request) {
             status: statusFromSheet(pick(row, ['status', 'negocio etapa', 'negocio - etapa']) || 'Aguardando atendimento'),
             observacoes: mergeNotes(buildLeadImportWarningNote(warnings), buildNotes(row)),
           };
+
+          const identityKey = buildLeadIdentityKey(lead);
+          const existingIncoming = incomingIdentity.get(identityKey);
+          if (existingIncoming) {
+            mergeLeadImportData(existingIncoming, lead);
+            duplicated += 1;
+            return;
+          }
+          incomingIdentity.set(identityKey, lead);
 
           const key = buildLeadDuplicateKey(lead);
           if (incomingKeys.has(key)) {

@@ -63,6 +63,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
 - Nao diga que voce e IA, bot, automacao, assistente virtual ou sistema.
 - Nao use prefixo de atendente, assinatura ou formato "Aline:" nas mensagens.
 - Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
+- Nao chame o cliente pelo nome em toda mensagem. Depois da primeira abordagem, use o nome so raramente.
 - Os "Dados ja conhecidos do lead" vieram do formulario. Trate esses dados como respostas ja dadas pelo cliente.
 - Nunca pergunte novamente CNPJ/MEI, idades, cidade, investimento, plano ativo ou plano atual quando esses campos ja tiverem valor diferente de vazio, "-" ou "Nao informado" nos dados conhecidos.
 - Depois que o cliente confirmar a cotacao/idades, a segunda pergunta obrigatoria deve ser a confirmacao do CNPJ/MEI/CPF do formulario. So depois disso siga para hospital/regiao, motivo da busca, cobertura nacional ou regional, investimento se nao veio no formulario, e-mail e agendamento de ligacao de 15 minutos.
@@ -73,7 +74,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
 - Quando for pedir o agendamento, nunca use "funciona melhor". Pergunte: "Que dia e horario voce esta mais confortavel pra voce?"
 - Quando o cliente responder com dia e horario, responda apenas que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradeca pelo atendimento, defina handoff true e nao faca mais nenhuma pergunta.
 - Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o encaminhamento de forma curta e natural.
-- Nunca diga "pode mandar audio" depois que o cliente ja enviou audio ou quando a mensagem atual vier como "Audio transcrito do cliente".
+- Nunca diga "pode mandar audio" depois que o cliente ja enviou audio ou quando a mensagem atual vier como "Audio transcrito do cliente". Se a mensagem disser que o audio nao foi transcrito, responda curto pedindo para o cliente enviar a informacao por texto.
 - Priorize respostas humanas, curtas e diretas, sem cara de script.`;
 
 export const DEFAULT_SYSTEM_PROMPT = `Voce e {persona}, uma consultora de vendas humana e simpatica da corretora de planos de saude {corretora_nome}.
@@ -120,7 +121,7 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 
 == TOM E ESTILO ==
 - Respostas curtas: 1 a 3 frases no maximo. Evite textao.
-- Fale pelo primeiro nome do cliente quando souber, de forma natural.
+- Use o primeiro nome do cliente no maximo na primeira abordagem ou quando ficar realmente natural. Nao repita o nome em mensagens consecutivas.
 - Proibido linguagem corporativa: "daremos continuidade", "estarei verificando", "com base nas informacoes fornecidas" etc.
 - Nao comece toda resposta com "Perfeito", "Entendi" ou "Certo". Varie ou va direto ao ponto.
 - Tom conversado: "Boa", "show", "me diz uma coisa", "pra eu te direcionar melhor", sem exagerar em girias.
@@ -213,6 +214,24 @@ function customerFacingNameOnly(text: string, lead: LeadRow) {
   if (!fullName || !firstName || fullName.toLowerCase() === firstName.toLowerCase()) return text;
 
   return text.replace(new RegExp(escapeRegExp(fullName), 'gi'), firstName);
+}
+
+function removeLeadVocative(text: string, lead: LeadRow) {
+  const firstName = leadFirstName(lead, '').trim();
+  if (!firstName) return text;
+
+  const escaped = escapeRegExp(firstName);
+  return text
+    .replace(new RegExp(`(^|[.!?]\\s+)${escaped}[,!:.]?\\s+`, 'gi'), '$1')
+    .replace(new RegExp(`,\\s*${escaped}([!.?])`, 'gi'), '$1')
+    .replace(new RegExp(`\\b(Perfeito|Legal|Boa|Show|Otimo|Ótimo|Certo|Entendi),\\s*${escaped}([!.?])`, 'gi'), '$1$2')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function customerReplyForFollowUp(text: string, lead: LeadRow, hasPreviousAiMessage: boolean) {
+  const firstNameOnly = customerFacingNameOnly(text, lead);
+  return hasPreviousAiMessage ? removeLeadVocative(firstNameOnly, lead) : firstNameOnly;
 }
 
 function hasKnownValue(value?: unknown) {
@@ -827,6 +846,71 @@ async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: s
   };
 }
 
+function extractSummaryField(summary: string, key: string) {
+  const labels = [
+    'Nome',
+    'Telefone',
+    'Idades',
+    'Idade\\(s\\)',
+    'CNPJ/MEI',
+    'Possui CNPJ/MEI',
+    'CNPJ informado',
+    'Cidade',
+    'Investimento',
+    'Investimento pretendido',
+    'Tem Plano Ativo\\?',
+    'Tem plano ativo\\?',
+    'Tem plano de saude',
+    'Tem plano de saude\\?',
+    'Plano Atual',
+    'Plano atual',
+    'Motivo',
+    'Motivo da busca',
+    'Hospital/Regiao',
+    'Hospital/Regi.o de prefer.ncia',
+    'Email',
+    'E-mail',
+    'Agendado',
+    'Pendente',
+    'Anuncio',
+    'IA encerrada',
+    'Erro IA',
+  ].join('|');
+  const normalized = String(summary || '').replace(/\\r\\n|\\n|\\r/g, '\n');
+  const regex = new RegExp(`(?:\\*?(?:${key})\\*?\\s*:\\s*)([\\s\\S]*?)(?=(?:\\s|\\\\n|\\\\r)*\\*?(?:${labels})\\*?\\s*:|$)`, 'i');
+  const match = normalized.match(regex);
+  return match?.[1]?.trim() || '';
+}
+
+function cleanSummaryValue(value: unknown, fallback = 'Nao informado') {
+  const text = String(value ?? '').replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+  if (!text || ['-', 'nao', 'não', 'null', 'undefined'].includes(normalizeAiText(text))) return fallback;
+  return text;
+}
+
+function formatResponsibleSummary(lead: LeadRow, summary: string) {
+  const field = (key: string, fallback?: unknown) => cleanSummaryValue(extractSummaryField(summary, key) || fallback);
+  const finishedReason = extractSummaryField(summary, 'IA encerrada');
+  const errorReason = extractSummaryField(summary, 'Erro IA');
+
+  return [
+    `Nome: ${cleanSummaryValue(lead.nome)}`,
+    `Telefone: ${cleanSummaryValue(lead.telefone)}`,
+    `Idades: ${field('Idades|Idade\\(s\\)', lead.idades)}`,
+    `CNPJ/MEI: ${field('CNPJ/MEI|Possui CNPJ/MEI', lead.possui_cnpj)}`,
+    `Cidade: ${field('Cidade', lead.cidade)}`,
+    `Investimento: ${field('Investimento|Investimento pretendido', lead.investimento)}`,
+    `Plano atual: ${field('Plano\\s+Atual|Plano atual', lead.plano_atual)}`,
+    `Motivo: ${field('Motivo|Motivo da busca', lead.motivo_busca)}`,
+    `Hospital/Regiao: ${field('Hospital/Regiao|Hospital/Regi.o de prefer.ncia', lead.hospital_preferencia)}`,
+    `Email: ${field('Email|E-mail', lead.email)}`,
+    `Agendado: ${field('Agendado', 'Nao')}`,
+    `Pendente: ${field('Pendente', 'Nao')}`,
+    finishedReason ? `Status da IA: ${cleanSummaryValue(finishedReason)}` : null,
+    errorReason ? `Erro IA: ${cleanSummaryValue(errorReason)}` : null,
+  ].filter(Boolean).join('\n');
+}
+
 async function notifyResponsible(lead: LeadRow, summary: string) {
   const responsible = await findResponsibleProfile(lead.responsavel_profile_id);
   const admin = await findAiAdmin(lead.corretor_id);
@@ -850,7 +934,7 @@ async function notifyResponsible(lead: LeadRow, summary: string) {
       bodyParts.push(`Agora é com o *${responsible.nome}*.`);
     }
     bodyParts.push('');
-    bodyParts.push(summary || leadFacts(lead));
+    bodyParts.push(formatResponsibleSummary(lead, summary || leadFacts(lead)));
     bodyParts.push('');
     bodyParts.push('Agora é a hora do atendimento humano.');
 
@@ -903,7 +987,9 @@ async function askAline(
   const nameRule = [
     'Regra obrigatoria de tratamento pelo nome:',
     `- Nome completo do lead: ${plain(lead.nome)}.`,
-    `- Nas mensagens enviadas ao cliente, chame sempre somente pelo primeiro nome: ${leadFirstName(lead)}.`,
+    `- Se usar o nome do cliente, use somente o primeiro nome: ${leadFirstName(lead)}.`,
+    '- Nao use o nome do cliente em respostas consecutivas.',
+    '- Depois da primeira mensagem, prefira responder sem chamar pelo nome.',
     '- Nunca use nome completo falando com o cliente.',
     '- O nome completo so deve aparecer em resumo interno, banco de dados ou notificacao para o responsavel.',
   ].join('\n');
@@ -1145,7 +1231,7 @@ export async function continueLeadAiFromIncoming(options: {
     isAffirmativeAnswer(options.customerMessage) &&
     !isCnpjConfirmationQuestion(previousOutboundText)
   ) {
-    const reply = cnpjConfirmationReply(lead);
+    const reply = customerReplyForFollowUp(cnpjConfirmationReply(lead), lead, Boolean(previousOutboundText));
     registerAiOutbound(lead.telefone || '', reply);
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
@@ -1171,7 +1257,7 @@ export async function continueLeadAiFromIncoming(options: {
     isCnpjConfirmationQuestion(previousOutboundText) &&
     isAffirmativeAnswer(options.customerMessage)
   ) {
-    const reply = nextQuestionAfterCnpjConfirmation(lead);
+    const reply = customerReplyForFollowUp(nextQuestionAfterCnpjConfirmation(lead), lead, Boolean(previousOutboundText));
     if (options.incomingWasAudio) {
       try {
         registerAiOutbound(lead.telefone || '', 'Mensagem de voz');
@@ -1247,11 +1333,11 @@ export async function continueLeadAiFromIncoming(options: {
 
   let handoff = Boolean(ai.handoff);
   let summary = ai.summary || session.summary || null;
-  let reply = customerFacingNameOnly(String(ai.reply || '').trim(), lead);
+  let reply = customerReplyForFollowUp(String(ai.reply || '').trim(), lead, Boolean(previousOutboundText));
 
   if (scheduleConfirmed) {
     handoff = true;
-    reply = handoffScheduleReply(lead);
+    reply = customerReplyForFollowUp(handoffScheduleReply(lead), lead, Boolean(previousOutboundText));
     summary = appendSummaryLine(summary || leadFacts(lead), `*Agendado*: ${options.customerMessage.trim()}`);
     summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
   }
@@ -1465,6 +1551,84 @@ function extractAgendadoValue(summary?: string | null): string | null {
   return null;
 }
 
+function saoPauloDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  return {
+    year: Number(parts.find((part) => part.type === 'year')?.value),
+    month: Number(parts.find((part) => part.type === 'month')?.value),
+    day: Number(parts.find((part) => part.type === 'day')?.value),
+  };
+}
+
+function saoPauloDateAt(year: number, month: number, day: number, hour: number, minute: number) {
+  return new Date(Date.UTC(year, month - 1, day, hour + 3, minute, 0, 0));
+}
+
+function addLocalDays(date: { year: number; month: number; day: number }, days: number) {
+  const utcNoon = new Date(Date.UTC(date.year, date.month - 1, date.day + days, 12, 0, 0, 0));
+  return {
+    year: utcNoon.getUTCFullYear(),
+    month: utcNoon.getUTCMonth() + 1,
+    day: utcNoon.getUTCDate(),
+  };
+}
+
+function parseScheduledTextToDate(scheduledText: string, reference = new Date()) {
+  const raw = String(scheduledText || '').trim();
+  const normalized = normalizeAiText(raw);
+  const timeMatch =
+    normalized.match(/\b(?:as|às|a partir das|depois das|antes das)\s*(\d{1,2})(?::|h)?\s*(\d{2})?\b/) ||
+    normalized.match(/\b(\d{1,2})(?::|h)\s*(\d{2})?\b/);
+
+  if (!timeMatch) return null;
+
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2] || '0');
+  if (!Number.isFinite(hour) || hour < 0 || hour > 23 || !Number.isFinite(minute) || minute < 0 || minute > 59) {
+    return null;
+  }
+
+  const today = saoPauloDateParts(reference);
+  let target = today;
+
+  const dateMatch = normalized.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if (dateMatch) {
+    const yearText = dateMatch[3];
+    const year = yearText ? Number(yearText.length === 2 ? `20${yearText}` : yearText) : today.year;
+    target = { year, month: Number(dateMatch[2]), day: Number(dateMatch[1]) };
+  } else if (/\bamanha\b/.test(normalized)) {
+    target = addLocalDays(today, 1);
+  } else if (/\bhoje\b/.test(normalized)) {
+    target = today;
+  } else {
+    const weekDays: Record<string, number> = {
+      domingo: 0,
+      segunda: 1,
+      terca: 2,
+      quarta: 3,
+      quinta: 4,
+      sexta: 5,
+      sabado: 6,
+    };
+    const weekDayKey = Object.keys(weekDays).find((key) => new RegExp(`\\b${key}\\b`).test(normalized));
+    if (weekDayKey) {
+      const currentDate = saoPauloDateAt(today.year, today.month, today.day, 12, 0);
+      const currentWeekDay = currentDate.getUTCDay();
+      let diff = weekDays[weekDayKey] - currentWeekDay;
+      if (diff <= 0) diff += 7;
+      target = addLocalDays(today, diff);
+    }
+  }
+
+  return saoPauloDateAt(target.year, target.month, target.day, hour, minute);
+}
+
 async function createAutoScheduledTask(lead: LeadRow, scheduledText: string, fallbackProfileId?: string | null) {
   try {
     const { data: existing } = await supabaseAdmin
@@ -1478,10 +1642,8 @@ async function createAutoScheduledTask(lead: LeadRow, scheduledText: string, fal
     if (existing) return;
 
     const title = `Reunião agendada pela IA: ${scheduledText}`;
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(9, 0, 0, 0);
-    const vencimento = tomorrow.toISOString();
+    const parsedSchedule = parseScheduledTextToDate(scheduledText);
+    const vencimento = parsedSchedule?.toISOString() || null;
 
     const targetProfileId = lead.responsavel_profile_id || fallbackProfileId || null;
 
@@ -1492,7 +1654,7 @@ async function createAutoScheduledTask(lead: LeadRow, scheduledText: string, fal
         corretor_id: lead.corretor_id,
         responsavel_profile_id: targetProfileId,
         titulo: title,
-        vencimento: vencimento,
+        vencimento,
         prioridade: 'alta',
         status: 'pendente'
       }]);
@@ -1519,10 +1681,40 @@ async function updateLeadFromSummary(leadId: string, summary?: string | null) {
   if (!summary) return;
   try {
     const updates: any = {};
+    const knownSummaryLabels = [
+      'Nome',
+      'Telefone',
+      'Idades',
+      'Idade\\(s\\)',
+      'CNPJ/MEI',
+      'Possui CNPJ/MEI',
+      'CNPJ informado',
+      'Cidade',
+      'Investimento',
+      'Investimento pretendido',
+      'Tem Plano Ativo\\?',
+      'Tem plano ativo\\?',
+      'Tem plano de saude',
+      'Tem plano de saude\\?',
+      'Plano Atual',
+      'Plano atual',
+      'Motivo',
+      'Motivo da busca',
+      'Hospital/Regiao',
+      'Hospital/Regi.o de prefer.ncia',
+      'Email',
+      'E-mail',
+      'Agendado',
+      'Pendente',
+      'Anuncio',
+      'IA encerrada',
+      'Erro IA',
+    ].join('|');
+    const normalizedSummary = String(summary).replace(/\\r\\n|\\n|\\r/g, '\n');
     
     const getValue = (key: string) => {
-      const regex = new RegExp(`(?:\\*?${key}\\*?:?\\s*)([^\\r\\n]+)`, 'i');
-      const match = summary.match(regex);
+      const regex = new RegExp(`(?:\\*?(?:${key})\\*?\\s*:\\s*)([\\s\\S]*?)(?=(?:\\s|\\\\n|\\\\r)*\\*?(?:${knownSummaryLabels})\\*?\\s*:|$)`, 'i');
+      const match = normalizedSummary.match(regex);
       if (match && match[1]) {
         const val = match[1].trim();
         if (
@@ -1540,28 +1732,31 @@ async function updateLeadFromSummary(leadId: string, summary?: string | null) {
     const nome = getValue('Nome');
     if (nome) updates.nome = nome;
 
-    const idades = getValue('Idades');
+    const idades = getValue('Idades|Idade\\(s\\)');
     if (idades) updates.idades = idades;
 
     const cidade = getValue('Cidade');
     if (cidade) updates.cidade = cidade;
 
-    const investimento = getValue('Investimento');
+    const investimento = getValue('Investimento|Investimento pretendido');
     if (investimento) updates.investimento = investimento;
+
+    const temPlanoAtivo = getValue('Tem\\s+Plano\\s+Ativo\\?|Tem\\s+plano\\s+ativo\\?|Tem\\s+plano\\s+de\\s+saude\\??');
+    if (temPlanoAtivo) updates.tem_plano_ativo = temPlanoAtivo;
 
     const planoAtual = getValue('Plano\\s+Atual');
     if (planoAtual) updates.plano_atual = planoAtual;
 
-    const email = getValue('Email');
+    const email = getValue('Email|E-mail');
     if (email) updates.email = email;
 
-    const motivo = getValue('Motivo');
+    const motivo = getValue('Motivo|Motivo da busca');
     if (motivo) updates.motivo_busca = motivo;
 
-    const hospital = getValue('Hospital/Regiao');
+    const hospital = getValue('Hospital/Regiao|Hospital/Regi.o de prefer.ncia');
     if (hospital) updates.hospital_preferencia = hospital;
 
-    const cnpjMei = getValue('CNPJ/MEI');
+    const cnpjMei = getValue('CNPJ/MEI|Possui CNPJ/MEI');
     if (cnpjMei) {
       const lower = cnpjMei.toLowerCase();
       if (lower.includes('mei')) {

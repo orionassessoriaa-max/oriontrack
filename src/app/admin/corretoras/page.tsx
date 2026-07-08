@@ -28,7 +28,7 @@ import { Corretor, Profile } from '@/types';
 import Link from 'next/link';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
-import { getGestorConcessionariaNames, isGestorLinkedToConcessionariaCorretor, normalizeAccessText } from '@/lib/gestorAccess';
+import { getGestorConcessionariaNames, isGestorLinkedToConcessionariaCorretor, isGestorLinkedToCorretor, normalizeAccessText } from '@/lib/gestorAccess';
 
 interface CorretoraGroup {
   id: string; // ID of the first corretor/profile in the group
@@ -227,10 +227,13 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
 function CorretorasContent() {
   const { profile, startViewingAsCorretor } = useAuth();
   const { confirmDialog } = useDialog();
+  const searchParams = useSearchParams();
   const router = useRouter();
+  const initialGestorId = searchParams.get('gestor');
 
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [gestores, setGestores] = useState<Profile[]>([]);
   const [corretorasCadastradas, setCorretorasCadastradas] = useState<CorretoraRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -259,7 +262,7 @@ function CorretorasContent() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
-      const [corretoresRes, profilesRes, corretorasRes] = await Promise.all([
+      const [corretoresRes, profilesRes, gestoresRes, corretorasRes] = await Promise.all([
         supabase
           .from('corretores')
           .select('*')
@@ -269,6 +272,12 @@ function CorretorasContent() {
           .select('*')
           .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
           .order('nome'),
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('tipo_usuario', 'gestor_trafego')
+          .in('status', ['active', 'ativo', 'Ativo'])
+          .order('nome'),
         token ? fetch('/api/admin/corretoras', {
           headers: { Authorization: `Bearer ${token}` }
         }) : Promise.resolve(null)
@@ -276,6 +285,7 @@ function CorretorasContent() {
 
       if (corretoresRes.error) throw corretoresRes.error;
       if (profilesRes.error) throw profilesRes.error;
+      if (gestoresRes.error) throw gestoresRes.error;
 
       let loadedCorretoras: CorretoraRecord[] = [];
       if (corretorasRes) {
@@ -302,6 +312,7 @@ function CorretorasContent() {
 
       let loadedCorretores = corretoresRes.data || [];
       let loadedProfiles = profilesRes.data || [];
+      const loadedGestores = gestoresRes.data || [];
 
       if (profile?.tipo_usuario === 'gestor_trafego') {
         loadedCorretores = loadedCorretores.filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, profile));
@@ -315,11 +326,41 @@ function CorretorasContent() {
         });
 
         loadedCorretoras = loadedCorretoras.filter((item) => concessionariaNames.has(normalizeAccessText(item.nome)));
+      } else if (profile?.tipo_usuario === 'admin' && initialGestorId) {
+        let concessionariaNames = new Set<string>();
+        if (initialGestorId === 'sem-gestor') {
+          loadedCorretores = loadedCorretores.filter((corretor) =>
+            Boolean(String(corretor.nome_empresa || '').trim()) &&
+            !loadedGestores.some((gestor) => isGestorLinkedToCorretor(corretor, gestor))
+          );
+          loadedCorretores.forEach((corretor) => {
+            const name = normalizeAccessText(corretor.nome_empresa);
+            if (name) concessionariaNames.add(name);
+          });
+        } else {
+          const selectedGestor = loadedGestores.find((gestor) => gestor.id === initialGestorId);
+          loadedCorretores = selectedGestor
+            ? loadedCorretores.filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, selectedGestor))
+            : [];
+          concessionariaNames = selectedGestor
+            ? getGestorConcessionariaNames(loadedCorretores, selectedGestor)
+            : new Set<string>();
+        }
+
+        const linkedCorretorIds = new Set(loadedCorretores.map((corretor) => corretor.id));
+        loadedProfiles = loadedProfiles.filter((item) => {
+          const profileCompany = normalizeAccessText(item.nome_empresa);
+          return (item.corretor_id && linkedCorretorIds.has(item.corretor_id))
+            || (Boolean(profileCompany) && concessionariaNames.has(profileCompany));
+        });
+
+        loadedCorretoras = loadedCorretoras.filter((item) => concessionariaNames.has(normalizeAccessText(item.nome)));
       }
 
       setCorretorasCadastradas(loadedCorretoras);
       setCorretores(loadedCorretores);
       setProfiles(loadedProfiles);
+      setGestores(loadedGestores);
     } catch (err: unknown) {
       console.error('Error fetching data:', err);
       setError("Erro ao carregar dados do banco de dados.");
@@ -335,7 +376,7 @@ function CorretorasContent() {
     }
     
     void Promise.resolve().then(fetchData);
-  }, [profile]);
+  }, [profile, initialGestorId]);
 
   const corretoras = useMemo(() => {
     return groupData(corretores, profiles, corretorasCadastradas);
@@ -358,6 +399,14 @@ function CorretorasContent() {
       return matchesSearch && matchesType;
     });
   }, [corretoras, search, typeFilter]);
+
+  const activeGestorName = initialGestorId === 'sem-gestor'
+    ? 'Sem gestor definido'
+    : gestores.find((gestor) => gestor.id === initialGestorId)?.nome;
+
+  const clearGestorFilter = () => {
+    router.push('/admin/corretoras');
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedGroups(prev => ({
@@ -551,6 +600,22 @@ function CorretorasContent() {
       {migrationPending && (
         <div className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm font-bold text-amber-300">
           O cadastro de concessionarias ainda precisa da migration no Supabase. A listagem antiga continua funcionando, mas concessionarias vazias so aparecem apos aplicar a migration.
+        </div>
+      )}
+
+      {isAdmin && initialGestorId && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Filtro por gestor ativo</p>
+            <p className="mt-1 text-sm font-black text-white">{activeGestorName || 'Gestor nao encontrado'}</p>
+          </div>
+          <button
+            type="button"
+            onClick={clearGestorFilter}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-200 hover:bg-white/5"
+          >
+            <X size={14} /> Ver todas
+          </button>
         </div>
       )}
 
