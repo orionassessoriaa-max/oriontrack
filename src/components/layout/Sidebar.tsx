@@ -365,6 +365,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     <>
       {/* Top Horizontal Navbar Header */}
       <div className={cn(
+        "orion-topbar",
         "fixed left-0 right-0 top-0 z-50 flex h-20 w-full items-center justify-between border-b px-4 text-white shadow-xl transition-all duration-300 sm:px-6",
         isDark ? "bg-[#020617] border-white/5" : "bg-[#0f172a] border-white/10"
       )}>
@@ -469,6 +470,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                       
                       {moreMenuOpen && (
                         <div className={cn(
+                          "orion-more-menu",
                           "absolute right-0 top-full mt-2.5 z-50 w-64 rounded-2xl backdrop-blur-md border p-2 shadow-2xl orion-dropdown-animate animate-in fade-in-50 slide-in-from-top-2 duration-200",
                           isDark ? "bg-[#090e1a]/95 border-white/5" : "bg-[#0f172a]/95 border-white/10"
                         )}>
@@ -584,6 +586,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
             className="fixed inset-0 top-20 z-40 bg-slate-950/75 backdrop-blur-md lg:hidden"
           />
           <div className={cn(
+            "orion-mobile-drawer",
             "fixed left-0 right-0 top-20 z-50 flex h-[calc(100vh-5rem)] w-full flex-col border-t p-6 text-white shadow-2xl transition-all duration-300 lg:hidden overflow-y-auto",
             isDark ? "bg-[#020617] border-white/5" : "bg-[#0f172a] border-white/10"
           )}>
@@ -633,7 +636,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
       {/* Real-time Floating Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-[9999] w-[350px] animate-in fade-in-50 slide-in-from-bottom-5 duration-300">
-          <div className="rounded-3xl border border-blue-500/30 bg-[#090e1a]/95 backdrop-blur-md p-5 shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+          <div className="orion-toast rounded-3xl border border-blue-500/30 bg-[#090e1a]/95 backdrop-blur-md p-5 shadow-[0_0_30px_rgba(59,130,246,0.3)]">
             <div className="flex items-center gap-3 mb-2.5">
               <div className="p-2 rounded-xl bg-blue-500/20 text-cyan-400">
                 <Bell size={18} className="animate-bounce" />

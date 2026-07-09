@@ -143,7 +143,26 @@ export async function POST(request: Request) {
 
     if (leadError) throw leadError;
 
-    const ai = await startLeadAiIfEligible(lead.id);
+    let ai: Awaited<ReturnType<typeof startLeadAiIfEligible>>;
+    try {
+      ai = await startLeadAiIfEligible(lead.id);
+    } catch (error: any) {
+      const rawMessage = String(error?.message || '');
+      const isDisconnected = rawMessage.toLowerCase().includes('whatsapp disconnected');
+      return NextResponse.json({
+        ok: false,
+        lead,
+        error: isDisconnected
+          ? `WhatsApp desconectado no perfil que envia a IA: ${adminProfile?.nome || 'admin da concessionaria'}${adminProfile?.telefone ? ` (${adminProfile.telefone})` : ''}. Reconecte esse perfil no Apolo WhatsApp e teste de novo.`
+          : rawMessage || 'Lead de teste criado, mas a IA nao conseguiu enviar a mensagem.',
+        sender: adminProfile ? {
+          id: adminProfile.id,
+          nome: adminProfile.nome,
+          telefone: adminProfile.telefone,
+          tipo_usuario: adminProfile.tipo_usuario,
+        } : null,
+      }, { status: 400 });
+    }
 
     await writeAuditLog(request, guard.profile, {
       action: 'send_ai_test',

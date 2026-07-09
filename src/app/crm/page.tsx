@@ -67,6 +67,20 @@ const columns: { id: LeadStatus; label: string; desc: string }[] = [
   { id: 'Sem interesse', label: 'Sem interesse', desc: 'Descartado comercialmente' },
 ];
 
+const kanbanStageHeaderClass: Record<string, string> = {
+  'Aguardando atendimento': 'from-blue-700 to-blue-600 border-blue-500/30',
+  'Inicio': 'from-sky-700 to-sky-600 border-sky-500/30',
+  'Contato feito': 'from-indigo-700 to-indigo-600 border-indigo-500/30',
+  'CotaÃ§Ã£o enviada': 'from-violet-700 to-violet-600 border-violet-500/30',
+  'Em negociaÃ§Ã£o': 'from-amber-700 to-amber-600 border-amber-500/30',
+  'NÃ£o tive retorno': 'from-slate-700 to-slate-600 border-slate-500/30',
+  'Venda realizada': 'from-emerald-700 to-emerald-600 border-emerald-500/30',
+  'Sem interesse': 'from-rose-700 to-rose-600 border-rose-500/30',
+  'RegiÃ£o sem comercializaÃ§Ã£o': 'from-orange-700 to-orange-600 border-orange-500/30',
+  'Chamou duas vezes': 'from-fuchsia-700 to-fuchsia-600 border-fuchsia-500/30',
+  'Telefone nÃ£o existe': 'from-zinc-700 to-zinc-600 border-zinc-500/30',
+};
+
 function isStale(lead: Lead) {
   if (normalizeLeadStatus(lead.status) !== 'Aguardando atendimento' || !lead.data_entrada) return false;
   return Date.now() - new Date(lead.data_entrada).getTime() > 20 * 60 * 1000;
@@ -1419,7 +1433,6 @@ export default function CrmPage() {
                 >
                   {columns.map((column) => {
                     const columnLeads = getLeadsByStatus(column.id);
-                    const statusStyle = getLeadStatusStyle(column.id);
                     const commercialTotal = getCommercialTotal(column.id);
                     const limit = visibleLimits[column.id] || 50;
                     const visibleLeads = columnLeads.slice(0, limit);
@@ -1427,34 +1440,35 @@ export default function CrmPage() {
                     return (
                       <section
                         key={column.id}
+                        aria-label={`Etapa ${column.label} com ${columnLeads.length} leads`}
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={() => handleDrop(column.id)}
-                        className={`flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-colors sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId ? 'border-blue-300 bg-blue-950/20' : 'border-white/10 bg-white/5'}`}
+                        className={`orion-kanban-column flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-colors sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}
                       >
-                        <header className="shrink-0 border-b border-cyan-400/20 bg-[#06111f] p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.28)]">
+                        <header className={`kanban-stage-header shrink-0 border-b bg-gradient-to-br p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.16)] ${kanbanStageHeaderClass[column.id] || 'from-blue-700 to-blue-600 border-blue-500/30'}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className={`h-3 w-3 shrink-0 rounded-full shadow-[0_0_12px_currentColor] ${statusStyle.dot}`} />
+                                <span className="h-3 w-3 shrink-0 rounded-full bg-white/90 shadow-[0_0_12px_rgba(255,255,255,0.6)]" />
                                 <h3 className="truncate text-[15px] font-black uppercase tracking-widest !text-white drop-shadow-sm">{column.label}</h3>
                               </div>
                               <p className="mt-1 text-[11px] font-black !text-white/85">{column.desc}</p>
                             </div>
-                            <span className="rounded-full border border-blue-400/20 bg-blue-600/20 px-2.5 py-1 text-[10px] font-black text-blue-100">
+                            <span className="rounded-full border border-white/25 bg-white/18 px-2.5 py-1 text-[10px] font-black text-white">
                               {columnLeads.length}
                             </span>
                           </div>
                           {requiresCommercialData(column.id) && (
-                            <div className="mt-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
-                              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-300">Total na etapa</p>
-                              <p className="text-sm font-black text-emerald-100">{formatCurrencyValue(commercialTotal)}</p>
+                            <div className="mt-2 rounded-xl border border-white/20 bg-white/12 px-3 py-2">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-white/75">Total na etapa</p>
+                              <p className="text-sm font-black text-white">{formatCurrencyValue(commercialTotal)}</p>
                             </div>
                           )}
                         </header>
                         <div
                           onDragOver={(event) => event.preventDefault()}
                           onDrop={() => handleDrop(column.id)}
-                          className={`scrollbar-visible flex-1 space-y-3 overflow-y-auto p-3 transition-colors ${draggedLeadId ? 'bg-blue-950/10' : statusStyle.column}`}
+                          className={`scrollbar-visible flex-1 space-y-3 overflow-y-auto p-3 transition-colors ${draggedLeadId ? 'bg-blue-50' : 'bg-slate-50'}`}
                         >
                           {visibleLeads.map((lead) => {
                             const selected = selectedLead?.id === lead.id;

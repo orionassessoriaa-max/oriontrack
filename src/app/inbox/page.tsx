@@ -2003,6 +2003,7 @@ export default function BrokerInboxPage() {
                     <button
                       key={c.id}
                       onClick={() => setSelectedConversation(c)}
+                      aria-current={isActive ? 'true' : undefined}
                       className={`w-full flex items-start gap-3 p-4 text-left transition-all ${
                         isActive ? 'bg-cyan-600/10 border-l-4 border-cyan-500' : 'hover:bg-white/2'
                       }`}
