@@ -88,7 +88,7 @@ export default function AdminFerramentasPage() {
   }, [configs, selectedCorretoraId]);
 
   const activeCount = ferramentas.filter((tool) => {
-    const status = configByTool.get(tool.key)?.status || 'disponivel';
+    const status = configByTool.get(tool.key)?.status || tool.defaultStatus || 'disponivel';
     return status !== 'oculto';
   }).length;
 
@@ -225,7 +225,7 @@ export default function AdminFerramentasPage() {
               <div className="grid gap-4 xl:grid-cols-2">
                 {ferramentas.map((tool) => {
                   const config = configByTool.get(tool.key);
-                  const status = config?.status || 'disponivel';
+                  const status = config?.status || tool.defaultStatus || 'disponivel';
                   return (
                     <div key={tool.key} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
