@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     const configByKey = new Map(configs.map((config) => [config.ferramenta_key, config]));
     const tools = FERRAMENTA_CATALOG.map((tool) => {
       const config = configByKey.get(tool.key);
-      const status = config?.status || 'disponivel';
+      const status = config?.status || tool.defaultStatus || 'disponivel';
       return {
         ...tool,
         status,
