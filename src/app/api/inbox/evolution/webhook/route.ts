@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone, profileIdFromEvolutionInstance } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming, isAiOutbound } from '@/lib/leadAiAgent';
+import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 
 function readText(data: any) {
   return String(
@@ -216,6 +217,8 @@ async function findConversation(corretorId: string, phone: string, leadId?: stri
 
 export async function POST(request: Request) {
   try {
+    ensureLeadAiTimeoutScheduler();
+
     const body = await request.json().catch(() => ({}));
     const data = body?.data || body;
     const event = String(body?.event || body?.type || '').toUpperCase();

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
+import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { normalizePhone } from '@/lib/uazapi';
 
 function cleanText(value: unknown, fallback = '') {
@@ -59,6 +60,8 @@ async function findBrokerForCorretora(corretoraName: string) {
 
 export async function POST(request: Request) {
   try {
+    ensureLeadAiTimeoutScheduler();
+
     const guard = await requireApiUser(request, ['admin']);
     if ('error' in guard) return guard.error;
 

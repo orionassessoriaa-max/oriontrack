@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { normalizePhone, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming, isAiOutbound } from '@/lib/leadAiAgent';
+import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 
 function readText(body: any) {
   return pickString(
@@ -923,6 +924,8 @@ async function hasRecentDuplicateMessage(conversationId: string, direction: 'inb
 
 export async function POST(request: Request) {
   try {
+    ensureLeadAiTimeoutScheduler();
+
     const body = await request.json().catch(() => ({}));
     const event = String(
       body?.wook ||

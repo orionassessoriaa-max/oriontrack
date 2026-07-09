@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
+import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 
 export async function GET(request: Request) {
+  ensureLeadAiTimeoutScheduler();
+
   const { searchParams } = new URL(request.url);
   const leadId = searchParams.get('lead_id');
   const secret = searchParams.get('secret');

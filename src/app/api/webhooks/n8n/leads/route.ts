@@ -5,6 +5,7 @@ import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
+import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
 
 function normalizeText(value: unknown, fallback = '') {
@@ -418,6 +419,8 @@ async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
 
 export async function POST(request: Request) {
   try {
+    ensureLeadAiTimeoutScheduler();
+
     const limited = rateLimit(request, 'webhook:n8n:leads', { limit: 180, windowMs: 60_000 });
     if (limited) return limited;
 
