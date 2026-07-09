@@ -482,11 +482,18 @@ body.theme-claro {
   -webkit-text-fill-color: #075cff !important;
 }
 
-.theme-claro :is(.orion-topbar, .orion-more-menu, .orion-mobile-drawer) :is(.bg-blue-600, .bg-blue-600\/12, .bg-blue-600\/15),
-.theme-claro :is(.orion-topbar, .orion-more-menu, .orion-mobile-drawer) :is(.bg-blue-600, .bg-blue-600\/12, .bg-blue-600\/15) :is(span, svg) {
+.theme-claro :is(.orion-topbar, .orion-more-menu, .orion-mobile-drawer) :is(.bg-blue-600) {
   background: #075cff !important;
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
+}
+
+.theme-claro :is(.orion-topbar, .orion-more-menu, .orion-mobile-drawer) :is(.bg-blue-600\/12, .bg-blue-600\/15),
+.theme-claro :is(.orion-topbar, .orion-more-menu, .orion-mobile-drawer) :is(.bg-blue-600\/12, .bg-blue-600\/15) :is(span, svg) {
+  background: #edf3ff !important;
+  color: #075cff !important;
+  -webkit-text-fill-color: #075cff !important;
+  border-color: #dbe7ff !important;
 }
 
 .theme-claro .orion-topbar img {
@@ -615,7 +622,72 @@ body.theme-claro {
 }
 
 .theme-claro .orion-inbox-shell {
+  gap: 20px !important;
+}
+
+.theme-claro .orion-inbox-shell {
   color: #0f172a !important;
+}
+
+.theme-claro .orion-inbox-connection {
+  min-height: 126px;
+  border-radius: 18px !important;
+  padding: 28px !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-claro .orion-inbox-connection-connected {
+  background:
+    radial-gradient(circle at 35% 0%, rgba(22, 163, 74, 0.08), transparent 46%),
+    #f4fffa !important;
+  border-color: #b8e6d0 !important;
+}
+
+.theme-claro .orion-inbox-connection-disconnected {
+  background: #fff9ed !important;
+  border-color: #fde2aa !important;
+}
+
+.theme-claro .orion-inbox-whatsapp-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #24d366, #089949);
+  color: #ffffff !important;
+  box-shadow: 0 12px 26px rgba(8, 153, 73, 0.22);
+}
+
+.theme-claro .orion-inbox-whatsapp-icon > .h-2 {
+  display: none !important;
+}
+
+.theme-claro .orion-inbox-whatsapp-mark {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.theme-claro .orion-inbox-connection p:first-child {
+  font-size: 18px !important;
+  letter-spacing: 0 !important;
+  color: #069447 !important;
+  -webkit-text-fill-color: #069447 !important;
+}
+
+.theme-claro .orion-inbox-connection p:last-child {
+  font-size: 15px !important;
+  color: #5d6474 !important;
+  -webkit-text-fill-color: #5d6474 !important;
+}
+
+.theme-claro .orion-inbox-connection button {
+  min-height: 56px !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  border: 1px solid #ff9aac !important;
+  color: #ff1744 !important;
+  -webkit-text-fill-color: #ff1744 !important;
+  padding-inline: 28px !important;
+  box-shadow: none !important;
 }
 
 .theme-claro .orion-inbox-list,
@@ -629,8 +701,125 @@ body.theme-claro {
   border-color: #d7e1ee !important;
 }
 
+.theme-claro .orion-inbox-list {
+  border-right: 1px solid #dfe7f2 !important;
+}
+
+.theme-claro .orion-inbox-chat {
+  border-right: 1px solid #dfe7f2 !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child {
+  padding: 24px !important;
+  border-bottom: 1px solid #e5ebf3 !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child {
+  height: 52px;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child button {
+  border-radius: 14px !important;
+  color: #667085 !important;
+  -webkit-text-fill-color: #667085 !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child button.bg-cyan-600 {
+  background: #075cff !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(7, 92, 255, 0.18) !important;
+}
+
+.theme-claro .orion-inbox-list select,
+.theme-claro .orion-inbox-list input {
+  min-height: 58px !important;
+  border-radius: 14px !important;
+  font-size: 15px !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04) !important;
+}
+
+.theme-claro .orion-inbox-list .flex-1.overflow-y-auto > button {
+  min-height: 108px;
+  padding: 22px 24px !important;
+  border-bottom: 1px solid #e8eef6 !important;
+}
+
+.theme-claro .orion-inbox-list .flex-1.overflow-y-auto > button[aria-current="true"] {
+  background: #eef5ff !important;
+  border-left: 4px solid #075cff !important;
+}
+
+.theme-claro .orion-inbox-list .h-10.w-10 {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 14px !important;
+  background: #e9efff !important;
+  color: #075cff !important;
+  -webkit-text-fill-color: #075cff !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-list .flex-1.overflow-y-auto > button span.text-xs {
+  font-size: 15px !important;
+  color: #121a2f !important;
+  -webkit-text-fill-color: #121a2f !important;
+}
+
 .theme-claro .orion-inbox-messages {
   background: #f6f8fb !important;
+  padding: 38px 32px !important;
+}
+
+.theme-claro .orion-inbox-chat-header {
+  min-height: 170px;
+  padding: 28px 28px 24px !important;
+}
+
+.theme-claro .orion-inbox-chat-header h2 {
+  font-size: 18px !important;
+  line-height: 1.2 !important;
+  color: #121a2f !important;
+  -webkit-text-fill-color: #121a2f !important;
+}
+
+.theme-claro .orion-inbox-chat-header button {
+  min-height: 40px;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  border: 1px solid #dfe7f2 !important;
+  color: #253044 !important;
+  -webkit-text-fill-color: #253044 !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04) !important;
+}
+
+.theme-claro .orion-inbox-chat-header button.bg-cyan-600 {
+  background: #075cff !important;
+  border-color: #075cff !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(7, 92, 255, 0.18) !important;
+}
+
+.theme-claro .orion-inbox-chat-header button.text-rose-400 {
+  color: #ff1744 !important;
+  -webkit-text-fill-color: #ff1744 !important;
+}
+
+.theme-claro .orion-inbox-chat-header .rounded-lg.bg-emerald-500\/10 {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 12px !important;
+  background: #f0fff7 !important;
+  border-color: #b8e6d0 !important;
+  color: #069447 !important;
+  -webkit-text-fill-color: #069447 !important;
 }
 
 .theme-claro .orion-inbox-messages .justify-end > div {
@@ -648,6 +837,24 @@ body.theme-claro {
   background: #ffffff !important;
   color: #0f172a !important;
   border: 1px solid #d7e1ee !important;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06) !important;
+  border-radius: 18px !important;
+  max-width: min(650px, 78%) !important;
+  padding: 22px !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-end > div {
+  box-shadow: 0 12px 30px rgba(7, 92, 255, 0.16) !important;
+  border-radius: 18px !important;
+  max-width: min(650px, 78%) !important;
+  padding: 18px !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-start > div p {
+  font-size: 15px !important;
+  line-height: 1.65 !important;
+  color: #1f2937 !important;
+  -webkit-text-fill-color: #1f2937 !important;
 }
 
 .theme-claro .orion-inbox-list button[aria-current="true"],
@@ -668,6 +875,81 @@ body.theme-claro {
   color: #0f172a !important;
   -webkit-text-fill-color: #0f172a !important;
   border-color: #d7e1ee !important;
+}
+
+.theme-claro .orion-inbox-composer {
+  padding: 24px !important;
+  background: #ffffff !important;
+  box-shadow: 0 -12px 28px rgba(15, 23, 42, 0.04) !important;
+}
+
+.theme-claro .orion-inbox-composer > .relative {
+  min-height: 78px;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.theme-claro .orion-inbox-composer textarea {
+  min-height: 58px !important;
+  border-radius: 18px !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-claro .orion-inbox-composer button,
+.theme-claro .orion-inbox-composer label {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 14px !important;
+}
+
+.theme-claro .orion-inbox-details {
+  padding: 28px !important;
+}
+
+.theme-claro .orion-inbox-details label {
+  color: #697386 !important;
+  -webkit-text-fill-color: #697386 !important;
+  font-size: 11px !important;
+}
+
+.theme-claro .orion-inbox-details > div {
+  border-color: #e5ebf3 !important;
+}
+
+.theme-claro .orion-inbox-details select {
+  min-height: 64px !important;
+  border-radius: 14px !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-claro .orion-lead-info-card {
+  min-height: 132px;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+  border: 1px solid #e1e8f0 !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+  padding: 16px !important;
+}
+
+.theme-claro .orion-lead-info-card span:first-child {
+  margin-bottom: 12px !important;
+  color: #697386 !important;
+  -webkit-text-fill-color: #697386 !important;
+}
+
+.theme-claro .orion-lead-info-card input,
+.theme-claro .orion-lead-info-card select,
+.theme-claro .orion-lead-info-card textarea {
+  min-height: 52px !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  border-color: #e1e8f0 !important;
+  color: #121a2f !important;
+  -webkit-text-fill-color: #121a2f !important;
+  font-size: 14px !important;
+  box-shadow: none !important;
 }
 
 .theme-claro .orion-kanban-column {
@@ -2335,6 +2617,438 @@ body.theme-claro {
   background: #00c99a !important;
   color: #ffffff !important;
   box-shadow: 0 10px 20px rgba(0, 201, 154, 0.18) !important;
+}
+
+/* =========================================================================
+   INBOX LIGHT THEME FINAL PASS: MATCH THE CLEAN WHATSAPP REFERENCE
+   ========================================================================= */
+
+.theme-claro .orion-inbox-shell {
+  height: calc(100vh - 104px) !important;
+  gap: 20px !important;
+  padding: 18px 28px 20px !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+.theme-claro .orion-inbox-connection {
+  min-height: 110px !important;
+  border-radius: 16px !important;
+  padding: 26px 28px !important;
+  border: 1px solid #a7f3d0 !important;
+  background: linear-gradient(90deg, #ecfdf5 0%, #f7fffb 100%) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-claro .orion-inbox-connection-connected {
+  border-color: #a7f3d0 !important;
+  background: linear-gradient(90deg, #ecfdf5 0%, #f7fffb 100%) !important;
+}
+
+.theme-claro .orion-inbox-connection-disconnected {
+  border-color: #fed7aa !important;
+  background: linear-gradient(90deg, #fff7ed 0%, #ffffff 100%) !important;
+}
+
+.theme-claro .orion-inbox-whatsapp-icon {
+  width: 54px !important;
+  height: 54px !important;
+  border-radius: 13px !important;
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 14px 28px rgba(22, 163, 74, 0.26) !important;
+}
+
+.theme-claro .orion-inbox-whatsapp-icon > .h-2 {
+  display: none !important;
+}
+
+.theme-claro .orion-inbox-whatsapp-mark {
+  width: 34px !important;
+  height: 34px !important;
+  color: #ffffff !important;
+}
+
+.theme-claro .orion-inbox-connection p:first-child {
+  color: #16a34a !important;
+  font-size: 18px !important;
+  line-height: 1.1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+.theme-claro .orion-inbox-connection p:last-child {
+  margin-top: 8px !important;
+  color: #667085 !important;
+  font-size: 15px !important;
+  line-height: 1.35 !important;
+  font-weight: 700 !important;
+}
+
+.theme-claro .orion-inbox-connection button {
+  min-width: 230px !important;
+  min-height: 56px !important;
+  border-radius: 11px !important;
+  border: 1px solid #fb7185 !important;
+  background: #ffffff !important;
+  color: #f43f5e !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+}
+
+.theme-claro .orion-inbox-connection button:hover {
+  background: #fff1f2 !important;
+}
+
+.theme-claro .orion-inbox-panel {
+  grid-template-columns: 392px minmax(0, 1fr) 392px !important;
+  gap: 0 !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 0 !important;
+  background: #ffffff !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07) !important;
+}
+
+.theme-claro .orion-inbox-list,
+.theme-claro .orion-inbox-chat,
+.theme-claro .orion-inbox-details {
+  border-radius: 0 !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-list {
+  border: 0 !important;
+  border-right: 1px solid #e5e7eb !important;
+}
+
+.theme-claro .orion-inbox-chat {
+  border: 0 !important;
+  border-right: 1px solid #e5e7eb !important;
+}
+
+.theme-claro .orion-inbox-details {
+  border: 0 !important;
+  padding: 26px !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child {
+  padding: 22px !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child {
+  height: 46px !important;
+  padding: 3px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 15px !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05) !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child button {
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  color: #64748b !important;
+  font-weight: 800 !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child button.bg-cyan-600,
+.theme-claro .orion-inbox-list > div:first-child > div:first-child button[class*="bg-cyan"] {
+  background: #0b8fe8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(11, 143, 232, 0.24) !important;
+}
+
+.theme-claro .orion-inbox-list select,
+.theme-claro .orion-inbox-list input {
+  min-height: 60px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-list input::placeholder,
+.theme-claro .orion-inbox-composer textarea::placeholder {
+  color: #98a2b3 !important;
+  -webkit-text-fill-color: #98a2b3 !important;
+}
+
+.theme-claro .orion-inbox-list .flex-1.overflow-y-auto {
+  background: #ffffff !important;
+}
+
+.theme-claro .orion-inbox-list .flex-1.overflow-y-auto > button {
+  min-height: 104px !important;
+  margin: 0 !important;
+  width: 100% !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid #eef2f6 !important;
+  background: #ffffff !important;
+  color: #101828 !important;
+  padding: 18px 22px !important;
+}
+
+.theme-claro .orion-inbox-list .flex-1.overflow-y-auto > button[aria-current="true"] {
+  border-left: 4px solid #1677ff !important;
+  background: #eef6ff !important;
+}
+
+.theme-claro .orion-inbox-list .flex-1.overflow-y-auto > button:hover {
+  background: #f5f9ff !important;
+}
+
+.theme-claro .orion-inbox-list .h-10.w-10 {
+  width: 52px !important;
+  height: 52px !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  background: linear-gradient(180deg, #eef4ff 0%, #dfe8ff 100%) !important;
+  color: #2563eb !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-list p,
+.theme-claro .orion-inbox-list span {
+  color: #101828 !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.theme-claro .orion-inbox-list span.text-xs,
+.theme-claro .orion-inbox-list p.text-2xs,
+.theme-claro .orion-inbox-list span.text-\[9px\] {
+  color: #667085 !important;
+}
+
+.theme-claro .orion-inbox-chat-header {
+  min-height: 148px !important;
+  padding: 26px 28px !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.theme-claro .orion-inbox-chat-header h2 {
+  color: #101828 !important;
+  font-size: 20px !important;
+  line-height: 1.15 !important;
+  font-weight: 900 !important;
+}
+
+.theme-claro .orion-inbox-chat-header .rounded-lg.bg-emerald-500\/10 {
+  border: 1px solid #a7f3d0 !important;
+  border-radius: 10px !important;
+  background: #ecfdf5 !important;
+  color: #059669 !important;
+  padding: 9px 14px !important;
+  font-size: 11px !important;
+}
+
+.theme-claro .orion-inbox-chat-header .text-slate-500,
+.theme-claro .orion-inbox-chat-header span {
+  color: #667085 !important;
+}
+
+.theme-claro .orion-inbox-chat-header button {
+  min-height: 38px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 11px !important;
+  background: #ffffff !important;
+  color: #344054 !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04) !important;
+}
+
+.theme-claro .orion-inbox-chat-header button.bg-cyan-600,
+.theme-claro .orion-inbox-chat-header button[class*="bg-cyan"] {
+  border-color: #0b63f6 !important;
+  background: #0b63f6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(11, 99, 246, 0.25) !important;
+}
+
+.theme-claro .orion-inbox-chat-header button.text-rose-400,
+.theme-claro .orion-inbox-chat-header button[class*="rose"] {
+  border-color: #fecdd3 !important;
+  background: #ffffff !important;
+  color: #f43f5e !important;
+}
+
+.theme-claro .orion-inbox-chat-header .border-l {
+  border-left: 0 !important;
+}
+
+.theme-claro .orion-inbox-chat-header .border-l button {
+  min-width: 32px !important;
+  min-height: 32px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #667085 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-messages {
+  background: #ffffff !important;
+  padding: 28px !important;
+  color: #101828 !important;
+}
+
+.theme-claro .orion-inbox-messages::before,
+.theme-claro .orion-inbox-messages::after {
+  display: none !important;
+  content: none !important;
+}
+
+.theme-claro .orion-inbox-messages .rounded-lg.border {
+  border-color: #e5e7eb !important;
+  background: #f2f4f7 !important;
+  color: #344054 !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-start > div {
+  border: 1px solid #e5e7eb !important;
+  border-radius: 18px !important;
+  border-top-left-radius: 18px !important;
+  background: #f8fafc !important;
+  color: #101828 !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06) !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-end > div {
+  border: 0 !important;
+  border-radius: 18px !important;
+  border-top-right-radius: 18px !important;
+  background: #0b9fbe !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(11, 159, 190, 0.22) !important;
+}
+
+.theme-claro .orion-inbox-messages p {
+  color: inherit !important;
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-start span {
+  color: #667085 !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-end span {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+.theme-claro .orion-inbox-messages .h-full h3 {
+  color: #101828 !important;
+}
+
+.theme-claro .orion-inbox-messages .h-full p {
+  color: #667085 !important;
+}
+
+.theme-claro .orion-inbox-composer {
+  padding: 20px 28px !important;
+  border-top: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+}
+
+.theme-claro .orion-inbox-composer > .relative {
+  align-items: center !important;
+  gap: 12px !important;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+}
+
+.theme-claro .orion-inbox-composer label,
+.theme-claro .orion-inbox-composer button:not([class*="bg-cyan"]) {
+  min-width: 44px !important;
+  min-height: 44px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: #667085 !important;
+}
+
+.theme-claro .orion-inbox-composer textarea {
+  height: 56px !important;
+  min-height: 56px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+  color: #101828 !important;
+  -webkit-text-fill-color: #101828 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-composer button[class*="bg-cyan"] {
+  width: 56px !important;
+  height: 56px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #0b63f6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 16px 28px rgba(11, 99, 246, 0.28) !important;
+}
+
+.theme-claro .orion-inbox-details label {
+  color: #667085 !important;
+  letter-spacing: 0.03em !important;
+}
+
+.theme-claro .orion-inbox-details > div {
+  border-bottom-color: #e5e7eb !important;
+}
+
+.theme-claro .orion-inbox-details select,
+.theme-claro .orion-inbox-details input,
+.theme-claro .orion-inbox-details textarea,
+.theme-claro .orion-lead-info-card,
+.theme-claro .orion-lead-info-card :is(input, select, textarea) {
+  border-color: #e5e7eb !important;
+  background: #ffffff !important;
+  color: #101828 !important;
+  -webkit-text-fill-color: #101828 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-lead-info-card {
+  min-height: 114px !important;
+  border-radius: 14px !important;
+  padding: 14px !important;
+}
+
+.theme-claro .orion-lead-info-card span,
+.theme-claro .orion-lead-info-card p {
+  color: #101828 !important;
+  -webkit-text-fill-color: #101828 !important;
+}
+
+.theme-claro .orion-inbox-details select {
+  min-height: 62px !important;
+  border-radius: 14px !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+}
+
+@media (max-width: 1280px) {
+  .theme-claro .orion-inbox-panel {
+    grid-template-columns: 310px minmax(0, 1fr) 320px !important;
+  }
+
+  .theme-claro .orion-inbox-shell {
+    padding-inline: 16px !important;
+  }
 }
 
 

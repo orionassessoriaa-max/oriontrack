@@ -700,31 +700,6 @@ async function transcribeUazapiAudio(body: any) {
   return '';
 }
 
-async function stopLeadAiForHumanOutbound(leadId: string, profileName?: string | null) {
-  const now = new Date().toISOString();
-  const actor = String(profileName || 'Atendente').trim();
-
-  const { data: session } = await supabaseAdmin
-    .from('lead_ai_sessions')
-    .select('id, summary')
-    .eq('lead_id', leadId)
-    .eq('status', 'active')
-    .maybeSingle();
-
-  if (!session) return;
-
-  const suffix = `\n\nIA encerrada: ${actor} assumiu o atendimento em ${now}.`;
-
-  await supabaseAdmin
-    .from('lead_ai_sessions')
-    .update({
-      status: 'handoff',
-      summary: `${session.summary || ''}${suffix}`.trim(),
-      updated_at: now,
-    })
-    .eq('id', session.id);
-}
-
 async function resolveProfileCorretorScope(profile: any) {
   const ids = new Set<string>();
   if (profile?.corretor_id) ids.add(profile.corretor_id);
@@ -1209,10 +1184,6 @@ export async function POST(request: Request) {
         audio_transcription_failed: hasAudio ? audioTranscriptionFailed : undefined,
       },
     }]);
-
-    if (fromMe && lead?.id) {
-      await stopLeadAiForHumanOutbound(lead.id, profile.nome);
-    }
 
     if (!fromMe && lead?.id) {
       try {

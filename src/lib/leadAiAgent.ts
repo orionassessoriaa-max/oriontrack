@@ -60,6 +60,10 @@ function formatAiBrokerageDisplayName(name?: string | null) {
 }
 
 const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
+- Escreva sempre em português do Brasil correto, com acentos, vírgulas e pontuação natural.
+- Toda frase enviada ao cliente deve terminar com ponto, interrogação ou exclamação.
+- Nunca envie mensagens todas em minúsculas, sem acento ou sem pontuação.
+- Se o prompt base tiver texto sem acento ou com encoding quebrado, corrija antes de responder ao cliente.
 - Nao diga que voce e IA, bot, automacao, assistente virtual ou sistema.
 - Nao use prefixo de atendente, assinatura ou formato "Aline:" nas mensagens.
 - Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
@@ -69,7 +73,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
 - Depois que o cliente confirmar a cotacao/idades, a segunda pergunta obrigatoria deve ser a confirmacao do CNPJ/MEI/CPF do formulario. So depois disso siga para hospital/regiao, motivo da busca, cobertura nacional ou regional, investimento se nao veio no formulario, e-mail e agendamento de ligacao de 15 minutos.
 - Se o formulario ja trouxe as principais informacoes comerciais, avance para hospital/regiao ou diretamente para e-mail/agendamento. Nao aja como se o formulario nao existisse.
 - Se o cliente pedir esclarecimento sobre algo que voce acabou de perguntar (ex: "como assim?", "nao entendi", "que isso?", "pq?", "explica", "o que e isso"), reexplique de forma simples, curta e natural como uma humana faria — NAO faca handoff nesses casos.
-- So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar a palavra "alvorada".
+- So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar exatamente a palavra "alvorada" sozinha. Nao faca handoff se "Alvorada" for parte de nome de hospital, clinica, bairro ou regiao.
 - Em handoff por duvida ou confusao real, nunca mande mensagem para o cliente. O Orion Track vai chamar o humano internamente.
 - Quando for pedir o agendamento, nunca use "funciona melhor". Pergunte: "Que dia e horario voce esta mais confortavel pra voce?"
 - Quando o cliente responder com dia e horario, responda apenas que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradeca pelo atendimento, defina handoff true e nao faca mais nenhuma pergunta.
@@ -133,7 +137,7 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 - Se o cliente disser "sim", "posso" ou algo vago: pergunte qual dia e horario especificos.
 - Ao pedir dia e horario, nao escreva "funciona melhor". Escreva de forma humana: "Que dia e horario voce esta mais confortavel pra voce?"
 - Ao cliente responder dia e horario: preencha *Agendado* no summary, defina "handoff": true e responda somente que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradecendo pelo atendimento. Depois disso nao pergunte mais nada.
-- Handoff silencioso ("handoff": true, "reply": "") se: cliente pedir preco exato, detalhes tecnicos de operadora, reclamar, pedir para falar com humano, ou enviar "alvorada".
+- Handoff silencioso ("handoff": true, "reply": "") se: cliente pedir preco exato, detalhes tecnicos de operadora, reclamar, pedir para falar com humano, ou enviar exatamente "alvorada" como mensagem isolada. Nao use essa regra quando Alvorada for hospital, clinica, bairro ou regiao.
 - Se o cliente pedir esclarecimento ("como assim?", "nao entendi", "pq?"): reexplique de forma simples e natural — NAO faca handoff.
 
 Nao envie ao cliente nomes de ferramentas internas. O resumo (summary) fica apenas no banco interno.
@@ -231,7 +235,8 @@ function removeLeadVocative(text: string, lead: LeadRow) {
 
 function customerReplyForFollowUp(text: string, lead: LeadRow, hasPreviousAiMessage: boolean) {
   const firstNameOnly = customerFacingNameOnly(text, lead);
-  return hasPreviousAiMessage ? removeLeadVocative(firstNameOnly, lead) : firstNameOnly;
+  const withoutRepeatedName = hasPreviousAiMessage ? removeLeadVocative(firstNameOnly, lead) : firstNameOnly;
+  return polishAiReply(withoutRepeatedName);
 }
 
 function hasKnownValue(value?: unknown) {
@@ -284,16 +289,75 @@ function stripPersonaPrefix(text: string) {
     .trim();
 }
 
+function fixPortugueseMojibake(text: string) {
+  const replacements: Array<[RegExp, string]> = [
+    [/VocÃª/g, 'Você'], [/vocÃª/g, 'você'],
+    [/cotaÃ§Ã£o/g, 'cotação'], [/CotaÃ§Ã£o/g, 'Cotação'],
+    [/simulaÃ§Ã£o/g, 'simulação'], [/SimulaÃ§Ã£o/g, 'Simulação'],
+    [/informaÃ§Ãµes/g, 'informações'], [/opÃ§Ãµes/g, 'opções'], [/opÃ§Ã£o/g, 'opção'],
+    [/saÃºde/g, 'saúde'], [/regiÃ£o/g, 'região'], [/RegiÃ£o/g, 'Região'],
+    [/preferÃªncia/g, 'preferência'], [/prevenÃ§Ã£o/g, 'prevenção'], [/urgÃªncia/g, 'urgência'],
+    [/especÃ­fico/g, 'específico'], [/Ã¡udio/g, 'áudio'], [/Ãudio/g, 'Áudio'],
+    [/ligaÃ§Ã£o/g, 'ligação'], [/nÃºmero/g, 'número'], [/horÃ¡rio/g, 'horário'],
+    [/amanhÃ£/g, 'amanhã'], [/terÃ§a/g, 'terça'], [/sÃ¡bado/g, 'sábado'],
+    [/nÃ£o/g, 'não'], [/NÃ£o/g, 'Não'], [/estÃ¡/g, 'está'], [/estÃ£o/g, 'estão'],
+    [/tambÃ©m/g, 'também'], [/Ã§/g, 'ç'], [/Ã£/g, 'ã'], [/Ã¡/g, 'á'],
+    [/Ã©/g, 'é'], [/Ã­/g, 'í'], [/Ã³/g, 'ó'], [/Ãº/g, 'ú'],
+    [/â€”/g, '—'], [/â€“/g, '–'], [/Âº/g, 'º'], [/Âª/g, 'ª'],
+  ];
+
+  return replacements.reduce((current, [pattern, replacement]) => current.replace(pattern, replacement), String(text || ''));
+}
+
+function polishAiReply(text: string) {
+  let polished = fixPortugueseMojibake(text)
+    .replace(/\bvoce\b/gi, 'você')
+    .replace(/\bcotacao\b/gi, 'cotação')
+    .replace(/\bsimulacao\b/gi, 'simulação')
+    .replace(/\binformacoes\b/gi, 'informações')
+    .replace(/\bopcoes\b/gi, 'opções')
+    .replace(/\bopcao\b/gi, 'opção')
+    .replace(/\bsaude\b/gi, 'saúde')
+    .replace(/\bligacao\b/gi, 'ligação')
+    .replace(/\bnumero\b/gi, 'número')
+    .replace(/\bhorario\b/gi, 'horário')
+    .replace(/\bregiao\b/gi, 'região')
+    .replace(/\bpreferencia\b/gi, 'preferência')
+    .replace(/\bclinica\b/gi, 'clínica')
+    .replace(/\bprevencao\b/gi, 'prevenção')
+    .replace(/\burgencia\b/gi, 'urgência')
+    .replace(/\bespecifico\b/gi, 'específico')
+    .replace(/\baudio\b/gi, 'áudio')
+    .replace(/\bamanha\b/gi, 'amanhã')
+    .replace(/\bterca\b/gi, 'terça')
+    .replace(/\bsabado\b/gi, 'sábado')
+    .replace(/\bnao\b/gi, 'não')
+    .replace(/\btambem\b/gi, 'também')
+    .replace(/\besta\b/gi, 'está')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/([,.!?;:])(?=\S)/g, '$1 ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  if (!polished) return '';
+
+  polished = polished.replace(/^([a-záàâãéêíóôõúç])/, (match) => match.toUpperCase());
+  if (!/[.!?)]$/.test(polished)) polished += '.';
+
+  return polished;
+}
+
 function parseAiJson(raw: string) {
   const clean = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
   try {
     const parsed = JSON.parse(clean);
     return {
       ...parsed,
-      reply: stripPersonaPrefix(String(parsed?.reply || '')),
+      reply: polishAiReply(stripPersonaPrefix(String(parsed?.reply || ''))),
     };
   } catch {
-    return { reply: stripPersonaPrefix(clean), handoff: false, summary: '' };
+    return { reply: polishAiReply(stripPersonaPrefix(clean)), handoff: false, summary: '' };
   }
 }
 
@@ -432,7 +496,7 @@ function looksLikeScheduleAnswer(text?: string | null) {
 }
 
 function handoffScheduleReply(lead: LeadRow) {
-  return `Perfeito, ${leadFirstName(lead)}. Um especialista vai entrar em contato por outro numero para confirmar esse agendamento. Obrigada pelo atendimento.`;
+  return polishAiReply(`Perfeito, ${leadFirstName(lead)}. Um especialista vai entrar em contato por outro número para confirmar esse agendamento. Obrigada pelo atendimento.`);
 }
 
 function appendSummaryLine(summary: string | null | undefined, line: string) {
@@ -1025,7 +1089,7 @@ async function askAline(
     },
     body: JSON.stringify({
       model: process.env.ORION_LEAD_AI_MODEL || 'gpt-4o-mini',
-      temperature: 0.65,
+      temperature: 0.35,
       max_tokens: 650,
       messages: [
         { role: 'system', content: system },
@@ -1103,12 +1167,12 @@ export async function startLeadAiIfEligible(leadId: string) {
     ? `Você clicou em um anúncio nosso e preencheu o formulário de interesse da ${opName}.`
     : 'Você clicou em um anúncio nosso e preencheu o formulário de interesse em nossos planos de saúde.';
 
-  const intro = [
+  const intro = fixPortugueseMojibake([
     `Olá, ${leadFirstName(lead)}! Tudo bem?`,
     `Me chamo ${aiConfig.persona}, da ${formattedBrokerageName}.`,
     interestText,
     initialLeadQuestion(lead),
-  ].join('\n\n');
+  ].join('\n\n'));
 
   const { data: existing } = await supabaseAdmin
     .from('lead_ai_sessions')

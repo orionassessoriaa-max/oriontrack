@@ -43,6 +43,17 @@ import {
   Phone
 } from 'lucide-react';
 
+function WhatsAppGlyph({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M16.02 5.33A10.55 10.55 0 0 0 7.1 21.5L5.33 26.67l5.36-1.7A10.55 10.55 0 1 0 16.02 5.33Zm0 2.1a8.45 8.45 0 0 1 7.1 13.04 8.44 8.44 0 0 1-10.82 2.5l-.42-.23-3.16 1 1.04-3.03-.27-.45A8.45 8.45 0 0 1 16.02 7.43Zm-3.58 4.2c-.2 0-.52.07-.8.38-.28.3-1.05 1.03-1.05 2.5 0 1.48 1.08 2.9 1.23 3.1.15.2 2.1 3.35 5.2 4.56 2.58 1.02 3.1.82 3.66.77.56-.05 1.82-.74 2.08-1.46.26-.72.26-1.34.18-1.46-.08-.13-.28-.2-.59-.36-.3-.15-1.82-.9-2.1-1-.28-.1-.49-.15-.7.15-.2.31-.8 1-.98 1.2-.18.21-.36.23-.67.08-.31-.16-1.3-.48-2.47-1.52-.91-.82-1.53-1.82-1.71-2.13-.18-.31-.02-.48.14-.63.14-.14.3-.36.46-.54.15-.18.2-.31.31-.51.1-.2.05-.38-.03-.54-.08-.15-.69-1.67-.95-2.28-.25-.6-.5-.52-.7-.53h-.6Z"
+      />
+    </svg>
+  );
+}
+
 type Conversation = {
   id: string;
   lead_id: string | null;
@@ -1859,13 +1870,13 @@ export default function BrokerInboxPage() {
         
         {/* Connection status header bar */}
         {isWhatsAppConnected ? (
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 animate-in fade-in-50">
+          <div className="orion-inbox-connection orion-inbox-connection-connected bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 animate-in fade-in-50">
             <div className="flex items-center gap-3">
-              <div className="relative flex items-center justify-center shrink-0">
+              <div className="orion-inbox-whatsapp-icon relative flex items-center justify-center shrink-0">
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping absolute" />
                 <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                <WhatsAppGlyph className="orion-inbox-whatsapp-mark" />
               </div>
-              <QrCode className="text-emerald-400 shrink-0" size={20} />
               <div>
                 <p className="text-xs font-black text-emerald-200 uppercase tracking-wider">WhatsApp Conectado</p>
                 <p className="text-2xs text-slate-400 font-bold mt-0.5">
@@ -1882,7 +1893,7 @@ export default function BrokerInboxPage() {
             </button>
           </div>
         ) : (
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 animate-in fade-in-50">
+          <div className="orion-inbox-connection orion-inbox-connection-disconnected bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 animate-in fade-in-50">
             <div className="flex items-center gap-3">
               <QrCode className="text-amber-400 shrink-0" size={20} />
               <div>
@@ -1931,7 +1942,7 @@ export default function BrokerInboxPage() {
         )}
 
         {/* MAIN 3-COLUMN LAYOUT PANEL */}
-        <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
+        <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 shadow-2xl grid grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)_360px] 2xl:grid-cols-[450px_minmax(0,1fr)_420px]">
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
           <div className="orion-inbox-list border-r border-white/5 flex flex-col bg-slate-900/20 h-full overflow-hidden">
@@ -2048,7 +2059,7 @@ export default function BrokerInboxPage() {
             {selectedConversation ? (
               <>
                 {/* Header do chat */}
-                <div className="orion-inbox-chat-header p-4 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/30 shrink-0">
+                  <div className="orion-inbox-chat-header p-4 border-b border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-slate-900/30 shrink-0">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <h2 className="text-sm font-black text-white">{cleanInboxDisplayName(selectedConversation.nome_contato, selectedConversation.telefone)}</h2>
@@ -3610,7 +3621,7 @@ function EditableLeadInfoCard({
 
   if (options?.length) {
     return (
-      <label className={`block rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
+      <label className={`orion-lead-info-card block rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
         <span className="mb-1 block text-[8px] font-black uppercase tracking-wider text-slate-500">{label}</span>
         <select
           value={draft}
@@ -3629,7 +3640,7 @@ function EditableLeadInfoCard({
   }
 
   return (
-    <label className={`block rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
+    <label className={`orion-lead-info-card block rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
       <span className="mb-1 block text-[8px] font-black uppercase tracking-wider text-slate-500">{label}</span>
       {multiline ? (
         <textarea
