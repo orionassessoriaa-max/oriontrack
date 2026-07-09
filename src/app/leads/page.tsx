@@ -873,12 +873,13 @@ export default function BrokerLeadsPage() {
 
   return (
     <InternalLayout>
-      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+      <div className="orion-leads-page">
+      <div className="orion-leads-header mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Leads</h1>
           <p className="font-medium text-gray-500">Lista detalhada com filtros, status comercial, página de origem e UTMs.</p>
         </div>
-        <div className={`grid w-full grid-cols-1 gap-3 md:w-auto ${canCreateManualLead ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+        <div className={`orion-leads-actions grid w-full grid-cols-1 gap-3 md:w-auto ${canCreateManualLead ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
           {canCreateManualLead && (
             <button
               onClick={() => {
@@ -970,7 +971,7 @@ export default function BrokerLeadsPage() {
         </section>
       )}
 
-      <div className="orion-panel mb-6 p-4 sm:p-5">
+      <div className="orion-leads-filters orion-panel mb-6 p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-[260px] flex-[1_1_320px]">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -1060,7 +1061,7 @@ export default function BrokerLeadsPage() {
         </div>
       </div>
 
-      <div className="-mx-5 sm:-mx-6 lg:-mx-8">
+      <div className="orion-leads-table-shell -mx-5 sm:-mx-6 lg:-mx-8">
         <div className="scrollbar-visible overflow-x-auto overflow-y-visible px-5 sm:px-6 lg:px-8">
           {error ? (
             <div className="py-24 text-center">
@@ -1074,7 +1075,7 @@ export default function BrokerLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full min-w-[2820px] border-collapse text-left text-[13px]">
+            <table className="orion-leads-table w-full min-w-[2820px] border-collapse text-left text-[13px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100">
                   <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
@@ -1320,6 +1321,7 @@ export default function BrokerLeadsPage() {
           </button>
         </div>
       )}
+      </div>
 
       {showCrmModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md sm:p-6">
