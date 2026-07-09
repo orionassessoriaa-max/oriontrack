@@ -1169,7 +1169,7 @@ export async function POST(request: Request) {
     }
 
     const direction = fromMe ? 'outbound' : 'inbound';
-    if (!hasMedia && await hasRecentDuplicateMessage(conversation.id, direction, message)) {
+    if (!providerId && !hasMedia && await hasRecentDuplicateMessage(conversation.id, direction, message)) {
       console.log('[uazapi_webhook] Ignorando mensagem duplicada recente.', {
         conversationId: conversation.id,
         direction,
@@ -1179,7 +1179,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, duplicated: true, reason: 'recent_duplicate' });
     }
 
-    await supabaseAdmin.from('whatsapp_mensagens').insert([{
+    const { error: insertError } = await supabaseAdmin.from('whatsapp_mensagens').insert([{
       conversa_id: conversation.id,
       direction,
       remetente: fromMe ? (profile.nome || 'Orion') : contactName,
@@ -1197,6 +1197,20 @@ export async function POST(request: Request) {
         audio_transcription_failed: hasAudio ? audioTranscriptionFailed : undefined,
       },
     }]);
+
+    if (insertError) {
+      if (insertError.code === '23505' && providerId) {
+        console.log('[uazapi_webhook] Ignorando provider_message_id duplicado.', {
+          conversationId: conversation.id,
+          providerId,
+          direction,
+          phone,
+        });
+        return NextResponse.json({ ok: true, duplicated: true, reason: 'provider_message_id' });
+      }
+
+      throw insertError;
+    }
 
     if (!fromMe && lead?.id) {
       try {

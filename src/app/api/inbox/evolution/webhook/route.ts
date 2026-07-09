@@ -363,7 +363,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, ai_outbound: true });
     }
 
-    await supabaseAdmin.from('whatsapp_mensagens').insert([{
+    const { error: insertError } = await supabaseAdmin.from('whatsapp_mensagens').insert([{
       conversa_id: conversation.id,
       direction: fromMe ? 'outbound' : 'inbound',
       remetente: fromMe ? (profile.nome || 'Orion') : contactName,
@@ -379,6 +379,19 @@ export async function POST(request: Request) {
         ai_customer_message: aiCustomerMessage || undefined,
       },
     }]);
+
+    if (insertError) {
+      if (insertError.code === '23505' && providerId) {
+        console.log('[evolution_webhook] Ignorando provider_message_id duplicado.', {
+          conversationId: conversation.id,
+          providerId,
+          phone,
+        });
+        return NextResponse.json({ ok: true, duplicated: true, reason: 'provider_message_id' });
+      }
+
+      throw insertError;
+    }
 
     if (!fromMe && lead?.id) {
       try {
