@@ -279,6 +279,17 @@ export async function POST(request: Request) {
       else if (hasDocument) message = '📎 Arquivo';
     }
 
+    if (hasMedia) {
+      const mediaMessage = data?.message?.documentMessage || data?.message?.imageMessage || data?.message?.videoMessage || audioMessage;
+      const mediaFileName = String(mediaMessage?.fileName || mediaMessage?.filename || body?.fileName || body?.filename || '').trim();
+      const genericMediaText = !message || /Mensagem de voz|Imagem|Video|Vídeo|Arquivo/i.test(message);
+      if (mediaFileName && genericMediaText) {
+        if (hasImage) message = `Imagem (${mediaFileName})`;
+        else if (hasVideo) message = `Video (${mediaFileName})`;
+        else if (hasDocument) message = `Arquivo (${mediaFileName})`;
+      }
+    }
+
     const remoteJid = readRemoteJid(data);
     let phone = normalizePhone(remoteJid.split('@')[0]);
 

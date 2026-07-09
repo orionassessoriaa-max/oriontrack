@@ -1064,6 +1064,16 @@ export async function POST(request: Request) {
     }
 
     // Tratar quando a ligação de voz é efetuada pelo próprio corretor de fora do CRM.
+    if (hasMedia) {
+      const mediaFileName = String(mediaMetadata.media_file_name || '').trim();
+      const genericMediaText = !message || /Mensagem de voz|Imagem|Video|Vídeo|Arquivo/i.test(message);
+      if (mediaFileName && genericMediaText) {
+        if (hasImage) message = `Imagem (${mediaFileName})`;
+        else if (hasVideo) message = `Video (${mediaFileName})`;
+        else if (hasDocument) message = `Arquivo (${mediaFileName})`;
+      }
+    }
+
     let isOutboundCall = false;
     const brokerPhone = profile?.telefone ? normalizePhone(profile.telefone) : '';
     if (callEvent && brokerPhone && phone === brokerPhone) {
@@ -1156,7 +1166,7 @@ export async function POST(request: Request) {
     }
 
     const direction = fromMe ? 'outbound' : 'inbound';
-    if (await hasRecentDuplicateMessage(conversation.id, direction, message)) {
+    if (!hasMedia && await hasRecentDuplicateMessage(conversation.id, direction, message)) {
       console.log('[uazapi_webhook] Ignorando mensagem duplicada recente.', {
         conversationId: conversation.id,
         direction,
