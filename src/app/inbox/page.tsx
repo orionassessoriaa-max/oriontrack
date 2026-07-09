@@ -337,7 +337,17 @@ export default function BrokerInboxPage() {
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
-    return data.session?.access_token || '';
+    const session = data.session;
+    const expiresSoon = session?.expires_at
+      ? session.expires_at * 1000 <= Date.now() + 60_000
+      : false;
+
+    if (session?.access_token && !expiresSoon) {
+      return session.access_token;
+    }
+
+    const refreshed = await supabase.auth.refreshSession();
+    return refreshed.data.session?.access_token || session?.access_token || '';
   }
 
   // Fetch connection status
