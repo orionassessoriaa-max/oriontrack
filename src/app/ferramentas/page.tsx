@@ -17,10 +17,16 @@ import {
   Info,
   Calendar,
   Layers,
-  ChevronDown,
   CheckCircle2,
   HelpCircle,
   TrendingUp,
+  ArrowUpRight,
+  BarChart3,
+  Clock3,
+  MessageCircle,
+  ShieldCheck,
+  Target,
+  Zap,
 } from 'lucide-react';
 
 // Premium metadata and copywriting for the 6 tools that have visual assets
@@ -204,7 +210,59 @@ type Tool = FerramentaCatalogItem & {
   premium?: PremiumMetadata;
 };
 
+type RawTool = FerramentaCatalogItem & {
+  status: FerramentaStatus;
+  observacoes: string | null;
+};
+
+type ToolsResponse = {
+  tools?: RawTool[];
+  error?: string;
+};
+
 const getToolTitle = (tool: Tool | null) => tool?.premium?.displayTitle || tool?.titulo || '';
+
+const IMPACT_METRICS = [
+  {
+    label: 'Resposta mais rapida',
+    value: '24/7',
+    description: 'O lead recebe retorno mesmo fora do horario comercial.',
+    icon: Clock3,
+  },
+  {
+    label: 'Operacao mais previsivel',
+    value: '+ ritmo',
+    description: 'Cada ferramenta remove gargalos do atendimento ao fechamento.',
+    icon: BarChart3,
+  },
+  {
+    label: 'Equipe mais focada',
+    value: '- retrabalho',
+    description: 'O corretor fica livre para vender, acompanhar e fechar.',
+    icon: Target,
+  },
+];
+
+const MOTIVATION_CARDS = [
+  {
+    title: 'Atendimento que nao esfria',
+    description: 'Bot e IA seguram o primeiro contato, qualificam e entregam contexto para o corretor entrar com mais precisao.',
+    icon: MessageCircle,
+    glow: 'from-emerald-500/20 to-cyan-500/10',
+  },
+  {
+    title: 'Marca que passa confianca',
+    description: 'Pagina comercial, social media e conteudos reais fazem a corretora parecer maior antes mesmo da primeira conversa.',
+    icon: ShieldCheck,
+    glow: 'from-blue-500/20 to-violet-500/10',
+  },
+  {
+    title: 'Time com mais argumento',
+    description: 'Treinamento e materiais comerciais reduzem improviso e deixam a abordagem mais clara, rapida e consistente.',
+    icon: Zap,
+    glow: 'from-amber-500/20 to-red-500/10',
+  },
+];
 
 export default function FerramentasPage() {
   const [tools, setTools] = useState<Tool[]>([]);
@@ -242,7 +300,7 @@ export default function FerramentasPage() {
       const response = await fetch('/api/ferramentas', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await response.json();
+      const data = (await response.json()) as ToolsResponse;
       if (!response.ok) {
         setError(data.error || 'Erro ao carregar ferramentas.');
         return;
@@ -250,8 +308,8 @@ export default function FerramentasPage() {
 
       // Filter and map tools to only include the ones with premium metadata
       const loadedTools: Tool[] = (data.tools || [])
-        .filter((tool: any) => PREMIUM_METADATA[tool.key])
-        .map((tool: any) => ({
+        .filter((tool) => PREMIUM_METADATA[tool.key])
+        .map((tool) => ({
           ...tool,
           premium: PREMIUM_METADATA[tool.key],
         }));
@@ -261,15 +319,18 @@ export default function FerramentasPage() {
       // Select first active tool as default hero tool
       const defaultHero = loadedTools.find((t) => t.status === 'ativo')?.key || loadedTools[0]?.key || null;
       setHeroToolKey(defaultHero);
-    } catch (err: any) {
-      setError(err?.message || 'Erro de rede ao carregar ferramentas.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro de rede ao carregar ferramentas.');
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadTools();
+    const loadTimeout = window.setTimeout(() => {
+      void loadTools();
+    }, 0);
+    return () => window.clearTimeout(loadTimeout);
   }, []);
 
   // Hero auto-rotation loop
@@ -371,12 +432,13 @@ export default function FerramentasPage() {
         }),
       });
 
-      const payload = await response.json();
+      const payload = (await response.json()) as { error?: string };
       if (!response.ok) {
         throw new Error(payload.error || 'Não foi possível enviar a solicitação.');
       }
 
       setConsultationSuccess(`Solicitação enviada. Seu gerente comercial analisará a ativação da ferramenta "${getToolTitle(tool)}" e entrará em contato.`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setConsultationError(err.message || 'Erro ao processar solicitação de suporte.');
     } finally {
@@ -401,6 +463,27 @@ export default function FerramentasPage() {
           }
           .animate-fade-in {
             animation: fadeIn 0.6s ease-out forwards;
+          }
+          @keyframes toolFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+          }
+          @keyframes toolPulseLine {
+            0% { transform: scaleX(0); opacity: 0.2; }
+            45%, 100% { transform: scaleX(1); opacity: 1; }
+          }
+          .tool-float {
+            animation: toolFloat 5s ease-in-out infinite;
+          }
+          .tool-pulse-line {
+            transform-origin: left;
+            animation: toolPulseLine 2.8s ease-out infinite;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .tool-float,
+            .tool-pulse-line {
+              animation: none !important;
+            }
           }
           
           /* Neutralize light theme overrides for the Netflix dashboard */
@@ -773,6 +856,167 @@ export default function FerramentasPage() {
                   </div>
                 </div>
               )}
+
+              <motion.section
+                initial={{ opacity: 0, y: 36 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.18 }}
+                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                className="relative overflow-hidden border-y border-white/10 bg-[radial-gradient(circle_at_20%_10%,rgba(239,68,68,0.16),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))] px-4 py-12 md:px-8 md:py-16 xl:px-12 xl:py-20"
+              >
+                <div className="absolute left-0 top-8 h-px w-1/2 bg-gradient-to-r from-red-600 via-white/30 to-transparent tool-pulse-line" />
+                <div className="mx-auto max-w-7xl">
+                  <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+                    <div className="space-y-7">
+                      <div className="space-y-4">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-red-200">
+                          <Sparkles size={14} className="text-red-400" />
+                          Ferramentas que mudam a rotina
+                        </span>
+                        <h3 className="max-w-2xl text-3xl font-black leading-[1.02] tracking-tight text-white md:text-5xl xl:text-6xl">
+                          Quando a corretora opera com apoio certo, venda deixa de depender de improviso.
+                        </h3>
+                        <p className="max-w-xl text-sm font-semibold leading-relaxed text-slate-300 md:text-base xl:text-lg">
+                          As ferramentas entram nos pontos que mais drenam energia: primeiro atendimento, prova de autoridade, organizacao comercial e velocidade de resposta. O resultado e uma operacao mais leve, mais clara e mais pronta para crescer.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {IMPACT_METRICS.map((metric, index) => {
+                          const Icon = metric.icon;
+                          return (
+                            <motion.div
+                              key={metric.label}
+                              initial={{ opacity: 0, y: 22 }}
+                              whileInView={{ opacity: 1, y: 0 }}
+                              viewport={{ once: true, amount: 0.35 }}
+                              transition={{ delay: index * 0.08, duration: 0.42 }}
+                              className="rounded-xl border border-white/10 bg-black/28 p-4 shadow-xl shadow-black/20 backdrop-blur"
+                            >
+                              <Icon size={18} className="mb-4 text-red-400" />
+                              <p className="text-2xl font-black tracking-tight text-white">{metric.value}</p>
+                              <p className="mt-1 text-xs font-black uppercase tracking-wider text-slate-400">{metric.label}</p>
+                              <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-300">{metric.description}</p>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                      {MOTIVATION_CARDS.map((card, index) => {
+                        const Icon = card.icon;
+                        return (
+                          <motion.div
+                            key={card.title}
+                            initial={{ opacity: 0, y: 28 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            whileHover={{ y: -6, scale: 1.015 }}
+                            viewport={{ once: true, amount: 0.3 }}
+                            transition={{ delay: index * 0.08, duration: 0.42 }}
+                            className={`relative min-h-[220px] overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br ${card.glow} p-5 shadow-2xl shadow-black/30`}
+                          >
+                            <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
+                            <div className="relative flex h-full flex-col justify-between gap-8">
+                              <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white">
+                                <Icon size={22} />
+                              </span>
+                              <div>
+                                <h4 className="text-lg font-black leading-tight text-white">{card.title}</h4>
+                                <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-300">{card.description}</p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </motion.section>
+
+              <motion.section
+                initial={{ opacity: 0, y: 34 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.2 }}
+                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-stretch"
+              >
+                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-[#0d0d12] p-5 shadow-2xl shadow-black/40 md:p-7">
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-400 to-red-500" />
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
+                      <MessageCircle size={24} />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-widest text-emerald-300">Feedback real</p>
+                      <h3 className="text-2xl font-black text-white md:text-3xl">A IA ajudando dentro do CRM</h3>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 overflow-hidden rounded-xl border border-white/10 bg-black/35 shadow-xl tool-float">
+                    <img
+                      src="/ferramentas/danilo-feedback.png"
+                      alt="Feedback do Danilo Iacovone sobre a IA de atendimento"
+                      className="h-auto w-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4">
+                  {[
+                    'A ferramenta aparece no momento em que o corretor precisa agir, sem depender de memoria ou planilha solta.',
+                    'O atendimento ganha continuidade: o lead conversa, a IA organiza contexto e o CRM vira uma central de decisao.',
+                    'Feedback assim mostra o ponto principal: quando a tecnologia fica simples, o time adota e a operacao anda.'
+                  ].map((quote, index) => (
+                    <motion.div
+                      key={quote}
+                      initial={{ opacity: 0, x: 28 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true, amount: 0.4 }}
+                      transition={{ delay: index * 0.08, duration: 0.42 }}
+                      className="rounded-xl border border-white/10 bg-white/[0.035] p-5 shadow-xl shadow-black/20"
+                    >
+                      <p className="text-sm font-semibold leading-relaxed text-slate-300 md:text-base">{quote}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.section>
+
+              <motion.section
+                initial={{ opacity: 0, scale: 0.98 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true, amount: 0.25 }}
+                transition={{ duration: 0.5 }}
+                className="relative overflow-hidden rounded-xl border border-red-500/25 bg-[linear-gradient(135deg,rgba(185,28,28,0.34),rgba(15,23,42,0.28)_45%,rgba(6,182,212,0.12))] p-6 shadow-2xl shadow-red-950/25 md:p-9 xl:p-12"
+              >
+                <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-red-500/20 blur-3xl" />
+                <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="max-w-3xl">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-red-200">Proximo nivel da operacao</p>
+                    <h3 className="mt-3 text-3xl font-black leading-tight text-white md:text-5xl">
+                      Gostou de alguma ferramenta e quer subir o nivel da sua operacao?
+                    </h3>
+                    <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-200 md:text-base">
+                      Clique no botao e ative ainda hoje. A equipe recebe sua solicitacao e te orienta no melhor caminho para colocar a ferramenta em producao.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const toolToActivate = availableTools[0] || selectedHeroTool || tools[0];
+                      if (toolToActivate) {
+                        selectHeroTool(toolToActivate.key);
+                        setDetailToolKey(toolToActivate.key);
+                      }
+                    }}
+                    className="inline-flex min-h-14 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-6 py-4 text-sm font-black text-black shadow-2xl shadow-black/25 transition hover:bg-slate-100 md:text-base"
+                  >
+                    Ativar ainda hoje
+                    <ArrowUpRight size={19} />
+                  </button>
+                </div>
+              </motion.section>
 
             </div>
 
