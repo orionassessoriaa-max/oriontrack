@@ -314,6 +314,7 @@ export default function CrmPage() {
   const [tipoCampanha, setTipoCampanha] = useState<TipoCampanha | null>('ambos');
   const [search, setSearch] = useState('');
   const [pageFilter, setPageFilter] = useState('todas');
+  const [originFilter, setOriginFilter] = useState('todas');
   const [metricFilter, setMetricFilter] = useState<MetricFilter>('todos');
   const [crmScopeView, setCrmScopeView] = useState<CrmScopeView>('meus');
   const [visibleLimits, setVisibleLimits] = useState<Record<string, number>>({});
@@ -334,6 +335,7 @@ export default function CrmPage() {
     investimento: '',
     cidade: '',
     operadora: '',
+    origem: '',
     email: '',
     motivo_busca: '',
     hospital_preferencia: '',
@@ -695,6 +697,7 @@ export default function CrmPage() {
         investimento: selectedLead.investimento || '',
         cidade: selectedLead.cidade || '',
         operadora: selectedLead.operadora || '',
+        origem: selectedLead.origem || '',
         email: selectedLead.email || '',
         motivo_busca: selectedLead.motivo_busca || '',
         hospital_preferencia: selectedLead.hospital_preferencia || '',
@@ -932,8 +935,9 @@ export default function CrmPage() {
     const term = search.toLowerCase();
     const nextLeads = viewScopedLeads.filter((lead) => {
       const leadPage = lead.operadora || '';
-      const searchMatch = `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.status} ${lead.operadora || ''} ${lead.observacoes || ''}`.toLowerCase().includes(term);
+      const searchMatch = `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.status} ${lead.operadora || ''} ${lead.origem || ''} ${lead.observacoes || ''}`.toLowerCase().includes(term);
       const pageMatch = pageFilter === 'todas' || (pageFilter === '__sem_pagina__' ? !leadPage : leadPage === pageFilter);
+      const originMatch = originFilter === 'todas' || (originFilter === '__sem_origem__' ? !lead.origem : lead.origem === originFilter);
       const metricMatch =
         metricFilter === 'todos' ||
         (metricFilter === 'sem_resposta' && staleLeadIds.has(lead.id)) ||
@@ -941,11 +945,11 @@ export default function CrmPage() {
         (metricFilter === 'hoje' && todayTaskLeadIds.has(lead.id)) ||
         (metricFilter === 'fit_icp' && fitLeadIds.has(lead.id));
 
-      return searchMatch && pageMatch && metricMatch;
+      return searchMatch && pageMatch && originMatch && metricMatch;
     });
 
     return nextLeads;
-  }, [viewScopedLeads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
+  }, [viewScopedLeads, search, pageFilter, originFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
 
   const boardColumns = useMemo(() => {
     const existingStatusColumns = leads
@@ -959,6 +963,11 @@ export default function CrmPage() {
   const pageOptions = useMemo(() => {
     const pages = viewScopedLeads.map((lead) => lead.operadora || '').filter(Boolean);
     return Array.from(new Set(pages)).sort((a, b) => a.localeCompare(b));
+  }, [viewScopedLeads]);
+
+  const originOptions = useMemo(() => {
+    const origins = viewScopedLeads.map((lead) => lead.origem || '').filter(Boolean);
+    return Array.from(new Set(origins)).sort((a, b) => a.localeCompare(b));
   }, [viewScopedLeads]);
 
   const staleCount = staleLeadIds.size;
@@ -1358,6 +1367,7 @@ export default function CrmPage() {
         investimento: editForm.investimento,
         cidade: editForm.cidade,
         operadora: editForm.operadora || null,
+        origem: editForm.origem || null,
         email: editForm.email || null,
         motivo_busca: editForm.motivo_busca || null,
         hospital_preferencia: editForm.hospital_preferencia || null,
@@ -1437,6 +1447,15 @@ export default function CrmPage() {
               <option value="todas">Todas as paginas</option>
               {pageOptions.map((page) => <option key={page} value={page}>{page}</option>)}
               <option value="__sem_pagina__">Sem pagina</option>
+            </select>
+            <select
+              value={originFilter}
+              onChange={(event) => setOriginFilter(event.target.value)}
+              className="w-full rounded-2xl border-none bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500/20 lg:w-[210px] lg:min-w-[210px]"
+            >
+              <option value="todas">Origem: todas</option>
+              {originOptions.map((origin) => <option key={origin} value={origin}>{origin}</option>)}
+              <option value="__sem_origem__">Sem origem</option>
             </select>
             {crmScopeOptions.length > 1 && (
               <select
@@ -1869,6 +1888,7 @@ export default function CrmPage() {
                       <EditField label="Telefone" value={editForm.telefone} onChange={(value) => setEditForm((prev) => ({ ...prev, telefone: value }))} />
                       <EditField label="Idades" value={editForm.idades} onChange={(value) => setEditForm((prev) => ({ ...prev, idades: value }))} />
                       <EditField label="Cidade" value={editForm.cidade} onChange={(value) => setEditForm((prev) => ({ ...prev, cidade: value }))} />
+                      <EditField label="Origem" value={editForm.origem} onChange={(value) => setEditForm((prev) => ({ ...prev, origem: value }))} />
                       <EditSelect label="Possui CNPJ?" value={editForm.possui_cnpj} options={['Sim', 'Não', 'Tenho MEI']} onChange={(value) => setEditForm((prev) => ({ ...prev, possui_cnpj: value }))} />
                       <EditField label="CNPJ do cliente" value={editForm.cnpj} onChange={(value) => setEditForm((prev) => ({ ...prev, cnpj: value }))} />
                       <EditSelect label="Plano ativo" value={editForm.tem_plano_ativo} options={['Sim', 'Não', 'Não informado']} onChange={(value) => setEditForm((prev) => ({ ...prev, tem_plano_ativo: value }))} />
@@ -1902,6 +1922,7 @@ export default function CrmPage() {
                     <InfoCard label="Plano atual" value={selectedLead.plano_atual || '-'} />
                     <InfoCard label="Investimento" value={selectedLead.investimento || '-'} />
                     <InfoCard label="Cidade" value={selectedLead.cidade || '-'} />
+                    <InfoCard label="Origem" value={selectedLead.origem || '-'} />
                     <InfoCard label="Pagina" value={selectedLead.operadora || '-'} />
                     <InfoCard label="E-mail" value={selectedLead.email || '-'} />
                     <InfoCard label="Motivo da busca" value={selectedLead.motivo_busca || '-'} />
