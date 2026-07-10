@@ -345,7 +345,7 @@ export default function FerramentasPage() {
 
   return (
     <InternalLayout>
-      <main className="min-h-screen bg-[#111115] text-white -mx-3 -my-5 p-3 pt-0 sm:-mx-5 sm:-my-7 lg:-mx-7 lg:-my-7 lg:p-7 lg:pt-0 pb-24 overflow-x-hidden font-sans">
+      <main className="min-h-screen bg-[#111115] text-white -mx-3 -my-5 pb-24 overflow-x-hidden font-sans netflix-theme sm:-mx-5 sm:-my-7 lg:-mx-7 lg:-my-7 relative">
         <style dangerouslySetInnerHTML={{ __html: `
           .scrollbar-none::-webkit-scrollbar {
             display: none;
@@ -361,22 +361,48 @@ export default function FerramentasPage() {
           .animate-fade-in {
             animation: fadeIn 0.6s ease-out forwards;
           }
+          
+          /* Neutralize light theme overrides for the Netflix dashboard */
+          .netflix-theme {
+            background-color: #111115 !important;
+            color: #ffffff !important;
+          }
+          .theme-claro .netflix-theme {
+            background-color: #111115 !important;
+            color: #ffffff !important;
+          }
+          .theme-claro .netflix-theme :is(button, a, span, p, h1, h2, h3, h4, li, ol, ul):not(.text-red-500):not(.text-emerald-400):not(.text-emerald-300):not(.text-red-200):not(.text-red-300):not(.text-black) {
+            color: inherit !important;
+          }
+          .theme-claro .netflix-theme .text-black,
+          .theme-claro .netflix-theme .text-black * {
+            color: #000000 !important;
+          }
+          .theme-claro .netflix-theme .text-red-500 {
+            color: #ef4444 !important;
+          }
+          .theme-claro .netflix-theme .text-emerald-400 {
+            color: #34d399 !important;
+          }
+          .theme-claro .netflix-theme .text-emerald-300 {
+            color: #6ee7b7 !important;
+          }
+          .theme-claro .netflix-theme .text-red-200 {
+            color: #fca5a5 !important;
+          }
+          .theme-claro .netflix-theme .text-red-300 {
+            color: #fca5a5 !important;
+          }
+          .theme-claro .netflix-theme .bg-white {
+            background-color: #ffffff !important;
+          }
+          .theme-claro .netflix-theme .bg-white:hover {
+            background-color: #e2e8f0 !important;
+          }
         ` }} />
         
-        {/* Search & Header Navigation */}
-        <div className="relative z-30 max-w-[1540px] mx-auto px-4 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 shadow-lg shadow-red-950/50">
-              <Sparkles size={20} className="text-white" />
-            </span>
-            <div>
-              <h1 className="text-2xl font-black tracking-tighter uppercase text-white flex items-center gap-1.5">
-                Orion<span className="text-red-500">Play</span>
-              </h1>
-              <p className="text-[10px] tracking-widest text-slate-400 font-bold uppercase">Área do Corretor</p>
-            </div>
-          </div>
-
+        {/* Search Navigation */}
+        <div className="absolute top-0 right-0 z-30 pt-24 lg:pt-28 px-6 md:px-16 flex justify-end w-full">
           <div className="relative w-full md:w-80">
             <Search className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
             <input
@@ -402,7 +428,7 @@ export default function FerramentasPage() {
           <div className="flex min-h-[60vh] items-center justify-center">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="animate-spin text-red-500" size={48} />
-              <p className="text-sm font-bold text-slate-400 tracking-wider uppercase animate-pulse">Carregando OrionPlay...</p>
+              <p className="text-sm font-bold text-slate-400 tracking-wider uppercase animate-pulse">Carregando ferramentas...</p>
             </div>
           </div>
         ) : error ? (
@@ -425,22 +451,22 @@ export default function FerramentasPage() {
           <>
             {/* HERO BANNER - Netflix Billboard Style */}
             {selectedHeroTool && selectedHeroTool.premium && (
-              <section className="relative w-full h-[65vh] min-h-[480px] md:h-[75vh] flex items-center justify-start overflow-hidden rounded-3xl mt-4 max-w-[1540px] mx-auto shadow-2xl">
+              <section className="relative w-full h-[75vh] md:h-[90vh] flex items-center justify-start overflow-hidden shadow-2xl -mt-24 lg:-mt-28">
                 {/* Background Image with Dark Vignette/Fade Gradients */}
                 <div className="absolute inset-0 z-0">
                   <img
                     src={selectedHeroTool.premium.fullImage}
                     alt={selectedHeroTool.titulo}
-                    className="w-full h-full object-cover object-center animate-fade-in scale-105 filter brightness-[0.6] transition-all duration-700"
+                    className="w-full h-full object-cover object-center animate-fade-in scale-105 filter brightness-[0.65] transition-all duration-700"
                   />
                   {/* Left Side Shadow for Text Contrast */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#111115] via-[#111115]/75 to-transparent z-10 w-full md:w-3/5" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#111115] via-[#111115]/75 to-transparent z-10 w-full md:w-1/2" />
                   {/* Base Gradient Fade to Black */}
                   <div className="absolute inset-0 bg-gradient-to-t from-[#111115] via-transparent to-transparent z-10" />
                 </div>
 
                 {/* Hero Content */}
-                <div className="relative z-20 max-w-2xl px-6 md:pl-16 flex flex-col items-start gap-4">
+                <div className="relative z-20 max-w-2xl px-6 md:pl-16 pt-32 md:pt-40 pb-20 flex flex-col items-start gap-4">
                   <div className="flex items-center gap-2">
                     <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded">
                       DESTAQUE
@@ -462,9 +488,10 @@ export default function FerramentasPage() {
                   <div className="flex flex-wrap items-center gap-3 mt-2">
                     <button
                       onClick={() => setDetailToolKey(selectedHeroTool.key)}
+                      style={{ backgroundColor: '#ffffff', color: '#000000' }}
                       className="flex items-center gap-2 bg-white text-black hover:bg-slate-200 transition duration-300 font-extrabold text-sm md:text-base px-6 py-3 rounded-lg shadow-lg shadow-black/35 cursor-pointer"
                     >
-                      <Play size={18} fill="currentColor" />
+                      <Play size={18} fill="#000000" stroke="#000000" />
                       Conhecer Detalhes
                     </button>
 
@@ -496,7 +523,7 @@ export default function FerramentasPage() {
             )}
 
             {/* CAROUSELS SECTION */}
-            <div className="max-w-[1540px] mx-auto px-4 mt-12 space-y-12">
+            <div className="w-full px-6 md:px-16 -mt-16 md:-mt-24 pb-20 relative z-20 space-y-16">
               
               {/* Row 1: Active Tools */}
               {activeTools.length > 0 && (
