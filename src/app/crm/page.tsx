@@ -38,8 +38,6 @@ import {
   History,
   UserCheck,
   MessageCircle,
-  ArrowRight,
-  GripVertical,
   Pencil,
   Trash2
 } from 'lucide-react';
@@ -300,6 +298,7 @@ export default function CrmPage() {
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [stageDraft, setStageDraft] = useState({ label: '', desc: '' });
   const [newStageName, setNewStageName] = useState('');
+  const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
   const [openedLeadParam, setOpenedLeadParam] = useState<string | null>(null);
   const [tipoCampanha, setTipoCampanha] = useState<TipoCampanha | null>('ambos');
   const [search, setSearch] = useState('');
@@ -1009,17 +1008,25 @@ export default function CrmPage() {
     setEditingColumnId(null);
   }
 
-  function moveKanbanColumn(columnId: LeadStatus, direction: -1 | 1) {
+  function moveKanbanColumn(columnId: LeadStatus, targetColumnId: LeadStatus) {
     setColumns((current) => {
       const index = current.findIndex((column) => column.id === columnId);
-      const targetIndex = index + direction;
+      const targetIndex = current.findIndex((column) => column.id === targetColumnId);
       if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return current;
-      if (isFixedKanbanStatus(current[index].id) || isFixedKanbanStatus(current[targetIndex].id)) return current;
+      if (index === targetIndex || isFixedKanbanStatus(current[index].id)) return current;
 
       const next = [...current];
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      const [moved] = next.splice(index, 1);
+      const insertionIndex = next.findIndex((column) => column.id === targetColumnId);
+      next.splice(insertionIndex < 0 ? next.length : insertionIndex, 0, moved);
       return next;
     });
+  }
+
+  function handleColumnDrop(targetColumnId: LeadStatus) {
+    if (!draggedColumnId) return;
+    moveKanbanColumn(draggedColumnId, targetColumnId);
+    setDraggedColumnId(null);
   }
 
   function deleteKanbanColumn(column: KanbanColumn) {
@@ -1561,39 +1568,6 @@ export default function CrmPage() {
 
           {error && <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold text-red-600">{error}</div>}
 
-          <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Etapas do Kanban</p>
-                <p className="mt-1 text-sm font-bold text-slate-600">
-                  Oportunidade, Em negociacao, Venda realizada e Sem interesse ficam fixas. As demais podem ser editadas.
-                </p>
-              </div>
-              <form onSubmit={addKanbanStage} className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-                <input
-                  value={newStageName}
-                  onChange={(event) => setNewStageName(event.target.value)}
-                  maxLength={80}
-                  placeholder="Nova etapa"
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:bg-white lg:w-64"
-                />
-                <button
-                  type="submit"
-                  className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-blue-700"
-                >
-                  <Plus size={14} /> Adicionar
-                </button>
-                <button
-                  type="button"
-                  onClick={resetKanbanColumns}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 transition hover:bg-slate-50"
-                >
-                  <RefreshCw size={14} /> Resetar
-                </button>
-              </form>
-            </div>
-          </div>
-
           <div className={`grid gap-6 ${selectedLead ? 'xl:grid-cols-[1fr_560px]' : 'grid-cols-1'}`}>
             <div>
               {loading ? (
@@ -1610,11 +1584,8 @@ export default function CrmPage() {
                     const commercialTotal = getCommercialTotal(column.id);
                     const limit = visibleLimits[column.id] || 50;
                     const visibleLeads = columnLeads.slice(0, limit);
-                    const columnIndex = columns.findIndex((item) => item.id === column.id);
                     const isFixedColumn = isFixedKanbanStatus(column.id);
                     const isEditingColumn = editingColumnId === column.id;
-                    const canMoveLeft = columnIndex > 0 && !isFixedColumn && !isFixedKanbanStatus(columns[columnIndex - 1]?.id);
-                    const canMoveRight = columnIndex >= 0 && columnIndex < columns.length - 1 && !isFixedColumn && !isFixedKanbanStatus(columns[columnIndex + 1]?.id);
                     const canDeleteColumn = !isFixedColumn && isCustomKanbanColumn(column) && columnLeads.length === 0;
 
                     return (
@@ -1622,10 +1593,18 @@ export default function CrmPage() {
                         key={column.id}
                         aria-label={`Etapa ${column.label} com ${columnLeads.length} leads`}
                         onDragOver={(event) => event.preventDefault()}
-                        onDrop={() => handleDrop(column.id)}
-                        className={`orion-kanban-column flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-colors sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}
+                        onDrop={() => draggedColumnId ? handleColumnDrop(column.id) : handleDrop(column.id)}
+                        className={`orion-kanban-column flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-colors sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId || draggedColumnId ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'} ${draggedColumnId === column.id ? 'opacity-55' : ''}`}
                       >
-                        <header className={`kanban-stage-header shrink-0 border-b bg-gradient-to-br p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.16)] ${kanbanStageHeaderClass[column.id] || 'from-blue-700 to-blue-600 border-blue-500/30'}`}>
+                        <header
+                          draggable={!isFixedColumn && !isEditingColumn}
+                          onDragStart={() => {
+                            if (!isFixedColumn && !isEditingColumn) setDraggedColumnId(column.id);
+                          }}
+                          onDragEnd={() => setDraggedColumnId(null)}
+                          className={`kanban-stage-header shrink-0 border-b bg-gradient-to-br p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.16)] ${!isFixedColumn && !isEditingColumn ? 'cursor-grab active:cursor-grabbing' : ''} ${kanbanStageHeaderClass[column.id] || 'from-blue-700 to-blue-600 border-blue-500/30'}`}
+                          title={!isFixedColumn ? 'Arraste para mover a etapa' : 'Etapa fixa'}
+                        >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
@@ -1673,12 +1652,6 @@ export default function CrmPage() {
                                         <Pencil size={12} />
                                       </button>
                                     )}
-                                    <button type="button" onClick={() => moveKanbanColumn(column.id, -1)} disabled={!canMoveLeft} className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-35" title="Mover para esquerda">
-                                      <ArrowLeft size={12} />
-                                    </button>
-                                    <button type="button" onClick={() => moveKanbanColumn(column.id, 1)} disabled={!canMoveRight} className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-35" title="Mover para direita">
-                                      <ArrowRight size={12} />
-                                    </button>
                                     {canDeleteColumn && (
                                       <button type="button" onClick={() => deleteKanbanColumn(column)} className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25" title="Excluir etapa">
                                         <Trash2 size={12} />
@@ -1689,11 +1662,6 @@ export default function CrmPage() {
                               </div>
                             </div>
                           </div>
-                          {isFixedColumn && (
-                            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white/80">
-                              <GripVertical size={10} /> Etapa fixa
-                            </div>
-                          )}
                           {requiresCommercialData(column.id) && (
                             <div className="mt-2 rounded-xl border border-white/20 bg-white/12 px-3 py-2">
                               <p className="text-[9px] font-black uppercase tracking-widest text-white/75">Total na etapa</p>
@@ -1704,7 +1672,7 @@ export default function CrmPage() {
                         <div
                           onDragOver={(event) => event.preventDefault()}
                           onDrop={() => handleDrop(column.id)}
-                          className={`scrollbar-visible flex-1 space-y-3 overflow-y-auto p-3 transition-colors ${draggedLeadId ? 'bg-blue-50' : 'bg-slate-50'}`}
+                          className={`scrollbar-none flex-1 space-y-3 overflow-y-auto p-3 transition-colors ${draggedLeadId ? 'bg-blue-50' : 'bg-slate-50'}`}
                         >
                           {visibleLeads.map((lead) => {
                             const selected = selectedLead?.id === lead.id;
@@ -1762,6 +1730,37 @@ export default function CrmPage() {
                       </section>
                     );
                   })}
+                  <section className="flex h-fit min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border border-slate-700 bg-slate-900/85 p-3 shadow-sm backdrop-blur-sm sm:min-w-[270px] sm:max-w-[290px]">
+                    <form onSubmit={addKanbanStage} className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-black text-white">
+                        <Plus size={18} />
+                        <span>Adicionar etapa</span>
+                      </div>
+                      <input
+                        value={newStageName}
+                        onChange={(event) => setNewStageName(event.target.value)}
+                        maxLength={80}
+                        placeholder="Nome da etapa"
+                        className="w-full rounded-xl border border-white/20 bg-white/90 px-3 py-2.5 text-sm font-bold text-slate-800 outline-none placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-400/30"
+                      />
+                      <div className="grid grid-cols-[1fr_auto] gap-2">
+                        <button
+                          type="submit"
+                          className="rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-blue-700"
+                        >
+                          Adicionar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetKanbanColumns}
+                          className="rounded-xl border border-white/20 bg-white/15 px-3 py-2.5 text-white transition hover:bg-white/25"
+                          title="Restaurar etapas padrao"
+                        >
+                          <RefreshCw size={14} />
+                        </button>
+                      </div>
+                    </form>
+                  </section>
                 </div>
                 </>
               )}
