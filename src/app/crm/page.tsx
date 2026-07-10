@@ -38,7 +38,6 @@ import {
   History,
   UserCheck,
   MessageCircle,
-  Pencil,
   Trash2
 } from 'lucide-react';
 import OrionMark from '@/components/ui/OrionMark';
@@ -74,10 +73,21 @@ const KANBAN_COLUMNS_STORAGE_KEY = 'orion:crm_kanban_columns:v1';
 const FIXED_KANBAN_STATUS_ORDER: LeadStatus[] = [
   'Aguardando atendimento',
   'Em negociaÃ§Ã£o',
+  'Em negociação',
   'Venda realizada',
   'Sem interesse',
 ];
 const FIXED_KANBAN_STATUSES = new Set<LeadStatus>(FIXED_KANBAN_STATUS_ORDER);
+
+function normalizeStageKey(value: string) {
+  return String(value || '')
+    .replace(/Ã§/g, 'ç')
+    .replace(/Ã£/g, 'ã')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 const kanbanStageHeaderClass: Record<string, string> = {
   'Aguardando atendimento': 'from-blue-700 to-blue-600 border-blue-500/30',
@@ -116,7 +126,8 @@ function normalizeKanbanColumns(raw: unknown): KanbanColumn[] {
 }
 
 function isFixedKanbanStatus(status: LeadStatus) {
-  return FIXED_KANBAN_STATUSES.has(status);
+  if (FIXED_KANBAN_STATUSES.has(status)) return true;
+  return ['aguardando atendimento', 'em negociacao', 'venda realizada', 'sem interesse'].includes(normalizeStageKey(status));
 }
 
 function isDefaultKanbanStatus(status: LeadStatus) {
@@ -1617,7 +1628,15 @@ export default function CrmPage() {
                                     className="min-w-0 rounded-lg border border-white/25 bg-white/95 px-2 py-1 text-xs font-black uppercase tracking-widest text-slate-900 outline-none"
                                   />
                                 ) : (
-                                  <h3 className="truncate text-[15px] font-black uppercase tracking-widest !text-white drop-shadow-sm">{column.label}</h3>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditingColumn(column)}
+                                    disabled={isFixedColumn}
+                                    className={`min-w-0 truncate text-left text-[15px] font-black uppercase tracking-widest !text-white drop-shadow-sm ${isFixedColumn ? 'cursor-default' : 'cursor-text hover:underline hover:decoration-white/50'}`}
+                                    title={isFixedColumn ? 'Etapa fixa' : 'Clique para editar a etapa'}
+                                  >
+                                    {column.label}
+                                  </button>
                                 )}
                               </div>
                               {isEditingColumn ? (
@@ -1628,7 +1647,15 @@ export default function CrmPage() {
                                   className="mt-2 w-full rounded-lg border border-white/25 bg-white/95 px-2 py-1 text-[11px] font-bold text-slate-700 outline-none"
                                 />
                               ) : (
-                                <p className="mt-1 text-[11px] font-black !text-white/85">{column.desc}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingColumn(column)}
+                                  disabled={isFixedColumn}
+                                  className={`mt-1 block max-w-full truncate text-left text-[11px] font-black !text-white/85 ${isFixedColumn ? 'cursor-default' : 'cursor-text hover:underline hover:decoration-white/40'}`}
+                                  title={isFixedColumn ? 'Etapa fixa' : 'Clique para editar a descricao'}
+                                >
+                                  {column.desc}
+                                </button>
                               )}
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-2">
@@ -1647,11 +1674,6 @@ export default function CrmPage() {
                                   </>
                                 ) : (
                                   <>
-                                    {!isFixedColumn && (
-                                      <button type="button" onClick={() => startEditingColumn(column)} className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25" title="Editar etapa">
-                                        <Pencil size={12} />
-                                      </button>
-                                    )}
                                     {canDeleteColumn && (
                                       <button type="button" onClick={() => deleteKanbanColumn(column)} className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25" title="Excluir etapa">
                                         <Trash2 size={12} />
