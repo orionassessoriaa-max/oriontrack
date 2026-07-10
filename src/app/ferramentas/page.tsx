@@ -6,27 +6,21 @@ import { supabase } from '@/lib/supabase/client';
 import { FerramentaCatalogItem, FerramentaStatus, FERRAMENTA_STATUS_LABEL } from '@/lib/ferramentas';
 import {
   ArrowRight,
-  BarChart3,
   Check,
   ChevronLeft,
   ChevronRight,
-  Gauge,
   Loader2,
   Play,
   Search,
   Settings,
-  ShieldCheck,
   Sparkles,
   X,
-  Zap,
 } from 'lucide-react';
 
 type Tool = FerramentaCatalogItem & {
   status: FerramentaStatus;
   observacoes: string | null;
 };
-
-const FEATURE_ICONS = [Zap, ShieldCheck, Gauge, BarChart3];
 
 function statusStyle(status: FerramentaStatus) {
   if (status === 'ativo') return 'border-emerald-400/50 bg-emerald-500/15 text-emerald-300';
@@ -276,11 +270,11 @@ export default function FerramentasPage() {
                       </p>
                       <div className="mt-7 flex flex-wrap gap-3">
                         <a
-                          href="#descricao"
+                          href="#ferramentas-lista"
                           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 text-sm font-black text-white shadow-lg shadow-indigo-950/35 transition hover:bg-indigo-500"
                         >
                           <Play size={17} fill="currentColor" />
-                          Ver descricao
+                          Ver ferramentas
                         </a>
                         <button
                           type="button"
@@ -309,46 +303,10 @@ export default function FerramentasPage() {
                   </div>
                 </section>
 
-                <ToolRail title="Ativas" tools={activeTools} selectedKey={selectedTool.key} onSelect={(tool) => setSelectedKey(tool.key)} />
+                <div id="ferramentas-lista">
+                  <ToolRail title="Ativas" tools={activeTools} selectedKey={selectedTool.key} onSelect={(tool) => setSelectedKey(tool.key)} />
+                </div>
                 <ToolRail title="Disponiveis" tools={availableTools} selectedKey={selectedTool.key} onSelect={(tool) => setSelectedKey(tool.key)} />
-
-                <section id="descricao" className="mt-6 rounded-2xl border border-white/10 bg-[#081321] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.30)] md:p-7">
-                  <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="max-w-2xl">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h2 className="text-3xl font-black tracking-[-0.03em] text-white">{selectedTool.titulo}</h2>
-                        <span className={`rounded-md border px-2.5 py-1 text-[10px] font-black uppercase ${statusStyle(selectedTool.status)}`}>
-                          {FERRAMENTA_STATUS_LABEL[selectedTool.status]}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-base font-medium leading-relaxed text-slate-300">{selectedTool.descricao}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 text-sm font-black text-white shadow-lg shadow-indigo-950/35 transition hover:bg-indigo-500"
-                    >
-                      <Settings size={17} />
-                      Configurar Ferramenta
-                    </button>
-                  </div>
-
-                  <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    {(selectedTool.beneficios || selectedTool.entregas).slice(0, 4).map((item, index) => {
-                      const Icon = FEATURE_ICONS[index % FEATURE_ICONS.length];
-                      return (
-                        <div key={item} className="rounded-xl border border-white/10 bg-white/[0.035] p-5">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-lime-400/20 bg-lime-400/10 text-lime-300">
-                            <Icon size={18} />
-                          </div>
-                          <h3 className="mt-4 text-sm font-black text-white">{item}</h3>
-                          <p className="mt-2 text-xs font-medium leading-relaxed text-slate-400">
-                            Recurso integrado ao fluxo da corretora para ganhar velocidade e consistencia.
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
               </>
             )}
           </div>
