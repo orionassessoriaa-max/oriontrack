@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { LEAD_STATUSES } from '@/lib/leadStatus';
 import { LeadStatus } from '@/types';
 
-const ALLOWED_STATUSES = LEAD_STATUSES;
+const LEAD_STATUS_MAX_LENGTH = 80;
 
 function numericOrNull(value: unknown) {
   if (value === null || value === undefined || value === '') return null;
@@ -16,6 +15,12 @@ function boolOrNull(value: unknown) {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'boolean') return value;
   return ['true', 'sim', '1', 'yes'].includes(String(value).toLowerCase());
+}
+
+function isValidLeadStatus(value: string) {
+  const status = value.trim();
+  if (!status || status.length > LEAD_STATUS_MAX_LENGTH) return false;
+  return !/[<>]/.test(status);
 }
 
 function cadenceDays(startValue?: string | null, endValue?: string | null) {
@@ -54,9 +59,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { id } = await context.params;
     const leadId = String(id || '').trim();
     const body = await request.json();
-    const status = String(body.status || '') as LeadStatus;
+    const status = String(body.status || '').trim() as LeadStatus;
 
-    if (!leadId || !ALLOWED_STATUSES.includes(status)) {
+    if (!leadId || !isValidLeadStatus(status)) {
       return NextResponse.json({ error: 'Status ou lead invalido.' }, { status: 400 });
     }
 

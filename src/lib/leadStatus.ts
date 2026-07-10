@@ -27,7 +27,7 @@ export function normalizeLeadStatus(status: string | null | undefined): LeadStat
 export function getLeadStatusStyle(status: string | null | undefined) {
   const normalized = normalizeLeadStatus(status);
 
-  const styles: Record<LeadStatus, { label: string; chip: string; dot: string; column: string }> = {
+  const styles: Record<string, { label: string; chip: string; dot: string; column: string }> = {
     'Aguardando atendimento': {
       label: 'Oportunidade',
       chip: 'orion-status-opportunity',
@@ -96,5 +96,10 @@ export function getLeadStatusStyle(status: string | null | undefined) {
     },
   };
 
-  return styles[normalized] || styles['Aguardando atendimento'];
+  return styles[normalized] || {
+    label: normalized,
+    chip: 'orion-status-neutral',
+    dot: 'bg-slate-500',
+    column: 'border-slate-200 bg-slate-100/70',
+  };
 }

@@ -49,18 +49,7 @@ export interface Corretor {
   created_at: string;
 }
 
-export type LeadStatus = 
-  | 'Aguardando atendimento' 
-  | 'Inicio' 
-  | 'Contato feito' 
-  | 'Cotação enviada' 
-  | 'Região sem comercialização' 
-  | 'Venda realizada' 
-  | 'Chamou duas vezes' 
-  | 'Telefone não existe' 
-  | 'Não tive retorno' 
-  | 'Em negociação' 
-  | 'Sem interesse';
+export type LeadStatus = string;
 
 export interface Lead {
   id: string;

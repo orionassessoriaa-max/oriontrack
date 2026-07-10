@@ -37,7 +37,11 @@ import {
   Activity,
   History,
   UserCheck,
-  MessageCircle
+  MessageCircle,
+  ArrowRight,
+  GripVertical,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import OrionMark from '@/components/ui/OrionMark';
 
@@ -55,8 +59,9 @@ type WhatsAppConversa = {
 
 type MetricFilter = 'todos' | 'sem_resposta' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
 type CrmScopeView = 'meus' | 'todos_concessionaria' | 'sem_responsavel' | `member:${string}` | `broker:${string}`;
+type KanbanColumn = { id: LeadStatus; label: string; desc: string };
 
-const columns: { id: LeadStatus; label: string; desc: string }[] = [
+const DEFAULT_COLUMNS: KanbanColumn[] = [
   { id: 'Aguardando atendimento', label: 'Oportunidade', desc: 'Entrou e precisa de primeiro contato' },
   { id: 'Inicio', label: 'Inicio', desc: 'Primeira abordagem realizada' },
   { id: 'Contato feito', label: 'Contato feito', desc: 'Em atendimento' },
@@ -66,6 +71,15 @@ const columns: { id: LeadStatus; label: string; desc: string }[] = [
   { id: 'Venda realizada', label: 'Venda realizada', desc: 'Conversão concluída' },
   { id: 'Sem interesse', label: 'Sem interesse', desc: 'Descartado comercialmente' },
 ];
+
+const KANBAN_COLUMNS_STORAGE_KEY = 'orion:crm_kanban_columns:v1';
+const FIXED_KANBAN_STATUS_ORDER: LeadStatus[] = [
+  'Aguardando atendimento',
+  'Em negociaÃ§Ã£o',
+  'Venda realizada',
+  'Sem interesse',
+];
+const FIXED_KANBAN_STATUSES = new Set<LeadStatus>(FIXED_KANBAN_STATUS_ORDER);
 
 const kanbanStageHeaderClass: Record<string, string> = {
   'Aguardando atendimento': 'from-blue-700 to-blue-600 border-blue-500/30',
@@ -80,6 +94,40 @@ const kanbanStageHeaderClass: Record<string, string> = {
   'Chamou duas vezes': 'from-fuchsia-700 to-fuchsia-600 border-fuchsia-500/30',
   'Telefone nÃ£o existe': 'from-zinc-700 to-zinc-600 border-zinc-500/30',
 };
+
+function cleanStageText(value: string, fallback: string) {
+  const cleaned = value.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
+  return cleaned.slice(0, 80) || fallback;
+}
+
+function normalizeKanbanColumns(raw: unknown): KanbanColumn[] {
+  const source = Array.isArray(raw) ? raw : DEFAULT_COLUMNS;
+  const byId = new Map<string, KanbanColumn>();
+
+  [...(source as Array<Partial<KanbanColumn>>), ...DEFAULT_COLUMNS].forEach((item) => {
+    const id = cleanStageText(String(item?.id || item?.label || ''), '');
+    if (!id || byId.has(id)) return;
+    byId.set(id, {
+      id,
+      label: cleanStageText(String(item?.label || id), id),
+      desc: cleanStageText(String(item?.desc || 'Etapa personalizada do funil'), 'Etapa personalizada do funil'),
+    });
+  });
+
+  return Array.from(byId.values());
+}
+
+function isFixedKanbanStatus(status: LeadStatus) {
+  return FIXED_KANBAN_STATUSES.has(status);
+}
+
+function isDefaultKanbanStatus(status: LeadStatus) {
+  return DEFAULT_COLUMNS.some((column) => column.id === status);
+}
+
+function isCustomKanbanColumn(column: KanbanColumn) {
+  return !isDefaultKanbanStatus(column.id);
+}
 
 function isStale(lead: Lead) {
   if (normalizeLeadStatus(lead.status) !== 'Aguardando atendimento' || !lead.data_entrada) return false;
@@ -240,6 +288,18 @@ export default function CrmPage() {
   const [atividades, setAtividades] = useState<LeadAtividade[]>([]);
   const [conversas, setConversas] = useState<WhatsAppConversa[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [columns, setColumns] = useState<KanbanColumn[]>(() => {
+    if (typeof window === 'undefined') return DEFAULT_COLUMNS;
+    try {
+      const saved = window.localStorage.getItem(KANBAN_COLUMNS_STORAGE_KEY);
+      return saved ? normalizeKanbanColumns(JSON.parse(saved)) : DEFAULT_COLUMNS;
+    } catch {
+      return DEFAULT_COLUMNS;
+    }
+  });
+  const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
+  const [stageDraft, setStageDraft] = useState({ label: '', desc: '' });
+  const [newStageName, setNewStageName] = useState('');
   const [openedLeadParam, setOpenedLeadParam] = useState<string | null>(null);
   const [tipoCampanha, setTipoCampanha] = useState<TipoCampanha | null>('ambos');
   const [search, setSearch] = useState('');
@@ -307,6 +367,14 @@ export default function CrmPage() {
       setMetricFilter(requestedFilter);
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(KANBAN_COLUMNS_STORAGE_KEY, JSON.stringify(columns));
+    } catch (err) {
+      console.error('Erro ao salvar etapas do Kanban:', err);
+    }
+  }, [columns]);
 
   useEffect(() => {
     if (!selectedLead) return;
@@ -869,6 +937,15 @@ export default function CrmPage() {
     return nextLeads;
   }, [viewScopedLeads, search, pageFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
 
+  const boardColumns = useMemo(() => {
+    const existingStatusColumns = leads
+      .map((lead) => normalizeLeadStatus(lead.status))
+      .filter((status) => !columns.some((column) => column.id === status))
+      .map((status) => ({ id: status, label: getLeadStatusStyle(status).label, desc: 'Etapa encontrada nos leads' }));
+
+    return normalizeKanbanColumns([...columns, ...existingStatusColumns]);
+  }, [columns, leads]);
+
   const pageOptions = useMemo(() => {
     const pages = viewScopedLeads.map((lead) => lead.operadora || '').filter(Boolean);
     return Array.from(new Set(pages)).sort((a, b) => a.localeCompare(b));
@@ -895,6 +972,70 @@ export default function CrmPage() {
     return getLeadsByStatus(status).reduce((total, lead) => {
       return total + parseCurrencyInput(lead.valor_negociacao);
     }, 0);
+  }
+
+  function addKanbanStage(event: FormEvent) {
+    event.preventDefault();
+    const name = cleanStageText(newStageName, '');
+    if (!name) return;
+    if (boardColumns.some((column) => column.id.toLowerCase() === name.toLowerCase())) {
+      alert('Ja existe uma etapa com esse nome.');
+      return;
+    }
+
+    setColumns((current) => normalizeKanbanColumns([
+      ...current,
+      { id: name, label: name, desc: 'Etapa personalizada do funil' },
+    ]));
+    setNewStageName('');
+  }
+
+  function startEditingColumn(column: KanbanColumn) {
+    if (isFixedKanbanStatus(column.id)) return;
+    setEditingColumnId(column.id);
+    setStageDraft({ label: column.label, desc: column.desc });
+  }
+
+  function saveEditingColumn(columnId: LeadStatus) {
+    setColumns((current) => current.map((column) => (
+      column.id === columnId
+        ? {
+          ...column,
+          label: cleanStageText(stageDraft.label, column.label),
+          desc: cleanStageText(stageDraft.desc, column.desc),
+        }
+        : column
+    )));
+    setEditingColumnId(null);
+  }
+
+  function moveKanbanColumn(columnId: LeadStatus, direction: -1 | 1) {
+    setColumns((current) => {
+      const index = current.findIndex((column) => column.id === columnId);
+      const targetIndex = index + direction;
+      if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return current;
+      if (isFixedKanbanStatus(current[index].id) || isFixedKanbanStatus(current[targetIndex].id)) return current;
+
+      const next = [...current];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  }
+
+  function deleteKanbanColumn(column: KanbanColumn) {
+    if (isFixedKanbanStatus(column.id)) return;
+    if (getLeadsByStatus(column.id).length > 0) {
+      alert('Mova os leads desta etapa antes de excluir.');
+      return;
+    }
+    if (!confirm(`Excluir a etapa "${column.label}"?`)) return;
+    setColumns((current) => current.filter((item) => item.id !== column.id));
+  }
+
+  function resetKanbanColumns() {
+    if (!confirm('Restaurar as etapas padrao do Kanban?')) return;
+    setColumns(DEFAULT_COLUMNS);
+    setEditingColumnId(null);
   }
 
   function requestCommercialPayload(lead: Lead, status: LeadStatus): Promise<CommercialPayload | null> {
@@ -1420,6 +1561,39 @@ export default function CrmPage() {
 
           {error && <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold text-red-600">{error}</div>}
 
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Etapas do Kanban</p>
+                <p className="mt-1 text-sm font-bold text-slate-600">
+                  Oportunidade, Em negociacao, Venda realizada e Sem interesse ficam fixas. As demais podem ser editadas.
+                </p>
+              </div>
+              <form onSubmit={addKanbanStage} className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+                <input
+                  value={newStageName}
+                  onChange={(event) => setNewStageName(event.target.value)}
+                  maxLength={80}
+                  placeholder="Nova etapa"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:bg-white lg:w-64"
+                />
+                <button
+                  type="submit"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  <Plus size={14} /> Adicionar
+                </button>
+                <button
+                  type="button"
+                  onClick={resetKanbanColumns}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 transition hover:bg-slate-50"
+                >
+                  <RefreshCw size={14} /> Resetar
+                </button>
+              </form>
+            </div>
+          </div>
+
           <div className={`grid gap-6 ${selectedLead ? 'xl:grid-cols-[1fr_560px]' : 'grid-cols-1'}`}>
             <div>
               {loading ? (
@@ -1431,11 +1605,17 @@ export default function CrmPage() {
                 <div
                   className="scrollbar-visible flex h-[calc(100dvh-360px)] min-h-[560px] gap-4 overflow-x-auto overscroll-x-contain scroll-smooth pb-4 pr-2 sm:gap-5 [scrollbar-gutter:stable] [touch-action:pan-x_pan-y]"
                 >
-                  {columns.map((column) => {
+                  {boardColumns.map((column) => {
                     const columnLeads = getLeadsByStatus(column.id);
                     const commercialTotal = getCommercialTotal(column.id);
                     const limit = visibleLimits[column.id] || 50;
                     const visibleLeads = columnLeads.slice(0, limit);
+                    const columnIndex = columns.findIndex((item) => item.id === column.id);
+                    const isFixedColumn = isFixedKanbanStatus(column.id);
+                    const isEditingColumn = editingColumnId === column.id;
+                    const canMoveLeft = columnIndex > 0 && !isFixedColumn && !isFixedKanbanStatus(columns[columnIndex - 1]?.id);
+                    const canMoveRight = columnIndex >= 0 && columnIndex < columns.length - 1 && !isFixedColumn && !isFixedKanbanStatus(columns[columnIndex + 1]?.id);
+                    const canDeleteColumn = !isFixedColumn && isCustomKanbanColumn(column) && columnLeads.length === 0;
 
                     return (
                       <section
@@ -1450,14 +1630,70 @@ export default function CrmPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="h-3 w-3 shrink-0 rounded-full bg-white/90 shadow-[0_0_12px_rgba(255,255,255,0.6)]" />
-                                <h3 className="truncate text-[15px] font-black uppercase tracking-widest !text-white drop-shadow-sm">{column.label}</h3>
+                                {isEditingColumn ? (
+                                  <input
+                                    value={stageDraft.label}
+                                    onChange={(event) => setStageDraft((current) => ({ ...current, label: event.target.value }))}
+                                    maxLength={80}
+                                    className="min-w-0 rounded-lg border border-white/25 bg-white/95 px-2 py-1 text-xs font-black uppercase tracking-widest text-slate-900 outline-none"
+                                  />
+                                ) : (
+                                  <h3 className="truncate text-[15px] font-black uppercase tracking-widest !text-white drop-shadow-sm">{column.label}</h3>
+                                )}
                               </div>
-                              <p className="mt-1 text-[11px] font-black !text-white/85">{column.desc}</p>
+                              {isEditingColumn ? (
+                                <input
+                                  value={stageDraft.desc}
+                                  onChange={(event) => setStageDraft((current) => ({ ...current, desc: event.target.value }))}
+                                  maxLength={80}
+                                  className="mt-2 w-full rounded-lg border border-white/25 bg-white/95 px-2 py-1 text-[11px] font-bold text-slate-700 outline-none"
+                                />
+                              ) : (
+                                <p className="mt-1 text-[11px] font-black !text-white/85">{column.desc}</p>
+                              )}
                             </div>
-                            <span className="rounded-full border border-white/25 bg-white/18 px-2.5 py-1 text-[10px] font-black text-white">
-                              {columnLeads.length}
-                            </span>
+                            <div className="flex shrink-0 flex-col items-end gap-2">
+                              <span className="rounded-full border border-white/25 bg-white/18 px-2.5 py-1 text-[10px] font-black text-white">
+                                {columnLeads.length}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                {isEditingColumn ? (
+                                  <>
+                                    <button type="button" onClick={() => saveEditingColumn(column.id)} className="rounded-lg bg-white/20 p-1.5 text-white hover:bg-white/30" title="Salvar etapa">
+                                      <Save size={12} />
+                                    </button>
+                                    <button type="button" onClick={() => setEditingColumnId(null)} className="rounded-lg bg-white/20 p-1.5 text-white hover:bg-white/30" title="Cancelar">
+                                      <X size={12} />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    {!isFixedColumn && (
+                                      <button type="button" onClick={() => startEditingColumn(column)} className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25" title="Editar etapa">
+                                        <Pencil size={12} />
+                                      </button>
+                                    )}
+                                    <button type="button" onClick={() => moveKanbanColumn(column.id, -1)} disabled={!canMoveLeft} className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-35" title="Mover para esquerda">
+                                      <ArrowLeft size={12} />
+                                    </button>
+                                    <button type="button" onClick={() => moveKanbanColumn(column.id, 1)} disabled={!canMoveRight} className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-35" title="Mover para direita">
+                                      <ArrowRight size={12} />
+                                    </button>
+                                    {canDeleteColumn && (
+                                      <button type="button" onClick={() => deleteKanbanColumn(column)} className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25" title="Excluir etapa">
+                                        <Trash2 size={12} />
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
+                          {isFixedColumn && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white/80">
+                              <GripVertical size={10} /> Etapa fixa
+                            </div>
+                          )}
                           {requiresCommercialData(column.id) && (
                             <div className="mt-2 rounded-xl border border-white/20 bg-white/12 px-3 py-2">
                               <p className="text-[9px] font-black uppercase tracking-widest text-white/75">Total na etapa</p>
@@ -1585,7 +1821,7 @@ export default function CrmPage() {
                     onChange={(event) => updateLeadStatus(selectedLead.id, event.target.value as LeadStatus)}
                     className="w-full rounded-2xl border-none bg-white px-4 py-3 text-sm font-black text-slate-700 focus:ring-2 focus:ring-blue-500/20"
                   >
-                    {columns.map((column) => <option key={column.id} value={column.id}>{column.label}</option>)}
+                    {boardColumns.map((column) => <option key={column.id} value={column.id}>{column.label}</option>)}
                   </select>
                 </div>
 
