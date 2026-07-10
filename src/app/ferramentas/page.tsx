@@ -1,127 +1,229 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { supabase } from '@/lib/supabase/client';
-import { FerramentaCatalogItem, FerramentaStatus, FERRAMENTA_STATUS_LABEL } from '@/lib/ferramentas';
+import { FerramentaCatalogItem, FerramentaStatus } from '@/lib/ferramentas';
 import {
-  ArrowRight,
   Check,
   ChevronLeft,
   ChevronRight,
   Loader2,
   Play,
   Search,
-  Settings,
   Sparkles,
   X,
+  Info,
+  Calendar,
+  Layers,
+  ChevronDown,
+  CheckCircle2,
+  HelpCircle,
+  TrendingUp,
 } from 'lucide-react';
+
+// Premium metadata and copywriting for the 6 tools that have visual assets
+interface PremiumMetadata {
+  coverImage: string;
+  fullImage: string;
+  categoria: string;
+  pitch: string;
+  entregas: string[];
+  beneficios: string[];
+  funcionamento: string[];
+  accentColor: string;
+  accentGlow: string;
+}
+
+const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
+  bot_atendimento: {
+    coverImage: '/ferramentas/capa/bot1.png',
+    fullImage: '/ferramentas/bot.png',
+    categoria: 'Atendimento Automático',
+    pitch: 'Não perca mais nenhum lead por demora no atendimento. O Bot de Atendimento trabalha para você 24 horas por dia, 7 dias por semana, enviando respostas instantâneas no WhatsApp, qualificando os clientes com menus interativos inteligentes e direcionando cada contato para o setor ou corretor ideal.',
+    entregas: [
+      'Respostas automáticas no WhatsApp',
+      'Menus interativos de seleção simples',
+      'Coleta preliminar de dados do lead',
+      'Direcionamento inteligente de atendimentos',
+      'Horários de atendimento personalizados'
+    ],
+    beneficios: [
+      'Disponibilidade total 24/7/365',
+      'Redução drástica no tempo de resposta inicial',
+      'Triagem padronizada e sem erros humanos',
+      'Melhoria perceptível na experiência do lead'
+    ],
+    funcionamento: [
+      'Nossa equipe configura suas mensagens e fluxos de atendimento.',
+      'Definimos juntos as regras de transbordo e encaminhamento.',
+      'Conectamos o robô ao seu número de WhatsApp comercial.',
+      'O bot assume o primeiro contato instantaneamente quando chega um lead.'
+    ],
+    accentColor: '#10b981', // emerald-500
+    accentGlow: 'hover:shadow-[0_0_25px_rgba(16,185,129,0.45)] hover:border-emerald-500/80',
+  },
+  ia_atendimento: {
+    coverImage: '/ferramentas/capa/ia1.png',
+    fullImage: '/ferramentas/ia.png',
+    categoria: 'Inteligência Artificial',
+    pitch: 'Tenha o poder da inteligência artificial mais avançada do mercado conversando com seus leads como se fosse você. A IA de Atendimento entende a intenção do cliente, responde dúvidas complexas de forma humanizada, envia áudios ultrarrealistas, qualifica o perfil de compra e entrega um resumo completo pronto para você fechar o negócio.',
+    entregas: [
+      'Qualificação guiada baseada em IA',
+      'Respostas realistas em texto e áudio por voz',
+      'Resumo automático de perfil para o corretor',
+      'Handoff inteligente para atendimento humano',
+      'Suporte a dúvidas frequentes configurável'
+    ],
+    beneficios: [
+      'Primeiro contato em menos de 60 segundos',
+      'Abordagem humanizada e personalizada para cada lead',
+      'Eliminação imediata de leads curiosos ou sem perfil',
+      'Aumento nas taxas de agendamento e fechamento comercial'
+    ],
+    funcionamento: [
+      'O lead é gerado pelas suas campanhas de tráfego.',
+      'A IA inicia o diálogo de forma amigável no WhatsApp.',
+      'Coleta as informações-chave (ex: orçamento, região, prazo).',
+      'Notifica você e envia o resumo da conversa para seu fechamento.'
+    ],
+    accentColor: '#f59e0b', // amber-500
+    accentGlow: 'hover:shadow-[0_0_25px_rgba(245,158,11,0.45)] hover:border-amber-500/80',
+  },
+  pagina_comercial: {
+    coverImage: '/ferramentas/capa/paginacomercial1.png',
+    fullImage: '/ferramentas/pagina-comercial.png',
+    categoria: 'Funil de Vendas',
+    pitch: 'Seus anúncios merecem uma página de destino à altura. Nossa Página Comercial é desenhada com foco em conversão e persuasão imobiliária. Apresente seus diferenciais, equipe, depoimentos de clientes e projetos de forma extremamente profissional, captando leads altamente qualificados diretamente no seu CRM.',
+    entregas: [
+      'Landing Page premium de alta conversão',
+      'Formulário dinâmico integrado ao Orion Track',
+      'Estrutura de copy validada por especialistas',
+      'Integração completa de tags (Meta Pixel, Google Analytics, UTMs)',
+      'Design responsivo focado em mobile'
+    ],
+    beneficios: [
+      'Aumento imediato na taxa de conversão de anúncios',
+      'Fortalecimento da autoridade da sua marca no mercado',
+      'Leads mais informados e prontos para comprar',
+      'Rastreamento preciso de dados de campanhas'
+    ],
+    funcionamento: [
+      'Escolha o produto ou posicionamento principal.',
+      'Nossa equipe desenvolve a estrutura e copywriting.',
+      'Configuramos o domínio próprio e integramos ao Orion Track.',
+      'Seus anúncios direcionam os clientes para a página otimizada.'
+    ],
+    accentColor: '#06b6d4', // cyan-500
+    accentGlow: 'hover:shadow-[0_0_25px_rgba(6,182,212,0.45)] hover:border-cyan-500/80',
+  },
+  captacao_imagens_videos: {
+    coverImage: '/ferramentas/capa/captação1.png',
+    fullImage: '/ferramentas/captacao.png',
+    categoria: 'Produção Audiovisual',
+    pitch: 'Imagens vendem mais que palavras. Transforme a imagem da sua corretora com fotos de equipe e vídeos profissionais dos seus melhores imóveis. Nossa equipe vai até você com equipamentos de alta tecnologia para criar conteúdos extraordinários perfeitos para anúncios e redes sociais. (Disponível apenas para Brasília e região).',
+    entregas: [
+      'Sessão de fotos corporativas da equipe',
+      'Produção e captação de vídeos para Reels/TikTok',
+      'Roteirização de vídeos focada em atração comercial',
+      'Edição profissional dinâmica com som e legendas'
+    ],
+    beneficios: [
+      'Geração de autoridade imediata frente aos clientes',
+      'Acervo de fotos reais para postagens e anúncios',
+      'Vídeos que retêm a atenção e geram compartilhamento',
+      'Profissionalismo visual que se destaca dos concorrentes'
+    ],
+    funcionamento: [
+      'Agende o melhor dia e horário no painel Orion.',
+      'Nossa equipe de conteúdo define os roteiros com você.',
+      'Realizamos a captação presencial de fotos e vídeos.',
+      'Entregamos os materiais editados e prontos para postar.'
+    ],
+    accentColor: '#3b82f6', // blue-500
+    accentGlow: 'hover:shadow-[0_0_25px_rgba(59,130,246,0.45)] hover:border-blue-500/80',
+  },
+  social_media: {
+    coverImage: '/ferramentas/capa/socialmedia1.png',
+    fullImage: '/ferramentas/social-media.png',
+    categoria: 'Gestão de Marca',
+    pitch: 'Mantenha suas redes sociais movimentadas e profissionais sem gastar seu precioso tempo. Nós criamos, planejamos e estruturamos um calendário de postagens de alta qualidade exclusivo para corretores, com artes elegantes, legendas estratégicas e conteúdo que atrai seguidores prontos para fazer negócios.',
+    entregas: [
+      'Calendário de postagens mensal completo',
+      'Artes personalizadas de alta qualidade para o feed',
+      'Templates de stories interativos e engajadores',
+      'Legendas persuasivas com chamadas para ação (CTA)'
+    ],
+    beneficios: [
+      'Presença online constante e sem esforço diário',
+      'Redes sociais com estética moderna e confiável',
+      'Atração orgânica de potenciais compradores',
+      'Mais tempo livre para focar no fechamento de vendas'
+    ],
+    funcionamento: [
+      'Entendemos a identidade e foco da sua marca.',
+      'Elaboramos o cronograma estratégico mensal de posts.',
+      'Nossos designers e redatores criam os criativos.',
+      'Você aprova e publica de forma automática ou manual.'
+    ],
+    accentColor: '#f97316', // orange-500
+    accentGlow: 'hover:shadow-[0_0_25px_rgba(249,115,22,0.45)] hover:border-orange-500/80',
+  },
+  treinamento_comercial: {
+    coverImage: '/ferramentas/capa/treinamento1.png',
+    fullImage: '/ferramentas/treinamento.png',
+    categoria: 'Alta Performance',
+    pitch: 'De nada adiantam novos leads se você não souber como convertê-los. Nosso Treinamento Comercial é um programa prático, direto ao ponto, focado nas maiores dores do corretor de imóveis: abordagem rápida, scripts de alta conversão no WhatsApp, superação de objeções de preço e técnicas de fechamento avançadas.',
+    entregas: [
+      'Aulas práticas gravadas focadas em vendas',
+      'Scripts de abordagem e contorno de objeções no WhatsApp',
+      'Scripts estruturados para reuniões de venda virtuais',
+      'Acompanhamento e checklists diários de conversão'
+    ],
+    beneficios: [
+      'Aumento imediato na conversão de leads para agendamentos',
+      'Equipe comercial alinhada e utilizando técnicas de ponta',
+      'Segurança total para falar de valores e fechamentos',
+      'Processo comercial claro, previsível e mensurável'
+    ],
+    funcionamento: [
+      'Avaliamos as principais dores do seu time de vendas.',
+      'Fornecemos acesso à nossa plataforma de capacitação.',
+      'Implementamos os scripts adaptados no seu dia a dia.',
+      'Acompanhamos a evolução dos resultados e ajustamos.'
+    ],
+    accentColor: '#84cc16', // lime-500
+    accentGlow: 'hover:shadow-[0_0_25px_rgba(132,204,22,0.45)] hover:border-lime-500/80',
+  }
+};
 
 type Tool = FerramentaCatalogItem & {
   status: FerramentaStatus;
   observacoes: string | null;
+  premium?: PremiumMetadata;
 };
-
-function statusStyle(status: FerramentaStatus) {
-  if (status === 'ativo') return 'border-emerald-400/50 bg-emerald-500/15 text-emerald-300';
-  if (status === 'disponivel') return 'border-indigo-400/50 bg-indigo-500/15 text-indigo-300';
-  if (status === 'em_breve') return 'border-amber-400/50 bg-amber-500/15 text-amber-300';
-  return 'border-slate-500/50 bg-slate-500/15 text-slate-300';
-}
-
-function heroImageStyle(tool: Tool) {
-  if (tool.key === 'pagina_comercial') return 'object-cover object-center';
-  if (tool.key === 'captacao_imagens_videos') return 'object-cover object-center';
-  return 'object-cover object-center';
-}
-
-function coverFallback(tool: Tool, compact = false) {
-  return (
-    <div className={`relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br ${tool.accent}`}>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_20%,rgba(255,255,255,0.18),transparent_25%),linear-gradient(135deg,rgba(0,0,0,0.10),rgba(0,0,0,0.34))]" />
-      <div className="absolute inset-x-0 top-1/2 h-px bg-white/20" />
-      <div className="relative px-5 text-center">
-        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/65">{tool.categoria}</p>
-        <h3 className={`${compact ? 'mt-3 text-2xl' : 'mt-5 text-4xl'} font-black leading-[0.92] text-white`}>
-          {tool.titulo}
-        </h3>
-      </div>
-    </div>
-  );
-}
-
-function ToolPoster({ tool, selected, onClick }: { tool: Tool; selected: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group relative h-[190px] min-w-[280px] overflow-hidden rounded-xl border bg-[#07111e] text-left shadow-[0_20px_45px_rgba(0,0,0,0.32)] transition duration-300 hover:-translate-y-1 hover:border-indigo-300/80 md:h-[210px] md:min-w-[340px] ${
-        selected ? 'border-indigo-300 ring-2 ring-indigo-400/70' : 'border-white/10'
-      }`}
-    >
-      {tool.coverImage ? (
-        <img
-          src={tool.coverImage}
-          alt={tool.titulo}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
-        />
-      ) : (
-        coverFallback(tool, true)
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/22 to-black/12" />
-      <span className={`absolute left-4 top-4 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase ${statusStyle(tool.status)}`}>
-        {FERRAMENTA_STATUS_LABEL[tool.status]}
-      </span>
-      {selected && (
-        <span className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-white text-indigo-700 shadow-lg">
-          <Check size={18} strokeWidth={3} />
-        </span>
-      )}
-      <div className="absolute inset-x-0 bottom-0 p-4">
-        <h3 className="text-lg font-black leading-tight text-white drop-shadow">{tool.titulo}</h3>
-        <p className="mt-1 line-clamp-2 text-xs font-semibold leading-relaxed text-slate-300">{tool.resumo}</p>
-      </div>
-    </button>
-  );
-}
-
-function ToolRail({
-  title,
-  tools,
-  selectedKey,
-  onSelect,
-}: {
-  title: string;
-  tools: Tool[];
-  selectedKey: string | null;
-  onSelect: (tool: Tool) => void;
-}) {
-  if (tools.length === 0) return null;
-
-  return (
-    <section className="mt-8">
-      <div className="mb-3 flex items-center justify-between gap-4">
-        <h2 className="text-xl font-black tracking-[-0.01em] text-white">{title}</h2>
-        <button type="button" className="flex items-center gap-2 text-sm font-bold text-slate-400 transition hover:text-white">
-          Ver todas
-          <ArrowRight size={16} />
-        </button>
-      </div>
-      <div className="flex gap-4 overflow-x-auto pb-3 pr-4 [scrollbar-width:thin] [scrollbar-color:#334155_transparent]">
-        {tools.map((tool) => (
-          <ToolPoster key={tool.key} tool={tool} selected={selectedKey === tool.key} onClick={() => onSelect(tool)} />
-        ))}
-      </div>
-    </section>
-  );
-}
 
 export default function FerramentasPage() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  
+  // Hero section selection
+  const [heroToolKey, setHeroToolKey] = useState<string | null>(null);
+  
+  // Detail Modal selection
+  const [detailToolKey, setDetailToolKey] = useState<string | null>(null);
+  
+  // Consultation State
+  const [submittingConsultation, setSubmittingConsultation] = useState(false);
+  const [consultationSuccess, setConsultationSuccess] = useState<string | null>(null);
+  const [consultationError, setConsultationError] = useState<string | null>(null);
+
+  // Scroll Refs for rows
+  const activeRowRef = useRef<HTMLDivElement>(null);
+  const availableRowRef = useRef<HTMLDivElement>(null);
 
   async function loadTools() {
     setLoading(true);
@@ -130,7 +232,7 @@ export default function FerramentasPage() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       if (!token) {
-        setError('Sessao expirada. Faca login novamente.');
+        setError('Sessão expirada. Faça login novamente.');
         return;
       }
 
@@ -143,9 +245,19 @@ export default function FerramentasPage() {
         return;
       }
 
-      const loadedTools: Tool[] = data.tools || [];
+      // Filter and map tools to only include the ones with premium metadata
+      const loadedTools: Tool[] = (data.tools || [])
+        .filter((tool: any) => PREMIUM_METADATA[tool.key])
+        .map((tool: any) => ({
+          ...tool,
+          premium: PREMIUM_METADATA[tool.key],
+        }));
+
       setTools(loadedTools);
-      setSelectedKey((current) => current || loadedTools.find((tool) => tool.key === 'pagina_comercial')?.key || loadedTools[0]?.key || null);
+      
+      // Select first active tool as default hero tool
+      const defaultHero = loadedTools.find((t) => t.status === 'ativo')?.key || loadedTools[0]?.key || null;
+      setHeroToolKey(defaultHero);
     } catch (err: any) {
       setError(err?.message || 'Erro de rede ao carregar ferramentas.');
     } finally {
@@ -157,161 +269,580 @@ export default function FerramentasPage() {
     loadTools();
   }, []);
 
+  // Filter tools based on search term
   const visibleTools = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return tools;
-    return tools.filter((tool) => `${tool.titulo} ${tool.categoria} ${tool.resumo} ${tool.descricao}`.toLowerCase().includes(term));
+    return tools.filter((tool) =>
+      `${tool.titulo} ${tool.categoria} ${tool.resumo} ${tool.descricao}`
+        .toLowerCase()
+        .includes(term)
+    );
   }, [search, tools]);
 
-  const activeTools = visibleTools.filter((tool) => tool.status === 'ativo');
-  const availableTools = visibleTools.filter((tool) => tool.status === 'disponivel' || tool.status === 'em_breve');
+  const activeTools = useMemo(() => visibleTools.filter((tool) => tool.status === 'ativo'), [visibleTools]);
+  const availableTools = useMemo(() => visibleTools.filter((tool) => tool.status !== 'ativo' && tool.status !== 'oculto'), [visibleTools]);
 
-  const selectedTool = useMemo(() => {
-    return tools.find((tool) => tool.key === selectedKey) || visibleTools[0] || tools[0] || null;
-  }, [selectedKey, tools, visibleTools]);
+  const selectedHeroTool = useMemo(() => {
+    return tools.find((tool) => tool.key === heroToolKey) || tools[0] || null;
+  }, [heroToolKey, tools]);
 
-  const selectedIndex = visibleTools.findIndex((tool) => tool.key === selectedTool?.key);
+  const selectedDetailTool = useMemo(() => {
+    return tools.find((tool) => tool.key === detailToolKey) || null;
+  }, [detailToolKey, tools]);
 
-  function selectAdjacent(direction: -1 | 1) {
-    if (!visibleTools.length) return;
-    const current = selectedIndex >= 0 ? selectedIndex : 0;
-    const nextIndex = (current + direction + visibleTools.length) % visibleTools.length;
-    setSelectedKey(visibleTools[nextIndex].key);
-  }
+  // Scroll handlers for rows
+  const handleScroll = (ref: React.RefObject<HTMLDivElement | null>, direction: 'left' | 'right') => {
+    if (ref.current) {
+      const scrollAmount = 480;
+      ref.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  // Consultation Submission
+  const handleConsultAvailability = async (tool: Tool) => {
+    if (!tool || submittingConsultation) return;
+
+    setSubmittingConsultation(true);
+    setConsultationError(null);
+    setConsultationSuccess(null);
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) {
+        throw new Error('Sessão expirada. Por favor, reconecte-se.');
+      }
+
+      const response = await fetch('/api/support/requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          categoria: 'sistema',
+          tipo: 'sistema',
+          mensagem: `[Solicitação de Ativação] O corretor tem interesse e solicita a ativação da ferramenta: "${tool.titulo}" (Chave: ${tool.key}). Favor entrar em contato para consultar disponibilidade e condições.`,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Não foi possível enviar a solicitação.');
+      }
+
+      setConsultationSuccess(`Solicitação enviada! O seu gerente comercial analisará a ativação da ferramenta "${tool.titulo}" e entrará em contato.`);
+    } catch (err: any) {
+      setConsultationError(err.message || 'Erro ao processar solicitação de suporte.');
+    } finally {
+      setSubmittingConsultation(false);
+    }
+  };
 
   return (
     <InternalLayout>
-      <main className="min-h-[calc(100vh-9rem)] bg-[#030914] text-white">
-        <div className="relative mx-auto max-w-[1540px] px-3 pb-10 sm:px-6">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_24%_0%,rgba(34,197,94,0.14),transparent_30%),radial-gradient(circle_at_75%_8%,rgba(37,99,235,0.18),transparent_28%)]" />
+      <main className="min-h-screen bg-[#111115] text-white -mx-3 -my-5 p-3 pt-0 sm:-mx-5 sm:-my-7 lg:-mx-7 lg:-my-7 lg:p-7 lg:pt-0 pb-24 overflow-x-hidden font-sans">
+        <style dangerouslySetInnerHTML={{ __html: `
+          .scrollbar-none::-webkit-scrollbar {
+            display: none;
+          }
+          .scrollbar-none {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: scale(1.01); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          .animate-fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+          }
+        ` }} />
+        
+        {/* Search & Header Navigation */}
+        <div className="relative z-30 max-w-[1540px] mx-auto px-4 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 shadow-lg shadow-red-950/50">
+              <Sparkles size={20} className="text-white" />
+            </span>
+            <div>
+              <h1 className="text-2xl font-black tracking-tighter uppercase text-white flex items-center gap-1.5">
+                Orion<span className="text-red-500">Play</span>
+              </h1>
+              <p className="text-[10px] tracking-widest text-slate-400 font-bold uppercase">Área do Corretor</p>
+            </div>
+          </div>
 
-          <div className="relative pt-7">
-            <header className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <p className="mb-2 inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-emerald-300">
-                  <Sparkles size={15} />
-                  Orion Store
-                </p>
-                <h1 className="text-4xl font-black tracking-[-0.03em] text-white md:text-5xl">Ferramentas</h1>
-                <p className="mt-2 max-w-2xl text-base font-medium text-slate-400">
-                  Solucoes que impulsionam sua corretora e elevam seus resultados.
-                </p>
-              </div>
-
-              <label className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur lg:w-[390px]">
-                <Search size={18} className="text-slate-500" />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar ferramenta..."
-                  className="h-full flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-500"
-                />
-                {search && (
-                  <button type="button" onClick={() => setSearch('')} className="text-slate-500 transition hover:text-white" aria-label="Limpar busca">
-                    <X size={16} />
-                  </button>
-                )}
-              </label>
-            </header>
-
-            {loading ? (
-              <div className="flex min-h-[520px] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
-                <Loader2 className="animate-spin text-indigo-300" size={36} />
-              </div>
-            ) : error ? (
-              <div className="rounded-2xl border border-rose-500/25 bg-rose-500/10 p-6 text-sm font-black text-rose-200">
-                {error}
-              </div>
-            ) : !selectedTool ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-10 text-center">
-                <p className="text-lg font-black text-white">Nenhuma ferramenta encontrada.</p>
-                <p className="mt-2 text-sm font-bold text-slate-500">Ajuste a busca para continuar.</p>
-              </div>
-            ) : (
-              <>
-                <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#07111e] shadow-[0_24px_90px_rgba(0,0,0,0.34)]">
-                  <div className="absolute inset-0">
-                    {selectedTool.coverImage ? (
-                      <img src={selectedTool.coverImage} alt="" className={`h-full w-full ${heroImageStyle(selectedTool)} opacity-45 blur-[1px] scale-105`} />
-                    ) : (
-                      coverFallback(selectedTool)
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#07111e] via-[#07111e]/80 to-[#07111e]/25" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#07111e] via-transparent to-transparent" />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => selectAdjacent(-1)}
-                    className="absolute left-4 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white backdrop-blur transition hover:bg-white/20 lg:flex"
-                    aria-label="Ferramenta anterior"
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectAdjacent(1)}
-                    className="absolute right-4 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white backdrop-blur transition hover:bg-white/20 lg:flex"
-                    aria-label="Proxima ferramenta"
-                  >
-                    <ChevronRight size={24} />
-                  </button>
-
-                  <div className="relative z-10 grid min-h-[360px] gap-6 p-5 md:p-8 lg:grid-cols-[1.1fr_0.85fr] lg:items-center xl:min-h-[410px] xl:grid-cols-[1fr_0.95fr]">
-                    <div className="max-w-xl lg:pl-8">
-                      <span className={`inline-flex rounded-md border px-3 py-1.5 text-xs font-black uppercase ${statusStyle(selectedTool.status)}`}>
-                        {FERRAMENTA_STATUS_LABEL[selectedTool.status]}
-                      </span>
-                      <h2 className="mt-5 text-4xl font-black leading-[0.96] tracking-[-0.04em] text-white md:text-6xl">
-                        {selectedTool.titulo}
-                      </h2>
-                      <p className="mt-5 max-w-lg text-base font-medium leading-relaxed text-slate-300 md:text-lg">
-                        {selectedTool.resumo}
-                      </p>
-                      <div className="mt-7 flex flex-wrap gap-3">
-                        <a
-                          href="#ferramentas-lista"
-                          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 text-sm font-black text-white shadow-lg shadow-indigo-950/35 transition hover:bg-indigo-500"
-                        >
-                          <Play size={17} fill="currentColor" />
-                          Ver ferramentas
-                        </a>
-                        <button
-                          type="button"
-                          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-white/12 bg-white/8 px-6 text-sm font-black text-slate-200 transition hover:bg-white/14 hover:text-white"
-                        >
-                          <Settings size={17} />
-                          Configurar
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-white/10 bg-[#0b1524]/88 p-5 backdrop-blur-md">
-                      <h3 className="text-base font-black text-white">Sobre esta ferramenta</h3>
-                      <p className="mt-3 text-sm font-medium leading-relaxed text-slate-300">{selectedTool.descricao}</p>
-                      <div className="mt-5 grid gap-3">
-                        {selectedTool.entregas.slice(0, 5).map((item) => (
-                          <div key={item} className="flex items-center gap-3 text-sm font-medium text-slate-300">
-                            <span className="flex h-5 w-5 items-center justify-center rounded border border-lime-400/45 text-lime-300">
-                              <Check size={13} />
-                            </span>
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <div id="ferramentas-lista">
-                  <ToolRail title="Ativas" tools={activeTools} selectedKey={selectedTool.key} onSelect={(tool) => setSelectedKey(tool.key)} />
-                </div>
-                <ToolRail title="Disponiveis" tools={availableTools} selectedKey={selectedTool.key} onSelect={(tool) => setSelectedKey(tool.key)} />
-              </>
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar ferramenta..."
+              className="w-full pl-10 pr-9 py-2.5 rounded-full border border-white/10 bg-white/[0.04] text-sm font-semibold text-white placeholder-slate-400 focus:outline-none focus:border-red-500 focus:bg-white/[0.08] transition duration-300"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+              >
+                <X size={15} />
+              </button>
             )}
           </div>
         </div>
+
+        {loading ? (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="animate-spin text-red-500" size={48} />
+              <p className="text-sm font-bold text-slate-400 tracking-wider uppercase animate-pulse">Carregando OrionPlay...</p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="max-w-2xl mx-auto mt-20 p-6 rounded-2xl border border-red-500/20 bg-red-500/10 text-center">
+            <p className="text-base font-bold text-red-300">{error}</p>
+            <button
+              onClick={loadTools}
+              className="mt-4 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-sm font-bold transition"
+            >
+              Tentar Novamente
+            </button>
+          </div>
+        ) : visibleTools.length === 0 ? (
+          <div className="max-w-md mx-auto mt-20 text-center p-8 rounded-2xl border border-white/5 bg-white/[0.02]">
+            <HelpCircle className="mx-auto text-slate-500 mb-4 animate-bounce" size={48} />
+            <p className="text-lg font-bold">Nenhuma ferramenta encontrada</p>
+            <p className="text-sm text-slate-400 mt-1">Ajuste seu termo de busca para localizar as ferramentas.</p>
+          </div>
+        ) : (
+          <>
+            {/* HERO BANNER - Netflix Billboard Style */}
+            {selectedHeroTool && selectedHeroTool.premium && (
+              <section className="relative w-full h-[65vh] min-h-[480px] md:h-[75vh] flex items-center justify-start overflow-hidden rounded-3xl mt-4 max-w-[1540px] mx-auto shadow-2xl">
+                {/* Background Image with Dark Vignette/Fade Gradients */}
+                <div className="absolute inset-0 z-0">
+                  <img
+                    src={selectedHeroTool.premium.fullImage}
+                    alt={selectedHeroTool.titulo}
+                    className="w-full h-full object-cover object-center animate-fade-in scale-105 filter brightness-[0.6] transition-all duration-700"
+                  />
+                  {/* Left Side Shadow for Text Contrast */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#111115] via-[#111115]/75 to-transparent z-10 w-full md:w-3/5" />
+                  {/* Base Gradient Fade to Black */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#111115] via-transparent to-transparent z-10" />
+                </div>
+
+                {/* Hero Content */}
+                <div className="relative z-20 max-w-2xl px-6 md:pl-16 flex flex-col items-start gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded">
+                      DESTAQUE
+                    </span>
+                    <span className="text-slate-300 text-xs font-bold flex items-center gap-1">
+                      <Layers size={13} className="text-red-500" />
+                      {selectedHeroTool.premium.categoria}
+                    </span>
+                  </div>
+
+                  <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white leading-tight drop-shadow-md">
+                    {selectedHeroTool.titulo}
+                  </h2>
+
+                  <p className="text-sm md:text-base font-medium leading-relaxed text-slate-300 drop-shadow max-w-lg">
+                    {selectedHeroTool.premium.pitch}
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-3 mt-2">
+                    <button
+                      onClick={() => setDetailToolKey(selectedHeroTool.key)}
+                      className="flex items-center gap-2 bg-white text-black hover:bg-slate-200 transition duration-300 font-extrabold text-sm md:text-base px-6 py-3 rounded-lg shadow-lg shadow-black/35 cursor-pointer"
+                    >
+                      <Play size={18} fill="currentColor" />
+                      Conhecer Detalhes
+                    </button>
+
+                    {selectedHeroTool.status === 'ativo' ? (
+                      <span className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-bold text-sm px-4 py-3 rounded-lg">
+                        <Check size={16} strokeWidth={3} />
+                        Disponível na sua conta
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setDetailToolKey(selectedHeroTool.key);
+                        }}
+                        className="flex items-center gap-2 bg-red-600/30 hover:bg-red-600/50 border border-red-500/45 text-red-200 hover:text-white transition duration-300 font-extrabold text-sm px-5 py-3 rounded-lg cursor-pointer"
+                      >
+                        <Info size={16} />
+                        Consultar Disponibilidade
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Subtitle Indicator at Right Corner */}
+                <div className="absolute right-6 bottom-16 z-20 hidden md:flex items-center gap-1.5 text-xs text-slate-400 font-bold bg-black/40 px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-sm">
+                  <TrendingUp size={14} className="text-red-500" />
+                  Alta Conversão Comprovada
+                </div>
+              </section>
+            )}
+
+            {/* CAROUSELS SECTION */}
+            <div className="max-w-[1540px] mx-auto px-4 mt-12 space-y-12">
+              
+              {/* Row 1: Active Tools */}
+              {activeTools.length > 0 && (
+                <div className="relative group/row">
+                  <h3 className="text-lg md:text-xl font-black tracking-tight text-white mb-4 flex items-center gap-2">
+                    <span className="h-5 w-1 bg-emerald-500 rounded-full" />
+                    Minhas Ferramentas Ativas
+                    <span className="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                      {activeTools.length} {activeTools.length === 1 ? 'ativa' : 'ativas'}
+                    </span>
+                  </h3>
+
+                  {/* Left scroll control */}
+                  <button
+                    onClick={() => handleScroll(activeRowRef, 'left')}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-30 h-[80%] w-10 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover/row:opacity-100 transition duration-300 border-r border-white/5 backdrop-blur-sm rounded-r-xl"
+                  >
+                    <ChevronLeft size={28} />
+                  </button>
+
+                  {/* Right scroll control */}
+                  <button
+                    onClick={() => handleScroll(activeRowRef, 'right')}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-30 h-[80%] w-10 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover/row:opacity-100 transition duration-300 border-l border-white/5 backdrop-blur-sm rounded-l-xl"
+                  >
+                    <ChevronRight size={28} />
+                  </button>
+
+                  {/* Card Container */}
+                  <div
+                    ref={activeRowRef}
+                    className="flex gap-4 overflow-x-auto py-2 scroll-smooth scrollbar-none [scrollbar-width:none]"
+                  >
+                    {activeTools.map((tool) => (
+                      <motion.div
+                        key={tool.key}
+                        whileHover={{ scale: 1.04, y: -4 }}
+                        transition={{ duration: 0.25 }}
+                        onClick={() => {
+                          setHeroToolKey(tool.key);
+                          setDetailToolKey(tool.key);
+                        }}
+                        className={`relative flex-none w-72 md:w-80 aspect-video rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
+                          tool.premium?.accentGlow || 'hover:border-red-500'
+                        }`}
+                      >
+                        {tool.premium ? (
+                          <img
+                            src={tool.premium.coverImage}
+                            alt={tool.titulo}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-indigo-900 to-slate-900 flex items-center justify-center">
+                            <span className="font-bold text-sm">{tool.titulo}</span>
+                          </div>
+                        )}
+                        {/* Overlay Gradiente */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent flex flex-col justify-end p-4" />
+                        
+                        {/* Tag Ativa */}
+                        <span className="absolute top-3 left-3 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded shadow-md flex items-center gap-1">
+                          <Check size={10} strokeWidth={3} />
+                          Ativa
+                        </span>
+
+                        <div className="absolute bottom-3 left-3 right-3">
+                          <h4 className="text-sm font-extrabold text-white leading-tight drop-shadow-md">
+                            {tool.titulo}
+                          </h4>
+                          <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                            {tool.resumo}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Row 2: Available Tools */}
+              {availableTools.length > 0 && (
+                <div className="relative group/row">
+                  <h3 className="text-lg md:text-xl font-black tracking-tight text-white mb-4 flex items-center gap-2">
+                    <span className="h-5 w-1 bg-red-600 rounded-full" />
+                    Novidades Disponíveis para Contratar
+                    <span className="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                      {availableTools.length} {availableTools.length === 1 ? 'opção' : 'opções'}
+                    </span>
+                  </h3>
+
+                  {/* Left scroll control */}
+                  <button
+                    onClick={() => handleScroll(availableRowRef, 'left')}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-30 h-[80%] w-10 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover/row:opacity-100 transition duration-300 border-r border-white/5 backdrop-blur-sm rounded-r-xl"
+                  >
+                    <ChevronLeft size={28} />
+                  </button>
+
+                  {/* Right scroll control */}
+                  <button
+                    onClick={() => handleScroll(availableRowRef, 'right')}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-30 h-[80%] w-10 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover/row:opacity-100 transition duration-300 border-l border-white/5 backdrop-blur-sm rounded-l-xl"
+                  >
+                    <ChevronRight size={28} />
+                  </button>
+
+                  {/* Card Container */}
+                  <div
+                    ref={availableRowRef}
+                    className="flex gap-4 overflow-x-auto py-2 scroll-smooth scrollbar-none [scrollbar-width:none]"
+                  >
+                    {availableTools.map((tool) => (
+                      <motion.div
+                        key={tool.key}
+                        whileHover={{ scale: 1.04, y: -4 }}
+                        transition={{ duration: 0.25 }}
+                        onClick={() => {
+                          setHeroToolKey(tool.key);
+                          setDetailToolKey(tool.key);
+                        }}
+                        className={`relative flex-none w-72 md:w-80 aspect-video rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
+                          tool.premium?.accentGlow || 'hover:border-red-500'
+                        }`}
+                      >
+                        {tool.premium ? (
+                          <img
+                            src={tool.premium.coverImage}
+                            alt={tool.titulo}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-red-950 to-slate-900 flex items-center justify-center">
+                            <span className="font-bold text-sm">{tool.titulo}</span>
+                          </div>
+                        )}
+                        {/* Overlay Gradiente */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent flex flex-col justify-end p-4" />
+                        
+                        {/* Tag Preço/Status */}
+                        <span className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded shadow-md">
+                          Disponível
+                        </span>
+
+                        <div className="absolute bottom-3 left-3 right-3">
+                          <h4 className="text-sm font-extrabold text-white leading-tight drop-shadow-md">
+                            {tool.titulo}
+                          </h4>
+                          <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                            {tool.resumo}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* EXPANDED DETAIL MODAL - Netflix Style */}
+            <AnimatePresence>
+              {selectedDetailTool && selectedDetailTool.premium && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 md:p-6 overflow-y-auto"
+                >
+                  <motion.div
+                    initial={{ scale: 0.9, y: 50, opacity: 0 }}
+                    animate={{ scale: 1, y: 0, opacity: 1 }}
+                    exit={{ scale: 0.9, y: 50, opacity: 0 }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                    className="relative bg-[#18181b] rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl border border-white/10 my-8"
+                  >
+                    
+                    {/* Header Image Cover */}
+                    <div className="relative w-full h-[280px] md:h-[400px] overflow-hidden">
+                      <img
+                        src={selectedDetailTool.premium.fullImage}
+                        alt={selectedDetailTool.titulo}
+                        className="w-full h-full object-cover object-center"
+                      />
+                      {/* Close Button */}
+                      <button
+                        onClick={() => {
+                          setDetailToolKey(null);
+                          setConsultationSuccess(null);
+                          setConsultationError(null);
+                        }}
+                        className="absolute right-4 top-4 z-40 bg-black/50 hover:bg-black/80 text-white rounded-full p-2.5 transition duration-300 border border-white/10"
+                      >
+                        <X size={20} />
+                      </button>
+
+                      {/* Overlays on Header */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#18181b] via-[#18181b]/30 to-transparent" />
+                      
+                      <div className="absolute bottom-6 left-6 md:left-12 z-20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="bg-red-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded">
+                            {selectedDetailTool.premium.categoria}
+                          </span>
+                        </div>
+                        <h3 className="text-3xl md:text-5xl font-black tracking-tighter text-white drop-shadow-md">
+                          {selectedDetailTool.titulo}
+                        </h3>
+                      </div>
+                    </div>
+
+                    {/* Modal Main Content Container */}
+                    <div className="p-6 md:p-12">
+                      <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-8 md:gap-12">
+                        
+                        {/* Left Column: Pitch & Mechanics */}
+                        <div className="space-y-6">
+                          <div>
+                            <h4 className="text-[11px] font-black uppercase tracking-widest text-red-500 mb-2">Copy Comercial</h4>
+                            <p className="text-sm md:text-base font-medium leading-relaxed text-slate-300">
+                              {selectedDetailTool.premium.pitch}
+                            </p>
+                          </div>
+
+                          <div className="border-t border-white/10 pt-4">
+                            <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-1.5">
+                              <Calendar size={16} className="text-red-500" />
+                              Como Funciona o Processo?
+                            </h4>
+                            <ol className="space-y-2.5 text-xs text-slate-400 font-semibold list-decimal pl-4">
+                              {selectedDetailTool.premium.funcionamento.map((item, idx) => (
+                                <li key={idx} className="pl-1">
+                                  {item}
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+
+                          <div className="border-t border-white/10 pt-4">
+                            <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-1.5">
+                              <TrendingUp size={16} className="text-red-500" />
+                              Principais Benefícios
+                            </h4>
+                            <ul className="space-y-2 text-xs text-slate-400 font-semibold list-disc pl-4">
+                              {selectedDetailTool.premium.beneficios.map((item, idx) => (
+                                <li key={idx} className="pl-1">
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+
+                        {/* Right Column: Active Check / Action Box */}
+                        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-6 flex flex-col justify-between h-fit self-start gap-6">
+                          
+                          <div>
+                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">
+                              O que está incluso na entrega?
+                            </h4>
+                            <div className="space-y-3">
+                              {selectedDetailTool.premium.entregas.map((entrega) => (
+                                <div key={entrega} className="flex items-start gap-3">
+                                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    <Check size={12} strokeWidth={3} />
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-300 leading-tight">
+                                    {entrega}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="border-t border-white/5 pt-6 space-y-4">
+                            {selectedDetailTool.status === 'ativo' ? (
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                                  <CheckCircle2 size={18} />
+                                  <span className="text-xs font-black uppercase tracking-wider">Ferramenta Ativa</span>
+                                </div>
+                                <p className="text-[11px] font-semibold text-slate-400 leading-relaxed text-center">
+                                  Esta ferramenta já se encontra em pleno funcionamento e integrada ao seu número ou conta.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                {consultationSuccess ? (
+                                  <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center"
+                                  >
+                                    <CheckCircle2 className="mx-auto text-emerald-400 mb-2 animate-bounce" size={24} />
+                                    <p className="text-xs font-black text-emerald-300 leading-normal">
+                                      {consultationSuccess}
+                                    </p>
+                                  </motion.div>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={submittingConsultation}
+                                      onClick={() => handleConsultAvailability(selectedDetailTool)}
+                                      className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:bg-red-700/50 text-white font-extrabold text-sm py-3 px-5 rounded-xl shadow-lg shadow-red-950/40 hover:shadow-red-600/20 hover:scale-[1.01] transition-all duration-300 cursor-pointer"
+                                    >
+                                      {submittingConsultation ? (
+                                        <>
+                                          <Loader2 className="animate-spin" size={16} />
+                                          Enviando Solicitação...
+                                        </>
+                                      ) : (
+                                        <>
+                                          Consultar Disponibilidade
+                                        </>
+                                      )}
+                                    </button>
+
+                                    {consultationError && (
+                                      <p className="text-xs font-bold text-red-400 text-center">
+                                        {consultationError}
+                                      </p>
+                                    )}
+
+                                    <p className="text-[11px] font-semibold text-slate-400 leading-relaxed text-center">
+                                      Ao clicar em consultar disponibilidade, enviaremos um chamado automático de ativação para a administração.
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                        </div>
+
+                      </div>
+                    </div>
+
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
+        )}
       </main>
     </InternalLayout>
   );
 }
+
