@@ -80,6 +80,14 @@ function field(body: Record<string, any>, aliases: string[]) {
   return '';
 }
 
+function inferLeadOrigem(body: Record<string, any>, campaign: string | null) {
+  const campaignText = normalizeKey(campaign || field(body, ['utm_campaign', 'campaign', 'campanha', 'nome campanha']));
+  if (campaignText.includes('orion')) return 'Orion';
+  const explicit = normalizeText(field(body, ['origem_lead', 'lead_origem', 'origem comercial', 'origem do lead']));
+  if (explicit) return explicit;
+  return normalizeText(field(body, ['utm_source', 'source', 'origem', 'utm origem'])) || null;
+}
+
 function parseCurrencyValue(value: unknown) {
   const raw = normalizeText(value);
   if (!raw || raw === '-') return null;
@@ -155,6 +163,7 @@ function buildEnrichmentUpdate(existing: any, incoming: any) {
     'investimento',
     'cidade',
     'operadora',
+    'origem',
     'utm_source',
     'utm_medium',
     'utm_campaign',
@@ -468,6 +477,8 @@ export async function POST(request: Request) {
       'receita',
     ]));
 
+    const utmCampaign = normalizeText(field(body, ['utm_campaign', 'campaign', 'campanha', 'nome campanha'])) || null;
+
     const leadPayload = {
       corretor_id: corretorId,
       data_entrada: dataEntrada,
@@ -482,9 +493,10 @@ export async function POST(request: Request) {
       investimento: normalizeText(field(body, ['investimento', 'investimento pretendido', 'investimento_pretendido', 'pretensao investimento', 'pretensão investimento', 'valor_pretendido', 'budget', 'orcamento', 'orçamento'])),
       cidade: normalizeText(field(body, ['cidade', 'city', 'regiao', 'localidade'])),
       operadora: normalizeText(field(body, ['operadora', 'pagina', 'página', 'aba', 'operator', 'page', 'source_page'])) || null,
+      origem: inferLeadOrigem(body, utmCampaign),
       utm_source: normalizeText(field(body, ['utm_source', 'source', 'origem', 'utm origem'])) || null,
       utm_medium: normalizeText(field(body, ['utm_medium', 'medium', 'meio', 'utm meio'])) || null,
-      utm_campaign: normalizeText(field(body, ['utm_campaign', 'campaign', 'campanha', 'nome campanha'])) || null,
+      utm_campaign: utmCampaign,
       utm_term: normalizeText(field(body, ['utm_term', 'term', 'conjunto', 'conjunto de anuncio', 'conjunto_anuncio', 'adset', 'ad set'])) || null,
       utm_content: normalizeText(field(body, ['utm_content', 'content', 'anuncio', 'anúncio', 'ad', 'criativo'])) || null,
       valor_negociacao: valorNegociacao,
@@ -504,7 +516,7 @@ export async function POST(request: Request) {
       const to = from + existingLimit - 1;
       const { data: existingLeads, error: existingError } = await supabaseAdmin
         .from('leads')
-        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
+        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
         .eq('corretor_id', corretorId)
         .range(from, to);
 
@@ -571,7 +583,7 @@ export async function POST(request: Request) {
     // Fetch final lead assignment details to notify the correct users
     const { data: finalLead } = await supabaseAdmin
       .from('leads')
-      .select('id, corretor_id, nome, telefone, idades, cidade, possui_cnpj, cnpj, investimento, tem_plano_ativo, plano_atual, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, responsavel_membro:responsavel_membro_id(nome)')
+      .select('id, corretor_id, nome, telefone, idades, cidade, possui_cnpj, cnpj, investimento, tem_plano_ativo, plano_atual, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, responsavel_membro:responsavel_membro_id(nome)')
       .eq('id', data.id)
       .maybeSingle();
 

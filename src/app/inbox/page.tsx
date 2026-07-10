@@ -700,7 +700,7 @@ export default function BrokerInboxPage() {
         .from('leads')
         .select(`
           status, etiqueta, observacoes, nome, telefone, idades, possui_cnpj, cnpj, responsavel_profile_id,
-          tem_plano_ativo, plano_atual, investimento, cidade, operadora, email,
+          tem_plano_ativo, plano_atual, investimento, cidade, operadora, origem, email,
           motivo_busca, hospital_preferencia, valor_negociacao, operadora_negociacao
         `)
         .eq('id', leadId)
@@ -2609,6 +2609,7 @@ export default function BrokerInboxPage() {
                       <EditableLeadInfoCard label="Investimento" field="investimento" value={leadInfo.investimento || ''} onSave={handleUpdateLeadField} />
                       <EditableLeadInfoCard label="Cidade" field="cidade" value={leadInfo.cidade || ''} onSave={handleUpdateLeadField} />
                       <EditableLeadInfoCard label="Pagina" field="operadora" value={leadInfo.operadora || ''} onSave={handleUpdateLeadField} />
+                      <EditableLeadInfoCard label="Origem" field="origem" value={leadInfo.origem || ''} onSave={handleUpdateLeadField} />
                       <EditableLeadInfoCard label="E-mail" field="email" value={leadInfo.email || ''} onSave={handleUpdateLeadField} className="col-span-2" />
                       <EditableLeadInfoCard label="Motivo da busca" field="motivo_busca" value={leadInfo.motivo_busca || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
                       <EditableLeadInfoCard label="Hospital/Regiao" field="hospital_preferencia" value={leadInfo.hospital_preferencia || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
@@ -2725,17 +2726,6 @@ export default function BrokerInboxPage() {
                         <button onClick={() => handleRemoveTag(t)} className="text-[8px] hover:text-white">✕</button>
                       </span>
                     ))}
-                  </div>
-                </div>
-
-                {/* Lead Source */}
-                <div className="space-y-2 shrink-0">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Origem do Lead</label>
-                  <div className="bg-slate-950 border border-white/5 rounded-2xl p-4">
-                    <div>
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Origem Cadastrada</span>
-                      <span className="text-xs font-black text-white block mt-0.5">Meta</span>
-                    </div>
                   </div>
                 </div>
 

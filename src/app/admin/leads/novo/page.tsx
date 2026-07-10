@@ -43,6 +43,7 @@ export default function AdminNovoLeadPage() {
     investimento: '',
     cidade: '',
     operadora: '',
+    origem: 'Manual',
     status: 'Aguardando atendimento' as LeadStatus,
     data_entrada: new Date().toISOString().split('T')[0]
   });
@@ -180,6 +181,18 @@ export default function AdminNovoLeadPage() {
                       type="date" required
                       value={formData.data_entrada}
                       onChange={e => setFormData({...formData, data_entrada: e.target.value})}
+                      className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-bold"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2 group md:col-span-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">ORIGEM</label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
+                    <input
+                      value={formData.origem}
+                      onChange={e => setFormData({...formData, origem: e.target.value})}
+                      placeholder="Ex: Manual, Orion, Indicação"
                       className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-blue-500 transition-all font-bold"
                     />
                   </div>

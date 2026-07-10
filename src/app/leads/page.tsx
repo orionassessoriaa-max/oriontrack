@@ -153,6 +153,7 @@ const EMPTY_MANUAL_LEAD = {
   plano_atual: '',
   investimento: '',
   cidade: '',
+  origem: 'Manual',
   responsavel_membro_id: 'unassigned',
 };
 
@@ -174,6 +175,10 @@ function leadAd(lead: Lead) {
   return lead.utm_content || noteValue(lead, 'utm_content') || '-';
 }
 
+function leadOrigem(lead: Lead) {
+  return lead.origem || '-';
+}
+
 export default function BrokerLeadsPage() {
   const { profile, actualProfile, isViewingAsCorretor } = useAuth();
   const { confirmDialog } = useDialog();
@@ -193,6 +198,7 @@ export default function BrokerLeadsPage() {
   const [dateTo, setDateTo] = useState('');
   const [dateFilterType, setDateFilterType] = useState('todos');
   const [operadoraFilter, setOperadoraFilter] = useState('todas');
+  const [origemFilter, setOrigemFilter] = useState('todos');
   const [campaignFilter, setCampaignFilter] = useState('todos');
   const [adsetFilter, setAdsetFilter] = useState('todos');
   const [adFilter, setAdFilter] = useState('todos');
@@ -520,7 +526,7 @@ export default function BrokerLeadsPage() {
     setSavingStatusId(null);
   };
 
-  const updateLeadTextField = async (lead: Lead, field: 'cnpj' | 'observacoes', rawValue: string) => {
+  const updateLeadTextField = async (lead: Lead, field: 'cnpj' | 'observacoes' | 'origem', rawValue: string) => {
     const nextValue = rawValue.trim();
     const currentValue = String((lead as any)[field] || '').trim();
     if (nextValue === currentValue) return;
@@ -714,6 +720,7 @@ export default function BrokerLeadsPage() {
       operadoraFilter === 'todas' ||
       (operadoraFilter === '__sem_aba__' ? leadTab === 'Sem aba' : leadTab === operadoraFilter);
     const campaignMatch = campaignFilter === 'todos' || leadCampaign(lead) === campaignFilter;
+    const origemMatch = origemFilter === 'todos' || leadOrigem(lead) === origemFilter;
     const adsetMatch = adsetFilter === 'todos' || leadAdset(lead) === adsetFilter;
     const adMatch = adFilter === 'todos' || leadAd(lead) === adFilter;
     const leadDate = lead.data_entrada ? new Date(lead.data_entrada) : null;
@@ -727,7 +734,7 @@ export default function BrokerLeadsPage() {
       responsavelFilter === 'todos' ||
       (responsavelFilter === 'sem_responsavel' ? !lead.responsavel_membro_id : lead.responsavel_membro_id === responsavelFilter);
 
-    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && campaignMatch && adsetMatch && adMatch && dateTypeMatch && fromMatch && toMatch && responsavelMatch;
+    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && origemMatch && campaignMatch && adsetMatch && adMatch && dateTypeMatch && fromMatch && toMatch && responsavelMatch;
   });
 
   const filterOptions = (values: string[]) => Array.from(new Set(values.filter((value) => value && value !== '-'))).sort((a, b) => a.localeCompare(b));
@@ -740,6 +747,7 @@ export default function BrokerLeadsPage() {
   }, [leads]);
 
   const campaignOptions = useMemo(() => filterOptions(leads.map(leadCampaign)), [leads]);
+  const origemOptions = useMemo(() => filterOptions(leads.map(leadOrigem)), [leads]);
   const adsetOptions = useMemo(() => filterOptions(leads.map(leadAdset)), [leads]);
   const adOptions = useMemo(() => filterOptions(leads.map(leadAd)), [leads]);
 
@@ -759,6 +767,7 @@ export default function BrokerLeadsPage() {
     cnpjFilter !== 'todos' ||
     statusFilter !== 'todos' ||
     operadoraFilter !== 'todas' ||
+    origemFilter !== 'todos' ||
     campaignFilter !== 'todos' ||
     adsetFilter !== 'todos' ||
     adFilter !== 'todos' ||
@@ -773,6 +782,7 @@ export default function BrokerLeadsPage() {
     setCnpjFilter('todos');
     setStatusFilter('todos');
     setOperadoraFilter('todas');
+    setOrigemFilter('todos');
     setCampaignFilter('todos');
     setAdsetFilter('todos');
     setAdFilter('todos');
@@ -799,7 +809,8 @@ export default function BrokerLeadsPage() {
       'Cidade',
       'Status',
       'Página/Operadora',
-      'Origem (UTM Source)',
+      'Origem',
+      'UTM Source',
       'Meio (UTM Medium)',
       'Campanha (UTM Campaign)',
       'Termo (UTM Term)',
@@ -821,6 +832,7 @@ export default function BrokerLeadsPage() {
       lead.cidade || '',
       lead.status || '',
       lead.operadora || '',
+      leadOrigem(lead),
       lead.utm_source || '',
       lead.utm_medium || '',
       lead.utm_campaign || '',
@@ -1021,6 +1033,10 @@ export default function BrokerLeadsPage() {
             {sheetTabs.map((tab) => <option key={tab} value={tab}>{tab}</option>)}
             <option value="__sem_aba__">Sem página</option>
           </select>
+          <select value={origemFilter} onChange={(e) => setOrigemFilter(e.target.value)} className="orion-control min-w-[190px] flex-[1_1_190px] px-4 py-3.5 text-sm">
+            <option value="todos">Origem: todas</option>
+            {origemOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
           <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm">
             <option value="todos">Campanha: todas</option>
             {campaignOptions.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -1053,6 +1069,11 @@ export default function BrokerLeadsPage() {
           <span className="orion-chip bg-amber-50 text-amber-700">
             CNPJ: {cnpjFilter === 'todos' ? 'todos' : cnpjFilter === 'com' ? 'com CNPJ' : cnpjFilter === 'sem' ? 'sem CNPJ' : 'nao informado'}
           </span>
+          {origemFilter !== 'todos' && (
+            <span className="orion-chip bg-cyan-50 text-cyan-700">
+              Origem: {origemFilter}
+            </span>
+          )}
           {!isTeamMemberProfile && responsavelFilter !== 'todos' && (
             <span className="orion-chip bg-indigo-50 text-indigo-700">
               Responsável: {responsavelFilter === 'sem_responsavel' ? 'sem responsável' : teamMembers.find(m => m.id === responsavelFilter)?.nome || 'carregando...'}
@@ -1094,6 +1115,7 @@ export default function BrokerLeadsPage() {
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Operadora venda</th>
                   <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
                   <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
+                  <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Origem</th>
                   <th className="min-w-[180px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Responsavel</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Campanha</th>
                   <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Conjunto</th>
@@ -1105,7 +1127,7 @@ export default function BrokerLeadsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={isViewingAsCorretor ? 22 : 21} className="py-20 text-center">
+                    <td colSpan={isViewingAsCorretor ? 23 : 22} className="py-20 text-center">
                       <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
                     </td>
                   </tr>
@@ -1217,6 +1239,17 @@ export default function BrokerLeadsPage() {
                       </div>
                     </td>
                     <td className="border border-slate-100 px-3 py-3 font-black text-slate-600">{leadTab}</td>
+                    <td className="border border-slate-100 px-3 py-3">
+                      <input
+                        defaultValue={leadOrigem(lead) === '-' ? '' : leadOrigem(lead)}
+                        onBlur={(event) => updateLeadTextField(lead, 'origem', event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') event.currentTarget.blur();
+                        }}
+                        placeholder="Origem"
+                        className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </td>
                     <td className="border border-slate-100 px-3 py-3">
                       {canManageLeadResponsible && teamMembers.length > 0 ? (
                         <select
@@ -1418,6 +1451,15 @@ export default function BrokerLeadsPage() {
                     onChange={(e) => setManualLeadForm((current) => ({ ...current, cidade: e.target.value }))}
                     className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
                     placeholder="Cidade"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Origem</label>
+                  <input
+                    value={manualLeadForm.origem}
+                    onChange={(e) => setManualLeadForm((current) => ({ ...current, origem: e.target.value }))}
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
+                    placeholder="Manual, Orion, Indicacao..."
                   />
                 </div>
                 <div className="space-y-2">

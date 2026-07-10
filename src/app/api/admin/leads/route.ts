@@ -236,6 +236,7 @@ export async function POST(request: Request) {
         investimento: String(body.investimento || ''),
         cidade: String(body.cidade || ''),
         operadora: body.operadora ? String(body.operadora) : null,
+        origem: body.origem ? String(body.origem).trim() : 'Manual',
         responsavel_membro_id: responsibleMember?.id || null,
         responsavel_profile_id: responsibleMember?.profile_id || null,
         status: normalizeLeadStatus(body.status || 'Aguardando atendimento'),

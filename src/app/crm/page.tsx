@@ -368,6 +368,12 @@ export default function CrmPage() {
     actualProfile?.tipo_usuario === 'admin'
   );
   const canManageLeadResponsible = canAssignTeamLeads;
+  const canManageKanbanStructure = !isTeamMemberProfile && (
+    profile?.tipo_usuario === 'admin' ||
+    profile?.tipo_usuario === 'corretor' ||
+    profile?.tipo_usuario === 'corretor_admin' ||
+    actualProfile?.tipo_usuario === 'admin'
+  );
   const isViewingBrokerAsAdmin = Boolean(simulatedCorretorId) && !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile?.tipo_usuario || '');
   const canUseDealershipViews = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin || (canAssignTeamLeads && teamMembers.length > 0);
 
@@ -995,6 +1001,7 @@ export default function CrmPage() {
 
   function addKanbanStage(event: FormEvent) {
     event.preventDefault();
+    if (!canManageKanbanStructure) return;
     const name = cleanStageText(newStageName, '');
     if (!name) return;
     if (boardColumns.some((column) => column.id.toLowerCase() === name.toLowerCase())) {
@@ -1010,12 +1017,14 @@ export default function CrmPage() {
   }
 
   function startEditingColumn(column: KanbanColumn) {
+    if (!canManageKanbanStructure) return;
     if (isFixedKanbanStatus(column.id)) return;
     setEditingColumnId(column.id);
     setStageDraft({ label: column.label, desc: column.desc });
   }
 
   function saveEditingColumn(columnId: LeadStatus) {
+    if (!canManageKanbanStructure) return;
     setColumns((current) => current.map((column) => (
       column.id === columnId
         ? {
@@ -1029,6 +1038,7 @@ export default function CrmPage() {
   }
 
   function moveKanbanColumn(columnId: LeadStatus, targetColumnId: LeadStatus) {
+    if (!canManageKanbanStructure) return;
     setColumns((current) => {
       const index = current.findIndex((column) => column.id === columnId);
       const targetIndex = current.findIndex((column) => column.id === targetColumnId);
@@ -1049,12 +1059,14 @@ export default function CrmPage() {
   }
 
   function handleColumnDrop(targetColumnId: LeadStatus) {
+    if (!canManageKanbanStructure) return;
     if (!draggedColumnId) return;
     moveKanbanColumn(draggedColumnId, targetColumnId);
     setDraggedColumnId(null);
   }
 
   function deleteKanbanColumn(column: KanbanColumn) {
+    if (!canManageKanbanStructure) return;
     if (isFixedKanbanStatus(column.id)) return;
     if (getLeadsByStatus(column.id).length > 0) {
       alert('Mova os leads desta etapa antes de excluir.');
@@ -1065,6 +1077,7 @@ export default function CrmPage() {
   }
 
   function resetKanbanColumns() {
+    if (!canManageKanbanStructure) return;
     if (!confirm('Restaurar as etapas padrao do Kanban?')) return;
     setColumns(DEFAULT_COLUMNS);
     setEditingColumnId(null);
@@ -1622,7 +1635,8 @@ export default function CrmPage() {
                     const isFixedColumn = isFixedKanbanStatus(column.id);
                     const isEditingColumn = editingColumnId === column.id;
                     const isStoredColumn = columns.some((item) => item.id === column.id);
-                    const canDeleteColumn = !isFixedColumn && isCustomKanbanColumn(column) && columnLeads.length === 0;
+                    const canEditColumn = canManageKanbanStructure && !isFixedColumn && isStoredColumn;
+                    const canDeleteColumn = canManageKanbanStructure && !isFixedColumn && isCustomKanbanColumn(column) && columnLeads.length === 0;
 
                     return (
                       <section
@@ -1630,25 +1644,25 @@ export default function CrmPage() {
                         aria-label={`Etapa ${column.label} com ${columnLeads.length} leads`}
                         onDragOver={(event) => event.preventDefault()}
                         onDragEnter={() => {
-                          if (draggedColumnId && draggedColumnId !== column.id) {
+                          if (canManageKanbanStructure && draggedColumnId && draggedColumnId !== column.id) {
                             moveKanbanColumn(draggedColumnId, column.id);
                           }
                         }}
-                        onDrop={() => draggedColumnId ? handleColumnDrop(column.id) : handleDrop(column.id)}
+                        onDrop={() => draggedColumnId && canManageKanbanStructure ? handleColumnDrop(column.id) : handleDrop(column.id)}
                         className={`orion-kanban-column flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-all duration-200 ease-out sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId || draggedColumnId ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'} ${draggedColumnId === column.id ? 'scale-[1.015] shadow-2xl shadow-blue-900/20 ring-2 ring-blue-300/70' : ''}`}
                       >
                         <header
-                          draggable={!isFixedColumn && !isEditingColumn && isStoredColumn}
+                          draggable={canEditColumn && !isEditingColumn}
                           onDragStart={(event) => {
-                            if (!isFixedColumn && !isEditingColumn && isStoredColumn) {
+                            if (canEditColumn && !isEditingColumn) {
                               event.dataTransfer.effectAllowed = 'move';
                               event.dataTransfer.setData('text/plain', column.id);
                               setDraggedColumnId(column.id);
                             }
                           }}
                           onDragEnd={() => setDraggedColumnId(null)}
-                          className={`kanban-stage-header shrink-0 border-b bg-gradient-to-br p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.16)] ${!isFixedColumn && !isEditingColumn && isStoredColumn ? 'cursor-grab active:cursor-grabbing' : ''} ${kanbanStageHeaderClass[column.id] || 'from-blue-700 to-blue-600 border-blue-500/30'}`}
-                          title={!isFixedColumn && isStoredColumn ? 'Arraste para mover a etapa' : 'Etapa fixa'}
+                          className={`kanban-stage-header shrink-0 border-b bg-gradient-to-br p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.16)] ${canEditColumn && !isEditingColumn ? 'cursor-grab active:cursor-grabbing' : ''} ${kanbanStageHeaderClass[column.id] || 'from-blue-700 to-blue-600 border-blue-500/30'}`}
+                          title={canEditColumn ? 'Arraste para mover a etapa' : 'Etapa fixa'}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
@@ -1664,10 +1678,10 @@ export default function CrmPage() {
                                 ) : (
                                   <button
                                     type="button"
-                                    onClick={() => startEditingColumn(column)}
-                                    disabled={isFixedColumn}
-                                    className={`min-w-0 truncate text-left text-[15px] font-black uppercase tracking-widest !text-white drop-shadow-sm ${isFixedColumn ? 'cursor-default' : 'cursor-text hover:underline hover:decoration-white/50'}`}
-                                    title={isFixedColumn ? 'Etapa fixa' : 'Clique para editar a etapa'}
+                                    onClick={() => canEditColumn && startEditingColumn(column)}
+                                    disabled={!canEditColumn}
+                                    className={`min-w-0 truncate text-left text-[15px] font-black uppercase tracking-widest !text-white drop-shadow-sm ${canEditColumn ? 'cursor-text hover:underline hover:decoration-white/50' : 'cursor-default'}`}
+                                    title={canEditColumn ? 'Clique para editar a etapa' : 'Etapa fixa'}
                                   >
                                     {column.label}
                                   </button>
@@ -1683,10 +1697,10 @@ export default function CrmPage() {
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => startEditingColumn(column)}
-                                  disabled={isFixedColumn}
-                                  className={`mt-1 block max-w-full truncate text-left text-[11px] font-black !text-white/85 ${isFixedColumn ? 'cursor-default' : 'cursor-text hover:underline hover:decoration-white/40'}`}
-                                  title={isFixedColumn ? 'Etapa fixa' : 'Clique para editar a descricao'}
+                                  onClick={() => canEditColumn && startEditingColumn(column)}
+                                  disabled={!canEditColumn}
+                                  className={`mt-1 block max-w-full truncate text-left text-[11px] font-black !text-white/85 ${canEditColumn ? 'cursor-text hover:underline hover:decoration-white/40' : 'cursor-default'}`}
+                                  title={canEditColumn ? 'Clique para editar a descricao' : 'Etapa fixa'}
                                 >
                                   {column.desc}
                                 </button>
@@ -1786,37 +1800,39 @@ export default function CrmPage() {
                       </section>
                     );
                   })}
-                  <section className="flex h-fit min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border border-slate-700 bg-slate-900/85 p-3 shadow-sm backdrop-blur-sm sm:min-w-[270px] sm:max-w-[290px]">
-                    <form onSubmit={addKanbanStage} className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-black text-white">
-                        <Plus size={18} />
-                        <span>Adicionar etapa</span>
-                      </div>
-                      <input
-                        value={newStageName}
-                        onChange={(event) => setNewStageName(event.target.value)}
-                        maxLength={80}
-                        placeholder="Nome da etapa"
-                        className="w-full rounded-xl border border-white/20 bg-white/90 px-3 py-2.5 text-sm font-bold text-slate-800 outline-none placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-400/30"
-                      />
-                      <div className="grid grid-cols-[1fr_auto] gap-2">
-                        <button
-                          type="submit"
-                          className="rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-blue-700"
-                        >
-                          Adicionar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={resetKanbanColumns}
-                          className="rounded-xl border border-white/20 bg-white/15 px-3 py-2.5 text-white transition hover:bg-white/25"
-                          title="Restaurar etapas padrao"
-                        >
-                          <RefreshCw size={14} />
-                        </button>
-                      </div>
-                    </form>
-                  </section>
+                  {canManageKanbanStructure && (
+                    <section className="flex h-fit min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border border-slate-700 bg-slate-900/85 p-3 shadow-sm backdrop-blur-sm sm:min-w-[270px] sm:max-w-[290px]">
+                      <form onSubmit={addKanbanStage} className="space-y-3">
+                        <div className="flex items-center gap-2 text-sm font-black text-white">
+                          <Plus size={18} />
+                          <span>Adicionar etapa</span>
+                        </div>
+                        <input
+                          value={newStageName}
+                          onChange={(event) => setNewStageName(event.target.value)}
+                          maxLength={80}
+                          placeholder="Nome da etapa"
+                          className="w-full rounded-xl border border-white/20 bg-white/90 px-3 py-2.5 text-sm font-bold text-slate-800 outline-none placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-400/30"
+                        />
+                        <div className="grid grid-cols-[1fr_auto] gap-2">
+                          <button
+                            type="submit"
+                            className="rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-sm transition hover:bg-blue-700"
+                          >
+                            Adicionar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={resetKanbanColumns}
+                            className="rounded-xl border border-white/20 bg-white/15 px-3 py-2.5 text-white transition hover:bg-white/25"
+                            title="Restaurar etapas padrao"
+                          >
+                            <RefreshCw size={14} />
+                          </button>
+                        </div>
+                      </form>
+                    </section>
+                  )}
                 </div>
                 </>
               )}
