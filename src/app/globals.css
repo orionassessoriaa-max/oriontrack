@@ -3051,6 +3051,196 @@ body.theme-claro {
   }
 }
 
+/* Inbox compact pass: keeps the service desk usable on common 1366px screens. */
+.theme-claro .orion-inbox-shell {
+  height: calc(100dvh - 96px) !important;
+  gap: 12px !important;
+  padding: 12px 16px 14px !important;
+  overflow: hidden !important;
+}
+
+.theme-claro .orion-inbox-connection {
+  min-height: 78px !important;
+  padding: 16px 22px !important;
+}
+
+.theme-claro .orion-inbox-whatsapp-icon {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+}
+
+.theme-claro .orion-inbox-whatsapp-mark {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.theme-claro .orion-inbox-connection p:first-child {
+  font-size: 15px !important;
+}
+
+.theme-claro .orion-inbox-connection p:last-child {
+  margin-top: 4px !important;
+  font-size: 13px !important;
+}
+
+.theme-claro .orion-inbox-connection button {
+  min-width: 170px !important;
+  min-height: 42px !important;
+  font-size: 11px !important;
+}
+
+.theme-claro .orion-inbox-panel {
+  grid-template-columns: 320px minmax(420px, 1fr) 320px !important;
+  min-height: 0 !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child {
+  padding: 14px !important;
+}
+
+.theme-claro .orion-inbox-list > div:first-child > div:first-child {
+  height: 40px !important;
+}
+
+.theme-claro .orion-inbox-list select,
+.theme-claro .orion-inbox-list input {
+  min-height: 44px !important;
+  font-size: 13px !important;
+}
+
+.theme-claro .orion-inbox-list .flex-1.overflow-y-auto > button {
+  min-height: 84px !important;
+  padding: 14px 16px !important;
+}
+
+.theme-claro .orion-inbox-list .h-10.w-10 {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 12px !important;
+  font-size: 13px !important;
+}
+
+.theme-claro .orion-inbox-chat-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-height: 88px !important;
+  padding: 14px 16px !important;
+}
+
+.theme-claro .orion-inbox-chat-title {
+  min-width: 0 !important;
+}
+
+.theme-claro .orion-inbox-chat-header h2 {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 16px !important;
+  line-height: 1.2 !important;
+}
+
+.theme-claro .orion-inbox-chat-header .rounded-lg.bg-emerald-500\/10 {
+  padding: 5px 8px !important;
+  font-size: 9px !important;
+}
+
+.theme-claro .orion-inbox-chat-actions {
+  justify-content: flex-end !important;
+  max-width: 360px !important;
+  gap: 6px !important;
+}
+
+.theme-claro .orion-inbox-chat-header button {
+  min-height: 30px !important;
+  padding: 6px 10px !important;
+  border-radius: 9px !important;
+  font-size: 8px !important;
+  line-height: 1 !important;
+}
+
+.theme-claro .orion-inbox-chat-header .border-l button {
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 5px !important;
+}
+
+.theme-claro .orion-inbox-messages {
+  padding: 16px !important;
+}
+
+.theme-claro .orion-inbox-composer {
+  padding: 12px 16px !important;
+}
+
+.theme-claro .orion-inbox-composer textarea {
+  height: 46px !important;
+  min-height: 46px !important;
+  font-size: 13px !important;
+}
+
+.theme-claro .orion-inbox-composer button[class*="bg-cyan"] {
+  width: 46px !important;
+  height: 46px !important;
+}
+
+.theme-claro .orion-inbox-composer label,
+.theme-claro .orion-inbox-composer button:not([class*="bg-cyan"]) {
+  min-width: 38px !important;
+  min-height: 38px !important;
+}
+
+.theme-claro .orion-inbox-details {
+  padding: 16px !important;
+  gap: 16px !important;
+}
+
+.theme-claro .orion-inbox-details select {
+  min-height: 48px !important;
+  font-size: 13px !important;
+}
+
+.theme-claro .orion-inbox-details input,
+.theme-claro .orion-inbox-details textarea {
+  min-height: 42px !important;
+}
+
+.theme-claro .orion-lead-info-card {
+  min-height: 82px !important;
+  padding: 10px !important;
+}
+
+@media (max-width: 1399px) {
+  .theme-claro .orion-inbox-shell {
+    padding-inline: 12px !important;
+  }
+
+  .theme-claro .orion-inbox-panel {
+    grid-template-columns: 300px minmax(390px, 1fr) 300px !important;
+  }
+
+  .theme-claro .orion-inbox-chat-actions {
+    max-width: 320px !important;
+  }
+
+  .theme-claro .orion-inbox-chat-header button {
+    padding-inline: 8px !important;
+  }
+}
+
+@media (max-width: 1199px) {
+  .theme-claro .orion-inbox-panel {
+    grid-template-columns: 300px minmax(0, 1fr) !important;
+  }
+
+  .theme-claro .orion-inbox-details {
+    display: none !important;
+  }
+}
+
 /* =========================================================================
    LEADS LIGHT THEME: WHITE / BLUE / GRAY REFERENCE
    ========================================================================= */

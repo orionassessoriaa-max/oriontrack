@@ -1952,7 +1952,7 @@ export default function BrokerInboxPage() {
         )}
 
         {/* MAIN 3-COLUMN LAYOUT PANEL */}
-        <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 shadow-2xl grid grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)_360px] 2xl:grid-cols-[450px_minmax(0,1fr)_420px]">
+        <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(420px,1fr)_320px] 2xl:grid-cols-[360px_minmax(520px,1fr)_360px]">
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
           <div className="orion-inbox-list border-r border-white/5 flex flex-col bg-slate-900/20 h-full overflow-hidden">
@@ -2069,8 +2069,8 @@ export default function BrokerInboxPage() {
             {selectedConversation ? (
               <>
                 {/* Header do chat */}
-                  <div className="orion-inbox-chat-header p-4 border-b border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-slate-900/30 shrink-0">
-                  <div className="space-y-1">
+                  <div className="orion-inbox-chat-header border-b border-white/5 bg-slate-900/30 shrink-0">
+                  <div className="orion-inbox-chat-title space-y-1">
                     <div className="flex items-center gap-2">
                       <h2 className="text-sm font-black text-white">{cleanInboxDisplayName(selectedConversation.nome_contato, selectedConversation.telefone)}</h2>
                       <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[8px] font-black uppercase text-emerald-400 tracking-wider">
@@ -2083,7 +2083,7 @@ export default function BrokerInboxPage() {
                       <span>Canal: Comercial | {selectedConversation.agentName}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="orion-inbox-chat-actions flex items-center gap-2 flex-wrap">
                     <button
                       onClick={() => setShowTemplateModal(true)}
                       className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
