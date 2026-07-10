@@ -39,7 +39,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   bot_atendimento: {
     coverImage: '/ferramentas/capa/bot1.png',
     categoria: 'Atendimento Automático',
-    pitch: 'Não perca mais nenhum lead por demora no atendimento. O Bot de Atendimento trabalha para você 24 horas por dia, 7 dias por semana, enviando respostas instantâneas no WhatsApp, qualificando os clientes com menus interativos inteligentes e direcionando cada contato para o setor ou corretor ideal.',
+    pitch: 'Não perca mais nenhum lead por demora no atendimento. O Bot de Atendimento trabalha para você todos os dias, envia respostas instantâneas no WhatsApp, qualifica os clientes com menus interativos e direciona cada contato para o responsável certo.',
     entregas: [
       'Respostas automáticas no WhatsApp',
       'Menus interativos de seleção simples',
@@ -65,7 +65,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   ia_atendimento: {
     coverImage: '/ferramentas/capa/ia1.png',
     categoria: 'Inteligência Artificial',
-    pitch: 'Tenha o poder da inteligência artificial mais avançada do mercado conversando com seus leads como se fosse você. A IA de Atendimento entende a intenção do cliente, responde dúvidas complexas de forma humanizada, envia áudios ultrarrealistas, qualifica o perfil de compra e entrega um resumo completo pronto para você fechar o negócio.',
+    pitch: 'Tenha uma inteligência artificial conversando com seus leads de forma natural e objetiva. A IA de Atendimento entende a intenção do cliente, responde dúvidas de forma humanizada, envia áudios, qualifica o perfil de compra e entrega um resumo completo para o corretor assumir no momento certo.',
     entregas: [
       'Qualificação guiada baseada em IA',
       'Respostas realistas em texto e áudio por voz',
@@ -91,7 +91,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   pagina_comercial: {
     coverImage: '/ferramentas/capa/paginacomercial1.png',
     categoria: 'Funil de Vendas',
-    pitch: 'Seus anúncios merecem uma página de destino à altura. Nossa Página Comercial é desenhada com foco em conversão e persuasão imobiliária. Apresente seus diferenciais, equipe, depoimentos de clientes e projetos de forma extremamente profissional, captando leads altamente qualificados diretamente no seu CRM.',
+    pitch: 'Seus anúncios precisam de uma página de destino à altura. A Página Comercial é criada com foco em conversão para planos de saúde: apresenta sua corretora, diferenciais, prova social e formulário integrado para captar leads qualificados diretamente no CRM.',
     entregas: [
       'Landing Page premium de alta conversão',
       'Formulário dinâmico integrado ao Orion Track',
@@ -117,7 +117,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   captacao_imagens_videos: {
     coverImage: '/ferramentas/capa/captação1.png',
     categoria: 'Produção Audiovisual',
-    pitch: 'Imagens vendem mais que palavras. Transforme a imagem da sua corretora com fotos de equipe e vídeos profissionais dos seus melhores imóveis. Nossa equipe vai até você com equipamentos de alta tecnologia para criar conteúdos extraordinários perfeitos para anúncios e redes sociais. (Disponível apenas para Brasília e região).',
+    pitch: 'Imagens vendem mais que palavras. Fortaleça a imagem da sua corretora com fotos da equipe e vídeos profissionais para anúncios e redes sociais. Nossa equipe vai até você para captar conteúdos reais, com direção e qualidade visual. Disponível apenas para Brasília e região.',
     entregas: [
       'Sessão de fotos corporativas da equipe',
       'Produção e captação de vídeos para Reels/TikTok',
@@ -167,7 +167,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   treinamento_comercial: {
     coverImage: '/ferramentas/capa/treinamento1.png',
     categoria: 'Alta Performance',
-    pitch: 'De nada adiantam novos leads se você não souber como convertê-los. Nosso Treinamento Comercial é um programa prático, direto ao ponto, focado nas maiores dores do corretor de imóveis: abordagem rápida, scripts de alta conversão no WhatsApp, superação de objeções de preço e técnicas de fechamento avançadas.',
+    pitch: 'Novos leads só viram venda quando o atendimento é bem conduzido. O Treinamento Comercial é prático e direto, focado nas principais dores do corretor de planos de saúde: abordagem rápida, scripts de WhatsApp, contorno de objeções e técnicas de fechamento.',
     entregas: [
       'Aulas práticas gravadas focadas em vendas',
       'Scripts de abordagem e contorno de objeções no WhatsApp',
@@ -321,7 +321,7 @@ export default function FerramentasPage() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       if (!token) {
-        throw new Error('Sessão expirada. Por favor, reconecte-se.');
+        throw new Error('Sessão expirada. Faça login novamente.');
       }
 
       const response = await fetch('/api/support/requests', {
@@ -333,7 +333,7 @@ export default function FerramentasPage() {
         body: JSON.stringify({
           categoria: 'sistema',
           tipo: 'sistema',
-          mensagem: `[Solicitação de Ativação] O corretor tem interesse e solicita a ativação da ferramenta: "${tool.titulo}" (Chave: ${tool.key}). Favor entrar em contato para consultar disponibilidade e condições.`,
+          mensagem: `[Solicitação de ativação] O corretor demonstrou interesse na ferramenta "${tool.titulo}" (chave: ${tool.key}). Entrar em contato para validar disponibilidade, condições e próximos passos.`,
         }),
       });
 
@@ -342,7 +342,7 @@ export default function FerramentasPage() {
         throw new Error(payload.error || 'Não foi possível enviar a solicitação.');
       }
 
-      setConsultationSuccess(`Solicitação enviada! O seu gerente comercial analisará a ativação da ferramenta "${tool.titulo}" e entrará em contato.`);
+      setConsultationSuccess(`Solicitação enviada. Seu gerente comercial analisará a ativação da ferramenta "${tool.titulo}" e entrará em contato.`);
     } catch (err: any) {
       setConsultationError(err.message || 'Erro ao processar solicitação de suporte.');
     } finally {
@@ -454,7 +454,7 @@ export default function FerramentasPage() {
               onClick={loadTools}
               className="mt-4 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-sm font-bold transition"
             >
-              Tentar Novamente
+              Tentar novamente
             </button>
           </div>
         ) : visibleTools.length === 0 ? (
@@ -508,7 +508,7 @@ export default function FerramentasPage() {
                       className="flex items-center gap-2 hover:bg-white/30 transition duration-300 font-extrabold text-sm md:text-base px-6 py-3 rounded-lg shadow-lg cursor-pointer btn-conhecer"
                     >
                       <Play size={18} fill="#ffffff" stroke="#ffffff" />
-                      Conhecer Detalhes
+                      Conhecer detalhes
                     </button>
 
                     {selectedHeroTool.status === 'ativo' ? (
@@ -524,7 +524,7 @@ export default function FerramentasPage() {
                         className="flex items-center gap-2 bg-red-600/30 hover:bg-red-600/50 border border-red-500/45 text-red-200 hover:text-white transition duration-300 font-extrabold text-sm px-5 py-3 rounded-lg cursor-pointer"
                       >
                         <Info size={16} />
-                        Consultar Disponibilidade
+                        Consultar disponibilidade
                       </button>
                     )}
                   </div>
@@ -533,7 +533,7 @@ export default function FerramentasPage() {
                 {/* Subtitle Indicator at Right Corner */}
                 <div className="absolute right-6 bottom-16 z-20 hidden md:flex items-center gap-1.5 text-xs text-slate-400 font-bold bg-black/40 px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-sm">
                   <TrendingUp size={14} className="text-red-500" />
-                  Alta Conversão Comprovada
+                  Alta conversão comprovada
                 </div>
               </section>
             )}
@@ -546,7 +546,7 @@ export default function FerramentasPage() {
                 <div className="relative group/row">
                   <h3 className="text-lg md:text-xl font-black tracking-tight text-white mb-4 flex items-center gap-2">
                     <span className="h-5 w-1 bg-emerald-500 rounded-full" />
-                    Minhas Ferramentas Ativas
+                    Minhas ferramentas ativas
                     <span className="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
                       {activeTools.length} {activeTools.length === 1 ? 'ativa' : 'ativas'}
                     </span>
@@ -625,7 +625,7 @@ export default function FerramentasPage() {
                 <div className="relative group/row">
                   <h3 className="text-lg md:text-xl font-black tracking-tight text-white mb-4 flex items-center gap-2">
                     <span className="h-5 w-1 bg-red-600 rounded-full" />
-                    Novidades Disponíveis para Contratar
+                    Novidades disponíveis para contratar
                     <span className="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
                       {availableTools.length} {availableTools.length === 1 ? 'opção' : 'opções'}
                     </span>
@@ -758,7 +758,7 @@ export default function FerramentasPage() {
                         {/* Left Column: Pitch & Mechanics */}
                         <div className="space-y-6">
                           <div>
-                            <h4 className="text-[11px] font-black uppercase tracking-widest text-red-500 mb-2">Copy Comercial</h4>
+                            <h4 className="text-[11px] font-black uppercase tracking-widest text-red-500 mb-2">Sobre a ferramenta</h4>
                             <p className="text-sm md:text-base font-medium leading-relaxed text-slate-300">
                               {selectedDetailTool.premium.pitch}
                             </p>
@@ -767,7 +767,7 @@ export default function FerramentasPage() {
                           <div className="border-t border-white/10 pt-4">
                             <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-1.5">
                               <Calendar size={16} className="text-red-500" />
-                              Como Funciona o Processo?
+                              Como funciona o processo
                             </h4>
                             <ol className="space-y-2.5 text-xs text-slate-400 font-semibold list-decimal pl-4">
                               {selectedDetailTool.premium.funcionamento.map((item, idx) => (
@@ -781,7 +781,7 @@ export default function FerramentasPage() {
                           <div className="border-t border-white/10 pt-4">
                             <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-1.5">
                               <TrendingUp size={16} className="text-red-500" />
-                              Principais Benefícios
+                              Principais benefícios
                             </h4>
                             <ul className="space-y-2 text-xs text-slate-400 font-semibold list-disc pl-4">
                               {selectedDetailTool.premium.beneficios.map((item, idx) => (
@@ -799,7 +799,7 @@ export default function FerramentasPage() {
                           
                           <div>
                             <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">
-                              O que está incluso na entrega?
+                              O que está incluso
                             </h4>
                             <div className="space-y-3">
                               {selectedDetailTool.premium.entregas.map((entrega) => (
@@ -820,7 +820,7 @@ export default function FerramentasPage() {
                               <div className="space-y-3">
                                 <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
                                   <CheckCircle2 size={18} />
-                                  <span className="text-xs font-black uppercase tracking-wider">Ferramenta Ativa</span>
+                                  <span className="text-xs font-black uppercase tracking-wider">Ferramenta ativa</span>
                                 </div>
                                 <p className="text-[11px] font-semibold text-slate-400 leading-relaxed text-center">
                                   Esta ferramenta já se encontra em pleno funcionamento e integrada ao seu número ou conta.
@@ -850,11 +850,11 @@ export default function FerramentasPage() {
                                       {submittingConsultation ? (
                                         <>
                                           <Loader2 className="animate-spin" size={16} />
-                                          Enviando Solicitação...
+                                          Enviando solicitação...
                                         </>
                                       ) : (
                                         <>
-                                          Consultar Disponibilidade
+                                          Consultar disponibilidade
                                         </>
                                       )}
                                     </button>
@@ -866,7 +866,7 @@ export default function FerramentasPage() {
                                     )}
 
                                     <p className="text-[11px] font-semibold text-slate-400 leading-relaxed text-center">
-                                      Ao clicar em consultar disponibilidade, enviaremos um chamado automático de ativação para a administração.
+                                      Ao consultar disponibilidade, um chamado de ativação será enviado automaticamente para a administração.
                                     </p>
                                   </>
                                 )}
