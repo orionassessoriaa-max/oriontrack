@@ -269,6 +269,20 @@ export default function FerramentasPage() {
     loadTools();
   }, []);
 
+  // Hero auto-rotation loop
+  useEffect(() => {
+    if (tools.length === 0) return;
+    const interval = setInterval(() => {
+      setHeroToolKey((currentKey) => {
+        const currentIndex = tools.findIndex((t) => t.key === currentKey);
+        if (currentIndex === -1) return tools[0]?.key || null;
+        const nextIndex = (currentIndex + 1) % tools.length;
+        return tools[nextIndex].key;
+      });
+    }, 6000); // cycle every 6 seconds
+    return () => clearInterval(interval);
+  }, [tools]);
+
   // Filter tools based on search term
   const visibleTools = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -399,6 +413,15 @@ export default function FerramentasPage() {
           .theme-claro .netflix-theme .bg-white:hover {
             background-color: #e2e8f0 !important;
           }
+          .theme-claro .netflix-theme .btn-conhecer {
+            background-color: rgba(255, 255, 255, 0.25) !important;
+            color: #ffffff !important;
+          }
+          .theme-claro .netflix-theme .btn-conhecer * {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+            stroke: #ffffff !important;
+          }
         ` }} />
         
         {/* Search Navigation */}
@@ -488,10 +511,10 @@ export default function FerramentasPage() {
                   <div className="flex flex-wrap items-center gap-3 mt-2">
                     <button
                       onClick={() => setDetailToolKey(selectedHeroTool.key)}
-                      style={{ backgroundColor: '#ffffff', color: '#000000' }}
-                      className="flex items-center gap-2 bg-white text-black hover:bg-slate-200 transition duration-300 font-extrabold text-sm md:text-base px-6 py-3 rounded-lg shadow-lg shadow-black/35 cursor-pointer"
+                      style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', color: '#ffffff' }}
+                      className="flex items-center gap-2 hover:bg-white/30 transition duration-300 font-extrabold text-sm md:text-base px-6 py-3 rounded-lg shadow-lg cursor-pointer btn-conhecer"
                     >
-                      <Play size={18} fill="#000000" stroke="#000000" />
+                      <Play size={18} fill="#ffffff" stroke="#ffffff" />
                       Conhecer Detalhes
                     </button>
 
@@ -704,7 +727,7 @@ export default function FerramentasPage() {
                     {/* Header Image Cover */}
                     <div className="relative w-full h-[280px] md:h-[400px] overflow-hidden">
                       <img
-                        src={selectedDetailTool.premium.fullImage}
+                        src={selectedDetailTool.premium.coverImage}
                         alt={selectedDetailTool.titulo}
                         className="w-full h-full object-cover object-center"
                       />
@@ -774,6 +797,22 @@ export default function FerramentasPage() {
                                 </li>
                               ))}
                             </ul>
+                          </div>
+
+                          <div className="border-t border-white/10 pt-4">
+                            <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-1.5">
+                              <HelpCircle size={16} className="text-red-500" />
+                              Visualização da Arte Completa
+                            </h4>
+                            <div className="relative rounded-xl overflow-hidden border border-white/10 bg-black/40 p-2">
+                              <img
+                                src={selectedDetailTool.premium.fullImage}
+                                alt="Arte Completa"
+                                className="w-full h-auto object-contain max-h-[360px] rounded-lg hover:scale-[1.01] transition duration-300 cursor-zoom-in"
+                                onClick={() => selectedDetailTool.premium && window.open(selectedDetailTool.premium.fullImage, '_blank')}
+                              />
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-2 font-semibold text-center">Clique na imagem para abrir em alta resolução em uma nova aba</p>
                           </div>
                         </div>
 
