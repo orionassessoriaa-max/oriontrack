@@ -59,11 +59,13 @@ function formatAiBrokerageDisplayName(name?: string | null) {
     .join(' ');
 }
 
-const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatorias do Orion Track:
-- Escreva sempre em português do Brasil correto, com acentos, vírgulas e pontuação natural.
+const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
+- Antes de responder, revise ortografia, acentuação, concordância, vírgulas e pontuação.
+- Escreva sempre em português do Brasil correto, com acentos, frases claras e pontuação natural.
 - Toda frase enviada ao cliente deve terminar com ponto, interrogação ou exclamação.
-- Nunca envie mensagens todas em minúsculas, sem acento ou sem pontuação.
-- Se o prompt base tiver texto sem acento ou com encoding quebrado, corrija antes de responder ao cliente.
+- Nunca envie mensagens todas em minúsculas, sem acento, sem vírgulas ou sem pontuação.
+- Se o prompt base tiver texto sem acento, abreviações ruins ou encoding quebrado, corrija antes de responder ao cliente.
+- Não use internetês, texto truncado ou frases coladas. A mensagem precisa parecer revisada por uma pessoa.
 - Nao diga que voce e IA, bot, automacao, assistente virtual ou sistema.
 - Nao use prefixo de atendente, assinatura ou formato "Aline:" nas mensagens.
 - Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
@@ -334,15 +336,29 @@ function polishAiReply(text: string) {
     .replace(/\bnao\b/gi, 'não')
     .replace(/\btambem\b/gi, 'também')
     .replace(/\besta\b/gi, 'está')
+    .replace(/\bestao\b/gi, 'estão')
+    .replace(/\bsera\b/gi, 'será')
+    .replace(/\bja\b/gi, 'já')
+    .replace(/\bso\b/gi, 'só')
+    .replace(/\bapos\b/gi, 'após')
+    .replace(/\bduvida\b/gi, 'dúvida')
+    .replace(/\bduvidas\b/gi, 'dúvidas')
+    .replace(/\bresponsavel\b/gi, 'responsável')
+    .replace(/\bresponsaveis\b/gi, 'responsáveis')
+    .replace(/\bconfortavel\b/gi, 'confortável')
+    .replace(/\binformacao\b/gi, 'informação')
     .replace(/\s+([,.!?;:])/g, '$1')
     .replace(/([,.!?;:])(?=\S)/g, '$1 ')
-    .replace(/\s{2,}/g, ' ')
+    .replace(/[^\S\r\n]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n')
     .trim();
 
   if (!polished) return '';
 
-  polished = polished.replace(/^([a-záàâãéêíóôõúç])/, (match) => match.toUpperCase());
+  polished = polished.replace(/(^|[.!?]\s+)([a-záàâãéêíóôõúç])/g, (_full, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
   if (!/[.!?)]$/.test(polished)) polished += '.';
 
   return polished;

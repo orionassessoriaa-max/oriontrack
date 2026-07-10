@@ -57,11 +57,11 @@ type ConversationRow = {
   corretor_id: string | null;
 };
 
-const DEFAULT_BOT_MESSAGE = `Ola, {primeiro_nome}! Tudo bem?
+const DEFAULT_BOT_MESSAGE = `Olá, {primeiro_nome}! Tudo bem?
 
-Voce acabou de preencher nosso formulario para planos de saude.
+Você acabou de preencher nosso formulário para planos de saúde.
 
-Logo um de nossos especialistas entrara em contato para te ajudar.`;
+Logo um de nossos especialistas entrará em contato para te ajudar.`;
 
 function firstName(value?: string | null) {
   return String(value || 'tudo bem').trim().split(/\s+/)[0] || 'tudo bem';
@@ -82,6 +82,36 @@ function readCorretoraName(config?: BotConfig | null) {
   return raw?.nome || '';
 }
 
+function polishOutboundText(text: string) {
+  let polished = String(text || '')
+    .replace(/\bOla\b/gi, 'Olá')
+    .replace(/\bvoce\b/gi, 'você')
+    .replace(/\bformulario\b/gi, 'formulário')
+    .replace(/\bsaude\b/gi, 'saúde')
+    .replace(/\bentrara\b/gi, 'entrará')
+    .replace(/\bcotacao\b/gi, 'cotação')
+    .replace(/\bsimulacao\b/gi, 'simulação')
+    .replace(/\binformacoes\b/gi, 'informações')
+    .replace(/\bnao\b/gi, 'não')
+    .replace(/\btambem\b/gi, 'também')
+    .replace(/\bhorario\b/gi, 'horário')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/([,.!?;:])(?=\S)/g, '$1 ')
+    .replace(/[^\S\r\n]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n')
+    .trim();
+
+  if (!polished) return '';
+
+  polished = polished.replace(/(^|[.!?]\s+)([a-záàâãéêíóôõúç])/g, (_full, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
+  if (!/[.!?)]$/.test(polished)) polished += '.';
+
+  return polished;
+}
+
 function renderBotMessage(template: string | null | undefined, lead: LeadRow, corretoraName: string) {
   const safeTemplate = template || DEFAULT_BOT_MESSAGE;
   const replacements: Record<string, string> = {
@@ -94,10 +124,12 @@ function renderBotMessage(template: string | null | undefined, lead: LeadRow, co
     concessionaria: corretoraName,
   };
 
-  return Object.entries(replacements).reduce(
+  const rendered = Object.entries(replacements).reduce(
     (message, [key, value]) => message.replace(new RegExp(`\\{${key}\\}`, 'gi'), value),
     safeTemplate
   );
+
+  return polishOutboundText(rendered);
 }
 
 async function findBroker(corretorId?: string | null) {
