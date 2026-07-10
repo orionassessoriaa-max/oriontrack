@@ -418,8 +418,8 @@ export default function FerramentasPage() {
         ` }} />
         
         {/* Search Navigation */}
-        <div className="absolute top-0 right-0 z-30 pt-24 lg:pt-28 px-6 md:px-16 flex justify-end w-full">
-          <div className="relative w-full md:w-80">
+        <div className="absolute top-0 right-0 z-30 pt-24 lg:pt-28 xl:pt-32 px-6 md:px-16 flex justify-end w-full pointer-events-none">
+          <div className="relative w-full md:w-80 xl:w-96 pointer-events-auto">
             <Search className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
@@ -467,7 +467,7 @@ export default function FerramentasPage() {
           <>
             {/* HERO BANNER - Netflix Billboard Style */}
             {selectedHeroTool && selectedHeroTool.premium && (
-              <section className="relative w-full h-[75vh] md:h-[90vh] flex items-center justify-start overflow-hidden shadow-2xl -mt-24 lg:-mt-28">
+              <section className="relative w-full min-h-[650px] md:min-h-[640px] lg:min-h-[660px] xl:min-h-[760px] 2xl:min-h-[840px] h-auto lg:h-[calc(100dvh-64px)] xl:h-[calc(100dvh-40px)] flex items-center justify-start overflow-hidden shadow-2xl -mt-24 lg:-mt-28">
                 {/* Background Image with Dark Vignette/Fade Gradients */}
                 <div className="absolute inset-0 z-0">
                   <img
@@ -482,22 +482,22 @@ export default function FerramentasPage() {
                 </div>
 
                 {/* Hero Content */}
-                <div className="relative z-20 max-w-2xl px-6 md:pl-16 pt-32 md:pt-40 pb-20 flex flex-col items-start gap-4">
+                <div className="relative z-20 max-w-2xl lg:max-w-3xl xl:max-w-4xl px-6 md:pl-16 lg:pl-20 xl:pl-24 pt-28 md:pt-32 lg:pt-32 xl:pt-44 2xl:pt-56 pb-28 lg:pb-36 xl:pb-44 flex flex-col items-start gap-4 xl:gap-6">
                   <div className="flex items-center gap-2">
-                    <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded">
+                    <span className="bg-red-600 text-white text-[10px] lg:text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded">
                       DESTAQUE
                     </span>
-                    <span className="text-slate-300 text-xs font-bold flex items-center gap-1">
-                      <Layers size={13} className="text-red-500" />
+                    <span className="text-slate-300 text-xs lg:text-sm font-bold flex items-center gap-1">
+                      <Layers size={13} className="text-red-500 lg:w-4 lg:h-4" />
                       {selectedHeroTool.premium.categoria}
                     </span>
                   </div>
 
-                  <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white leading-tight drop-shadow-md">
+                  <h2 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-[6rem] font-black tracking-tighter text-white leading-[0.95] drop-shadow-md">
                     {selectedHeroTool.titulo}
                   </h2>
 
-                  <p className="text-sm md:text-base font-medium leading-relaxed text-slate-300 drop-shadow max-w-lg">
+                  <p className="text-sm md:text-base lg:text-base xl:text-lg 2xl:text-xl font-medium leading-relaxed text-slate-300 drop-shadow max-w-lg lg:max-w-xl xl:max-w-2xl 2xl:max-w-4xl">
                     {selectedHeroTool.premium.pitch}
                   </p>
 
@@ -505,15 +505,15 @@ export default function FerramentasPage() {
                     <button
                       onClick={() => setDetailToolKey(selectedHeroTool.key)}
                       style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', color: '#ffffff' }}
-                      className="flex items-center gap-2 hover:bg-white/30 transition duration-300 font-extrabold text-sm md:text-base px-6 py-3 rounded-lg shadow-lg cursor-pointer btn-conhecer"
+                      className="flex items-center gap-2 hover:bg-white/30 transition duration-300 font-extrabold text-sm md:text-base xl:text-lg px-6 py-3 xl:px-8 xl:py-4 2xl:px-10 2xl:py-5 rounded-lg shadow-lg cursor-pointer btn-conhecer"
                     >
-                      <Play size={18} fill="#ffffff" stroke="#ffffff" />
+                      <Play size={18} className="xl:w-5 xl:h-5 2xl:w-6 2xl:h-6" fill="#ffffff" stroke="#ffffff" />
                       Conhecer detalhes
                     </button>
 
                     {selectedHeroTool.status === 'ativo' ? (
-                      <span className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-bold text-sm px-4 py-3 rounded-lg">
-                        <Check size={16} strokeWidth={3} />
+                      <span className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-bold text-sm md:text-base xl:text-lg px-4 py-3 xl:px-6 xl:py-4 2xl:px-8 2xl:py-5 rounded-lg">
+                        <Check size={16} className="xl:w-5 xl:h-5 2xl:w-6 2xl:h-6" strokeWidth={3} />
                         Disponível na sua conta
                       </span>
                     ) : (
@@ -521,9 +521,9 @@ export default function FerramentasPage() {
                         onClick={() => {
                           setDetailToolKey(selectedHeroTool.key);
                         }}
-                        className="flex items-center gap-2 bg-red-600/30 hover:bg-red-600/50 border border-red-500/45 text-red-200 hover:text-white transition duration-300 font-extrabold text-sm px-5 py-3 rounded-lg cursor-pointer"
+                        className="flex items-center gap-2 bg-red-600/30 hover:bg-red-600/50 border border-red-500/45 text-red-200 hover:text-white transition duration-300 font-extrabold text-sm md:text-base xl:text-lg px-5 py-3 xl:px-7 xl:py-4 2xl:px-9 2xl:py-5 rounded-lg cursor-pointer"
                       >
-                        <Info size={16} />
+                        <Info size={16} className="xl:w-5 xl:h-5 2xl:w-6 2xl:h-6" />
                         Consultar disponibilidade
                       </button>
                     )}
@@ -539,12 +539,12 @@ export default function FerramentasPage() {
             )}
 
             {/* CAROUSELS SECTION */}
-            <div className="w-full px-6 md:px-16 -mt-16 md:-mt-24 pb-20 relative z-20 space-y-16">
+            <div className="w-full px-6 md:px-16 -mt-6 md:-mt-10 lg:-mt-14 xl:-mt-20 2xl:-mt-24 pb-20 relative z-20 space-y-12 lg:space-y-16 xl:space-y-24">
               
               {/* Row 1: Active Tools */}
               {activeTools.length > 0 && (
                 <div className="relative group/row">
-                  <h3 className="text-lg md:text-xl font-black tracking-tight text-white mb-4 flex items-center gap-2">
+                  <h3 className="text-lg md:text-xl xl:text-2xl 2xl:text-3xl font-black tracking-tight text-white mb-4 flex flex-wrap items-center gap-2">
                     <span className="h-5 w-1 bg-emerald-500 rounded-full" />
                     Minhas ferramentas ativas
                     <span className="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
@@ -582,7 +582,7 @@ export default function FerramentasPage() {
                           setHeroToolKey(tool.key);
                           setDetailToolKey(tool.key);
                         }}
-                        className={`relative flex-none w-72 h-[162px] md:w-80 md:h-[180px] rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
+                        className={`relative flex-none w-72 h-[162px] md:w-80 md:h-[180px] lg:w-[340px] lg:h-[191px] xl:w-[420px] xl:h-[236px] 2xl:w-[500px] 2xl:h-[281px] rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
                           tool.premium?.accentGlow || 'hover:border-red-500'
                         }`}
                       >
@@ -623,7 +623,7 @@ export default function FerramentasPage() {
               {/* Row 2: Available Tools */}
               {availableTools.length > 0 && (
                 <div className="relative group/row">
-                  <h3 className="text-lg md:text-xl font-black tracking-tight text-white mb-4 flex items-center gap-2">
+                  <h3 className="text-lg md:text-xl xl:text-2xl 2xl:text-3xl font-black tracking-tight text-white mb-4 flex flex-wrap items-center gap-2">
                     <span className="h-5 w-1 bg-red-600 rounded-full" />
                     Novidades disponíveis para contratar
                     <span className="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
@@ -661,7 +661,7 @@ export default function FerramentasPage() {
                           setHeroToolKey(tool.key);
                           setDetailToolKey(tool.key);
                         }}
-                        className={`relative flex-none w-72 h-[162px] md:w-80 md:h-[180px] rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
+                        className={`relative flex-none w-72 h-[162px] md:w-80 md:h-[180px] lg:w-[340px] lg:h-[191px] xl:w-[420px] xl:h-[236px] 2xl:w-[500px] 2xl:h-[281px] rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
                           tool.premium?.accentGlow || 'hover:border-red-500'
                         }`}
                       >
@@ -714,11 +714,11 @@ export default function FerramentasPage() {
                     animate={{ scale: 1, y: 0, opacity: 1 }}
                     exit={{ scale: 0.9, y: 50, opacity: 0 }}
                     transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                    className="relative bg-[#18181b] rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl border border-white/10 my-8"
+                    className="relative bg-[#18181b] rounded-2xl w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl overflow-hidden shadow-2xl border border-white/10 my-8"
                   >
                     
                     {/* Header Image Cover */}
-                    <div className="relative w-full h-[280px] md:h-[400px] overflow-hidden">
+                    <div className="relative w-full h-[280px] md:h-[400px] lg:h-[500px] xl:h-[580px] overflow-hidden">
                       <img
                         src={selectedDetailTool.premium.coverImage}
                         alt={selectedDetailTool.titulo}
@@ -741,11 +741,11 @@ export default function FerramentasPage() {
                       
                       <div className="absolute bottom-6 left-6 md:left-12 z-20">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="bg-red-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded">
+                          <span className="bg-red-600 text-white text-[9px] lg:text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded">
                             {selectedDetailTool.premium.categoria}
                           </span>
                         </div>
-                        <h3 className="text-3xl md:text-5xl font-black tracking-tighter text-white drop-shadow-md">
+                        <h3 className="text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-black tracking-tighter text-white drop-shadow-md">
                           {selectedDetailTool.titulo}
                         </h3>
                       </div>
@@ -758,18 +758,18 @@ export default function FerramentasPage() {
                         {/* Left Column: Pitch & Mechanics */}
                         <div className="space-y-6">
                           <div>
-                            <h4 className="text-[11px] font-black uppercase tracking-widest text-red-500 mb-2">Sobre a ferramenta</h4>
-                            <p className="text-sm md:text-base font-medium leading-relaxed text-slate-300">
+                            <h4 className="text-[11px] lg:text-xs font-black uppercase tracking-widest text-red-500 mb-2">Sobre a ferramenta</h4>
+                            <p className="text-sm md:text-base lg:text-lg xl:text-xl font-medium leading-relaxed text-slate-300">
                               {selectedDetailTool.premium.pitch}
                             </p>
                           </div>
 
                           <div className="border-t border-white/10 pt-4">
-                            <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-1.5">
-                              <Calendar size={16} className="text-red-500" />
+                            <h4 className="text-sm lg:text-base font-bold text-white mb-3 flex items-center gap-1.5">
+                              <Calendar size={16} className="text-red-500 lg:w-5 lg:h-5" />
                               Como funciona o processo
                             </h4>
-                            <ol className="space-y-2.5 text-xs text-slate-400 font-semibold list-decimal pl-4">
+                            <ol className="space-y-2.5 text-xs lg:text-sm xl:text-base text-slate-400 font-semibold list-decimal pl-4">
                               {selectedDetailTool.premium.funcionamento.map((item, idx) => (
                                 <li key={idx} className="pl-1">
                                   {item}
@@ -779,11 +779,11 @@ export default function FerramentasPage() {
                           </div>
 
                           <div className="border-t border-white/10 pt-4">
-                            <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-1.5">
-                              <TrendingUp size={16} className="text-red-500" />
+                            <h4 className="text-sm lg:text-base font-bold text-white mb-3 flex items-center gap-1.5">
+                              <TrendingUp size={16} className="text-red-500 lg:w-5 lg:h-5" />
                               Principais benefícios
                             </h4>
-                            <ul className="space-y-2 text-xs text-slate-400 font-semibold list-disc pl-4">
+                            <ul className="space-y-2 text-xs lg:text-sm xl:text-base text-slate-400 font-semibold list-disc pl-4">
                               {selectedDetailTool.premium.beneficios.map((item, idx) => (
                                 <li key={idx} className="pl-1">
                                   {item}
@@ -795,19 +795,19 @@ export default function FerramentasPage() {
                         </div>
 
                         {/* Right Column: Active Check / Action Box */}
-                        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-6 flex flex-col justify-between h-fit self-start gap-6">
+                        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-6 lg:p-8 xl:p-10 flex flex-col justify-between h-fit self-start gap-6 lg:gap-8">
                           
                           <div>
-                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">
+                            <h4 className="text-xs lg:text-sm font-black uppercase tracking-widest text-slate-400 mb-4">
                               O que está incluso
                             </h4>
                             <div className="space-y-3">
                               {selectedDetailTool.premium.entregas.map((entrega) => (
                                 <div key={entrega} className="flex items-start gap-3">
                                   <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                    <Check size={12} strokeWidth={3} />
+                                    <Check size={12} className="lg:w-4 lg:h-4 xl:w-5 xl:h-5" strokeWidth={3} />
                                   </span>
-                                  <span className="text-xs font-bold text-slate-300 leading-tight">
+                                  <span className="text-xs lg:text-sm xl:text-base font-bold text-slate-300 leading-tight">
                                     {entrega}
                                   </span>
                                 </div>
