@@ -566,7 +566,7 @@ export default function FerramentasPage() {
                           setHeroToolKey(tool.key);
                           setDetailToolKey(tool.key);
                         }}
-                        className={`relative flex-none w-72 md:w-80 aspect-video rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
+                        className={`relative flex-none w-72 h-[162px] md:w-80 md:h-[180px] rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
                           tool.premium?.accentGlow || 'hover:border-red-500'
                         }`}
                       >
@@ -645,7 +645,7 @@ export default function FerramentasPage() {
                           setHeroToolKey(tool.key);
                           setDetailToolKey(tool.key);
                         }}
-                        className={`relative flex-none w-72 md:w-80 aspect-video rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
+                        className={`relative flex-none w-72 h-[162px] md:w-80 md:h-[180px] rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
                           tool.premium?.accentGlow || 'hover:border-red-500'
                         }`}
                       >
