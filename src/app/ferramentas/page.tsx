@@ -26,7 +26,6 @@ import {
 // Premium metadata and copywriting for the 6 tools that have visual assets
 interface PremiumMetadata {
   coverImage: string;
-  fullImage: string;
   categoria: string;
   pitch: string;
   entregas: string[];
@@ -39,7 +38,6 @@ interface PremiumMetadata {
 const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   bot_atendimento: {
     coverImage: '/ferramentas/capa/bot1.png',
-    fullImage: '/ferramentas/bot.png',
     categoria: 'Atendimento Automático',
     pitch: 'Não perca mais nenhum lead por demora no atendimento. O Bot de Atendimento trabalha para você 24 horas por dia, 7 dias por semana, enviando respostas instantâneas no WhatsApp, qualificando os clientes com menus interativos inteligentes e direcionando cada contato para o setor ou corretor ideal.',
     entregas: [
@@ -66,7 +64,6 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   ia_atendimento: {
     coverImage: '/ferramentas/capa/ia1.png',
-    fullImage: '/ferramentas/ia.png',
     categoria: 'Inteligência Artificial',
     pitch: 'Tenha o poder da inteligência artificial mais avançada do mercado conversando com seus leads como se fosse você. A IA de Atendimento entende a intenção do cliente, responde dúvidas complexas de forma humanizada, envia áudios ultrarrealistas, qualifica o perfil de compra e entrega um resumo completo pronto para você fechar o negócio.',
     entregas: [
@@ -93,7 +90,6 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   pagina_comercial: {
     coverImage: '/ferramentas/capa/paginacomercial1.png',
-    fullImage: '/ferramentas/pagina-comercial.png',
     categoria: 'Funil de Vendas',
     pitch: 'Seus anúncios merecem uma página de destino à altura. Nossa Página Comercial é desenhada com foco em conversão e persuasão imobiliária. Apresente seus diferenciais, equipe, depoimentos de clientes e projetos de forma extremamente profissional, captando leads altamente qualificados diretamente no seu CRM.',
     entregas: [
@@ -120,7 +116,6 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   captacao_imagens_videos: {
     coverImage: '/ferramentas/capa/captação1.png',
-    fullImage: '/ferramentas/captacao.png',
     categoria: 'Produção Audiovisual',
     pitch: 'Imagens vendem mais que palavras. Transforme a imagem da sua corretora com fotos de equipe e vídeos profissionais dos seus melhores imóveis. Nossa equipe vai até você com equipamentos de alta tecnologia para criar conteúdos extraordinários perfeitos para anúncios e redes sociais. (Disponível apenas para Brasília e região).',
     entregas: [
@@ -146,7 +141,6 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   social_media: {
     coverImage: '/ferramentas/capa/socialmedia1.png',
-    fullImage: '/ferramentas/social-media.png',
     categoria: 'Gestão de Marca',
     pitch: 'Mantenha suas redes sociais movimentadas e profissionais sem gastar seu precioso tempo. Nós criamos, planejamos e estruturamos um calendário de postagens de alta qualidade exclusivo para corretores, com artes elegantes, legendas estratégicas e conteúdo que atrai seguidores prontos para fazer negócios.',
     entregas: [
@@ -172,7 +166,6 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   treinamento_comercial: {
     coverImage: '/ferramentas/capa/treinamento1.png',
-    fullImage: '/ferramentas/treinamento.png',
     categoria: 'Alta Performance',
     pitch: 'De nada adiantam novos leads se você não souber como convertê-los. Nosso Treinamento Comercial é um programa prático, direto ao ponto, focado nas maiores dores do corretor de imóveis: abordagem rápida, scripts de alta conversão no WhatsApp, superação de objeções de preço e técnicas de fechamento avançadas.',
     entregas: [
@@ -478,7 +471,7 @@ export default function FerramentasPage() {
                 {/* Background Image with Dark Vignette/Fade Gradients */}
                 <div className="absolute inset-0 z-0">
                   <img
-                    src={selectedHeroTool.premium.fullImage}
+                    src={selectedHeroTool.premium.coverImage}
                     alt={selectedHeroTool.titulo}
                     className="w-full h-full object-cover object-center animate-fade-in scale-105 filter brightness-[0.65] transition-all duration-700"
                   />
@@ -799,21 +792,6 @@ export default function FerramentasPage() {
                             </ul>
                           </div>
 
-                          <div className="border-t border-white/10 pt-4">
-                            <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-1.5">
-                              <HelpCircle size={16} className="text-red-500" />
-                              Visualização da Arte Completa
-                            </h4>
-                            <div className="relative rounded-xl overflow-hidden border border-white/10 bg-black/40 p-2">
-                              <img
-                                src={selectedDetailTool.premium.fullImage}
-                                alt="Arte Completa"
-                                className="w-full h-auto object-contain max-h-[360px] rounded-lg hover:scale-[1.01] transition duration-300 cursor-zoom-in"
-                                onClick={() => selectedDetailTool.premium && window.open(selectedDetailTool.premium.fullImage, '_blank')}
-                              />
-                            </div>
-                            <p className="text-[10px] text-slate-400 mt-2 font-semibold text-center">Clique na imagem para abrir em alta resolução em uma nova aba</p>
-                          </div>
                         </div>
 
                         {/* Right Column: Active Check / Action Box */}
@@ -911,4 +889,3 @@ export default function FerramentasPage() {
     </InternalLayout>
   );
 }
-
