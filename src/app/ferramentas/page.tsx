@@ -26,6 +26,7 @@ import {
 // Premium metadata and copywriting for the 6 tools that have visual assets
 interface PremiumMetadata {
   coverImage: string;
+  displayTitle: string;
   categoria: string;
   pitch: string;
   entregas: string[];
@@ -38,6 +39,7 @@ interface PremiumMetadata {
 const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   bot_atendimento: {
     coverImage: '/ferramentas/capa/bot1.png',
+    displayTitle: 'Bot de Atendimento',
     categoria: 'Atendimento Automático',
     pitch: 'Não perca mais nenhum lead por demora no atendimento. O Bot de Atendimento trabalha para você todos os dias, envia respostas instantâneas no WhatsApp, qualifica os clientes com menus interativos e direciona cada contato para o responsável certo.',
     entregas: [
@@ -64,6 +66,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   ia_atendimento: {
     coverImage: '/ferramentas/capa/ia1.png',
+    displayTitle: 'IA de Atendimento',
     categoria: 'Inteligência Artificial',
     pitch: 'Tenha uma inteligência artificial conversando com seus leads de forma natural e objetiva. A IA de Atendimento entende a intenção do cliente, responde dúvidas de forma humanizada, envia áudios, qualifica o perfil de compra e entrega um resumo completo para o corretor assumir no momento certo.',
     entregas: [
@@ -90,6 +93,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   pagina_comercial: {
     coverImage: '/ferramentas/capa/paginacomercial1.png',
+    displayTitle: 'Página Comercial',
     categoria: 'Funil de Vendas',
     pitch: 'Seus anúncios precisam de uma página de destino à altura. A Página Comercial é criada com foco em conversão para planos de saúde: apresenta sua corretora, diferenciais, prova social e formulário integrado para captar leads qualificados diretamente no CRM.',
     entregas: [
@@ -116,6 +120,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   captacao_imagens_videos: {
     coverImage: '/ferramentas/capa/captação1.png',
+    displayTitle: 'Captação de Imagens e Vídeos',
     categoria: 'Produção Audiovisual',
     pitch: 'Imagens vendem mais que palavras. Fortaleça a imagem da sua corretora com fotos da equipe e vídeos profissionais para anúncios e redes sociais. Nossa equipe vai até você para captar conteúdos reais, com direção e qualidade visual. Disponível apenas para Brasília e região.',
     entregas: [
@@ -141,6 +146,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   social_media: {
     coverImage: '/ferramentas/capa/socialmedia1.png',
+    displayTitle: 'Social Media',
     categoria: 'Gestão de Marca',
     pitch: 'Mantenha suas redes sociais movimentadas e profissionais sem gastar seu precioso tempo. Nós criamos, planejamos e estruturamos um calendário de postagens de alta qualidade exclusivo para corretores, com artes elegantes, legendas estratégicas e conteúdo que atrai seguidores prontos para fazer negócios.',
     entregas: [
@@ -166,6 +172,7 @@ const PREMIUM_METADATA: Record<string, PremiumMetadata> = {
   },
   treinamento_comercial: {
     coverImage: '/ferramentas/capa/treinamento1.png',
+    displayTitle: 'Treinamento Comercial',
     categoria: 'Alta Performance',
     pitch: 'Novos leads só viram venda quando o atendimento é bem conduzido. O Treinamento Comercial é prático e direto, focado nas principais dores do corretor de planos de saúde: abordagem rápida, scripts de WhatsApp, contorno de objeções e técnicas de fechamento.',
     entregas: [
@@ -197,6 +204,8 @@ type Tool = FerramentaCatalogItem & {
   premium?: PremiumMetadata;
 };
 
+const getToolTitle = (tool: Tool | null) => tool?.premium?.displayTitle || tool?.titulo || '';
+
 export default function FerramentasPage() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,6 +214,7 @@ export default function FerramentasPage() {
   
   // Hero section selection
   const [heroToolKey, setHeroToolKey] = useState<string | null>(null);
+  const [heroDirection, setHeroDirection] = useState(1);
   
   // Detail Modal selection
   const [detailToolKey, setDetailToolKey] = useState<string | null>(null);
@@ -269,6 +279,7 @@ export default function FerramentasPage() {
       setHeroToolKey((currentKey) => {
         const currentIndex = tools.findIndex((t) => t.key === currentKey);
         if (currentIndex === -1) return tools[0]?.key || null;
+        setHeroDirection(1);
         const nextIndex = (currentIndex + 1) % tools.length;
         return tools[nextIndex].key;
       });
@@ -297,6 +308,29 @@ export default function FerramentasPage() {
   const selectedDetailTool = useMemo(() => {
     return tools.find((tool) => tool.key === detailToolKey) || null;
   }, [detailToolKey, tools]);
+
+  const moveHero = (direction: 1 | -1) => {
+    if (tools.length === 0) return;
+    setHeroDirection(direction);
+    setHeroToolKey((currentKey) => {
+      const currentIndex = tools.findIndex((tool) => tool.key === currentKey);
+      const safeIndex = currentIndex === -1 ? 0 : currentIndex;
+      const nextIndex = (safeIndex + direction + tools.length) % tools.length;
+      return tools[nextIndex].key;
+    });
+  };
+
+  const selectHeroTool = (key: string) => {
+    const currentIndex = tools.findIndex((tool) => tool.key === heroToolKey);
+    const nextIndex = tools.findIndex((tool) => tool.key === key);
+    setHeroDirection(nextIndex >= currentIndex ? 1 : -1);
+    setHeroToolKey(key);
+  };
+
+  const handleHeroDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number } }) => {
+    if (info.offset.x < -70) moveHero(1);
+    if (info.offset.x > 70) moveHero(-1);
+  };
 
   // Scroll handlers for rows
   const handleScroll = (ref: React.RefObject<HTMLDivElement | null>, direction: 'left' | 'right') => {
@@ -333,7 +367,7 @@ export default function FerramentasPage() {
         body: JSON.stringify({
           categoria: 'sistema',
           tipo: 'sistema',
-          mensagem: `[Solicitação de ativação] O corretor demonstrou interesse na ferramenta "${tool.titulo}" (chave: ${tool.key}). Entrar em contato para validar disponibilidade, condições e próximos passos.`,
+          mensagem: `[Solicitação de ativação] O corretor demonstrou interesse na ferramenta "${getToolTitle(tool)}" (chave: ${tool.key}). Entrar em contato para validar disponibilidade, condições e próximos passos.`,
         }),
       });
 
@@ -342,7 +376,7 @@ export default function FerramentasPage() {
         throw new Error(payload.error || 'Não foi possível enviar a solicitação.');
       }
 
-      setConsultationSuccess(`Solicitação enviada. Seu gerente comercial analisará a ativação da ferramenta "${tool.titulo}" e entrará em contato.`);
+      setConsultationSuccess(`Solicitação enviada. Seu gerente comercial analisará a ativação da ferramenta "${getToolTitle(tool)}" e entrará em contato.`);
     } catch (err: any) {
       setConsultationError(err.message || 'Erro ao processar solicitação de suporte.');
     } finally {
@@ -467,75 +501,117 @@ export default function FerramentasPage() {
           <>
             {/* HERO BANNER - Netflix Billboard Style */}
             {selectedHeroTool && selectedHeroTool.premium && (
-              <section className="relative w-full min-h-[650px] md:min-h-[640px] lg:min-h-[660px] xl:min-h-[760px] 2xl:min-h-[840px] h-auto lg:h-[calc(100dvh-64px)] xl:h-[calc(100dvh-40px)] flex items-center justify-start overflow-hidden shadow-2xl -mt-24 lg:-mt-28">
+              <motion.section
+                className="relative w-full min-h-[650px] md:min-h-[640px] lg:min-h-[660px] xl:min-h-[760px] 2xl:min-h-[840px] h-auto lg:h-[calc(100dvh-64px)] xl:h-[calc(100dvh-40px)] flex items-center justify-start overflow-hidden shadow-2xl -mt-24 lg:-mt-28 touch-pan-y"
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.08}
+                onDragEnd={handleHeroDragEnd}
+              >
                 {/* Background Image with Dark Vignette/Fade Gradients */}
-                <div className="absolute inset-0 z-0">
-                  <img
-                    src={selectedHeroTool.premium.coverImage}
-                    alt={selectedHeroTool.titulo}
-                    className="w-full h-full object-cover object-center animate-fade-in scale-105 filter brightness-[0.65] transition-all duration-700"
-                  />
-                  {/* Left Side Shadow for Text Contrast */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#111115] via-[#111115]/75 to-transparent z-10 w-full md:w-1/2" />
-                  {/* Base Gradient Fade to Black */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#111115] via-transparent to-transparent z-10" />
-                </div>
+                <AnimatePresence initial={false} mode="popLayout">
+                  <motion.div
+                    key={`hero-bg-${selectedHeroTool.key}`}
+                    initial={{ opacity: 0, x: heroDirection * 80 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: heroDirection * -80 }}
+                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute inset-0 z-0"
+                  >
+                    <img
+                      src={selectedHeroTool.premium.coverImage}
+                      alt={getToolTitle(selectedHeroTool)}
+                      className="w-full h-full object-cover object-center scale-105 filter brightness-[0.65]"
+                    />
+                    {/* Left Side Shadow for Text Contrast */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#111115] via-[#111115]/75 to-transparent z-10 w-full md:w-1/2" />
+                    {/* Base Gradient Fade to Black */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#111115] via-transparent to-transparent z-10" />
+                  </motion.div>
+                </AnimatePresence>
+
+                <button
+                  type="button"
+                  aria-label="Ferramenta anterior"
+                  onClick={() => moveHero(-1)}
+                  className="absolute left-3 md:left-5 top-1/2 z-30 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/85 backdrop-blur-md transition hover:bg-black/60 hover:text-white"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+
+                <button
+                  type="button"
+                  aria-label="Próxima ferramenta"
+                  onClick={() => moveHero(1)}
+                  className="absolute right-3 md:right-5 top-1/2 z-30 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/85 backdrop-blur-md transition hover:bg-black/60 hover:text-white"
+                >
+                  <ChevronRight size={20} />
+                </button>
 
                 {/* Hero Content */}
-                <div className="relative z-20 max-w-2xl lg:max-w-3xl xl:max-w-4xl px-6 md:pl-16 lg:pl-20 xl:pl-24 pt-28 md:pt-32 lg:pt-32 xl:pt-44 2xl:pt-56 pb-28 lg:pb-36 xl:pb-44 flex flex-col items-start gap-4 xl:gap-6">
-                  <div className="flex items-center gap-2">
-                    <span className="bg-red-600 text-white text-[10px] lg:text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded">
-                      DESTAQUE
-                    </span>
-                    <span className="text-slate-300 text-xs lg:text-sm font-bold flex items-center gap-1">
-                      <Layers size={13} className="text-red-500 lg:w-4 lg:h-4" />
-                      {selectedHeroTool.premium.categoria}
-                    </span>
-                  </div>
-
-                  <h2 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-[6rem] font-black tracking-tighter text-white leading-[0.95] drop-shadow-md">
-                    {selectedHeroTool.titulo}
-                  </h2>
-
-                  <p className="text-sm md:text-base lg:text-base xl:text-lg 2xl:text-xl font-medium leading-relaxed text-slate-300 drop-shadow max-w-lg lg:max-w-xl xl:max-w-2xl 2xl:max-w-4xl">
-                    {selectedHeroTool.premium.pitch}
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-3 mt-2">
-                    <button
-                      onClick={() => setDetailToolKey(selectedHeroTool.key)}
-                      style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', color: '#ffffff' }}
-                      className="flex items-center gap-2 hover:bg-white/30 transition duration-300 font-extrabold text-sm md:text-base xl:text-lg px-6 py-3 xl:px-8 xl:py-4 2xl:px-10 2xl:py-5 rounded-lg shadow-lg cursor-pointer btn-conhecer"
-                    >
-                      <Play size={18} className="xl:w-5 xl:h-5 2xl:w-6 2xl:h-6" fill="#ffffff" stroke="#ffffff" />
-                      Conhecer detalhes
-                    </button>
-
-                    {selectedHeroTool.status === 'ativo' ? (
-                      <span className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-bold text-sm md:text-base xl:text-lg px-4 py-3 xl:px-6 xl:py-4 2xl:px-8 2xl:py-5 rounded-lg">
-                        <Check size={16} className="xl:w-5 xl:h-5 2xl:w-6 2xl:h-6" strokeWidth={3} />
-                        Disponível na sua conta
+                <AnimatePresence initial={false} mode="wait">
+                  <motion.div
+                    key={`hero-content-${selectedHeroTool.key}`}
+                    initial={{ opacity: 0, x: heroDirection * 52 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: heroDirection * -52 }}
+                    transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                    className="relative z-20 max-w-2xl lg:max-w-3xl xl:max-w-4xl px-14 md:pl-16 md:pr-6 lg:pl-20 xl:pl-24 pt-28 md:pt-32 lg:pt-32 xl:pt-44 2xl:pt-56 pb-28 lg:pb-36 xl:pb-44 flex flex-col items-start gap-4 xl:gap-6"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="bg-red-600 text-white text-[10px] lg:text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded">
+                        DESTAQUE
                       </span>
-                    ) : (
+                      <span className="text-slate-300 text-xs lg:text-sm font-bold flex items-center gap-1">
+                        <Layers size={13} className="text-red-500 lg:w-4 lg:h-4" />
+                        {selectedHeroTool.premium.categoria}
+                      </span>
+                    </div>
+
+                    <h2 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-[6rem] font-black tracking-tighter text-white leading-[0.95] drop-shadow-md">
+                      {getToolTitle(selectedHeroTool)}
+                    </h2>
+
+                    <p className="text-sm md:text-base lg:text-base xl:text-lg 2xl:text-xl font-medium leading-relaxed text-slate-300 drop-shadow max-w-lg lg:max-w-xl xl:max-w-2xl 2xl:max-w-4xl">
+                      {selectedHeroTool.premium.pitch}
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-3 mt-2">
                       <button
-                        onClick={() => {
-                          setDetailToolKey(selectedHeroTool.key);
-                        }}
-                        className="flex items-center gap-2 bg-red-600/30 hover:bg-red-600/50 border border-red-500/45 text-red-200 hover:text-white transition duration-300 font-extrabold text-sm md:text-base xl:text-lg px-5 py-3 xl:px-7 xl:py-4 2xl:px-9 2xl:py-5 rounded-lg cursor-pointer"
+                        onClick={() => setDetailToolKey(selectedHeroTool.key)}
+                        style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', color: '#ffffff' }}
+                        className="flex items-center gap-2 hover:bg-white/30 transition duration-300 font-extrabold text-sm md:text-base xl:text-lg px-6 py-3 xl:px-8 xl:py-4 2xl:px-10 2xl:py-5 rounded-lg shadow-lg cursor-pointer btn-conhecer"
                       >
-                        <Info size={16} className="xl:w-5 xl:h-5 2xl:w-6 2xl:h-6" />
-                        Consultar disponibilidade
+                        <Play size={18} className="xl:w-5 xl:h-5 2xl:w-6 2xl:h-6" fill="#ffffff" stroke="#ffffff" />
+                        Conhecer detalhes
                       </button>
-                    )}
-                  </div>
-                </div>
+
+                      {selectedHeroTool.status === 'ativo' ? (
+                        <span className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-bold text-sm md:text-base xl:text-lg px-4 py-3 xl:px-6 xl:py-4 2xl:px-8 2xl:py-5 rounded-lg">
+                          <Check size={16} className="xl:w-5 xl:h-5 2xl:w-6 2xl:h-6" strokeWidth={3} />
+                          Disponível na sua conta
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setDetailToolKey(selectedHeroTool.key);
+                          }}
+                          className="flex items-center gap-2 bg-red-600/30 hover:bg-red-600/50 border border-red-500/45 text-red-200 hover:text-white transition duration-300 font-extrabold text-sm md:text-base xl:text-lg px-5 py-3 xl:px-7 xl:py-4 2xl:px-9 2xl:py-5 rounded-lg cursor-pointer"
+                        >
+                          <Info size={16} className="xl:w-5 xl:h-5 2xl:w-6 2xl:h-6" />
+                          Consultar disponibilidade
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
 
                 {/* Subtitle Indicator at Right Corner */}
                 <div className="absolute right-6 bottom-16 z-20 hidden md:flex items-center gap-1.5 text-xs text-slate-400 font-bold bg-black/40 px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-sm">
                   <TrendingUp size={14} className="text-red-500" />
                   Alta conversão comprovada
                 </div>
-              </section>
+              </motion.section>
             )}
 
             {/* CAROUSELS SECTION */}
@@ -579,7 +655,7 @@ export default function FerramentasPage() {
                         whileHover={{ scale: 1.04, y: -4 }}
                         transition={{ duration: 0.25 }}
                         onClick={() => {
-                          setHeroToolKey(tool.key);
+                          selectHeroTool(tool.key);
                           setDetailToolKey(tool.key);
                         }}
                         className={`relative flex-none w-72 h-[162px] md:w-80 md:h-[180px] lg:w-[340px] lg:h-[191px] xl:w-[420px] xl:h-[236px] 2xl:w-[500px] 2xl:h-[281px] rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
@@ -589,12 +665,12 @@ export default function FerramentasPage() {
                         {tool.premium ? (
                           <img
                             src={tool.premium.coverImage}
-                            alt={tool.titulo}
+                            alt={getToolTitle(tool)}
                             className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full bg-gradient-to-br from-indigo-900 to-slate-900 flex items-center justify-center">
-                            <span className="font-bold text-sm">{tool.titulo}</span>
+                            <span className="font-bold text-sm">{getToolTitle(tool)}</span>
                           </div>
                         )}
                         {/* Overlay Gradiente */}
@@ -608,7 +684,7 @@ export default function FerramentasPage() {
 
                         <div className="absolute bottom-3 left-3 right-3">
                           <h4 className="text-sm font-extrabold text-white leading-tight drop-shadow-md">
-                            {tool.titulo}
+                            {getToolTitle(tool)}
                           </h4>
                           <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
                             {tool.resumo}
@@ -658,7 +734,7 @@ export default function FerramentasPage() {
                         whileHover={{ scale: 1.04, y: -4 }}
                         transition={{ duration: 0.25 }}
                         onClick={() => {
-                          setHeroToolKey(tool.key);
+                          selectHeroTool(tool.key);
                           setDetailToolKey(tool.key);
                         }}
                         className={`relative flex-none w-72 h-[162px] md:w-80 md:h-[180px] lg:w-[340px] lg:h-[191px] xl:w-[420px] xl:h-[236px] 2xl:w-[500px] 2xl:h-[281px] rounded-xl overflow-hidden border border-white/10 bg-[#16161c] cursor-pointer shadow-xl transition-all duration-300 ${
@@ -668,12 +744,12 @@ export default function FerramentasPage() {
                         {tool.premium ? (
                           <img
                             src={tool.premium.coverImage}
-                            alt={tool.titulo}
+                            alt={getToolTitle(tool)}
                             className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full bg-gradient-to-br from-red-950 to-slate-900 flex items-center justify-center">
-                            <span className="font-bold text-sm">{tool.titulo}</span>
+                            <span className="font-bold text-sm">{getToolTitle(tool)}</span>
                           </div>
                         )}
                         {/* Overlay Gradiente */}
@@ -686,7 +762,7 @@ export default function FerramentasPage() {
 
                         <div className="absolute bottom-3 left-3 right-3">
                           <h4 className="text-sm font-extrabold text-white leading-tight drop-shadow-md">
-                            {tool.titulo}
+                            {getToolTitle(tool)}
                           </h4>
                           <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
                             {tool.resumo}
@@ -721,7 +797,7 @@ export default function FerramentasPage() {
                     <div className="relative w-full h-[280px] md:h-[400px] lg:h-[500px] xl:h-[580px] overflow-hidden">
                       <img
                         src={selectedDetailTool.premium.coverImage}
-                        alt={selectedDetailTool.titulo}
+                        alt={getToolTitle(selectedDetailTool)}
                         className="w-full h-full object-cover object-center"
                       />
                       {/* Close Button */}
@@ -746,7 +822,7 @@ export default function FerramentasPage() {
                           </span>
                         </div>
                         <h3 className="text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-black tracking-tighter text-white drop-shadow-md">
-                          {selectedDetailTool.titulo}
+                          {getToolTitle(selectedDetailTool)}
                         </h3>
                       </div>
                     </div>
