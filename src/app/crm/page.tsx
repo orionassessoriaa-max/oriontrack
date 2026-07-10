@@ -1038,7 +1038,12 @@ export default function CrmPage() {
       const next = [...current];
       const [moved] = next.splice(index, 1);
       const insertionIndex = next.findIndex((column) => column.id === targetColumnId);
-      next.splice(insertionIndex < 0 ? next.length : insertionIndex, 0, moved);
+      const nextIndex = insertionIndex < 0
+        ? next.length
+        : index < targetIndex
+          ? insertionIndex + 1
+          : insertionIndex;
+      next.splice(nextIndex, 0, moved);
       return next;
     });
   }
@@ -1616,6 +1621,7 @@ export default function CrmPage() {
                     const visibleLeads = columnLeads.slice(0, limit);
                     const isFixedColumn = isFixedKanbanStatus(column.id);
                     const isEditingColumn = editingColumnId === column.id;
+                    const isStoredColumn = columns.some((item) => item.id === column.id);
                     const canDeleteColumn = !isFixedColumn && isCustomKanbanColumn(column) && columnLeads.length === 0;
 
                     return (
@@ -1623,17 +1629,26 @@ export default function CrmPage() {
                         key={column.id}
                         aria-label={`Etapa ${column.label} com ${columnLeads.length} leads`}
                         onDragOver={(event) => event.preventDefault()}
+                        onDragEnter={() => {
+                          if (draggedColumnId && draggedColumnId !== column.id) {
+                            moveKanbanColumn(draggedColumnId, column.id);
+                          }
+                        }}
                         onDrop={() => draggedColumnId ? handleColumnDrop(column.id) : handleDrop(column.id)}
-                        className={`orion-kanban-column flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-colors sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId || draggedColumnId ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'} ${draggedColumnId === column.id ? 'opacity-55' : ''}`}
+                        className={`orion-kanban-column flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-all duration-200 ease-out sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId || draggedColumnId ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'} ${draggedColumnId === column.id ? 'scale-[1.015] shadow-2xl shadow-blue-900/20 ring-2 ring-blue-300/70' : ''}`}
                       >
                         <header
-                          draggable={!isFixedColumn && !isEditingColumn}
-                          onDragStart={() => {
-                            if (!isFixedColumn && !isEditingColumn) setDraggedColumnId(column.id);
+                          draggable={!isFixedColumn && !isEditingColumn && isStoredColumn}
+                          onDragStart={(event) => {
+                            if (!isFixedColumn && !isEditingColumn && isStoredColumn) {
+                              event.dataTransfer.effectAllowed = 'move';
+                              event.dataTransfer.setData('text/plain', column.id);
+                              setDraggedColumnId(column.id);
+                            }
                           }}
                           onDragEnd={() => setDraggedColumnId(null)}
-                          className={`kanban-stage-header shrink-0 border-b bg-gradient-to-br p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.16)] ${!isFixedColumn && !isEditingColumn ? 'cursor-grab active:cursor-grabbing' : ''} ${kanbanStageHeaderClass[column.id] || 'from-blue-700 to-blue-600 border-blue-500/30'}`}
-                          title={!isFixedColumn ? 'Arraste para mover a etapa' : 'Etapa fixa'}
+                          className={`kanban-stage-header shrink-0 border-b bg-gradient-to-br p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.16)] ${!isFixedColumn && !isEditingColumn && isStoredColumn ? 'cursor-grab active:cursor-grabbing' : ''} ${kanbanStageHeaderClass[column.id] || 'from-blue-700 to-blue-600 border-blue-500/30'}`}
+                          title={!isFixedColumn && isStoredColumn ? 'Arraste para mover a etapa' : 'Etapa fixa'}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
