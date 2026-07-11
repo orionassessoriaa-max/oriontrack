@@ -79,6 +79,7 @@ export default function AdminCentralPage() {
   const [corretorasList, setCorretorasList] = useState<any[]>([]);
   const [gestoresList, setGestoresList] = useState<any[]>([]);
   const [alertsList, setAlertsList] = useState<any[]>([]);
+  const [overdueTrafficRequests, setOverdueTrafficRequests] = useState<any[]>([]);
   const [showNoBalanceModal, setShowNoBalanceModal] = useState(false);
   const [showPendingOnboardingModal, setShowPendingOnboardingModal] = useState(false);
   const [showNoBrokerageModal, setShowNoBrokerageModal] = useState(false);
@@ -127,6 +128,17 @@ export default function AdminCentralPage() {
         .from('solicitacoes_suporte')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'nova');
+
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      const { data: oldTrafficRequests } = await supabase
+        .from('solicitacoes_suporte')
+        .select('id, solicitante_nome, categoria, tipo, mensagem, created_at')
+        .eq('status', 'nova')
+        .lt('created_at', threeHoursAgo);
+
+      setOverdueTrafficRequests((oldTrafficRequests || []).filter((request) =>
+        /trafego|tráfego|meta|cpl|campanha|anuncio|anúncio|aprov/i.test(`${request.categoria || ''} ${request.tipo || ''} ${request.mensagem || ''}`)
+      ));
 
       // 5. Gestores e corretores
       const [profilesRes, corretoresRes, corretorasRes] = await Promise.all([
@@ -375,6 +387,42 @@ export default function AdminCentralPage() {
       .sort((a, b) => a.corretora_nome.localeCompare(b.corretora_nome, 'pt-BR'));
   }, [corretorasList, corretoresList, gestoresList]);
 
+  const highCplList = useMemo(() => {
+    return alertsList
+      .filter((a) => a.cpl !== null && Number(a.cpl) >= 28)
+      .map((a) => {
+        const cObj = corretoresList.find(c => c.id === a.corretor_id);
+        const gestorId = cObj ? inferGestorIdFromTeam(cObj, gestoresList) : null;
+        const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
+        return {
+          corretor_id: a.corretor_id,
+          corretora_nome: cObj?.nome_empresa || a.meta_ad_account_name || a.corretor_nome,
+          corretor_nome: a.corretor_nome,
+          gestor_nome: gestorNome,
+          cpl: Number(a.cpl),
+          leads: Number(a.leads || 0),
+          spend: Number(a.spend || 0),
+        };
+      });
+  }, [alertsList, corretoresList, gestoresList]);
+
+  const crmPendingTrafficList = useMemo(() => {
+    return alertsList
+      .filter((a) => Boolean(a.dados_crm_pendentes))
+      .map((a) => {
+        const cObj = corretoresList.find(c => c.id === a.corretor_id);
+        const gestorId = cObj ? inferGestorIdFromTeam(cObj, gestoresList) : null;
+        const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
+        return {
+          corretor_id: a.corretor_id,
+          corretora_nome: cObj?.nome_empresa || a.meta_ad_account_name || a.corretor_nome,
+          corretor_nome: a.corretor_nome,
+          gestor_nome: gestorNome,
+          spend: Number(a.spend || 0),
+        };
+      });
+  }, [alertsList, corretoresList, gestoresList]);
+
   const quickActions = [
     { 
       title: 'Novo Corretor', 
@@ -585,6 +633,69 @@ export default function AdminCentralPage() {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          <Link
+            href="/trafego/avisos-meta"
+            className="group relative bg-[#090e1a]/85 border border-red-500/10 hover:border-red-500/40 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(239,68,68,0.12)] transition-all duration-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">CPL crítico</p>
+              <div className="p-2.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 group-hover:scale-110 transition-transform">
+                <TrendingUp size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-red-400 transition-colors">{highCplList.length}</p>
+            )}
+            <p className="text-[10px] font-semibold text-slate-500 mt-2 flex items-center gap-1 group-hover:text-slate-400 transition-colors">
+              CPL real acima de R$ 28,00 usando leads do CRM <ArrowRight size={10} />
+            </p>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-red-500/0 via-red-500/40 to-red-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </Link>
+
+          <Link
+            href="/trafego/avisos-meta"
+            className="group relative bg-[#090e1a]/85 border border-blue-500/10 hover:border-blue-500/40 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(59,130,246,0.12)] transition-all duration-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">CRM pendente</p>
+              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 group-hover:scale-110 transition-transform">
+                <FileSearch size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-blue-400 transition-colors">{crmPendingTrafficList.length}</p>
+            )}
+            <p className="text-[10px] font-semibold text-slate-500 mt-2 flex items-center gap-1 group-hover:text-slate-400 transition-colors">
+              Meta tem gasto, mas faltam leads importados no CRM <ArrowRight size={10} />
+            </p>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500/0 via-blue-500/40 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </Link>
+
+          <Link
+            href="/admin/suporte"
+            className="group relative bg-[#090e1a]/85 border border-amber-500/10 hover:border-amber-500/40 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(245,158,11,0.12)] transition-all duration-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Aprovação vencida</p>
+              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 group-hover:scale-110 transition-transform">
+                <Clock size={18} />
+              </div>
+            </div>
+            {loading ? (
+              <div className="h-8 w-16 bg-slate-800 animate-pulse rounded-lg" />
+            ) : (
+              <p className="text-3xl font-black text-white group-hover:text-amber-400 transition-colors">{overdueTrafficRequests.length}</p>
+            )}
+            <p className="text-[10px] font-semibold text-slate-500 mt-2 flex items-center gap-1 group-hover:text-slate-400 transition-colors">
+              Chamados de tráfego sem revisão há mais de 3h <ArrowRight size={10} />
+            </p>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-amber-500/0 via-amber-500/40 to-amber-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </Link>
+
           {/* Card: Concessionarias Sem Saldo */}
           <div 
             onClick={() => setShowNoBalanceModal(true)}

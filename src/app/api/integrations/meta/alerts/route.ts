@@ -11,6 +11,14 @@ type CorretorMeta = {
   meta_ad_account_name: string | null;
 };
 
+const TRAFFIC_RULES = {
+  cplAttention: 20,
+  cplCritical: 28,
+  cpcMax: 6,
+  ctrMin: 1,
+  lowBalance: 100,
+};
+
 async function requireTrafficAccess(request: Request) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -135,7 +143,7 @@ async function fetchSheetLeadCount(corretor: CorretorMeta, since: string, until:
 async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
   const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
   const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
-  insightsUrl.searchParams.set('fields', 'spend,ctr');
+  insightsUrl.searchParams.set('fields', 'spend,ctr,cpc,cpm,frequency,clicks,inline_link_clicks,cost_per_inline_link_click,actions,cost_per_action_type');
   insightsUrl.searchParams.set('level', 'account');
   insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
   insightsUrl.searchParams.set('access_token', accessToken);
@@ -168,6 +176,14 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   const leads = sheetLeads;
   const cpl = leads > 0 ? spend / leads : null;
   const ctr = Number(row.ctr || 0);
+  const cpc = Number(row.cpc || 0);
+  const cpm = Number(row.cpm || 0);
+  const frequency = Number(row.frequency || 0);
+  const clicks = Number(row.clicks || 0);
+  const linkClicks = Number(row.inline_link_clicks || 0);
+  const costPerLinkClick = Number(row.cost_per_inline_link_click || 0);
+  const landingPageViews = Number((row.actions || []).find((item: any) => item.action_type === 'landing_page_view')?.value || 0);
+  const costPerLandingPageView = Number((row.cost_per_action_type || []).find((item: any) => item.action_type === 'landing_page_view')?.value || 0);
   const rawBalance = accountPayload?.balance;
   const balance = rawBalance === undefined || rawBalance === null ? null : Number(rawBalance) / 100;
   const fundingDetails = accountPayload?.funding_source_details;
@@ -191,8 +207,20 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     saldo: isCard ? null : effectiveBalance,
       currency: accountPayload?.currency || 'BRL',
       forma_pagamento: formaPagamento,
-      alerta_cpl_alto: cpl !== null && cpl > 25,
-      alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < 100,
+      clicks,
+      link_clicks: linkClicks,
+      cpc,
+      cpm,
+      frequency,
+      landing_page_views: landingPageViews,
+      cost_per_link_click: costPerLinkClick,
+      cost_per_landing_page_view: costPerLandingPageView,
+      alerta_cpl_alto: cpl !== null && cpl >= TRAFFIC_RULES.cplCritical,
+      alerta_cpl_atencao: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && cpl < TRAFFIC_RULES.cplCritical,
+      alerta_metricas_secundarias: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && (cpc > TRAFFIC_RULES.cpcMax || ctr < TRAFFIC_RULES.ctrMin),
+      alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < TRAFFIC_RULES.lowBalance,
+      dados_crm_pendentes: spend > 0 && leads === 0,
+      regras: TRAFFIC_RULES,
     };
 }
 
@@ -303,11 +331,23 @@ export async function POST(request: Request) {
           leads: 0,
           cpl: null,
           ctr: 0,
+          clicks: 0,
+          link_clicks: 0,
+          cpc: 0,
+          cpm: 0,
+          frequency: 0,
+          landing_page_views: 0,
+          cost_per_link_click: 0,
+          cost_per_landing_page_view: 0,
           saldo: null,
           currency: 'BRL',
           forma_pagamento: 'Nao informado',
           alerta_cpl_alto: false,
+          alerta_cpl_atencao: false,
+          alerta_metricas_secundarias: false,
           alerta_saldo_baixo: false,
+          dados_crm_pendentes: false,
+          regras: TRAFFIC_RULES,
           error: result.reason?.message || 'Erro ao consultar esta conta.',
         };
       })
@@ -318,7 +358,8 @@ export async function POST(request: Request) {
       data_inicio: since,
       data_fim: until,
       refreshed_at: new Date().toISOString(),
-      threshold_cpl: 25,
+      threshold_cpl: TRAFFIC_RULES.cplCritical,
+      rules: TRAFFIC_RULES,
       accounts,
     });
   } catch (error: any) {

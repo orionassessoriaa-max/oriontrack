@@ -19,7 +19,11 @@ import {
   ShieldAlert,
   Sparkles,
   Trophy,
-  Clock
+  Clock,
+  RefreshCw,
+  Activity,
+  MousePointerClick,
+  Eye
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -43,13 +47,66 @@ type Corretor = {
   created_at: string;
 };
 
+type MetaAccountAlert = {
+  corretor_id: string;
+  corretor_nome: string;
+  meta_ad_account_id: string | null;
+  meta_ad_account_name: string | null;
+  spend: number;
+  leads: number;
+  cpl: number | null;
+  ctr: number;
+  cpc?: number;
+  cpm?: number;
+  frequency?: number;
+  link_clicks?: number;
+  landing_page_views?: number;
+  cost_per_link_click?: number;
+  cost_per_landing_page_view?: number;
+  saldo: number | null;
+  currency: string;
+  forma_pagamento?: string;
+  alerta_cpl_alto: boolean;
+  alerta_cpl_atencao?: boolean;
+  alerta_metricas_secundarias?: boolean;
+  alerta_saldo_baixo: boolean;
+  dados_crm_pendentes?: boolean;
+  error?: string;
+};
+
+function formatCurrency(value: number | null | undefined, currency = 'BRL') {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value));
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '0,00%';
+  return `${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+}
+
+function classifyMetaAccount(account: MetaAccountAlert) {
+  const paymentText = String(account.forma_pagamento || '').toLowerCase();
+  const isCard = paymentText.includes('cartao') || paymentText.includes('cartão') || paymentText.includes('card') || paymentText.includes('visa') || paymentText.includes('mastercard');
+  const hasPaymentError = account.error && /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(account.error));
+
+  if (account.error && !hasPaymentError) return { label: 'Erro Meta', tone: 'amber', detail: account.error };
+  if (isCard && hasPaymentError) return { label: 'Erro pagamento', tone: 'red', detail: 'Falha no processamento do cartão. Admin deve acompanhar.' };
+  if (!isCard && account.saldo !== null && account.saldo <= 0) return { label: 'Sem saldo', tone: 'red', detail: 'Conta pré-paga sem saldo. Admin deve ser avisado.' };
+  if (account.alerta_cpl_alto) return { label: 'CPL crítico', tone: 'red', detail: 'CPL chegou a R$ 28,00 ou mais. Revisão obrigatória antes de qualquer ação.' };
+  if (account.dados_crm_pendentes) return { label: 'CRM pendente', tone: 'blue', detail: 'Existe investimento na Meta, mas nenhum lead no CRM. Conferir importação antes de julgar o CPL.' };
+  if (account.alerta_cpl_atencao || account.alerta_metricas_secundarias) return { label: 'Em atenção', tone: 'amber', detail: 'CPL acima de R$ 20,00. Avaliar CPC, CTR, CPM, página de destino e frequência.' };
+  if (!isCard && account.alerta_saldo_baixo) return { label: 'Saldo baixo', tone: 'amber', detail: 'Saldo abaixo do mínimo operacional.' };
+  return { label: 'Saudável', tone: 'emerald', detail: 'Sem alerta crítico no período selecionado.' };
+}
+
 export default function GestorDashboardPage() {
   const { profile } = useAuth();
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalLeads, setTotalLeads] = useState(0);
-  const [criticalAccounts, setCriticalAccounts] = useState<any[]>([]);
+  const [metaAccounts, setMetaAccounts] = useState<MetaAccountAlert[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const [alertsUpdatedAt, setAlertsUpdatedAt] = useState<string | null>(null);
   const [presetLabel, setPresetLabel] = useState('Todo o período');
   const [error, setError] = useState<string | null>(null);
 
@@ -125,26 +182,8 @@ export default function GestorDashboardPage() {
           });
           if (response.ok) {
             const payload = await response.json();
-            const accounts = payload.accounts || [];
-            
-            const critical = accounts.filter((acc: any) => {
-              const isCard = String(acc.forma_pagamento || '').toLowerCase().includes('cartao') || 
-                             String(acc.forma_pagamento || '').toLowerCase().includes('cartão') ||
-                             String(acc.forma_pagamento || '').toLowerCase().includes('card') ||
-                             String(acc.forma_pagamento || '').toLowerCase().includes('visa') ||
-                             String(acc.forma_pagamento || '').toLowerCase().includes('mastercard');
-              const hasPaymentError = acc.error && (
-                /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(acc.error))
-              );
-              
-              const isCriticalCpl = acc.cpl !== null && acc.cpl > 25;
-              const isCriticalBalance = !isCard && acc.saldo !== null && acc.saldo < 100;
-              const isCardError = isCard && hasPaymentError;
-              const hasGeneralError = acc.error && !isCard;
-
-              return isCriticalCpl || isCriticalBalance || isCardError || hasGeneralError;
-            });
-            setCriticalAccounts(critical);
+            setMetaAccounts(payload.accounts || []);
+            setAlertsUpdatedAt(payload.refreshed_at || new Date().toISOString());
           }
         } catch (err) {
           console.error('Error loading critical accounts on gestor dashboard:', err);
@@ -162,6 +201,12 @@ export default function GestorDashboardPage() {
 
   const activeCampaignsCount = corretores.filter(c => c.campanhas_ativas).length;
   const pendingOnboardingCount = corretores.filter(c => !c.onboarding_status || c.onboarding_status === 'pendente').length;
+  const reviewAccounts = metaAccounts
+    .map((account) => ({ account, status: classifyMetaAccount(account) }))
+    .filter(({ status }) => status.label !== 'Saudável');
+  const criticalReviewCount = reviewAccounts.filter(({ status }) => status.tone === 'red').length;
+  const attentionReviewCount = reviewAccounts.filter(({ status }) => status.tone === 'amber').length;
+  const crmPendingCount = reviewAccounts.filter(({ status }) => status.label === 'CRM pendente').length;
 
   const quickActions = [
     {
@@ -272,89 +317,113 @@ export default function GestorDashboardPage() {
         </div>
       ) : (
         <>
-          {/* Alertas Críticos de Contas Meta Ads */}
-          {criticalAccounts.length > 0 && (
-            <div className="mb-10 p-6 rounded-[2rem] border border-red-500/20 bg-red-500/5 shadow-[0_0_30px_rgba(239,68,68,0.06)] backdrop-blur-md animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center shrink-0">
-                  <ShieldAlert size={20} className="animate-pulse" />
+          {/* Central de Revisao Meta / CRM */}
+          <div className="mb-10 rounded-[2rem] border border-white/5 bg-[#090e1a]/85 p-6 shadow-2xl backdrop-blur-md">
+            <div className="mb-6 flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-300">
+                  <Activity size={24} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black text-white leading-none">Contas Críticas em Alerta</h2>
-                  <p className="text-xs font-bold text-red-400/80 mt-1.5">Campanhas ou saldos que requerem atenção imediata.</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">MVP de otimização</p>
+                  <h2 className="mt-1 text-2xl font-black tracking-tight text-white">Revisão Meta com leads reais do CRM</h2>
+                  <p className="mt-1 max-w-3xl text-sm font-semibold leading-relaxed text-slate-400">
+                    O sistema monitora as contas conectadas, calcula CPL usando somente leads do CRM e separa o que é crítico, atenção ou apenas dado pendente. Nenhuma campanha é pausada automaticamente neste MVP.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={fetchDashboardData}
+                disabled={loading || loadingAlerts}
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loadingAlerts ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+                Revisar contas
+              </button>
+            </div>
+
+            <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <div className="rounded-2xl border border-red-500/15 bg-red-500/10 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-300">Crítico</p>
+                <p className="mt-2 text-3xl font-black text-white">{criticalReviewCount}</p>
+                <p className="mt-1 text-xs font-bold text-red-200/80">CPL &gt;= R$ 28, sem saldo ou erro de pagamento.</p>
+              </div>
+              <div className="rounded-2xl border border-amber-500/15 bg-amber-500/10 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Atenção</p>
+                <p className="mt-2 text-3xl font-black text-white">{attentionReviewCount}</p>
+                <p className="mt-1 text-xs font-bold text-amber-200/80">CPL &gt;= R$ 20 exige leitura das métricas secundárias.</p>
+              </div>
+              <div className="rounded-2xl border border-blue-500/15 bg-blue-500/10 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">CRM pendente</p>
+                <p className="mt-2 text-3xl font-black text-white">{crmPendingCount}</p>
+                <p className="mt-1 text-xs font-bold text-blue-200/80">Investimento existe, mas ainda nao ha leads no CRM.</p>
+              </div>
+              <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/10 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Contas lidas</p>
+                <p className="mt-2 text-3xl font-black text-white">{metaAccounts.length}</p>
+                <p className="mt-1 text-xs font-bold text-emerald-200/80">Base conectada via Meta, leads conferidos no Orion.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ultima revisao</p>
+                <p className="mt-2 text-sm font-black text-white">{alertsUpdatedAt ? new Date(alertsUpdatedAt).toLocaleString('pt-BR') : 'Ainda nao revisado'}</p>
+                <p className="mt-1 text-xs font-bold text-slate-500">Rotina prevista: 2 vezes ao dia + revisão manual.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-black text-white">Contas para revisar agora</h3>
+                    <p className="text-xs font-bold text-slate-500">Ordenadas por risco operacional. Danilo deve aparecer fiel quando os leads estiverem no CRM.</p>
+                  </div>
+                  <Link href="/trafego/avisos-meta" className="text-[10px] font-black uppercase tracking-widest text-cyan-300 hover:text-cyan-200">
+                    Ver todos
+                  </Link>
+                </div>
+
+                <div className="space-y-3">
+                  {loadingAlerts ? (
+                    <div className="flex items-center justify-center py-10 text-slate-400"><Loader2 className="animate-spin" size={24} /></div>
+                  ) : reviewAccounts.length === 0 ? (
+                    <p className="rounded-xl border border-white/5 bg-white/[0.02] p-5 text-sm font-bold text-slate-400">Nenhum alerta para revisar no periodo selecionado.</p>
+                  ) : reviewAccounts.slice(0, 6).map(({ account, status }) => (
+                    <div key={`${account.corretor_id}-${account.meta_ad_account_id}`} className="rounded-2xl border border-white/5 bg-white/[0.025] p-4 transition hover:border-cyan-400/25 hover:bg-white/[0.04]">
+                      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black text-white">{account.corretor_nome}</p>
+                          <p className="mt-1 text-[10px] font-bold text-slate-500">{account.meta_ad_account_name || `act_${account.meta_ad_account_id}`}</p>
+                        </div>
+                        <span className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
+                          status.tone === 'red' ? 'border-red-400/25 bg-red-500/10 text-red-300' :
+                          status.tone === 'amber' ? 'border-amber-400/25 bg-amber-500/10 text-amber-300' :
+                          status.tone === 'blue' ? 'border-blue-400/25 bg-blue-500/10 text-blue-300' :
+                          'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'
+                        }`}>{status.label}</span>
+                      </div>
+                      <p className="mb-3 text-xs font-bold leading-relaxed text-slate-300">{status.detail}</p>
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                        <MetricMini label="Leads CRM" value={String(account.leads || 0)} />
+                        <MetricMini label="CPL real" value={formatCurrency(account.cpl, account.currency)} />
+                        <MetricMini label="CTR" value={formatPercent(account.ctr)} />
+                        <MetricMini label="CPC" value={formatCurrency(account.cpc || 0, account.currency)} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {criticalAccounts.map((acc) => {
-                  const isCard = String(acc.forma_pagamento || '').toLowerCase().includes('cartao') || 
-                                 String(acc.forma_pagamento || '').toLowerCase().includes('cartão') ||
-                                 String(acc.forma_pagamento || '').toLowerCase().includes('card') ||
-                                 String(acc.forma_pagamento || '').toLowerCase().includes('visa') ||
-                                 String(acc.forma_pagamento || '').toLowerCase().includes('mastercard');
-                  const hasPaymentError = acc.error && (
-                    /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(acc.error))
-                  );
-
-                  let badgeText = 'Normal';
-                  let badgeTone = 'emerald';
-                  let detailText = '';
-
-                  if (acc.cpl !== null && acc.cpl > 25) {
-                    badgeText = 'CPL Alto';
-                    badgeTone = 'red';
-                    detailText = `CPL de R$ ${Number(acc.cpl).toFixed(2).replace('.', ',')} acima do limite.`;
-                  } else if (isCard && hasPaymentError) {
-                    badgeText = 'Erro Pagamento';
-                    badgeTone = 'red';
-                    detailText = 'Falha de processamento no cartão de crédito.';
-                  } else if (!isCard && acc.saldo !== null && acc.saldo <= 0) {
-                    badgeText = 'Sem Saldo';
-                    badgeTone = 'red';
-                    detailText = 'Campanhas suspensas por falta de créditos.';
-                  } else if (!isCard && acc.saldo !== null && acc.saldo < 100) {
-                    badgeText = 'Saldo Baixo';
-                    badgeTone = 'amber';
-                    detailText = `Saldo de R$ ${Number(acc.saldo).toFixed(2).replace('.', ',')} abaixo do limite de R$ 100.`;
-                  } else if (acc.error) {
-                    badgeText = 'Erro Meta';
-                    badgeTone = 'amber';
-                    detailText = acc.error;
-                  }
-
-                  return (
-                    <div key={acc.corretor_id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors flex flex-col justify-between gap-3 group">
-                      <div>
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                          <p className="font-extrabold text-white text-sm truncate group-hover:text-cyan-400 transition-colors">{acc.corretor_nome}</p>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest leading-none border ${
-                            badgeTone === 'red'
-                              ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                              : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                          }`}>
-                            {badgeText}
-                          </span>
-                        </div>
-                        <p className="text-[10px] font-semibold text-slate-500 truncate leading-none">
-                          {acc.meta_ad_account_name || `act_${acc.meta_ad_account_id}`}
-                        </p>
-                        <p className="text-xs font-bold text-slate-300 mt-2">{detailText}</p>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-1">
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{isCard ? 'Cartão de Crédito' : 'Pré-pago'}</span>
-                        <Link 
-                          href="/trafego/avisos-meta"
-                          className="text-[9px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1"
-                        >
-                          Ver Avisos <ArrowRight size={10} />
-                        </Link>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <h3 className="text-base font-black text-white">Regras do MVP</h3>
+                <div className="mt-4 space-y-3">
+                  <RuleRow icon={TrendingUp} title="CPL crítico" text="Pausar só entra como recomendação quando CPL real chegar a R$ 28,00 com dados confiáveis." tone="red" />
+                  <RuleRow icon={Activity} title="CPL em atenção" text="Acima de R$ 20,00 o painel exige leitura de CPC, CTR, CPM, visualização de página e frequência." tone="amber" />
+                  <RuleRow icon={MousePointerClick} title="Métricas secundárias" text="CPC máximo R$ 6,00, CTR mínimo 1%. Frequência fica como indicador de fadiga." tone="blue" />
+                  <RuleRow icon={Eye} title="Fonte dos leads" text="Lead oficial vem do CRM Orion. Se a Meta tem gasto e o CRM nao tem lead, o status vira CRM pendente." tone="emerald" />
+                </div>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Stats Section */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
@@ -524,5 +593,45 @@ export default function GestorDashboardPage() {
         </div>
       </div>
     </InternalLayout>
+  );
+}
+
+function MetricMini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/5 bg-black/20 p-3">
+      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-black text-white">{value}</p>
+    </div>
+  );
+}
+
+function RuleRow({
+  icon: Icon,
+  title,
+  text,
+  tone,
+}: {
+  icon: any;
+  title: string;
+  text: string;
+  tone: 'red' | 'amber' | 'blue' | 'emerald';
+}) {
+  const toneClass = {
+    red: 'border-red-400/15 bg-red-500/10 text-red-300',
+    amber: 'border-amber-400/15 bg-amber-500/10 text-amber-300',
+    blue: 'border-blue-400/15 bg-blue-500/10 text-blue-300',
+    emerald: 'border-emerald-400/15 bg-emerald-500/10 text-emerald-300',
+  }[tone];
+
+  return (
+    <div className="flex gap-3 rounded-2xl border border-white/5 bg-white/[0.025] p-4">
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${toneClass}`}>
+        <Icon size={18} />
+      </div>
+      <div>
+        <p className="text-sm font-black text-white">{title}</p>
+        <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-400">{text}</p>
+      </div>
+    </div>
   );
 }
