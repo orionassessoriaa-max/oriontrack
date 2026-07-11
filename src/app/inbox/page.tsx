@@ -40,7 +40,8 @@ import {
   Video,
   Download,
   PhoneCall,
-  Phone
+  Phone,
+  ChevronDown
 } from 'lucide-react';
 
 function WhatsAppGlyph({ className = '' }: { className?: string }) {
@@ -266,6 +267,7 @@ export default function BrokerInboxPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [leadActivities, setLeadActivities] = useState<any[]>([]);
   const [leadInfo, setLeadInfo] = useState<any>(null);
+  const [leadDetailsOpen, setLeadDetailsOpen] = useState(false);
 
   // Apolo Bot & Close Reason Modal States
   const [showBotConfigModal, setShowBotConfigModal] = useState(false);
@@ -677,6 +679,7 @@ export default function BrokerInboxPage() {
 
   useEffect(() => {
     setSendError(null);
+    setLeadDetailsOpen(false);
     if (selectedConversation?.id) {
       void fetchMessages(selectedConversation.id);
     } else {
@@ -2598,23 +2601,49 @@ export default function BrokerInboxPage() {
 
                 {/* Dados do Lead */}
                 {leadInfo && (
-                  <div className="space-y-3.5 shrink-0 border-b border-white/5 pb-4">
-                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Dados do Lead</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <EditableLeadInfoCard label="Idade" field="idades" value={leadInfo.idades || ''} onSave={handleUpdateLeadField} />
-                      <EditableLeadInfoCard label="Plano ativo" field="tem_plano_ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Nao informado']} />
-                      <EditableLeadInfoCard label="Possui CNPJ?" field="possui_cnpj" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Tenho MEI', 'Nao informado']} />
-                      <EditableLeadInfoCard label="CNPJ" field="cnpj" value={leadInfo.cnpj || ''} onSave={handleUpdateLeadField} />
-                      <EditableLeadInfoCard label="Plano atual" field="plano_atual" value={leadInfo.plano_atual || ''} onSave={handleUpdateLeadField} />
-                      <EditableLeadInfoCard label="Investimento" field="investimento" value={leadInfo.investimento || ''} onSave={handleUpdateLeadField} />
-                      <EditableLeadInfoCard label="Cidade" field="cidade" value={leadInfo.cidade || ''} onSave={handleUpdateLeadField} />
-                      <EditableLeadInfoCard label="Pagina" field="operadora" value={leadInfo.operadora || ''} onSave={handleUpdateLeadField} />
-                      <EditableLeadInfoCard label="Origem" field="origem" value={leadInfo.origem || ''} onSave={handleUpdateLeadField} />
-                      <EditableLeadInfoCard label="E-mail" field="email" value={leadInfo.email || ''} onSave={handleUpdateLeadField} className="col-span-2" />
-                      <EditableLeadInfoCard label="Motivo da busca" field="motivo_busca" value={leadInfo.motivo_busca || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
-                      <EditableLeadInfoCard label="Hospital/Regiao" field="hospital_preferencia" value={leadInfo.hospital_preferencia || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
-                      <EditableLeadInfoCard label="Observacoes" field="observacoes" value={leadInfo.observacoes || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
-                    </div>
+                  <div className="shrink-0 border-b border-white/5 pb-4">
+                    <button
+                      type="button"
+                      onClick={() => setLeadDetailsOpen((current) => !current)}
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/5 bg-slate-950/45 px-3.5 py-3 text-left transition hover:border-cyan-500/25 hover:bg-slate-950/70"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Dados do lead</span>
+                          <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-cyan-300">
+                            {leadDetailsOpen ? 'Aberto' : 'Minimizado'}
+                          </span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-bold text-slate-300">
+                          <span className="truncate rounded-lg bg-white/[0.03] px-2 py-1">Idade: {leadInfo.idades || '-'}</span>
+                          <span className="truncate rounded-lg bg-white/[0.03] px-2 py-1">CNPJ: {normalizeCnpjOwnership(leadInfo.possui_cnpj) || '-'}</span>
+                          <span className="truncate rounded-lg bg-white/[0.03] px-2 py-1">Plano: {normalizePlanoAtivo(leadInfo.tem_plano_ativo) || '-'}</span>
+                          <span className="truncate rounded-lg bg-white/[0.03] px-2 py-1">Cidade: {leadInfo.cidade || '-'}</span>
+                        </div>
+                      </div>
+                      <ChevronDown
+                        size={16}
+                        className={`shrink-0 text-slate-400 transition-transform ${leadDetailsOpen ? 'rotate-180 text-cyan-300' : ''}`}
+                      />
+                    </button>
+
+                    {leadDetailsOpen && (
+                      <div className="mt-3 grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <EditableLeadInfoCard label="Idade" field="idades" value={leadInfo.idades || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard label="Plano ativo" field="tem_plano_ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Nao informado']} />
+                        <EditableLeadInfoCard label="Possui CNPJ?" field="possui_cnpj" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Tenho MEI', 'Nao informado']} />
+                        <EditableLeadInfoCard label="CNPJ" field="cnpj" value={leadInfo.cnpj || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard label="Plano atual" field="plano_atual" value={leadInfo.plano_atual || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard label="Investimento" field="investimento" value={leadInfo.investimento || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard label="Cidade" field="cidade" value={leadInfo.cidade || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard label="Pagina" field="operadora" value={leadInfo.operadora || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard label="Origem" field="origem" value={leadInfo.origem || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard label="E-mail" field="email" value={leadInfo.email || ''} onSave={handleUpdateLeadField} className="col-span-2" />
+                        <EditableLeadInfoCard label="Motivo da busca" field="motivo_busca" value={leadInfo.motivo_busca || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
+                        <EditableLeadInfoCard label="Hospital/Regiao" field="hospital_preferencia" value={leadInfo.hospital_preferencia || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
+                        <EditableLeadInfoCard label="Observacoes" field="observacoes" value={leadInfo.observacoes || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
+                      </div>
+                    )}
                   </div>
                 )}
 
