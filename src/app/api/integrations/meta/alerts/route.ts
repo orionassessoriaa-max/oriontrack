@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
+import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 type CorretorMeta = {
   id: string;
@@ -9,6 +10,7 @@ type CorretorMeta = {
   nome_empresa: string | null;
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
+  time_operacional?: unknown;
 };
 
 const TRAFFIC_RULES = {
@@ -33,7 +35,7 @@ async function requireTrafficAccess(request: Request) {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('id, tipo_usuario, corretor_id')
+    .select('id, nome, email, email_real, tipo_usuario, corretor_id')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -236,14 +238,20 @@ async function resolveBrokerageMetaAccount(corretor: CorretorMeta) {
 
   const { data: metaOwner } = await supabaseAdmin
     .from('corretores')
-    .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name')
+    .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional')
     .eq('nome_empresa', corretoraNome)
     .not('meta_ad_account_id', 'is', null)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
-  return (metaOwner as CorretorMeta | null) || corretor;
+  if (!metaOwner) return corretor;
+
+  return {
+    ...corretor,
+    meta_ad_account_id: metaOwner.meta_ad_account_id,
+    meta_ad_account_name: metaOwner.meta_ad_account_name,
+  };
 }
 
 export async function POST(request: Request) {
@@ -269,15 +277,14 @@ export async function POST(request: Request) {
 
     const query = supabaseAdmin
       .from('corretores')
-      .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name')
+      .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional')
       .order('nome', { ascending: true });
 
     if (guard.profile.tipo_usuario === 'gestor_trafego') {
-      query.eq('gestor_trafego_id', guard.user.id);
       if (corretorId) {
         query.eq('id', corretorId);
       } else {
-        query.not('meta_ad_account_id', 'is', null);
+        query.not('nome_empresa', 'is', null);
       }
     } else if (['corretor', 'corretor_admin', 'corretor_membro'].includes(guard.profile.tipo_usuario)) {
       if (!guard.profile.corretor_id) {
@@ -297,8 +304,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const scopedCorretores = guard.profile.tipo_usuario === 'gestor_trafego'
+      ? ((corretores || []) as CorretorMeta[]).filter((corretor) =>
+          isGestorLinkedToConcessionariaCorretor(corretor, guard.profile)
+        )
+      : ((corretores || []) as CorretorMeta[]);
+
     const resolvedCorretores = await Promise.all(
-      ((corretores || []) as CorretorMeta[]).map((corretor) => resolveBrokerageMetaAccount(corretor))
+      scopedCorretores.map((corretor) => resolveBrokerageMetaAccount(corretor))
     );
 
     const uniqueByAccount = new Map<string, CorretorMeta>();
