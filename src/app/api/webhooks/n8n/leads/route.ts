@@ -80,14 +80,6 @@ function field(body: Record<string, any>, aliases: string[]) {
   return '';
 }
 
-function inferLeadOrigem(body: Record<string, any>, campaign: string | null) {
-  const campaignText = normalizeKey(campaign || field(body, ['utm_campaign', 'campaign', 'campanha', 'nome campanha']));
-  if (campaignText.includes('orion')) return 'Orion';
-  const explicit = normalizeText(field(body, ['origem_lead', 'lead_origem', 'origem comercial', 'origem do lead']));
-  if (explicit) return explicit;
-  return normalizeText(field(body, ['utm_source', 'source', 'origem', 'utm origem'])) || null;
-}
-
 function parseCurrencyValue(value: unknown) {
   const raw = normalizeText(value);
   if (!raw || raw === '-') return null;
@@ -163,7 +155,6 @@ function buildEnrichmentUpdate(existing: any, incoming: any) {
     'investimento',
     'cidade',
     'operadora',
-    'origem',
     'utm_source',
     'utm_medium',
     'utm_campaign',
@@ -493,7 +484,6 @@ export async function POST(request: Request) {
       investimento: normalizeText(field(body, ['investimento', 'investimento pretendido', 'investimento_pretendido', 'pretensao investimento', 'pretensão investimento', 'valor_pretendido', 'budget', 'orcamento', 'orçamento'])),
       cidade: normalizeText(field(body, ['cidade', 'city', 'regiao', 'localidade'])),
       operadora: normalizeText(field(body, ['operadora', 'pagina', 'página', 'aba', 'operator', 'page', 'source_page'])) || null,
-      origem: inferLeadOrigem(body, utmCampaign),
       utm_source: normalizeText(field(body, ['utm_source', 'source', 'origem', 'utm origem'])) || null,
       utm_medium: normalizeText(field(body, ['utm_medium', 'medium', 'meio', 'utm meio'])) || null,
       utm_campaign: utmCampaign,
@@ -516,7 +506,7 @@ export async function POST(request: Request) {
       const to = from + existingLimit - 1;
       const { data: existingLeads, error: existingError } = await supabaseAdmin
         .from('leads')
-        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
+        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
         .eq('corretor_id', corretorId)
         .range(from, to);
 
@@ -583,13 +573,37 @@ export async function POST(request: Request) {
     // Fetch final lead assignment details to notify the correct users
     const { data: finalLead } = await supabaseAdmin
       .from('leads')
-      .select('id, corretor_id, nome, telefone, idades, cidade, possui_cnpj, cnpj, investimento, tem_plano_ativo, plano_atual, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, responsavel_membro:responsavel_membro_id(nome)')
+      .select('id, corretor_id, nome, telefone, idades, cidade, possui_cnpj, cnpj, investimento, tem_plano_ativo, plano_atual, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, responsavel_membro:responsavel_membro_id(nome)')
       .eq('id', data.id)
       .maybeSingle();
+
+    const assignedMembroRaw = finalLead?.responsavel_membro;
+    const assignedMembroObj = Array.isArray(assignedMembroRaw) ? assignedMembroRaw[0] : (assignedMembroRaw as any);
+    const assignedMemberName = assignedMembroObj?.nome || null;
+    let memberProfile: any = null;
+
+    if (finalLead?.responsavel_profile_id) {
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('id, nome, email, tipo_usuario, telefone')
+        .eq('id', finalLead.responsavel_profile_id)
+        .maybeSingle();
+      memberProfile = prof;
+    }
 
     const aiStart = await tryStartLeadAiForWebhook(data.id);
     const botStart = aiStart?.eligible ? null : await tryStartLeadBotForWebhook(data.id);
     const suppressStandardLeadNotifications = Boolean(aiStart?.eligible);
+    const notificationReport = {
+      standard_notifications_suppressed_by_ai: suppressStandardLeadNotifications,
+      ai_handoff_will_notify_responsible: suppressStandardLeadNotifications,
+      owner_profiles_notified: [] as Array<{ id: string; nome: string | null; tipo_usuario: string | null }>,
+      responsible_profile_notified: null as null | { id: string; nome: string | null; tipo_usuario: string | null },
+      danilo_notified_now: false,
+      note: suppressStandardLeadNotifications
+        ? 'IA iniciada: notificacao padrao de novo lead foi suprimida. O responsavel sera avisado quando a IA fizer handoff.'
+        : 'IA nao assumiu: notificacoes padrao de novo lead podem ser enviadas agora.',
+    };
 
     if (finalLead && !suppressStandardLeadNotifications) {
       const { data: leadBroker } = await supabaseAdmin
@@ -624,20 +638,7 @@ export async function POST(request: Request) {
       // Find active broker admin profiles for this dealership (corretor)
       const { data: admins } = await adminQuery;
 
-      // Find assigned team member profile
-      let memberProfile = null;
-      if (finalLead.responsavel_profile_id) {
-        const { data: prof } = await supabaseAdmin
-          .from('profiles')
-          .select('id, nome, email, tipo_usuario, telefone')
-          .eq('id', finalLead.responsavel_profile_id)
-          .maybeSingle();
-        memberProfile = prof;
-      }
-
-      const assignedMembroRaw = finalLead.responsavel_membro;
-      const assignedMembroObj = Array.isArray(assignedMembroRaw) ? assignedMembroRaw[0] : (assignedMembroRaw as any);
-      const memberName = assignedMembroObj?.nome || memberProfile?.nome;
+      const memberName = assignedMemberName || memberProfile?.nome;
       const ownerRecipients = (admins || []).filter((admin) => admin.id !== memberProfile?.id);
       const shouldNotifyOwners = ownerRecipients.length > 0 && (
         !memberProfile ||
@@ -647,6 +648,15 @@ export async function POST(request: Request) {
 
       // 1. Notify broker admins
       if (shouldNotifyOwners) {
+        notificationReport.owner_profiles_notified = ownerRecipients.map((profile) => ({
+          id: profile.id,
+          nome: profile.nome || null,
+          tipo_usuario: profile.tipo_usuario || null,
+        }));
+        notificationReport.danilo_notified_now = ownerRecipients.some((profile) =>
+          normalizeKey(profile.nome || '').includes('danilo')
+        );
+
         const adminMsg = buildLeadDetailsMessage(
           finalLead,
           memberName
@@ -677,6 +687,15 @@ export async function POST(request: Request) {
 
       // 2. Notify assigned member broker
       if (memberProfile) {
+        notificationReport.responsible_profile_notified = {
+          id: memberProfile.id,
+          nome: memberProfile.nome || null,
+          tipo_usuario: memberProfile.tipo_usuario || null,
+        };
+        if (normalizeKey(memberProfile.nome || '').includes('danilo')) {
+          notificationReport.danilo_notified_now = true;
+        }
+
         const memberMsg = buildLeadDetailsMessage(
           finalLead,
           'Novo lead pronto para atendimento.\n\nEsse lead acabou de entrar em contato com voce pelo CRM. Responda o quanto antes para aproveitar o momento de interesse.'
@@ -709,13 +728,29 @@ export async function POST(request: Request) {
       metadata: {
         corretor_id: corretorId,
         assigned_member_id: assignedMemberId,
+        assigned_member_name: assignedMemberName,
+        responsible_profile_id: finalLead?.responsavel_profile_id || null,
+        responsible_profile_name: memberProfile?.nome || null,
         source: 'n8n',
         ai_start: aiStart,
         bot_start: botStart,
+        notifications: notificationReport,
       },
     });
 
-    return NextResponse.json({ success: true, lead: data, responsavel_membro_id: assignedMemberId, ai: aiStart, bot: botStart });
+    return NextResponse.json({
+      success: true,
+      lead: data,
+      assignment: {
+        responsavel_membro_id: assignedMemberId,
+        responsavel_membro_nome: assignedMemberName,
+        responsavel_profile_id: finalLead?.responsavel_profile_id || null,
+        responsavel_profile_nome: memberProfile?.nome || null,
+      },
+      ai: aiStart,
+      bot: botStart,
+      notifications: notificationReport,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao receber lead do n8n.' }, { status: 500 });
   }
