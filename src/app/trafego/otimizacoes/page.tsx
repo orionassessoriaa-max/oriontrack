@@ -37,6 +37,7 @@ type CreativePreview = {
   id?: string | null;
   name?: string | null;
   thumbnail_url?: string | null;
+  image_url?: string | null;
   title?: string | null;
   body?: string | null;
 };
@@ -68,6 +69,15 @@ function formatPercent(value: number | null | undefined) {
 
 function accountKey(account: AccountOption) {
   return String(account.meta_ad_account_id || account.id || '');
+}
+
+function bestCreativeImage(creative?: CreativePreview | null) {
+  if (creative?.image_url) return creative.image_url;
+  const thumbnail = creative?.thumbnail_url || '';
+  return thumbnail
+    .replace(/\/p\d+x\d+\//g, '/p1080x1080/')
+    .replace(/s\d+x\d+/, 's1080x1080')
+    .replace(/\/\d+x\d+\//g, '/1080x1080/');
 }
 
 export default function OtimizacoesPage() {
@@ -296,8 +306,8 @@ export default function OtimizacoesPage() {
           )}
         </main>
       </div>
-      {fullscreenCreative?.creative?.thumbnail_url ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
+      {bestCreativeImage(fullscreenCreative?.creative) ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 p-4 backdrop-blur-sm">
           <button
             type="button"
             onClick={() => setFullscreenCreative(null)}
@@ -306,23 +316,23 @@ export default function OtimizacoesPage() {
           >
             <X size={22} />
           </button>
-          <div className="grid max-h-[92vh] w-full max-w-6xl gap-4 overflow-auto rounded-2xl border border-white/10 bg-[#08111d] p-4 shadow-2xl lg:grid-cols-[minmax(0,1fr)_340px]">
-            <div className="flex items-center justify-center rounded-xl bg-black/35 p-3">
+          <div className="grid max-h-[94vh] w-full max-w-[1500px] gap-4 overflow-auto rounded-2xl border border-white/10 bg-[#08111d] p-4 shadow-2xl lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="flex min-h-[68vh] items-center justify-center rounded-xl bg-black/35 p-3">
               <img
-                src={fullscreenCreative.creative.thumbnail_url}
-                alt={fullscreenCreative.creative.name || fullscreenCreative.name}
-                className="max-h-[82vh] max-w-full rounded-lg object-contain"
+                src={bestCreativeImage(fullscreenCreative!.creative)}
+                alt={fullscreenCreative!.creative?.name || fullscreenCreative!.name}
+                className="h-auto max-h-[88vh] w-auto max-w-full rounded-lg object-contain"
               />
             </div>
             <div className="min-w-0 p-2">
               <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Visualizacao do anuncio</p>
-              <h3 className="mt-3 text-2xl font-black text-white">{fullscreenCreative.creative.title || fullscreenCreative.creative.name || fullscreenCreative.name}</h3>
-              {fullscreenCreative.creative.body ? (
-                <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-300">{fullscreenCreative.creative.body}</p>
+              <h3 className="mt-3 text-2xl font-black text-white">{fullscreenCreative!.creative?.title || fullscreenCreative!.creative?.name || fullscreenCreative!.name}</h3>
+              {fullscreenCreative!.creative?.body ? (
+                <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-300">{fullscreenCreative!.creative.body}</p>
               ) : null}
               <div className="mt-5 flex flex-wrap items-center gap-2">
-                <StatusBadge status={fullscreenCreative.effective_status || fullscreenCreative.status} />
-                <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">ID: {fullscreenCreative.id}</span>
+                <StatusBadge status={fullscreenCreative!.effective_status || fullscreenCreative!.status} />
+                <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">ID: {fullscreenCreative!.id}</span>
               </div>
             </div>
           </div>
@@ -440,13 +450,14 @@ function MetricRow({ name, level, status, metrics, indent = '', open = false, ha
 
 function CreativeRow({ ad, onOpenCreative }: { ad: AdNode; onOpenCreative: (ad: AdNode) => void }) {
   const creative = ad.creative;
+  const previewImage = bestCreativeImage(creative);
   return (
     <tr className="bg-black/20">
       <td colSpan={8} className="py-4 pl-20 pr-4">
         <div className="grid gap-4 border-l-2 border-cyan-400/40 pl-4 sm:grid-cols-[140px_1fr]">
-          {creative?.thumbnail_url ? (
+          {previewImage ? (
             <div className="relative h-28 w-36 overflow-hidden rounded-lg ring-1 ring-white/10">
-              <img src={creative.thumbnail_url} alt={creative.name || ad.name} className="h-full w-full object-cover" />
+              <img src={previewImage} alt={creative?.name || ad.name} className="h-full w-full object-cover" />
               <button
                 type="button"
                 onClick={() => onOpenCreative(ad)}

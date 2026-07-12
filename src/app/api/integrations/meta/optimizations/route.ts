@@ -321,6 +321,7 @@ function buildTree(
                 id: details.creative.id || null,
                 name: details.creative.name || null,
                 thumbnail_url: details.creative.thumbnail_url || null,
+                image_url: details.creative.image_url || null,
                 title: details.creative.title || details.creative.object_story_spec?.link_data?.name || null,
                 body: details.creative.body || details.creative.object_story_spec?.link_data?.message || null,
               } : null,
@@ -408,7 +409,7 @@ export async function POST(request: Request) {
     const [campaignDetails, adsetDetails, adDetails] = await Promise.all([
       fetchObjectMap(campaignRows.map((row: any) => row.campaign_id), 'id,name,status,effective_status', token, graphVersion),
       fetchObjectMap(adsetRows.map((row: any) => row.adset_id), 'id,name,status,effective_status', token, graphVersion),
-      fetchObjectMap(adRows.map((row: any) => row.ad_id), 'id,name,status,effective_status,creative{id,name,thumbnail_url,title,body,object_story_spec}', token, graphVersion),
+      fetchObjectMap(adRows.map((row: any) => row.ad_id), 'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,title,body,object_story_spec}', token, graphVersion),
     ]);
 
     const currency = 'BRL';

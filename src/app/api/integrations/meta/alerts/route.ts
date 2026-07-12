@@ -235,7 +235,7 @@ async function fetchActiveCreatives(corretor: CorretorMeta, since: string, until
   const rows = insightsPayload.data || [];
   const adDetails = await fetchObjectMap(
     rows.map((row: any) => row.ad_id),
-    'id,name,status,effective_status,creative{id,name,thumbnail_url,title,body,object_story_spec}',
+    'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,title,body,object_story_spec}',
     accessToken,
     graphVersion
   );
@@ -253,6 +253,7 @@ async function fetchActiveCreatives(corretor: CorretorMeta, since: string, until
         meta_ad_account_id: corretor.meta_ad_account_id,
         meta_ad_account_name: corretor.meta_ad_account_name,
         thumbnail_url: details?.creative?.thumbnail_url || null,
+        image_url: details?.creative?.image_url || null,
         spend,
         leads: leadCount,
         cpl: leadCount > 0 ? spend / leadCount : null,

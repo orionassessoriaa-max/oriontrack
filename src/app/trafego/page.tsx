@@ -86,6 +86,7 @@ type ActiveCreative = {
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
   thumbnail_url?: string | null;
+  image_url?: string | null;
   spend: number;
   leads: number;
   cpl: number | null;
@@ -144,6 +145,23 @@ function scoreTrafficAccount(account: MetaAccountAlert) {
   score += Math.min(leads, 50) * 0.35;
 
   return Math.max(0, Math.round(score));
+}
+
+function scoreActiveCreative(creative: ActiveCreative) {
+  let score = 0;
+  const leads = Number(creative.leads || 0);
+  const spend = Number(creative.spend || 0);
+  const cpl = creative.cpl === null || creative.cpl === undefined ? null : Number(creative.cpl);
+
+  score += Math.min(leads, 50) * 3;
+  if (leads === 0 && spend > 0) score -= 30;
+  if (cpl !== null) {
+    if (cpl < 20) score += 25;
+    else if (cpl < 28) score += 8;
+    else score -= 25;
+  }
+
+  return score;
 }
 
 export default function GestorDashboardPage() {
@@ -776,7 +794,10 @@ function TrafficCommandCenter({
       return (toneOrder[classifyMetaAccount(a).tone] ?? 2) - (toneOrder[classifyMetaAccount(b).tone] ?? 2);
     })
     .slice(0, 12);
-  const creativeRows = activeCreatives.slice(0, 10);
+  const creativeRows = activeCreatives
+    .slice()
+    .sort((a, b) => scoreActiveCreative(b) - scoreActiveCreative(a))
+    .slice(0, 10);
   const maxCreativeSpend = Math.max(...creativeRows.map((creative) => Number(creative.spend || 0)), 1);
   const maxCreativeLeads = Math.max(...creativeRows.map((creative) => Number(creative.leads || 0)), 1);
 
@@ -812,7 +833,7 @@ function TrafficCommandCenter({
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <Panel title="Concessionárias em atenção" action={<Link href="/trafego/corretores" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Ver todas</Link>}>
+            <Panel title="Concessionárias em atenção" action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Abrir otimizacoes</Link>}>
               <div className="mb-3 grid grid-cols-[1fr_76px_76px_16px] gap-2 px-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
                 <span>Concessionária</span>
                 <span>Status</span>
@@ -825,7 +846,7 @@ function TrafficCommandCenter({
                 ) : displayedAttention.map(({ account, status }) => (
                   <Link
                     key={`attention-${account.corretor_id}-${account.meta_ad_account_id}`}
-                    href="/trafego/avisos-meta"
+                    href={`/trafego/otimizacoes?conta=${encodeURIComponent(account.meta_ad_account_id || account.corretor_id)}`}
                     className="grid min-h-12 grid-cols-[1fr_76px_76px_16px] items-center gap-2 rounded-xl border border-white/5 bg-white/[0.025] px-2 transition hover:border-cyan-400/30 hover:bg-white/[0.05]"
                   >
                     <span className="flex min-w-0 items-center gap-3">
@@ -840,7 +861,7 @@ function TrafficCommandCenter({
               </div>
             </Panel>
 
-            <Panel title="Recomendações" badge={String(approvalQueue.length)} action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Ver todas</Link>}>
+            <Panel title="Recomendações" badge={String(approvalQueue.length)} action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Abrir otimizacoes</Link>}>
               <div className="space-y-3">
                 {approvalQueue.length === 0 ? (
                   <EmptyPanel text="Nada aguardando decisão humana agora." />
