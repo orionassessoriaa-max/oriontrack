@@ -229,7 +229,50 @@ async function fetchInsights(accountId: string, level: 'account' | 'campaign' | 
   return payload.data || [];
 }
 
-function buildTree(campaignRows: any[], adsetRows: any[], adRows: any[], leads: any[], currency: string) {
+async function fetchObjectMap(ids: string[], fields: string, token: string, graphVersion: string) {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  const result = new Map<string, any>();
+
+  for (let index = 0; index < uniqueIds.length; index += 50) {
+    const chunk = uniqueIds.slice(index, index + 50);
+    const url = new URL(`https://graph.facebook.com/${graphVersion}/`);
+    url.searchParams.set('ids', chunk.join(','));
+    url.searchParams.set('fields', fields);
+    url.searchParams.set('access_token', token);
+
+    const response = await fetch(url.toString(), { next: { revalidate: 300 } });
+    const payload = await response.json();
+    if (!response.ok || payload.error) continue;
+
+    Object.entries(payload || {}).forEach(([id, value]) => result.set(id, value));
+  }
+
+  return result;
+}
+
+function normalizeStatus(value?: string | null) {
+  const raw = String(value || '').trim().toUpperCase();
+  if (!raw) return 'UNKNOWN';
+  return raw;
+}
+
+function statusFromDetails(details?: any) {
+  return {
+    status: normalizeStatus(details?.status),
+    effective_status: normalizeStatus(details?.effective_status),
+  };
+}
+
+function buildTree(
+  campaignRows: any[],
+  adsetRows: any[],
+  adRows: any[],
+  leads: any[],
+  currency: string,
+  campaignDetails: Map<string, any>,
+  adsetDetails: Map<string, any>,
+  adDetails: Map<string, any>
+) {
   const adsetsByCampaign = new Map<string, any[]>();
   adsetRows.forEach((row) => {
     const key = String(row.campaign_id || row.campaign_name || 'sem-campanha');
@@ -246,27 +289,41 @@ function buildTree(campaignRows: any[], adsetRows: any[], adRows: any[], leads: 
     const campaignKey = String(campaign.campaign_id || campaign.campaign_name || 'sem-campanha');
     const campaignName = campaign.campaign_name || 'Campanha sem nome';
     const campaignLeads = countLeads(leads, 'utm_campaign', campaignName);
+    const campaignMeta = statusFromDetails(campaignDetails.get(campaign.campaign_id));
 
     return {
       id: campaignKey,
       name: campaignName,
       level: 'campaign',
+      ...campaignMeta,
       metrics: metricRow(campaign, campaignLeads, currency),
       adsets: (adsetsByCampaign.get(campaignKey) || []).map((adset) => {
         const adsetKey = String(adset.adset_id || adset.adset_name || 'sem-conjunto');
         const adsetName = adset.adset_name || 'Conjunto sem nome';
         const adsetLeads = countLeads(leads, 'utm_term', adsetName);
+        const adsetMeta = statusFromDetails(adsetDetails.get(adset.adset_id));
         return {
           id: adsetKey,
           name: adsetName,
           level: 'adset',
+          ...adsetMeta,
           metrics: metricRow(adset, adsetLeads, currency),
           ads: (adsByAdset.get(adsetKey) || []).map((ad) => {
             const adName = ad.ad_name || 'Anuncio sem nome';
+            const details = adDetails.get(ad.ad_id);
+            const adMeta = statusFromDetails(details);
             return {
               id: String(ad.ad_id || adName),
               name: adName,
               level: 'ad',
+              ...adMeta,
+              creative: details?.creative ? {
+                id: details.creative.id || null,
+                name: details.creative.name || null,
+                thumbnail_url: details.creative.thumbnail_url || null,
+                title: details.creative.title || details.creative.object_story_spec?.link_data?.name || null,
+                body: details.creative.body || details.creative.object_story_spec?.link_data?.message || null,
+              } : null,
               metrics: metricRow(ad, countLeads(leads, 'utm_content', adName), currency),
             };
           }),
@@ -348,9 +405,15 @@ export async function POST(request: Request) {
       fetchInsights(accountId, 'ad', range.since, range.until, token, graphVersion),
     ]);
 
+    const [campaignDetails, adsetDetails, adDetails] = await Promise.all([
+      fetchObjectMap(campaignRows.map((row: any) => row.campaign_id), 'id,name,status,effective_status', token, graphVersion),
+      fetchObjectMap(adsetRows.map((row: any) => row.adset_id), 'id,name,status,effective_status', token, graphVersion),
+      fetchObjectMap(adRows.map((row: any) => row.ad_id), 'id,name,status,effective_status,creative{id,name,thumbnail_url,title,body,object_story_spec}', token, graphVersion),
+    ]);
+
     const currency = 'BRL';
     const total = metricRow(accountRows[0] || {}, leads.length, currency);
-    const tree = buildTree(campaignRows, adsetRows, adRows, leads, currency);
+    const tree = buildTree(campaignRows, adsetRows, adRows, leads, currency, campaignDetails, adsetDetails, adDetails);
     const aiPayload = {
       concessionaria: selected.nome_empresa || selected.nome,
       conta_meta: selected.meta_ad_account_name || selected.meta_ad_account_id,

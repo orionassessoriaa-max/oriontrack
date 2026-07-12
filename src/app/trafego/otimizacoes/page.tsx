@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
@@ -28,9 +28,22 @@ type Metrics = {
   currency: string;
 };
 
-type AdNode = { id: string; name: string; level: 'ad'; metrics: Metrics };
-type AdsetNode = { id: string; name: string; level: 'adset'; metrics: Metrics; ads: AdNode[] };
-type CampaignNode = { id: string; name: string; level: 'campaign'; metrics: Metrics; adsets: AdsetNode[] };
+type MetaStatus = {
+  status?: string;
+  effective_status?: string;
+};
+
+type CreativePreview = {
+  id?: string | null;
+  name?: string | null;
+  thumbnail_url?: string | null;
+  title?: string | null;
+  body?: string | null;
+};
+
+type AdNode = MetaStatus & { id: string; name: string; level: 'ad'; metrics: Metrics; creative?: CreativePreview | null };
+type AdsetNode = MetaStatus & { id: string; name: string; level: 'adset'; metrics: Metrics; ads: AdNode[] };
+type CampaignNode = MetaStatus & { id: string; name: string; level: 'campaign'; metrics: Metrics; adsets: AdsetNode[] };
 
 function todayLocal() {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -69,6 +82,7 @@ export default function OtimizacoesPage() {
   const [presetLabel, setPresetLabel] = useState('Este mês');
   const [expandedCampaigns, setExpandedCampaigns] = useState<Record<string, boolean>>({});
   const [expandedAdsets, setExpandedAdsets] = useState<Record<string, boolean>>({});
+  const [expandedAds, setExpandedAds] = useState<Record<string, boolean>>({});
   const [aiRecommendation, setAiRecommendation] = useState('');
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
@@ -256,8 +270,10 @@ export default function OtimizacoesPage() {
                           campaign={campaign}
                           expandedCampaigns={expandedCampaigns}
                           expandedAdsets={expandedAdsets}
+                          expandedAds={expandedAds}
                           setExpandedCampaigns={setExpandedCampaigns}
                           setExpandedAdsets={setExpandedAdsets}
+                          setExpandedAds={setExpandedAds}
                         />
                       ))}
                     </tbody>
@@ -286,14 +302,18 @@ function CampaignRows({
   campaign,
   expandedCampaigns,
   expandedAdsets,
+  expandedAds,
   setExpandedCampaigns,
   setExpandedAdsets,
+  setExpandedAds,
 }: {
   campaign: CampaignNode;
   expandedCampaigns: Record<string, boolean>;
   expandedAdsets: Record<string, boolean>;
+  expandedAds: Record<string, boolean>;
   setExpandedCampaigns: (value: Record<string, boolean> | ((current: Record<string, boolean>) => Record<string, boolean>)) => void;
   setExpandedAdsets: (value: Record<string, boolean> | ((current: Record<string, boolean>) => Record<string, boolean>)) => void;
+  setExpandedAds: (value: Record<string, boolean> | ((current: Record<string, boolean>) => Record<string, boolean>)) => void;
 }) {
   const campaignOpen = Boolean(expandedCampaigns[campaign.id]);
   return (
@@ -301,6 +321,7 @@ function CampaignRows({
       <MetricRow
         name={campaign.name}
         level="Campanha"
+        status={campaign.effective_status || campaign.status}
         metrics={campaign.metrics}
         open={campaignOpen}
         hasChildren={campaign.adsets.length > 0}
@@ -309,30 +330,47 @@ function CampaignRows({
       {campaignOpen && campaign.adsets.map((adset) => {
         const adsetOpen = Boolean(expandedAdsets[adset.id]);
         return (
-          <>
+          <Fragment key={adset.id}>
             <MetricRow
-              key={adset.id}
               name={adset.name}
               level="Conjunto"
+              status={adset.effective_status || adset.status}
               metrics={adset.metrics}
               indent="pl-8"
               open={adsetOpen}
               hasChildren={adset.ads.length > 0}
               onToggle={() => setExpandedAdsets((current) => ({ ...current, [adset.id]: !current[adset.id] }))}
             />
-            {adsetOpen && adset.ads.map((ad) => (
-              <MetricRow key={ad.id} name={ad.name} level="Anúncio" metrics={ad.metrics} indent="pl-14" />
-            ))}
-          </>
+            {adsetOpen && adset.ads.map((ad) => {
+              const adOpen = Boolean(expandedAds[ad.id]);
+              const hasPreview = Boolean(ad.creative?.thumbnail_url || ad.creative?.title || ad.creative?.body || ad.creative?.name);
+              return (
+                <Fragment key={ad.id}>
+                  <MetricRow
+                    name={ad.name}
+                    level="Anúncio"
+                    status={ad.effective_status || ad.status}
+                    metrics={ad.metrics}
+                    indent="pl-14"
+                    open={adOpen}
+                    hasChildren={hasPreview}
+                    onToggle={() => setExpandedAds((current) => ({ ...current, [ad.id]: !current[ad.id] }))}
+                  />
+                  {adOpen && hasPreview ? <CreativeRow ad={ad} /> : null}
+                </Fragment>
+              );
+            })}
+          </Fragment>
         );
       })}
     </>
   );
 }
 
-function MetricRow({ name, level, metrics, indent = '', open = false, hasChildren = false, onToggle }: {
+function MetricRow({ name, level, status, metrics, indent = '', open = false, hasChildren = false, onToggle }: {
   name: string;
   level: string;
+  status?: string;
   metrics: Metrics;
   indent?: string;
   open?: boolean;
@@ -346,7 +384,10 @@ function MetricRow({ name, level, metrics, indent = '', open = false, hasChildre
           {hasChildren ? (open ? <ChevronDown size={15} className="text-cyan-300" /> : <ChevronRight size={15} className="text-slate-500" />) : <span className="w-[15px]" />}
           <span className="min-w-0">
             <span className="block truncate text-sm font-black text-white">{name}</span>
-            <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500">{level}</span>
+            <span className="mt-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+              {level}
+              <StatusBadge status={status} />
+            </span>
           </span>
         </button>
       </td>
@@ -358,6 +399,70 @@ function MetricRow({ name, level, metrics, indent = '', open = false, hasChildre
       <DataCell value={formatPercent(metrics.ctr)} alert={Number(metrics.ctr || 0) < 1} />
       <DataCell value={Number(metrics.frequency || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} />
     </tr>
+  );
+}
+
+function CreativeRow({ ad }: { ad: AdNode }) {
+  const creative = ad.creative;
+  return (
+    <tr className="bg-black/20">
+      <td colSpan={8} className="py-4 pl-20 pr-4">
+        <div className="grid gap-4 border-l-2 border-cyan-400/40 pl-4 sm:grid-cols-[140px_1fr]">
+          {creative?.thumbnail_url ? (
+            <img src={creative.thumbnail_url} alt={creative.name || ad.name} className="h-28 w-36 rounded-lg object-cover ring-1 ring-white/10" />
+          ) : (
+            <div className="grid h-28 w-36 place-items-center rounded-lg bg-white/[0.04] text-[10px] font-black uppercase tracking-widest text-slate-500 ring-1 ring-white/10">
+              Sem preview
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Visualização do anúncio</p>
+              <StatusBadge status={ad.effective_status || ad.status} />
+            </div>
+            <p className="truncate text-sm font-black text-white">{creative?.title || creative?.name || ad.name}</p>
+            {creative?.body ? <p className="mt-2 max-w-3xl text-xs font-semibold leading-relaxed text-slate-400">{creative.body}</p> : null}
+            <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-600">ID: {ad.id}</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function StatusBadge({ status }: { status?: string }) {
+  const normalized = String(status || 'UNKNOWN').toUpperCase();
+  const labelMap: Record<string, string> = {
+    ACTIVE: 'Ativo',
+    PAUSED: 'Pausado',
+    DELETED: 'Excluído',
+    ARCHIVED: 'Arquivado',
+    CAMPAIGN_PAUSED: 'Campanha pausada',
+    ADSET_PAUSED: 'Conjunto pausado',
+    IN_PROCESS: 'Processando',
+    WITH_ISSUES: 'Com problema',
+    PENDING_REVIEW: 'Em análise',
+    DISAPPROVED: 'Reprovado',
+    PREAPPROVED: 'Pré-aprovado',
+    UNKNOWN: 'Sem status',
+  };
+  const label = labelMap[normalized] || normalized.replace(/_/g, ' ').toLowerCase();
+  const active = normalized === 'ACTIVE';
+  const problem = ['WITH_ISSUES', 'DISAPPROVED', 'DELETED'].includes(normalized);
+  const paused = normalized.includes('PAUSED') || normalized === 'ARCHIVED';
+
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${
+      active
+        ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
+        : problem
+          ? 'border-red-400/25 bg-red-400/10 text-red-300'
+          : paused
+            ? 'border-amber-400/25 bg-amber-400/10 text-amber-300'
+            : 'border-slate-400/20 bg-white/[0.04] text-slate-400'
+    }`}>
+      {label}
+    </span>
   );
 }
 
