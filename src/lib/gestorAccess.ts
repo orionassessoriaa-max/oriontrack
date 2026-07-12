@@ -26,7 +26,7 @@ function normalizeEmail(value?: string | null) {
 export function isGestorLinkedToCorretor(corretor: CorretorLike, gestor: GestorProfileLike | null | undefined) {
   if (!gestor?.id) return false;
   const gestorId = gestor.id;
-  if (corretor.gestor_trafego_id === gestorId) return true;
+  if (corretor.gestor_trafego_id) return corretor.gestor_trafego_id === gestorId;
 
   const team = Array.isArray(corretor.time_operacional) ? corretor.time_operacional : [];
   const gestorName = normalizeAccessText(gestor.nome);

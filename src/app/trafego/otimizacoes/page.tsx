@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { BarChart3, ChevronDown, ChevronRight, Loader2, Maximize2, RefreshCw, Search, Sparkles, X } from 'lucide-react';
+import { BarChart3, CheckCircle2, ChevronDown, ChevronRight, FileText, Loader2, Maximize2, RefreshCw, Search, Sparkles, Wand2, X } from 'lucide-react';
 
 type AccountOption = {
   id: string;
@@ -45,6 +45,15 @@ type CreativePreview = {
 type AdNode = MetaStatus & { id: string; name: string; level: 'ad'; metrics: Metrics; creative?: CreativePreview | null };
 type AdsetNode = MetaStatus & { id: string; name: string; level: 'adset'; metrics: Metrics; ads: AdNode[] };
 type CampaignNode = MetaStatus & { id: string; name: string; level: 'campaign'; metrics: Metrics; adsets: AdsetNode[] };
+type OptimizationDraft = {
+  summary?: string;
+  publish_status?: string;
+  campaign?: Record<string, any>;
+  adsets?: Record<string, any>[];
+  ads?: Record<string, any>[];
+  human_review_checklist?: string[];
+  missing_info?: string[];
+};
 
 function todayLocal() {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -95,6 +104,12 @@ export default function OtimizacoesPage() {
   const [expandedAds, setExpandedAds] = useState<Record<string, boolean>>({});
   const [fullscreenCreative, setFullscreenCreative] = useState<AdNode | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState('');
+  const [optimizePrompt, setOptimizePrompt] = useState('');
+  const [driveFolderUrl, setDriveFolderUrl] = useState('');
+  const [creativeReference, setCreativeReference] = useState('');
+  const [optimizationDraft, setOptimizationDraft] = useState<OptimizationDraft | null>(null);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,6 +155,43 @@ export default function OtimizacoesPage() {
     setTotal(payload.total || null);
     setTree(payload.tree || []);
     setAiRecommendation(payload.ai_recommendation || payload.fallback_recommendation || '');
+  }
+
+  async function generateOptimizationDraft() {
+    if (!selected?.meta_ad_account_id) return;
+    setGeneratingDraft(true);
+    setDraftError(null);
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setDraftError('Sessao expirada.');
+      setGeneratingDraft(false);
+      return;
+    }
+
+    const response = await fetch('/api/integrations/meta/optimize-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        account_id: selected.meta_ad_account_id,
+        prompt: optimizePrompt,
+        drive_folder_url: driveFolderUrl,
+        creative_reference: creativeReference,
+        metrics: total,
+        gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego' ? profile.id : undefined,
+      }),
+    });
+
+    const payload = await response.json();
+    setGeneratingDraft(false);
+
+    if (!response.ok) {
+      setDraftError(payload.error || 'Erro ao gerar rascunho.');
+      return;
+    }
+
+    setOptimizationDraft(payload.draft || null);
   }
 
   useEffect(() => {
@@ -301,6 +353,99 @@ export default function OtimizacoesPage() {
                 <p className="max-w-5xl whitespace-pre-line text-sm font-bold leading-relaxed text-slate-300">
                   {aiRecommendation || 'Clique em Revisar com IA para gerar uma análise real com base nas regras de CPL, CPC, CTR e leads do CRM.'}
                 </p>
+              </section>
+
+              <section className="mt-6 border-t border-white/10 pt-5">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    <Wand2 size={17} className="text-cyan-300" />
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-widest text-white">Otimizar</h3>
+                      <p className="text-xs font-semibold text-slate-500">Crie rascunhos de campanha/anuncio com IA. Tudo sai como PAUSED.</p>
+                    </div>
+                  </div>
+                  <span className="w-fit rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-200">Publicacao pausada</span>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
+                  <div className="space-y-3">
+                    <textarea
+                      value={optimizePrompt}
+                      onChange={(event) => setOptimizePrompt(event.target.value)}
+                      placeholder="Ex: Criar campanha ABO SulAmerica DF, publico 30 a 58 anos, Brasilia e entorno, verba R$ 50/dia. Use o criativo AD 2 da pasta SulAmerica DF."
+                      className="min-h-32 w-full resize-y rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm font-semibold leading-relaxed text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
+                    />
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Pasta Drive</span>
+                        <input
+                          value={driveFolderUrl}
+                          onChange={(event) => setDriveFolderUrl(event.target.value)}
+                          placeholder="Cole o link da pasta ou escreva o nome"
+                          className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-xs font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Criativo</span>
+                        <input
+                          value={creativeReference}
+                          onChange={(event) => setCreativeReference(event.target.value)}
+                          placeholder="Ex: AD 2 da pasta SulAmerica DF"
+                          className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-xs font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Fluxo seguro</p>
+                    <div className="mt-3 space-y-3 text-xs font-bold text-slate-400">
+                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> IA monta campanha, conjunto, publico, verba e anuncio.</p>
+                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Criativo e pasta Drive ficam registrados no rascunho.</p>
+                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Tudo nasce PAUSED para revisao humana.</p>
+                    </div>
+                    {draftError ? <p className="mt-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-xs font-bold text-red-200">{draftError}</p> : null}
+                    <button
+                      type="button"
+                      onClick={generateOptimizationDraft}
+                      disabled={generatingDraft || !selected || optimizePrompt.trim().length < 12}
+                      className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      {generatingDraft ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+                      Gerar rascunho paused
+                    </button>
+                  </div>
+                </div>
+
+                {optimizationDraft ? (
+                  <div className="mt-5 rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.04] p-4">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Rascunho gerado</p>
+                        <h4 className="mt-1 text-xl font-black text-white">{optimizationDraft.campaign?.name || 'Campanha pausada'}</h4>
+                      </div>
+                      <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-200">
+                        {optimizationDraft.publish_status || 'PAUSED'}
+                      </span>
+                    </div>
+                    {optimizationDraft.summary ? <p className="mb-4 text-sm font-bold leading-relaxed text-slate-300">{optimizationDraft.summary}</p> : null}
+                    <div className="grid gap-3 lg:grid-cols-3">
+                      <DraftBlock title="Campanha" data={optimizationDraft.campaign} />
+                      <DraftBlock title="Conjuntos" data={optimizationDraft.adsets} />
+                      <DraftBlock title="Anuncios" data={optimizationDraft.ads} />
+                    </div>
+                    {optimizationDraft.human_review_checklist?.length ? (
+                      <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Checklist humano</p>
+                        <ul className="space-y-2 text-xs font-bold text-slate-300">
+                          {optimizationDraft.human_review_checklist.map((item, index) => (
+                            <li key={`${item}-${index}`} className="flex gap-2"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-300" /> {item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </section>
             </>
           )}
@@ -484,6 +629,20 @@ function CreativeRow({ ad, onOpenCreative }: { ad: AdNode; onOpenCreative: (ad: 
         </div>
       </td>
     </tr>
+  );
+}
+
+function DraftBlock({ title, data }: { title: string; data: any }) {
+  return (
+    <div className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <FileText size={15} className="text-cyan-300" />
+        <p className="text-xs font-black uppercase tracking-widest text-white">{title}</p>
+      </div>
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words text-[11px] font-semibold leading-relaxed text-slate-300">
+        {JSON.stringify(data || {}, null, 2)}
+      </pre>
+    </div>
   );
 }
 
