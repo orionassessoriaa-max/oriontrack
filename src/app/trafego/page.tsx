@@ -53,6 +53,7 @@ type Corretor = {
 type MetaAccountAlert = {
   corretor_id: string;
   corretor_nome: string;
+  concessionaria_nome?: string;
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
   spend: number;
@@ -253,8 +254,8 @@ export default function GestorDashboardPage() {
 
   const quickActions = [
     {
-      title: 'Leads dos Corretores',
-      desc: 'Visualizar e gerenciar leads',
+      title: 'Leads das Concessionarias',
+      desc: 'Visualizar leads por concessionaria',
       href: '/trafego/leads',
       icon: FileSearch,
       color: 'from-blue-600 to-indigo-600',
@@ -713,6 +714,12 @@ function TrafficCommandCenter({
   const dailyAnalyses = 0;
   const displayedAttention = reviewAccounts.slice(0, 5);
   const activeConcessionarias = concessionarias.filter((item) => item.active).length;
+  const portfolioRows = metaAccounts
+    .slice()
+    .sort((a, b) => Number(b.spend || 0) - Number(a.spend || 0))
+    .slice(0, 10);
+  const maxPortfolioSpend = Math.max(...portfolioRows.map((account) => Number(account.spend || 0)), 1);
+  const maxPortfolioLeads = Math.max(...portfolioRows.map((account) => Number(account.leads || 0)), 1);
 
   return (
     <section className="-mx-4 -mt-6 rounded-3xl border border-cyan-400/10 bg-[#050b14] p-4 text-white shadow-2xl sm:-mx-6 sm:p-6 lg:-mx-8 xl:p-8">
@@ -740,7 +747,7 @@ function TrafficCommandCenter({
           <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <TrafficKpi href="/trafego/corretores" icon={Users} label="Concessionárias monitoradas" value={String(monitoredCount)} detail={`Ativas: ${activeConcessionarias} | Pausadas: ${Math.max(monitoredCount - activeConcessionarias, 0)}`} tone="cyan" />
             <TrafficKpi href="/trafego/avisos-meta" icon={TrendingUp} label="Análises hoje" value={String(dailyAnalyses)} detail="Sem registro de análise automática hoje" tone="blue" />
-            <TrafficKpi href="/trafego/avisos-meta" icon={DollarSign} label="Maior CPL" value={formatCurrency(highestCplAccount?.cpl, highestCplAccount?.currency)} detail={highestCplAccount?.corretor_nome || 'Nenhuma conta com CPL'} tone="emerald" />
+            <TrafficKpi href="/trafego/avisos-meta" icon={DollarSign} label="Maior CPL" value={formatCurrency(highestCplAccount?.cpl, highestCplAccount?.currency)} detail={highestCplAccount?.concessionaria_nome || highestCplAccount?.corretor_nome || 'Nenhuma conta com CPL'} tone="emerald" />
             <TrafficKpi href="/trafego/avisos-meta" icon={AlertTriangle} label="Alertas ativos" value={String(criticalReviewCount + attentionReviewCount + crmPendingCount)} detail={`${criticalReviewCount} críticos | ${attentionReviewCount} atenção`} tone="red" />
             <TrafficKpi href="#recomendacoes" icon={ListChecks} label="Recomendações" value={String(approvalQueue.length)} detail="Aguardando aprovar ou revisar" tone="amber" />
           </div>
@@ -764,7 +771,7 @@ function TrafficCommandCenter({
                   >
                     <span className="flex min-w-0 items-center gap-3">
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-600 text-xs font-black">{account.corretor_nome?.[0] || '?'}</span>
-                      <span className="truncate text-xs font-black text-white">{account.corretor_nome}</span>
+                      <span className="truncate text-xs font-black text-white">{account.concessionaria_nome || account.corretor_nome}</span>
                     </span>
                     <span className={`w-fit rounded-md border px-2 py-1 text-[9px] font-black ${getToneClasses(status.tone)}`}>{status.label}</span>
                     <span className="text-xs font-black text-slate-200">{formatCurrency(account.cpl, account.currency)}</span>
@@ -790,7 +797,7 @@ function TrafficCommandCenter({
                           <p className="truncate text-sm font-black text-white">{status.tone === 'red' ? 'Pausar anúncio' : status.tone === 'amber' ? 'Trocar criativo' : 'Revisar conta'}</p>
                           <span className={`rounded px-2 py-0.5 text-[9px] font-black uppercase ${getToneClasses(status.tone)}`}>{status.tone === 'red' ? 'Crítico' : 'Atenção'}</span>
                         </div>
-                        <p className="mt-1 line-clamp-2 text-xs font-semibold leading-relaxed text-slate-400">{account.corretor_nome}: {status.detail}</p>
+                        <p className="mt-1 line-clamp-2 text-xs font-semibold leading-relaxed text-slate-400">{account.concessionaria_nome || account.corretor_nome}: {status.detail}</p>
                         <p className="mt-1 text-[10px] font-bold text-slate-500">CPL: {formatCurrency(account.cpl, account.currency)} | CTR: {formatPercent(account.ctr)} | CPC: {formatCurrency(account.cpc || 0, account.currency)}</p>
                       </div>
                       <div className="flex gap-2 lg:flex-col">
@@ -811,6 +818,32 @@ function TrafficCommandCenter({
           </div>
 
           <div className="mt-4">
+            <Panel title="Comparativo da carteira" action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Abrir otimizacoes</Link>}>
+              <div className="space-y-4">
+                {portfolioRows.length === 0 ? (
+                  <EmptyPanel text="Nenhuma concessionaria com dados Meta neste periodo." />
+                ) : portfolioRows.map((account) => (
+                  <div key={`portfolio-${account.corretor_id}-${account.meta_ad_account_id}`} className="grid gap-2 lg:grid-cols-[190px_1fr_92px_1fr_86px_96px] lg:items-center">
+                    <div>
+                      <p className="truncate text-xs font-black text-white">{account.concessionaria_nome || account.corretor_nome}</p>
+                      <p className="truncate text-[10px] font-bold text-slate-500">{account.meta_ad_account_name || `act_${account.meta_ad_account_id}`}</p>
+                    </div>
+                    <div className="h-6 bg-white/[0.04]">
+                      <div className="h-full bg-cyan-500/75" style={{ width: `${Math.max(3, (Number(account.spend || 0) / maxPortfolioSpend) * 100)}%` }} />
+                    </div>
+                    <p className="text-right text-xs font-black text-white">{formatCurrency(account.spend, account.currency)}</p>
+                    <div className="h-6 bg-white/[0.04]">
+                      <div className="h-full bg-emerald-400/75" style={{ width: `${Math.max(3, (Number(account.leads || 0) / maxPortfolioLeads) * 100)}%` }} />
+                    </div>
+                    <p className="text-right text-xs font-black text-white">{account.leads || 0} leads</p>
+                    <p className={`text-right text-xs font-black ${Number(account.cpl || 0) >= 28 ? 'text-red-300' : 'text-slate-200'}`}>{formatCurrency(account.cpl, account.currency)}</p>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+
+          <div className="hidden">
             <Panel
               title="Análise da IA"
               badge={analysisStatus?.tone === 'red' ? 'Crítico' : analysisStatus?.label || 'Seguro'}

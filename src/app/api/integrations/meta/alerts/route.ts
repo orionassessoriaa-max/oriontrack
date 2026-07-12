@@ -200,6 +200,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     return {
     corretor_id: corretor.id,
     corretor_nome: corretor.nome,
+    concessionaria_nome: corretor.nome_empresa || corretor.nome,
     meta_ad_account_id: corretor.meta_ad_account_id,
     meta_ad_account_name: corretor.meta_ad_account_name,
     spend,
@@ -359,6 +360,7 @@ export async function POST(request: Request) {
         return {
           corretor_id: corretor.id,
           corretor_nome: corretor.nome,
+          concessionaria_nome: corretor.nome_empresa || corretor.nome,
           meta_ad_account_id: corretor.meta_ad_account_id,
           meta_ad_account_name: corretor.meta_ad_account_name,
           spend: 0,
