@@ -1,27 +1,33 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { AlertCircle, Download, Loader2, RefreshCw, Search, ShieldAlert, RotateCcw } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
-import { Lead } from '@/types';
+import { AlertCircle, Download, Loader2, RefreshCw, RotateCcw, Search } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import PhoneAction from '@/components/ui/PhoneAction';
+import { supabase } from '@/lib/supabase/client';
+import { Lead } from '@/types';
 import { getLeadStatusStyle, LEAD_STATUSES } from '@/lib/leadStatus';
 
 type TrafficLead = Lead & {
   corretores?: {
     nome: string;
+    nome_empresa?: string | null;
   } | null;
 };
 
 type CorretorOption = {
   id: string;
   nome: string;
+  nome_empresa?: string | null;
 };
+
+function normalizeText(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
 
 function cnpjCategory(value?: string | null) {
   const normalized = normalizeText(value);
@@ -49,13 +55,6 @@ function leadAd(lead: Lead) {
   return lead.utm_content || noteValue(lead, 'utm_content') || '-';
 }
 
-function normalizeText(value?: string | null) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
-
 function sheetTabLabel(value?: string | null) {
   const raw = String(value || '').trim();
   if (!raw || raw.includes('{{')) return 'Sem aba';
@@ -69,12 +68,21 @@ function sheetTabLabel(value?: string | null) {
     ['medsenior', 'MEDSENIOR'],
     ['hapvida', 'HAPVIDA'],
     ['alice', 'ALICE'],
-    ['odontoprev', 'ODONTOPREV'],
-    ['aurora', 'AURORA'],
-    ['sao lucas', 'SAO LUCAS'],
   ];
-  const found = known.find(([key]) => normalized.includes(key));
-  return found?.[1] || raw;
+  return known.find(([key]) => normalized.includes(key))?.[1] || raw;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '-';
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export default function TrafficLeadsPage() {
@@ -84,19 +92,15 @@ export default function TrafficLeadsPage() {
   const [corretores, setCorretores] = useState<CorretorOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedConcessionaria, setSelectedConcessionaria] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCorretorId, setSelectedCorretorId] = useState('todos');
-
-  // Filtros Premium do Leads Screen
   const [cnpjFilter, setCnpjFilter] = useState('todos');
   const [statusFilter, setStatusFilter] = useState('todos');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [dateFilterType, setDateFilterType] = useState('todos');
   const [operadoraFilter, setOperadoraFilter] = useState('todas');
-  const [campaignFilter, setCampaignFilter] = useState('todos');
-  const [adsetFilter, setAdsetFilter] = useState('todos');
-  const [adFilter, setAdFilter] = useState('todos');
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [dragSelecting, setDragSelecting] = useState(false);
 
   async function fetchLeads() {
     if (!profile?.id) return;
@@ -107,29 +111,19 @@ export default function TrafficLeadsPage() {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      if (!token) throw new Error('Sessao expirada.');
+      if (!token) throw new Error('Sessão expirada.');
 
       const response = await fetch(`/api/trafego/leads?gestor_id=${encodeURIComponent(profile.id)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const payload = await response.json();
 
-      if (!response.ok) {
-        throw new Error(payload.error || 'Erro ao carregar leads vinculados a sua gestao.');
-      }
+      if (!response.ok) throw new Error(payload.error || 'Erro ao carregar leads.');
 
       setCorretores((payload.corretores || []) as CorretorOption[]);
       setLeads((payload.leads || []) as TrafficLead[]);
-    } catch (err: unknown) {
-      console.error('Error fetching traffic leads:', err);
-      const errorMessage = err instanceof Error ? err.message : '';
-      const errorCode = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
-
-      if (errorCode === '42501' || errorMessage.toLowerCase().includes('row-level security')) {
-        setError('Acesso negado: voce nao tem permissao para visualizar estes leads.');
-      } else {
-        setError('Erro ao carregar leads vinculados a sua gestao.');
-      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar leads.');
     } finally {
       setLoading(false);
     }
@@ -137,444 +131,284 @@ export default function TrafficLeadsPage() {
 
   useEffect(() => {
     if (!profile) return;
-
     if (profile.tipo_usuario === 'admin') {
       router.push('/admin/leads');
       return;
     }
-
     if (profile.tipo_usuario !== 'gestor_trafego') {
       router.push('/dashboard');
       return;
     }
+    void fetchLeads();
+  }, [profile?.id]);
 
-    void Promise.resolve().then(fetchLeads);
-  }, [profile]);
+  const concessionarias = useMemo(() => {
+    const groups = new Map<string, { key: string; nome: string; brokerIds: string[]; total: number }>();
 
-  const filteredLeads = leads.filter(lead => {
-    const matchesCorretor = selectedCorretorId === 'todos' || lead.corretor_id === selectedCorretorId;
-    if (!matchesCorretor) return false;
+    corretores.forEach((corretor) => {
+      const nome = String(corretor.nome_empresa || corretor.nome || 'Sem concessionaria').trim();
+      const key = normalizeText(nome);
+      const current = groups.get(key);
+      if (current) current.brokerIds.push(corretor.id);
+      else groups.set(key, { key, nome, brokerIds: [corretor.id], total: 0 });
+    });
 
-    const leadTab = sheetTabLabel(lead.operadora);
-    const term = searchTerm.toLowerCase();
-    const searchMatch =
-      (lead.nome?.toLowerCase() || '').includes(term) ||
-      (lead.telefone || '').includes(searchTerm) ||
-      (lead.cidade?.toLowerCase() || '').includes(term) ||
-      (lead.corretores?.nome?.toLowerCase() || '').includes(term) ||
-      (lead.operadora?.toLowerCase() || '').includes(term) ||
-      (lead.observacoes?.toLowerCase() || '').includes(term);
+    leads.forEach((lead) => {
+      const nome = String(lead.corretores?.nome_empresa || lead.corretores?.nome || '').trim();
+      const key = normalizeText(nome);
+      const current = groups.get(key);
+      if (current) current.total += 1;
+    });
 
-    const cnpjMatch = cnpjFilter === 'todos' || cnpjCategory(lead.possui_cnpj) === cnpjFilter;
-    const statusMatch = statusFilter === 'todos' || lead.status === statusFilter;
-    const operadoraMatch =
-      operadoraFilter === 'todas' ||
-      (operadoraFilter === '__sem_aba__' ? leadTab === 'Sem aba' : leadTab === operadoraFilter);
-    
-    const campaignMatch = campaignFilter === 'todos' || leadCampaign(lead) === campaignFilter;
-    const adsetMatch = adsetFilter === 'todos' || leadAdset(lead) === adsetFilter;
-    const adMatch = adFilter === 'todos' || leadAd(lead) === adFilter;
-    
-    const leadDate = lead.data_entrada ? new Date(lead.data_entrada) : null;
-    const dateTypeMatch =
-      dateFilterType === 'todos' ||
-      (dateFilterType === 'com_data' && lead.data_entrada !== null) ||
-      (dateFilterType === 'sem_data' && lead.data_entrada === null);
-    
-    const fromMatch = !dateFrom || (leadDate && leadDate >= new Date(dateFrom));
-    const toMatch = !dateTo || (leadDate && leadDate <= new Date(dateTo + 'T23:59:59'));
+    return Array.from(groups.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [corretores, leads]);
 
-    return searchMatch && cnpjMatch && statusMatch && operadoraMatch && campaignMatch && adsetMatch && adMatch && dateTypeMatch && fromMatch && toMatch;
-  });
-
-  const filterOptions = (values: string[]) => Array.from(new Set(values.filter((value) => value && value !== '-'))).sort((a, b) => a.localeCompare(b));
+  const selectedGroup = concessionarias.find((item) => item.key === selectedConcessionaria) || null;
 
   const sheetTabs = useMemo(() => {
-    const fromLeads = leads
-      .map((lead) => sheetTabLabel(lead.operadora))
-      .filter((operadora) => operadora !== 'Sem aba');
+    const fromLeads = leads.map((lead) => sheetTabLabel(lead.operadora)).filter((item) => item !== 'Sem aba');
     return Array.from(new Set(fromLeads)).sort((a, b) => a.localeCompare(b));
   }, [leads]);
 
-  const campaignOptions = useMemo(() => filterOptions(leads.map(leadCampaign)), [leads]);
-  const adsetOptions = useMemo(() => filterOptions(leads.map(leadAdset)), [leads]);
-  const adOptions = useMemo(() => filterOptions(leads.map(leadAd)), [leads]);
+  const filteredLeads = useMemo(() => {
+    if (!selectedGroup) return [];
+    const term = searchTerm.trim().toLowerCase();
 
-  const clearFilters = () => {
+    return leads.filter((lead) => {
+      if (!selectedGroup.brokerIds.includes(String(lead.corretor_id || ''))) return false;
+      const leadDate = lead.data_entrada ? new Date(lead.data_entrada) : null;
+      const searchMatch = !term || [
+        lead.nome,
+        lead.telefone,
+        lead.cidade,
+        lead.idades,
+        lead.investimento,
+        lead.observacoes,
+      ].join(' ').toLowerCase().includes(term);
+      const fromMatch = !dateFrom || (leadDate && leadDate >= new Date(dateFrom));
+      const toMatch = !dateTo || (leadDate && leadDate <= new Date(`${dateTo}T23:59:59`));
+      const cnpjMatch = cnpjFilter === 'todos' || cnpjCategory(lead.possui_cnpj) === cnpjFilter;
+      const statusMatch = statusFilter === 'todos' || lead.status === statusFilter;
+      const pageMatch = operadoraFilter === 'todas' || sheetTabLabel(lead.operadora) === operadoraFilter;
+      return searchMatch && fromMatch && toMatch && cnpjMatch && statusMatch && pageMatch;
+    });
+  }, [leads, selectedGroup, searchTerm, dateFrom, dateTo, cnpjFilter, statusFilter, operadoraFilter]);
+
+  const hasFilters = Boolean(searchTerm || dateFrom || dateTo || cnpjFilter !== 'todos' || statusFilter !== 'todos' || operadoraFilter !== 'todas');
+
+  function clearFilters() {
     setSearchTerm('');
-    setCnpjFilter('todos');
-    setStatusFilter('todos');
     setDateFrom('');
     setDateTo('');
-    setDateFilterType('todos');
+    setCnpjFilter('todos');
+    setStatusFilter('todos');
     setOperadoraFilter('todas');
-    setCampaignFilter('todos');
-    setAdsetFilter('todos');
-    setAdFilter('todos');
-  };
+  }
 
-  const exportToCsv = () => {
-    if (filteredLeads.length === 0) {
-      alert('Nenhum lead para exportar.');
-      return;
-    }
+  function toggleSelection(id: string) {
+    setSelectedLeadIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
-    const headers = [
-      'Data de Entrada',
-      'Corretor',
-      'Nome',
-      'Telefone',
-      'Idades',
-      'CNPJ',
-      'Plano Ativo',
-      'Plano Atual',
-      'Custo Plano Atual',
-      'Investimento',
-      'Cidade',
-      'Status',
-      'Página/Operadora',
-      'Origem (UTM Source)',
-      'Meio (UTM Medium)',
-      'Campanha (UTM Campaign)',
-      'Termo (UTM Term)',
-      'Conteúdo (UTM Content)',
-      'Observações'
-    ];
+  function selectWhileDragging(id: string) {
+    if (!dragSelecting) return;
+    setSelectedLeadIds((current) => {
+      if (current.has(id)) return current;
+      const next = new Set(current);
+      next.add(id);
+      return next;
+    });
+  }
 
-    const rows = filteredLeads.map(lead => [
-      lead.data_entrada ? new Date(lead.data_entrada).toLocaleDateString('pt-BR') : '',
-      lead.corretores?.nome || '',
+  function exportToCsv() {
+    if (!filteredLeads.length) return alert('Nenhum lead para exportar.');
+    const headers = ['Data', 'Nome', 'Telefone', 'Idades', 'Possui CNPJ', 'Cidade', 'Investimento', 'Status', 'Pagina', 'Campanha', 'Conjunto', 'Anuncio'];
+    const rows = filteredLeads.map((lead) => [
+      formatDate(lead.data_entrada),
       lead.nome || '',
       lead.telefone || '',
       lead.idades || '',
       lead.possui_cnpj || '',
-      lead.tem_plano_ativo || '',
-      lead.plano_atual || '',
-      lead.custo_plano_atual || '',
-      lead.investimento || '',
       lead.cidade || '',
+      lead.investimento || '',
       lead.status || '',
       sheetTabLabel(lead.operadora),
-      lead.utm_source || '',
-      lead.utm_medium || '',
-      lead.utm_campaign || '',
-      lead.utm_term || '',
-      lead.utm_content || '',
-      lead.observacoes || ''
+      leadCampaign(lead),
+      leadAdset(lead),
+      leadAd(lead),
     ]);
-
-    const csvContent = [
-      headers.join(';'),
-      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
-    ].join('\n');
-
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csv = [headers, ...rows].map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `leads_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    link.style.visibility = 'hidden';
+    link.href = url;
+    link.download = `leads_${selectedGroup?.nome || 'concessionaria'}_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-
-  const hasActiveFilters =
-    searchTerm !== '' ||
-    cnpjFilter !== 'todos' ||
-    statusFilter !== 'todos' ||
-    dateFrom !== '' ||
-    dateTo !== '' ||
-    dateFilterType !== 'todos' ||
-    operadoraFilter !== 'todas' ||
-    campaignFilter !== 'todos' ||
-    adsetFilter !== 'todos' ||
-    adFilter !== 'todos';
+  }
 
   return (
     <InternalLayout>
-      <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+      <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Planilhas dos Corretores</h1>
-          <p className="font-medium text-gray-500">Selecione o corretor e veja a planilha com origem da aba, status e UTMs.</p>
+          <h1 className="text-3xl font-black text-white">Leads</h1>
+          <p className="mt-1 text-sm font-semibold text-slate-400">Planilha por concessionária. Os leads só aparecem depois da seleção.</p>
         </div>
         <button
           onClick={exportToCsv}
-          className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-6 py-3 font-bold text-gray-700 shadow-sm transition-all hover:bg-gray-50"
+          disabled={!filteredLeads.length}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-xs font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-40"
         >
-          <Download size={18} /> Exportar
+          <Download size={15} /> Exportar
         </button>
       </div>
 
-      <div className="orion-panel mb-6 p-4 sm:p-5">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Corretor Selector */}
-          <select
-            value={selectedCorretorId}
-            onChange={(event) => setSelectedCorretorId(event.target.value)}
-            className="orion-control min-w-[200px] flex-[1_1_200px] px-4 py-3.5 text-sm font-black"
-          >
-            <option value="todos">Todos os corretores</option>
-            {corretores.map((corretor) => (
-              <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>
-            ))}
-          </select>
+      <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
+        <select
+          value={selectedConcessionaria}
+          onChange={(event) => {
+            setSelectedConcessionaria(event.target.value);
+            setSelectedLeadIds(new Set());
+          }}
+          className="h-9 min-w-[260px] rounded-md border border-white/10 bg-slate-950 px-3 text-xs font-black text-white outline-none focus:border-cyan-400"
+        >
+          <option value="">Selecionar concessionária</option>
+          {concessionarias.map((item) => (
+            <option key={item.key} value={item.key}>{item.nome} ({item.total})</option>
+          ))}
+        </select>
 
-          {/* Search Term */}
-          <div className="relative min-w-[260px] flex-[1_1_320px]">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Buscar por lead, telefone, cidade, corretor, aba ou UTM..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="orion-control w-full py-3.5 pl-12 pr-4 text-sm transition-all"
-            />
-          </div>
-
-          {/* Dates */}
+        <label className="relative min-w-[220px] flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
           <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="orion-control min-w-[165px] flex-[0_0_165px] px-4 py-3.5 text-sm"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Buscar..."
+            className="h-9 w-full rounded-md border border-white/10 bg-slate-950 pl-8 pr-3 text-xs font-bold text-white outline-none focus:border-cyan-400"
           />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="orion-control min-w-[165px] flex-[0_0_165px] px-4 py-3.5 text-sm"
-          />
+        </label>
 
-          {/* Date filter type */}
-          <select
-            value={dateFilterType}
-            onChange={(e) => setDateFilterType(e.target.value)}
-            className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm"
-          >
-            <option value="todos">Data: todos</option>
-            <option value="com_data">Apenas com data</option>
-            <option value="sem_data">Sem data</option>
-          </select>
+        <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-xs font-bold text-white outline-none focus:border-cyan-400" />
+        <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-xs font-bold text-white outline-none focus:border-cyan-400" />
 
-          {/* CNPJ Filter */}
-          <select
-            value={cnpjFilter}
-            onChange={(e) => setCnpjFilter(e.target.value)}
-            className="orion-control min-w-[170px] flex-[1_1_170px] px-4 py-3.5 text-sm"
-          >
-            <option value="todos">CNPJ: todos</option>
-            <option value="com">Com CNPJ</option>
-            <option value="sem">Sem CNPJ</option>
-            <option value="nao_informado">Nao informado</option>
-          </select>
+        <select value={cnpjFilter} onChange={(event) => setCnpjFilter(event.target.value)} className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-xs font-bold text-white outline-none focus:border-cyan-400">
+          <option value="todos">CNPJ: todos</option>
+          <option value="com">Com CNPJ</option>
+          <option value="sem">Sem CNPJ</option>
+          <option value="nao_informado">Não informado</option>
+        </select>
 
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="orion-control min-w-[220px] flex-[1_1_220px] px-4 py-3.5 text-sm"
-          >
-            <option value="todos">Todos os status</option>
-            {LEAD_STATUSES.map(status => (
-              <option key={status} value={status}>
-                {getLeadStatusStyle(status).label}
-              </option>
-            ))}
-          </select>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-xs font-bold text-white outline-none focus:border-cyan-400">
+          <option value="todos">Status: todos</option>
+          {LEAD_STATUSES.map((status) => <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>)}
+        </select>
 
-          {/* Page/Operadora Filter */}
-          <select
-            value={operadoraFilter}
-            onChange={(e) => setOperadoraFilter(e.target.value)}
-            className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm"
-          >
-            <option value="todas">Página: todas</option>
-            {sheetTabs.map((tab) => (
-              <option key={tab} value={tab}>{tab}</option>
-            ))}
-            <option value="__sem_aba__">Sem página</option>
-          </select>
+        <select value={operadoraFilter} onChange={(event) => setOperadoraFilter(event.target.value)} className="h-9 rounded-md border border-white/10 bg-slate-950 px-3 text-xs font-bold text-white outline-none focus:border-cyan-400">
+          <option value="todas">Página: todas</option>
+          {sheetTabs.map((tab) => <option key={tab} value={tab}>{tab}</option>)}
+        </select>
 
-          {/* Campaign Filter */}
-          <select
-            value={campaignFilter}
-            onChange={(e) => setCampaignFilter(e.target.value)}
-            className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm"
-          >
-            <option value="todos">Campanha: todas</option>
-            {campaignOptions.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-
-          {/* Adset Filter */}
-          <select
-            value={adsetFilter}
-            onChange={(e) => setAdsetFilter(e.target.value)}
-            className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm"
-          >
-            <option value="todos">Conjunto: todos</option>
-            {adsetOptions.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-
-          {/* Ad Filter */}
-          <select
-            value={adFilter}
-            onChange={(e) => setAdFilter(e.target.value)}
-            className="orion-control min-w-[210px] flex-[1_1_210px] px-4 py-3.5 text-sm"
-          >
-            <option value="todos">Anuncio: todos</option>
-            {adOptions.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-
-          {/* Refresh and Clear Actions */}
-          <div className="flex gap-2 min-h-[50px] items-center">
-            <button
-              onClick={fetchLeads}
-              className="flex min-h-[50px] items-center justify-center gap-2 rounded-xl bg-slate-100 px-5 font-black text-slate-600 transition-all hover:bg-slate-200"
-            >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            </button>
-            
-            <button
-              type="button"
-              onClick={clearFilters}
-              disabled={!hasActiveFilters}
-              className="flex min-h-[50px] min-w-[120px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-widest text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <RotateCcw size={15} /> Limpar
-            </button>
-          </div>
-        </div>
-
-        {/* Lead Count Badge and Active Chips */}
-        <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-widest text-slate-500">
-          <span className="orion-chip bg-slate-100 text-slate-600">
-            {filteredLeads.length} de {leads.length} leads
-          </span>
-          <span className="orion-chip bg-blue-50 text-blue-700">
-            Página: {operadoraFilter === 'todas' ? 'todas' : operadoraFilter === '__sem_aba__' ? 'sem página' : operadoraFilter}
-          </span>
-          {cnpjFilter !== 'todos' && (
-            <span className="orion-chip bg-amber-50 text-amber-700">
-              CNPJ: {cnpjFilter === 'com' ? 'com CNPJ' : cnpjFilter === 'sem' ? 'sem CNPJ' : 'nao informado'}
-            </span>
-          )}
-        </div>
+        <button onClick={fetchLeads} className="grid h-9 w-9 place-items-center rounded-md bg-white/5 text-slate-300 hover:bg-white/10">
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+        </button>
+        <button onClick={clearFilters} disabled={!hasFilters} className="grid h-9 w-9 place-items-center rounded-md bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-40">
+          <RotateCcw size={15} />
+        </button>
       </div>
 
-      <div className="orion-table-shell overflow-hidden">
-        <div className="scrollbar-visible max-h-[calc(100vh-330px)] overflow-auto">
-          {error ? (
-            <div className="py-24 text-center">
-              <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-                <ShieldAlert size={32} />
-              </div>
-              <h3 className="mb-2 text-xl font-bold text-gray-900">Acesso restrito</h3>
-              <p className="mx-auto mb-6 max-w-md font-medium text-red-500">{error}</p>
-              <button onClick={fetchLeads} className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-blue-600 hover:underline">
-                <RefreshCw size={14} /> Tentar novamente
-              </button>
-            </div>
-          ) : (
-            <table className="w-full min-w-[2200px] border-collapse text-left text-[13px]">
+      <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+        <span>{selectedGroup ? `${filteredLeads.length} de ${selectedGroup.total} leads` : 'Selecione uma concessionária'}</span>
+        {selectedGroup && <span className="rounded bg-cyan-400/10 px-2 py-1 text-cyan-300">{selectedGroup.nome}</span>}
+      </div>
+
+      <div className="relative overflow-hidden border border-white/10 bg-white">
+        {!selectedGroup ? (
+          <div className="flex h-[520px] flex-col items-center justify-center text-center">
+            <AlertCircle className="mb-3 text-slate-300" size={36} />
+            <p className="text-sm font-black text-slate-700">Escolha uma concessionária para abrir a planilha.</p>
+          </div>
+        ) : error ? (
+          <div className="flex h-[520px] items-center justify-center text-sm font-bold text-red-600">{error}</div>
+        ) : (
+          <div
+            className="max-h-[calc(100vh-260px)] overflow-auto"
+            onMouseUp={() => setDragSelecting(false)}
+            onMouseLeave={() => setDragSelecting(false)}
+          >
+            <table className="w-full min-w-[1480px] border-collapse text-[12px] text-black">
               <thead className="sticky top-0 z-10">
-                <tr className="bg-slate-100">
-                  <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Data</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Corretor</th>
-                  <th className="min-w-[240px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Lead</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Telefone</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Idades</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">CNPJ</th>
-                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Tem plano ativo?</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cidade</th>
-                  <th className="border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Investimento</th>
-                  <th className="border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
-                  <th className="min-w-[150px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Página / Operadora</th>
-                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Campanha</th>
-                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Conjunto</th>
-                  <th className="min-w-[220px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Anuncio</th>
-                  <th className="min-w-[280px] border border-slate-200 px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Observações</th>
+                <tr className="bg-[#1e88e5] text-white">
+                  <SheetHead className="w-10 text-center">#</SheetHead>
+                  <SheetHead>DATA</SheetHead>
+                  <SheetHead>NOME</SheetHead>
+                  <SheetHead>TELEFONE</SheetHead>
+                  <SheetHead>IDADES</SheetHead>
+                  <SheetHead>POSSUI CNPJ</SheetHead>
+                  <SheetHead>CIDADE</SheetHead>
+                  <SheetHead>INVESTIMENTO</SheetHead>
+                  <SheetHead>STATUS</SheetHead>
+                  <SheetHead>PÁGINA</SheetHead>
+                  <SheetHead>CAMPANHA</SheetHead>
+                  <SheetHead>CONJUNTO</SheetHead>
+                  <SheetHead>ANÚNCIO</SheetHead>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={16} className="py-20 text-center">
-                      <Loader2 className="mx-auto animate-spin text-blue-600" size={40} />
-                    </td>
-                  </tr>
+                  <tr><td colSpan={13} className="h-40 text-center"><Loader2 className="mx-auto animate-spin text-blue-600" /></td></tr>
                 ) : filteredLeads.map((lead, index) => {
-                  const statusStyle = getLeadStatusStyle(lead.status);
-                  
+                  const selected = selectedLeadIds.has(lead.id);
                   return (
-                    <tr key={lead.id} className="transition-colors border-b border-slate-100 hover:bg-blue-50/30">
-                      <td className="border border-slate-100 bg-slate-50 px-3 py-3 text-center text-xs font-black text-slate-400">{index + 1}</td>
-                      <td className="border border-slate-100 px-3 py-3 text-[13px] font-bold text-slate-500">
-                        {lead.data_entrada ? format(new Date(lead.data_entrada), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '-'}
-                      </td>
-                      <td className="border border-slate-100 px-3 py-3 text-sm font-bold text-slate-600">{lead.corretores?.nome || '-'}</td>
-                      <td className="border border-slate-100 px-3 py-3"><p className="text-sm font-bold text-gray-900">{lead.nome}</p></td>
-                      <td className="border border-slate-100 px-3 py-3 text-sm font-medium text-slate-600">
-                        <PhoneAction phone={lead.telefone} />
-                      </td>
-                      <td className="border border-slate-100 px-3 py-3 text-sm font-bold text-slate-500">{lead.idades || '-'}</td>
-                      <td className="border border-slate-100 px-3 py-3">
-                        <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
-                          cnpjCategory(lead.possui_cnpj) === 'com' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
-                          cnpjCategory(lead.possui_cnpj) === 'sem' ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100' :
-                          'bg-slate-50 text-slate-500 ring-1 ring-slate-100'
-                        }`}>
-                          {lead.possui_cnpj || 'Nao informado'}
-                        </span>
-                      </td>
-                      <td className="border border-slate-100 px-3 py-3">
-                        <span className={`inline-flex min-w-[190px] max-w-[240px] whitespace-normal rounded-lg px-3 py-2 text-[11px] font-black uppercase leading-relaxed tracking-widest ${
-                          normalizeText(lead.tem_plano_ativo).includes('sim') ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' :
-                          normalizeText(lead.tem_plano_ativo).includes('nao') ? 'bg-slate-100 text-slate-600 ring-1 ring-slate-200' :
-                          'bg-slate-50 text-slate-500'
-                        }`}>
-                          {lead.tem_plano_ativo || 'Nao informado'}
-                        </span>
-                      </td>
-                      <td className="border border-slate-100 px-3 py-3 text-sm font-medium text-slate-500">{lead.cidade || '-'}</td>
-                      <td className="border border-slate-100 px-3 py-3 text-sm font-bold text-slate-600">{lead.investimento || '-'}</td>
-                      <td className="border border-slate-100 px-3 py-3 text-center">
-                        <span className={`inline-block rounded-full px-3 py-1.5 text-[9px] font-black uppercase tracking-widest ${statusStyle.chip}`}>
-                          {statusStyle.label}
-                        </span>
-                      </td>
-                      <td className="border border-slate-100 px-3 py-3 text-xs font-black uppercase tracking-widest text-slate-600">{sheetTabLabel(lead.operadora)}</td>
-                      <td className="border border-slate-100 px-3 py-3 text-xs font-medium text-slate-600">{leadCampaign(lead)}</td>
-                      <td className="border border-slate-100 px-3 py-3 text-xs font-medium text-slate-600">{leadAdset(lead)}</td>
-                      <td className="border border-slate-100 px-3 py-3 text-xs font-medium text-slate-600">{leadAd(lead)}</td>
-                      <td className="border border-slate-100 px-3 py-3 text-xs font-bold leading-relaxed text-slate-500">
-                        <div className="max-w-[380px] whitespace-normal">{lead.observacoes || '-'}</div>
-                      </td>
+                    <tr
+                      key={lead.id}
+                      onMouseDown={() => {
+                        setDragSelecting(true);
+                        toggleSelection(lead.id);
+                      }}
+                      onMouseEnter={() => selectWhileDragging(lead.id)}
+                      className={`h-6 cursor-cell select-none ${selected ? 'bg-blue-100 outline outline-1 outline-blue-500' : index % 2 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50`}
+                    >
+                      <SheetCell className="bg-slate-100 text-center text-slate-600">{index + 1}</SheetCell>
+                      <SheetCell>{formatDate(lead.data_entrada)}</SheetCell>
+                      <SheetCell strong>{lead.nome || '-'}</SheetCell>
+                      <SheetCell>{lead.telefone || '-'}</SheetCell>
+                      <SheetCell>{lead.idades || '-'}</SheetCell>
+                      <SheetCell strong>{lead.possui_cnpj || '-'}</SheetCell>
+                      <SheetCell>{lead.cidade || '-'}</SheetCell>
+                      <SheetCell strong>{lead.investimento || '-'}</SheetCell>
+                      <SheetCell>{getLeadStatusStyle(lead.status).label}</SheetCell>
+                      <SheetCell>{sheetTabLabel(lead.operadora)}</SheetCell>
+                      <SheetCell>{leadCampaign(lead)}</SheetCell>
+                      <SheetCell>{leadAdset(lead)}</SheetCell>
+                      <SheetCell>{leadAd(lead)}</SheetCell>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
 
-        {!loading && !error && filteredLeads.length === 0 && (
-          <div className="py-24 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-50 text-slate-300">
-              <AlertCircle size={32} />
-            </div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Nenhum lead encontrado</p>
+        {selectedLeadIds.size > 0 && (
+          <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full bg-slate-950 px-5 py-3 text-xs font-black text-white shadow-2xl">
+            {selectedLeadIds.size} lead(s) selecionado(s)
+            <button onClick={() => setSelectedLeadIds(new Set())} className="rounded-full bg-white/10 px-3 py-1 text-[10px] uppercase tracking-widest hover:bg-white/20">Limpar</button>
           </div>
         )}
       </div>
     </InternalLayout>
   );
+}
+
+function SheetHead({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <th className={`border border-[#8bbbe8] px-2 py-0.5 text-left text-[14px] font-black leading-5 ${className}`}>{children}</th>;
+}
+
+function SheetCell({ children, strong = false, className = '' }: { children: ReactNode; strong?: boolean; className?: string }) {
+  return <td className={`max-w-[220px] truncate border border-slate-300 px-2 py-0.5 leading-5 ${strong ? 'font-bold' : 'font-semibold'} ${className}`}>{children}</td>;
 }

@@ -52,7 +52,7 @@ export async function GET(request: Request) {
 
   const corretores = ((corretoresData || []) as CorretorRecord[])
     .filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, gestor))
-    .map((corretor) => ({ id: corretor.id, nome: corretor.nome }));
+    .map((corretor) => ({ id: corretor.id, nome: corretor.nome, nome_empresa: corretor.nome_empresa }));
 
   const corretorIds = corretores.map((corretor) => corretor.id);
 
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
 
   const { data: leads, error: leadsError } = await supabaseAdmin
     .from('leads')
-    .select('*, corretores(nome)')
+    .select('*, corretores(nome,nome_empresa)')
     .in('corretor_id', corretorIds)
     .order('data_entrada', { ascending: false, nullsFirst: false });
 

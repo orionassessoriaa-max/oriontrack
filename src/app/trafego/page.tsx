@@ -119,6 +119,7 @@ export default function GestorDashboardPage() {
   const [alertsUpdatedAt, setAlertsUpdatedAt] = useState<string | null>(null);
   const [presetLabel, setPresetLabel] = useState('Todo o período');
   const [error, setError] = useState<string | null>(null);
+  const [approvedRecommendations, setApprovedRecommendations] = useState<Record<string, boolean>>({});
 
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -379,6 +380,8 @@ export default function GestorDashboardPage() {
             loadingAlerts={loadingAlerts}
             alertsUpdatedAt={alertsUpdatedAt}
             onReview={fetchDashboardData}
+            approvedRecommendations={approvedRecommendations}
+            onApproveRecommendation={(key) => setApprovedRecommendations((current) => ({ ...current, [key]: true }))}
           />
           <div className="hidden">
           {/* Central de Revisao Meta / CRM */}
@@ -681,6 +684,8 @@ function TrafficCommandCenter({
   loadingAlerts,
   alertsUpdatedAt,
   onReview,
+  approvedRecommendations,
+  onApproveRecommendation,
 }: {
   corretores: Corretor[];
   concessionarias: { nome: string; active: boolean; corretores: Corretor[] }[];
@@ -701,6 +706,8 @@ function TrafficCommandCenter({
   loadingAlerts: boolean;
   alertsUpdatedAt: string | null;
   onReview: () => void;
+  approvedRecommendations: Record<string, boolean>;
+  onApproveRecommendation: (key: string) => void;
 }) {
   const monitoredCount = concessionarias.length;
   const dailyAnalyses = 0;
@@ -735,7 +742,7 @@ function TrafficCommandCenter({
             <TrafficKpi href="/trafego/avisos-meta" icon={TrendingUp} label="Análises hoje" value={String(dailyAnalyses)} detail="Sem registro de análise automática hoje" tone="blue" />
             <TrafficKpi href="/trafego/avisos-meta" icon={DollarSign} label="Maior CPL" value={formatCurrency(highestCplAccount?.cpl, highestCplAccount?.currency)} detail={highestCplAccount?.corretor_nome || 'Nenhuma conta com CPL'} tone="emerald" />
             <TrafficKpi href="/trafego/avisos-meta" icon={AlertTriangle} label="Alertas ativos" value={String(criticalReviewCount + attentionReviewCount + crmPendingCount)} detail={`${criticalReviewCount} críticos | ${attentionReviewCount} atenção`} tone="red" />
-            <TrafficKpi href="/tarefas" icon={ListChecks} label="Ações aguardando" value={String(approvalQueue.length)} detail="Revisão humana antes de executar" tone="amber" />
+            <TrafficKpi href="#recomendacoes" icon={ListChecks} label="Recomendações" value={String(approvalQueue.length)} detail="Aguardando aprovar ou revisar" tone="amber" />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
@@ -767,14 +774,14 @@ function TrafficCommandCenter({
               </div>
             </Panel>
 
-            <Panel title="Fila de aprovação humana" badge={String(approvalQueue.length)} action={<Link href="/tarefas" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Ver todas</Link>}>
+            <Panel title="Recomendações" badge={String(approvalQueue.length)} action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Ver todas</Link>}>
               <div className="space-y-3">
                 {approvalQueue.length === 0 ? (
                   <EmptyPanel text="Nada aguardando decisão humana agora." />
                 ) : approvalQueue.map(({ account, status }, index) => {
                   const Icon = status.tone === 'red' ? Pause : status.tone === 'amber' ? ImageIcon : TrendingUp;
                   return (
-                    <div key={`queue-${account.corretor_id}-${index}`} className="grid gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-3 lg:grid-cols-[44px_1fr_74px]">
+                    <div id={index === 0 ? 'recomendacoes' : undefined} key={`queue-${account.corretor_id}-${index}`} className="grid gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-3 lg:grid-cols-[44px_1fr_84px]">
                       <div className={`grid h-11 w-11 place-items-center rounded-xl border ${getToneClasses(status.tone)}`}>
                         <Icon size={18} />
                       </div>
@@ -787,8 +794,14 @@ function TrafficCommandCenter({
                         <p className="mt-1 text-[10px] font-bold text-slate-500">CPL: {formatCurrency(account.cpl, account.currency)} | CTR: {formatPercent(account.ctr)} | CPC: {formatCurrency(account.cpc || 0, account.currency)}</p>
                       </div>
                       <div className="flex gap-2 lg:flex-col">
-                        <Link href="/trafego/avisos-meta" className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-center text-[10px] font-black text-white hover:bg-blue-500">Abrir</Link>
-                        <Link href="/tarefas" className="flex-1 rounded-lg bg-white/5 px-3 py-2 text-center text-[10px] font-black text-slate-300 hover:bg-white/10">Tarefa</Link>
+                        <button
+                          type="button"
+                          onClick={() => onApproveRecommendation(`${account.corretor_id}-${account.meta_ad_account_id}-${index}`)}
+                          className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-center text-[10px] font-black text-white hover:bg-blue-500"
+                        >
+                          {approvedRecommendations[`${account.corretor_id}-${account.meta_ad_account_id}-${index}`] ? 'Aprovado' : 'Aprovar'}
+                        </button>
+                        <Link href={`/trafego/otimizacoes?conta=${encodeURIComponent(account.meta_ad_account_id || account.corretor_id)}`} className="flex-1 rounded-lg bg-white/5 px-3 py-2 text-center text-[10px] font-black text-slate-300 hover:bg-white/10">Revisar</Link>
                       </div>
                     </div>
                   );
