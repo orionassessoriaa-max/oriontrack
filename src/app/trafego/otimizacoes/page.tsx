@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { BarChart3, ChevronDown, ChevronRight, Loader2, RefreshCw, Search, Sparkles } from 'lucide-react';
+import { BarChart3, ChevronDown, ChevronRight, Loader2, Maximize2, RefreshCw, Search, Sparkles, X } from 'lucide-react';
 
 type AccountOption = {
   id: string;
@@ -83,6 +83,7 @@ export default function OtimizacoesPage() {
   const [expandedCampaigns, setExpandedCampaigns] = useState<Record<string, boolean>>({});
   const [expandedAdsets, setExpandedAdsets] = useState<Record<string, boolean>>({});
   const [expandedAds, setExpandedAds] = useState<Record<string, boolean>>({});
+  const [fullscreenCreative, setFullscreenCreative] = useState<AdNode | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState('');
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
@@ -274,6 +275,7 @@ export default function OtimizacoesPage() {
                           setExpandedCampaigns={setExpandedCampaigns}
                           setExpandedAdsets={setExpandedAdsets}
                           setExpandedAds={setExpandedAds}
+                          onOpenCreative={setFullscreenCreative}
                         />
                       ))}
                     </tbody>
@@ -294,6 +296,38 @@ export default function OtimizacoesPage() {
           )}
         </main>
       </div>
+      {fullscreenCreative?.creative?.thumbnail_url ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={() => setFullscreenCreative(null)}
+            className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20"
+            aria-label="Fechar visualizacao"
+          >
+            <X size={22} />
+          </button>
+          <div className="grid max-h-[92vh] w-full max-w-6xl gap-4 overflow-auto rounded-2xl border border-white/10 bg-[#08111d] p-4 shadow-2xl lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="flex items-center justify-center rounded-xl bg-black/35 p-3">
+              <img
+                src={fullscreenCreative.creative.thumbnail_url}
+                alt={fullscreenCreative.creative.name || fullscreenCreative.name}
+                className="max-h-[82vh] max-w-full rounded-lg object-contain"
+              />
+            </div>
+            <div className="min-w-0 p-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Visualizacao do anuncio</p>
+              <h3 className="mt-3 text-2xl font-black text-white">{fullscreenCreative.creative.title || fullscreenCreative.creative.name || fullscreenCreative.name}</h3>
+              {fullscreenCreative.creative.body ? (
+                <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-300">{fullscreenCreative.creative.body}</p>
+              ) : null}
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <StatusBadge status={fullscreenCreative.effective_status || fullscreenCreative.status} />
+                <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">ID: {fullscreenCreative.id}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </InternalLayout>
   );
 }
@@ -306,6 +340,7 @@ function CampaignRows({
   setExpandedCampaigns,
   setExpandedAdsets,
   setExpandedAds,
+  onOpenCreative,
 }: {
   campaign: CampaignNode;
   expandedCampaigns: Record<string, boolean>;
@@ -314,6 +349,7 @@ function CampaignRows({
   setExpandedCampaigns: (value: Record<string, boolean> | ((current: Record<string, boolean>) => Record<string, boolean>)) => void;
   setExpandedAdsets: (value: Record<string, boolean> | ((current: Record<string, boolean>) => Record<string, boolean>)) => void;
   setExpandedAds: (value: Record<string, boolean> | ((current: Record<string, boolean>) => Record<string, boolean>)) => void;
+  onOpenCreative: (ad: AdNode) => void;
 }) {
   const campaignOpen = Boolean(expandedCampaigns[campaign.id]);
   return (
@@ -356,7 +392,7 @@ function CampaignRows({
                     hasChildren={hasPreview}
                     onToggle={() => setExpandedAds((current) => ({ ...current, [ad.id]: !current[ad.id] }))}
                   />
-                  {adOpen && hasPreview ? <CreativeRow ad={ad} /> : null}
+                  {adOpen && hasPreview ? <CreativeRow ad={ad} onOpenCreative={onOpenCreative} /> : null}
                 </Fragment>
               );
             })}
@@ -402,14 +438,24 @@ function MetricRow({ name, level, status, metrics, indent = '', open = false, ha
   );
 }
 
-function CreativeRow({ ad }: { ad: AdNode }) {
+function CreativeRow({ ad, onOpenCreative }: { ad: AdNode; onOpenCreative: (ad: AdNode) => void }) {
   const creative = ad.creative;
   return (
     <tr className="bg-black/20">
       <td colSpan={8} className="py-4 pl-20 pr-4">
         <div className="grid gap-4 border-l-2 border-cyan-400/40 pl-4 sm:grid-cols-[140px_1fr]">
           {creative?.thumbnail_url ? (
-            <img src={creative.thumbnail_url} alt={creative.name || ad.name} className="h-28 w-36 rounded-lg object-cover ring-1 ring-white/10" />
+            <div className="relative h-28 w-36 overflow-hidden rounded-lg ring-1 ring-white/10">
+              <img src={creative.thumbnail_url} alt={creative.name || ad.name} className="h-full w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => onOpenCreative(ad)}
+                className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full border border-white/20 bg-black/65 text-white backdrop-blur transition hover:bg-cyan-500"
+                aria-label="Abrir criativo em tela cheia"
+              >
+                <Maximize2 size={15} />
+              </button>
+            </div>
           ) : (
             <div className="grid h-28 w-36 place-items-center rounded-lg bg-white/[0.04] text-[10px] font-black uppercase tracking-widest text-slate-500 ring-1 ring-white/10">
               Sem preview

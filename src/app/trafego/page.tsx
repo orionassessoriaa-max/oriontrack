@@ -25,7 +25,8 @@ import {
   LayoutDashboard,
   Image as ImageIcon,
   ListChecks,
-  Pause
+  Pause,
+  Circle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -78,6 +79,20 @@ type MetaAccountAlert = {
   error?: string;
 };
 
+type ActiveCreative = {
+  id: string;
+  ad_name: string;
+  concessionaria_nome: string;
+  meta_ad_account_id: string | null;
+  meta_ad_account_name: string | null;
+  thumbnail_url?: string | null;
+  spend: number;
+  leads: number;
+  cpl: number | null;
+  currency: string;
+  status?: string;
+};
+
 function formatCurrency(value: number | null | undefined, currency = 'BRL') {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A';
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value));
@@ -110,12 +125,35 @@ function getToneClasses(tone: string) {
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
 }
 
+function scoreTrafficAccount(account: MetaAccountAlert) {
+  let score = 100;
+  const cpl = Number(account.cpl || 0);
+  const cpc = Number(account.cpc || 0);
+  const ctr = Number(account.ctr || 0);
+  const frequency = Number(account.frequency || 0);
+  const leads = Number(account.leads || 0);
+  const spend = Number(account.spend || 0);
+
+  if (account.error) score -= 35;
+  if (spend > 0 && leads === 0) score -= 45;
+  if (cpl >= 28) score -= 45;
+  else if (cpl >= 20) score -= 22;
+  if (cpc > 6) score -= 14;
+  if (ctr > 0 && ctr < 1) score -= 14;
+  if (frequency >= 3.5) score -= 8;
+  score += Math.min(leads, 50) * 0.35;
+
+  return Math.max(0, Math.round(score));
+}
+
 export default function GestorDashboardPage() {
   const { profile, actualProfile } = useAuth();
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalLeads, setTotalLeads] = useState(0);
   const [metaAccounts, setMetaAccounts] = useState<MetaAccountAlert[]>([]);
+  const [activeCreatives, setActiveCreatives] = useState<ActiveCreative[]>([]);
+  const [portfolioAiReview, setPortfolioAiReview] = useState('');
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertsUpdatedAt, setAlertsUpdatedAt] = useState<string | null>(null);
   const [presetLabel, setPresetLabel] = useState('Todo o período');
@@ -132,10 +170,10 @@ export default function GestorDashboardPage() {
   }, []);
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboardData(false);
   }, [profile?.id, dataInicio, dataFim]);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (analyze = false) => {
     if (!profile?.id) return;
     
     setLoading(true);
@@ -191,6 +229,9 @@ export default function GestorDashboardPage() {
               Authorization: `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
+              analyze,
+              data_inicio: dataInicio,
+              data_fim: dataFim,
               gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
                 ? profile.id
                 : undefined,
@@ -199,6 +240,8 @@ export default function GestorDashboardPage() {
           if (response.ok) {
             const payload = await response.json();
             setMetaAccounts(payload.accounts || []);
+            setActiveCreatives(payload.active_creatives || []);
+            if (payload.portfolio_ai_review) setPortfolioAiReview(payload.portfolio_ai_review);
             setAlertsUpdatedAt(payload.refreshed_at || new Date().toISOString());
           }
         } catch (err) {
@@ -353,7 +396,7 @@ export default function GestorDashboardPage() {
           <h3 className="text-xl font-bold text-white mb-2">Erro Operacional</h3>
           <p className="text-slate-400 font-medium max-w-md mx-auto mb-6">{error}</p>
           <button 
-            onClick={fetchDashboardData}
+            onClick={() => fetchDashboardData(false)}
             className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-white/10"
           >
             Tentar Novamente
@@ -380,7 +423,9 @@ export default function GestorDashboardPage() {
             totalSpend={totalSpend}
             loadingAlerts={loadingAlerts}
             alertsUpdatedAt={alertsUpdatedAt}
-            onReview={fetchDashboardData}
+            onReview={() => fetchDashboardData(true)}
+            activeCreatives={activeCreatives}
+            portfolioAiReview={portfolioAiReview}
             approvedRecommendations={approvedRecommendations}
             onApproveRecommendation={(key) => setApprovedRecommendations((current) => ({ ...current, [key]: true }))}
           />
@@ -401,7 +446,7 @@ export default function GestorDashboardPage() {
                 </div>
               </div>
               <button
-                onClick={fetchDashboardData}
+                onClick={() => fetchDashboardData(true)}
                 disabled={loading || loadingAlerts}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -685,6 +730,8 @@ function TrafficCommandCenter({
   loadingAlerts,
   alertsUpdatedAt,
   onReview,
+  activeCreatives,
+  portfolioAiReview,
   approvedRecommendations,
   onApproveRecommendation,
 }: {
@@ -707,6 +754,8 @@ function TrafficCommandCenter({
   loadingAlerts: boolean;
   alertsUpdatedAt: string | null;
   onReview: () => void;
+  activeCreatives: ActiveCreative[];
+  portfolioAiReview: string;
   approvedRecommendations: Record<string, boolean>;
   onApproveRecommendation: (key: string) => void;
 }) {
@@ -716,10 +765,20 @@ function TrafficCommandCenter({
   const activeConcessionarias = concessionarias.filter((item) => item.active).length;
   const portfolioRows = metaAccounts
     .slice()
-    .sort((a, b) => Number(b.spend || 0) - Number(a.spend || 0))
+    .sort((a, b) => scoreTrafficAccount(b) - scoreTrafficAccount(a))
     .slice(0, 10);
   const maxPortfolioSpend = Math.max(...portfolioRows.map((account) => Number(account.spend || 0)), 1);
   const maxPortfolioLeads = Math.max(...portfolioRows.map((account) => Number(account.leads || 0)), 1);
+  const summaryRows = metaAccounts
+    .slice()
+    .sort((a, b) => {
+      const toneOrder: Record<string, number> = { red: 0, amber: 1, blue: 2, emerald: 3 };
+      return (toneOrder[classifyMetaAccount(a).tone] ?? 2) - (toneOrder[classifyMetaAccount(b).tone] ?? 2);
+    })
+    .slice(0, 12);
+  const creativeRows = activeCreatives.slice(0, 10);
+  const maxCreativeSpend = Math.max(...creativeRows.map((creative) => Number(creative.spend || 0)), 1);
+  const maxCreativeLeads = Math.max(...creativeRows.map((creative) => Number(creative.leads || 0)), 1);
 
   return (
     <section className="-mx-4 -mt-6 rounded-3xl border border-cyan-400/10 bg-[#050b14] p-4 text-white shadow-2xl sm:-mx-6 sm:p-6 lg:-mx-8 xl:p-8">
@@ -818,15 +877,19 @@ function TrafficCommandCenter({
           </div>
 
           <div className="mt-4">
-            <Panel title="Comparativo da carteira" action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Abrir otimizacoes</Link>}>
+            <Panel title="Ranking da carteira" action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Abrir otimizações</Link>}>
               <div className="space-y-4">
                 {portfolioRows.length === 0 ? (
                   <EmptyPanel text="Nenhuma concessionaria com dados Meta neste periodo." />
-                ) : portfolioRows.map((account) => (
-                  <div key={`portfolio-${account.corretor_id}-${account.meta_ad_account_id}`} className="grid gap-2 lg:grid-cols-[190px_1fr_92px_1fr_86px_96px] lg:items-center">
+                ) : portfolioRows.map((account, index) => {
+                  const status = classifyMetaAccount(account);
+                  const score = scoreTrafficAccount(account);
+                  return (
+                  <div key={`portfolio-${account.corretor_id}-${account.meta_ad_account_id}`} className="grid gap-2 lg:grid-cols-[44px_180px_1fr_92px_1fr_86px_96px] lg:items-center">
+                    <div className={`grid h-9 w-9 place-items-center rounded-xl border text-xs font-black ${getToneClasses(status.tone)}`}>#{index + 1}</div>
                     <div>
                       <p className="truncate text-xs font-black text-white">{account.concessionaria_nome || account.corretor_nome}</p>
-                      <p className="truncate text-[10px] font-bold text-slate-500">{account.meta_ad_account_name || `act_${account.meta_ad_account_id}`}</p>
+                      <p className="truncate text-[10px] font-bold text-slate-500">{status.label} | Score {score}</p>
                     </div>
                     <div className="h-6 bg-white/[0.04]">
                       <div className="h-full bg-cyan-500/75" style={{ width: `${Math.max(3, (Number(account.spend || 0) / maxPortfolioSpend) * 100)}%` }} />
@@ -838,10 +901,19 @@ function TrafficCommandCenter({
                     <p className="text-right text-xs font-black text-white">{account.leads || 0} leads</p>
                     <p className={`text-right text-xs font-black ${Number(account.cpl || 0) >= 28 ? 'text-red-300' : 'text-slate-200'}`}>{formatCurrency(account.cpl, account.currency)}</p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Panel>
           </div>
+
+          {portfolioAiReview ? (
+            <div className="mt-4">
+              <Panel title="Leitura da IA">
+                <p className="whitespace-pre-line text-sm font-bold leading-relaxed text-slate-300">{portfolioAiReview}</p>
+              </Panel>
+            </div>
+          ) : null}
 
           <div className="hidden">
             <Panel
@@ -895,6 +967,50 @@ function TrafficCommandCenter({
           </div>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr]">
+            <Panel title="Resumo da carteira">
+              <div className="space-y-2">
+                {summaryRows.length === 0 ? (
+                  <EmptyPanel text="Nenhuma conta monitorada neste periodo." />
+                ) : summaryRows.map((account) => {
+                  const status = classifyMetaAccount(account);
+                  return (
+                    <div key={`summary-${account.corretor_id}-${account.meta_ad_account_id}`} className="flex items-center justify-between gap-3 border-b border-white/5 py-2 last:border-b-0">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Circle size={10} className={status.tone === 'red' ? 'fill-red-400 text-red-400' : status.tone === 'amber' ? 'fill-amber-300 text-amber-300' : status.tone === 'blue' ? 'fill-blue-300 text-blue-300' : 'fill-emerald-300 text-emerald-300'} />
+                        <p className="truncate text-xs font-black text-white">{account.concessionaria_nome || account.corretor_nome}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-widest ${getToneClasses(status.tone)}`}>{status.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Panel>
+            <Panel title="Criativos ativos">
+              <div className="space-y-4">
+                {creativeRows.length === 0 ? (
+                  <EmptyPanel text="Nenhum criativo ativo encontrado no periodo." />
+                ) : creativeRows.map((creative) => (
+                  <div key={`creative-${creative.id}`} className="grid gap-2 lg:grid-cols-[190px_1fr_92px_1fr_86px_96px] lg:items-center">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-black text-white">{creative.ad_name}</p>
+                      <p className="truncate text-[10px] font-bold text-slate-500">{creative.concessionaria_nome}</p>
+                    </div>
+                    <div className="h-6 bg-white/[0.04]">
+                      <div className="h-full bg-cyan-500/75" style={{ width: `${Math.max(3, (Number(creative.spend || 0) / maxCreativeSpend) * 100)}%` }} />
+                    </div>
+                    <p className="text-right text-xs font-black text-white">{formatCurrency(creative.spend, creative.currency)}</p>
+                    <div className="h-6 bg-white/[0.04]">
+                      <div className="h-full bg-emerald-400/75" style={{ width: `${Math.max(3, (Number(creative.leads || 0) / maxCreativeLeads) * 100)}%` }} />
+                    </div>
+                    <p className="text-right text-xs font-black text-white">{creative.leads || 0} leads</p>
+                    <p className={`text-right text-xs font-black ${Number(creative.cpl || 0) >= 28 ? 'text-red-300' : 'text-slate-200'}`}>{formatCurrency(creative.cpl, creative.currency)}</p>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+
+          <div className="hidden">
             <Panel title="Resumo da carteira">
               <div className="grid gap-3 sm:grid-cols-3">
                 <AnalysisMetric label="Saudáveis" value={String(healthyAccountsCount)} />

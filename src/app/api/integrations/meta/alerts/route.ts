@@ -149,6 +149,198 @@ async function fetchSheetLeadCount(corretor: CorretorMeta, since: string, until:
   return count || 0;
 }
 
+async function fetchSheetLeads(corretor: CorretorMeta, since: string, until: string) {
+  const start = `${since}T00:00:00.000-03:00`;
+  const end = `${until}T23:59:59.999-03:00`;
+  let corretorIds = corretor.scoped_corretor_ids?.length ? corretor.scoped_corretor_ids : [corretor.id];
+
+  const corretoraNome = String(corretor.nome_empresa || '').trim();
+  if (!corretor.scoped_corretor_ids?.length && corretoraNome) {
+    let groupQuery = supabaseAdmin
+      .from('corretores')
+      .select('id')
+      .eq('nome_empresa', corretoraNome);
+
+    if (corretor.gestor_trafego_id) {
+      groupQuery = groupQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
+    }
+
+    const { data: groupCorretores, error: groupError } = await groupQuery;
+    if (groupError) throw new Error(`Erro ao buscar corretores da concessionaria: ${groupError.message}`);
+    const groupIds = (groupCorretores || []).map((item) => item.id).filter(Boolean);
+    if (groupIds.length > 0) corretorIds = groupIds;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('leads')
+    .select('id, utm_content, data_entrada')
+    .in('corretor_id', corretorIds)
+    .gte('data_entrada', start)
+    .lte('data_entrada', end);
+
+  if (error) throw new Error(`Erro ao buscar leads CRM: ${error.message}`);
+  return data || [];
+}
+
+function normalizeKey(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function countCreativeLeads(leads: any[], adName?: string | null) {
+  const target = normalizeKey(adName);
+  if (!target) return 0;
+  return leads.filter((lead) => normalizeKey(lead.utm_content) === target).length;
+}
+
+async function fetchObjectMap(ids: string[], fields: string, accessToken: string, graphVersion: string) {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  const result = new Map<string, any>();
+
+  for (let index = 0; index < uniqueIds.length; index += 50) {
+    const chunk = uniqueIds.slice(index, index + 50);
+    const url = new URL(`https://graph.facebook.com/${graphVersion}/`);
+    url.searchParams.set('ids', chunk.join(','));
+    url.searchParams.set('fields', fields);
+    url.searchParams.set('access_token', accessToken);
+
+    const response = await fetch(url.toString(), { next: { revalidate: 600 } });
+    const payload = await response.json();
+    if (!response.ok || payload.error) continue;
+    Object.entries(payload || {}).forEach(([id, value]) => result.set(id, value));
+  }
+
+  return result;
+}
+
+async function fetchActiveCreatives(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
+  const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
+  const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
+  insightsUrl.searchParams.set('fields', 'spend,ctr,cpc,cpm,frequency,inline_link_clicks,ad_id,ad_name');
+  insightsUrl.searchParams.set('level', 'ad');
+  insightsUrl.searchParams.set('limit', '100');
+  insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
+  insightsUrl.searchParams.set('access_token', accessToken);
+
+  const [insightsResponse, leads] = await Promise.all([
+    fetch(insightsUrl.toString(), { next: { revalidate: 600 } }),
+    fetchSheetLeads(corretor, since, until),
+  ]);
+  const insightsPayload = await insightsResponse.json();
+  if (!insightsResponse.ok || insightsPayload.error) throw new Error(describeMetaError(insightsPayload.error, accountId));
+
+  const rows = insightsPayload.data || [];
+  const adDetails = await fetchObjectMap(
+    rows.map((row: any) => row.ad_id),
+    'id,name,status,effective_status,creative{id,name,thumbnail_url,title,body,object_story_spec}',
+    accessToken,
+    graphVersion
+  );
+
+  return rows
+    .map((row: any) => {
+      const details = adDetails.get(row.ad_id);
+      const effectiveStatus = String(details?.effective_status || details?.status || '').toUpperCase();
+      const spend = Number(row.spend || 0);
+      const leadCount = countCreativeLeads(leads, row.ad_name);
+      return {
+        id: String(row.ad_id || row.ad_name),
+        ad_name: row.ad_name || details?.name || 'Anuncio sem nome',
+        concessionaria_nome: corretor.nome_empresa || corretor.nome,
+        meta_ad_account_id: corretor.meta_ad_account_id,
+        meta_ad_account_name: corretor.meta_ad_account_name,
+        thumbnail_url: details?.creative?.thumbnail_url || null,
+        spend,
+        leads: leadCount,
+        cpl: leadCount > 0 ? spend / leadCount : null,
+        currency: 'BRL',
+        status: effectiveStatus || 'UNKNOWN',
+      };
+    })
+    .filter((creative: any) => creative.status === 'ACTIVE')
+    .sort((a: any, b: any) => Number(b.spend || 0) - Number(a.spend || 0))
+    .slice(0, 3);
+}
+
+function localPortfolioReview(accounts: any[], activeCreatives: any[]) {
+  const critical = accounts.filter((account) => account.alerta_cpl_alto || account.error).length;
+  const crmPending = accounts.filter((account) => account.dados_crm_pendentes).length;
+  const attention = accounts.filter((account) => account.alerta_cpl_atencao || account.alerta_metricas_secundarias).length;
+  const best = accounts
+    .filter((account) => Number(account.leads || 0) > 0 && Number(account.cpl || 999) < TRAFFIC_RULES.cplAttention)
+    .sort((a, b) => Number(a.cpl || 999) - Number(b.cpl || 999))[0];
+  const topCreative = activeCreatives
+    .filter((creative) => Number(creative.leads || 0) > 0)
+    .sort((a, b) => Number(b.leads || 0) - Number(a.leads || 0))[0];
+
+  return [
+    `Resumo: ${critical} conta(s) critica(s), ${attention} em atencao e ${crmPending} com CRM pendente.`,
+    best ? `Melhor conta no momento: ${best.concessionaria_nome || best.corretor_nome}, com CPL CRM de ${Number(best.cpl || 0).toLocaleString('pt-BR', { style: 'currency', currency: best.currency || 'BRL' })}.` : 'Nenhuma conta saudavel com leads CRM suficientes para ranquear como melhor.',
+    topCreative ? `Criativo com mais leads CRM: ${topCreative.ad_name}, em ${topCreative.concessionaria_nome}, com ${topCreative.leads} lead(s).` : 'Ainda nao ha criativo ativo com lead CRM atribuido por UTM de anuncio.',
+    'Regra de seguranca: quando ha investimento e zero lead CRM, revisar webhook/UTM antes de julgar CPL ou aprovar qualquer acao.',
+  ].join('\n');
+}
+
+async function generatePortfolioAiReview(accounts: any[], activeCreatives: any[], since: string, until: string) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return localPortfolioReview(accounts, activeCreatives);
+
+  const payload = {
+    periodo: { since, until },
+    regras: TRAFFIC_RULES,
+    contas: accounts.map((account) => ({
+      concessionaria: account.concessionaria_nome || account.corretor_nome,
+      investimento: account.spend,
+      leads_crm: account.leads,
+      cpl_crm: account.cpl,
+      cpc: account.cpc,
+      ctr: account.ctr,
+      cpm: account.cpm,
+      frequencia: account.frequency,
+      status: account.error ? account.error : account.dados_crm_pendentes ? 'CRM pendente' : account.alerta_cpl_alto ? 'CPL critico' : account.alerta_cpl_atencao ? 'Atencao' : 'Saudavel',
+    })),
+    criativos_ativos: activeCreatives.map((creative) => ({
+      concessionaria: creative.concessionaria_nome,
+      anuncio: creative.ad_name,
+      investimento: creative.spend,
+      leads_crm: creative.leads,
+      cpl_crm: creative.cpl,
+      status: creative.status,
+    })),
+  };
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: process.env.ORION_TRAFFIC_AI_MODEL || 'gpt-4o-mini',
+      temperature: 0.2,
+      max_tokens: 520,
+      messages: [
+        {
+          role: 'system',
+          content: `Voce e uma IA de gestao de trafego para corretoras de planos de saude. Regras fixas:
+- Leads oficiais sempre sao os leads CRM, nunca leads reportados pela Meta.
+- CPL critico quando CPL CRM chegar a R$ 28,00 ou mais.
+- CPL acima de R$ 20,00 exige avaliar CPC, CTR, CPM, visualizacao de pagina e frequencia.
+- CPC maximo R$ 6,00.
+- CTR minimo 1%.
+- Se houver investimento e zero lead CRM, classifique como CRM pendente e recomende revisar webhook/UTM antes de otimizar.
+Responda em portugues do Brasil, curto, em bullets, sem inventar dados.`
+        },
+        { role: 'user', content: JSON.stringify(payload).slice(0, 16000) },
+      ],
+    }),
+  });
+
+  if (!response.ok) return localPortfolioReview(accounts, activeCreatives);
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || localPortfolioReview(accounts, activeCreatives);
+}
+
 async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
   const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
   const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
@@ -278,6 +470,7 @@ export async function POST(request: Request) {
     const search = String(body.nome || '').trim().toLowerCase();
     const corretorId = body.corretor_id ? String(body.corretor_id) : null;
     const requestedGestorId = body.gestor_id ? String(body.gestor_id) : null;
+    const shouldAnalyze = Boolean(body.analyze);
     let scopedGestorProfile = guard.profile;
 
     if (guard.profile.tipo_usuario === 'admin' && requestedGestorId) {
@@ -398,6 +591,17 @@ export async function POST(request: Request) {
       })
       .sort((a, b) => Number(b.alerta_cpl_alto) - Number(a.alerta_cpl_alto));
 
+    const creativeSettled = await Promise.allSettled(
+      filtered.map((corretor) => fetchActiveCreatives(corretor, since, until, accessToken, graphVersion))
+    );
+    const activeCreatives = creativeSettled
+      .flatMap((result) => result.status === 'fulfilled' ? result.value : [])
+      .sort((a: any, b: any) => Number(b.spend || 0) - Number(a.spend || 0))
+      .slice(0, 20);
+    const portfolioAiReview = shouldAnalyze
+      ? await generatePortfolioAiReview(accounts, activeCreatives, since, until)
+      : '';
+
     return NextResponse.json({
       success: true,
       data_inicio: since,
@@ -406,6 +610,8 @@ export async function POST(request: Request) {
       threshold_cpl: TRAFFIC_RULES.cplCritical,
       rules: TRAFFIC_RULES,
       accounts,
+      active_creatives: activeCreatives,
+      portfolio_ai_review: portfolioAiReview,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao buscar avisos Meta.' }, { status: 500 });
