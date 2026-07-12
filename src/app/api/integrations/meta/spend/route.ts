@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
+import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 async function requireTrafficAccess(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -16,7 +17,7 @@ async function requireTrafficAccess(request: Request) {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('id, tipo_usuario')
+    .select('id, tipo_usuario, nome, email, email_real')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -62,7 +63,7 @@ function describeMetaError(error: any, accountId?: string | null) {
   return message || 'Nao consegui consultar esta conta Meta agora.';
 }
 
-async function resolveBrokerageMetaAccount(corretor: any) {
+async function resolveBrokerageMetaAccount(corretor: any, gestorProfile?: any) {
   if (String(corretor.meta_ad_account_id || '').trim()) {
     return corretor;
   }
@@ -74,7 +75,7 @@ async function resolveBrokerageMetaAccount(corretor: any) {
 
   let metaOwnerQuery = supabaseAdmin
     .from('corretores')
-    .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name')
+    .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional')
     .eq('nome_empresa', corretoraNome)
     .not('meta_ad_account_id', 'is', null)
     .order('created_at', { ascending: true })
@@ -84,9 +85,12 @@ async function resolveBrokerageMetaAccount(corretor: any) {
     metaOwnerQuery = metaOwnerQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
   }
 
-  const { data: metaOwner } = await metaOwnerQuery.maybeSingle();
+  const { data: metaOwners } = await metaOwnerQuery;
+  const scopedOwners = gestorProfile?.tipo_usuario === 'gestor_trafego'
+    ? (metaOwners || []).filter((item) => isGestorLinkedToConcessionariaCorretor(item, gestorProfile))
+    : (metaOwners || []);
 
-  return metaOwner || corretor;
+  return scopedOwners[0] || corretor;
 }
 
 export async function POST(request: Request) {
@@ -113,7 +117,7 @@ export async function POST(request: Request) {
 
     const { data: corretor, error: corretorError } = await supabaseAdmin
       .from('corretores')
-      .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name')
+      .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional')
       .eq('id', corretorId)
       .maybeSingle();
 
@@ -121,7 +125,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
     }
 
-    if (guard.profile.tipo_usuario === 'gestor_trafego' && corretor.gestor_trafego_id !== guard.user.id) {
+    if (guard.profile.tipo_usuario === 'gestor_trafego' && !isGestorLinkedToConcessionariaCorretor(corretor, guard.profile)) {
       return NextResponse.json({ error: 'Este corretor nao esta vinculado ao seu gestor.' }, { status: 403 });
     }
 
@@ -137,7 +141,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const metaAccount = await resolveBrokerageMetaAccount(corretor);
+    const metaAccount = await resolveBrokerageMetaAccount(corretor, guard.profile);
 
     if (!metaAccount.meta_ad_account_id) {
       return NextResponse.json({ error: 'Esta concessionaria ainda nao tem conta Meta vinculada.' }, { status: 400 });

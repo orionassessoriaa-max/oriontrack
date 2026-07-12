@@ -19,9 +19,28 @@ export function normalizeAccessText(value?: string | null) {
     .toLowerCase();
 }
 
+function normalizeEmail(value?: string | null) {
+  return String(value || '').trim().toLowerCase();
+}
+
 export function isGestorLinkedToCorretor(corretor: CorretorLike, gestor: GestorProfileLike | null | undefined) {
   if (!gestor?.id) return false;
-  return corretor.gestor_trafego_id === gestor.id;
+  const gestorId = gestor.id;
+  if (corretor.gestor_trafego_id === gestorId) return true;
+
+  const team = Array.isArray(corretor.time_operacional) ? corretor.time_operacional : [];
+  const gestorName = normalizeAccessText(gestor.nome);
+  const gestorEmails = [gestor.email, gestor.email_real].map(normalizeEmail).filter(Boolean);
+
+  return team.some((member: any) => {
+    const memberIds = [member?.profile_id, member?.id, member?.user_id].map((value) => String(value || ''));
+    const memberName = normalizeAccessText(member?.nome);
+    const memberEmails = [member?.email, member?.email_real].map(normalizeEmail).filter(Boolean);
+
+    return memberIds.includes(gestorId)
+      || (Boolean(gestorName) && memberName === gestorName)
+      || memberEmails.some((email) => gestorEmails.includes(email));
+  });
 }
 
 export function hasConcessionaria(corretor: CorretorLike) {

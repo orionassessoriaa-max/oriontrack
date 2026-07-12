@@ -11,6 +11,7 @@ type CorretorMeta = {
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
   time_operacional?: unknown;
+  scoped_corretor_ids?: string[];
 };
 
 const TRAFFIC_RULES = {
@@ -117,10 +118,10 @@ function describeMetaError(error: any, accountId?: string | null) {
 async function fetchSheetLeadCount(corretor: CorretorMeta, since: string, until: string) {
   const start = `${since}T00:00:00.000-03:00`;
   const end = `${until}T23:59:59.999-03:00`;
-  let corretorIds = [corretor.id];
+  let corretorIds = corretor.scoped_corretor_ids?.length ? corretor.scoped_corretor_ids : [corretor.id];
 
   const corretoraNome = String(corretor.nome_empresa || '').trim();
-  if (corretoraNome) {
+  if (!corretor.scoped_corretor_ids?.length && corretoraNome) {
     let groupQuery = supabaseAdmin
       .from('corretores')
       .select('id')
@@ -233,7 +234,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     };
 }
 
-async function resolveBrokerageMetaAccount(corretor: CorretorMeta) {
+function resolveBrokerageMetaAccount(corretor: CorretorMeta, scopedCorretores: CorretorMeta[]) {
   if (String(corretor.meta_ad_account_id || '').trim()) {
     return corretor;
   }
@@ -243,19 +244,9 @@ async function resolveBrokerageMetaAccount(corretor: CorretorMeta) {
     return corretor;
   }
 
-  let metaOwnerQuery = supabaseAdmin
-    .from('corretores')
-    .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional')
-    .eq('nome_empresa', corretoraNome)
-    .not('meta_ad_account_id', 'is', null)
-    .order('created_at', { ascending: true })
-    .limit(1);
-
-  if (corretor.gestor_trafego_id) {
-    metaOwnerQuery = metaOwnerQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
-  }
-
-  const { data: metaOwner } = await metaOwnerQuery.maybeSingle();
+  const metaOwner = scopedCorretores.find((item) =>
+    item.nome_empresa === corretoraNome && String(item.meta_ad_account_id || '').trim()
+  );
 
   if (!metaOwner) return corretor;
 
@@ -343,9 +334,16 @@ export async function POST(request: Request) {
         )
       : ((corretores || []) as CorretorMeta[]);
 
-    const resolvedCorretores = await Promise.all(
-      scopedCorretores.map((corretor) => resolveBrokerageMetaAccount(corretor))
-    );
+    const resolvedCorretores = scopedCorretores.map((corretor) => {
+      const corretoraNome = String(corretor.nome_empresa || '').trim();
+      const scopedGroupIds = corretoraNome
+        ? scopedCorretores.filter((item) => item.nome_empresa === corretoraNome).map((item) => item.id)
+        : [corretor.id];
+      return {
+        ...resolveBrokerageMetaAccount(corretor, scopedCorretores),
+        scoped_corretor_ids: scopedGroupIds,
+      };
+    });
 
     const uniqueByAccount = new Map<string, CorretorMeta>();
     resolvedCorretores.forEach((corretor) => {

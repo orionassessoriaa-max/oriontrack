@@ -11,6 +11,7 @@ type CorretorMeta = {
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
   time_operacional?: unknown;
+  scoped_corretor_ids?: string[];
 };
 
 const TRAFFIC_RULES = {
@@ -89,24 +90,14 @@ function describeMetaError(error: any, accountId?: string | null) {
   return message || 'Nao consegui consultar esta conta Meta agora.';
 }
 
-async function resolveBrokerageMetaAccount(corretor: CorretorMeta) {
+function resolveBrokerageMetaAccount(corretor: CorretorMeta, scopedCorretores: CorretorMeta[]) {
   if (String(corretor.meta_ad_account_id || '').trim()) return corretor;
   const nomeEmpresa = String(corretor.nome_empresa || '').trim();
   if (!nomeEmpresa) return corretor;
 
-  let metaOwnerQuery = supabaseAdmin
-    .from('corretores')
-    .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional')
-    .eq('nome_empresa', nomeEmpresa)
-    .not('meta_ad_account_id', 'is', null)
-    .order('created_at', { ascending: true })
-    .limit(1);
-
-  if (corretor.gestor_trafego_id) {
-    metaOwnerQuery = metaOwnerQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
-  }
-
-  const { data } = await metaOwnerQuery.maybeSingle();
+  const data = scopedCorretores.find((item) =>
+    item.nome_empresa === nomeEmpresa && String(item.meta_ad_account_id || '').trim()
+  );
 
   return data ? { ...corretor, meta_ad_account_id: data.meta_ad_account_id, meta_ad_account_name: data.meta_ad_account_name } : corretor;
 }
@@ -145,7 +136,16 @@ async function getAllowedAccounts(profile: any, requestedGestorId?: string | nul
     ? ((data || []) as CorretorMeta[]).filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, scopedProfile))
     : ((data || []) as CorretorMeta[]);
 
-  const resolved = await Promise.all(scoped.map((corretor) => resolveBrokerageMetaAccount(corretor)));
+  const resolved = scoped.map((corretor) => {
+    const nomeEmpresa = String(corretor.nome_empresa || '').trim();
+    const scopedGroupIds = nomeEmpresa
+      ? scoped.filter((item) => item.nome_empresa === nomeEmpresa).map((item) => item.id)
+      : [corretor.id];
+    return {
+      ...resolveBrokerageMetaAccount(corretor, scoped),
+      scoped_corretor_ids: scopedGroupIds,
+    };
+  });
   const unique = new Map<string, CorretorMeta>();
   resolved.forEach((corretor) => {
     const accountId = normalizeAccountId(corretor.meta_ad_account_id);
@@ -158,9 +158,9 @@ async function getAllowedAccounts(profile: any, requestedGestorId?: string | nul
 async function fetchCrmLeads(corretor: CorretorMeta, since: string, until: string) {
   const start = `${since}T00:00:00.000-03:00`;
   const end = `${until}T23:59:59.999-03:00`;
-  let corretorIds = [corretor.id];
+  let corretorIds = corretor.scoped_corretor_ids?.length ? corretor.scoped_corretor_ids : [corretor.id];
 
-  if (corretor.nome_empresa) {
+  if (!corretor.scoped_corretor_ids?.length && corretor.nome_empresa) {
     let groupQuery = supabaseAdmin
       .from('corretores')
       .select('id')
