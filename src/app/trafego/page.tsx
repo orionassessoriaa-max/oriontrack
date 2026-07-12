@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { 
@@ -8,7 +8,6 @@ import {
   BarChart3, 
   TrendingUp, 
   DollarSign, 
-  ArrowRight,
   UserPlus,
   Loader2,
   Calendar,
@@ -18,22 +17,15 @@ import {
   CheckCircle2,
   ChevronRight,
   ShieldAlert,
-  Sparkles,
-  Trophy,
   Clock,
   RefreshCw,
   Activity,
   MousePointerClick,
   Eye,
   LayoutDashboard,
-  Megaphone,
-  CheckSquare,
   Image as ImageIcon,
-  FileText,
   ListChecks,
-  Settings,
-  Pause,
-  WalletCards
+  Pause
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -47,6 +39,7 @@ import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 type Corretor = {
   id: string;
   nome: string;
+  nome_empresa?: string | null;
   email: string;
   telefone: string | null;
   link_pagina: string | null;
@@ -117,7 +110,7 @@ function getToneClasses(tone: string) {
 }
 
 export default function GestorDashboardPage() {
-  const { profile } = useAuth();
+  const { profile, actualProfile } = useAuth();
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalLeads, setTotalLeads] = useState(0);
@@ -195,7 +188,11 @@ export default function GestorDashboardPage() {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${accessToken}`,
             },
-            body: JSON.stringify({}),
+            body: JSON.stringify({
+              gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
+                ? profile.id
+                : undefined,
+            }),
           });
           if (response.ok) {
             const payload = await response.json();
@@ -218,6 +215,24 @@ export default function GestorDashboardPage() {
 
   const activeCampaignsCount = corretores.filter(c => c.campanhas_ativas).length;
   const pendingOnboardingCount = corretores.filter(c => !c.onboarding_status || c.onboarding_status === 'pendente').length;
+  const concessionarias = useMemo(() => {
+    const grouped = new Map<string, { nome: string; active: boolean; corretores: Corretor[] }>();
+
+    corretores.forEach((corretor) => {
+      const nome = String((corretor as any).nome_empresa || corretor.nome || '').trim();
+      if (!nome) return;
+      const key = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const current = grouped.get(key);
+      if (current) {
+        current.corretores.push(corretor);
+        current.active = current.active || Boolean(corretor.campanhas_ativas);
+      } else {
+        grouped.set(key, { nome, active: Boolean(corretor.campanhas_ativas), corretores: [corretor] });
+      }
+    });
+
+    return Array.from(grouped.values());
+  }, [corretores]);
   const reviewAccounts = metaAccounts
     .map((account) => ({ account, status: classifyMetaAccount(account) }))
     .filter(({ status }) => status.label !== 'Saudável');
@@ -227,6 +242,9 @@ export default function GestorDashboardPage() {
   const totalSpend = metaAccounts.reduce((sum, account) => sum + Number(account.spend || 0), 0);
   const crmLeadCount = metaAccounts.reduce((sum, account) => sum + Number(account.leads || 0), 0);
   const averageCpl = crmLeadCount > 0 ? totalSpend / crmLeadCount : null;
+  const highestCplAccount = metaAccounts
+    .filter((account) => account.cpl !== null && account.cpl !== undefined)
+    .sort((a, b) => Number(b.cpl || 0) - Number(a.cpl || 0))[0] || null;
   const healthyAccountsCount = Math.max(metaAccounts.length - reviewAccounts.length, 0);
   const approvalQueue = reviewAccounts.slice(0, 4);
   const analysisAccount = reviewAccounts[0]?.account || metaAccounts[0] || null;
@@ -343,6 +361,7 @@ export default function GestorDashboardPage() {
         <>
           <TrafficCommandCenter
             corretores={corretores}
+            concessionarias={concessionarias}
             activeCampaignsCount={activeCampaignsCount}
             totalLeads={totalLeads}
             metaAccounts={metaAccounts}
@@ -355,17 +374,10 @@ export default function GestorDashboardPage() {
             analysisAccount={analysisAccount}
             analysisStatus={analysisStatus}
             averageCpl={averageCpl}
+            highestCplAccount={highestCplAccount}
             totalSpend={totalSpend}
             loadingAlerts={loadingAlerts}
             alertsUpdatedAt={alertsUpdatedAt}
-            dataInicio={dataInicio}
-            dataFim={dataFim}
-            presetLabel={presetLabel}
-            onDateChange={(start, end, label) => {
-              setDataInicio(start);
-              setDataFim(end);
-              setPresetLabel(label);
-            }}
             onReview={fetchDashboardData}
           />
           <div className="hidden">
@@ -651,6 +663,7 @@ export default function GestorDashboardPage() {
 
 function TrafficCommandCenter({
   corretores,
+  concessionarias,
   activeCampaignsCount,
   totalLeads,
   metaAccounts,
@@ -663,16 +676,14 @@ function TrafficCommandCenter({
   analysisAccount,
   analysisStatus,
   averageCpl,
+  highestCplAccount,
   totalSpend,
   loadingAlerts,
   alertsUpdatedAt,
-  dataInicio,
-  dataFim,
-  presetLabel,
-  onDateChange,
   onReview,
 }: {
   corretores: Corretor[];
+  concessionarias: { nome: string; active: boolean; corretores: Corretor[] }[];
   activeCampaignsCount: number;
   totalLeads: number;
   metaAccounts: MetaAccountAlert[];
@@ -685,83 +696,29 @@ function TrafficCommandCenter({
   analysisAccount: MetaAccountAlert | null;
   analysisStatus: { label: string; tone: string; detail: string } | null;
   averageCpl: number | null;
+  highestCplAccount: MetaAccountAlert | null;
   totalSpend: number;
   loadingAlerts: boolean;
   alertsUpdatedAt: string | null;
-  dataInicio: string;
-  dataFim: string;
-  presetLabel: string;
-  onDateChange: (start: string, end: string, label: string) => void;
   onReview: () => void;
 }) {
-  const sidebarItems = [
-    { label: 'Dashboard', href: '/trafego', icon: LayoutDashboard, active: true },
-    { label: 'Corretoras', href: '/trafego/corretores', icon: Users },
-    { label: 'Campanhas', href: '/trafego/avisos-meta', icon: Megaphone },
-    { label: 'Aprovações', href: '/tarefas', icon: CheckSquare, badge: reviewAccounts.length },
-    { label: 'Criativos', href: '/designer', icon: ImageIcon },
-    { label: 'Relatórios', href: '/trafego/relatorios', icon: BarChart3 },
-    { label: 'Logs', href: '/admin/historico', icon: FileText },
-    { label: 'Configurações', href: '/perfil', icon: Settings },
-  ];
-
-  const monitoredCount = metaAccounts.length || corretores.length;
-  const dailyAnalyses = monitoredCount * 2;
+  const monitoredCount = concessionarias.length;
+  const dailyAnalyses = 0;
   const displayedAttention = reviewAccounts.slice(0, 5);
+  const activeConcessionarias = concessionarias.filter((item) => item.active).length;
 
   return (
-    <section className="-mx-4 -mt-6 overflow-hidden rounded-3xl border border-cyan-400/10 bg-[#050b14] text-white shadow-2xl sm:-mx-6 lg:-mx-8">
-      <div className="grid min-h-[760px] grid-cols-1 xl:grid-cols-[220px_1fr]">
-        <aside className="border-b border-white/10 bg-[#07111d]/95 p-4 xl:border-b-0 xl:border-r">
-          <div className="mb-8 flex items-center gap-3 px-2">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600/20 text-blue-300">
-              <Sparkles size={18} />
-            </div>
-            <div>
-              <p className="text-sm font-black uppercase tracking-wider text-white">Orion Ads</p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Gestão Meta</p>
-            </div>
-          </div>
-
-          <nav className="grid grid-cols-2 gap-2 xl:block xl:space-y-2">
-            {sidebarItems.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className={`flex min-h-11 items-center justify-between rounded-xl px-3 text-xs font-bold transition ${
-                  item.active ? 'bg-blue-600/25 text-cyan-300 ring-1 ring-blue-500/30' : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <item.icon size={15} />
-                  {item.label}
-                </span>
-                {item.badge ? (
-                  <span className="rounded-md bg-yellow-400 px-1.5 py-0.5 text-[10px] font-black text-slate-950">{item.badge}</span>
-                ) : null}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Última revisão</p>
-            <p className="mt-2 text-xs font-bold text-slate-200">{alertsUpdatedAt ? new Date(alertsUpdatedAt).toLocaleString('pt-BR') : 'Ainda não revisado'}</p>
-          </div>
-        </aside>
-
-        <div className="p-4 sm:p-6 xl:p-8">
+    <section className="-mx-4 -mt-6 rounded-3xl border border-cyan-400/10 bg-[#050b14] p-4 text-white shadow-2xl sm:-mx-6 sm:p-6 lg:-mx-8 xl:p-8">
           <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">IA de Tráfego</h1>
-              <p className="mt-1 text-sm font-semibold text-slate-400">Monitoramento automático das campanhas e recomendações operacionais.</p>
+              <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Dashboard</h1>
+              <p className="mt-1 text-sm font-semibold text-slate-400">Monitoramento das concessionárias do gestor e recomendações operacionais.</p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <MetaDatePicker
-                startDate={dataInicio}
-                endDate={dataFim}
-                preset={presetLabel}
-                onChange={onDateChange}
-              />
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Última revisão</p>
+                <p className="mt-1 text-xs font-black text-slate-200">{alertsUpdatedAt ? new Date(alertsUpdatedAt).toLocaleString('pt-BR') : 'Sem revisão registrada'}</p>
+              </div>
               <button
                 onClick={onReview}
                 disabled={loadingAlerts}
@@ -774,29 +731,29 @@ function TrafficCommandCenter({
           </div>
 
           <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <TrafficKpi icon={Users} label="Corretoras monitoradas" value={String(monitoredCount)} detail={`Ativas: ${activeCampaignsCount} | Pausadas: ${Math.max(corretores.length - activeCampaignsCount, 0)}`} tone="cyan" />
-            <TrafficKpi icon={TrendingUp} label="Análises/dia" value={String(dailyAnalyses)} detail="2 revisões automáticas por dia" tone="blue" />
-            <TrafficKpi icon={DollarSign} label="CPL médio" value={formatCurrency(averageCpl)} detail={`${totalLeads} leads reais no CRM`} tone="emerald" />
-            <TrafficKpi icon={AlertTriangle} label="Alertas ativos" value={String(criticalReviewCount + attentionReviewCount + crmPendingCount)} detail={`${criticalReviewCount} críticos | ${attentionReviewCount} atenção`} tone="red" />
-            <TrafficKpi icon={ListChecks} label="Ações aguardando" value={String(approvalQueue.length)} detail="Revisão humana antes de executar" tone="amber" />
+            <TrafficKpi href="/trafego/corretores" icon={Users} label="Concessionárias monitoradas" value={String(monitoredCount)} detail={`Ativas: ${activeConcessionarias} | Pausadas: ${Math.max(monitoredCount - activeConcessionarias, 0)}`} tone="cyan" />
+            <TrafficKpi href="/trafego/avisos-meta" icon={TrendingUp} label="Análises hoje" value={String(dailyAnalyses)} detail="Sem registro de análise automática hoje" tone="blue" />
+            <TrafficKpi href="/trafego/avisos-meta" icon={DollarSign} label="Maior CPL" value={formatCurrency(highestCplAccount?.cpl, highestCplAccount?.currency)} detail={highestCplAccount?.corretor_nome || 'Nenhuma conta com CPL'} tone="emerald" />
+            <TrafficKpi href="/trafego/avisos-meta" icon={AlertTriangle} label="Alertas ativos" value={String(criticalReviewCount + attentionReviewCount + crmPendingCount)} detail={`${criticalReviewCount} críticos | ${attentionReviewCount} atenção`} tone="red" />
+            <TrafficKpi href="/tarefas" icon={ListChecks} label="Ações aguardando" value={String(approvalQueue.length)} detail="Revisão humana antes de executar" tone="amber" />
           </div>
 
-          <div className="grid gap-4 2xl:grid-cols-[0.9fr_1.15fr_1fr]">
-            <Panel title="Corretoras em atenção" action={<Link href="/trafego/corretores" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Ver todas</Link>}>
-              <div className="mb-3 grid grid-cols-[1fr_82px_82px_18px] gap-2 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                <span>Corretora</span>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Panel title="Concessionárias em atenção" action={<Link href="/trafego/corretores" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Ver todas</Link>}>
+              <div className="mb-3 grid grid-cols-[1fr_76px_76px_16px] gap-2 px-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <span>Concessionária</span>
                 <span>Status</span>
                 <span>CPL</span>
                 <span />
               </div>
               <div className="space-y-2">
                 {displayedAttention.length === 0 ? (
-                  <EmptyPanel text="Nenhuma corretora em atenção neste período." />
+                  <EmptyPanel text="Nenhuma concessionária em atenção agora." />
                 ) : displayedAttention.map(({ account, status }) => (
                   <Link
                     key={`attention-${account.corretor_id}-${account.meta_ad_account_id}`}
                     href="/trafego/avisos-meta"
-                    className="grid min-h-14 grid-cols-[1fr_82px_82px_18px] items-center gap-2 rounded-xl border border-white/5 bg-white/[0.025] px-2 transition hover:border-cyan-400/30 hover:bg-white/[0.05]"
+                    className="grid min-h-12 grid-cols-[1fr_76px_76px_16px] items-center gap-2 rounded-xl border border-white/5 bg-white/[0.025] px-2 transition hover:border-cyan-400/30 hover:bg-white/[0.05]"
                   >
                     <span className="flex min-w-0 items-center gap-3">
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-600 text-xs font-black">{account.corretor_nome?.[0] || '?'}</span>
@@ -823,7 +780,7 @@ function TrafficCommandCenter({
                       </div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-black text-white">{status.label}</p>
+                          <p className="truncate text-sm font-black text-white">{status.tone === 'red' ? 'Pausar anúncio' : status.tone === 'amber' ? 'Trocar criativo' : 'Revisar conta'}</p>
                           <span className={`rounded px-2 py-0.5 text-[9px] font-black uppercase ${getToneClasses(status.tone)}`}>{status.tone === 'red' ? 'Crítico' : 'Atenção'}</span>
                         </div>
                         <p className="mt-1 line-clamp-2 text-xs font-semibold leading-relaxed text-slate-400">{account.corretor_nome}: {status.detail}</p>
@@ -838,7 +795,9 @@ function TrafficCommandCenter({
                 })}
               </div>
             </Panel>
+          </div>
 
+          <div className="mt-4">
             <Panel
               title="Análise da IA"
               badge={analysisStatus?.tone === 'red' ? 'Crítico' : analysisStatus?.label || 'Seguro'}
@@ -846,6 +805,11 @@ function TrafficCommandCenter({
             >
               {analysisAccount && analysisStatus ? (
                 <div className="space-y-4">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Conta analisada</p>
+                    <p className="mt-1 text-lg font-black text-white">{analysisAccount.corretor_nome}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">{analysisAccount.meta_ad_account_name || `act_${analysisAccount.meta_ad_account_id}`}</p>
+                  </div>
                   <div className={`rounded-xl border p-4 ${getToneClasses(analysisStatus.tone)}`}>
                     <div className="mb-2 flex items-center gap-2">
                       <AlertTriangle size={16} />
@@ -898,19 +862,19 @@ function TrafficCommandCenter({
               </p>
             </Panel>
           </div>
-        </div>
-      </div>
     </section>
   );
 }
 
 function TrafficKpi({
+  href,
   icon: Icon,
   label,
   value,
   detail,
   tone,
 }: {
+  href: string;
   icon: any;
   label: string;
   value: string;
@@ -926,16 +890,17 @@ function TrafficKpi({
   }[tone];
 
   return (
-    <div className={`rounded-xl border bg-gradient-to-br p-4 ${tones}`}>
+    <Link href={href} className={`block rounded-xl border bg-gradient-to-br p-4 transition hover:-translate-y-0.5 hover:border-cyan-300/35 hover:shadow-xl hover:shadow-cyan-950/20 ${tones}`}>
       <div className="mb-3 flex items-center justify-between">
         <div className="grid h-10 w-10 place-items-center rounded-xl bg-black/20">
           <Icon size={19} />
         </div>
+        <ChevronRight size={16} className="text-slate-500" />
       </div>
       <p className="text-3xl font-black text-white">{value}</p>
       <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-slate-400">{label}</p>
       <p className="mt-2 text-[11px] font-bold text-slate-500">{detail}</p>
-    </div>
+    </Link>
   );
 }
 

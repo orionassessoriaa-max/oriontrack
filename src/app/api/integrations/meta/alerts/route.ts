@@ -274,13 +274,34 @@ export async function POST(request: Request) {
     const { since, until } = getMetaCompatibleRange(requestedSince, requestedUntil);
     const search = String(body.nome || '').trim().toLowerCase();
     const corretorId = body.corretor_id ? String(body.corretor_id) : null;
+    const requestedGestorId = body.gestor_id ? String(body.gestor_id) : null;
+    let scopedGestorProfile = guard.profile;
+
+    if (guard.profile.tipo_usuario === 'admin' && requestedGestorId) {
+      const { data: gestorProfile, error: gestorError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, nome, email, email_real, tipo_usuario, corretor_id')
+        .eq('id', requestedGestorId)
+        .eq('tipo_usuario', 'gestor_trafego')
+        .maybeSingle();
+
+      if (gestorError) {
+        return NextResponse.json({ error: gestorError.message }, { status: 500 });
+      }
+
+      if (!gestorProfile) {
+        return NextResponse.json({ error: 'Gestor de trafego nao encontrado.' }, { status: 404 });
+      }
+
+      scopedGestorProfile = gestorProfile;
+    }
 
     const query = supabaseAdmin
       .from('corretores')
       .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional')
       .order('nome', { ascending: true });
 
-    if (guard.profile.tipo_usuario === 'gestor_trafego') {
+    if (scopedGestorProfile.tipo_usuario === 'gestor_trafego') {
       if (corretorId) {
         query.eq('id', corretorId);
       } else {
@@ -304,9 +325,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const scopedCorretores = guard.profile.tipo_usuario === 'gestor_trafego'
+    const scopedCorretores = scopedGestorProfile.tipo_usuario === 'gestor_trafego'
       ? ((corretores || []) as CorretorMeta[]).filter((corretor) =>
-          isGestorLinkedToConcessionariaCorretor(corretor, guard.profile)
+          isGestorLinkedToConcessionariaCorretor(corretor, scopedGestorProfile)
         )
       : ((corretores || []) as CorretorMeta[]);
 
