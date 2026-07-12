@@ -94,14 +94,19 @@ async function resolveBrokerageMetaAccount(corretor: CorretorMeta) {
   const nomeEmpresa = String(corretor.nome_empresa || '').trim();
   if (!nomeEmpresa) return corretor;
 
-  const { data } = await supabaseAdmin
+  let metaOwnerQuery = supabaseAdmin
     .from('corretores')
     .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional')
     .eq('nome_empresa', nomeEmpresa)
     .not('meta_ad_account_id', 'is', null)
     .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+
+  if (corretor.gestor_trafego_id) {
+    metaOwnerQuery = metaOwnerQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
+  }
+
+  const { data } = await metaOwnerQuery.maybeSingle();
 
   return data ? { ...corretor, meta_ad_account_id: data.meta_ad_account_id, meta_ad_account_name: data.meta_ad_account_name } : corretor;
 }
@@ -156,10 +161,16 @@ async function fetchCrmLeads(corretor: CorretorMeta, since: string, until: strin
   let corretorIds = [corretor.id];
 
   if (corretor.nome_empresa) {
-    const { data } = await supabaseAdmin
+    let groupQuery = supabaseAdmin
       .from('corretores')
       .select('id')
       .eq('nome_empresa', corretor.nome_empresa);
+
+    if (corretor.gestor_trafego_id) {
+      groupQuery = groupQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
+    }
+
+    const { data } = await groupQuery;
     const ids = (data || []).map((item) => item.id).filter(Boolean);
     if (ids.length) corretorIds = ids;
   }

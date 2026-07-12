@@ -72,14 +72,19 @@ async function resolveBrokerageMetaAccount(corretor: any) {
     return corretor;
   }
 
-  const { data: metaOwner } = await supabaseAdmin
+  let metaOwnerQuery = supabaseAdmin
     .from('corretores')
     .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name')
     .eq('nome_empresa', corretoraNome)
     .not('meta_ad_account_id', 'is', null)
     .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+
+  if (corretor.gestor_trafego_id) {
+    metaOwnerQuery = metaOwnerQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
+  }
+
+  const { data: metaOwner } = await metaOwnerQuery.maybeSingle();
 
   return metaOwner || corretor;
 }
