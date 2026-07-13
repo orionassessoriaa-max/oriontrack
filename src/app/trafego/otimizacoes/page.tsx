@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
@@ -113,9 +113,12 @@ export default function OtimizacoesPage() {
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialAccountId, setInitialAccountId] = useState<string | null>(null);
+  const optimizationRequestRef = useRef(0);
 
   async function fetchOptimization(accountId?: string | null, analyze = false) {
     if (!profile?.id) return;
+    const requestId = ++optimizationRequestRef.current;
+    const isCurrentRequest = () => optimizationRequestRef.current === requestId;
     if (analyze) setReviewing(true);
     else setLoading(true);
     setError(null);
@@ -123,6 +126,7 @@ export default function OtimizacoesPage() {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) {
+      if (!isCurrentRequest()) return;
       setError('Sessão expirada.');
       setLoading(false);
       setReviewing(false);
@@ -142,6 +146,7 @@ export default function OtimizacoesPage() {
     });
 
     const payload = await response.json();
+    if (!isCurrentRequest()) return;
     setLoading(false);
     setReviewing(false);
 
@@ -194,6 +199,12 @@ export default function OtimizacoesPage() {
 
   useEffect(() => {
     if (!profile?.id) return;
+    setAccounts([]);
+    setSelected(null);
+    setTotal(null);
+    setTree([]);
+    setAiRecommendation('');
+    setError(null);
     const params = new URLSearchParams(window.location.search);
     const accountFromUrl = params.get('conta');
     setInitialAccountId(accountFromUrl);

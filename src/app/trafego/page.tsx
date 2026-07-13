@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { 
@@ -188,6 +188,7 @@ export default function GestorDashboardPage() {
   const [presetLabel, setPresetLabel] = useState('Todo o período');
   const [error, setError] = useState<string | null>(null);
   const [approvedRecommendations, setApprovedRecommendations] = useState<Record<string, boolean>>({});
+  const dashboardRequestRef = useRef(0);
 
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -199,11 +200,17 @@ export default function GestorDashboardPage() {
   }, []);
 
   useEffect(() => {
+    setCorretores([]);
+    setMetaAccounts([]);
+    setActiveCreatives([]);
+    setPortfolioAiReview('');
     fetchDashboardData(false);
-  }, [profile?.id, dataInicio, dataFim]);
+  }, [profile?.id, actualProfile?.id, dataInicio, dataFim]);
 
   const fetchDashboardData = async (analyze = false) => {
     if (!profile?.id) return;
+    const requestId = ++dashboardRequestRef.current;
+    const isCurrentRequest = () => dashboardRequestRef.current === requestId;
     
     setLoading(true);
     setError(null);
@@ -216,12 +223,14 @@ export default function GestorDashboardPage() {
         .order('nome', { ascending: true });
 
       if (cError) throw cError;
+      if (!isCurrentRequest()) return;
 
       // Filter brokers where current user is their traffic manager
       let filteredCorretores: Corretor[] = corretoresData || [];
       if (profile.tipo_usuario === 'gestor_trafego') {
         filteredCorretores = filteredCorretores.filter(c => isGestorLinkedToConcessionariaCorretor(c, profile));
       }
+      if (!isCurrentRequest()) return;
       setCorretores(filteredCorretores);
 
       // 2. Fetch total leads for these brokers
@@ -242,7 +251,9 @@ export default function GestorDashboardPage() {
         const { count, error: lError } = await leadsRequest;
 
         if (lError) console.error('Error fetching leads count:', lError);
-        setTotalLeads(count || 0);
+        if (isCurrentRequest()) setTotalLeads(count || 0);
+      } else if (isCurrentRequest()) {
+        setTotalLeads(0);
       }
 
       // 3. Fetch Meta Ads alerts to identify critical accounts under gestor management
@@ -268,22 +279,23 @@ export default function GestorDashboardPage() {
           });
           if (response.ok) {
             const payload = await response.json();
+            if (!isCurrentRequest()) return;
             setMetaAccounts(payload.accounts || []);
             setActiveCreatives(payload.active_creatives || []);
-            if (payload.portfolio_ai_review) setPortfolioAiReview(payload.portfolio_ai_review);
+            setPortfolioAiReview(payload.portfolio_ai_review || '');
             setAlertsUpdatedAt(payload.refreshed_at || new Date().toISOString());
           }
         } catch (err) {
           console.error('Error loading critical accounts on gestor dashboard:', err);
         } finally {
-          setLoadingAlerts(false);
+          if (isCurrentRequest()) setLoadingAlerts(false);
         }
       }
     } catch (err: any) {
       console.error('Error loading gestor dashboard:', err);
-      setError('Erro ao carregar dados do painel.');
+      if (isCurrentRequest()) setError('Erro ao carregar dados do painel.');
     } finally {
-      setLoading(false);
+      if (isCurrentRequest()) setLoading(false);
     }
   };
 
@@ -916,21 +928,32 @@ function TrafficCommandCenter({
                   const status = classifyMetaAccount(account);
                   const score = scoreTrafficAccount(account);
                   return (
-                  <div key={`portfolio-${account.corretor_id}-${account.meta_ad_account_id}`} className="grid gap-2 lg:grid-cols-[44px_180px_1fr_92px_1fr_86px_96px] lg:items-center">
+                  <div key={`portfolio-${account.corretor_id}-${account.meta_ad_account_id}`} className="grid gap-3 border-b border-white/5 pb-4 last:border-b-0 last:pb-0 lg:grid-cols-[44px_190px_1fr_112px] lg:items-center">
                     <div className={`grid h-9 w-9 place-items-center rounded-xl border text-xs font-black ${getToneClasses(status.tone)}`}>#{index + 1}</div>
                     <div>
                       <p className="truncate text-xs font-black text-white">{account.concessionaria_nome || account.corretor_nome}</p>
                       <p className="truncate text-[10px] font-bold text-slate-500">{status.label} | Score {score}</p>
                     </div>
-                    <div className="h-6 bg-white/[0.04]">
-                      <div className="h-full bg-cyan-500/75" style={{ width: `${Math.max(3, (Number(account.spend || 0) / maxPortfolioSpend) * 100)}%` }} />
+                    <div className="space-y-2.5">
+                      <div className="grid grid-cols-[86px_1fr_96px] items-center gap-3">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Investimento</span>
+                        <span className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                          <span className="block h-full rounded-full bg-cyan-500/80" style={{ width: `${Math.max(3, (Number(account.spend || 0) / maxPortfolioSpend) * 100)}%` }} />
+                        </span>
+                        <span className="text-right text-xs font-black tabular-nums text-white">{formatCurrency(account.spend, account.currency)}</span>
+                      </div>
+                      <div className="grid grid-cols-[86px_1fr_96px] items-center gap-3">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Leads CRM</span>
+                        <span className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                          <span className="block h-full rounded-full bg-emerald-400/80" style={{ width: `${Math.max(3, (Number(account.leads || 0) / maxPortfolioLeads) * 100)}%` }} />
+                        </span>
+                        <span className="text-right text-xs font-black tabular-nums text-white">{account.leads || 0} leads</span>
+                      </div>
                     </div>
-                    <p className="text-right text-xs font-black text-white">{formatCurrency(account.spend, account.currency)}</p>
-                    <div className="h-6 bg-white/[0.04]">
-                      <div className="h-full bg-emerald-400/75" style={{ width: `${Math.max(3, (Number(account.leads || 0) / maxPortfolioLeads) * 100)}%` }} />
+                    <div className="lg:text-right">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">CPL CRM</p>
+                      <p className={`mt-1 text-sm font-black tabular-nums ${Number(account.cpl || 0) >= 28 ? 'text-red-300' : 'text-slate-200'}`}>{formatCurrency(account.cpl, account.currency)}</p>
                     </div>
-                    <p className="text-right text-xs font-black text-white">{account.leads || 0} leads</p>
-                    <p className={`text-right text-xs font-black ${Number(account.cpl || 0) >= 28 ? 'text-red-300' : 'text-slate-200'}`}>{formatCurrency(account.cpl, account.currency)}</p>
                   </div>
                   );
                 })}
