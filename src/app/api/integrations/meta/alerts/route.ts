@@ -263,7 +263,7 @@ async function fetchActiveCreatives(corretor: CorretorMeta, since: string, until
     })
     .filter((creative: any) => creative.status === 'ACTIVE')
     .sort((a: any, b: any) => Number(b.spend || 0) - Number(a.spend || 0))
-    .slice(0, 3);
+    .slice(0, 10);
 }
 
 function localPortfolioReview(accounts: any[], activeCreatives: any[]) {
@@ -597,8 +597,7 @@ export async function POST(request: Request) {
     );
     const activeCreatives = creativeSettled
       .flatMap((result) => result.status === 'fulfilled' ? result.value : [])
-      .sort((a: any, b: any) => Number(b.spend || 0) - Number(a.spend || 0))
-      .slice(0, 20);
+      .sort((a: any, b: any) => Number(b.spend || 0) - Number(a.spend || 0));
     const portfolioAiReview = shouldAnalyze
       ? await generatePortfolioAiReview(accounts, activeCreatives, since, until)
       : '';

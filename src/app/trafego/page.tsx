@@ -26,7 +26,9 @@ import {
   Image as ImageIcon,
   ListChecks,
   Pause,
-  Circle
+  Circle,
+  Maximize2,
+  X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -162,6 +164,15 @@ function scoreActiveCreative(creative: ActiveCreative) {
   }
 
   return score;
+}
+
+function bestActiveCreativeImage(creative?: ActiveCreative | null) {
+  if (creative?.image_url) return creative.image_url;
+  const thumbnail = creative?.thumbnail_url || '';
+  return thumbnail
+    .replace(/\/p\d+x\d+\//g, '/p1080x1080/')
+    .replace(/s\d+x\d+/, 's1080x1080')
+    .replace(/\/\d+x\d+\//g, '/1080x1080/');
 }
 
 export default function GestorDashboardPage() {
@@ -777,14 +788,14 @@ function TrafficCommandCenter({
   approvedRecommendations: Record<string, boolean>;
   onApproveRecommendation: (key: string) => void;
 }) {
+  const [fullscreenCreative, setFullscreenCreative] = useState<ActiveCreative | null>(null);
   const monitoredCount = concessionarias.length;
   const dailyAnalyses = 0;
   const displayedAttention = reviewAccounts.slice(0, 5);
   const activeConcessionarias = concessionarias.filter((item) => item.active).length;
   const portfolioRows = metaAccounts
     .slice()
-    .sort((a, b) => scoreTrafficAccount(b) - scoreTrafficAccount(a))
-    .slice(0, 10);
+    .sort((a, b) => scoreTrafficAccount(b) - scoreTrafficAccount(a));
   const maxPortfolioSpend = Math.max(...portfolioRows.map((account) => Number(account.spend || 0)), 1);
   const maxPortfolioLeads = Math.max(...portfolioRows.map((account) => Number(account.leads || 0)), 1);
   const summaryRows = metaAccounts
@@ -796,8 +807,7 @@ function TrafficCommandCenter({
     .slice(0, 12);
   const creativeRows = activeCreatives
     .slice()
-    .sort((a, b) => scoreActiveCreative(b) - scoreActiveCreative(a))
-    .slice(0, 10);
+    .sort((a, b) => scoreActiveCreative(b) - scoreActiveCreative(a));
   const maxCreativeSpend = Math.max(...creativeRows.map((creative) => Number(creative.spend || 0)), 1);
   const maxCreativeLeads = Math.max(...creativeRows.map((creative) => Number(creative.leads || 0)), 1);
 
@@ -1010,8 +1020,28 @@ function TrafficCommandCenter({
               <div className="space-y-4">
                 {creativeRows.length === 0 ? (
                   <EmptyPanel text="Nenhum criativo ativo encontrado no periodo." />
-                ) : creativeRows.map((creative) => (
-                  <div key={`creative-${creative.id}`} className="grid gap-2 lg:grid-cols-[190px_1fr_92px_1fr_86px_96px] lg:items-center">
+                ) : creativeRows.map((creative) => {
+                  const preview = bestActiveCreativeImage(creative);
+                  return (
+                  <div key={`creative-${creative.id}`} className="grid gap-2 lg:grid-cols-[56px_190px_1fr_92px_1fr_86px_96px] lg:items-center">
+                    <button
+                      type="button"
+                      onClick={() => preview && setFullscreenCreative(creative)}
+                      disabled={!preview}
+                      className="group relative grid h-12 w-12 place-items-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] disabled:cursor-default"
+                      aria-label="Abrir criativo em tela cheia"
+                    >
+                      {preview ? (
+                        <>
+                          <img src={preview} alt={creative.ad_name} className="h-full w-full object-cover transition group-hover:scale-105" />
+                          <span className="absolute inset-0 grid place-items-center bg-black/45 opacity-0 transition group-hover:opacity-100">
+                            <Maximize2 size={15} className="text-white" />
+                          </span>
+                        </>
+                      ) : (
+                        <ImageIcon size={16} className="text-slate-600" />
+                      )}
+                    </button>
                     <div className="min-w-0">
                       <p className="truncate text-xs font-black text-white">{creative.ad_name}</p>
                       <p className="truncate text-[10px] font-bold text-slate-500">{creative.concessionaria_nome}</p>
@@ -1026,10 +1056,40 @@ function TrafficCommandCenter({
                     <p className="text-right text-xs font-black text-white">{creative.leads || 0} leads</p>
                     <p className={`text-right text-xs font-black ${Number(creative.cpl || 0) >= 28 ? 'text-red-300' : 'text-slate-200'}`}>{formatCurrency(creative.cpl, creative.currency)}</p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Panel>
           </div>
+
+          {bestActiveCreativeImage(fullscreenCreative) ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
+              <button
+                type="button"
+                onClick={() => setFullscreenCreative(null)}
+                className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Fechar criativo"
+              >
+                <X size={22} />
+              </button>
+              <div className="grid max-h-[94vh] w-full max-w-[1400px] gap-4 overflow-auto rounded-2xl border border-white/10 bg-[#08111d] p-4 shadow-2xl lg:grid-cols-[minmax(0,1fr)_340px]">
+                <div className="flex min-h-[68vh] items-center justify-center rounded-xl bg-black/35 p-3">
+                  <img src={bestActiveCreativeImage(fullscreenCreative)} alt={fullscreenCreative?.ad_name || 'Criativo'} className="h-auto max-h-[88vh] w-auto max-w-full rounded-lg object-contain" />
+                </div>
+                <div className="min-w-0 p-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Criativo ativo</p>
+                  <h3 className="mt-3 text-2xl font-black text-white">{fullscreenCreative?.ad_name}</h3>
+                  <p className="mt-2 text-sm font-bold text-slate-400">{fullscreenCreative?.concessionaria_nome}</p>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <MetricMini label="Investimento" value={formatCurrency(fullscreenCreative?.spend, fullscreenCreative?.currency)} />
+                    <MetricMini label="Leads CRM" value={String(fullscreenCreative?.leads || 0)} />
+                    <MetricMini label="CPL" value={formatCurrency(fullscreenCreative?.cpl, fullscreenCreative?.currency)} />
+                    <MetricMini label="Status" value={fullscreenCreative?.status || 'Ativo'} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="hidden">
             <Panel title="Resumo da carteira">

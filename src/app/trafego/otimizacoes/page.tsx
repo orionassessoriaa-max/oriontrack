@@ -48,6 +48,7 @@ type CampaignNode = MetaStatus & { id: string; name: string; level: 'campaign'; 
 type OptimizationDraft = {
   summary?: string;
   publish_status?: string;
+  actions?: Record<string, any>[];
   campaign?: Record<string, any>;
   adsets?: Record<string, any>[];
   ads?: Record<string, any>[];
@@ -105,8 +106,6 @@ export default function OtimizacoesPage() {
   const [fullscreenCreative, setFullscreenCreative] = useState<AdNode | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState('');
   const [optimizePrompt, setOptimizePrompt] = useState('');
-  const [driveFolderUrl, setDriveFolderUrl] = useState('');
-  const [creativeReference, setCreativeReference] = useState('');
   const [optimizationDraft, setOptimizationDraft] = useState<OptimizationDraft | null>(null);
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -116,6 +115,7 @@ export default function OtimizacoesPage() {
   const [initialAccountId, setInitialAccountId] = useState<string | null>(null);
 
   async function fetchOptimization(accountId?: string | null, analyze = false) {
+    if (!profile?.id) return;
     if (analyze) setReviewing(true);
     else setLoading(true);
     setError(null);
@@ -176,8 +176,6 @@ export default function OtimizacoesPage() {
       body: JSON.stringify({
         account_id: selected.meta_ad_account_id,
         prompt: optimizePrompt,
-        drive_folder_url: driveFolderUrl,
-        creative_reference: creativeReference,
         metrics: total,
         gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego' ? profile.id : undefined,
       }),
@@ -195,16 +193,18 @@ export default function OtimizacoesPage() {
   }
 
   useEffect(() => {
+    if (!profile?.id) return;
     const params = new URLSearchParams(window.location.search);
     const accountFromUrl = params.get('conta');
     setInitialAccountId(accountFromUrl);
     void fetchOptimization(accountFromUrl);
-  }, []);
+  }, [profile?.id, actualProfile?.id]);
 
   useEffect(() => {
+    if (!profile?.id) return;
     if (initialAccountId === null) return;
     void fetchOptimization(selected?.meta_ad_account_id || initialAccountId);
-  }, [dateStart, dateEnd]);
+  }, [dateStart, dateEnd, profile?.id, actualProfile?.id]);
 
   const filteredAccounts = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -361,10 +361,10 @@ export default function OtimizacoesPage() {
                     <Wand2 size={17} className="text-cyan-300" />
                     <div>
                       <h3 className="text-sm font-black uppercase tracking-widest text-white">Otimizar</h3>
-                      <p className="text-xs font-semibold text-slate-500">Crie rascunhos de campanha/anuncio com IA. Tudo sai como PAUSED.</p>
+                      <p className="text-xs font-semibold text-slate-500">Peça campanhas, pausas, trocas de criativo, verba ou ajustes. A IA gera um plano revisável.</p>
                     </div>
                   </div>
-                  <span className="w-fit rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-200">Publicacao pausada</span>
+                  <span className="w-fit rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-200">Revisão obrigatória</span>
                 </div>
 
                 <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
@@ -372,37 +372,17 @@ export default function OtimizacoesPage() {
                     <textarea
                       value={optimizePrompt}
                       onChange={(event) => setOptimizePrompt(event.target.value)}
-                      placeholder="Ex: Criar campanha ABO SulAmerica DF, publico 30 a 58 anos, Brasilia e entorno, verba R$ 50/dia. Use o criativo AD 2 da pasta SulAmerica DF."
+                      placeholder="Ex: Pause o AD-4 Amil-SP. Ou: crie campanha ABO SulAmerica DF, publico 30 a 58 anos, verba R$ 50/dia, use o criativo AD 2 da pasta SulAmerica DF."
                       className="min-h-32 w-full resize-y rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm font-semibold leading-relaxed text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
                     />
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <label className="block">
-                        <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Pasta Drive</span>
-                        <input
-                          value={driveFolderUrl}
-                          onChange={(event) => setDriveFolderUrl(event.target.value)}
-                          placeholder="Cole o link da pasta ou escreva o nome"
-                          className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-xs font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Criativo</span>
-                        <input
-                          value={creativeReference}
-                          onChange={(event) => setCreativeReference(event.target.value)}
-                          placeholder="Ex: AD 2 da pasta SulAmerica DF"
-                          className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-xs font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400"
-                        />
-                      </label>
-                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Fluxo seguro</p>
                     <div className="mt-3 space-y-3 text-xs font-bold text-slate-400">
-                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> IA monta campanha, conjunto, publico, verba e anuncio.</p>
-                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Criativo e pasta Drive ficam registrados no rascunho.</p>
-                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Tudo nasce PAUSED para revisao humana.</p>
+                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Entende criar, pausar, trocar criativo, ajustar verba e revisar estrutura.</p>
+                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Se citar Drive no prompt, registra pasta e criativo no plano.</p>
+                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Ação real só depois de revisão humana.</p>
                     </div>
                     {draftError ? <p className="mt-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-xs font-bold text-red-200">{draftError}</p> : null}
                     <button
@@ -412,7 +392,7 @@ export default function OtimizacoesPage() {
                       className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-blue-500 disabled:opacity-50"
                     >
                       {generatingDraft ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
-                      Gerar rascunho paused
+                      Gerar plano de ação
                     </button>
                   </div>
                 </div>
@@ -429,7 +409,8 @@ export default function OtimizacoesPage() {
                       </span>
                     </div>
                     {optimizationDraft.summary ? <p className="mb-4 text-sm font-bold leading-relaxed text-slate-300">{optimizationDraft.summary}</p> : null}
-                    <div className="grid gap-3 lg:grid-cols-3">
+                    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                      <DraftBlock title="Ações" data={optimizationDraft.actions} />
                       <DraftBlock title="Campanha" data={optimizationDraft.campaign} />
                       <DraftBlock title="Conjuntos" data={optimizationDraft.adsets} />
                       <DraftBlock title="Anuncios" data={optimizationDraft.ads} />

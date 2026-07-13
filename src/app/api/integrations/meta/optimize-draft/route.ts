@@ -75,12 +75,18 @@ async function findAllowedAccount(profile: any, accountId: string, requestedGest
 function fallbackDraft(payload: any, account: CorretorMeta) {
   const now = new Date().toISOString().slice(0, 10);
   const concessionaria = account.nome_empresa || account.nome;
-  const creativeReference = payload.creative_reference || 'Criativo indicado no prompt';
 
   return {
     mode: 'draft',
-    publish_status: 'PAUSED',
-    summary: `Rascunho PAUSED para ${concessionaria}. Revisar publico, verba e criativo antes de publicar.`,
+    publish_status: 'REVIEW_REQUIRED',
+    summary: `Plano de otimizacao para ${concessionaria}. Revisar antes de executar qualquer acao no Meta.`,
+    actions: [
+      {
+        type: 'review_request',
+        status_after_action: 'PAUSED_WHEN_CREATING_NEW_ITEMS',
+        instruction: payload.prompt,
+      },
+    ],
     campaign: {
       name: `[ORION] ${concessionaria} | ${now}`,
       objective: 'OUTCOME_LEADS',
@@ -99,18 +105,18 @@ function fallbackDraft(payload: any, account: CorretorMeta) {
     ],
     ads: [
       {
-        name: `AD 1 | ${creativeReference}`,
+        name: 'AD ou criativo citado no prompt',
         status: 'PAUSED',
-        creative_reference: creativeReference,
-        drive_folder: payload.drive_folder_url || '',
-        primary_text: 'Copy gerada a partir do prompt e revisada pelo gestor.',
+        creative_reference: 'Extrair do prompt quando existir.',
+        drive_folder: 'Extrair do prompt quando existir.',
+        primary_text: 'Gerar ou revisar conforme pedido do gestor.',
       },
     ],
     human_review_checklist: [
-      'Conferir se a pasta do Drive e o criativo citado estao corretos.',
-      'Conferir idade, cidade, raio e exclusoes antes de subir.',
-      'Conferir verba diaria e se a campanha deve ser ABO.',
-      'Criar no Meta sempre como PAUSED neste MVP.',
+      'Conferir se a acao pedida foi interpretada corretamente.',
+      'Se for criacao de campanha, conjunto ou anuncio, criar sempre como PAUSED.',
+      'Se for pausa/troca/verba, revisar o item exato antes de executar.',
+      'Se houver Drive no prompt, conferir pasta e criativo antes de usar.',
     ],
   };
 }
@@ -133,12 +139,15 @@ async function generateDraftWithAi(payload: any, account: CorretorMeta) {
           role: 'system',
           content: `Voce cria rascunhos de campanhas Meta Ads para corretoras de planos de saude.
 Regras obrigatorias:
-- Nunca publicar ativo. Toda campanha, conjunto e anuncio devem sair com status PAUSED.
+- O gestor pode pedir qualquer otimizacao: criar campanha, criar conjunto, criar anuncio, pausar anuncio, pausar criativo, pausar conjunto, pausar campanha, trocar criativo, ajustar verba, duplicar, revisar copy ou reorganizar estrutura.
+- Nunca execute de verdade neste endpoint. Gere apenas rascunho operacional revisavel.
+- Toda criacao nova de campanha, conjunto ou anuncio deve sair com status PAUSED.
+- Acoes de pausa/troca/verba devem virar itens em actions, com alvo, motivo, risco e checklist.
 - Se o usuario pedir ABO, usar budget_mode ABO e verba no conjunto.
 - Leads oficiais sao do CRM, mas aqui voce esta criando estrutura de campanha, nao julgando resultado.
-- Use o criativo citado pelo usuario exatamente como referencia, por exemplo "AD 2 da pasta SulAmerica DF".
+- Extraia do proprio prompt qualquer referencia de Drive/pasta/criativo, por exemplo "AD 2 da pasta SulAmerica DF". Se o gestor nao informar link nem nome de pasta, coloque isso em missing_info.
 - Se houver link/pasta Drive, registre a pasta no campo drive_folder. Nao invente arquivo que nao foi citado.
-- Retorne apenas JSON valido com: mode, publish_status, summary, campaign, adsets, ads, human_review_checklist, missing_info.
+- Retorne apenas JSON valido com: mode, publish_status, summary, actions, campaign, adsets, ads, human_review_checklist, missing_info.
 - Nao invente ID do Meta.`
         },
         {
@@ -148,8 +157,6 @@ Regras obrigatorias:
             meta_ad_account_name: account.meta_ad_account_name,
             meta_ad_account_id: account.meta_ad_account_id,
             prompt: payload.prompt,
-            drive_folder_url: payload.drive_folder_url,
-            creative_reference: payload.creative_reference,
             current_metrics: payload.metrics,
             fallback_shape: base,
           }).slice(0, 12000),
@@ -168,7 +175,7 @@ Regras obrigatorias:
     return {
       ...parsed,
       mode: 'draft',
-      publish_status: 'PAUSED',
+      publish_status: parsed.publish_status || 'REVIEW_REQUIRED',
     };
   } catch {
     return base;
