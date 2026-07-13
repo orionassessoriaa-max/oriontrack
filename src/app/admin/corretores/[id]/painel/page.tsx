@@ -4,6 +4,7 @@ import { use, useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { StatCard } from '@/components/ui/Stats';
 import { supabase } from '@/lib/supabase/client';
+import { isLeadSale } from '@/lib/leadStatus';
 import { Corretor, Lead } from '@/types';
 import { ArrowLeft, ExternalLink, KanbanSquare, Loader2, Target, TrendingUp, Users } from 'lucide-react';
 import Link from 'next/link';
@@ -35,7 +36,7 @@ export default function AdminCorretorPainelPage({ params }: { params: Promise<{ 
     total: leads.length,
     oportunidades: leads.filter((lead) => lead.status === 'Aguardando atendimento').length,
     negociacao: leads.filter((lead) => lead.status === 'Em negociação').length,
-    vendas: leads.filter((lead) => lead.status === 'Venda realizada').length,
+    vendas: leads.filter(isLeadSale).length,
   };
 
   if (loading) {

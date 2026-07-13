@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { LeadStatus } from '@/types';
+import { normalizeKanbanStages, isSaleEquivalentStage } from '@/lib/kanbanStages';
 
 const LEAD_STATUS_MAX_LENGTH = 80;
 
@@ -85,6 +86,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       updated_at: new Date().toISOString(),
     };
 
+    const { data: broker } = lead.corretor_id
+      ? await supabaseAdmin.from('corretores').select('kanban_etapas').eq('id', lead.corretor_id).maybeSingle()
+      : { data: null };
+    updatePayload.conta_como_venda = isSaleEquivalentStage(normalizeKanbanStages(broker?.kanban_etapas), status);
+
     if (isStatusChanging) {
       updatePayload.cadencia_inicio = new Date().toISOString();
       updatePayload.cadencia_ativa = true;
@@ -100,7 +106,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       .from('leads')
       .update(updatePayload)
       .eq('id', leadId)
-      .select('id, status, valor_negociacao, operadora_negociacao, sem_interesse_motivo, sem_interesse_fez_cotacao, cadencia_inicio, cadencia_fim, cadencia_ativa')
+      .select('id, status, conta_como_venda, valor_negociacao, operadora_negociacao, sem_interesse_motivo, sem_interesse_fez_cotacao, cadencia_inicio, cadencia_fim, cadencia_ativa')
       .single();
 
     if (updateError) {

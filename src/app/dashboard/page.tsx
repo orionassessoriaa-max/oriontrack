@@ -35,7 +35,7 @@ import OrionMark from '@/components/ui/OrionMark';
 import { useRouter } from 'next/navigation';
 import OrionFunnel from '@/components/ui/OrionFunnel';
 import { motion } from 'framer-motion';
-import { normalizeLeadStatus } from '@/lib/leadStatus';
+import { isLeadSale, normalizeLeadStatus } from '@/lib/leadStatus';
 
 type CorretorDashboardData = {
   id: string;
@@ -53,6 +53,7 @@ type CorretorDashboardData = {
 
 type LeadMetricRow = {
   status: string | null;
+  conta_como_venda?: boolean | null;
   data_entrada: string | null;
   cidade?: string | null;
   valor_negociacao?: string | number | null;
@@ -490,7 +491,7 @@ export default function DashboardPage() {
           const to = from + limitNum - 1;
           let statsRequest = supabase
             .from('leads')
-            .select('status, data_entrada, cidade, valor_negociacao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim')
+            .select('status, conta_como_venda, data_entrada, cidade, valor_negociacao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim')
             .in('corretor_id', idsToFetch)
             .range(from, to);
 
@@ -513,7 +514,7 @@ export default function DashboardPage() {
         }
 
         // Calculate all-time summary (used for the 4 financial cards step 3)
-        const allTimeSoldLeads = allLeads.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
+        const allTimeSoldLeads = allLeads.filter(isLeadSale);
         const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
         
         setAllTimeStats({
@@ -650,7 +651,7 @@ export default function DashboardPage() {
           });
         }
 
-        const soldLeads = statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada');
+        const soldLeads = statsRes.filter(isLeadSale);
         let pendingTasks: Array<{ id: string; vencimento: string | null }> = [];
         if (idsToFetch.length > 0) {
           let tasksRequest = supabase
@@ -719,7 +720,7 @@ export default function DashboardPage() {
           inProgress: inProgressLeads.length,
           quoted: quotedLeads.length,
           sold: soldLeads.length,
-          soldThisMonth: statsRes.filter(l => normalizeLeadStatus(l.status) === 'Venda realizada' && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
+          soldThisMonth: statsRes.filter(l => isLeadSale(l) && l.data_entrada && monthKey(new Date(l.data_entrada)) === thisMonthKey).length,
           stale: statsRes.filter(l => {
             if (normalizeLeadStatus(l.status) !== 'Aguardando atendimento' || !l.data_entrada) return false;
             return Date.now() - new Date(l.data_entrada).getTime() > 20 * 60 * 1000;

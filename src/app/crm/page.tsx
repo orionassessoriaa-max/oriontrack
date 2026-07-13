@@ -7,6 +7,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadAtividade, LeadStatus, LeadTarefa, TipoCampanha } from '@/types';
 import { getLeadStatusStyle, normalizeLeadStatus } from '@/lib/leadStatus';
+import { getKanbanStageLabel, isSaleEquivalentStage } from '@/lib/kanbanStages';
 import { getLeadQualification } from '@/lib/leadQualification';
 import { cleanLeadObservationText, getLeadImportWarnings } from '@/lib/leadWarnings';
 import { format } from 'date-fns';
@@ -56,7 +57,7 @@ type WhatsAppConversa = {
 
 type MetricFilter = 'todos' | 'sem_resposta' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
 type CrmScopeView = 'meus' | 'todos_concessionaria' | 'sem_responsavel' | `member:${string}` | `broker:${string}`;
-type KanbanColumn = { id: LeadStatus; label: string; desc: string };
+type KanbanColumn = { id: LeadStatus; label: string; desc: string; saleEquivalent?: boolean };
 
 const DEFAULT_COLUMNS: KanbanColumn[] = [
   { id: 'Aguardando atendimento', label: 'Oportunidade', desc: 'Entrou e precisa de primeiro contato' },
@@ -119,6 +120,7 @@ function normalizeKanbanColumns(raw: unknown): KanbanColumn[] {
       id,
       label: cleanStageText(String(item?.label || id), id),
       desc: cleanStageText(String(item?.desc || 'Etapa personalizada do funil'), 'Etapa personalizada do funil'),
+      saleEquivalent: id === 'Venda realizada' || Boolean(item?.saleEquivalent),
     });
   });
 
@@ -204,12 +206,12 @@ function normalizePlanoAtivo(value?: string | null) {
   return 'Não informado';
 }
 
-function requiresCommercialData(status: LeadStatus) {
-  return COMMERCIAL_REQUIRED_STATUSES.includes(status);
+function requiresCommercialData(status: LeadStatus, stages: KanbanColumn[] = []) {
+  return COMMERCIAL_REQUIRED_STATUSES.includes(status) || isSaleEquivalentStage(stages, status);
 }
 
-function requiresStatusMoveModal(status: LeadStatus) {
-  return requiresCommercialData(status) || status === 'Sem interesse';
+function requiresStatusMoveModal(status: LeadStatus, stages: KanbanColumn[] = []) {
+  return requiresCommercialData(status, stages) || status === 'Sem interesse';
 }
 
 function getCadenceDays(lead: Pick<Lead, 'cadencia_inicio' | 'cadencia_fim' | 'cadencia_ativa' | 'created_at' | 'data_entrada'>) {
@@ -307,8 +309,11 @@ export default function CrmPage() {
     }
   });
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
-  const [stageDraft, setStageDraft] = useState({ label: '', desc: '' });
+  const [stageDraft, setStageDraft] = useState({ label: '', desc: '', saleEquivalent: false });
   const [newStageName, setNewStageName] = useState('');
+  const [newStageCountsAsSale, setNewStageCountsAsSale] = useState(false);
+  const [kanbanCorretorId, setKanbanCorretorId] = useState<string | null>(null);
+  const [kanbanStagesLoaded, setKanbanStagesLoaded] = useState(false);
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
   const [openedLeadParam, setOpenedLeadParam] = useState<string | null>(null);
   const [tipoCampanha, setTipoCampanha] = useState<TipoCampanha | null>('ambos');
@@ -395,6 +400,24 @@ export default function CrmPage() {
   }, [columns]);
 
   useEffect(() => {
+    if (!kanbanStagesLoaded || !kanbanCorretorId || !canManageKanbanStructure) return;
+    const timer = window.setTimeout(async () => {
+      const token = await getToken();
+      if (!token) return;
+      const response = await fetch('/api/crm/stages', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ corretor_id: kanbanCorretorId, stages: columns }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setError(payload.error || 'Nao foi possivel salvar as etapas do funil.');
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [columns, kanbanCorretorId, kanbanStagesLoaded, canManageKanbanStructure]);
+
+  useEffect(() => {
     if (!selectedLead) return;
 
     const originalOverflow = document.body.style.overflow;
@@ -456,6 +479,8 @@ export default function CrmPage() {
         setCrmScopeView('todos_concessionaria');
       }
       const corretorScopeId = simulatedId || (['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario) ? profile.corretor_id : null);
+      setKanbanCorretorId(corretorScopeId || null);
+      setKanbanStagesLoaded(false);
       
       let corretorIds = corretorScopeId ? [corretorScopeId] : [];
       let companyName = profile.nome_empresa || null;
@@ -464,7 +489,7 @@ export default function CrmPage() {
       if (corretorScopeId) {
         const { data: brokerRow } = await supabase
           .from('corretores')
-          .select('id,nome,email,nome_empresa')
+          .select('id,nome,email,nome_empresa,kanban_etapas')
           .eq('id', corretorScopeId)
           .maybeSingle();
         
@@ -474,6 +499,8 @@ export default function CrmPage() {
         if (brokerRow?.id) {
           scopedBrokers = [{ id: brokerRow.id, nome: brokerRow.nome || 'Corretor', email: brokerRow.email || null }];
         }
+        setColumns(normalizeKanbanColumns(brokerRow?.kanban_etapas));
+        setKanbanStagesLoaded(true);
 
         if (companyName) {
           const { data: siblings } = await supabase
@@ -486,6 +513,7 @@ export default function CrmPage() {
           }
         }
       }
+      if (!corretorScopeId) setKanbanStagesLoaded(true);
       setDealershipBrokers(scopedBrokers);
 
       let tarefasQuery = supabase
@@ -1011,16 +1039,17 @@ export default function CrmPage() {
 
     setColumns((current) => normalizeKanbanColumns([
       ...current,
-      { id: name, label: name, desc: 'Etapa personalizada do funil' },
+      { id: name, label: name, desc: 'Etapa personalizada do funil', saleEquivalent: newStageCountsAsSale },
     ]));
     setNewStageName('');
+    setNewStageCountsAsSale(false);
   }
 
   function startEditingColumn(column: KanbanColumn) {
     if (!canManageKanbanStructure) return;
     if (isFixedKanbanStatus(column.id)) return;
     setEditingColumnId(column.id);
-    setStageDraft({ label: column.label, desc: column.desc });
+    setStageDraft({ label: column.label, desc: column.desc, saleEquivalent: Boolean(column.saleEquivalent) });
   }
 
   function saveEditingColumn(columnId: LeadStatus) {
@@ -1031,6 +1060,7 @@ export default function CrmPage() {
           ...column,
           label: cleanStageText(stageDraft.label, column.label),
           desc: cleanStageText(stageDraft.desc, column.desc),
+          saleEquivalent: stageDraft.saleEquivalent,
         }
         : column
     )));
@@ -1084,8 +1114,8 @@ export default function CrmPage() {
   }
 
   function requestCommercialPayload(lead: Lead, status: LeadStatus): Promise<CommercialPayload | null> {
-    if (!requiresStatusMoveModal(status)) return Promise.resolve(null);
-    if (requiresCommercialData(status) && parseCurrencyInput(lead.valor_negociacao) > 0) return Promise.resolve(null);
+    if (!requiresStatusMoveModal(status, columns)) return Promise.resolve(null);
+    if (requiresCommercialData(status, columns) && parseCurrencyInput(lead.valor_negociacao) > 0) return Promise.resolve(null);
 
     setCommercialModalError(null);
     setCommercialModal({
@@ -1149,9 +1179,9 @@ export default function CrmPage() {
     if (!currentLead) return;
 
     let commercialPayload: CommercialPayload | null = null;
-    if (requiresStatusMoveModal(status)) {
+    if (requiresStatusMoveModal(status, columns)) {
       commercialPayload = await requestCommercialPayload(currentLead, status);
-      if (commercialPayload === null && requiresStatusMoveModal(status) && !(requiresCommercialData(status) && parseCurrencyInput(currentLead.valor_negociacao) > 0)) return;
+      if (commercialPayload === null && requiresStatusMoveModal(status, columns) && !(requiresCommercialData(status, columns) && parseCurrencyInput(currentLead.valor_negociacao) > 0)) return;
     }
 
     const previousLeads = leads;
@@ -1362,7 +1392,7 @@ export default function CrmPage() {
     event.preventDefault();
     if (!selectedLead) return;
 
-    if (requiresCommercialData(editForm.status)) {
+    if (requiresCommercialData(editForm.status, columns)) {
       const hasCommercialData = editForm.valor_negociacao;
       if (!hasCommercialData) {
         alert('Para salvar lead em negociação em diante, preencha o valor da negociação.');
@@ -1661,7 +1691,7 @@ export default function CrmPage() {
                             }
                           }}
                           onDragEnd={() => setDraggedColumnId(null)}
-                          className={`kanban-stage-header shrink-0 border-b bg-gradient-to-br p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.16)] ${canEditColumn && !isEditingColumn ? 'cursor-grab active:cursor-grabbing' : ''} ${kanbanStageHeaderClass[column.id] || 'from-blue-700 to-blue-600 border-blue-500/30'}`}
+                          className={`kanban-stage-header shrink-0 border-b bg-gradient-to-br p-3 text-white shadow-[0_10px_24px_rgba(2,6,23,0.16)] ${canEditColumn && !isEditingColumn ? 'cursor-grab active:cursor-grabbing' : ''} ${kanbanStageHeaderClass[column.id] || (column.saleEquivalent ? kanbanStageHeaderClass['Venda realizada'] : 'from-blue-700 to-blue-600 border-blue-500/30')}`}
                           title={canEditColumn ? 'Arraste para mover a etapa' : 'Etapa fixa'}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -1688,12 +1718,18 @@ export default function CrmPage() {
                                 )}
                               </div>
                               {isEditingColumn ? (
-                                <input
-                                  value={stageDraft.desc}
-                                  onChange={(event) => setStageDraft((current) => ({ ...current, desc: event.target.value }))}
-                                  maxLength={80}
-                                  className="mt-2 w-full rounded-lg border border-white/25 bg-white/95 px-2 py-1 text-[11px] font-bold text-slate-700 outline-none"
-                                />
+                                <div className="mt-2 space-y-2">
+                                  <input
+                                    value={stageDraft.desc}
+                                    onChange={(event) => setStageDraft((current) => ({ ...current, desc: event.target.value }))}
+                                    maxLength={80}
+                                    className="w-full rounded-lg border border-white/25 bg-white/95 px-2 py-1 text-[11px] font-bold text-slate-700 outline-none"
+                                  />
+                                  <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-white">
+                                    <input type="checkbox" checked={stageDraft.saleEquivalent} onChange={(event) => setStageDraft((current) => ({ ...current, saleEquivalent: event.target.checked }))} className="h-3.5 w-3.5 accent-emerald-500" />
+                                    Contar como venda
+                                  </label>
+                                </div>
                               ) : (
                                 <button
                                   type="button"
@@ -1732,7 +1768,7 @@ export default function CrmPage() {
                               </div>
                             </div>
                           </div>
-                          {requiresCommercialData(column.id) && (
+                          {requiresCommercialData(column.id, columns) && (
                             <div className="mt-2 rounded-xl border border-white/20 bg-white/12 px-3 py-2">
                               <p className="text-[9px] font-black uppercase tracking-widest text-white/75">Total na etapa</p>
                               <p className="text-sm font-black text-white">{formatCurrencyValue(commercialTotal)}</p>
@@ -1814,6 +1850,10 @@ export default function CrmPage() {
                           placeholder="Nome da etapa"
                           className="w-full rounded-xl border border-white/20 bg-white/90 px-3 py-2.5 text-sm font-bold text-slate-800 outline-none placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-400/30"
                         />
+                        <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-slate-200">
+                          <input type="checkbox" checked={newStageCountsAsSale} onChange={(event) => setNewStageCountsAsSale(event.target.checked)} className="h-4 w-4 accent-emerald-500" />
+                          Contar como venda
+                        </label>
                         <div className="grid grid-cols-[1fr_auto] gap-2">
                           <button
                             type="submit"
@@ -1883,7 +1923,7 @@ export default function CrmPage() {
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Status comercial</p>
-                      <p className="text-sm font-black text-blue-950">{getLeadStatusStyle(selectedLead.status).label}</p>
+                      <p className="text-sm font-black text-blue-950">{getKanbanStageLabel(columns, selectedLead.status)}</p>
                     </div>
                     {isStale(selectedLead) && <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">Atenção</span>}
                   </div>
@@ -2467,7 +2507,7 @@ export default function CrmPage() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Dados comerciais</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-950">Avancar para {getLeadStatusStyle(commercialModal.status).label}</h2>
+                <h2 className="mt-1 text-2xl font-black text-slate-950">Avancar para {getKanbanStageLabel(columns, commercialModal.status)}</h2>
                 <p className="mt-1 text-sm font-bold text-slate-500">{commercialModal.lead.nome}</p>
               </div>
               <button

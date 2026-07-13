@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
+import { getLeadStatusStyle, normalizeLeadStatus } from '@/lib/leadStatus';
+import { DEFAULT_KANBAN_STAGES, KanbanStage, getKanbanStageLabel, normalizeKanbanStages } from '@/lib/kanbanStages';
 import { 
   CheckCircle2, 
   Loader2, 
@@ -41,7 +42,8 @@ import {
   Download,
   PhoneCall,
   Phone,
-  ChevronDown
+  ChevronDown,
+  PanelRight
 } from 'lucide-react';
 
 function WhatsAppGlyph({ className = '' }: { className?: string }) {
@@ -85,6 +87,7 @@ type InboxMessage = {
   audioDuration?: string;
   provider_message_id?: string | null;
   metadata?: any;
+  reactions?: string[];
 };
 
 type MessageMediaKind = 'audio' | 'image' | 'video' | 'file' | 'call' | null;
@@ -183,6 +186,33 @@ function getMessageMediaKind(message: InboxMessage): MessageMediaKind {
   return null;
 }
 
+function getReactionTarget(message: InboxMessage) {
+  const metadata = message.metadata || {};
+  return String(metadata.message?.reaction || metadata.data?.message?.reaction || metadata.reaction || '').replace(/^.*?:/, '');
+}
+
+function isReactionMessage(message: InboxMessage) {
+  const metadata = message.metadata || {};
+  const type = String(metadata.message?.type || metadata.message?.messageType || metadata.messageType || metadata.type || '').toLowerCase();
+  return Boolean(getReactionTarget(message)) || type.includes('reaction');
+}
+
+function getMessageExternalIds(message: InboxMessage) {
+  const metadata = message.metadata || {};
+  return [
+    message.provider_message_id,
+    metadata.message?.messageid,
+    metadata.message?.id,
+    metadata.data?.message?.messageid,
+    metadata.data?.message?.id,
+    metadata.messageid,
+    metadata.id,
+  ].filter(Boolean).flatMap((value) => {
+    const id = String(value);
+    return [id, id.replace(/^.*?:/, '')];
+  });
+}
+
 function base64ToObjectUrl(base64: string, mimeType: string) {
   const cleanBase64 = base64.includes(';base64,') ? base64.split(';base64,')[1] : base64;
   const byteCharacters = atob(cleanBase64);
@@ -268,6 +298,8 @@ export default function BrokerInboxPage() {
   const [leadActivities, setLeadActivities] = useState<any[]>([]);
   const [leadInfo, setLeadInfo] = useState<any>(null);
   const [leadDetailsOpen, setLeadDetailsOpen] = useState(false);
+  const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);
+  const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
 
   // Apolo Bot & Close Reason Modal States
   const [showBotConfigModal, setShowBotConfigModal] = useState(false);
@@ -680,12 +712,32 @@ export default function BrokerInboxPage() {
   useEffect(() => {
     setSendError(null);
     setLeadDetailsOpen(false);
+    setDetailsPanelOpen(false);
     if (selectedConversation?.id) {
       void fetchMessages(selectedConversation.id);
     } else {
       setMessages([]);
     }
   }, [selectedConversation?.id]);
+
+  useEffect(() => {
+    const corretorId = selectedConversation?.corretor_id || profile?.corretor_id;
+    if (!corretorId) {
+      setKanbanStages(DEFAULT_KANBAN_STAGES);
+      return;
+    }
+    let active = true;
+    void (async () => {
+      const token = await getToken();
+      if (!token) return;
+      const response = await fetch(`/api/crm/stages?corretor_id=${encodeURIComponent(corretorId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (active && response.ok) setKanbanStages(normalizeKanbanStages(payload.stages));
+    })();
+    return () => { active = false; };
+  }, [selectedConversation?.corretor_id, profile?.corretor_id]);
 
   useEffect(() => {
     if (selectedConversation?.lead_id) {
@@ -1865,6 +1917,23 @@ export default function BrokerInboxPage() {
     m.mensagem.toLowerCase().includes(searchChatQuery.toLowerCase().trim())
   );
 
+  const displayChatMessages = useMemo(() => {
+    const reactionsByTarget = new Map<string, string[]>();
+    filteredChatMessages.forEach((message) => {
+      if (!isReactionMessage(message)) return;
+      const target = getReactionTarget(message);
+      if (!target) return;
+      reactionsByTarget.set(target, [...(reactionsByTarget.get(target) || []), message.mensagem]);
+    });
+
+    return filteredChatMessages
+      .filter((message) => !isReactionMessage(message))
+      .map((message) => {
+        const reactions = getMessageExternalIds(message).flatMap((id) => reactionsByTarget.get(id) || []);
+        return reactions.length ? { ...message, reactions: Array.from(new Set(reactions)) } : message;
+      });
+  }, [filteredChatMessages]);
+
   useEffect(() => {
     const imageMessages = filteredChatMessages
       .filter(message => getMessageMediaKind(message) === 'image' && !mediaUrls[message.id] && loadingMediaId !== message.id && !mediaLoadErrors[message.id])
@@ -2088,6 +2157,14 @@ export default function BrokerInboxPage() {
                   </div>
                   <div className="orion-inbox-chat-actions flex items-center gap-2 flex-wrap">
                     <button
+                      type="button"
+                      onClick={() => { setLeadDetailsOpen(true); setDetailsPanelOpen(true); }}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 transition hover:bg-cyan-500/20 xl:hidden"
+                    >
+                      <PanelRight size={13} />
+                      Dados do lead
+                    </button>
+                    <button
                       onClick={() => setShowTemplateModal(true)}
                       className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
                     >
@@ -2205,8 +2282,8 @@ export default function BrokerInboxPage() {
                     <div className="flex h-full items-center justify-center">
                       <Loader2 className="animate-spin text-cyan-400" size={24} />
                     </div>
-                  ) : filteredChatMessages.length > 0 ? (
-                    filteredChatMessages.map((message, index) => {
+                  ) : displayChatMessages.length > 0 ? (
+                    displayChatMessages.map((message, index) => {
                       const isMine = message.direction === 'outbound';
                       const isPlaying = playingAudioId === message.id;
                       const isLoading = loadingAudioId === message.id;
@@ -2215,7 +2292,7 @@ export default function BrokerInboxPage() {
                       const isMediaLoading = loadingMediaId === message.id;
                       const mediaError = Boolean(mediaLoadErrors[message.id]);
                       const fileName = media?.fileName || getMessageFileName(message) || message.mensagem.replace(/^.*?(Imagem|Arquivo|Video|Vídeo)\s*:?\s*/i, '').replace(/[()]/g, '').trim() || 'Arquivo recebido';
-                      const previousMessage = filteredChatMessages[index - 1];
+                      const previousMessage = displayChatMessages[index - 1];
                       const showDaySeparator = !previousMessage || messageDayKey(previousMessage.created_at) !== messageDayKey(message.created_at);
                       return (
                         <div key={message.id} className="space-y-4">
@@ -2227,7 +2304,7 @@ export default function BrokerInboxPage() {
                             </div>
                           )}
                           <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
-                          <div className={`max-w-[75%] rounded-[1.5rem] p-3.5 shadow-lg space-y-1.5 ${
+                          <div className={`relative max-w-[75%] rounded-[1.5rem] p-3.5 shadow-lg space-y-1.5 ${
                             mediaKind === 'call'
                               ? isMine
                                 ? 'bg-emerald-600 text-white rounded-tr-none'
@@ -2383,6 +2460,11 @@ export default function BrokerInboxPage() {
                                 {formatHour(message.created_at)}
                               </span>
                             </div>
+                            {message.reactions?.length ? (
+                              <div className={`absolute -bottom-3 ${isMine ? 'right-3' : 'left-3'} flex items-center rounded-full border border-white/10 bg-slate-800 px-2 py-0.5 text-sm shadow-lg`}>
+                                {message.reactions.join(' ')}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                         </div>
@@ -2575,7 +2657,12 @@ export default function BrokerInboxPage() {
           </div>
 
           {/* COLUMN 3: RIGHT SIDEBAR - LEAD DETAILS PANEL */}
-          <div className="orion-inbox-details bg-slate-900/20 flex flex-col p-5 space-y-6 overflow-y-auto h-full">
+          {detailsPanelOpen && <button type="button" aria-label="Fechar dados do lead" onClick={() => setDetailsPanelOpen(false)} className="fixed inset-0 z-[90] bg-slate-950/65 xl:hidden" />}
+          <div className={`orion-inbox-details fixed bottom-0 right-0 top-[72px] z-[100] flex w-[min(360px,calc(100vw-20px))] flex-col space-y-6 overflow-y-auto border-l border-white/10 bg-[#07111f] p-5 shadow-2xl transition-transform duration-200 xl:static xl:z-auto xl:h-full xl:w-auto xl:translate-x-0 xl:border-l-0 xl:bg-slate-900/20 xl:shadow-none ${detailsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className="flex items-center justify-between border-b border-white/5 pb-3 xl:hidden">
+              <span className="text-xs font-black uppercase tracking-wider text-white">Dados do lead</span>
+              <button type="button" onClick={() => setDetailsPanelOpen(false)} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Fechar painel"><X size={16} /></button>
+            </div>
             {selectedConversation ? (
               <>
                 {/* Status do Lead no CRM */}
@@ -2592,8 +2679,11 @@ export default function BrokerInboxPage() {
                       onChange={(e) => handleUpdateLeadStatus(e.target.value)}
                       className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white font-black uppercase tracking-wider focus:outline-none focus:border-cyan-500/50"
                     >
-                      {LEAD_STATUSES.map((status) => (
-                        <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>
+                      {leadStatus && !kanbanStages.some((stage) => stage.id === leadStatus) && (
+                        <option value={leadStatus}>{leadStatus}</option>
+                      )}
+                      {kanbanStages.map((stage) => (
+                        <option key={stage.id} value={stage.id}>{getKanbanStageLabel(kanbanStages, stage.id)}</option>
                       ))}
                     </select>
                   )}

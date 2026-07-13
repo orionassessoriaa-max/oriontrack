@@ -93,6 +93,7 @@ export interface Lead {
     email: string;
   } | null;
   status: LeadStatus;
+  conta_como_venda?: boolean | null;
   etiqueta?: string;
   observacoes?: string;
   created_at: string;

@@ -26,7 +26,8 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getLeadStatusStyle, LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
+import { getLeadStatusStyle, isLeadSale, normalizeLeadStatus } from '@/lib/leadStatus';
+import { DEFAULT_KANBAN_STAGES, KanbanStage, getKanbanStageLabel, isSaleEquivalentStage, normalizeKanbanStages } from '@/lib/kanbanStages';
 import { cleanLeadObservationText, getLeadImportWarnings } from '@/lib/leadWarnings';
 import PhoneAction from '@/components/ui/PhoneAction';
 
@@ -111,12 +112,12 @@ function formatCurrencyValue(value?: string | number | null) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseCurrencyInput(value));
 }
 
-function requiresCommercialData(status: LeadStatus) {
-  return COMMERCIAL_REQUIRED_STATUSES.includes(status);
+function requiresCommercialData(status: LeadStatus, stages: KanbanStage[] = []) {
+  return COMMERCIAL_REQUIRED_STATUSES.includes(status) || isSaleEquivalentStage(stages, status);
 }
 
-function requiresStatusMoveModal(status: LeadStatus) {
-  return requiresCommercialData(status) || status === 'Sem interesse';
+function requiresStatusMoveModal(status: LeadStatus, stages: KanbanStage[] = []) {
+  return requiresCommercialData(status, stages) || status === 'Sem interesse';
 }
 
 type CommercialPayload = {
@@ -218,6 +219,7 @@ export default function BrokerLeadsPage() {
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
+  const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
   const canAssignTeamLeads = !isTeamMemberProfile && (
     profile?.tipo_usuario === 'admin' ||
@@ -246,8 +248,21 @@ export default function BrokerLeadsPage() {
     if (profile?.corretor_id) {
       fetchLeads(0, false);
       fetchCrmConfig();
+      fetchKanbanStages();
     }
   }, [profile?.corretor_id, profile?.nome_empresa]);
+
+  const fetchKanbanStages = async () => {
+    if (!profile?.corretor_id) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return;
+    const response = await fetch(`/api/crm/stages?corretor_id=${encodeURIComponent(profile.corretor_id)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) setKanbanStages(normalizeKanbanStages(payload.stages));
+  };
 
   useEffect(() => {
     if (profile?.corretor_id && canAssignTeamLeads) {
@@ -398,8 +413,8 @@ export default function BrokerLeadsPage() {
   };
 
   const requestCommercialPayload = (lead: Lead, status: LeadStatus): Promise<CommercialPayload | null> => {
-    if (!requiresStatusMoveModal(status)) return Promise.resolve(null);
-    if (requiresCommercialData(status) && parseCurrencyInput(lead.valor_negociacao) > 0) return Promise.resolve(null);
+    if (!requiresStatusMoveModal(status, kanbanStages)) return Promise.resolve(null);
+    if (requiresCommercialData(status, kanbanStages) && parseCurrencyInput(lead.valor_negociacao) > 0) return Promise.resolve(null);
 
     setCommercialModalError(null);
     setCommercialModal({
@@ -463,9 +478,9 @@ export default function BrokerLeadsPage() {
     if (!currentLead) return;
 
     let commercialPayload: CommercialPayload | null = null;
-    if (requiresStatusMoveModal(status)) {
+    if (requiresStatusMoveModal(status, kanbanStages)) {
       commercialPayload = await requestCommercialPayload(currentLead, status);
-      if (commercialPayload === null && requiresStatusMoveModal(status) && !(requiresCommercialData(status) && parseCurrencyInput(currentLead.valor_negociacao) > 0)) return;
+      if (commercialPayload === null && requiresStatusMoveModal(status, kanbanStages) && !(requiresCommercialData(status, kanbanStages) && parseCurrencyInput(currentLead.valor_negociacao) > 0)) return;
     }
 
     setSavingStatusId(leadId);
@@ -867,7 +882,7 @@ export default function BrokerLeadsPage() {
         if (status !== 'Aguardando atendimento' || !lead.data_entrada) return false;
         return Date.now() - new Date(lead.data_entrada).getTime() > 20 * 60 * 1000;
       }).length;
-      const vendas = memberLeads.filter((lead) => normalizeLeadStatus(lead.status) === 'Venda realizada').length;
+      const vendas = memberLeads.filter(isLeadSale).length;
       const negociacao = memberLeads.filter((lead) => normalizeText(normalizeLeadStatus(lead.status)).includes('negocia')).length;
       return {
         ...member,
@@ -1010,7 +1025,7 @@ export default function BrokerLeadsPage() {
           </select>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="orion-control min-w-[220px] flex-[1_1_220px] px-4 py-3.5 text-sm">
             <option value="todos">Todos os status</option>
-            {LEAD_STATUSES.map(status => <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>)}
+            {kanbanStages.map(stage => <option key={stage.id} value={stage.id}>{getKanbanStageLabel(kanbanStages, stage.id)}</option>)}
           </select>
           {canManageLeadResponsible && (
             <select
@@ -1132,7 +1147,7 @@ export default function BrokerLeadsPage() {
                     </td>
                   </tr>
                 ) : filteredLeads.map((lead, index) => {
-                  const statusStyle = getLeadStatusStyle(lead.status);
+                  const statusStyle = getLeadStatusStyle(isSaleEquivalentStage(kanbanStages, lead.status) ? 'Venda realizada' : lead.status);
                   const leadTab = tabLabel(lead.operadora);
                   const importWarnings = getLeadImportWarnings(lead);
                   const cleanObservacoes = cleanLeadObservationText(lead.observacoes);
@@ -1233,7 +1248,8 @@ export default function BrokerLeadsPage() {
                           onChange={(e) => updateLeadStatus(lead.id, e.target.value as LeadStatus)}
                           className={`orion-status-select border px-3 py-2 text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-blue-500/20 ${statusStyle.chip}`}
                         >
-                          {LEAD_STATUSES.map(status => <option key={status} value={status}>{getLeadStatusStyle(status).label}</option>)}
+                          {!kanbanStages.some((stage) => stage.id === lead.status) && <option value={lead.status}>{lead.status}</option>}
+                          {kanbanStages.map(stage => <option key={stage.id} value={stage.id}>{getKanbanStageLabel(kanbanStages, stage.id)}</option>)}
                         </select>
                         {savingStatusId === lead.id && <Loader2 className="animate-spin text-blue-600" size={16} />}
                       </div>
@@ -1591,7 +1607,7 @@ export default function BrokerLeadsPage() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Dados comerciais</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-950">Avancar para {getLeadStatusStyle(commercialModal.status).label}</h2>
+                <h2 className="mt-1 text-2xl font-black text-slate-950">Avancar para {getKanbanStageLabel(kanbanStages, commercialModal.status)}</h2>
                 <p className="mt-1 text-sm font-bold text-slate-500">{commercialModal.lead.nome}</p>
               </div>
               <button

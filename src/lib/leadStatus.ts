@@ -24,6 +24,11 @@ export function normalizeLeadStatus(status: string | null | undefined): LeadStat
   return LEGACY_LEAD_STATUS_MAP[status] || (status as LeadStatus);
 }
 
+export function isLeadSale(lead: { status?: string | null; conta_como_venda?: boolean | null } | string | null | undefined) {
+  if (typeof lead === 'string' || lead == null) return normalizeLeadStatus(lead) === 'Venda realizada';
+  return Boolean(lead.conta_como_venda) || normalizeLeadStatus(lead.status) === 'Venda realizada';
+}
+
 export function getLeadStatusStyle(status: string | null | undefined) {
   const normalized = normalizeLeadStatus(status);
 
