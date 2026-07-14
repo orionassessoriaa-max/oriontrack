@@ -42,6 +42,7 @@ function sessionContextStart(session: any) {
 const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
+const DEFAULT_ELEVENLABS_FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
 
 function formatAiBrokerageDisplayName(name?: string | null) {
   const rawName = String(name || '').trim();
@@ -435,18 +436,18 @@ function cnpjConfirmationReply(lead: LeadRow) {
   const mode = cnpjModeFromLead(lead);
 
   if (mode === 'mei') {
-    return `Legal, ${firstName}! Vi aqui que voce mencionou que tem MEI, esta certinho? So para confirmar se fazemos a simulacao empresarial.\n\nSe preferir, pode me responder por audio tambem.`;
+    return `Legal, ${firstName}! Vi aqui que voce mencionou que tem MEI, esta certinho? So para confirmar se fazemos a simulacao empresarial.`;
   }
 
   if (mode === 'business') {
-    return `Legal, ${firstName}! Vi aqui que voce mencionou que tem CNPJ, esta certinho? So para confirmar se fazemos a simulacao empresarial.\n\nSe preferir, pode me responder por audio tambem.`;
+    return `Legal, ${firstName}! Vi aqui que voce mencionou que tem CNPJ, esta certinho? So para confirmar se fazemos a simulacao empresarial.`;
   }
 
   if (mode === 'cpf') {
-    return `Legal, ${firstName}! Vi aqui que voce mencionou que nao tem CNPJ, esta certinho? So para confirmar se fazemos a simulacao pelo CPF.\n\nSe preferir, pode me responder por audio tambem.`;
+    return `Legal, ${firstName}! Vi aqui que voce mencionou que nao tem CNPJ, esta certinho? So para confirmar se fazemos a simulacao pelo CPF.`;
   }
 
-  return `Legal, ${firstName}! So para eu te direcionar certinho: a simulacao seria pelo CNPJ/MEI ou pelo CPF?\n\nSe preferir, pode me responder por audio tambem.`;
+  return `Legal, ${firstName}! So para eu te direcionar certinho: a simulacao seria pelo CNPJ/MEI ou pelo CPF?`;
 }
 
 function nextQuestionAfterCnpjConfirmation(lead: LeadRow) {
@@ -835,41 +836,17 @@ async function formatTextForSpeech(text: string) {
   }
 }
 
-async function openAiTextToSpeechBase64(text: string) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
-
-  const response = await fetch('https://api.openai.com/v1/audio/speech', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: process.env.ORION_LEAD_AI_TTS_MODEL || 'tts-1-hd',
-      voice: process.env.ORION_LEAD_AI_TTS_VOICE || 'nova',
-      input: text,
-      response_format: 'mp3',
-    }),
-  });
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload?.error?.message || 'Erro ao gerar audio da IA.');
-  }
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return buffer.toString('base64');
-}
-
 async function elevenLabsTextToSpeechBase64(text: string) {
   const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ORION_ELEVENLABS_API_KEY;
   const voiceId = process.env.ORION_LEAD_AI_ELEVEN_VOICE_ID || process.env.ELEVENLABS_VOICE_ID || DEFAULT_ELEVENLABS_VOICE_ID;
   if (!apiKey || !voiceId) return null;
 
   const outputFormat = process.env.ORION_LEAD_AI_ELEVEN_OUTPUT_FORMAT || 'mp3_44100_128';
-  try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=${outputFormat}`, {
+  const fallbackVoiceId = process.env.ORION_LEAD_AI_ELEVEN_FALLBACK_VOICE_ID || DEFAULT_ELEVENLABS_FALLBACK_VOICE_ID;
+  const voiceIds = [voiceId, fallbackVoiceId].filter((id, index, list) => id && list.indexOf(id) === index);
+
+  for (const currentVoiceId of voiceIds) {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${currentVoiceId}?output_format=${outputFormat}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -889,16 +866,22 @@ async function elevenLabsTextToSpeechBase64(text: string) {
     });
 
     if (!response.ok) {
-      console.error('[lead_ai_agent] ElevenLabs TTS unavailable, using OpenAI fallback:', response.status);
-      return null;
+      const payload = await response.json().catch(() => ({}));
+      const detail = payload?.detail || payload;
+      console.error('[lead_ai_agent] ElevenLabs TTS unavailable:', {
+        status: response.status,
+        voiceId: currentVoiceId,
+        code: detail?.code || detail?.type,
+        message: detail?.message,
+      });
+      continue;
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
     return buffer.toString('base64');
-  } catch (error) {
-    console.error('[lead_ai_agent] ElevenLabs TTS failed, using OpenAI fallback:', error);
-    return null;
   }
+
+  return null;
 }
 
 async function textToSpeechBase64(text: string) {
@@ -906,11 +889,7 @@ async function textToSpeechBase64(text: string) {
   const elevenAudio = await elevenLabsTextToSpeechBase64(speechText);
   if (elevenAudio) return { audio: elevenAudio, provider: 'elevenlabs', speechText };
 
-  return {
-    audio: await openAiTextToSpeechBase64(speechText),
-    provider: 'openai',
-    speechText,
-  };
+  throw new Error('ElevenLabs indisponivel para gerar audio. Verifique ELEVENLABS_API_KEY e ORION_LEAD_AI_ELEVEN_VOICE_ID.');
 }
 
 async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: string) {
