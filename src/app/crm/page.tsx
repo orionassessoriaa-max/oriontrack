@@ -210,6 +210,11 @@ function requiresCommercialData(status: LeadStatus, stages: KanbanColumn[] = [])
   return COMMERCIAL_REQUIRED_STATUSES.includes(status) || isSaleEquivalentStage(stages, status);
 }
 
+function showsStageTotal(status: LeadStatus, stages: KanbanColumn[] = []) {
+  const normalized = normalizeStageKey(String(status || ''));
+  return requiresCommercialData(status, stages) || normalized.includes('document');
+}
+
 function requiresStatusMoveModal(status: LeadStatus, stages: KanbanColumn[] = []) {
   return requiresCommercialData(status, stages) || status === 'Sem interesse';
 }
@@ -1768,7 +1773,7 @@ export default function CrmPage() {
                               </div>
                             </div>
                           </div>
-                          {requiresCommercialData(column.id, columns) && (
+                          {showsStageTotal(column.id, columns) && (
                             <div className="mt-2 rounded-xl border border-white/20 bg-white/12 px-3 py-2">
                               <p className="text-[9px] font-black uppercase tracking-widest text-white/75">Total na etapa</p>
                               <p className="text-sm font-black text-white">{formatCurrencyValue(commercialTotal)}</p>
