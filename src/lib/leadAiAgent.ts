@@ -785,6 +785,47 @@ function cleanTextForSpeech(text: string) {
     .trim();
 }
 
+function numberToPortuguese(value: number): string {
+  if (!Number.isFinite(value)) return String(value);
+  const n = Math.trunc(Math.abs(value));
+  const units = 'zero um dois tres quatro cinco seis sete oito nove'.split(' ');
+  const teens = 'dez onze doze treze quatorze quinze dezesseis dezessete dezoito dezenove'.split(' ');
+  const tens = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+  const hundreds = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+  if (n < 10) return units[n];
+  if (n < 20) return teens[n - 10];
+  if (n < 100) return `${tens[Math.floor(n / 10)]}${n % 10 ? ` e ${units[n % 10]}` : ''}`;
+  if (n === 100) return 'cem';
+  if (n < 1000) return `${hundreds[Math.floor(n / 100)]}${n % 100 ? ` e ${numberToPortuguese(n % 100)}` : ''}`;
+  if (n < 1000000) {
+    const thousands = Math.floor(n / 1000);
+    const rest = n % 1000;
+    return `${thousands === 1 ? 'mil' : `${numberToPortuguese(thousands)} mil`}${rest ? ` e ${numberToPortuguese(rest)}` : ''}`;
+  }
+  return String(value);
+}
+
+function expandPortugueseSpeechNumbers(text: string) {
+  return text
+    .replace(/R\$\s*([\d.]+)(?:,(\d{1,2}))?/g, (_match, reaisRaw: string, centsRaw?: string) => {
+      const reais = Number(String(reaisRaw).replace(/\./g, ''));
+      const cents = Number(String(centsRaw || '0').padEnd(2, '0'));
+      const reaisText = `${numberToPortuguese(reais)} ${reais === 1 ? 'real' : 'reais'}`;
+      const centsText = cents > 0 ? ` e ${numberToPortuguese(cents)} centavos` : '';
+      return `${reaisText}${centsText}`;
+    })
+    .replace(/\b(\d{1,2}):(\d{2})\b/g, (_match, hourRaw: string, minuteRaw: string) => {
+      const hour = Number(hourRaw);
+      const minute = Number(minuteRaw);
+      if (minute === 0) return `${numberToPortuguese(hour)} horas`;
+      return `${numberToPortuguese(hour)} horas e ${numberToPortuguese(minute)} minutos`;
+    })
+    .replace(/\b(\d{1,2})\s*h(?:oras?)?\b/gi, (_match, hourRaw: string) => `${numberToPortuguese(Number(hourRaw))} horas`)
+    .replace(/\b(\d{1,2})\s*(?:min|mins|minutos?)\b/gi, (_match, minuteRaw: string) => `${numberToPortuguese(Number(minuteRaw))} minutos`)
+    .replace(/\b(\d{1,2})\s*(pessoas?|vidas?|anos?)\b/gi, (_match, raw: string, unit: string) => `${numberToPortuguese(Number(raw))} ${unit}`)
+    .replace(/\b(0|[1-9]\d?)\b/g, (match) => numberToPortuguese(Number(match)));
+}
+
 async function formatTextForSpeech(text: string) {
   const apiKey = process.env.OPENAI_API_KEY;
   const cleanText = cleanTextForSpeech(text);
@@ -815,6 +856,8 @@ async function formatTextForSpeech(text: string) {
               'Nao deixe o texto com cara de leitura formal, comercial gravado ou locucao.',
               'Evite linguagem robotica, formal demais ou com cara de script.',
               'Datas e horas devem ficar naturais quando faladas, por exemplo 10:00 vira dez horas.',
+              'Valores em reais devem ficar por extenso, por exemplo R$ 2.000,00 vira dois mil reais.',
+              'Numeros pequenos devem ficar por extenso, por exemplo 15 minutos vira quinze minutos.',
               'Telefones devem ficar naturais: DDD em dezena e blocos separados por virgula.',
               'Remova qualquer prefixo de atendente.',
               'Nao inclua nenhuma informacao alem do texto final para ser falado.',
@@ -885,7 +928,7 @@ async function elevenLabsTextToSpeechBase64(text: string) {
 }
 
 async function textToSpeechBase64(text: string) {
-  const speechText = cleanTextForSpeech(text);
+  const speechText = expandPortugueseSpeechNumbers(await formatTextForSpeech(text));
   const elevenAudio = await elevenLabsTextToSpeechBase64(speechText);
   if (elevenAudio) return { audio: elevenAudio, provider: 'elevenlabs', speechText };
 
