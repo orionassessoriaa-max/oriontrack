@@ -308,6 +308,12 @@ function stripDataUrl(value?: string | null) {
   return raw.includes(';base64,') ? raw.split(';base64,')[1] : raw;
 }
 
+function isBrowserOpenableUrl(value?: string | null) {
+  const raw = String(value || '').trim();
+  if (!/^https?:\/\//i.test(raw)) return false;
+  return !/\/\/[^/]*whatsapp\.net\//i.test(raw);
+}
+
 function byteObjectToBase64(value: any) {
   if (!value || typeof value !== 'object') return '';
   const bytes = value?.data && typeof value.data === 'object' ? value.data : value;
@@ -350,11 +356,19 @@ function looksLikeMediaMessage(value: any) {
   return Boolean(
     value?.mimetype ||
     value?.mimeType ||
+    value?.Mimetype ||
     value?.mediaKey ||
+    value?.MediaKey ||
     value?.fileSha256 ||
+    value?.fileSHA256 ||
+    value?.FileSHA256 ||
     value?.fileEncSha256 ||
+    value?.fileEncSHA256 ||
+    value?.FileEncSHA256 ||
     value?.directPath ||
+    value?.DirectPath ||
     value?.url ||
+    value?.URL ||
     value?.mediaUrl ||
     value?.fileUrl ||
     value?.downloadUrl ||
@@ -423,6 +437,7 @@ function readUazapiMediaMetadata(body: any) {
     body?.data?.fileURL,
     body?.data?.downloadUrl,
     body?.data?.url,
+    mediaMessage?.URL,
     mediaMessage?.mediaUrl,
     mediaMessage?.fileUrl,
     mediaMessage?.fileURL,
@@ -471,23 +486,29 @@ function readUazapiMediaMetadata(body: any) {
 }
 
 function buildUazapiDownloadBody(providerId: string, mediaMessage: any) {
-  const mediaKey = pickString(mediaMessage?.mediaKey, byteObjectToBase64(mediaMessage?.mediaKey));
-  const fileSha256 = pickString(mediaMessage?.fileSha256, byteObjectToBase64(mediaMessage?.fileSha256));
-  const fileEncSha256 = pickString(mediaMessage?.fileEncSha256, byteObjectToBase64(mediaMessage?.fileEncSha256));
-  const fileLength = longToNumber(mediaMessage?.fileLength);
+  const mediaUrl = pickString(mediaMessage?.url, mediaMessage?.URL);
+  const mimetype = pickString(mediaMessage?.mimetype, mediaMessage?.mimeType, mediaMessage?.Mimetype);
+  const mediaKeyValue = mediaMessage?.mediaKey || mediaMessage?.MediaKey;
+  const fileSha256Value = mediaMessage?.fileSha256 || mediaMessage?.fileSHA256 || mediaMessage?.FileSHA256;
+  const fileEncSha256Value = mediaMessage?.fileEncSha256 || mediaMessage?.fileEncSHA256 || mediaMessage?.FileEncSHA256;
+  const mediaKey = pickString(mediaKeyValue, byteObjectToBase64(mediaKeyValue));
+  const fileSha256 = pickString(fileSha256Value, byteObjectToBase64(fileSha256Value));
+  const fileEncSha256 = pickString(fileEncSha256Value, byteObjectToBase64(fileEncSha256Value));
+  const fileLength = longToNumber(mediaMessage?.fileLength ?? mediaMessage?.FileLength);
+  const directPath = pickString(mediaMessage?.directPath, mediaMessage?.DirectPath);
 
   const message: any = {
     key: { id: providerId },
     message: {},
   };
 
-  if (mediaMessage?.url) message.message.Url = mediaMessage.url;
-  if (mediaMessage?.mimetype) message.message.Mimetype = mediaMessage.mimetype;
+  if (mediaUrl) message.message.Url = mediaUrl;
+  if (mimetype) message.message.Mimetype = mimetype;
   if (mediaKey) message.message.MediaKey = mediaKey;
   if (fileSha256) message.message.FileSHA256 = fileSha256;
   if (fileEncSha256) message.message.FileEncSHA256 = fileEncSha256;
   if (typeof fileLength === 'number' && !Number.isNaN(fileLength)) message.message.FileLength = fileLength;
-  if (mediaMessage?.directPath) message.message.DirectPath = mediaMessage.directPath;
+  if (directPath) message.message.DirectPath = directPath;
 
   return {
     message,
@@ -502,18 +523,24 @@ function buildUazapiDownloadPayloads(providerId: string, mediaMessage: any) {
     messageId: providerId,
   };
 
-  const mediaKey = pickString(mediaMessage?.mediaKey, byteObjectToBase64(mediaMessage?.mediaKey));
-  const fileSha256 = pickString(mediaMessage?.fileSha256, byteObjectToBase64(mediaMessage?.fileSha256));
-  const fileEncSha256 = pickString(mediaMessage?.fileEncSha256, byteObjectToBase64(mediaMessage?.fileEncSha256));
-  const fileLength = longToNumber(mediaMessage?.fileLength);
+  const mediaUrl = pickString(mediaMessage?.url, mediaMessage?.URL);
+  const mimetype = pickString(mediaMessage?.mimetype, mediaMessage?.mimeType, mediaMessage?.Mimetype);
+  const mediaKeyValue = mediaMessage?.mediaKey || mediaMessage?.MediaKey;
+  const fileSha256Value = mediaMessage?.fileSha256 || mediaMessage?.fileSHA256 || mediaMessage?.FileSHA256;
+  const fileEncSha256Value = mediaMessage?.fileEncSha256 || mediaMessage?.fileEncSHA256 || mediaMessage?.FileEncSHA256;
+  const mediaKey = pickString(mediaKeyValue, byteObjectToBase64(mediaKeyValue));
+  const fileSha256 = pickString(fileSha256Value, byteObjectToBase64(fileSha256Value));
+  const fileEncSha256 = pickString(fileEncSha256Value, byteObjectToBase64(fileEncSha256Value));
+  const fileLength = longToNumber(mediaMessage?.fileLength ?? mediaMessage?.FileLength);
+  const directPath = pickString(mediaMessage?.directPath, mediaMessage?.DirectPath);
 
-  if (mediaMessage?.url) {
-    body.Url = mediaMessage.url;
-    body.url = mediaMessage.url;
+  if (mediaUrl) {
+    body.Url = mediaUrl;
+    body.url = mediaUrl;
   }
-  if (mediaMessage?.mimetype || mediaMessage?.mimeType) {
-    body.Mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
-    body.mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
+  if (mimetype) {
+    body.Mimetype = mimetype;
+    body.mimetype = mimetype;
   }
   if (mediaKey) {
     body.MediaKey = mediaKey;
@@ -531,9 +558,9 @@ function buildUazapiDownloadPayloads(providerId: string, mediaMessage: any) {
     body.FileLength = fileLength;
     body.fileLength = fileLength;
   }
-  if (mediaMessage?.directPath) {
-    body.DirectPath = mediaMessage.directPath;
-    body.directPath = mediaMessage.directPath;
+  if (directPath) {
+    body.DirectPath = directPath;
+    body.directPath = directPath;
   }
 
   return [wrapped, body];
@@ -544,14 +571,48 @@ function pickProviderPayloadBase64(payload: any) {
     payload?.base64,
     payload?.media_base64,
     payload?.mediaBase64,
+    payload?.media,
     payload?.file,
     payload?.data?.base64,
     payload?.data?.media_base64,
     payload?.data?.mediaBase64,
+    payload?.data?.media,
     payload?.data?.file,
+    payload?.response?.base64,
+    payload?.response?.media_base64,
+    payload?.response?.mediaBase64,
+    payload?.response?.media,
+    payload?.response?.file,
     payload?.message?.base64,
     payload?.message?.mediaBase64
   ));
+}
+
+function pickProviderPayloadUrl(payload: any) {
+  const value = pickString(
+    payload?.media_url,
+    payload?.mediaUrl,
+    payload?.fileUrl,
+    payload?.fileURL,
+    payload?.downloadUrl,
+    payload?.downloadURL,
+    payload?.url,
+    payload?.data?.media_url,
+    payload?.data?.mediaUrl,
+    payload?.data?.fileUrl,
+    payload?.data?.fileURL,
+    payload?.data?.downloadUrl,
+    payload?.data?.downloadURL,
+    payload?.data?.url,
+    payload?.response?.mediaUrl,
+    payload?.response?.fileUrl,
+    payload?.response?.fileURL,
+    payload?.response?.downloadUrl,
+    payload?.response?.downloadURL,
+    payload?.response?.url
+  );
+
+  return isBrowserOpenableUrl(value) ? value : '';
 }
 
 async function downloadUazapiMediaBase64(instance: string, providerId: string, body: any) {
@@ -570,12 +631,34 @@ async function downloadUazapiMediaBase64(instance: string, providerId: string, b
 
         mediaBase64 = pickProviderPayloadBase64(payload);
         if (mediaBase64) break;
+
+        const mediaUrl = pickProviderPayloadUrl(payload);
+        if (mediaUrl) {
+          const mediaResponse = await fetch(mediaUrl);
+          if (mediaResponse.ok) {
+            mediaBase64 = Buffer.from(await mediaResponse.arrayBuffer()).toString('base64');
+            if (mediaBase64) break;
+          }
+          console.warn('[uazapi_webhook] UAZAPI returned media URL but download failed:', {
+            status: mediaResponse.status,
+            providerId,
+          });
+        }
       } catch (attemptError: any) {
         console.warn('[uazapi_webhook] UAZAPI media download attempt failed:', attemptError?.message || attemptError);
       }
     }
 
-    if (!mediaBase64) return null;
+    if (!mediaBase64) {
+      console.warn('[uazapi_webhook] UAZAPI media download returned no base64/url.', {
+        providerId,
+        instance,
+        payloadKeys: payload && typeof payload === 'object' ? Object.keys(payload).slice(0, 20) : [],
+        dataKeys: payload?.data && typeof payload.data === 'object' ? Object.keys(payload.data).slice(0, 20) : [],
+        responseKeys: payload?.response && typeof payload.response === 'object' ? Object.keys(payload.response).slice(0, 20) : [],
+      });
+      return null;
+    }
 
     return {
       media_base64: mediaBase64,
