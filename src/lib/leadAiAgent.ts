@@ -75,9 +75,11 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
 - Nunca pergunte novamente CNPJ/MEI, idades, cidade, investimento, plano ativo ou plano atual quando esses campos ja tiverem valor diferente de vazio, "-" ou "Nao informado" nos dados conhecidos.
 - Depois que o cliente confirmar a cotacao/idades, a segunda pergunta obrigatoria deve ser a confirmacao do CNPJ/MEI/CPF do formulario. So depois disso siga para hospital/regiao, motivo da busca, cobertura nacional ou regional, investimento se nao veio no formulario, e-mail e agendamento de ligacao de 15 minutos.
 - Se o cliente mandar apenas saudacao, como "bom dia", "boa tarde", "boa noite", "oi" ou "ola", responda a saudacao rapidamente e retome a pergunta pendente. Nunca responda "como posso ajudar hoje" quando ja existir atendimento em andamento.
+- Se o cliente pedir valor, preco, mensalidade ou tabela, nunca diga que nao pode enviar pelo WhatsApp. Explique de forma natural que os valores dependem da cotacao e da rede escolhida, e ofereca chamar um especialista para passar certinho.
+- Se o cliente mencionar luto, doenca, internacao, dor, cirurgia, cancer, perda de familiar ou qualquer situacao delicada, acolha primeiro com empatia real e curta. Nao acelere a venda. Pergunte se esta tudo bem continuar a cotacao.
 - Se o formulario ja trouxe as principais informacoes comerciais, avance para hospital/regiao ou diretamente para e-mail/agendamento. Nao aja como se o formulario nao existisse.
 - Se o cliente pedir esclarecimento sobre algo que voce acabou de perguntar (ex: "como assim?", "nao entendi", "que isso?", "pq?", "explica", "o que e isso"), reexplique de forma simples, curta e natural como uma humana faria — NAO faca handoff nesses casos.
-- So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar exatamente a palavra "alvorada" sozinha. Nao faca handoff se "Alvorada" for parte de nome de hospital, clinica, bairro ou regiao.
+- So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar exatamente a palavra "alvorada" sozinha. Quando for pedido de valor, pode responder ao cliente antes do handoff, sem dizer que e proibido enviar pelo WhatsApp. Nao faca handoff se "Alvorada" for parte de nome de hospital, clinica, bairro ou regiao.
 - Em handoff por duvida ou confusao real, nunca mande mensagem para o cliente. O Orion Track vai chamar o humano internamente.
 - Quando for pedir o agendamento, nunca use "funciona melhor". Pergunte: "Que dia e horario voce esta mais confortavel pra voce?"
 - Quando o cliente responder com dia e horario, responda apenas que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradeca pelo atendimento, defina handoff true e nao faca mais nenhuma pergunta.
@@ -116,7 +118,7 @@ NUNCA siga uma ordem rigida se o cliente ja adiantou informacoes — pule direto
 IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se um campo ja tem valor util, ele ja foi respondido. Nao pergunte novamente e nao aja como se estivesse vazio.
 
 - CNPJ/MEI ou CPF: o plano sera via empresa (CNPJ ou MEI) ou pessoa fisica (CPF)?
-  Pergunte somente se "Possui CNPJ/MEI" estiver vazio, "-" ou "Nao informado".
+  Pergunte somente se "Possui CNPJ/MEI" estiver vazio, "-" ou "Nao informado". Use um tom natural, por exemplo: "Voce quer que eu faca a cotacao usando seu CPF ou teria um CNPJ ativo? Te pergunto so pra saber qual cotacao faz mais sentido pra voce."
 - Idades e quantidade de pessoas: quem vai usar o plano? Quantas pessoas?
   Pergunte somente se "Idade(s)" estiver vazio, "-" ou "Nao informado". Se as idades ja vieram do formulario, a primeira mensagem ja confirmou isso.
 - Hospital ou clinica de preferencia na regiao.
@@ -135,13 +137,15 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 - Tom conversado: "Boa", "show", "me diz uma coisa", "pra eu te direcionar melhor", sem exagerar em girias.
 - Nao use ponto de exclamacao em toda mensagem.
 - Depois da primeira confirmacao da cotacao/idades, confirme se a simulacao sera empresarial (CNPJ/MEI) ou pelo CPF antes de perguntar hospital/regiao.
+- Pedido de valores/precos: nao diga que nao pode enviar no WhatsApp. Diga que os valores dependem da cotacao e que pode chamar um especialista para passar certinho.
+- Situações sensíveis: se o cliente disser que perdeu alguem, esta doente, internado, com dor, em cirurgia ou cuidando de familiar, acolha primeiro. Exemplo de tom: "Sinto muito por isso. Espero que fique tudo bem por ai. Se estiver tudo bem para voce, posso continuar a cotacao?"
 
 == HANDOFF (Transferencia para Especialista) ==
 - Agendamento so e concluido com DIA e HORARIO ESPECIFICOS (ex: "amanha as 14h", "quinta as 10h").
 - Se o cliente disser "sim", "posso" ou algo vago: pergunte qual dia e horario especificos.
 - Ao pedir dia e horario, nao escreva "funciona melhor". Escreva de forma humana: "Que dia e horario voce esta mais confortavel pra voce?"
 - Ao cliente responder dia e horario: preencha *Agendado* no summary, defina "handoff": true e responda somente que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradecendo pelo atendimento. Depois disso nao pergunte mais nada.
-- Handoff silencioso ("handoff": true, "reply": "") se: cliente pedir preco exato, detalhes tecnicos de operadora, reclamar, pedir para falar com humano, ou enviar exatamente "alvorada" como mensagem isolada. Nao use essa regra quando Alvorada for hospital, clinica, bairro ou regiao.
+- Handoff silencioso ("handoff": true, "reply": "") se: cliente pedir detalhes tecnicos de operadora, reclamar, pedir para falar com humano, ou enviar exatamente "alvorada" como mensagem isolada. Para pedido de valor/preco, responda de forma gentil oferecendo chamar um especialista e defina handoff true. Nao use essa regra quando Alvorada for hospital, clinica, bairro ou regiao.
 - Se o cliente pedir esclarecimento ("como assim?", "nao entendi", "pq?"): reexplique de forma simples e natural — NAO faca handoff.
 
 Nao envie ao cliente nomes de ferramentas internas. O resumo (summary) fica apenas no banco interno.
@@ -424,6 +428,19 @@ function isGreetingOnly(text?: string | null) {
   if (!normalized) return false;
 
   return /^(oi|ola|ol[aá]|bom dia|boa tarde|boa noite|e ai|eae|opa)( tudo bem| tudo bom| tudo certo| beleza)?$/.test(normalized);
+}
+
+function isValueRequest(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return (
+    /\b(valor|valores|preco|precos|preco exato|mensalidade|tabela|quanto custa|quanto fica|quanto sai|qual o valor|passa o valor|me passa o valor|manda o valor|simulacao pronta)\b/.test(normalized) ||
+    /\br\$\s*\d/i.test(String(text || ''))
+  );
+}
+
+function isSensitivePersonalSituation(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return /\b(perdi minha mae|perdi meu pai|perdi minha esposa|perdi meu marido|falecimento|faleceu|luto|morreu|doente|doenca|internad|internacao|hospitalizad|cirurgia|cancer|quimio|dor|acidente|uti|emergencia na familia)\b/.test(normalized);
 }
 
 function isCnpjConfirmationQuestion(text?: string | null) {
@@ -1108,7 +1125,15 @@ async function askAline(
     };
   });
 
-  const baseSystem = (aiConfig.system_prompt || DEFAULT_SYSTEM_PROMPT)
+  const configuredPrompt = String(aiConfig.system_prompt || '');
+  const useDefaultPrompt =
+    !configuredPrompt.trim() ||
+    normalizeAiText(configuredPrompt).includes('modelo de atendimento individual') ||
+    normalizeAiText(configuredPrompt).includes('nao pergunte se o cliente tem cnpj') ||
+    normalizeAiText(configuredPrompt).includes('pme mantem a etapa') ||
+    normalizeAiText(configuredPrompt).includes('fluxo linear de perguntas');
+
+  const baseSystem = (useDefaultPrompt ? DEFAULT_SYSTEM_PROMPT : configuredPrompt)
     .replace(/{persona}/gi, aiConfig.persona)
     .replace(/{lead_facts}/gi, leadFacts(lead))
     .replace(/{corretora_nome}/gi, corretoraNome)
@@ -1483,15 +1508,29 @@ export async function continueLeadAiFromIncoming(options: {
   }
 
   let ai: any;
-  try {
-    ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
-  } catch (error) {
-    console.error('[lead_ai_agent] IA falhou ao continuar atendimento. Fazendo handoff:', error);
-    return await handoffAiFailure({
-      session,
-      lead,
-      reason: 'falha tecnica ao gerar a proxima resposta da IA.',
-    });
+  if (isValueRequest(options.customerMessage)) {
+    ai = {
+      handoff: true,
+      reply: 'Consigo pedir para um especialista te passar os valores certinhos, porque isso depende da cotacao, da rede escolhida e dos dados do perfil. Vou chamar ele para te orientar melhor.',
+      summary: appendSummaryLine(session.summary || leadFacts(lead), `IA encerrada: cliente pediu valores. Especialista deve assumir e apresentar a cotacao.`),
+    };
+  } else if (isSensitivePersonalSituation(options.customerMessage)) {
+    ai = {
+      handoff: false,
+      reply: 'Sinto muito por isso. Espero que as coisas fiquem mais leves por ai. Se estiver tudo bem para voce, posso continuar a cotacao com calma?',
+      summary: appendSummaryLine(session.summary || leadFacts(lead), `Observacao sensivel do lead: ${options.customerMessage.trim()}`),
+    };
+  } else {
+    try {
+      ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
+    } catch (error) {
+      console.error('[lead_ai_agent] IA falhou ao continuar atendimento. Fazendo handoff:', error);
+      return await handoffAiFailure({
+        session,
+        lead,
+        reason: 'falha tecnica ao gerar a proxima resposta da IA.',
+      });
+    }
   }
 
   let handoff = Boolean(ai.handoff);

@@ -74,6 +74,8 @@ Regras de Conversacao:
 - Nao use ponto de exclamacao in toda mensagem.
 - Nunca peca dados que ja constam nos dados conhecidos ou no historico.
 - Os dados conhecidos vieram do formulario. Se CNPJ/MEI, idades, cidade, investimento, plano ativo ou plano atual ja tiverem valor util, trate como respondido e nao pergunte novamente.
+- Se o cliente pedir valor, preco, mensalidade ou tabela, nao diga que nao pode enviar pelo WhatsApp. Diga que os valores dependem da cotacao e que pode chamar um especialista para passar certinho.
+- Se o cliente falar de luto, doenca, internacao, cirurgia, dor, acidente ou perda familiar, acolha primeiro com empatia curta. Pergunte se esta tudo bem continuar a cotacao com calma.
 - Faca no maximo uma pergunta por mensagem, seguindo rigorosamente o fluxo abaixo.
 
 Fluxo linear de perguntas (siga esta ordem, sempre pulando o que ja estiver respondido ou conhecido):
@@ -83,7 +85,7 @@ Fluxo linear de perguntas (siga esta ordem, sempre pulando o que ja estiver resp
    - REGRA OBRIGATORIA: pergunte CNPJ/MEI somente se nao houver informacao util nos dados conhecidos. Se ja veio do formulario, pule esta etapa.
    - Se o lead ja tem CNPJ nos dados conhecidos: "Legal, [Nome]! Vi aqui que você mencionou que tem CNPJ, está certinho? Só para confirmar se fazemos a simulação empresarial."
    - Se o lead tem MEI nos dados conhecidos: "Ah, que bacana, [Nome]! Vi que você tem MEI. Há quanto tempo ele foi aberto, mais ou menos?"
-   - Se nao souber se tem CNPJ/MEI/CPF nos dados conhecidos: pergunte de forma sutil e natural se o plano seria feito usando CNPJ/MEI ou no CPF (Pessoa Fisica).
+   - Se nao souber se tem CNPJ/MEI/CPF nos dados conhecidos: pergunte de forma sutil e natural: "Voce quer que eu faca a cotacao usando seu CPF ou teria um CNPJ ativo? Te pergunto so pra saber qual cotacao faz mais sentido pra voce."
 3. Confirmacao de quantidade de pessoas:
    - REGRA OBRIGATORIA: pergunte quantidade/idades somente se as idades nao vieram nos dados conhecidos. Se ja vieram, a primeira mensagem automatica ja confirmou.
    - Se souber as idades do lead, conte a quantidade de idades (ex: se idades for "23, 45", sao 2 pessoas) e pergunte: "Só pra confirmar, o plano seria para essas [X] pessoas?" (substituindo [X] pelo numero correto).
@@ -102,7 +104,8 @@ Fluxo linear de perguntas (siga esta ordem, sempre pulando o que ja estiver resp
 
 Regras de Handoff (Transferencia para Especialista):
 - Se o cliente responder de forma positiva marcando o horario da ligacao de 15 minutos: registre "agendado: true" no summary, defina "handoff": true e responda na "reply" de forma natural exatamente esta frase: "Perfeito! Já tenho todos os dados, agora um especialista vai entrar em contato por outro número para confirmar o horário contigo, ok?"
-- Se a IA tiver qualquer duvida ou problema, se o cliente pedir valores/precos/detalhes tecnicos de operadoras, se demonstrar pressa, ficar confuso, reclamar, mandar algo desconexo ou se voce nao tiver seguranca do que responder: defina "handoff": true, deixe "reply" como string vazia "" e nao envie nenhuma mensagem ao cliente. O sistema vai notificar o humano internamente.
+- Se o cliente pedir valores/precos: responda de forma gentil oferecendo chamar um especialista para passar os valores certinhos e defina "handoff": true.
+- Se a IA tiver qualquer duvida ou problema, se o cliente pedir detalhes tecnicos de operadoras, se demonstrar pressa, ficar confuso, reclamar, mandar algo desconexo ou se voce nao tiver seguranca do que responder: defina "handoff": true, deixe "reply" como string vazia "" e nao envie nenhuma mensagem ao cliente. O sistema vai notificar o humano internamente.
 - Se o cliente enviar a palavra "alvorada", defina "handoff": true, deixe "reply" como string vazia "" e nao envie nenhuma mensagem ao cliente.
 
 Nao envie ao cliente nomes de ferramentas internas. O resumo (summary) deve ficar apenas no banco de dados interno.
@@ -268,19 +271,11 @@ const normalizePrompt = (value = '') => value.trim().replace(/\r\n/g, '\n');
 
 const BUILTIN_PROMPT_MODELS: PromptModel[] = [
   {
-    id: 'builtin-pme',
-    nome: 'PME',
-    categoria: 'Empresarial',
-    system_prompt: PME_SYSTEM_PROMPT_TEMPLATE,
-    base_model: 'pme',
-    builtin: true,
-  },
-  {
-    id: 'builtin-individual',
-    nome: 'Individual',
-    categoria: 'Pessoa fisica',
-    system_prompt: INDIVIDUAL_SYSTEM_PROMPT_TEMPLATE,
-    base_model: 'individual',
+    id: 'builtin-padrao',
+    nome: 'Padrão',
+    categoria: 'Atendimento geral',
+    system_prompt: DEFAULT_SYSTEM_PROMPT_TEMPLATE,
+    base_model: 'padrao',
     builtin: true,
   },
 ];
@@ -305,7 +300,7 @@ export default function AdminIaPage() {
   const [persona, setPersona] = useState('Aline');
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
   const [customPromptModels, setCustomPromptModels] = useState<PromptModel[]>([]);
-  const [selectedPromptModelId, setSelectedPromptModelId] = useState('builtin-pme');
+  const [selectedPromptModelId, setSelectedPromptModelId] = useState('builtin-padrao');
   const [saveModelOpen, setSaveModelOpen] = useState(false);
   const [modelName, setModelName] = useState('');
   const [modelCategory, setModelCategory] = useState('Atendimento');
@@ -417,7 +412,7 @@ export default function AdminIaPage() {
     setSelectedCorretoraId(inactiveCorretoras[0].id);
     setPersona('Aline');
     setSystemPrompt(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
-    setSelectedPromptModelId('builtin-pme');
+    setSelectedPromptModelId('builtin-padrao');
     setError(null);
     setSuccess(null);
   };
@@ -905,7 +900,7 @@ export default function AdminIaPage() {
                       )}
                     </div>
                     <p className="text-[9px] font-bold leading-relaxed text-slate-500">
-                      PME mantem a etapa de CNPJ/MEI. Individual remove perguntas de CNPJ e conduz como pessoa fisica.
+                      O modelo Padrão conduz CPF ou CNPJ de forma natural. Edite o prompt e salve um modelo apenas se alguma conta precisar de uma regra específica.
                     </p>
                   </div>
 
