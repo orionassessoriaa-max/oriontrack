@@ -1951,11 +1951,11 @@ export default function BrokerInboxPage() {
 
   return (
     <InternalLayout>
-      <div className="orion-inbox-shell h-[calc(100vh-92px)] min-h-0 flex flex-col gap-4 overflow-hidden">
+      <div className="orion-inbox-shell h-[calc(100dvh-72px)] min-h-0 flex flex-col gap-0 overflow-hidden">
         
         {/* Connection status header bar */}
         {isWhatsAppConnected ? (
-          <div className="orion-inbox-connection orion-inbox-connection-connected bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 animate-in fade-in-50">
+          <div className="orion-inbox-connection orion-inbox-connection-connected bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 animate-in fade-in-50">
             <div className="flex items-center gap-3">
               <div className="orion-inbox-whatsapp-icon relative flex items-center justify-center shrink-0">
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping absolute" />
@@ -1978,7 +1978,7 @@ export default function BrokerInboxPage() {
             </button>
           </div>
         ) : (
-          <div className="orion-inbox-connection orion-inbox-connection-disconnected bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 animate-in fade-in-50">
+          <div className="orion-inbox-connection orion-inbox-connection-disconnected bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 animate-in fade-in-50">
             <div className="flex items-center gap-3">
               <QrCode className="text-amber-400 shrink-0" size={20} />
               <div>
@@ -2027,7 +2027,7 @@ export default function BrokerInboxPage() {
         )}
 
         {/* MAIN 3-COLUMN LAYOUT PANEL */}
-        <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 shadow-2xl grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(420px,1fr)_320px] 2xl:grid-cols-[360px_minmax(520px,1fr)_360px]">
+        <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(420px,1fr)_320px] 2xl:grid-cols-[360px_minmax(520px,1fr)_360px]">
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
           <div className="orion-inbox-list border-r border-white/5 flex flex-col bg-slate-900/20 h-full overflow-hidden">
