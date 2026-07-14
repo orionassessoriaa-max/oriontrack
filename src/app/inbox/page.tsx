@@ -711,7 +711,7 @@ export default function BrokerInboxPage() {
 
   useEffect(() => {
     setSendError(null);
-    setLeadDetailsOpen(false);
+    setLeadDetailsOpen(true);
     setDetailsPanelOpen(false);
     if (selectedConversation?.id) {
       void fetchMessages(selectedConversation.id);
@@ -765,6 +765,7 @@ export default function BrokerInboxPage() {
         const normalizedLeadInfo = { ...data, origem: data.utm_source || '' };
         setLeadStatus(normalizeLeadStatus(data.status));
         setLeadInfo(normalizedLeadInfo);
+        setLeadDetailsOpen(true);
         setSelectedConversation((current) => current?.lead_id === leadId ? {
           ...current,
           tags: data.etiqueta ? [data.etiqueta] : current.tags || [],
@@ -2701,9 +2702,9 @@ export default function BrokerInboxPage() {
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Dados do lead</span>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-cyan-300">Dados do lead</span>
                           <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-cyan-300">
-                            {leadDetailsOpen ? 'Aberto' : 'Minimizado'}
+                            {leadDetailsOpen ? 'Editando' : 'Ver dados'}
                           </span>
                         </div>
                         <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-bold text-slate-300">
