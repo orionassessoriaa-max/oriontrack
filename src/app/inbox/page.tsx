@@ -2707,12 +2707,6 @@ export default function BrokerInboxPage() {
                             {leadDetailsOpen ? 'Editando' : 'Ver dados'}
                           </span>
                         </div>
-                        <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-bold text-slate-300">
-                          <span className="truncate rounded-lg bg-white/[0.03] px-2 py-1">Idade: {leadInfo.idades || '-'}</span>
-                          <span className="truncate rounded-lg bg-white/[0.03] px-2 py-1">CNPJ: {normalizeCnpjOwnership(leadInfo.possui_cnpj) || '-'}</span>
-                          <span className="truncate rounded-lg bg-white/[0.03] px-2 py-1">Plano: {normalizePlanoAtivo(leadInfo.tem_plano_ativo) || '-'}</span>
-                          <span className="truncate rounded-lg bg-white/[0.03] px-2 py-1">Cidade: {leadInfo.cidade || '-'}</span>
-                        </div>
                       </div>
                       <ChevronDown
                         size={16}
