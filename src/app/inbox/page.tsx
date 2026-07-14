@@ -755,15 +755,16 @@ export default function BrokerInboxPage() {
         .from('leads')
         .select(`
           status, etiqueta, observacoes, nome, telefone, idades, possui_cnpj, cnpj, responsavel_profile_id,
-          tem_plano_ativo, plano_atual, investimento, cidade, operadora, origem, email,
+          tem_plano_ativo, plano_atual, investimento, cidade, operadora, utm_source, email,
           motivo_busca, hospital_preferencia, valor_negociacao, operadora_negociacao
         `)
         .eq('id', leadId)
         .single();
       if (error) throw error;
       if (data) {
+        const normalizedLeadInfo = { ...data, origem: data.utm_source || '' };
         setLeadStatus(normalizeLeadStatus(data.status));
-        setLeadInfo(data);
+        setLeadInfo(normalizedLeadInfo);
         setSelectedConversation((current) => current?.lead_id === leadId ? {
           ...current,
           tags: data.etiqueta ? [data.etiqueta] : current.tags || [],
@@ -879,17 +880,18 @@ export default function BrokerInboxPage() {
 
   const handleUpdateLeadField = async (field: string, rawValue: string) => {
     if (!selectedConversation?.lead_id || !leadInfo) return;
+    const dbField = field === 'origem' ? 'utm_source' : field;
     const nextValue = rawValue.trim();
     const currentValue = String(leadInfo[field] || '').trim();
     if (nextValue === currentValue) return;
 
     const previous = leadInfo;
-    setLeadInfo((current: any) => current ? { ...current, [field]: nextValue || null } : current);
+    setLeadInfo((current: any) => current ? { ...current, [field]: nextValue || null, [dbField]: nextValue || null } : current);
 
     const { error } = await supabase
       .from('leads')
       .update({
-        [field]: nextValue || null,
+        [dbField]: nextValue || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', selectedConversation.lead_id);

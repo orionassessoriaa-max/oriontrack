@@ -542,6 +542,7 @@ export default function BrokerLeadsPage() {
   };
 
   const updateLeadTextField = async (lead: Lead, field: 'cnpj' | 'observacoes' | 'origem', rawValue: string) => {
+    const dbField = field === 'origem' ? 'utm_source' : field;
     const nextValue = rawValue.trim();
     const currentValue = String((lead as any)[field] || '').trim();
     if (nextValue === currentValue) return;
@@ -555,7 +556,7 @@ export default function BrokerLeadsPage() {
     const { error } = await supabase
       .from('leads')
       .update({
-        [field]: nextValue || null,
+        [dbField]: nextValue || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', lead.id);
