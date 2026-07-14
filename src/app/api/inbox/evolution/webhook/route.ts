@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone, profileIdFromEvolutionInstance } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { continueLeadAiFromIncoming, isAiOutbound } from '@/lib/leadAiAgent';
+import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 
 function readText(data: any) {
@@ -116,7 +116,14 @@ async function transcribeAudio(base64: string, mimeType = 'audio/ogg') {
   if (!bytes.length) return '';
 
   const formData = new FormData();
-  const fileName = mimeType.includes('mpeg') || mimeType.includes('mp3') ? 'audio.mp3' : 'audio.ogg';
+  const normalizedMime = String(mimeType || 'audio/ogg').toLowerCase();
+  const fileName = normalizedMime.includes('mpeg') || normalizedMime.includes('mp3')
+    ? 'audio.mp3'
+    : normalizedMime.includes('webm')
+      ? 'audio.webm'
+      : normalizedMime.includes('mp4') || normalizedMime.includes('m4a')
+        ? 'audio.m4a'
+        : 'audio.ogg';
   formData.append('file', new Blob([bytes], { type: mimeType }), fileName);
   formData.append('model', process.env.ORION_LEAD_AI_TRANSCRIBE_MODEL || 'whisper-1');
   formData.append('language', 'pt');
@@ -395,6 +402,14 @@ export async function POST(request: Request) {
 
     if (!fromMe && lead?.id) {
       try {
+        if (hasAudio && !audioTranscript) {
+          await handoffLeadAiToResponsible(
+            lead.id,
+            'audio recebido, mas nao foi possivel transcrever automaticamente. Responsavel deve ouvir o audio no inbox e assumir o atendimento sem resposta automatica ao cliente.'
+          );
+          return NextResponse.json({ ok: true, audio_handoff: true });
+        }
+
         await continueLeadAiFromIncoming({
           leadId: lead.id,
           conversationId: conversation.id,
