@@ -74,6 +74,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
 - Os "Dados ja conhecidos do lead" vieram do formulario. Trate esses dados como respostas ja dadas pelo cliente.
 - Nunca pergunte novamente CNPJ/MEI, idades, cidade, investimento, plano ativo ou plano atual quando esses campos ja tiverem valor diferente de vazio, "-" ou "Nao informado" nos dados conhecidos.
 - Depois que o cliente confirmar a cotacao/idades, a segunda pergunta obrigatoria deve ser a confirmacao do CNPJ/MEI/CPF do formulario. So depois disso siga para hospital/regiao, motivo da busca, cobertura nacional ou regional, investimento se nao veio no formulario, e-mail e agendamento de ligacao de 15 minutos.
+- Se o cliente mandar apenas saudacao, como "bom dia", "boa tarde", "boa noite", "oi" ou "ola", responda a saudacao rapidamente e retome a pergunta pendente. Nunca responda "como posso ajudar hoje" quando ja existir atendimento em andamento.
 - Se o formulario ja trouxe as principais informacoes comerciais, avance para hospital/regiao ou diretamente para e-mail/agendamento. Nao aja como se o formulario nao existisse.
 - Se o cliente pedir esclarecimento sobre algo que voce acabou de perguntar (ex: "como assim?", "nao entendi", "que isso?", "pq?", "explica", "o que e isso"), reexplique de forma simples, curta e natural como uma humana faria — NAO faca handoff nesses casos.
 - So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar exatamente a palavra "alvorada" sozinha. Nao faca handoff se "Alvorada" for parte de nome de hospital, clinica, bairro ou regiao.
@@ -412,6 +413,17 @@ function isInitialConfirmationQuestion(text?: string | null) {
 function isAffirmativeAnswer(text?: string | null) {
   const normalized = normalizeAiText(text);
   return /\b(sim|isso|correto|certo|ok|okay|pode|quero|gostaria|confirmo|perfeito|ta certo|esta certo)\b/.test(normalized);
+}
+
+function isGreetingOnly(text?: string | null) {
+  const normalized = normalizeAiText(text)
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized) return false;
+
+  return /^(oi|ola|ol[aá]|bom dia|boa tarde|boa noite|e ai|eae|opa)( tudo bem| tudo bom| tudo certo| beleza)?$/.test(normalized);
 }
 
 function isCnpjConfirmationQuestion(text?: string | null) {
@@ -1339,12 +1351,14 @@ export async function continueLeadAiFromIncoming(options: {
     .filter((item) => item.direction === 'outbound')
     .slice(-5)
     .map((item) => String(item.metadata?.ai_text || item.mensagem || ''));
+  const recentInitialConfirmation = recentOutboundTexts.some(isInitialConfirmationQuestion);
+  const recentCnpjConfirmation = recentOutboundTexts.some(isCnpjConfirmationQuestion);
   const scheduleConfirmed =
     looksLikeScheduleAnswer(options.customerMessage) &&
     (isSchedulePrompt(previousOutboundText) || recentOutboundTexts.some(isSchedulePrompt));
 
   if (
-    isInitialConfirmationQuestion(previousOutboundText) &&
+    (isInitialConfirmationQuestion(previousOutboundText) || (recentInitialConfirmation && !recentCnpjConfirmation)) &&
     isAffirmativeAnswer(options.customerMessage) &&
     !isCnpjConfirmationQuestion(previousOutboundText)
   ) {
@@ -1371,7 +1385,39 @@ export async function continueLeadAiFromIncoming(options: {
   }
 
   if (
-    isCnpjConfirmationQuestion(previousOutboundText) &&
+    (isInitialConfirmationQuestion(previousOutboundText) || (recentInitialConfirmation && !recentCnpjConfirmation)) &&
+    isGreetingOnly(options.customerMessage)
+  ) {
+    const greeting = normalizeAiText(options.customerMessage).includes('boa tarde')
+      ? 'Boa tarde!'
+      : normalizeAiText(options.customerMessage).includes('boa noite')
+        ? 'Boa noite!'
+        : normalizeAiText(options.customerMessage).includes('bom dia')
+          ? 'Bom dia!'
+          : 'Oi!';
+    const reply = customerReplyForFollowUp(`${greeting} ${initialLeadQuestion(lead)}`, lead, Boolean(previousOutboundText));
+    registerAiOutbound(lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+      ...(payload || {}),
+      instance: uazapiInstanceName(adminProfile.id),
+      ai_agent: aiConfig.persona,
+    });
+
+    await supabaseAdmin
+      .from('lead_ai_sessions')
+      .update({
+        last_customer_message_at: new Date().toISOString(),
+        last_ai_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', session.id);
+
+    return { handled: true, handoff: false, deterministic: 'greeting_kept_initial_confirmation' };
+  }
+
+  if (
+    (isCnpjConfirmationQuestion(previousOutboundText) || recentCnpjConfirmation) &&
     isAffirmativeAnswer(options.customerMessage)
   ) {
     const reply = customerReplyForFollowUp(nextQuestionAfterCnpjConfirmation(lead), lead, Boolean(previousOutboundText));
