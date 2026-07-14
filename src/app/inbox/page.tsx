@@ -1956,7 +1956,7 @@ export default function BrokerInboxPage() {
         {/* Connection status header bar */}
         {isWhatsAppConnected ? (
           <div className="orion-inbox-connection orion-inbox-connection-connected bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 animate-in fade-in-50">
-            <div className="flex items-center gap-3">
+            <div className="orion-inbox-connection-info flex items-center gap-3">
               <div className="orion-inbox-whatsapp-icon relative flex items-center justify-center shrink-0">
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping absolute" />
                 <div className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -1972,14 +1972,14 @@ export default function BrokerInboxPage() {
             <button
               onClick={disconnectWhatsApp}
               disabled={connecting}
-              className="px-5 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/40 border border-rose-500/30 text-rose-400 text-2xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+              className="orion-inbox-connection-action px-5 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/40 border border-rose-500/30 text-rose-400 text-2xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
             >
               {connecting ? 'Desconectando...' : 'Desconectar Conta'}
             </button>
           </div>
         ) : (
           <div className="orion-inbox-connection orion-inbox-connection-disconnected bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 animate-in fade-in-50">
-            <div className="flex items-center gap-3">
+            <div className="orion-inbox-connection-info flex items-center gap-3">
               <QrCode className="text-amber-400 shrink-0" size={20} />
               <div>
                 <p className="text-xs font-black text-amber-200 uppercase tracking-wider">WhatsApp Desconectado</p>
@@ -1991,7 +1991,7 @@ export default function BrokerInboxPage() {
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="orion-inbox-connection-actions flex flex-wrap items-center gap-2">
               <button
                 onClick={disconnectWhatsApp}
                 disabled={connecting}
