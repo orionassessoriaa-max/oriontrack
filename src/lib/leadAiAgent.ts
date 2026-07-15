@@ -970,15 +970,30 @@ async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: s
   const cleanAudioBase64 = audio.includes(';base64,') ? audio.split(';base64,')[1] : audio;
 
   const dataUrl = `data:audio/mpeg;base64,${cleanAudioBase64}`;
+  const number = normalizePhone(phone);
+  const recordingDelay = Math.min(Math.max(speechText.length * 45, 1800), 8000);
+
+  try {
+    await uazapiFetch('/message/presence', {
+      method: 'POST',
+      body: JSON.stringify({
+        number,
+        presence: 'recording',
+        delay: recordingDelay,
+      }),
+    }, { instanceName: instance });
+  } catch (presenceErr) {
+    console.warn('[lead_ai_agent] Failed sending recording presence before audio:', presenceErr);
+  }
 
   const payload = await uazapiFetch('/send/media', {
     method: 'POST',
     body: JSON.stringify({
-      number: normalizePhone(phone),
-      path: dataUrl,
+      number,
       file: dataUrl,
-      type: 'audio',
-      caption: undefined,
+      type: 'ptt',
+      mimetype: 'audio/mpeg',
+      delay: recordingDelay,
     }),
   }, { instanceName: instance });
 

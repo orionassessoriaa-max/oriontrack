@@ -413,7 +413,7 @@ export async function POST(request: Request) {
         ? mediaBase64 
         : `data:${mimetype || 'application/octet-stream'};base64,${mediaBase64}`;
 
-      const mediaTypeMapped = mediatype === 'audio' ? 'audio' : (mediatype || 'document');
+      const mediaTypeMapped = mediatype === 'audio' ? 'ptt' : (mediatype || 'document');
       const cleanBase64 = dataUrl.includes(';base64,') ? dataUrl.split(';base64,')[1] : dataUrl;
       outboundMediaMetadata = {
         media_base64: cleanBase64,
@@ -422,14 +422,32 @@ export async function POST(request: Request) {
         mediaType: mediaTypeMapped,
       };
 
+      const audioDelay = mediatype === 'audio' ? 2500 : undefined;
+
+      if (mediatype === 'audio') {
+        try {
+          await uazapiFetch('/message/presence', {
+            method: 'POST',
+            body: JSON.stringify({
+              number: phone,
+              presence: 'recording',
+              delay: audioDelay || 2500,
+            }),
+          }, { instanceName: instance });
+        } catch (presenceErr) {
+          console.warn('[inbox_messages] Failed sending recording presence before audio:', presenceErr);
+        }
+      }
+
       payload = await uazapiFetch('/send/media', {
         method: 'POST',
         body: JSON.stringify({
           number: phone,
-          path: dataUrl,
           file: dataUrl,
           type: mediaTypeMapped,
-          caption: text || undefined,
+          text: text || undefined,
+          mimetype: mimetype || undefined,
+          delay: audioDelay,
         }),
       }, { instanceName: instance });
     } else {
