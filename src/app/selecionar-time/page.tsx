@@ -28,8 +28,8 @@ const teams: Array<{
     id: 'kripto_hunters',
     name: 'Kripto Hunter',
     subtitle: 'Comercial',
-    description: 'Area reservada para a futura operacao comercial Kripto Hunter dentro do ecossistema Orion Track.',
-    badge: 'Em integracao',
+    description: 'Operacao comercial da Orion com dashboard executivo, pipeline, leads, tarefas e follow-up inteligente.',
+    badge: 'Pedro Admin',
     icon: Target,
     gradient: 'from-emerald-500 via-teal-600 to-cyan-700',
   },
@@ -79,7 +79,7 @@ export default function SelecionarTimePage() {
               Qual time voce deseja acessar?
             </h1>
             <p className="mt-4 max-w-2xl text-sm font-bold leading-relaxed text-slate-400 sm:text-base">
-              Escolha a operacao antes de entrar no painel. O Apollo continua como CRM operacional; Kripto Hunter fica preparado para a integracao comercial.
+              Escolha a operacao antes de entrar no painel. Apollo e Kripto Hunter possuem dados, fluxos e identidades visuais independentes.
             </p>
           </div>
           <button

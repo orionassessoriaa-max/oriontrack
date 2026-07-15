@@ -96,6 +96,16 @@ export default function LoginPage() {
         destination = '/account';
       }
 
+      if (profile.tipo_usuario !== 'admin') {
+        const { data: commercialMember } = await supabase
+          .from('comercial_membros')
+          .select('ativo')
+          .eq('profile_id', profile.id)
+          .eq('ativo', true)
+          .maybeSingle();
+        if (commercialMember?.ativo) destination = '/comercial';
+      }
+
       handlePlayGoal(destination);
     } catch (err: any) {
       setError(err.message);

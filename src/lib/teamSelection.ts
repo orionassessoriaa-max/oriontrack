@@ -10,6 +10,6 @@ export function canSelectOperationalTeam(profile?: Profile | null) {
 }
 
 export function getTeamHome(team: OrionTeamKey | string | null) {
-  if (team === 'kripto_hunters') return '/admin';
+  if (team === 'kripto_hunters') return '/comercial';
   return '/admin';
 }
