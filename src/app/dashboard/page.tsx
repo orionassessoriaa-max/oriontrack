@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { StatCard } from '@/components/ui/Stats';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -303,6 +303,7 @@ export default function DashboardPage() {
   });
   const [periodSpend, setPeriodSpend] = useState(0);
   const [chartAnimate, setChartAnimate] = useState(false);
+  const dashboardFetchRequestRef = useRef(0);
 
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -448,6 +449,13 @@ export default function DashboardPage() {
         return;
       }
 
+      if (!dataInicio || !dataFim) {
+        setLoadingData(true);
+        return;
+      }
+
+      const requestId = ++dashboardFetchRequestRef.current;
+      const isCurrentRequest = () => requestId === dashboardFetchRequestRef.current;
       setLoadingData(true);
       
       try {
@@ -463,6 +471,7 @@ export default function DashboardPage() {
           throw corretorError;
         }
 
+        if (!isCurrentRequest()) return;
         setCorretorData(data);
 
         // 2. Buscar Todos os Estatísticas de Leads (Sem filtro de data na query)
@@ -502,6 +511,7 @@ export default function DashboardPage() {
           const statsQuery = await statsRequest;
 
           if (statsQuery.error) throw statsQuery.error;
+          if (!isCurrentRequest()) return;
 
           const dataRows = statsQuery.data || [];
           allLeads = [...allLeads, ...(dataRows as LeadMetricRow[])];
@@ -517,6 +527,8 @@ export default function DashboardPage() {
         const allTimeSoldLeads = allLeads.filter(isLeadSale);
         const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
         
+        if (!isCurrentRequest()) return;
+
         setAllTimeStats({
           total: allLeads.length,
           sold: allTimeSoldLeads.length,
@@ -583,14 +595,17 @@ export default function DashboardPage() {
               }),
             });
 
+            const spendPayload = await spendResponse.json().catch(() => ({}));
             if (spendResponse.ok) {
-              const spendPayload = await spendResponse.json();
               currentPeriodSpend = Number(spendPayload.spend || 0);
+            } else {
+              console.error('Erro ao buscar investimento Meta do periodo:', spendPayload?.error || spendResponse.statusText);
             }
           } catch (error) {
             console.error('Erro ao buscar investimento Meta do periodo:', error);
           }
         }
+        if (!isCurrentRequest()) return;
         setPeriodSpend(currentPeriodSpend);
 
         // Fetch monthly Meta spends (static 6-months)
@@ -613,7 +628,10 @@ export default function DashboardPage() {
                   }),
                 });
 
-                const payload = await response.json();
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                  console.error('Erro ao buscar investimento Meta do mes:', month.key, payload?.error || response.statusText);
+                }
                 return {
                   key: month.key,
                   spend: response.ok ? Number(payload.spend || 0) : 0,
@@ -625,12 +643,15 @@ export default function DashboardPage() {
             })
           );
 
+          if (!isCurrentRequest()) return;
+
           spendResults.forEach((result) => {
             const current = monthMap.get(result.key);
             if (current) current.spend = result.spend;
           });
         }
 
+        if (!isCurrentRequest()) return;
         setMonthlyPerformance(Array.from(monthMap.values()));
 
         // Filter leads in memory for active date filter (used for status, pizza, funnel)
@@ -755,22 +776,22 @@ export default function DashboardPage() {
               const payload = await response.json();
               if (payload.accounts && payload.accounts.length > 0) {
                 const matchingAcc = payload.accounts.find((acc: any) => acc.corretor_id === profile.corretor_id);
-                setMetaAccount(matchingAcc || null);
+                if (isCurrentRequest()) setMetaAccount(matchingAcc || null);
               } else {
-                setMetaAccount(null);
+                if (isCurrentRequest()) setMetaAccount(null);
               }
             }
           } catch (err) {
             console.error('Error fetching broker meta status:', err);
           } finally {
-            setLoadingMeta(false);
+            if (isCurrentRequest()) setLoadingMeta(false);
           }
         }
 
       } catch (err: unknown) {
         console.error("Dashboard general error:", err);
       } finally {
-        setLoadingData(false);
+        if (isCurrentRequest()) setLoadingData(false);
       }
     }
 
