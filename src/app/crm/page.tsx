@@ -970,6 +970,32 @@ export default function CrmPage() {
       .map((lead) => lead.id)
   ), [viewScopedLeads, tipoCampanha]);
 
+  const leadStatusColumns = useMemo(() => {
+    const seen = new Set<string>();
+    return leads
+      .map((lead) => normalizeLeadStatus(lead.status))
+      .filter((status) => {
+        if (!status || seen.has(status)) return false;
+        seen.add(status);
+        return true;
+      })
+      .map((status) => ({ id: status, label: getLeadStatusStyle(status).label, desc: 'Etapa encontrada nos leads' }));
+  }, [leads]);
+
+  useEffect(() => {
+    if (!kanbanStagesLoaded || !kanbanCorretorId || !canManageKanbanStructure) return;
+
+    setColumns((current) => {
+      const missingColumns = leadStatusColumns.filter((column) => (
+        !current.some((item) => normalizeStageKey(item.id) === normalizeStageKey(column.id))
+      ));
+
+      return missingColumns.length
+        ? normalizeKanbanColumns([...current, ...missingColumns])
+        : current;
+    });
+  }, [leadStatusColumns, kanbanCorretorId, kanbanStagesLoaded, canManageKanbanStructure]);
+
   const filteredLeads = useMemo(() => {
     const term = search.toLowerCase();
     const nextLeads = viewScopedLeads.filter((lead) => {
@@ -991,13 +1017,12 @@ export default function CrmPage() {
   }, [viewScopedLeads, search, pageFilter, originFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
 
   const boardColumns = useMemo(() => {
-    const existingStatusColumns = leads
-      .map((lead) => normalizeLeadStatus(lead.status))
-      .filter((status) => !columns.some((column) => column.id === status))
-      .map((status) => ({ id: status, label: getLeadStatusStyle(status).label, desc: 'Etapa encontrada nos leads' }));
+    const existingStatusColumns = leadStatusColumns.filter((statusColumn) => (
+      !columns.some((column) => normalizeStageKey(column.id) === normalizeStageKey(statusColumn.id))
+    ));
 
     return normalizeKanbanColumns([...columns, ...existingStatusColumns]);
-  }, [columns, leads]);
+  }, [columns, leadStatusColumns]);
 
   const pageOptions = useMemo(() => {
     const pages = viewScopedLeads.map((lead) => lead.operadora || '').filter(Boolean);
