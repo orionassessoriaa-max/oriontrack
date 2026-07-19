@@ -682,18 +682,26 @@ async function findBroker(corretorId: string) {
 async function findAiAdmin(corretorId: string, preferredProfileId?: string | null): Promise<ProfileRow | null> {
   const { data: broker } = await supabaseAdmin
     .from('corretores')
-    .select('nome_empresa')
+    .select('id, nome_empresa')
     .eq('id', corretorId)
     .maybeSingle();
 
   if (!broker?.nome_empresa) return null;
+
+  const { data: brokerageCorretores } = await supabaseAdmin
+    .from('corretores')
+    .select('id')
+    .eq('nome_empresa', broker.nome_empresa);
+
+  const brokerageCorretorIds = (brokerageCorretores || []).map((item) => item.id);
+  const allowedCorretorIds = brokerageCorretorIds.length ? brokerageCorretorIds : [corretorId];
 
   if (preferredProfileId) {
     const { data: preferred } = await supabaseAdmin
       .from('profiles')
       .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
       .eq('id', preferredProfileId)
-      .eq('corretor_id', corretorId)
+      .in('corretor_id', allowedCorretorIds)
       .in('tipo_usuario', ['corretor_admin', 'corretor'])
       .in('status', ['active', 'ativo', 'Ativo'])
       .maybeSingle();
@@ -704,7 +712,7 @@ async function findAiAdmin(corretorId: string, preferredProfileId?: string | nul
   const { data: admins } = await supabaseAdmin
     .from('profiles')
     .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
-    .eq('corretor_id', corretorId)
+    .in('corretor_id', allowedCorretorIds)
     .in('tipo_usuario', ['corretor_admin', 'corretor'])
     .in('status', ['active', 'ativo', 'Ativo'])
     .order('tipo_usuario', { ascending: true })
@@ -1241,7 +1249,7 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   if (!aiConfig) return { started: false, eligible: false, reason: 'IA desativada para esta concessionaria.' };
 
-  const adminProfile = await findAiAdmin(lead.corretor_id, lead.responsavel_profile_id);
+  const adminProfile = await findAiAdmin(lead.corretor_id, aiConfig.sender_profile_id || lead.responsavel_profile_id);
   if (!adminProfile) return { started: false, eligible: true, reason: 'Admin IA da concessionaria nao encontrado.' };
 
   const phone = normalizePhone(lead.telefone);
@@ -1364,7 +1372,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   if (!aiConfig) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'IA desativada para esta concessionaria.' }; }
 
-  const adminProfile = await findAiAdmin(lead.corretor_id, session.admin_profile_id || lead.responsavel_profile_id);
+  const adminProfile = await findAiAdmin(lead.corretor_id, session.admin_profile_id || aiConfig.sender_profile_id || lead.responsavel_profile_id);
   if (!adminProfile) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Admin IA da concessionaria nao encontrado.' }; }
 
   let historyQuery = supabaseAdmin

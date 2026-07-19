@@ -247,6 +247,8 @@ export async function GET(request: Request) {
 
       return NextResponse.json({
         team: null,
+        primary_corretor_id: scope.primaryCorretorId,
+        corretor_ids: scope.corretorIds,
         brokerage_name: brokerageName || null,
         membros,
         leads: [],
@@ -320,6 +322,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       team,
+      primary_corretor_id: scope.primaryCorretorId,
+      corretor_ids: scope.corretorIds,
       brokerage_name: brokerageName || team.nome || null,
       membros: membrosWithPhoto,
       leads,

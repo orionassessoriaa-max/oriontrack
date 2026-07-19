@@ -24,12 +24,36 @@ function normalizeCnpjLabel(value: unknown) {
   return raw;
 }
 
-async function findAdminForCorretora(corretoraName: string) {
+async function findAdminForCorretora(corretoraName: string, preferredProfileId?: string | null) {
+  const { data: corretores, error: corretoresError } = await supabaseAdmin
+    .from('corretores')
+    .select('id')
+    .ilike('nome_empresa', corretoraName);
+
+  if (corretoresError) throw corretoresError;
+
+  const corretorIds = (corretores || []).map((corretor) => corretor.id).filter(Boolean);
+  if (corretorIds.length === 0) return null;
+
+  if (preferredProfileId) {
+    const { data: preferred, error: preferredError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nome, email, tipo_usuario, corretor_id, nome_empresa, telefone, status')
+      .eq('id', preferredProfileId)
+      .in('corretor_id', corretorIds)
+      .in('tipo_usuario', ['corretor_admin', 'corretor'])
+      .in('status', ['active', 'ativo', 'Ativo'])
+      .maybeSingle();
+
+    if (preferredError) throw preferredError;
+    if (preferred?.corretor_id) return preferred;
+  }
+
   const { data: admins, error } = await supabaseAdmin
     .from('profiles')
     .select('id, nome, email, tipo_usuario, corretor_id, nome_empresa, telefone, status')
     .in('tipo_usuario', ['corretor_admin', 'corretor'])
-    .ilike('nome_empresa', corretoraName)
+    .in('corretor_id', corretorIds)
     .in('status', ['active', 'ativo', 'Ativo'])
     .order('tipo_usuario', { ascending: true })
     .order('created_at', { ascending: true })
@@ -83,7 +107,7 @@ export async function POST(request: Request) {
 
     const { data: config, error: configError } = await supabaseAdmin
       .from('corretora_ai_configs')
-      .select('id, corretora_id, persona, status, corretoras(id, nome, status)')
+      .select('id, corretora_id, persona, status, sender_profile_id, corretoras(id, nome, status)')
       .eq('id', configId)
       .eq('status', 'ativo')
       .maybeSingle();
@@ -102,7 +126,7 @@ export async function POST(request: Request) {
     }
 
     const corretoraName = corretora.nome;
-    const adminProfile = await findAdminForCorretora(corretoraName);
+    const adminProfile = await findAdminForCorretora(corretoraName, config.sender_profile_id);
     const broker = adminProfile?.corretor_id
       ? { id: adminProfile.corretor_id }
       : await findBrokerForCorretora(corretoraName);

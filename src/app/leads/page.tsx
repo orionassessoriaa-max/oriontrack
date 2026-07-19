@@ -218,6 +218,8 @@ export default function BrokerLeadsPage() {
   const [commercialModalError, setCommercialModalError] = useState<string | null>(null);
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [resolvedCorretorId, setResolvedCorretorId] = useState<string | null>(null);
+  const [resolvedCorretorIds, setResolvedCorretorIds] = useState<string[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
@@ -229,8 +231,14 @@ export default function BrokerLeadsPage() {
   );
   const canManageLeadResponsible = canAssignTeamLeads;
   const leadCreatorRoles = ['corretor', 'corretor_admin', 'corretor_membro', 'corretor_integrante', 'corretor_parceiro'];
+  const brokerCorretorId = resolvedCorretorId || profile?.corretor_id || null;
+  const brokerCorretorIds = resolvedCorretorIds.length > 0
+    ? resolvedCorretorIds
+    : brokerCorretorId
+      ? [brokerCorretorId]
+      : [];
   const canCreateManualLead = Boolean(
-    profile?.corretor_id &&
+    brokerCorretorId &&
     profile?.tipo_usuario &&
     leadCreatorRoles.includes(profile.tipo_usuario)
   );
@@ -246,18 +254,17 @@ export default function BrokerLeadsPage() {
 
   useEffect(() => {
     if (profile?.corretor_id) {
-      fetchLeads(0, false);
-      fetchCrmConfig();
-      fetchKanbanStages();
+      setResolvedCorretorId(profile.corretor_id);
+      setResolvedCorretorIds([profile.corretor_id]);
     }
-  }, [profile?.corretor_id, profile?.nome_empresa]);
+  }, [profile?.corretor_id]);
 
   const fetchKanbanStages = async () => {
-    if (!profile?.corretor_id) return;
+    if (!brokerCorretorId) return;
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
     if (!token) return;
-    const response = await fetch(`/api/crm/stages?corretor_id=${encodeURIComponent(profile.corretor_id)}`, {
+    const response = await fetch(`/api/crm/stages?corretor_id=${encodeURIComponent(brokerCorretorId)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const payload = await response.json().catch(() => ({}));
@@ -265,13 +272,21 @@ export default function BrokerLeadsPage() {
   };
 
   useEffect(() => {
-    if (profile?.corretor_id && canAssignTeamLeads) {
+    if (profile?.id && canAssignTeamLeads) {
       fetchTeamMembers();
     }
-  }, [profile?.corretor_id, profile?.nome_empresa, canAssignTeamLeads]);
+  }, [profile?.id, profile?.corretor_id, profile?.nome_empresa, canAssignTeamLeads]);
+
+  useEffect(() => {
+    if (brokerCorretorId) {
+      fetchLeads(0, false);
+      fetchCrmConfig();
+      fetchKanbanStages();
+    }
+  }, [brokerCorretorId, resolvedCorretorIds.join('|'), profile?.nome_empresa]);
 
   const fetchLeads = async (page = 0, append = false) => {
-    if (!profile?.corretor_id) {
+    if (!brokerCorretorId) {
       setLoading(false);
       return;
     }
@@ -286,16 +301,7 @@ export default function BrokerLeadsPage() {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      let idsToFetch = [profile.corretor_id];
-      if (profile.nome_empresa) {
-        const { data: siblings } = await supabase
-          .from('corretores')
-          .select('id')
-          .eq('nome_empresa', profile.nome_empresa);
-        if (siblings && siblings.length > 0) {
-          idsToFetch = siblings.map((s) => s.id);
-        }
-      }
+      const idsToFetch = brokerCorretorIds.length > 0 ? brokerCorretorIds : [brokerCorretorId];
 
       let leadsQuery = supabase
         .from('leads')
@@ -304,7 +310,7 @@ export default function BrokerLeadsPage() {
         .order('data_entrada', { ascending: false, nullsFirst: false })
         .range(from, to);
 
-      if (profile.tipo_usuario === 'corretor_membro') {
+      if (profile?.tipo_usuario === 'corretor_membro') {
         leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
       }
 
@@ -336,19 +342,19 @@ export default function BrokerLeadsPage() {
   };
 
   const fetchCrmConfig = async () => {
-    if (!profile?.corretor_id) return;
+    if (!brokerCorretorId) return;
 
     const { data } = await supabase
       .from('corretores')
       .select('crm_api_url, operadoras_info')
-      .eq('id', profile.corretor_id)
+      .eq('id', brokerCorretorId)
       .maybeSingle();
 
     setCrmApiUrl(data?.crm_api_url || '');
   };
 
   const fetchTeamMembers = async () => {
-    if (!profile?.corretor_id || !canAssignTeamLeads) {
+    if (!profile?.id || !canAssignTeamLeads) {
       setTeamMembers([]);
       return;
     }
@@ -357,12 +363,22 @@ export default function BrokerLeadsPage() {
     const token = data.session?.access_token;
     if (!token) return;
 
-    const response = await fetch(`/api/corretor/times?corretor_id=${encodeURIComponent(profile.corretor_id)}`, {
+    const query = profile.corretor_id ? `?corretor_id=${encodeURIComponent(profile.corretor_id)}` : '';
+    const response = await fetch(`/api/corretor/times${query}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const payload = await response.json().catch(() => ({}));
     if (response.ok) {
       setTeamMembers(payload.membros || []);
+      setResolvedCorretorId(payload.primary_corretor_id || profile.corretor_id || null);
+      setResolvedCorretorIds(Array.isArray(payload.corretor_ids) && payload.corretor_ids.length > 0
+        ? payload.corretor_ids
+        : payload.primary_corretor_id
+          ? [payload.primary_corretor_id]
+          : profile.corretor_id
+            ? [profile.corretor_id]
+            : []
+      );
     } else {
       console.error('Erro ao buscar responsaveis:', payload.error || response.statusText);
       setTeamMembers([]);
@@ -370,7 +386,7 @@ export default function BrokerLeadsPage() {
   };
 
   const assignLeadToMember = async (leadId: string, memberId: string) => {
-    if (!profile?.corretor_id) return;
+    if (!brokerCorretorId) return;
 
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -386,7 +402,7 @@ export default function BrokerLeadsPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId || 'unassigned', corretor_id: profile.corretor_id }),
+      body: JSON.stringify({ action: 'assign_lead', lead_id: leadId, member_id: memberId || 'unassigned', corretor_id: brokerCorretorId }),
     });
     const payload = await response.json().catch(() => ({}));
 
@@ -609,13 +625,13 @@ export default function BrokerLeadsPage() {
 
   const saveCrmConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile?.corretor_id) return;
+    if (!brokerCorretorId) return;
 
     setSavingCrm(true);
     const { error: updateError } = await supabase
       .from('corretores')
       .update({ crm_api_url: crmApiUrl || null })
-      .eq('id', profile.corretor_id);
+      .eq('id', brokerCorretorId);
 
     setSavingCrm(false);
     if (updateError) {
@@ -628,7 +644,7 @@ export default function BrokerLeadsPage() {
 
   const importSheet = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile?.corretor_id || !sheetUrl.trim()) {
+    if (!brokerCorretorId || !sheetUrl.trim()) {
       setImportMessage('Cole o link da planilha.');
       return;
     }
@@ -652,7 +668,7 @@ export default function BrokerLeadsPage() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        corretor_id: profile.corretor_id,
+        corretor_id: brokerCorretorId,
         sheet_url: sheetUrl,
       }),
     });
@@ -675,7 +691,7 @@ export default function BrokerLeadsPage() {
 
   const createManualLead = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!profile?.corretor_id || !canCreateManualLead) return;
+    if (!brokerCorretorId || !canCreateManualLead) return;
     if (!manualLeadForm.nome.trim() || !manualLeadForm.telefone.trim()) {
       setManualLeadError('Informe nome e telefone do lead.');
       return;
@@ -699,7 +715,7 @@ export default function BrokerLeadsPage() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        corretor_id: profile.corretor_id,
+        corretor_id: brokerCorretorId,
         ...manualLeadForm,
         status: 'Aguardando atendimento',
       }),

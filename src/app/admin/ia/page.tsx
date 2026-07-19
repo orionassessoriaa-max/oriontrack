@@ -35,6 +35,7 @@ interface AiConfig {
   corretora_id: string;
   persona: string;
   system_prompt: string;
+  sender_profile_id?: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -52,6 +53,16 @@ interface PromptModel {
   created_at?: string;
   updated_at?: string;
   builtin?: boolean;
+}
+
+interface SenderProfile {
+  id: string;
+  nome: string;
+  email?: string | null;
+  email_real?: string | null;
+  telefone?: string | null;
+  tipo_usuario?: string | null;
+  corretor_id?: string | null;
 }
 
 const DEFAULT_SYSTEM_PROMPT_TEMPLATE = DEFAULT_LEAD_AI_SYSTEM_PROMPT;
@@ -228,6 +239,8 @@ export default function AdminIaPage() {
   const [selectedCorretoraId, setSelectedCorretoraId] = useState('');
   const [persona, setPersona] = useState(DEFAULT_LEAD_AI_PERSONA);
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
+  const [senderProfilesByCorretora, setSenderProfilesByCorretora] = useState<Record<string, SenderProfile[]>>({});
+  const [selectedSenderProfileId, setSelectedSenderProfileId] = useState('');
   const [customPromptModels, setCustomPromptModels] = useState<PromptModel[]>([]);
   const [selectedPromptModelId, setSelectedPromptModelId] = useState('builtin-padrao');
   const [saveModelOpen, setSaveModelOpen] = useState(false);
@@ -252,6 +265,7 @@ export default function AdminIaPage() {
   const selectedPromptModel = promptModels.find((model) => model.id === selectedPromptModelId);
   const promptEditedFromModel = Boolean(selectedPromptModel) && normalizePrompt(systemPrompt) !== normalizePrompt(selectedPromptModel?.system_prompt || '');
   const canSavePromptModel = systemPrompt.trim().length > 0 && (selectedPromptModelId === 'custom' || promptEditedFromModel);
+  const availableSenderProfiles = senderProfilesByCorretora[selectedCorretoraId] || [];
 
   async function loadData() {
     if (!isAdmin) {
@@ -291,6 +305,7 @@ export default function AdminIaPage() {
       if (response.ok) {
         setActiveConfigs(data.activeConfigs || []);
         setInactiveCorretoras(data.inactiveCorretoras || []);
+        setSenderProfilesByCorretora(data.senderProfilesByCorretora || {});
       } else {
         setError(data.error || 'Erro ao carregar dados da IA.');
       }
@@ -326,6 +341,7 @@ export default function AdminIaPage() {
     setSelectedCorretoraId(config.corretora_id);
     setPersona(config.persona);
     setSystemPrompt(config.system_prompt);
+    setSelectedSenderProfileId(config.sender_profile_id || '');
     setSelectedPromptModelId(findPromptModelId(config.system_prompt, promptModels));
     setError(null);
     setSuccess(null);
@@ -341,6 +357,7 @@ export default function AdminIaPage() {
     setSelectedCorretoraId(inactiveCorretoras[0].id);
     setPersona(DEFAULT_LEAD_AI_PERSONA);
     setSystemPrompt(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
+    setSelectedSenderProfileId('');
     setSelectedPromptModelId('builtin-padrao');
     setError(null);
     setSuccess(null);
@@ -438,6 +455,7 @@ export default function AdminIaPage() {
           corretora_id: selectedCorretoraId,
           persona: persona.trim(),
           system_prompt: systemPrompt.trim(),
+          sender_profile_id: selectedSenderProfileId || null,
           status: 'ativo'
         })
       });
@@ -776,7 +794,10 @@ export default function AdminIaPage() {
                     {isAddingNew ? (
                       <select
                         value={selectedCorretoraId}
-                        onChange={(e) => setSelectedCorretoraId(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedCorretoraId(e.target.value);
+                          setSelectedSenderProfileId('');
+                        }}
                         className="w-full px-3 py-3 rounded-xl border border-slate-800 bg-slate-900/60 text-xs font-bold text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
                       >
                         {inactiveCorretoras.map((c) => (
@@ -790,6 +811,33 @@ export default function AdminIaPage() {
                         <Building size={14} className="text-slate-500" />
                         <span>{selectedConfig?.corretoras?.nome || 'Concessionária'}</span>
                       </div>
+                    )}
+                  </div>
+
+                  {/* Sender WhatsApp Profile */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      WhatsApp que a IA vai usar
+                    </label>
+                    <select
+                      value={selectedSenderProfileId}
+                      onChange={(e) => setSelectedSenderProfileId(e.target.value)}
+                      className="w-full px-3 py-3 rounded-xl border border-slate-800 bg-slate-900/60 text-xs font-bold text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+                    >
+                      <option value="">Automatico: admin/corretor conectado</option>
+                      {availableSenderProfiles.map((sender) => (
+                        <option key={sender.id} value={sender.id}>
+                          {sender.nome} {sender.telefone ? `- ${sender.telefone}` : ''} {sender.tipo_usuario === 'corretor_admin' ? '(admin)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[9px] font-bold leading-relaxed text-slate-500">
+                      Essa e a instancia de WhatsApp que envia as mensagens da IA. Se deixar automatico, o sistema usa o admin/corretor ativo da concessionaria.
+                    </p>
+                    {availableSenderProfiles.length === 0 && (
+                      <p className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-[10px] font-bold text-amber-300">
+                        Nenhum admin/corretor ativo encontrado para esta concessionaria. Verifique o vinculo do perfil com a concessionaria.
+                      </p>
                     )}
                   </div>
 

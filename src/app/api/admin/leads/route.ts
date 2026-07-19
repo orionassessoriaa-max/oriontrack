@@ -47,13 +47,58 @@ async function requireLeadCreator(request: Request) {
   return { user, profile };
 }
 
+async function resolveProfileCorretorId(profile: any) {
+  if (profile.corretor_id) return profile.corretor_id;
+
+  const emails = [profile.email, profile.email_real]
+    .filter(Boolean)
+    .map((email) => String(email).trim().toLowerCase());
+
+  if (emails.length > 0) {
+    const { data: corretorByEmail } = await supabaseAdmin
+      .from('corretores')
+      .select('id')
+      .or(emails.map((email) => `email.eq.${email},email_real.eq.${email}`).join(','))
+      .maybeSingle();
+
+    if (corretorByEmail?.id) {
+      await supabaseAdmin
+        .from('profiles')
+        .update({ corretor_id: corretorByEmail.id })
+        .eq('id', profile.id);
+      return corretorByEmail.id;
+    }
+  }
+
+  const brokerageName = String(profile.nome_empresa || '').trim();
+  if (brokerageName) {
+    const { data: corretorByCompany } = await supabaseAdmin
+      .from('corretores')
+      .select('id')
+      .eq('nome_empresa', brokerageName)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (corretorByCompany?.id) {
+      await supabaseAdmin
+        .from('profiles')
+        .update({ corretor_id: corretorByCompany.id })
+        .eq('id', profile.id);
+      return corretorByCompany.id;
+    }
+  }
+
+  return null;
+}
+
 async function getCorretorScopeForProfile(profile: any, requestedCorretorId: string) {
   if (profile.tipo_usuario === 'admin') {
     if (!requestedCorretorId) return { error: 'Selecione um corretor.' };
     return { corretorId: requestedCorretorId, corretorIds: [requestedCorretorId] };
   }
 
-  const ownCorretorId = profile.corretor_id;
+  const ownCorretorId = await resolveProfileCorretorId(profile);
   if (!ownCorretorId) return { error: 'Perfil sem corretor vinculado.' };
 
   const { data: ownCorretor } = await supabaseAdmin
@@ -221,29 +266,44 @@ export async function POST(request: Request) {
     if ('error' in responsibleResult) return NextResponse.json({ error: responsibleResult.error }, { status: 400 });
     const responsibleMember = responsibleResult.member;
 
-    const { data, error } = await supabaseAdmin
+    const origem = body.origem ? String(body.origem).trim() : 'Manual';
+    const leadPayload = {
+      corretor_id: corretorId,
+      nome,
+      telefone,
+      idades: String(body.idades || ''),
+      possui_cnpj: String(body.possui_cnpj || 'Nao informado'),
+      cnpj: body.cnpj ? String(body.cnpj) : null,
+      tem_plano_ativo: String(body.tem_plano_ativo || 'Nao informado'),
+      plano_atual: String(body.plano_atual || ''),
+      custo_plano_atual: String(body.custo_plano_atual || ''),
+      investimento: String(body.investimento || ''),
+      cidade: String(body.cidade || ''),
+      operadora: body.operadora ? String(body.operadora) : null,
+      origem,
+      utm_source: origem,
+      responsavel_membro_id: responsibleMember?.id || null,
+      responsavel_profile_id: responsibleMember?.profile_id || null,
+      status: normalizeLeadStatus(body.status || 'Aguardando atendimento'),
+      data_entrada: body.data_entrada ? new Date(body.data_entrada).toISOString() : new Date().toISOString(),
+    };
+
+    let { data, error } = await supabaseAdmin
       .from('leads')
-      .insert([{
-        corretor_id: corretorId,
-        nome,
-        telefone,
-        idades: String(body.idades || ''),
-        possui_cnpj: String(body.possui_cnpj || 'Nao informado'),
-        cnpj: body.cnpj ? String(body.cnpj) : null,
-        tem_plano_ativo: String(body.tem_plano_ativo || 'Nao informado'),
-        plano_atual: String(body.plano_atual || ''),
-        custo_plano_atual: String(body.custo_plano_atual || ''),
-        investimento: String(body.investimento || ''),
-        cidade: String(body.cidade || ''),
-        operadora: body.operadora ? String(body.operadora) : null,
-        origem: body.origem ? String(body.origem).trim() : 'Manual',
-        responsavel_membro_id: responsibleMember?.id || null,
-        responsavel_profile_id: responsibleMember?.profile_id || null,
-        status: normalizeLeadStatus(body.status || 'Aguardando atendimento'),
-        data_entrada: body.data_entrada ? new Date(body.data_entrada).toISOString() : new Date().toISOString(),
-      }])
+      .insert([leadPayload])
       .select('*, responsavel_membro:responsavel_membro_id(nome,email)')
       .single();
+
+    if (error && String(error.message || '').includes("'origem' column")) {
+      const { origem: _origem, ...fallbackPayload } = leadPayload;
+      const retry = await supabaseAdmin
+        .from('leads')
+        .insert([fallbackPayload])
+        .select('*, responsavel_membro:responsavel_membro_id(nome,email)')
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
