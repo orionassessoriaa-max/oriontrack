@@ -4,6 +4,7 @@ import { normalizeLeadStatus } from '@/lib/leadStatus';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
+import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 
 const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
 const LEAD_CREATOR_PROFILE_TYPES = [
@@ -266,7 +267,18 @@ export async function POST(request: Request) {
     if ('error' in responsibleResult) return NextResponse.json({ error: responsibleResult.error }, { status: 400 });
     const responsibleMember = responsibleResult.member;
 
-    const origem = body.origem ? String(body.origem).trim() : 'Manual';
+    const origem = resolveLeadOrigin({
+      origem: body.origem,
+      utm_source: body.utm_source,
+      utm_medium: body.utm_medium,
+      utm_campaign: body.utm_campaign,
+      utm_term: body.utm_term,
+      utm_content: body.utm_content,
+      campaign: body.campanha,
+      adset: body.conjunto,
+      ad: body.anuncio,
+      operadora: body.operadora,
+    }, 'Manual');
     const leadPayload = {
       corretor_id: corretorId,
       nome,
@@ -294,7 +306,7 @@ export async function POST(request: Request) {
       .select('*, responsavel_membro:responsavel_membro_id(nome,email)')
       .single();
 
-    if (error && String(error.message || '').includes("'origem' column")) {
+    if (error && isMissingLeadOriginColumn(error)) {
       const { origem: _origem, ...fallbackPayload } = leadPayload;
       const retry = await supabaseAdmin
         .from('leads')

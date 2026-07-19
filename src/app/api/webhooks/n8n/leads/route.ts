@@ -7,6 +7,7 @@ import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
+import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 
 function normalizeText(value: unknown, fallback = '') {
   if (value === undefined || value === null) return fallback;
@@ -155,6 +156,7 @@ function buildEnrichmentUpdate(existing: any, incoming: any) {
     'investimento',
     'cidade',
     'operadora',
+    'origem',
     'utm_source',
     'utm_medium',
     'utm_campaign',
@@ -495,8 +497,22 @@ export async function POST(request: Request) {
       observacoes: normalizeText(field(body, ['observacoes', 'observação', 'observacao', 'obs', 'comentarios'])) || null,
       updated_at: new Date().toISOString()
     };
+    const resolvedOrigin = resolveLeadOrigin({
+      origem: leadPayload.utm_source,
+      utm_source: leadPayload.utm_source,
+      utm_medium: leadPayload.utm_medium,
+      utm_campaign: leadPayload.utm_campaign,
+      utm_term: leadPayload.utm_term,
+      utm_content: leadPayload.utm_content,
+      operadora: leadPayload.operadora,
+      observacoes: leadPayload.observacoes,
+    }, 'Orion');
+    const leadPayloadWithOrigin = {
+      ...leadPayload,
+      origem: resolvedOrigin,
+    };
 
-    const duplicateKey = buildLeadDuplicateKey(leadPayload);
+    const duplicateKey = buildLeadDuplicateKey(leadPayloadWithOrigin);
     let existingPage = 0;
     const existingLimit = 1000;
     let fetchExisting = true;
@@ -514,9 +530,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: existingError.message }, { status: 500 });
       }
 
-      const existingIdentity = (existingLeads || []).find((lead) => buildLeadIdentityKey(lead) === buildLeadIdentityKey(leadPayload));
+      const existingIdentity = (existingLeads || []).find((lead) => buildLeadIdentityKey(lead) === buildLeadIdentityKey(leadPayloadWithOrigin));
       if (existingIdentity) {
-        const update = buildEnrichmentUpdate(existingIdentity, leadPayload);
+        const update = buildEnrichmentUpdate(existingIdentity, leadPayloadWithOrigin);
         if (Object.keys(update).length > 0) {
           const { data: enrichedLead, error: enrichError } = await supabaseAdmin
             .from('leads')
@@ -526,6 +542,28 @@ export async function POST(request: Request) {
             .single();
 
           if (enrichError) {
+            if (isMissingLeadOriginColumn(enrichError) && update.origem !== undefined) {
+              const { origem: _origem, ...fallbackUpdate } = update;
+              const fallback = await supabaseAdmin
+                .from('leads')
+                .update({ ...fallbackUpdate, updated_at: new Date().toISOString() })
+                .eq('id', existingIdentity.id)
+                .select('id, corretor_id, nome, telefone, status')
+                .single();
+
+              if (fallback.error) {
+                return NextResponse.json({ error: fallback.error.message }, { status: 500 });
+              }
+
+              return NextResponse.json({
+                success: true,
+                duplicate: true,
+                enriched: true,
+                lead: fallback.data,
+                ai: await tryStartLeadAiForWebhook(fallback.data.id),
+                message: 'Lead existente enriquecido com dados novos.',
+              });
+            }
             return NextResponse.json({ error: enrichError.message }, { status: 500 });
           }
 
@@ -558,14 +596,28 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data, error } = await supabaseAdmin
+    let { data, error } = await supabaseAdmin
       .from('leads')
-      .insert([leadPayload])
+      .insert([leadPayloadWithOrigin])
       .select('id, corretor_id, nome, telefone, status')
       .single();
 
+    if (error && isMissingLeadOriginColumn(error)) {
+      const { origem: _origem, ...fallbackPayload } = leadPayloadWithOrigin;
+      const retry = await supabaseAdmin
+        .from('leads')
+        .insert([fallbackPayload])
+        .select('id, corretor_id, nome, telefone, status')
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
+
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!data) {
+      return NextResponse.json({ error: 'Lead nao foi criado.' }, { status: 500 });
     }
 
     const assignedMemberId = await assignLeadToNextTeamMember(corretorId, data.id);

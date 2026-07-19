@@ -4,6 +4,7 @@ import { LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 import { buildLeadImportWarningNote } from '@/lib/leadWarnings';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
+import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 
 type CsvRow = Record<string, string>;
 type LeadInsert = {
@@ -20,6 +21,7 @@ type LeadInsert = {
   investimento: string;
   cidade: string;
   operadora: string;
+  origem?: string;
   utm_source: string;
   utm_medium: string;
   utm_campaign: string;
@@ -274,6 +276,7 @@ function buildEnrichmentUpdate(existing: any, incoming: LeadInsert) {
     'investimento',
     'cidade',
     'operadora',
+    'origem',
     'utm_source',
     'utm_medium',
     'utm_campaign',
@@ -752,6 +755,16 @@ export async function POST(request: Request) {
             investimento: pick(row, ['investimento', 'investimento pretendido', 'pretensao investimento', 'quer investir quanto', 'quanto pretende investir', 'orcamento']),
             cidade: pick(row, ['cidade', 'regiao', 'localidade']),
             operadora: inferOperadora(row, sheetName),
+            origem: resolveLeadOrigin({
+              origem: pick(row, ['origem', 'utm origem', 'utm_source', 'source']),
+              utm_source: pick(row, ['utm_source', 'source', 'origem', 'utm origem']),
+              utm_medium: pick(row, ['utm_medium', 'medium', 'meio', 'utm meio']),
+              utm_campaign: pick(row, ['utm_campaign', 'campaign', 'campanha', 'nome campanha']),
+              utm_term: pick(row, ['utm_term', 'term', 'conjunto', 'conjunto de anuncio', 'adset', 'ad set']),
+              utm_content: pick(row, ['utm_content', 'content', 'anuncio', 'anÃºncio', 'ad', 'criativo']),
+              operadora: inferOperadora(row, sheetName),
+              observacoes: buildNotes(row),
+            }),
             utm_source: pick(row, ['utm_source', 'source', 'origem', 'utm origem']),
             utm_medium: pick(row, ['utm_medium', 'medium', 'meio', 'utm meio']),
             utm_campaign: pick(row, ['utm_campaign', 'campaign', 'campanha', 'nome campanha']),
@@ -845,7 +858,19 @@ export async function POST(request: Request) {
         .eq('id', item.id);
 
       if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
+        if (isMissingLeadOriginColumn(updateError) && item.update.origem !== undefined) {
+          const { origem: _origem, ...fallbackUpdate } = item.update;
+          const { error: fallbackError } = await supabaseAdmin
+            .from('leads')
+            .update({ ...fallbackUpdate, updated_at: new Date().toISOString() })
+            .eq('id', item.id);
+
+          if (fallbackError) {
+            return NextResponse.json({ error: fallbackError.message }, { status: 500 });
+          }
+        } else {
+          return NextResponse.json({ error: updateError.message }, { status: 500 });
+        }
       }
       enriched += 1;
     }
@@ -862,10 +887,20 @@ export async function POST(request: Request) {
       }, { status: enriched > 0 ? 200 : 409 });
     }
 
-    const { data, error } = await supabaseAdmin
+    let { data, error } = await supabaseAdmin
       .from('leads')
       .insert(uniqueLeads)
       .select('id');
+
+    if (error && isMissingLeadOriginColumn(error)) {
+      const retryLeads = uniqueLeads.map(({ origem: _origem, ...lead }) => lead);
+      const retry = await supabaseAdmin
+        .from('leads')
+        .insert(retryLeads)
+        .select('id');
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

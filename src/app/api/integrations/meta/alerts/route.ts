@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 
 type CorretorMeta = {
   id: string;
@@ -115,40 +116,6 @@ function describeMetaError(error: any, accountId?: string | null) {
   return message || 'Nao consegui consultar esta conta Meta agora.';
 }
 
-async function fetchSheetLeadCount(corretor: CorretorMeta, since: string, until: string) {
-  const start = `${since}T00:00:00.000-03:00`;
-  const end = `${until}T23:59:59.999-03:00`;
-  let corretorIds = corretor.scoped_corretor_ids?.length ? corretor.scoped_corretor_ids : [corretor.id];
-
-  const corretoraNome = String(corretor.nome_empresa || '').trim();
-  if (!corretor.scoped_corretor_ids?.length && corretoraNome) {
-    let groupQuery = supabaseAdmin
-      .from('corretores')
-      .select('id')
-      .eq('nome_empresa', corretoraNome);
-
-    if (corretor.gestor_trafego_id) {
-      groupQuery = groupQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
-    }
-
-    const { data: groupCorretores, error: groupError } = await groupQuery;
-
-    if (groupError) throw new Error(`Erro ao buscar corretores da concessionaria: ${groupError.message}`);
-    const groupIds = (groupCorretores || []).map((item) => item.id).filter(Boolean);
-    if (groupIds.length > 0) corretorIds = groupIds;
-  }
-
-  const { count, error } = await supabaseAdmin
-    .from('leads')
-    .select('id', { count: 'exact', head: true })
-    .in('corretor_id', corretorIds)
-    .gte('data_entrada', start)
-    .lte('data_entrada', end);
-
-  if (error) throw new Error(`Erro ao contar leads da planilha: ${error.message}`);
-  return count || 0;
-}
-
 async function fetchSheetLeads(corretor: CorretorMeta, since: string, until: string) {
   const start = `${since}T00:00:00.000-03:00`;
   const end = `${until}T23:59:59.999-03:00`;
@@ -166,20 +133,32 @@ async function fetchSheetLeads(corretor: CorretorMeta, since: string, until: str
     }
 
     const { data: groupCorretores, error: groupError } = await groupQuery;
+
     if (groupError) throw new Error(`Erro ao buscar corretores da concessionaria: ${groupError.message}`);
     const groupIds = (groupCorretores || []).map((item) => item.id).filter(Boolean);
     if (groupIds.length > 0) corretorIds = groupIds;
   }
 
-  const { data, error } = await supabaseAdmin
+  let { data, error }: { data: any[] | null; error: any } = await supabaseAdmin
     .from('leads')
-    .select('id, utm_content, data_entrada')
+    .select('id, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes, data_entrada')
     .in('corretor_id', corretorIds)
     .gte('data_entrada', start)
     .lte('data_entrada', end);
 
+  if (error && isMissingLeadOriginColumn(error)) {
+    const retry = await supabaseAdmin
+      .from('leads')
+      .select('id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes, data_entrada')
+      .in('corretor_id', corretorIds)
+      .gte('data_entrada', start)
+      .lte('data_entrada', end);
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) throw new Error(`Erro ao buscar leads CRM: ${error.message}`);
-  return data || [];
+  return (data || []).filter(isOrionLead);
 }
 
 function normalizeKey(value?: string | null) {
@@ -279,9 +258,9 @@ function localPortfolioReview(accounts: any[], activeCreatives: any[]) {
 
   return [
     `Resumo: ${critical} conta(s) critica(s), ${attention} em atencao e ${crmPending} com CRM pendente.`,
-    best ? `Melhor conta no momento: ${best.concessionaria_nome || best.corretor_nome}, com CPL CRM de ${Number(best.cpl || 0).toLocaleString('pt-BR', { style: 'currency', currency: best.currency || 'BRL' })}.` : 'Nenhuma conta saudavel com leads CRM suficientes para ranquear como melhor.',
-    topCreative ? `Criativo com mais leads CRM: ${topCreative.ad_name}, em ${topCreative.concessionaria_nome}, com ${topCreative.leads} lead(s).` : 'Ainda nao ha criativo ativo com lead CRM atribuido por UTM de anuncio.',
-    'Regra de seguranca: quando ha investimento e zero lead CRM, revisar webhook/UTM antes de julgar CPL ou aprovar qualquer acao.',
+    best ? `Melhor conta no momento: ${best.concessionaria_nome || best.corretor_nome}, com CPL Orion CRM de ${Number(best.cpl || 0).toLocaleString('pt-BR', { style: 'currency', currency: best.currency || 'BRL' })}.` : 'Nenhuma conta saudavel com leads Orion no CRM suficientes para ranquear como melhor.',
+    topCreative ? `Criativo com mais leads Orion no CRM: ${topCreative.ad_name}, em ${topCreative.concessionaria_nome}, com ${topCreative.leads} lead(s).` : 'Ainda nao ha criativo ativo com lead Orion no CRM atribuido por UTM de anuncio.',
+    'Regra de seguranca: quando ha investimento e zero lead Orion no CRM, revisar webhook/UTM antes de julgar CPL ou aprovar qualquer acao.',
   ].join('\n');
 }
 
@@ -324,12 +303,12 @@ async function generatePortfolioAiReview(accounts: any[], activeCreatives: any[]
         {
           role: 'system',
           content: `Voce e uma IA de gestao de trafego para corretoras de planos de saude. Regras fixas:
-- Leads oficiais sempre sao os leads CRM, nunca leads reportados pela Meta.
-- CPL critico quando CPL CRM chegar a R$ 28,00 ou mais.
+- Leads oficiais para CPL sao somente leads Orion no CRM, nunca leads reportados pela Meta nem leads manuais.
+- CPL critico quando CPL Orion CRM chegar a R$ 28,00 ou mais.
 - CPL acima de R$ 20,00 exige avaliar CPC, CTR, CPM, visualizacao de pagina e frequencia.
 - CPC maximo R$ 6,00.
 - CTR minimo 1%.
-- Se houver investimento e zero lead CRM, classifique como CRM pendente e recomende revisar webhook/UTM antes de otimizar.
+- Se houver investimento e zero lead Orion no CRM, classifique como CRM pendente e recomende revisar webhook/UTM antes de otimizar.
 Responda em portugues do Brasil, curto, em bullets, sem inventar dados.`
         },
         { role: 'user', content: JSON.stringify(payload).slice(0, 16000) },
@@ -357,7 +336,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   const [insightsResponse, accountResponse, sheetLeads] = await Promise.all([
     fetch(insightsUrl.toString(), { next: { revalidate: 900 } }),
     fetch(accountUrl.toString(), { next: { revalidate: 900 } }),
-    fetchSheetLeadCount(corretor, since, until),
+    fetchSheetLeads(corretor, since, until),
   ]);
 
   const [insightsPayload, accountPayload] = await Promise.all([
@@ -375,7 +354,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
 
   const row = insightsPayload.data?.[0] || {};
   const spend = Number(row.spend || 0);
-  const leads = sheetLeads;
+  const leads = sheetLeads.length;
   const cpl = leads > 0 ? spend / leads : null;
   const ctr = Number(row.ctr || 0);
   const cpc = Number(row.cpc || 0);

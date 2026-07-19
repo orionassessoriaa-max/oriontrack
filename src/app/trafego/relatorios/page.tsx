@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { format } from 'date-fns';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 
 type ReportCorretor = {
   id: string;
@@ -216,19 +217,30 @@ export default function TrafficReportsPage() {
         fonteLeads = 'manual';
       } else {
         investido = await fetchMetaSpend();
-        const { count, error: supabaseError } = await supabase
+        let { data: crmLeads, error: supabaseError }: { data: any[] | null; error: any } = await supabase
           .from('leads')
-          .select('*', { count: 'exact', head: true })
+          .select('id, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes')
           .eq('corretor_id', formData.corretor_id)
           .gte('data_entrada', new Date(formData.data_inicio).toISOString())
           .lte('data_entrada', new Date(formData.data_fim + 'T23:59:59').toISOString());
+
+        if (supabaseError && isMissingLeadOriginColumn(supabaseError)) {
+          const retry = await supabase
+            .from('leads')
+            .select('id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes')
+            .eq('corretor_id', formData.corretor_id)
+            .gte('data_entrada', new Date(formData.data_inicio).toISOString())
+            .lte('data_entrada', new Date(formData.data_fim + 'T23:59:59').toISOString());
+          crmLeads = retry.data;
+          supabaseError = retry.error;
+        }
 
         if (supabaseError) {
           alert('Erro ao buscar leads: ' + supabaseError.message);
           return;
         }
 
-        numLeads = count || 0;
+        numLeads = (crmLeads || []).filter(isOrionLead).length;
       }
 
       const cpl = numLeads > 0 ? investido / numLeads : null;

@@ -230,7 +230,7 @@ export default function OtimizacoesPage() {
           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">Meta Ads + CRM</p>
           <h1 className="text-3xl font-black text-white sm:text-4xl">Otimizações</h1>
           <p className="mt-1 max-w-3xl text-sm font-semibold text-slate-400">
-            Campanhas, conjuntos e anúncios com CPL calculado pelos leads que caíram no CRM.
+            Campanhas, conjuntos e anúncios com CPL calculado somente pelos leads de origem Orion no CRM.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -306,7 +306,7 @@ export default function OtimizacoesPage() {
               <div className="mb-5 grid grid-cols-2 gap-x-8 gap-y-4 border-b border-white/10 pb-5 lg:grid-cols-6">
                 <Metric label="Total" value={formatCurrency(total.spend, total.currency)} />
                 <Metric label="Leads CRM" value={String(total.leads_crm || 0)} />
-                <Metric label="CPL CRM" value={formatCurrency(total.cpl_crm, total.currency)} alert={Number(total.cpl_crm || 0) >= 28} />
+                <Metric label="CPL Orion CRM" value={formatCurrency(total.cpl_crm, total.currency)} alert={Number(total.cpl_crm || 0) >= 28} />
                 <Metric label="CPC" value={formatCurrency(total.cpc || 0, total.currency)} alert={Number(total.cpc || 0) > 6} />
                 <Metric label="CPM" value={formatCurrency(total.cpm || 0, total.currency)} />
                 <Metric label="CTR" value={formatPercent(total.ctr)} alert={Number(total.ctr || 0) < 1} />
@@ -330,7 +330,7 @@ export default function OtimizacoesPage() {
                         <th className="py-3 pr-4">Nome</th>
                         <th className="px-3 py-3 text-right">Total</th>
                         <th className="px-3 py-3 text-right">Leads CRM</th>
-                        <th className="px-3 py-3 text-right">CPL CRM</th>
+                        <th className="px-3 py-3 text-right">CPL Orion CRM</th>
                         <th className="px-3 py-3 text-right">CPC</th>
                         <th className="px-3 py-3 text-right">CPM</th>
                         <th className="px-3 py-3 text-right">CTR</th>
@@ -362,7 +362,7 @@ export default function OtimizacoesPage() {
                   <h3 className="text-sm font-black uppercase tracking-widest text-white">Recomendação da IA</h3>
                 </div>
                 <p className="max-w-5xl whitespace-pre-line text-sm font-bold leading-relaxed text-slate-300">
-                  {aiRecommendation || 'Clique em Revisar com IA para gerar uma análise real com base nas regras de CPL, CPC, CTR e leads do CRM.'}
+                  {aiRecommendation || 'Clique em Revisar com IA para gerar uma análise real com base nas regras de CPL, CPC, CTR e leads Orion no CRM.'}
                 </p>
               </section>
 

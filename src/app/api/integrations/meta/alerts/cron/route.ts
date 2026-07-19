@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
+import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 
 type CorretorMeta = {
   id: string;
@@ -45,15 +46,26 @@ async function fetchSheetLeadCount(corretorId: string, since: string, until: str
   const start = `${since}T00:00:00.000-03:00`;
   const end = `${until}T23:59:59.999-03:00`;
 
-  const { count, error } = await supabaseAdmin
+  let { data, error }: { data: any[] | null; error: any } = await supabaseAdmin
     .from('leads')
-    .select('id', { count: 'exact', head: true })
+    .select('id, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes')
     .eq('corretor_id', corretorId)
     .gte('data_entrada', start)
     .lte('data_entrada', end);
 
+  if (error && isMissingLeadOriginColumn(error)) {
+    const retry = await supabaseAdmin
+      .from('leads')
+      .select('id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes')
+      .eq('corretor_id', corretorId)
+      .gte('data_entrada', start)
+      .lte('data_entrada', end);
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) throw new Error(`Erro ao contar leads da planilha: ${error.message}`);
-  return count || 0;
+  return (data || []).filter(isOrionLead).length;
 }
 
 async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {

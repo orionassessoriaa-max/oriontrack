@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 
 type CorretorMeta = {
   id: string;
@@ -175,15 +176,26 @@ async function fetchCrmLeads(corretor: CorretorMeta, since: string, until: strin
     if (ids.length) corretorIds = ids;
   }
 
-  const { data, error } = await supabaseAdmin
+  let { data, error }: { data: any[] | null; error: any } = await supabaseAdmin
     .from('leads')
-    .select('id, utm_campaign, utm_term, utm_content, data_entrada')
+    .select('id, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes, data_entrada')
     .in('corretor_id', corretorIds)
     .gte('data_entrada', start)
     .lte('data_entrada', end);
 
+  if (error && isMissingLeadOriginColumn(error)) {
+    const retry = await supabaseAdmin
+      .from('leads')
+      .select('id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes, data_entrada')
+      .in('corretor_id', corretorIds)
+      .gte('data_entrada', start)
+      .lte('data_entrada', end);
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) throw new Error(`Erro ao buscar leads CRM: ${error.message}`);
-  return data || [];
+  return (data || []).filter(isOrionLead);
 }
 
 function countLeads(leads: any[], field: 'utm_campaign' | 'utm_term' | 'utm_content', name?: string | null) {
@@ -360,13 +372,13 @@ async function generateAiRecommendation(payload: any) {
         {
           role: 'system',
           content: `Voce e uma IA especialista em Meta Ads para corretoras de plano de saude. Analise com base nestas regras:
-- Leads oficiais sempre sao os leads CRM, nunca os leads da Meta.
-- CPL critico: pausar/revisar quando CPL CRM chegar a R$ 28,00 ou mais.
-- Se CPL CRM estiver acima de R$ 20,00, avaliar metricas secundarias.
+- Leads oficiais para CPL sao somente leads Orion no CRM, nunca leads da Meta nem leads manuais.
+- CPL critico: pausar/revisar quando CPL Orion CRM chegar a R$ 28,00 ou mais.
+- Se CPL Orion CRM estiver acima de R$ 20,00, avaliar metricas secundarias.
 - CPC maximo R$ 6,00.
 - CTR minimo 1%.
 - Frequencia indica fadiga de publico/criativo.
-Responda em portugues do Brasil, direto, com recomendacao operacional. Nao invente dados. Se faltar lead CRM, diga para revisar rastreamento antes de otimizar.`
+Responda em portugues do Brasil, direto, com recomendacao operacional. Nao invente dados. Se faltar lead Orion no CRM, diga para revisar rastreamento antes de otimizar.`
         },
         { role: 'user', content: JSON.stringify(payload).slice(0, 14000) },
       ],

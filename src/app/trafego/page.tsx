@@ -115,7 +115,7 @@ function classifyMetaAccount(account: MetaAccountAlert) {
   if (isCard && hasPaymentError) return { label: 'Erro pagamento', tone: 'red', detail: 'Falha no processamento do cartão. Admin deve acompanhar.' };
   if (!isCard && account.saldo !== null && account.saldo <= 0) return { label: 'Sem saldo', tone: 'red', detail: 'Conta pré-paga sem saldo. Admin deve ser avisado.' };
   if (account.alerta_cpl_alto) return { label: 'CPL crítico', tone: 'red', detail: 'CPL chegou a R$ 28,00 ou mais. Revisão obrigatória antes de qualquer ação.' };
-  if (account.dados_crm_pendentes) return { label: 'CRM pendente', tone: 'blue', detail: 'Existe investimento na Meta, mas nenhum lead no CRM. Conferir importação antes de julgar o CPL.' };
+  if (account.dados_crm_pendentes) return { label: 'CRM pendente', tone: 'blue', detail: 'Existe investimento na Meta, mas nenhum lead Orion no CRM. Conferir automação/UTM antes de julgar o CPL.' };
   if (account.alerta_cpl_atencao || account.alerta_metricas_secundarias) return { label: 'Em atenção', tone: 'amber', detail: 'CPL acima de R$ 20,00. Avaliar CPC, CTR, CPM, página de destino e frequência.' };
   if (!isCard && account.alerta_saldo_baixo) return { label: 'Saldo baixo', tone: 'amber', detail: 'Saldo abaixo do mínimo operacional.' };
   return { label: 'Saudável', tone: 'emerald', detail: 'Sem alerta crítico no período selecionado.' };
@@ -482,7 +482,7 @@ export default function GestorDashboardPage() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">MVP de otimização</p>
                   <h2 className="mt-1 text-2xl font-black tracking-tight text-white">Revisão Meta com leads reais do CRM</h2>
                   <p className="mt-1 max-w-3xl text-sm font-semibold leading-relaxed text-slate-400">
-                    O sistema monitora as contas conectadas, calcula CPL usando somente leads do CRM e separa o que é crítico, atenção ou apenas dado pendente. Nenhuma campanha é pausada automaticamente neste MVP.
+                    O sistema monitora as contas conectadas, calcula CPL usando somente leads Orion no CRM e separa o que é crítico, atenção ou apenas dado pendente. Nenhuma campanha é pausada automaticamente neste MVP.
                   </p>
                 </div>
               </div>
@@ -573,7 +573,7 @@ export default function GestorDashboardPage() {
                   <RuleRow icon={TrendingUp} title="CPL crítico" text="Pausar só entra como recomendação quando CPL real chegar a R$ 28,00 com dados confiáveis." tone="red" />
                   <RuleRow icon={Activity} title="CPL em atenção" text="Acima de R$ 20,00 o painel exige leitura de CPC, CTR, CPM, visualização de página e frequência." tone="amber" />
                   <RuleRow icon={MousePointerClick} title="Métricas secundárias" text="CPC máximo R$ 6,00, CTR mínimo 1%. Frequência fica como indicador de fadiga." tone="blue" />
-                  <RuleRow icon={Eye} title="Fonte dos leads" text="Lead oficial vem do CRM Orion. Se a Meta tem gasto e o CRM nao tem lead, o status vira CRM pendente." tone="emerald" />
+                  <RuleRow icon={Eye} title="Fonte dos leads" text="Para CPL, o lead oficial e somente o lead de origem Orion no CRM. Se a Meta tem gasto e nao ha lead Orion, o status vira CRM pendente." tone="emerald" />
                 </div>
               </div>
             </div>
@@ -951,7 +951,7 @@ function TrafficCommandCenter({
                       </div>
                     </div>
                     <div className="lg:text-right">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">CPL CRM</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">CPL Orion</p>
                       <p className={`mt-1 text-sm font-black tabular-nums ${Number(account.cpl || 0) >= 28 ? 'text-red-300' : 'text-slate-200'}`}>{formatCurrency(account.cpl, account.currency)}</p>
                     </div>
                   </div>
@@ -1124,7 +1124,7 @@ function TrafficCommandCenter({
             </Panel>
             <Panel title="Regra de segurança">
               <p className="text-sm font-semibold leading-relaxed text-slate-300">
-                O painel usa leads do CRM para calcular CPL. Quando existe gasto na Meta e nenhum lead no CRM, a conta entra como “CRM pendente” para evitar decisão errada.
+                O painel usa somente leads de origem Orion no CRM para calcular CPL. Quando existe gasto na Meta e nenhum lead Orion no CRM, a conta entra como “CRM pendente” para evitar decisão errada.
               </p>
             </Panel>
           </div>

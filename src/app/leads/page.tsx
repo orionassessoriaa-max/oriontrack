@@ -30,6 +30,7 @@ import { getLeadStatusStyle, isLeadSale, normalizeLeadStatus } from '@/lib/leadS
 import { DEFAULT_KANBAN_STAGES, KanbanStage, getKanbanStageLabel, isSaleEquivalentStage, normalizeKanbanStages } from '@/lib/kanbanStages';
 import { cleanLeadObservationText, getLeadImportWarnings } from '@/lib/leadWarnings';
 import PhoneAction from '@/components/ui/PhoneAction';
+import { resolveLeadOrigin } from '@/lib/leadOrigin';
 
 function normalizeText(value?: string | null) {
   return String(value || '')
@@ -177,7 +178,16 @@ function leadAd(lead: Lead) {
 }
 
 function leadOrigem(lead: Lead) {
-  return lead.origem || '-';
+  return resolveLeadOrigin({
+    origem: lead.origem,
+    utm_source: lead.utm_source,
+    utm_medium: lead.utm_medium,
+    utm_campaign: lead.utm_campaign,
+    utm_term: lead.utm_term,
+    utm_content: lead.utm_content,
+    operadora: lead.operadora,
+    observacoes: lead.observacoes,
+  }) || '-';
 }
 
 export default function BrokerLeadsPage() {
