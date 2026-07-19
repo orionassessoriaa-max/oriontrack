@@ -3743,6 +3743,379 @@ body.theme-claro {
   }
 }
 
+/* =========================================================================
+   TEMA CLARO — CAMADA FINAL: remove glow neon e resolve o conflito de
+   especificidade que deixava texto branco sobre fundo branco no topbar.
+   Este bloco não altera .theme-noturno (tema escuro) em nada.
+   ========================================================================= */
+
+/* Neutraliza qualquer glow/halo colorido (a "cara neon") só no tema claro.
+   Pega tanto a classe normal quanto variantes hover:/focus: pelo texto literal
+   presente no atributo class, então cobre os dois casos com um único seletor. */
+html.theme-claro [class*="shadow-[0_0_"],
+html.theme-claro [class*="shadow-[0px_0px_"] {
+  box-shadow: none !important;
+}
+
+html.theme-claro [class*="drop-shadow-[0_0_"] {
+  filter: none !important;
+}
+
+/* Topbar, menu "Mais", gaveta mobile e toast: fundo branco + texto escuro
+   definidos juntos (color E -webkit-text-fill-color) para não depender de
+   qual navegador prioriza qual propriedade. Isso é o que resolve o texto
+   invisível: um bloco anterior só setava "color", outro só setava
+   "-webkit-text-fill-color" com valores opostos — cada navegador escolhia
+   um vencedor diferente. */
+html.theme-claro .orion-topbar,
+html.theme-claro .orion-mobile-drawer,
+html.theme-claro div[class*="fixed"][class*="h-20"],
+html.theme-claro div[class*="fixed"][class*="h-\[calc\(100vh-5rem\)\]"],
+html.theme-claro .absolute[class*="bg-[#0f172a]"],
+html.theme-claro .absolute[class*="bg-[#090e1a]/95"] {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+  -webkit-text-fill-color: #334155 !important;
+}
+
+html.theme-claro .orion-topbar :is(a, button, p, span, h1, h2, h3, h4, svg),
+html.theme-claro .orion-mobile-drawer :is(a, button, p, span, h1, h2, h3, h4, svg),
+html.theme-claro div[class*="fixed"][class*="h-20"] :is(a, button, p, span, h1, h2, h3, h4, svg),
+html.theme-claro div[class*="fixed"][class*="h-\[calc\(100vh-5rem\)\]"] :is(a, button, p, span, h1, h2, h3, h4, svg),
+html.theme-claro .absolute[class*="bg-[#0f172a]"] :is(a, button, p, span, h1, h2, h3, h4, svg),
+html.theme-claro .absolute[class*="bg-[#090e1a]/95"] :is(a, button, p, span, h1, h2, h3, h4, svg) {
+  color: #334155 !important;
+  -webkit-text-fill-color: #334155 !important;
+}
+
+/* Item de navegação ativo: azul de marca sólido, não ciano neon.
+   Especificidade duplicada de propósito (".theme-claro.theme-claro") para
+   vencer com folga a regra antiga [class*="fixed"][class*="h-20"] que ainda
+   fixa cyan-400 na propriedade "color". */
+html.theme-claro.theme-claro .orion-topbar nav a[class*="bg-blue-600"],
+html.theme-claro.theme-claro div[class*="fixed"][class*="h-20"] nav a[class*="bg-blue-"] {
+  background-color: #eef4fb !important;
+  border-color: #dbe7ff !important;
+  color: #075cff !important;
+  -webkit-text-fill-color: #075cff !important;
+}
+
+html.theme-claro.theme-claro .orion-topbar nav a[class*="bg-blue-600"] svg,
+html.theme-claro.theme-claro div[class*="fixed"][class*="h-20"] nav a[class*="bg-blue-"] svg {
+  color: #075cff !important;
+}
+
+html.theme-claro .orion-topbar nav a:not([class*="bg-blue-600"]):hover,
+html.theme-claro div[class*="fixed"][class*="h-20"] nav a:not([class*="bg-blue-600"]):hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+/* Botão "Mais" (dropdown) ativo e itens do dropdown seguem o mesmo padrão */
+html.theme-claro .orion-topbar button[class*="bg-blue-600"],
+html.theme-claro div[class*="fixed"][class*="h-20"] button[class*="bg-blue-600"] {
+  background-color: #eef4fb !important;
+  border-color: #dbe7ff !important;
+  color: #075cff !important;
+  -webkit-text-fill-color: #075cff !important;
+}
+
+/* Botões translúcidos do topbar (toggle de tema, avatar, hamburguer) */
+html.theme-claro .orion-topbar .bg-white\/5,
+html.theme-claro div[class*="fixed"][class*="h-20"] .bg-white\/5 {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
+  -webkit-text-fill-color: #475569 !important;
+}
+
+/* =========================================================================
+   TEMA CLARO — CRM  (sistema de design, escopado em .orion-crm)
+   Base branco/cinza, ZERO neon, acento unico = azul petroleo.
+   As cores das ETAPAS do kanban (.kanban-stage-header) sao mantidas de
+   proposito — cada etapa guarda sua cor.
+
+   LEI DE CONTRASTE (impede texto invisivel):
+   - Fundo de acento SOLIDO  => texto sempre branco (e todos os filhos).
+   - Texto de acento (petroleo) => so sobre neutro/branco, nunca sobre acento.
+   - Nada translucido vira solido.
+   A ordem das regras importa: "dentro de botao = branco" vem DEPOIS de
+   "texto de acento = petroleo" para vencer no empate de especificidade.
+   ========================================================================= */
+
+html.theme-claro .orion-crm {
+  --crm-surface: #ffffff;
+  --crm-surface-2: #eef2f6;
+  --crm-border: #e2e8f0;
+  --petrol: #14566a;
+  --petrol-hover: #0e4453;
+  --petrol-soft: #e4eef1;
+  --petrol-soft-hover: #d4e4e8;
+  --petrol-soft-border: #c9dee3;
+  --petrol-ink: #0f4c5c;
+}
+
+/* --- Acentos de TEXTO/icone (ciano/azul) -> petroleo, sobre neutro --- */
+html.theme-claro .orion-crm [class*="text-cyan-"],
+html.theme-claro .orion-crm [class*="text-blue-6"],
+html.theme-claro .orion-crm [class*="group-hover\:text-cyan-"] {
+  color: var(--petrol) !important;
+  -webkit-text-fill-color: var(--petrol) !important;
+}
+
+/* --- Botoes de acao SOLIDOS -> petroleo, texto branco ---
+   Classe EXATA (.bg-blue-600), nunca [class*=], para nao pegar
+   chips translucidos (bg-blue-600/10) e sumir com o texto. */
+html.theme-claro .orion-crm .bg-blue-600,
+html.theme-claro .orion-crm .bg-cyan-600 {
+  background-color: var(--petrol) !important;
+  background-image: none !important;
+  border-color: var(--petrol) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(15, 76, 92, 0.12) !important;
+}
+html.theme-claro .orion-crm .bg-blue-600:hover,
+html.theme-claro .orion-crm .bg-cyan-600:hover,
+html.theme-claro .orion-crm .hover\:bg-blue-700:hover {
+  background-color: var(--petrol-hover) !important;
+  border-color: var(--petrol-hover) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Lei de contraste: TUDO dentro de um fundo de acento solido fica branco.
+   (fica DEPOIS da regra de texto-acento para vencer o empate) */
+html.theme-claro .orion-crm .bg-blue-600 *,
+html.theme-claro .orion-crm .bg-cyan-600 * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* --- Botoes/toggles translucidos e link do kanban -> petroleo suave --- */
+html.theme-claro .orion-crm .bg-white\/5,
+html.theme-claro .orion-crm a[href*="kanban"] {
+  background: var(--petrol-soft) !important;
+  border: 1.5px solid var(--petrol-soft-border) !important;
+  color: var(--petrol-ink) !important;
+  -webkit-text-fill-color: var(--petrol-ink) !important;
+  box-shadow: none !important;
+}
+html.theme-claro .orion-crm .bg-white\/5:hover,
+html.theme-claro .orion-crm a[href*="kanban"]:hover {
+  background: var(--petrol-soft-hover) !important;
+  border-color: var(--petrol) !important;
+  color: var(--petrol-hover) !important;
+  -webkit-text-fill-color: var(--petrol-hover) !important;
+  transform: none !important;
+}
+html.theme-claro .orion-crm .bg-white\/5 svg,
+html.theme-claro .orion-crm a[href*="kanban"] svg {
+  color: var(--petrol) !important;
+}
+
+/* --- Caixas/banners de acento (ciano suave) -> neutro, texto legivel --- */
+html.theme-claro .orion-crm [class*="bg-cyan-50"],
+html.theme-claro .orion-crm [class*="border-cyan-1"] {
+  background-color: #f2f6f7 !important;
+  border-color: #d7e3e6 !important;
+}
+
+/* --- Fundos com gradiente ciano/ceu -> branco liso --- */
+html.theme-claro .orion-crm [class*="from-cyan-"],
+html.theme-claro .orion-crm [class*="via-white"][class*="to-sky-"] {
+  background-image: none !important;
+  background-color: var(--crm-surface) !important;
+}
+
+/* --- Icone preenchido ciano do painel de metricas -> petroleo, sem pulsar --- */
+html.theme-claro .orion-crm .bg-cyan-600.animate-pulse {
+  background-color: var(--petrol) !important;
+  animation: none !important;
+}
+
+/* --- Anel de foco ciano -> petroleo --- */
+html.theme-claro .orion-crm [class*="ring-cyan-"]:focus {
+  --tw-ring-color: rgba(20, 86, 106, 0.22) !important;
+}
+
+/* --- ZERO neon: mata brilhos (halo 0 0) dentro do CRM --- */
+html.theme-claro .orion-crm [class*="shadow-[0_0_"],
+html.theme-claro .orion-crm [class*="shadow-[0px_0px_"] {
+  box-shadow: none !important;
+}
+html.theme-claro .orion-crm [class*="drop-shadow-[0_0_"] {
+  filter: none !important;
+}
+
+/* --- Kanban: mantem a cor da etapa, mas suaviza a sombra pesada
+   (sombra de profundidade sobria, nao "neon") --- */
+html.theme-claro .orion-crm .kanban-stage-header {
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.10) !important;
+}
+
+/* =========================================================================
+   INBOX MOBILE: WhatsApp-like single-screen flow
+   ========================================================================= */
+
+@media (max-width: 1023px) {
+  .orion-inbox-shell,
+  .theme-claro .orion-inbox-shell {
+    height: calc(100dvh - 64px) !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .orion-inbox-panel,
+  .theme-claro .orion-inbox-panel {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0 !important;
+    min-width: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .orion-inbox-connection-connected,
+  .theme-claro .orion-inbox-connection-connected {
+    display: none !important;
+  }
+
+  .orion-inbox-connection-disconnected,
+  .theme-claro .orion-inbox-connection-disconnected {
+    min-height: auto !important;
+    height: auto !important;
+    padding: 10px 12px !important;
+    border-radius: 0 !important;
+  }
+
+  .orion-inbox-list,
+  .orion-inbox-chat,
+  .theme-claro .orion-inbox-list,
+  .theme-claro .orion-inbox-chat {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-right: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .orion-inbox-list > div:first-child,
+  .theme-claro .orion-inbox-list > div:first-child {
+    padding: 10px 12px !important;
+  }
+
+  .orion-inbox-list select,
+  .orion-inbox-list input,
+  .theme-claro .orion-inbox-list select,
+  .theme-claro .orion-inbox-list input {
+    min-height: 42px !important;
+    font-size: 16px !important;
+  }
+
+  .orion-inbox-list .flex-1.overflow-y-auto > button,
+  .theme-claro .orion-inbox-list .flex-1.overflow-y-auto > button {
+    min-height: 76px !important;
+    margin: 0 !important;
+    width: 100% !important;
+    padding: 12px 14px !important;
+    border-radius: 0 !important;
+  }
+
+  .orion-inbox-chat-header,
+  .theme-claro .orion-inbox-chat-header {
+    min-height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 10px 12px !important;
+  }
+
+  .orion-inbox-chat-title,
+  .theme-claro .orion-inbox-chat-title {
+    min-width: 0 !important;
+  }
+
+  .orion-inbox-chat-title h2,
+  .theme-claro .orion-inbox-chat-title h2 {
+    max-width: calc(100vw - 130px) !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 16px !important;
+  }
+
+  .orion-inbox-chat-actions,
+  .theme-claro .orion-inbox-chat-actions {
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .orion-inbox-chat-actions::-webkit-scrollbar,
+  .theme-claro .orion-inbox-chat-actions::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .orion-inbox-chat-header button,
+  .theme-claro .orion-inbox-chat-header button {
+    min-height: 34px !important;
+    white-space: nowrap !important;
+  }
+
+  .orion-inbox-messages,
+  .theme-claro .orion-inbox-messages {
+    padding: 12px !important;
+  }
+
+  .orion-inbox-messages .justify-end > div,
+  .orion-inbox-messages .justify-start > div,
+  .theme-claro .orion-inbox-messages .justify-end > div,
+  .theme-claro .orion-inbox-messages .justify-start > div {
+    max-width: 86% !important;
+    padding: 12px !important;
+    border-radius: 18px !important;
+  }
+
+  .orion-inbox-composer,
+  .theme-claro .orion-inbox-composer {
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .orion-inbox-composer textarea,
+  .theme-claro .orion-inbox-composer textarea {
+    min-height: 44px !important;
+    height: 44px !important;
+    font-size: 16px !important;
+  }
+
+  .orion-inbox-composer label,
+  .orion-inbox-composer button,
+  .theme-claro .orion-inbox-composer label,
+  .theme-claro .orion-inbox-composer button {
+    min-width: 40px !important;
+    min-height: 40px !important;
+  }
+
+  .orion-inbox-details,
+  .theme-claro .orion-inbox-details {
+    display: flex !important;
+    top: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-radius: 0 !important;
+    padding: 14px !important;
+  }
+}
+
 
 
 

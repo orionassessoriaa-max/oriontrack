@@ -18,6 +18,7 @@ import {
   X,
   Clock,
   Archive,
+  ArrowLeft,
   AlertTriangle,
   User,
   MoreHorizontal,
@@ -1951,11 +1952,11 @@ export default function BrokerInboxPage() {
 
   return (
     <InternalLayout>
-      <div className="orion-inbox-shell h-[calc(100dvh-72px)] min-h-0 flex flex-col gap-0 overflow-hidden">
+      <div className="orion-inbox-shell h-[calc(100dvh-64px)] sm:h-[calc(100dvh-72px)] min-h-0 flex flex-col gap-0 overflow-hidden">
         
         {/* Connection status header bar */}
         {isWhatsAppConnected ? (
-          <div className="orion-inbox-connection orion-inbox-connection-connected bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 animate-in fade-in-50">
+          <div className="orion-inbox-connection orion-inbox-connection-connected bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 hidden sm:flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 animate-in fade-in-50">
             <div className="orion-inbox-connection-info flex items-center gap-3">
               <div className="orion-inbox-whatsapp-icon relative flex items-center justify-center shrink-0">
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping absolute" />
@@ -1978,7 +1979,7 @@ export default function BrokerInboxPage() {
             </button>
           </div>
         ) : (
-          <div className="orion-inbox-connection orion-inbox-connection-disconnected bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 animate-in fade-in-50">
+          <div className="orion-inbox-connection orion-inbox-connection-disconnected bg-amber-500/10 border-b border-amber-500/20 px-3 py-2 sm:px-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shrink-0 animate-in fade-in-50">
             <div className="orion-inbox-connection-info flex items-center gap-3">
               <QrCode className="text-amber-400 shrink-0" size={20} />
               <div>
@@ -2030,7 +2031,7 @@ export default function BrokerInboxPage() {
         <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(420px,1fr)_320px] 2xl:grid-cols-[360px_minmax(520px,1fr)_360px]">
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
-          <div className="orion-inbox-list border-r border-white/5 flex flex-col bg-slate-900/20 h-full overflow-hidden">
+          <div className={`orion-inbox-list border-r border-white/5 ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col bg-slate-900/20 h-full overflow-hidden`}>
             {/* Counts Filter Header */}
             <div className="p-4 border-b border-white/5 space-y-3.5">
               <div className="flex items-center justify-between bg-white/5 p-1 rounded-2xl gap-0.5 shadow-inner">
@@ -2098,7 +2099,10 @@ export default function BrokerInboxPage() {
                   return (
                     <button
                       key={c.id}
-                      onClick={() => setSelectedConversation(c)}
+                      onClick={() => {
+                        setSelectedConversation(c);
+                        setDetailsPanelOpen(false);
+                      }}
                       aria-current={isActive ? 'true' : undefined}
                       className={`w-full flex items-start gap-3 p-4 text-left transition-all ${
                         isActive ? 'bg-cyan-600/10 border-l-4 border-cyan-500' : 'hover:bg-white/2'
@@ -2140,36 +2144,47 @@ export default function BrokerInboxPage() {
           </div>
 
           {/* COLUMN 2: MIDDLE CHAT CONVERSATION WINDOW */}
-          <div className="orion-inbox-chat flex min-w-0 flex-col bg-[#050b16] border-r border-white/5 h-full overflow-hidden">
+          <div className={`orion-inbox-chat ${selectedConversation ? 'flex' : 'hidden lg:flex'} min-w-0 flex-col bg-[#050b16] border-r border-white/5 h-full overflow-hidden`}>
             {selectedConversation ? (
               <>
                 {/* Header do chat */}
-                  <div className="orion-inbox-chat-header border-b border-white/5 bg-slate-900/30 shrink-0">
+                  <div className="orion-inbox-chat-header border-b border-white/5 bg-slate-900/30 shrink-0 p-3 sm:p-4">
                   <div className="orion-inbox-chat-title space-y-1">
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedConversation(null);
+                          setDetailsPanelOpen(false);
+                        }}
+                        className="lg:hidden -ml-1 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
+                        aria-label="Voltar para conversas"
+                      >
+                        <ArrowLeft size={18} />
+                      </button>
                       <h2 className="text-sm font-black text-white">{cleanInboxDisplayName(selectedConversation.nome_contato, selectedConversation.telefone)}</h2>
                       <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[8px] font-black uppercase text-emerald-400 tracking-wider">
                         Expira em {selectedConversation.expirationTime}
                       </span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 text-[9px] font-bold text-slate-500">
+                    <div className="hidden sm:flex flex-wrap items-center gap-2 text-[9px] font-bold text-slate-500">
                       <span>Nº PROTOCOLO: {selectedConversation.protocolNumber}</span>
                       <span>•</span>
                       <span>Canal: Comercial | {selectedConversation.agentName}</span>
                     </div>
                   </div>
-                  <div className="orion-inbox-chat-actions flex items-center gap-2 flex-wrap">
+                  <div className="orion-inbox-chat-actions -mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
                     <button
                       type="button"
                       onClick={() => { setLeadDetailsOpen(true); setDetailsPanelOpen(true); }}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 transition hover:bg-cyan-500/20 xl:hidden"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 transition hover:bg-cyan-500/20 xl:hidden"
                     >
                       <PanelRight size={13} />
                       Dados do lead
                     </button>
                     <button
                       onClick={() => setShowTemplateModal(true)}
-                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
+                      className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
                     >
                       Template
                     </button>
@@ -2181,25 +2196,25 @@ export default function BrokerInboxPage() {
                         }
                         setShowForwardModal(true);
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 border border-cyan-500/10 text-[9px] font-black uppercase tracking-wider text-white transition-all cursor-pointer"
+                      className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 border border-cyan-500/10 text-[9px] font-black uppercase tracking-wider text-white transition-all cursor-pointer"
                     >
                       Encaminhar para Responsável
                     </button>
                     <button
                       onClick={handleTogglePause}
-                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
+                      className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
                     >
                       {selectedConversation.status === 'pausada' ? 'Retomar' : 'Pausar'}
                     </button>
                     <button
                       onClick={handleEndChat}
-                      className="px-3 py-1.5 rounded-xl border border-rose-500/30 hover:bg-rose-500/10 text-[9px] font-black uppercase tracking-wider text-rose-400 transition-all cursor-pointer"
+                      className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl border border-rose-500/30 hover:bg-rose-500/10 text-[9px] font-black uppercase tracking-wider text-rose-400 transition-all cursor-pointer"
                     >
                       Encerrar
                     </button>
  
                     {/* Header Action Icons Toolbar */}
-                    <div className="flex items-center gap-1.5 border-l border-white/5 pl-2 ml-1">
+                    <div className="flex shrink-0 items-center gap-1.5 border-l border-white/5 pl-2 ml-1">
                       <button onClick={handleShare} className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Compartilhar conversa">
                         <Share2 size={13} />
                       </button>
@@ -2280,7 +2295,7 @@ export default function BrokerInboxPage() {
                 )}
 
                 {/* Mensagens list */}
-                <div className="orion-inbox-messages flex-1 overflow-y-auto bg-[#050b16] p-5 space-y-4">
+                <div className="orion-inbox-messages flex-1 overflow-y-auto bg-[#050b16] p-3 sm:p-5 space-y-3 sm:space-y-4">
                   {loadingMessages ? (
                     <div className="flex h-full items-center justify-center">
                       <Loader2 className="animate-spin text-cyan-400" size={24} />
@@ -2307,7 +2322,7 @@ export default function BrokerInboxPage() {
                             </div>
                           )}
                           <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
-                          <div className={`relative max-w-[75%] rounded-[1.5rem] p-3.5 shadow-lg space-y-1.5 ${
+                          <div className={`relative max-w-[86%] sm:max-w-[75%] rounded-[1.25rem] sm:rounded-[1.5rem] p-3 sm:p-3.5 shadow-lg space-y-1.5 ${
                             mediaKind === 'call'
                               ? isMine
                                 ? 'bg-emerald-600 text-white rounded-tr-none'
@@ -2486,7 +2501,7 @@ export default function BrokerInboxPage() {
                 </div>
 
                 {/* Rodapé de envio de mensagens */}
-                <div className="orion-inbox-composer p-4 border-t border-white/5 bg-[#050b16] shrink-0">
+                <div className="orion-inbox-composer p-2.5 sm:p-4 border-t border-white/5 bg-[#050b16] shrink-0">
                   
                   {/* Visualizadores de Anexos */}
                   {selectedAttachments.length > 0 && (
@@ -2557,9 +2572,9 @@ export default function BrokerInboxPage() {
                     </div>
                   ) : (
                     /* ENTRADA DE TEXTO COMUM */
-                    <div className="relative flex items-end gap-2 shrink-0 pb-1">
+                    <div className="relative flex items-end gap-1.5 sm:gap-2 shrink-0 pb-1">
                       {/* Media/Tools Icons */}
-                      <div className="flex items-center gap-1 mb-1">
+                      <div className="flex items-center gap-0.5 sm:gap-1 mb-1">
                         <label className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 cursor-pointer flex items-center justify-center shrink-0">
                           <Paperclip size={16} />
                           <input
@@ -2618,7 +2633,7 @@ export default function BrokerInboxPage() {
                         }}
                         rows={1}
                         placeholder='Digite "/" para respostas rápidas ou escreva uma'
-                        className="flex-1 bg-slate-950 border border-white/5 rounded-2xl px-4 py-3 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto"
+                        className="min-w-0 flex-1 bg-slate-950 border border-white/5 rounded-2xl px-3 sm:px-4 py-3 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto"
                         style={{ height: '44px' }}
                       />
 
@@ -2661,7 +2676,7 @@ export default function BrokerInboxPage() {
 
           {/* COLUMN 3: RIGHT SIDEBAR - LEAD DETAILS PANEL */}
           {detailsPanelOpen && <button type="button" aria-label="Fechar dados do lead" onClick={() => setDetailsPanelOpen(false)} className="fixed inset-0 z-[90] bg-slate-950/65 xl:hidden" />}
-          <div className={`orion-inbox-details fixed bottom-0 right-0 top-[72px] z-[100] flex w-[min(360px,calc(100vw-20px))] flex-col space-y-6 overflow-y-auto border-l border-white/10 bg-[#07111f] p-5 shadow-2xl transition-transform duration-200 xl:static xl:z-auto xl:h-full xl:w-auto xl:translate-x-0 xl:border-l-0 xl:bg-slate-900/20 xl:shadow-none ${detailsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          <div className={`orion-inbox-details fixed bottom-0 right-0 top-0 sm:top-[72px] z-[100] flex w-[min(380px,100vw)] flex-col space-y-6 overflow-y-auto border-l border-white/10 bg-[#07111f] p-5 shadow-2xl transition-transform duration-200 xl:static xl:z-auto xl:h-full xl:w-auto xl:translate-x-0 xl:border-l-0 xl:bg-slate-900/20 xl:shadow-none ${detailsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
             <div className="flex items-center justify-between border-b border-white/5 pb-3 xl:hidden">
               <span className="text-xs font-black uppercase tracking-wider text-white">Dados do lead</span>
               <button type="button" onClick={() => setDetailsPanelOpen(false)} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Fechar painel"><X size={16} /></button>
