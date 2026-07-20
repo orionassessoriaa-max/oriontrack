@@ -307,6 +307,32 @@ function mergeLeadImportData(existing: LeadInsert, incoming: LeadInsert) {
   }
 }
 
+function isLeadDedupeConstraintError(error: any) {
+  const message = String(error?.message || error?.details || error?.hint || '');
+  return error?.code === '23505' && message.includes('leads_exact_dedupe_v2_idx');
+}
+
+async function insertLeadHandlingMissingOrigin(lead: LeadInsert) {
+  let { data, error } = await supabaseAdmin
+    .from('leads')
+    .insert([lead])
+    .select('id')
+    .maybeSingle();
+
+  if (error && isMissingLeadOriginColumn(error)) {
+    const { origem: _origem, ...fallbackLead } = lead;
+    const retry = await supabaseAdmin
+      .from('leads')
+      .insert([fallbackLead])
+      .select('id')
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  return { data, error };
+}
+
 function orderedCells(row: CsvRow) {
   return Object.entries(row)
     .filter(([key]) => key.startsWith('__cell_'))
@@ -877,33 +903,30 @@ export async function POST(request: Request) {
 
     if (uniqueLeads.length === 0) {
       return NextResponse.json({
-        success: enriched > 0,
-        error: enriched > 0 ? undefined : 'Todos os leads da planilha ja existem no CRM.',
+        success: true,
+        message: enriched > 0 ? 'Leads existentes atualizados com dados faltantes.' : 'Todos os leads da planilha ja existem no CRM.',
         imported: 0,
         enriched,
         duplicated,
         skipped,
         incomplete,
-      }, { status: enriched > 0 ? 200 : 409 });
+      });
     }
 
-    let { data, error } = await supabaseAdmin
-      .from('leads')
-      .insert(uniqueLeads)
-      .select('id');
+    const insertedIds: string[] = [];
+    for (const lead of uniqueLeads) {
+      const { data: insertedLead, error: insertError } = await insertLeadHandlingMissingOrigin(lead);
 
-    if (error && isMissingLeadOriginColumn(error)) {
-      const retryLeads = uniqueLeads.map(({ origem: _origem, ...lead }) => lead);
-      const retry = await supabaseAdmin
-        .from('leads')
-        .insert(retryLeads)
-        .select('id');
-      data = retry.data;
-      error = retry.error;
-    }
+      if (insertError) {
+        if (isLeadDedupeConstraintError(insertError)) {
+          duplicated += 1;
+          continue;
+        }
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: insertError.message }, { status: 500 });
+      }
+
+      if (insertedLead?.id) insertedIds.push(insertedLead.id);
     }
 
     await writeAuditLog(request, guard.profile, {
@@ -912,7 +935,7 @@ export async function POST(request: Request) {
       entity_id: corretorId,
       metadata: {
         corretor_nome: corretor.nome,
-        imported: data?.length || uniqueLeads.length,
+        imported: insertedIds.length,
         enriched,
         incomplete,
         skipped,
@@ -923,7 +946,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      imported: data?.length || uniqueLeads.length,
+      imported: insertedIds.length,
       enriched,
       skipped,
       duplicated,
