@@ -250,7 +250,18 @@ async function tryStartLeadAiForWebhook(leadId?: string | null) {
     return await startLeadAiIfEligible(leadId);
   } catch (aiErr) {
     console.error('[Webhook n8n] Failed starting lead AI:', aiErr);
-    return null;
+    const rawMessage = String((aiErr as any)?.message || aiErr || '');
+    const lowerMessage = rawMessage.toLowerCase();
+    const reason = lowerMessage.includes('whatsapp disconnected')
+      ? 'WhatsApp desconectado na instancia que envia a IA.'
+      : rawMessage || 'Erro desconhecido ao iniciar a IA.';
+
+    return {
+      started: false,
+      eligible: false,
+      error: true,
+      reason,
+    };
   }
 }
 
@@ -644,16 +655,23 @@ export async function POST(request: Request) {
     }
 
     const aiStart = await tryStartLeadAiForWebhook(data.id);
-    const botStart = aiStart?.eligible ? null : await tryStartLeadBotForWebhook(data.id);
+    const aiStartError = aiStart && 'error' in aiStart ? aiStart : null;
+    const botStart = aiStart?.eligible || aiStartError ? null : await tryStartLeadBotForWebhook(data.id);
     const suppressStandardLeadNotifications = Boolean(aiStart?.eligible);
+    const aiFailureNote = aiStartError?.reason
+      ? `IA nao chamou automaticamente: ${aiStartError.reason}`
+      : null;
     const notificationReport = {
       standard_notifications_suppressed_by_ai: suppressStandardLeadNotifications,
       ai_handoff_will_notify_responsible: suppressStandardLeadNotifications,
+      ai_start_error: aiFailureNote,
       owner_profiles_notified: [] as Array<{ id: string; nome: string | null; tipo_usuario: string | null }>,
       responsible_profile_notified: null as null | { id: string; nome: string | null; tipo_usuario: string | null },
       danilo_notified_now: false,
       note: suppressStandardLeadNotifications
         ? 'IA iniciada: notificacao padrao de novo lead foi suprimida. O responsavel sera avisado quando a IA fizer handoff.'
+        : aiFailureNote
+          ? `${aiFailureNote} Notificacao padrao de novo lead enviada.`
         : 'IA nao assumiu: notificacoes padrao de novo lead podem ser enviadas agora.',
     };
 
@@ -711,9 +729,12 @@ export async function POST(request: Request) {
 
         const adminMsg = buildLeadDetailsMessage(
           finalLead,
-          memberName
-            ? `Chegou um lead para ${memberName}.`
-            : 'Chegou um lead sem responsavel definido.'
+          [
+            memberName
+              ? `Chegou um lead para ${memberName}.`
+              : 'Chegou um lead sem responsavel definido.',
+            aiFailureNote,
+          ].filter(Boolean).join('\n')
         );
 
         for (const admin of ownerRecipients) {
@@ -750,7 +771,11 @@ export async function POST(request: Request) {
 
         const memberMsg = buildLeadDetailsMessage(
           finalLead,
-          'Novo lead pronto para atendimento.\n\nEsse lead acabou de entrar em contato com voce pelo CRM. Responda o quanto antes para aproveitar o momento de interesse.'
+          [
+            'Novo lead pronto para atendimento.',
+            aiFailureNote,
+            'Esse lead acabou de entrar em contato com voce pelo CRM. Responda o quanto antes para aproveitar o momento de interesse.',
+          ].filter(Boolean).join('\n\n')
         );
 
         await supabaseAdmin.from('notificacoes').insert([{
