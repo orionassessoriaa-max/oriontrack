@@ -158,7 +158,8 @@
 @media (max-width: 480px) { .kh-kpi-grid { grid-template-columns: 1fr; } .kh-kpi:last-child { grid-column: auto; } .kh-detail-grid { grid-template-columns: 1fr; } .kh-detail-grid > div { border-right: 0 !important; } .kh-date-actions label { width: 100%; justify-content: space-between; } .kh-date-actions .kh-filter { width: calc(100% - 42px); } }
 
 .kh-search { min-height: 42px; min-width: min(280px, 70vw); display: flex; align-items: center; gap: 8px; border: 1px solid var(--kh-line); border-radius: 6px; background: #080d13; padding: 0 11px; color: var(--kh-muted); }
-.kh-search input { width: 100%; min-height: 38px !important; border: 0 !important; background: transparent !important; color: var(--kh-text) !important; -webkit-text-fill-color: var(--kh-text) !important; outline: none !important; box-shadow: none !important; }
+.kh-shell main .kh-search input { width: 100%; min-height: 38px !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; color: var(--kh-text) !important; -webkit-text-fill-color: var(--kh-text) !important; outline: none !important; box-shadow: none !important; appearance: none !important; padding: 0 !important; }
+.kh-shell main .kh-search input:focus { border: 0 !important; background: transparent !important; box-shadow: none !important; }
 .kh-search input::placeholder { color: #607086; -webkit-text-fill-color: #607086; }
 .kh-kanban-page { min-width: 0; }
 .kh-kanban { display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-x: contain; padding: 0 0 14px; scroll-snap-type: x proximity; scrollbar-color: #2d4057 #0a1017; }
