@@ -7,6 +7,7 @@ function ratio(value: number, total: number) {
 }
 
 const LOST_STATES = new Set(['perdido', 'desqualificado', 'sem interesse', 'negocio fechado', 'venda realizada']);
+const KRIPTO_PRINCIPAL_ACCOUNT_ID = '1531044161152262';
 function normalized(value: unknown) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
@@ -15,6 +16,34 @@ function scopedQuery(query: any, role: string, profileId: string) {
   if (role === 'sdr') return query.eq('sdr_id', profileId);
   if (role === 'closer') return query.eq('closer_id', profileId);
   return query;
+}
+
+async function fetchKriptoMetaInvestment(start: string, end: string) {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) return { rows: null as Array<{ date: string; value: number }> | null, error: 'META_ACCESS_TOKEN nao configurado no servidor.' };
+
+  const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
+  const url = new URL(`https://graph.facebook.com/${graphVersion}/act_${KRIPTO_PRINCIPAL_ACCOUNT_ID}/insights`);
+  url.searchParams.set('fields', 'spend,date_start');
+  url.searchParams.set('time_range', JSON.stringify({ since: start, until: end }));
+  url.searchParams.set('time_increment', '1');
+  url.searchParams.set('limit', '500');
+  url.searchParams.set('access_token', token);
+
+  const response = await fetch(url.toString(), { next: { revalidate: 300 } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) {
+    const message = String(payload?.error?.message || '').toLowerCase();
+    if (String(payload?.error?.code || '') === '190' || message.includes('access token')) {
+      return { rows: null, error: 'Token Meta expirado ou invalido. Gere um novo token para atualizar os valores.' };
+    }
+    return { rows: null, error: payload?.error?.message || 'Nao foi possivel consultar o investimento da conta Meta.' };
+  }
+
+  return {
+    rows: (payload.data || []).map((row: any) => ({ date: String(row.date_start), value: Number(row.spend || 0) })),
+    error: null,
+  };
 }
 
 export async function GET(request: Request) {
@@ -54,7 +83,12 @@ export async function GET(request: Request) {
     if (!LOST_STATES.has(normalized(lead.status))) current.active += 1;
     stateMap.set(state, current);
   });
-  const investment = (investmentResult.data || []).reduce((sum, row) => sum + Number(row.valor || 0), 0);
+  const metaInvestment = guard.canViewMetaInvestment ? await fetchKriptoMetaInvestment(start, end) : { rows: null, error: null };
+  const metaRows = metaInvestment.rows;
+  const investmentRows: Array<{ data: string; valor: number }> = metaRows
+    ? metaRows.map((row) => ({ data: row.date, valor: row.value }))
+    : (investmentResult.data || []).map((row: any) => ({ data: String(row.data), valor: Number(row.valor || 0) }));
+  const investment = investmentRows.reduce((sum, row) => sum + Number(row.valor || 0), 0);
   const qualified = leads.filter((lead) => lead.lead_qualificado).length;
   const scheduled = leads.filter((lead) => lead.reuniao_agendada_at).length;
   const realized = leads.filter((lead) => lead.reuniao_realizada_at).length;
@@ -89,7 +123,7 @@ export async function GET(request: Request) {
       day.revenue += Number(lead.valor_fechado || 0);
     }
   });
-  (investmentResult.data || []).forEach((row) => { ensureDay(row.data).investment += Number(row.valor || 0); });
+  investmentRows.forEach((row) => { ensureDay(row.data).investment += Number(row.valor || 0); });
 
   const profileIds = (memberResult.data || []).map((member) => member.profile_id);
   const { data: profiles } = profileIds.length
@@ -151,5 +185,13 @@ export async function GET(request: Request) {
       sales: row.sales,
     });
 
-  return NextResponse.json({ metrics, trend, states: Array.from(stateMap.values()).sort((a, b) => b.leads - a.leads), role: guard.commercialRole, updatedAt: new Date().toISOString() });
+  return NextResponse.json({
+    metrics,
+    trend,
+    states: Array.from(stateMap.values()).sort((a, b) => b.leads - a.leads),
+    role: guard.commercialRole,
+    meta_error: metaInvestment.error,
+    investment_source: metaRows ? 'meta' : 'manual_fallback',
+    updatedAt: new Date().toISOString(),
+  });
 }

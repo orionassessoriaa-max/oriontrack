@@ -11,6 +11,8 @@ type Overview = {
   team: Array<{ id: string; role: string; name: string; photo: string | null; leads: number; mql: number; meetings: number; sales: number; revenue: number }>;
   states: Array<{ state: string; leads: number; active: number }>;
   updatedAt?: string;
+  meta_error?: string | null;
+  investment_source?: 'meta' | 'manual_fallback';
 };
 
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
@@ -116,6 +118,7 @@ export default function CommercialDashboardPage() {
         </div>
       </header>
       {error && <div className="kh-inline-error">{error}</div>}
+      {data?.meta_error && <div className="kh-inline-error">{data.meta_error}</div>}
 
       <section className={`kh-kpi-grid ${canViewMetaInvestment ? '' : 'restricted'}`} aria-label="Indicadores principais">
         {primary.map((item) => <article key={item.label} className={`kh-kpi ${item.tone}`}><div className="kh-kpi-icon"><item.icon size={19} /></div><span>{item.label}</span><strong>{loading ? '—' : item.value}</strong><small>{item.helper}</small></article>)}
