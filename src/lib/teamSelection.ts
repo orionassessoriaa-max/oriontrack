@@ -6,7 +6,7 @@ export const TEAM_SELECTION_STORAGE_KEY = 'orion:selected_team';
 export type OrionTeamKey = 'apollo' | 'kripto_hunters';
 
 export function canSelectOperationalTeam(profile?: Profile | null) {
-  return profile?.tipo_usuario === 'admin' || isDevOpsManagerProfile(profile);
+  return profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor_admin' || isDevOpsManagerProfile(profile);
 }
 
 export function getTeamHome(team: OrionTeamKey | string | null) {

@@ -13,7 +13,7 @@ function normalizeStages(input: unknown): CommercialStage[] {
     if (!label || !id || seen.has(id)) return null;
     seen.add(id);
     const base = COMMERCIAL_STAGES.find((stage) => stage.id === id);
-    const protectedStage = Boolean(value.protected) || ['Oportunidade', 'Em negociação', 'Negócio fechado', 'Venda realizada', 'Sem interesse'].includes(id) || /negocia|negócio|venda realizada/i.test(label);
+    const protectedStage = Boolean(value.protected) || ['Oportunidade', 'Em negociacao', 'Negocio fechado', 'Venda realizada', 'Sem interesse'].includes(id) || /negoci|negocio|venda realizada/i.test(label.normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
     return { id, label, desc: String(value.desc || base?.desc || 'Etapa personalizada'), protected: protectedStage };
   }).filter(Boolean) as CommercialStage[];
 }
