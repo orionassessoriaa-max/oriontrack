@@ -29,9 +29,12 @@ export async function GET(request: Request) {
     .order('data_entrada');
   leadQuery = scopedQuery(leadQuery, guard.commercialRole, guard.profile.id);
 
+  const investmentQuery = guard.canViewMetaInvestment
+    ? supabaseAdmin.from('comercial_investimentos').select('data,valor').gte('data', start).lte('data', end)
+    : Promise.resolve({ data: [], error: null });
   const [leadResult, investmentResult, memberResult] = await Promise.all([
     leadQuery,
-    supabaseAdmin.from('comercial_investimentos').select('data,valor').gte('data', start).lte('data', end),
+    investmentQuery,
     supabaseAdmin.from('comercial_membros').select('profile_id,papel,ativo').eq('ativo', true),
   ]);
   if (leadResult.error) return NextResponse.json({ error: leadResult.error.message }, { status: 500 });
@@ -95,22 +98,14 @@ export async function GET(request: Request) {
   });
 
   const metrics = {
-    investment,
     leads: leads.length,
-    cpl: leads.length ? investment / leads.length : 0,
     qualified,
-    costPerMql: qualified ? investment / qualified : 0,
     scheduled,
     realized,
     qualifiedMeetings,
     disqualifiedMeetings,
     noShow,
-    costPerMeeting: realized ? investment / realized : 0,
-    costPerQualifiedMeeting: qualifiedMeetings ? investment / qualifiedMeetings : 0,
     closed: closed.length,
-    cac: closed.length ? investment / closed.length : 0,
-    roi: investment ? ((revenue - investment) / investment) * 100 : 0,
-    roas: investment ? revenue / investment : 0,
     negotiation,
     revenue,
     averageTicket: closed.length ? revenue / closed.length : 0,
@@ -120,8 +115,28 @@ export async function GET(request: Request) {
     schedulingRate: ratio(scheduled, leads.length),
     qualifiedSchedulingRate: ratio(qualifiedMeetings, scheduled),
     averageCloseDays: closeTimes.length ? closeTimes.reduce((sum, value) => sum + value, 0) / closeTimes.length : 0,
+    ...(guard.canViewMetaInvestment ? {
+      investment,
+      cpl: leads.length ? investment / leads.length : 0,
+      costPerMql: qualified ? investment / qualified : 0,
+      costPerMeeting: realized ? investment / realized : 0,
+      costPerQualifiedMeeting: qualifiedMeetings ? investment / qualifiedMeetings : 0,
+      cac: closed.length ? investment / closed.length : 0,
+      roi: investment ? ((revenue - investment) / investment) * 100 : 0,
+      roas: investment ? revenue / investment : 0,
+    } : {}),
   };
 
-  return NextResponse.json({ metrics, trend: Array.from(trendMap.values()).sort((a, b) => a.date.localeCompare(b.date)), team, role: guard.commercialRole });
-}
+  const trend = Array.from(trendMap.values())
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((row) => guard.canViewMetaInvestment ? row : {
+      date: row.date,
+      leads: row.leads,
+      mql: row.mql,
+      meetings: row.meetings,
+      sales: row.sales,
+      revenue: row.revenue,
+    });
 
+  return NextResponse.json({ metrics, trend, team, role: guard.commercialRole });
+}
