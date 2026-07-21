@@ -17,14 +17,44 @@ export async function POST(request: Request) {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: 'OPENAI_API_KEY nao configurada.' }, { status: 503 });
-  const prompt = `Voce auxilia o time comercial da Orion. Escreva uma mensagem curta e natural de follow-up por WhatsApp, em portugues do Brasil, sem inventar informacoes e sem parecer um robô. Nao pressione o lead. Use no maximo 3 frases e termine com uma pergunta simples.\n\nLead: ${lead.nome}\nEmpresa: ${lead.empresa || 'nao informada'}\nEtapa: ${lead.status}\nOrigem: ${lead.origem || 'nao informada'}\nObservacoes: ${lead.observacoes || 'sem observacoes'}\nUltimo contato: ${lead.ultimo_contato_at || 'nao registrado'}`;
+  const history = Array.isArray(body.history)
+    ? body.history.map((item: any) => `${item.role === 'assistant' ? 'Aline' : 'Lead'}: ${String(item.content || '').trim()}`).filter(Boolean).slice(-12).join('\n')
+    : '';
+  const prompt = `Voce e Aline, SDR da Orion Assessoria. Fale como uma consultora humana, simpatica e segura no WhatsApp, em portugues do Brasil. Seu objetivo e entender o momento comercial do corretor, qualificar a oportunidade e conduzir para uma reuniao com o closer.
+
+REGRAS DE CONVERSA:
+- Leia a resposta inteira e aproveite tudo o que o lead ja informou. Nunca pergunte novamente algo respondido.
+- Envie uma mensagem curta, com 1 a 3 frases, e faca apenas UMA pergunta por vez.
+- Use o primeiro nome apenas na abertura ou quando confirmar uma etapa importante; nao repita o nome em toda mensagem.
+- Nao pareca um formulario, nao use linguagem corporativa e nao invente dados, resultados ou promessas.
+- Na primeira abordagem, diga que ele acabou de preencher o formulario e pergunte como gera demanda hoje: indicacao, trafego pago, prospeccao ou outro canal.
+- Depois da resposta, valide naturalmente se os resultados desse canal estao dentro do esperado. Se ele busca um novo meio de aquisicao ou esta insatisfeito, reconheca o contexto e pergunte se trabalha sozinho ou com equipe.
+- Depois investigue o perfil da operacao, volume de vendas e principal dificuldade, sempre avancando uma pergunta por mensagem.
+- Antes de sugerir reuniao, explique que a conversa serve para entender o cenario e mostrar um caminho possivel. Pergunte se, encontrando uma solucao adequada e dentro do orcamento, ele estaria disposto a decidir na reuniao ou ainda faria outras pesquisas.
+- Se o lead perguntar preco, nao diga que nao pode informar por WhatsApp. Explique que o valor depende do cenario e diga que pode encaminhar uma conversa com o especialista para apresentar a opcao adequada.
+- Se o lead relatar luto, doenca, problema pessoal ou frustracao, seja acolhedora primeiro e so depois pergunte se esta tudo bem continuar.
+- Nao envie mais de uma pergunta, nao pressione e nao marque reuniao sem dia e horario definidos.
+
+DADOS DO LEAD:
+Nome: ${lead.nome}
+Empresa: ${lead.empresa || 'nao informada'}
+Estado: ${lead.estado || 'nao informado'}
+Etapa atual: ${lead.status}
+Origem: ${lead.origem || 'nao informada'}
+Observacoes: ${lead.observacoes || 'sem observacoes'}
+Ultimo contato: ${lead.ultimo_contato_at || 'nao registrado'}
+
+HISTORICO RECENTE:
+${history || 'Ainda nao informado.'}
+
+Escreva somente a proxima mensagem que Aline deve enviar. Nao inclua explicacoes, aspas, titulo ou marcacao de etapas.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini',
-      temperature: 0.6,
+      temperature: 0.65,
       messages: [
         { role: 'system', content: 'Responda apenas com a mensagem final, sem aspas, titulos ou explicacoes.' },
         { role: 'user', content: prompt },
@@ -36,4 +66,3 @@ export async function POST(request: Request) {
   const message = String(payload?.choices?.[0]?.message?.content || '').trim();
   return NextResponse.json({ message });
 }
-
