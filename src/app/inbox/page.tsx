@@ -500,6 +500,46 @@ export default function BrokerInboxPage() {
       matchedConv = rows.find((r) => normalizePhone(r.telefone) === targetPhone);
 
       if (!matchedConv) {
+        // The inbox list is intentionally limited. When a lead is opened
+        // directly by URL, recover its persisted conversation before using
+        // a temporary empty conversation.
+        const targetDigits = targetPhone.replace(/\D/g, '');
+        const targetLast8 = targetDigits.length >= 8 ? targetDigits.slice(-8) : targetDigits;
+        let savedConversationQuery = supabase
+          .from('whatsapp_conversas')
+          .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
+          .in('corretor_id', idsToFetch)
+          .or(`telefone.eq.${targetPhone},telefone.ilike.%${targetLast8}`)
+          .order('ultima_mensagem_at', { ascending: false })
+          .limit(1);
+
+        if (isTeamMember) {
+          savedConversationQuery = savedConversationQuery.eq('leads.responsavel_profile_id', profile.id);
+        }
+
+        const { data: savedConversations } = await savedConversationQuery;
+        const savedRow = savedConversations?.[0] as any;
+        if (savedRow) {
+          const savedLead = savedRow.leads as any;
+          const savedResponsibleProfileId = savedLead?.responsavel_profile_id || null;
+          const savedMember = savedResponsibleProfileId ? teamMemberByProfileId.get(String(savedResponsibleProfileId)) : null;
+          matchedConv = {
+            ...savedRow,
+            status: savedRow.status === 'aguardando' ? 'espera' : savedRow.status === 'resolvida' ? 'fechada' : savedRow.status,
+            agentName: savedLead?.responsavel_membro?.nome || savedMember?.nome || (savedResponsibleProfileId && savedResponsibleProfileId === profile?.id ? profile?.nome : null) || 'Fila Geral',
+            responsibleProfileId: savedResponsibleProfileId,
+            expirationTime: '03/06 Ã s 23:07',
+            protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
+            tags: savedRow.tags || ['Lead Frio'],
+            notes: savedRow.notes || [],
+            source: 'Meta',
+            aiActive: savedRow.aiActive ?? false,
+            customFields: savedRow.customFields || [],
+          } as Conversation;
+          rows.unshift(matchedConv);
+        }
+
+        if (!matchedConv) {
         const leadId = params.get('lead');
         let contactName = params.get('nome') ? decodeURIComponent(params.get('nome')!) : 'Novo Contato';
 
@@ -540,6 +580,7 @@ export default function BrokerInboxPage() {
         };
         rows.unshift(tempConv);
         matchedConv = tempConv;
+        }
       }
     }
 
