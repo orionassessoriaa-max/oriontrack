@@ -117,6 +117,11 @@
 .kh-sdr-config-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; margin-top: 12px; }
 .kh-sdr-config-footer > span { color: var(--kh-green); font-size: 11px; }
 .kh-sdr-followup { margin-top: 16px; }
+.kh-sheet-table { min-width: 1980px; }
+.kh-sheet-table th:nth-child(6), .kh-sheet-table td:nth-child(6) { width: 190px; }
+.kh-sheet-table th:nth-child(7), .kh-sheet-table td:nth-child(7), .kh-sheet-table th:nth-child(8), .kh-sheet-table td:nth-child(8) { width: 150px; }
+.kh-sheet-table th:nth-child(9), .kh-sheet-table td:nth-child(9), .kh-sheet-table th:nth-child(10), .kh-sheet-table td:nth-child(10) { width: 130px; }
+.kh-sheet-table th:nth-child(n+13):nth-child(-n+17), .kh-sheet-table td:nth-child(n+13):nth-child(-n+17) { width: 135px; }
 @media (max-width: 700px) { .kh-sdr-status { align-items: flex-start; } .kh-sdr-config-footer { align-items: flex-start; flex-direction: column; } .kh-sdr-config-footer .kh-button { width: 100%; } }
 
 @media (prefers-reduced-motion: reduce) {
