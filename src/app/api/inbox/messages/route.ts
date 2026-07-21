@@ -275,14 +275,30 @@ export async function GET(request: Request) {
 
     const conversationIds = await findAccessibleConversationIdsByPhone(guard.profile, conversation);
 
-    const { data, error } = await supabaseAdmin
+    // Read the selected conversation first. This prevents an alternate
+    // conversation for the same phone from masking an existing history.
+    const directQuery = await supabaseAdmin
       .from('whatsapp_mensagens')
       .select('*')
-      .in('conversa_id', conversationIds)
+      .eq('conversa_id', conversation.id)
       .order('created_at', { ascending: true })
       .limit(300);
 
-    if (error) throw error;
+    if (directQuery.error) throw directQuery.error;
+
+    let data = directQuery.data || [];
+    if (!data.length && conversationIds.length > 1) {
+      const fallback = await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .select('*')
+        .in('conversa_id', conversationIds.filter((id) => id !== conversation.id))
+        .order('created_at', { ascending: true })
+        .limit(300);
+
+      if (fallback.error) throw fallback.error;
+      data = fallback.data || [];
+    }
+
     return NextResponse.json({ messages: dedupeMessages(data || []) });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao consegui carregar as mensagens.' }, { status: 500 });

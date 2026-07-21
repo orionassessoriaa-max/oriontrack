@@ -702,7 +702,12 @@ export default function BrokerInboxPage() {
           isAudio,
         };
       });
-      setMessages(response.ok ? mapped : []);
+      if (!response.ok) {
+        const errorMessage = typeof payload.error === 'string' ? payload.error : 'Nao foi possivel carregar o historico desta conversa.';
+        setSendError(errorMessage);
+        return;
+      }
+      setMessages(mapped);
     } catch (err) {
       console.error(err);
     } finally {
