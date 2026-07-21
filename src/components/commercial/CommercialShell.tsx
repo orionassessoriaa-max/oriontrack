@@ -15,6 +15,8 @@ type CommercialContextValue = {
   role: CommercialRole | null;
   members: CommercialMember[];
   currentProfileId: string | null;
+  canViewMetaInvestment: boolean;
+  isDevOps: boolean;
   loading: boolean;
   error: string | null;
   api: (url: string, init?: RequestInit) => Promise<any>;
@@ -50,6 +52,8 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   const [role, setRole] = useState<CommercialRole | null>(null);
   const [members, setMembers] = useState<CommercialMember[]>([]);
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const [canViewMetaInvestment, setCanViewMetaInvestment] = useState(false);
+  const [isDevOps, setIsDevOps] = useState(false);
   const [viewingCommercialProfileId, setViewingCommercialProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +86,8 @@ export default function CommercialShell({ children }: { children: React.ReactNod
       setRole(payload.role);
       setMembers(payload.members || []);
       setCurrentProfileId(payload.currentProfileId || null);
+      setCanViewMetaInvestment(Boolean(payload.canViewMetaInvestment));
+      setIsDevOps(Boolean(payload.isDevOps));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao abrir o comercial.');
     } finally {
@@ -140,7 +146,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   }
 
   return (
-    <CommercialContext.Provider value={{ role, members, currentProfileId, loading, error, api, refreshAccess, canViewCommercialAsUser, viewingCommercialProfileId, startViewingCommercialMember, stopViewingCommercialMember }}>
+    <CommercialContext.Provider value={{ role, members, currentProfileId, canViewMetaInvestment, isDevOps, loading, error, api, refreshAccess, canViewCommercialAsUser, viewingCommercialProfileId, startViewingCommercialMember, stopViewingCommercialMember }}>
       <div className={`kh ${collapsed ? 'kh-collapsed' : ''}`}>
         {mobileOpen && <button className="kh-scrim" aria-label="Fechar menu" onClick={() => setMobileOpen(false)} />}
         <aside className={`kh-sidebar ${mobileOpen ? 'is-open' : ''}`}>
@@ -189,7 +195,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
             )}
             <div className="kh-profile">
               <div className="kh-avatar">{String(currentMember?.nome || actualProfile?.nome || 'KH').split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</div>
-              <div><strong>{currentMember?.nome || actualProfile?.nome}</strong><span>{commercialRoleLabel(role)}</span></div>
+              <div><strong>{currentMember?.nome || actualProfile?.nome}</strong><span>{isDevOps ? 'DevOps Manager' : commercialRoleLabel(role)}</span></div>
             </div>
           </header>
           <main className="kh-main">{children}</main>

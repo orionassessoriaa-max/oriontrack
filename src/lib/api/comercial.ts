@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 import { requireApiUser, type ApiProfile } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { CommercialRole } from '@/lib/comercial';
+import { isDevOpsManagerProfile } from '@/lib/users';
 
 export type CommercialGuard = {
   user: { id: string; email?: string | null };
   profile: ApiProfile;
   commercialRole: CommercialRole;
+  canViewMetaInvestment: boolean;
+  isDevOps: boolean;
 };
 
 export async function requireCommercialUser(
@@ -17,6 +20,10 @@ export async function requireCommercialUser(
   if (baseResult.error) return { error: baseResult.error };
   let base = { user: baseResult.user, profile: baseResult.profile };
   const isMaster = base.profile.tipo_usuario === 'admin' && Boolean(base.profile.is_admin_master);
+  const canViewMetaInvestment = base.profile.tipo_usuario === 'admin'
+    || String(base.profile.tipo_usuario) === 'dev'
+    || isDevOpsManagerProfile(base.profile);
+  const isDevOps = isDevOpsManagerProfile(base.profile);
   const viewProfileId = request.headers.get('x-commercial-view-profile-id') || new URL(request.url).searchParams.get('view_profile_id');
 
   if (isMaster && viewProfileId && viewProfileId !== base.profile.id) {
@@ -54,13 +61,13 @@ export async function requireCommercialUser(
     };
   }
 
-  const role = (member?.ativo ? member.papel : isMaster ? 'coordenador' : null) as CommercialRole | null;
+  const role = (member?.ativo ? member.papel : isMaster || isDevOps ? 'coordenador' : null) as CommercialRole | null;
   if (!role) return { error: NextResponse.json({ error: 'Acesso restrito ao time comercial.' }, { status: 403 }) };
   if (coordinatorOnly && role !== 'coordenador') {
     return { error: NextResponse.json({ error: 'Acao restrita ao coordenador comercial.' }, { status: 403 }) };
   }
 
-  return { user: base.user, profile: base.profile, commercialRole: role } as CommercialGuard;
+  return { user: base.user, profile: base.profile, commercialRole: role, canViewMetaInvestment, isDevOps } as CommercialGuard;
 }
 
 export function applyCommercialLeadScope<T extends { eq: (column: string, value: string) => T }>(

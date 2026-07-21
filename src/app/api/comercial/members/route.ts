@@ -43,13 +43,75 @@ export async function GET(request: Request) {
       .map((profile) => ({ id: profile.id, nome: profile.nome, email: profile.email_real || profile.email || null }));
   }
 
-  return NextResponse.json({ members, candidates, role: guard.commercialRole, currentProfileId: guard.profile.id });
+  return NextResponse.json({
+    members,
+    candidates,
+    role: guard.commercialRole,
+    currentProfileId: guard.profile.id,
+    canViewMetaInvestment: guard.canViewMetaInvestment,
+    isDevOps: guard.isDevOps,
+  });
 }
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request, true);
   if ('error' in guard) return guard.error;
   const body = await request.json();
+  if (body.action === 'create') {
+    const nome = String(body.nome || '').trim();
+    const papel = String(body.papel || 'sdr');
+    const emailReal = String(body.email || '').trim().toLowerCase();
+    if (!nome || !['coordenador', 'closer', 'sdr'].includes(papel)) {
+      return NextResponse.json({ error: 'Nome e função comercial são obrigatórios.' }, { status: 400 });
+    }
+
+    const baseEmail = emailReal || `${nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '') || 'integrante'}@orion.com`;
+    let email = baseEmail;
+    for (let suffix = 1; suffix < 100; suffix += 1) {
+      const { data: existing } = await supabaseAdmin.from('profiles').select('id').or(`email.eq.${email},email_real.eq.${email}`).maybeSingle();
+      if (!existing) break;
+      const [local, domain] = baseEmail.split('@');
+      email = `${local}${suffix}@${domain}`;
+    }
+    const senhaProvisoria = `${Math.random().toString(36).slice(-6)}A9!`;
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: senhaProvisoria,
+      email_confirm: true,
+      user_metadata: { nome, tipo_usuario: 'corretor_membro', equipe_orion: 'kripto_hunters' },
+    });
+    if (authError || !authData.user) return NextResponse.json({ error: authError?.message || 'Não foi possível criar o acesso.' }, { status: 400 });
+
+    const profilePayload = {
+      id: authData.user.id,
+      email,
+      email_real: emailReal || null,
+      nome,
+      tipo_usuario: 'corretor_membro',
+      corretor_id: null,
+      telefone: String(body.telefone || '').trim() || null,
+      status: 'active',
+      precisa_trocar_senha: true,
+      equipe_orion: 'kripto_hunters',
+    };
+    const { error: profileError } = await supabaseAdmin.from('profiles').insert(profilePayload);
+    if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
+    const { error: memberError } = await supabaseAdmin.from('comercial_membros').insert({
+      profile_id: authData.user.id,
+      papel,
+      ativo: true,
+      updated_at: new Date().toISOString(),
+    });
+    if (memberError) {
+      await supabaseAdmin.from('profiles').delete().eq('id', authData.user.id);
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return NextResponse.json({ error: memberError.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, credentials: { nome, email, senhaProvisoria, papel } });
+  }
   const profileId = String(body.profile_id || '');
   const papel = String(body.papel || '');
   if (!profileId || !['coordenador', 'closer', 'sdr'].includes(papel)) {
@@ -87,4 +149,3 @@ export async function PATCH(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
-
