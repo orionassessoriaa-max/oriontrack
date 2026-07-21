@@ -38,6 +38,17 @@ export type CommercialLead = {
   empresa: string | null;
   origem: string | null;
   campanha: string | null;
+  ja_investiu_trafego: string | null;
+  faturamento_mensal: string | null;
+  prioridade: string | null;
+  investimento: string | null;
+  vidas: string | null;
+  negocio_etapa: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_term: string | null;
+  utm_content: string | null;
   status: string;
   sdr_id: string | null;
   closer_id: string | null;
@@ -83,4 +94,3 @@ export function currency(value: number | string | null | undefined) {
 export function percent(value: number | null | undefined) {
   return `${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
-
