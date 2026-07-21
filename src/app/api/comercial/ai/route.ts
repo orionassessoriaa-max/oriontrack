@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request);
@@ -15,25 +16,16 @@ export async function POST(request: Request) {
   const { data: lead } = await query.maybeSingle();
   if (!lead) return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
 
+  const { data: config } = await supabaseAdmin.from('comercial_config').select('ia_sdr_ativa,ia_sdr_prompt').eq('id', 1).maybeSingle();
+  if (config?.ia_sdr_ativa === false) return NextResponse.json({ error: 'A IA SDR esta desativada para esta operacao.' }, { status: 409 });
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: 'OPENAI_API_KEY nao configurada.' }, { status: 503 });
   const history = Array.isArray(body.history)
     ? body.history.map((item: any) => `${item.role === 'assistant' ? 'Aline' : 'Lead'}: ${String(item.content || '').trim()}`).filter(Boolean).slice(-12).join('\n')
     : '';
-  const prompt = `Voce e Aline, SDR da Orion Assessoria. Fale como uma consultora humana, simpatica e segura no WhatsApp, em portugues do Brasil. Seu objetivo e entender o momento comercial do corretor, qualificar a oportunidade e conduzir para uma reuniao com o closer.
-
-REGRAS DE CONVERSA:
-- Leia a resposta inteira e aproveite tudo o que o lead ja informou. Nunca pergunte novamente algo respondido.
-- Envie uma mensagem curta, com 1 a 3 frases, e faca apenas UMA pergunta por vez.
-- Use o primeiro nome apenas na abertura ou quando confirmar uma etapa importante; nao repita o nome em toda mensagem.
-- Nao pareca um formulario, nao use linguagem corporativa e nao invente dados, resultados ou promessas.
-- Na primeira abordagem, diga que ele acabou de preencher o formulario e pergunte como gera demanda hoje: indicacao, trafego pago, prospeccao ou outro canal.
-- Depois da resposta, valide naturalmente se os resultados desse canal estao dentro do esperado. Se ele busca um novo meio de aquisicao ou esta insatisfeito, reconheca o contexto e pergunte se trabalha sozinho ou com equipe.
-- Depois investigue o perfil da operacao, volume de vendas e principal dificuldade, sempre avancando uma pergunta por mensagem.
-- Antes de sugerir reuniao, explique que a conversa serve para entender o cenario e mostrar um caminho possivel. Pergunte se, encontrando uma solucao adequada e dentro do orcamento, ele estaria disposto a decidir na reuniao ou ainda faria outras pesquisas.
-- Se o lead perguntar preco, nao diga que nao pode informar por WhatsApp. Explique que o valor depende do cenario e diga que pode encaminhar uma conversa com o especialista para apresentar a opcao adequada.
-- Se o lead relatar luto, doenca, problema pessoal ou frustracao, seja acolhedora primeiro e so depois pergunte se esta tudo bem continuar.
-- Nao envie mais de uma pergunta, nao pressione e nao marque reuniao sem dia e horario definidos.
+  const systemPrompt = String(config?.ia_sdr_prompt || DEFAULT_COMMERCIAL_SDR_PROMPT);
+  const prompt = `${systemPrompt}
 
 DADOS DO LEAD:
 Nome: ${lead.nome}
@@ -47,7 +39,7 @@ Ultimo contato: ${lead.ultimo_contato_at || 'nao registrado'}
 HISTORICO RECENTE:
 ${history || 'Ainda nao informado.'}
 
-Escreva somente a proxima mensagem que Aline deve enviar. Nao inclua explicacoes, aspas, titulo ou marcacao de etapas.`;
+Escreva somente a proxima mensagem para este lead.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
