@@ -10,6 +10,13 @@ function scopedQuery(query: any, role: string, profileId: string) {
   return query;
 }
 
+function redactFinancialFields<T extends Record<string, any>>(lead: T, canView: boolean) {
+  if (canView) return lead;
+  const sanitized = { ...lead };
+  for (const field of ['ja_investiu_trafego', 'faturamento_mensal', 'investimento', 'valor_negociacao', 'valor_fechado']) delete sanitized[field];
+  return sanitized;
+}
+
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
@@ -28,7 +35,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ leads: data || [], role: guard.commercialRole });
+  return NextResponse.json({ leads: (data || []).map((lead) => redactFinancialFields(lead, guard.canViewCommercialFinancials)), role: guard.commercialRole });
 }
 
 export async function POST(request: Request) {
@@ -46,18 +53,29 @@ export async function POST(request: Request) {
     empresa: String(body.empresa || '').trim() || null,
     origem: String(body.origem || '').trim() || null,
     campanha: String(body.campanha || '').trim() || null,
+    ja_investiu_trafego: guard.canViewCommercialFinancials ? String(body.ja_investiu_trafego || '').trim() || null : null,
+    faturamento_mensal: guard.canViewCommercialFinancials ? String(body.faturamento_mensal || '').trim() || null : null,
+    prioridade: String(body.prioridade || '').trim() || null,
+    investimento: guard.canViewCommercialFinancials ? String(body.investimento || '').trim() || null : null,
+    vidas: String(body.vidas || '').trim() || null,
+    negocio_etapa: String(body.negocio_etapa || '').trim() || null,
+    utm_source: String(body.utm_source || '').trim() || null,
+    utm_medium: String(body.utm_medium || '').trim() || null,
+    utm_campaign: String(body.utm_campaign || '').trim() || null,
+    utm_term: String(body.utm_term || '').trim() || null,
+    utm_content: String(body.utm_content || '').trim() || null,
     status,
     sdr_id: guard.commercialRole === 'sdr' ? guard.profile.id : body.sdr_id || null,
     closer_id: guard.commercialRole === 'closer' ? guard.profile.id : body.closer_id || null,
     lead_qualificado: Boolean(body.lead_qualificado),
-    valor_negociacao: Number(body.valor_negociacao || 0),
+    valor_negociacao: guard.canViewCommercialFinancials ? Number(body.valor_negociacao || 0) : 0,
     observacoes: String(body.observacoes || '').trim() || null,
     created_by: guard.profile.id,
   };
   const { data, error } = await supabaseAdmin.from('comercial_leads').insert(payload).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await writeAuditLog(request, guard.profile, { action: 'commercial.lead.create', entity_type: 'commercial_lead', entity_id: data.id });
-  return NextResponse.json({ lead: data }, { status: 201 });
+  return NextResponse.json({ lead: redactFinancialFields(data, guard.canViewCommercialFinancials) }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {
@@ -73,12 +91,15 @@ export async function PATCH(request: Request) {
   if (!allowed) return NextResponse.json({ error: 'Lead nao encontrado ou sem permissao.' }, { status: 404 });
 
   const allowedFields = [
-    'nome', 'telefone', 'email', 'empresa', 'origem', 'campanha', 'status', 'sdr_id', 'closer_id',
+    'nome', 'telefone', 'email', 'empresa', 'origem', 'campanha', 'ja_investiu_trafego', 'faturamento_mensal',
+    'prioridade', 'investimento', 'vidas', 'negocio_etapa', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term',
+    'utm_content', 'status', 'sdr_id', 'closer_id',
     'lead_qualificado', 'valor_negociacao', 'valor_fechado', 'reuniao_agendada_at',
     'reuniao_realizada_at', 'reuniao_qualificada', 'no_show', 'observacoes', 'ultimo_contato_at', 'fechado_at',
   ];
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const field of allowedFields) {
+    if (!guard.canViewCommercialFinancials && ['ja_investiu_trafego', 'faturamento_mensal', 'investimento', 'valor_negociacao', 'valor_fechado'].includes(field)) continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
   }
   if (typeof update.status === 'string' && !COMMERCIAL_STATUSES.includes(update.status as any)) {
@@ -93,6 +114,5 @@ export async function PATCH(request: Request) {
   await writeAuditLog(request, guard.profile, {
     action: 'commercial.lead.update', entity_type: 'commercial_lead', entity_id: id, metadata: { fields: Object.keys(update) },
   });
-  return NextResponse.json({ lead: data });
+  return NextResponse.json({ lead: redactFinancialFields(data, guard.canViewCommercialFinancials) });
 }
-

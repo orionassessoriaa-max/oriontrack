@@ -8,6 +8,7 @@ export type CommercialGuard = {
   user: { id: string; email?: string | null };
   profile: ApiProfile;
   commercialRole: CommercialRole;
+  canViewCommercialFinancials: boolean;
   canViewMetaInvestment: boolean;
   isDevOps: boolean;
 };
@@ -67,7 +68,8 @@ export async function requireCommercialUser(
     return { error: NextResponse.json({ error: 'Acao restrita ao coordenador comercial.' }, { status: 403 }) };
   }
 
-  return { user: base.user, profile: base.profile, commercialRole: role, canViewMetaInvestment, isDevOps } as CommercialGuard;
+  const canViewCommercialFinancials = role === 'coordenador' || canViewMetaInvestment;
+  return { user: base.user, profile: base.profile, commercialRole: role, canViewCommercialFinancials, canViewMetaInvestment, isDevOps } as CommercialGuard;
 }
 
 export function applyCommercialLeadScope<T extends { eq: (column: string, value: string) => T }>(

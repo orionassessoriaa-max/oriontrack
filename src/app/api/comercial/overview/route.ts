@@ -93,7 +93,7 @@ export async function GET(request: Request) {
       mql: owned.filter((lead) => lead.lead_qualificado).length,
       meetings: owned.filter((lead) => lead.reuniao_agendada_at).length,
       sales: owned.filter((lead) => lead.status === 'Negócio fechado').length,
-      revenue: owned.reduce((sum, lead) => sum + Number(lead.valor_fechado || 0), 0),
+      ...(guard.canViewCommercialFinancials ? { revenue: owned.reduce((sum, lead) => sum + Number(lead.valor_fechado || 0), 0) } : {}),
     };
   });
 
@@ -106,16 +106,16 @@ export async function GET(request: Request) {
     disqualifiedMeetings,
     noShow,
     closed: closed.length,
-    negotiation,
-    revenue,
-    averageTicket: closed.length ? revenue / closed.length : 0,
     conversionLeads: ratio(closed.length, leads.length),
     conversionMeetings: ratio(closed.length, realized),
     conversionQualifiedMeetings: ratio(closed.length, qualifiedMeetings),
     schedulingRate: ratio(scheduled, leads.length),
     qualifiedSchedulingRate: ratio(qualifiedMeetings, scheduled),
     averageCloseDays: closeTimes.length ? closeTimes.reduce((sum, value) => sum + value, 0) / closeTimes.length : 0,
-    ...(guard.canViewMetaInvestment ? {
+    ...(guard.canViewCommercialFinancials ? {
+      negotiation,
+      revenue,
+      averageTicket: closed.length ? revenue / closed.length : 0,
       investment,
       cpl: leads.length ? investment / leads.length : 0,
       costPerMql: qualified ? investment / qualified : 0,
@@ -129,13 +129,12 @@ export async function GET(request: Request) {
 
   const trend = Array.from(trendMap.values())
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map((row) => guard.canViewMetaInvestment ? row : {
+    .map((row) => guard.canViewCommercialFinancials ? row : {
       date: row.date,
       leads: row.leads,
       mql: row.mql,
       meetings: row.meetings,
       sales: row.sales,
-      revenue: row.revenue,
     });
 
   return NextResponse.json({ metrics, trend, team, role: guard.commercialRole });

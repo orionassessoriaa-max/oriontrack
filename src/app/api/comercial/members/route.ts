@@ -49,6 +49,7 @@ export async function GET(request: Request) {
     role: guard.commercialRole,
     currentProfileId: guard.profile.id,
     canViewMetaInvestment: guard.canViewMetaInvestment,
+    canViewCommercialFinancials: guard.canViewCommercialFinancials,
     isDevOps: guard.isDevOps,
   });
 }

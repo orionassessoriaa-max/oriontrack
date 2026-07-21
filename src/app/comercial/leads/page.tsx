@@ -9,7 +9,7 @@ import { COMMERCIAL_STATUSES, currency, type CommercialLead } from '@/lib/comerc
 function formatDate(value: string) { return new Date(value).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
 
 export default function CommercialLeadsPage() {
-  const { api, members } = useCommercial();
+  const { api, members, canViewCommercialFinancials } = useCommercial();
   const [leads, setLeads] = useState<CommercialLead[]>([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('todos');
@@ -42,7 +42,7 @@ export default function CommercialLeadsPage() {
   }
 
   return (
-    <div>
+    <div className={canViewCommercialFinancials ? '' : 'kh-hide-commercial-financials'}>
       <header className="kh-page-head"><div><div className="kh-eyebrow">Central de leads</div><h1>Leads</h1><p>Planilha comercial para qualificação, passagem de responsável e fechamento.</p></div><div className="kh-actions"><button className="kh-button" onClick={exportCsv}><Download size={16} /> Exportar</button><button className="kh-icon-button" onClick={() => void load()} aria-label="Atualizar"><RefreshCw size={17} className={loading ? 'kh-spin' : ''} /></button><button className="kh-button primary" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus size={17} /> Adicionar lead</button></div></header>
       <section className="kh-sheet-filters"><div className="kh-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar nome, telefone, empresa..." /></div><select className="kh-select" value={status} onChange={(event) => setStatus(event.target.value)}><option value="todos">Todas as etapas</option>{COMMERCIAL_STATUSES.map((item) => <option key={item}>{item}</option>)}</select><select className="kh-select" value={responsible} onChange={(event) => setResponsible(event.target.value)}><option value="todos">Todos os responsáveis</option>{members.filter((member) => member.ativo && member.papel !== 'coordenador').map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select><span>{visible.length} de {leads.length} leads</span></section>
       <section className="kh-sheet-wrap">
@@ -50,8 +50,7 @@ export default function CommercialLeadsPage() {
           <tbody>{visible.map((lead, index) => <tr key={lead.id} className={selected.has(lead.id) ? 'selected' : ''}><td className="select"><button onClick={() => toggle(lead.id)} aria-label={`Selecionar ${lead.nome}`}>{selected.has(lead.id) ? <CheckSquare2 size={15} /> : <Square size={15} />}</button></td><td>{index + 1}</td><td>{formatDate(lead.data_entrada)}</td><td className="name">{lead.nome}<small>{lead.email || 'Sem e-mail'}</small></td><td>{lead.telefone || '—'}</td><td>{lead.empresa || '—'}</td><td>{lead.origem || '—'}<small>{lead.campanha || ''}</small></td><td><select value={lead.status} onChange={(event) => void updateLead(lead.id, { status: event.target.value })}>{COMMERCIAL_STATUSES.map((item) => <option key={item}>{item}</option>)}</select></td><td>{memberMap.get(lead.sdr_id || '')?.nome || '—'}</td><td>{memberMap.get(lead.closer_id || '')?.nome || '—'}</td><td><button className={`kh-mql-toggle ${lead.lead_qualificado ? 'active' : ''}`} onClick={() => void updateLead(lead.id, { lead_qualificado: !lead.lead_qualificado })}>{lead.lead_qualificado ? 'MQL' : 'Não'}</button></td><td className="money">{currency(lead.valor_negociacao)}</td><td><button className="kh-row-action" aria-label={`Editar ${lead.nome}`} onClick={() => { setEditing(lead); setModalOpen(true); }}><Edit3 size={15} /></button></td></tr>)}{!visible.length && <tr><td colSpan={13} className="kh-table-empty">{loading ? 'Carregando leads...' : 'Nenhum lead encontrado com esses filtros.'}</td></tr>}</tbody></table>
       </section>
       {selected.size > 0 && <div className="kh-bulk-bar"><strong>{selected.size} selecionado{selected.size > 1 ? 's' : ''}</strong><select className="kh-select" defaultValue="" onChange={(event) => { if (event.target.value) void bulkStatus(event.target.value); }}><option value="" disabled>Mover para etapa...</option>{COMMERCIAL_STATUSES.map((item) => <option key={item}>{item}</option>)}</select><button aria-label="Limpar seleção" onClick={() => setSelected(new Set())}><X size={17} /></button></div>}
-      <CommercialLeadModal open={modalOpen} members={members} lead={editing} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={async (data) => { if (editing) await updateLead(editing.id, data); else await api('/api/comercial/leads', { method: 'POST', body: JSON.stringify(data) }); await load(); }} />
+      <CommercialLeadModal open={modalOpen} members={members} canViewFinancials={canViewCommercialFinancials} lead={editing} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={async (data) => { if (editing) await updateLead(editing.id, data); else await api('/api/comercial/leads', { method: 'POST', body: JSON.stringify(data) }); await load(); }} />
     </div>
   );
 }
-

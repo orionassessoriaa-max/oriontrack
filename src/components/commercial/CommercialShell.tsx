@@ -13,6 +13,7 @@ import { canSelectOperationalTeam } from '@/lib/teamSelection';
 
 type CommercialContextValue = {
   role: CommercialRole | null;
+  canViewCommercialFinancials: boolean;
   members: CommercialMember[];
   currentProfileId: string | null;
   canViewMetaInvestment: boolean;
@@ -50,6 +51,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [role, setRole] = useState<CommercialRole | null>(null);
+  const [canViewCommercialFinancials, setCanViewCommercialFinancials] = useState(false);
   const [members, setMembers] = useState<CommercialMember[]>([]);
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const [canViewMetaInvestment, setCanViewMetaInvestment] = useState(false);
@@ -84,6 +86,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
     try {
       const payload = await api('/api/comercial/members');
       setRole(payload.role);
+      setCanViewCommercialFinancials(Boolean(payload.canViewCommercialFinancials));
       setMembers(payload.members || []);
       setCurrentProfileId(payload.currentProfileId || null);
       setCanViewMetaInvestment(Boolean(payload.canViewMetaInvestment));
@@ -146,7 +149,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   }
 
   return (
-    <CommercialContext.Provider value={{ role, members, currentProfileId, canViewMetaInvestment, isDevOps, loading, error, api, refreshAccess, canViewCommercialAsUser, viewingCommercialProfileId, startViewingCommercialMember, stopViewingCommercialMember }}>
+    <CommercialContext.Provider value={{ role, canViewCommercialFinancials, members, currentProfileId, canViewMetaInvestment, isDevOps, loading, error, api, refreshAccess, canViewCommercialAsUser, viewingCommercialProfileId, startViewingCommercialMember, stopViewingCommercialMember }}>
       <div className={`kh ${collapsed ? 'kh-collapsed' : ''}`}>
         {mobileOpen && <button className="kh-scrim" aria-label="Fechar menu" onClick={() => setMobileOpen(false)} />}
         <aside className={`kh-sidebar ${mobileOpen ? 'is-open' : ''}`}>

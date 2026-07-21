@@ -198,6 +198,10 @@
 .kh-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 20px; }
 .kh-form-grid label > span { display: block; margin-bottom: 7px; color: var(--kh-muted); font-size: 10px; font-weight: 700; }
 .kh-form-grid :is(input, select, textarea) { width: 100%; }
+.kh-hide-commercial-financials .kh-sheet-table th:nth-child(12),
+.kh-hide-commercial-financials .kh-sheet-table td:nth-child(12),
+.kh-hide-commercial-financials .kh-kanban-column > header > small,
+.kh-hide-commercial-financials .kh-kanban-cards article footer > strong { display: none; }
 .kh-form-grid .wide { grid-column: 1 / -1; }
 .kh-check { min-height: 42px; display: flex; align-items: center; gap: 9px; align-self: end; }
 .kh-check input { width: 17px !important; min-height: 17px !important; height: 17px; accent-color: var(--kh-blue); }
