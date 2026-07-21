@@ -169,6 +169,20 @@
 .kh-kanban { display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-x: contain; padding: 0 0 14px; scroll-snap-type: x proximity; scrollbar-color: #2d4057 #0a1017; }
 .kh-kanban-column { width: 284px; min-width: 284px; min-height: calc(100dvh - 200px); overflow: hidden; border: 1px solid var(--kh-line); border-radius: 7px; background: #080d13; scroll-snap-align: start; }
 .kh-kanban-column > header { min-height: 86px; border-bottom: 1px solid hsl(var(--stage-hue) 55% 35%); background: hsl(var(--stage-hue) 48% 17%); padding: 13px 14px; }
+.kh-kanban-column > header { position: relative; cursor: grab; }
+.kh-kanban-column > header:active { cursor: grabbing; }
+.kh-stage-grip { color: #a9bbce; opacity: .75; }
+.kh-stage-actions { position: absolute; right: 10px; bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.kh-stage-actions em { color: #9eb0c5; font-size: 8px; font-style: normal; text-transform: uppercase; }
+.kh-stage-actions button { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 4px; background: rgba(0,0,0,.2); color: #a9bbce; }
+.kh-stage-actions button:hover { color: #ff7f8b; background: rgba(255,100,120,.12); }
+.kh-kanban-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 10px; color: var(--kh-muted); font-size: 11px; }
+.kh-stage-add { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 10px; border: 1px solid var(--kh-line); border-radius: 7px; background: var(--kh-surface); }
+.kh-stage-add .kh-input { flex: 1; min-height: 36px; }
+.kh-stage-error { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 10px; }
+.kh-stage-error button { display: grid; place-items: center; border: 0; background: transparent; color: inherit; }
+.kh-add-lead-column { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; border: 1px dashed #314257; border-radius: 5px; background: transparent; color: #aebed1; font-size: 11px; font-weight: 700; }
+.kh-add-lead-column:hover { border-color: var(--kh-cyan); color: var(--kh-cyan); background: rgba(23,190,230,.06); }
 .kh-kanban-column > header > div { display: grid; grid-template-columns: 25px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .kh-kanban-column > header span { color: hsl(var(--stage-hue) 75% 70%); font-size: 9px; font-weight: 800; }
 .kh-kanban-column > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; text-transform: uppercase; }

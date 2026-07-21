@@ -18,7 +18,14 @@ export const COMMERCIAL_STATUSES = [
   'Negócio fechado',
 ] as const;
 
-export type CommercialStatus = (typeof COMMERCIAL_STATUSES)[number];
+export type CommercialStage = { id: string; label: string; desc?: string; protected?: boolean };
+export const COMMERCIAL_STAGES: CommercialStage[] = COMMERCIAL_STATUSES.map((label) => ({
+  id: label,
+  label,
+  protected: ['Oportunidade', 'Em negociaÃ§Ã£o', 'NegÃ³cio fechado', 'Sem interesse'].includes(label),
+}));
+
+export type CommercialStatus = string;
 export type CommercialRole = 'coordenador' | 'closer' | 'sdr';
 
 export type CommercialMember = {
