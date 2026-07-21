@@ -15,7 +15,7 @@ type Props = {
   onSave: (data: Record<string, unknown>) => Promise<void>;
 };
 
-const empty = { nome: '', telefone: '', email: '', empresa: '', origem: '', campanha: '', ja_investiu_trafego: '', faturamento_mensal: '', prioridade: '', investimento: '', vidas: '', negocio_etapa: '', utm_source: '', utm_medium: '', utm_campaign: '', utm_term: '', utm_content: '', status: 'Oportunidade', sdr_id: '', closer_id: '', valor_negociacao: '', observacoes: '', lead_qualificado: false };
+const empty = { nome: '', telefone: '', email: '', empresa: '', estado: '', origem: '', campanha: '', ja_investiu_trafego: '', faturamento_mensal: '', prioridade: '', investimento: '', vidas: '', negocio_etapa: '', utm_source: '', utm_medium: '', utm_campaign: '', utm_term: '', utm_content: '', status: 'Oportunidade', sdr_id: '', closer_id: '', valor_negociacao: '', observacoes: '', lead_qualificado: false };
 
 export default function CommercialLeadModal({ open, members, canViewFinancials, stages = COMMERCIAL_STAGES, initialStatus = 'Oportunidade', lead, onClose, onSave }: Props) {
   const [form, setForm] = useState(empty);
@@ -26,7 +26,7 @@ export default function CommercialLeadModal({ open, members, canViewFinancials, 
     if (!open) return;
     setForm(lead ? {
       ...empty,
-      nome: lead.nome || '', telefone: lead.telefone || '', email: lead.email || '', empresa: lead.empresa || '', origem: lead.origem || '', campanha: lead.campanha || '',
+      nome: lead.nome || '', telefone: lead.telefone || '', email: lead.email || '', empresa: lead.empresa || '', estado: lead.estado || '', origem: lead.origem || '', campanha: lead.campanha || '',
       ja_investiu_trafego: lead.ja_investiu_trafego || '', faturamento_mensal: lead.faturamento_mensal || '', prioridade: lead.prioridade || '', investimento: lead.investimento || '', vidas: lead.vidas || '', negocio_etapa: lead.negocio_etapa || '', utm_source: lead.utm_source || '', utm_medium: lead.utm_medium || '', utm_campaign: lead.utm_campaign || '', utm_term: lead.utm_term || '', utm_content: lead.utm_content || '',
       status: lead.status || 'Oportunidade', sdr_id: lead.sdr_id || '', closer_id: lead.closer_id || '', valor_negociacao: String(lead.valor_negociacao || ''), observacoes: lead.observacoes || '', lead_qualificado: Boolean(lead.lead_qualificado),
     } : { ...empty, status: initialStatus });
@@ -53,6 +53,7 @@ export default function CommercialLeadModal({ open, members, canViewFinancials, 
           <label><span>Telefone</span><input className="kh-input" type="tel" value={form.telefone} onChange={(event) => set('telefone', event.target.value)} /></label>
           <label><span>E-mail</span><input className="kh-input" type="email" value={form.email} onChange={(event) => set('email', event.target.value)} /></label>
           <label><span>Empresa</span><input className="kh-input" value={form.empresa} onChange={(event) => set('empresa', event.target.value)} /></label>
+          <label><span>Estado (UF)</span><input className="kh-input" maxLength={2} value={form.estado} onChange={(event) => set('estado', event.target.value.toUpperCase())} /></label>
           <label><span>Origem</span><input className="kh-input" value={form.origem} onChange={(event) => set('origem', event.target.value)} /></label>
           <label><span>Campanha</span><input className="kh-input" value={form.campanha} onChange={(event) => set('campanha', event.target.value)} /></label>
           {canViewFinancials && <label><span>JÃ¡ investiu em trÃ¡fego?</span><input className="kh-input" value={form.ja_investiu_trafego} onChange={(event) => set('ja_investiu_trafego', event.target.value)} /></label>}

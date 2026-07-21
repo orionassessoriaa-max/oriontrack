@@ -6,6 +6,11 @@ function ratio(value: number, total: number) {
   return total > 0 ? (value / total) * 100 : 0;
 }
 
+const LOST_STATES = new Set(['perdido', 'desqualificado', 'sem interesse', 'negocio fechado', 'venda realizada']);
+function normalized(value: unknown) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 function scopedQuery(query: any, role: string, profileId: string) {
   if (role === 'sdr') return query.eq('sdr_id', profileId);
   if (role === 'closer') return query.eq('closer_id', profileId);
@@ -40,6 +45,15 @@ export async function GET(request: Request) {
   if (leadResult.error) return NextResponse.json({ error: leadResult.error.message }, { status: 500 });
 
   const leads = leadResult.data || [];
+  const stateMap = new Map<string, { state: string; leads: number; active: number }>();
+  leads.forEach((lead) => {
+    const state = String(lead.estado || '').trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(state)) return;
+    const current = stateMap.get(state) || { state, leads: 0, active: 0 };
+    current.leads += 1;
+    if (!LOST_STATES.has(normalized(lead.status))) current.active += 1;
+    stateMap.set(state, current);
+  });
   const investment = (investmentResult.data || []).reduce((sum, row) => sum + Number(row.valor || 0), 0);
   const qualified = leads.filter((lead) => lead.lead_qualificado).length;
   const scheduled = leads.filter((lead) => lead.reuniao_agendada_at).length;
@@ -137,5 +151,5 @@ export async function GET(request: Request) {
       sales: row.sales,
     });
 
-  return NextResponse.json({ metrics, trend, team, role: guard.commercialRole });
+  return NextResponse.json({ metrics, trend, states: Array.from(stateMap.values()).sort((a, b) => b.leads - a.leads), role: guard.commercialRole, updatedAt: new Date().toISOString() });
 }

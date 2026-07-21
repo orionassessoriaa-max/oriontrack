@@ -244,6 +244,7 @@ export async function POST(request: Request) {
       telefone,
       email,
       empresa: normalizeText(field(rawPayload, ['empresa', 'company', 'negocio', 'nome da empresa'])) || null,
+      estado: normalizeText(field(rawPayload, ['estado', 'uf', 'state'])).toUpperCase().slice(0, 2) || null,
       origem: normalizeText(field(rawPayload, ['origem', 'source', 'utm_source', 'canal'])) || 'Funil comercial',
       campanha: normalizeText(field(rawPayload, ['campanha', 'campaign', 'utm_campaign', 'formulario', 'form'])) || null,
       status,

@@ -43,6 +43,7 @@ export type CommercialLead = {
   telefone: string | null;
   email: string | null;
   empresa: string | null;
+  estado: string | null;
   origem: string | null;
   campanha: string | null;
   ja_investiu_trafego: string | null;

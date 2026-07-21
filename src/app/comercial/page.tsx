@@ -9,6 +9,8 @@ type Overview = {
   metrics: Record<string, number>;
   trend: Array<{ date: string; leads: number; mql: number; meetings: number; sales: number; revenue: number; investment: number }>;
   team: Array<{ id: string; role: string; name: string; photo: string | null; leads: number; mql: number; meetings: number; sales: number; revenue: number }>;
+  states: Array<{ state: string; leads: number; active: number }>;
+  updatedAt?: string;
 };
 
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
@@ -40,6 +42,26 @@ function TrendChart({ rows }: { rows: Overview['trend'] }) {
   );
 }
 
+const statePositions: Record<string, [number, number]> = {
+  AC: [20, 20], RO: [29, 27], AM: [39, 20], RR: [48, 10], AP: [66, 13], PA: [57, 28], TO: [63, 42], MA: [76, 27], PI: [81, 39], CE: [88, 29], RN: [96, 32], PB: [96, 40], PE: [91, 48], AL: [91, 57], SE: [84, 63], BA: [76, 56], MT: [51, 58], GO: [62, 67], DF: [68, 61], MS: [51, 78], ES: [85, 75], MG: [72, 78], RJ: [78, 87], SP: [61, 89], PR: [54, 96], SC: [64, 104], RS: [53, 111],
+};
+
+function WeeklyMeetingsChart({ rows }: { rows: Overview['trend'] }) {
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - (6 - index));
+    const key = isoDate(date); const row = rows.find((item) => item.date === key);
+    return { key, label: date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''), value: row?.meetings || 0 };
+  });
+  const max = Math.max(1, ...days.map((day) => day.value));
+  return <div className="kh-weekly-chart" aria-label="Reuniões agendadas nos últimos sete dias"><div className="kh-weekly-y"><span>{max}</span><span>{Math.ceil(max / 2)}</span><span>0</span></div><div className="kh-weekly-bars">{days.map((day) => <div className="kh-weekly-day" key={day.key}><div className="kh-weekly-track"><i style={{ height: `${day.value ? Math.max(10, (day.value / max) * 100) : 3}%` }}><b>{day.value}</b></i></div><span>{day.label}</span></div>)}</div></div>;
+}
+
+function StateMap({ states, selected, onSelect }: { states: Overview['states']; selected: string | null; onSelect: (state: string) => void }) {
+  const values = new Map(states.map((item) => [item.state, item]));
+  const max = Math.max(1, ...states.map((item) => item.leads));
+  return <div className="kh-state-map" aria-label="Mapa de origem dos leads por estado"><div className="kh-map-canvas">{Object.entries(statePositions).map(([state, [x, y]]) => { const item = values.get(state); const intensity = item ? 0.25 + (item.leads / max) * 0.75 : 0.08; return <button type="button" key={state} className={`kh-state-node ${selected === state ? 'selected' : ''}`} style={{ left: `${x}%`, top: `${y}px`, '--state-intensity': intensity } as React.CSSProperties} onClick={() => onSelect(state)} aria-label={`${state}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}><span>{state}</span>{item && <b>{item.leads}</b>}</button>; })}</div></div>;
+}
+
 export default function CommercialDashboardPage() {
   const { api, role, currentProfileId, canViewMetaInvestment } = useCommercial();
   const [start, setStart] = useState(startOfMonth());
@@ -47,6 +69,7 @@ export default function CommercialDashboardPage() {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedState, setSelectedState] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -55,8 +78,10 @@ export default function CommercialDashboardPage() {
     finally { setLoading(false); }
   }, [api, end, start]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = window.setInterval(() => void load(), 30_000); return () => window.clearInterval(timer); }, [load]);
 
   const m = data?.metrics || {};
+  const selectedStateData = data?.states?.find((item) => item.state === selectedState);
   const primary = [
     ...(canViewMetaInvestment ? [{ label: 'Investimento', value: currency(m.investment), helper: 'No período selecionado', icon: WalletCards, tone: 'blue' }] : []),
     { label: 'Leads', value: String(m.leads || 0), helper: `${m.qualified || 0} qualificados`, icon: UsersRound, tone: 'cyan' },
@@ -107,6 +132,11 @@ export default function CommercialDashboardPage() {
           <div className="kh-panel-header"><div><span>Conversão</span><h2>Funil comercial</h2></div><span>{percent(m.conversionLeads)} total</span></div>
           <div className="kh-funnel-list">{funnel.map(([label, value], index) => <div key={String(label)}><div><span>{label}</span><strong>{Number(value || 0)}</strong></div><div className="kh-progress"><i style={{ width: `${Math.max(Number(value || 0) ? 5 : 0, (Number(value || 0) / maxFunnel) * 100)}%` }} /></div>{index < funnel.length - 1 && <small>{Number(value || 0) ? percent((Number(funnel[index + 1][1] || 0) / Number(value || 1)) * 100) : '0,0%'}</small>}</div>)}</div>
         </article>
+      </section>
+
+      <section className="kh-live-grid">
+        <article className="kh-panel kh-live-meetings"><div className="kh-panel-header"><div><span>Atualização automática a cada 30 segundos</span><h2>Reuniões da semana</h2></div><span className="kh-live-dot">Ao vivo</span></div><WeeklyMeetingsChart rows={data?.trend || []} /></article>
+        <article className="kh-panel kh-origin-panel"><div className="kh-panel-header"><div><span>Origem geográfica dos leads</span><h2>Leads por estado</h2></div><span>{data?.states?.reduce((sum, item) => sum + item.leads, 0) || 0} mapeados</span></div><StateMap states={data?.states || []} selected={selectedState} onSelect={setSelectedState} />{selectedStateData ? <div className="kh-state-detail"><strong>{selectedStateData.state}</strong><span>{selectedStateData.leads} leads recebidos</span><b>{selectedStateData.active} ativos na Orion</b></div> : <div className="kh-state-hint">Selecione um estado para ver os leads recebidos e os que continuam ativos.</div>}</article>
       </section>
 
       <section className="kh-bottom-grid">

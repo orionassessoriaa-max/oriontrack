@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     telefone: String(body.telefone || '').trim() || null,
     email: String(body.email || '').trim() || null,
     empresa: String(body.empresa || '').trim() || null,
+    estado: String(body.estado || '').trim().toUpperCase().slice(0, 2) || null,
     origem: String(body.origem || '').trim() || null,
     campanha: String(body.campanha || '').trim() || null,
     ja_investiu_trafego: guard.canViewCommercialFinancials ? String(body.ja_investiu_trafego || '').trim() || null : null,
@@ -90,7 +91,7 @@ export async function PATCH(request: Request) {
   if (!allowed) return NextResponse.json({ error: 'Lead nao encontrado ou sem permissao.' }, { status: 404 });
 
   const allowedFields = [
-    'nome', 'telefone', 'email', 'empresa', 'origem', 'campanha', 'ja_investiu_trafego', 'faturamento_mensal',
+    'nome', 'telefone', 'email', 'empresa', 'estado', 'origem', 'campanha', 'ja_investiu_trafego', 'faturamento_mensal',
     'prioridade', 'investimento', 'vidas', 'negocio_etapa', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term',
     'utm_content', 'status', 'sdr_id', 'closer_id',
     'lead_qualificado', 'valor_negociacao', 'valor_fechado', 'reuniao_agendada_at',
