@@ -3,10 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import {
-  Bot, BriefcaseBusiness, CheckSquare2, ChevronLeft, Eye, LayoutDashboard, LogOut, Menu,
-  PanelLeftClose, PanelLeftOpen, Sparkles, Table2, UsersRound, X,
-} from 'lucide-react';
+import { Bot, BriefcaseBusiness, CheckSquare2, ChevronDown, Eye, LayoutDashboard, LogOut, Menu, Sparkles, Table2, UsersRound, X } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { commercialRoleLabel, type CommercialMember, type CommercialRole } from '@/lib/comercial';
 import { canSelectOperationalTeam } from '@/lib/teamSelection';
@@ -49,7 +46,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   const router = useRouter();
   const { user, actualProfile, loading: authLoading, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [role, setRole] = useState<CommercialRole | null>(null);
   const [canViewCommercialFinancials, setCanViewCommercialFinancials] = useState(false);
   const [members, setMembers] = useState<CommercialMember[]>([]);
@@ -68,13 +65,8 @@ export default function CommercialShell({ children }: { children: React.ReactNod
     const headers = new Headers(init.headers);
     headers.set('Content-Type', 'application/json');
     headers.set('Authorization', `Bearer ${token}`);
-    if (canViewCommercialAsUser && viewingCommercialProfileId) {
-      headers.set('x-commercial-view-profile-id', viewingCommercialProfileId);
-    }
-    const response = await fetch(url, {
-      ...init,
-      headers,
-    });
+    if (canViewCommercialAsUser && viewingCommercialProfileId) headers.set('x-commercial-view-profile-id', viewingCommercialProfileId);
+    const response = await fetch(url, { ...init, headers });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || 'Não foi possível concluir a operação.');
     return payload;
@@ -100,10 +92,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
-      router.replace('/login');
-      return;
-    }
+    if (!user) { router.replace('/login'); return; }
     void refreshAccess();
   }, [authLoading, refreshAccess, router, user, viewingCommercialProfileId]);
 
@@ -113,7 +102,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
     if (saved) setViewingCommercialProfileId(saved);
   }, [canViewCommercialAsUser]);
 
-  useEffect(() => setMobileOpen(false), [pathname]);
+  useEffect(() => { setMobileOpen(false); setMoreOpen(false); }, [pathname]);
 
   const startViewingCommercialMember = useCallback((profileId: string) => {
     if (!canViewCommercialAsUser) return;
@@ -133,77 +122,37 @@ export default function CommercialShell({ children }: { children: React.ReactNod
     : baseNavigation, [role]);
   const currentMember = members.find((member) => member.profile_id === currentProfileId);
 
-  if (authLoading || loading) {
-    return <div className="kh-loading"><Sparkles className="kh-spin" size={26} /><span>Preparando operação comercial</span></div>;
-  }
+  if (authLoading || loading) return <div className="kh-loading"><Sparkles className="kh-spin" size={26} /><span>Preparando operação comercial</span></div>;
+  if (error) return <div className="kh-loading kh-error-state"><div className="kh-error-icon"><X size={24} /></div><h1>Não foi possível abrir o comercial</h1><p>{error}</p><button type="button" onClick={() => void refreshAccess()}>Tentar novamente</button></div>;
 
-  if (error) {
-    return (
-      <div className="kh-loading kh-error-state">
-        <div className="kh-error-icon"><X size={24} /></div>
-        <h1>Não foi possível abrir o comercial</h1>
-        <p>{error}</p>
-        <button type="button" onClick={() => void refreshAccess()}>Tentar novamente</button>
-      </div>
-    );
-  }
+  const directNavigation = navigation.slice(0, 4);
+  const overflowNavigation = navigation.slice(4);
+  const currentMemberName = currentMember?.nome || actualProfile?.nome || 'Usuário';
+  const initials = currentMemberName.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  const overflowActive = overflowNavigation.some((item) => pathname.startsWith(item.href));
 
   return (
     <CommercialContext.Provider value={{ role, canViewCommercialFinancials, members, currentProfileId, canViewMetaInvestment, isDevOps, loading, error, api, refreshAccess, canViewCommercialAsUser, viewingCommercialProfileId, startViewingCommercialMember, stopViewingCommercialMember }}>
-      <div className={`kh ${collapsed ? 'kh-collapsed' : ''}`}>
-        {mobileOpen && <button className="kh-scrim" aria-label="Fechar menu" onClick={() => setMobileOpen(false)} />}
-        <aside className={`kh-sidebar ${mobileOpen ? 'is-open' : ''}`}>
-          <div className="kh-brand">
-            <div className="kh-brand-mark"><span>K</span></div>
-            {!collapsed && <div><strong>KRIPTO</strong><span>HUNTERS</span></div>}
-            <button className="kh-mobile-close" aria-label="Fechar menu" onClick={() => setMobileOpen(false)}><X size={20} /></button>
+      <div className="kh"><div className="kh-workspace">
+        <header className="kh-topbar">
+          <div className="kh-topbar-left">
+            <button className="kh-menu" aria-label="Abrir menu" onClick={() => setMobileOpen((value) => !value)}><Menu size={20} /></button>
+            <Link href="/comercial" className="kh-logo-link" aria-label="Visão geral do Kripto Hunters"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-orion-logo" /></Link>
+            <nav className="kh-top-nav" aria-label="Navegação comercial">
+              {directNavigation.map((item) => { const Icon = item.icon; const active = item.href === '/comercial' ? pathname === item.href : pathname.startsWith(item.href); return <Link key={item.href} href={item.href} className={active ? 'active' : ''}><Icon size={14} /><span>{item.label}</span></Link>; })}
+              {overflowNavigation.length > 0 && <div className="kh-more-wrap"><button type="button" className={moreOpen || overflowActive ? 'active' : ''} onClick={() => setMoreOpen((value) => !value)}><span>Mais</span><ChevronDown size={14} className={moreOpen ? 'rotate' : ''} /></button>{moreOpen && <div className="kh-more-menu">{overflowNavigation.map((item) => { const Icon = item.icon; const active = pathname.startsWith(item.href); return <Link key={item.href} href={item.href} className={active ? 'active' : ''} onClick={() => setMoreOpen(false)}><Icon size={15} /><span>{item.label}</span></Link>; })}</div>}</div>}
+            </nav>
           </div>
-
-          <nav className="kh-nav" aria-label="Navegação comercial">
-            {navigation.map((item) => {
-              const active = item.href === '/comercial' ? pathname === item.href : pathname.startsWith(item.href);
-              const Icon = item.icon;
-              return (
-                <Link key={item.href} href={item.href} className={active ? 'active' : ''} title={collapsed ? item.label : undefined}>
-                  <Icon size={19} strokeWidth={1.8} />
-                  {!collapsed && <span>{item.label}</span>}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="kh-sidebar-bottom">
-            {canSelectOperationalTeam(actualProfile) && (
-              <Link href="/selecionar-time" title={collapsed ? 'Trocar operação' : undefined}>
-                <ChevronLeft size={18} />{!collapsed && <span>Trocar operação</span>}
-              </Link>
-            )}
-            <button type="button" onClick={signOut} title={collapsed ? 'Sair' : undefined}>
-              <LogOut size={18} />{!collapsed && <span>Sair</span>}
-            </button>
+          <div className="kh-topbar-right">
+            {viewingCommercialProfileId && canViewCommercialAsUser && <button type="button" className="kh-viewing-pill" onClick={stopViewingCommercialMember} title="Sair da visualização do integrante"><Eye size={14} /> Vendo como {currentMemberName} <X size={13} /></button>}
+            {canSelectOperationalTeam(actualProfile) && <Link href="/selecionar-time" className="kh-switch-operation">Trocar operação</Link>}
+            <div className="kh-profile"><div className="kh-avatar">{initials}</div><div><strong>{currentMemberName}</strong><span>{isDevOps ? 'DevOps Manager' : commercialRoleLabel(role)}</span></div></div>
+            <button type="button" className="kh-logout" onClick={signOut} aria-label="Sair" title="Sair"><LogOut size={16} /></button>
           </div>
-          <button className="kh-collapse" type="button" aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'} onClick={() => setCollapsed((value) => !value)}>
-            {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-          </button>
-        </aside>
-
-        <div className="kh-workspace">
-          <header className="kh-topbar">
-            <button className="kh-menu" aria-label="Abrir menu" onClick={() => setMobileOpen(true)}><Menu size={21} /></button>
-            <div className="kh-topbar-context"><span>Operação comercial</span><strong>{pathname === '/comercial' ? 'Visão geral' : navigation.find((item) => pathname.startsWith(item.href) && item.href !== '/comercial')?.label || 'Kripto Hunters'}</strong></div>
-            {viewingCommercialProfileId && canViewCommercialAsUser && (
-              <button type="button" className="kh-viewing-pill" onClick={stopViewingCommercialMember} title="Sair da visualizacao do integrante">
-                <Eye size={15} /> Vendo como {currentMember?.nome || 'integrante'} <X size={14} />
-              </button>
-            )}
-            <div className="kh-profile">
-              <div className="kh-avatar">{String(currentMember?.nome || actualProfile?.nome || 'KH').split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</div>
-              <div><strong>{currentMember?.nome || actualProfile?.nome}</strong><span>{isDevOps ? 'DevOps Manager' : commercialRoleLabel(role)}</span></div>
-            </div>
-          </header>
-          <main className="kh-main">{children}</main>
-        </div>
-      </div>
+        </header>
+        {mobileOpen && <><button className="kh-scrim" aria-label="Fechar menu" onClick={() => setMobileOpen(false)} /><nav className="kh-mobile-nav" aria-label="Menu comercial">{navigation.map((item) => { const Icon = item.icon; const active = item.href === '/comercial' ? pathname === item.href : pathname.startsWith(item.href); return <Link key={item.href} href={item.href} className={active ? 'active' : ''} onClick={() => setMobileOpen(false)}><Icon size={17} /><span>{item.label}</span></Link>; })}{canSelectOperationalTeam(actualProfile) && <Link href="/selecionar-time" onClick={() => setMobileOpen(false)}><span>Trocar operação</span></Link>}</nav></>}
+        <main className="kh-main">{children}</main>
+      </div></div>
     </CommercialContext.Provider>
   );
 }
