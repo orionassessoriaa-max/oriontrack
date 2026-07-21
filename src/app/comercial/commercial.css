@@ -254,11 +254,12 @@
 .kh-kanban-column > header b { min-width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid hsl(var(--stage-hue) 50% 35%); border-radius: 50%; background: rgba(0,0,0,.15); font-size: 10px; }
 .kh-kanban-column > header small { display: block; margin: 12px 0 0 33px; color: #9eb0c5; font-size: 10px; font-variant-numeric: tabular-nums; }
 .kh-kanban-cards { min-height: 220px; display: grid; align-content: start; gap: 8px; padding: 9px; }
-.kh-kanban-cards article { min-height: 164px; border: 1px solid #1d2938; border-radius: 6px; background: #0c131c; padding: 12px; transition: border-color 180ms ease, opacity 180ms ease, transform 220ms ease, box-shadow 220ms ease; }
+.kh-kanban-cards article { min-height: 164px; border: 1px solid #1d2938; border-radius: 6px; background: #0c131c; padding: 12px; cursor: pointer; transition: border-color 180ms ease, opacity 180ms ease, transform 220ms ease, box-shadow 220ms ease; }
 .kh-kanban-cards article:hover { border-color: #385472; transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,.18); }
+.kh-kanban-cards article.expanded { border-color: var(--kh-cyan); box-shadow: 0 10px 24px rgba(0, 190, 230, .12); }
 .kh-kanban-cards article.dragging { opacity: .45; transform: rotate(1deg) scale(.98); box-shadow: 0 12px 24px rgba(0,0,0,.28); }
 .kh-kanban-cards article.moving { opacity: .62; pointer-events: none; }
-.kh-card-top { display: flex; align-items: center; gap: 6px; }
+.kh-card-top { display: flex; align-items: center; gap: 6px; }.kh-card-expand { margin-left: auto; display: grid; place-items: center; color: var(--kh-cyan); }
 .kh-dot { width: 7px; height: 7px; border-radius: 50%; background: #68788d; }.kh-dot.qualified { background: var(--kh-green); box-shadow: 0 0 9px rgba(47,210,160,.45); }
 .kh-card-top small { color: var(--kh-muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .kh-kanban-cards h3 { margin: 12px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
@@ -266,7 +267,7 @@
 .kh-card-owner { display: flex; align-items: center; gap: 6px; margin-top: 15px; color: #7f90a5; font-size: 9px; }
 .kh-kanban-cards footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 13px; border-top: 1px solid #192433; padding-top: 10px; }
 .kh-kanban-cards footer strong { font-size: 10px; font-variant-numeric: tabular-nums; }
-.kh-kanban-cards footer select { width: 88px; min-height: 27px !important; border: 1px solid #253548 !important; border-radius: 4px !important; background: #080d13 !important; color: #8293a7 !important; -webkit-text-fill-color: #8293a7 !important; font-size: 8px; }
+.kh-card-stage { max-width: 112px; overflow: hidden; color: var(--kh-muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; text-align: right; }.kh-card-details { margin: 12px -2px 0; border-top: 1px solid #192433; padding-top: 11px; cursor: default; }.kh-card-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }.kh-card-detail-grid div { min-width: 0; }.kh-card-detail-grid small { display: block; color: var(--kh-muted); font-size: 8px; text-transform: uppercase; }.kh-card-detail-grid strong { display: block; overflow: hidden; margin-top: 3px; color: var(--kh-text); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }.kh-card-task-form { display: grid; gap: 8px; margin-top: 13px; border-top: 1px solid #192433; padding-top: 11px; }.kh-card-task-title { display: flex; align-items: center; gap: 6px; color: var(--kh-cyan); font-size: 10px; }.kh-card-task-fields { display: grid; grid-template-columns: 1.2fr 1fr .7fr; gap: 6px; }.kh-card-task-form .kh-input, .kh-card-task-form .kh-select, .kh-card-task-form .kh-textarea { min-height: 30px !important; font-size: 9px; }.kh-card-task-form .kh-textarea { min-height: 52px !important; resize: vertical; }.kh-card-task-form .kh-button { justify-content: center; min-height: 31px; font-size: 9px; }
 .kh-column-empty { height: 130px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: #4f6074; font-size: 9px; }
 .kh-modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; }
 .kh-modal-scrim { position: absolute; inset: 0; border: 0; background: rgba(0, 3, 7, .76); backdrop-filter: blur(5px); }
