@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { COMMERCIAL_STATUSES } from '@/lib/comercial';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
@@ -45,7 +44,7 @@ export async function POST(request: Request) {
   const nome = String(body.nome || '').trim();
   if (!nome) return NextResponse.json({ error: 'Nome do lead e obrigatorio.' }, { status: 400 });
 
-  const status = COMMERCIAL_STATUSES.includes(body.status) ? body.status : 'Oportunidade';
+  const status = String(body.status || 'Oportunidade').trim().slice(0, 80) || 'Oportunidade';
   const payload = {
     nome,
     telefone: String(body.telefone || '').trim() || null,
@@ -101,9 +100,6 @@ export async function PATCH(request: Request) {
   for (const field of allowedFields) {
     if (!guard.canViewCommercialFinancials && ['ja_investiu_trafego', 'faturamento_mensal', 'investimento', 'valor_negociacao', 'valor_fechado'].includes(field)) continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
-  }
-  if (typeof update.status === 'string' && !COMMERCIAL_STATUSES.includes(update.status as any)) {
-    return NextResponse.json({ error: 'Etapa comercial invalida.' }, { status: 400 });
   }
   if (update.status === 'Negócio fechado' && !Object.prototype.hasOwnProperty.call(body, 'fechado_at')) {
     update.fechado_at = new Date().toISOString();
