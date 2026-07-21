@@ -11,7 +11,10 @@ type CorretorMeta = {
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
   time_operacional?: unknown;
+  is_orion_principal?: boolean;
 };
+
+const KRIPTO_PRINCIPAL_ACCOUNT_ID = '1531044161152262';
 
 async function requireTrafficAccess(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -55,7 +58,26 @@ async function resolveScopedProfile(profile: any, requestedGestorId?: string | n
   return gestor || profile;
 }
 
-async function findAllowedAccount(profile: any, accountId: string, requestedGestorId?: string | null) {
+async function findAllowedAccount(profile: any, accountId: string, requestedGestorId?: string | null, requestedEquipe?: string | null) {
+  if (requestedEquipe === 'kripto_hunters' && accountId === KRIPTO_PRINCIPAL_ACCOUNT_ID) {
+    const { data: principal } = await supabaseAdmin
+      .from('meta_ad_accounts')
+      .select('id, meta_account_id, nome')
+      .eq('meta_account_id', KRIPTO_PRINCIPAL_ACCOUNT_ID)
+      .maybeSingle();
+    if (principal) {
+      return {
+        id: String(principal.id),
+        nome: principal.nome || 'CA - Orion Conta Principal',
+        gestor_trafego_id: null,
+        nome_empresa: principal.nome || 'CA - Orion Conta Principal',
+        meta_ad_account_id: principal.meta_account_id,
+        meta_ad_account_name: principal.nome || 'CA - Orion Conta Principal',
+        is_orion_principal: true,
+      } as CorretorMeta;
+    }
+  }
+
   const scopedProfile = await resolveScopedProfile(profile, requestedGestorId);
   const { data, error } = await supabaseAdmin
     .from('corretores')
@@ -200,7 +222,8 @@ export async function POST(request: Request) {
     const account = await findAllowedAccount(
       guard.profile,
       accountId,
-      body.gestor_id ? String(body.gestor_id) : null
+      body.gestor_id ? String(body.gestor_id) : null,
+      body.equipe ? String(body.equipe) : null
     );
 
     if (!account) {

@@ -81,6 +81,11 @@ function accountKey(account: AccountOption) {
   return String(account.meta_ad_account_id || account.id || '');
 }
 
+function selectedOperationalTeam() {
+  if (typeof window === 'undefined') return null;
+  return window.sessionStorage.getItem('orion:selected_team') || window.localStorage.getItem('orion:selected_team');
+}
+
 function bestCreativeImage(creative?: CreativePreview | null) {
   if (creative?.image_url) return creative.image_url;
   const thumbnail = creative?.thumbnail_url || '';
@@ -141,6 +146,7 @@ export default function OtimizacoesPage() {
         data_fim: dateEnd,
         account_id: accountId || selected?.meta_ad_account_id,
         analyze,
+        equipe: selectedOperationalTeam(),
         gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego' ? profile.id : undefined,
       }),
     });
@@ -182,6 +188,7 @@ export default function OtimizacoesPage() {
         account_id: selected.meta_ad_account_id,
         prompt: optimizePrompt,
         metrics: total,
+        equipe: selectedOperationalTeam(),
         gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego' ? profile.id : undefined,
       }),
     });

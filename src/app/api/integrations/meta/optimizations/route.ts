@@ -13,7 +13,10 @@ type CorretorMeta = {
   meta_ad_account_name: string | null;
   time_operacional?: unknown;
   scoped_corretor_ids?: string[];
+  is_orion_principal?: boolean;
 };
+
+const KRIPTO_PRINCIPAL_ACCOUNT_ID = '1531044161152262';
 
 const TRAFFIC_RULES = {
   cplAttention: 20,
@@ -36,7 +39,7 @@ async function requireTrafficAccess(request: Request) {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('id, nome, email, tipo_usuario, corretor_id')
+    .select('id, nome, email, tipo_usuario, corretor_id, equipe_orion')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -103,7 +106,7 @@ function resolveBrokerageMetaAccount(corretor: CorretorMeta, scopedCorretores: C
   return data ? { ...corretor, meta_ad_account_id: data.meta_ad_account_id, meta_ad_account_name: data.meta_ad_account_name } : corretor;
 }
 
-async function getAllowedAccounts(profile: any, requestedGestorId?: string | null) {
+async function getAllowedAccounts(profile: any, requestedGestorId?: string | null, requestedEquipe?: string | null) {
   let scopedProfile = profile;
 
   if (profile.tipo_usuario === 'admin' && requestedGestorId) {
@@ -147,6 +150,30 @@ async function getAllowedAccounts(profile: any, requestedGestorId?: string | nul
       scoped_corretor_ids: scopedGroupIds,
     };
   });
+
+  // A conta principal pertence exclusivamente ao painel Kripto Hunters.
+  // Ela nao possui um corretor/concessionaria correspondente e nunca deve
+  // ser usada para calcular leads ou CPL do CRM.
+  if (requestedEquipe === 'kripto_hunters') {
+    const { data: principal } = await supabaseAdmin
+      .from('meta_ad_accounts')
+      .select('id, meta_account_id, nome, currency, status')
+      .eq('meta_account_id', KRIPTO_PRINCIPAL_ACCOUNT_ID)
+      .maybeSingle();
+
+    if (principal) {
+      return [{
+        id: String(principal.id),
+        nome: principal.nome || 'CA - Orion Conta Principal',
+        gestor_trafego_id: null,
+        nome_empresa: principal.nome || 'CA - Orion Conta Principal',
+        meta_ad_account_id: principal.meta_account_id,
+        meta_ad_account_name: principal.nome || 'CA - Orion Conta Principal',
+        time_operacional: 'kripto_hunters',
+        is_orion_principal: true,
+      } as CorretorMeta];
+    }
+  }
   const unique = new Map<string, CorretorMeta>();
   resolved.forEach((corretor) => {
     const accountId = normalizeAccountId(corretor.meta_ad_account_id);
@@ -157,6 +184,9 @@ async function getAllowedAccounts(profile: any, requestedGestorId?: string | nul
 }
 
 async function fetchCrmLeads(corretor: CorretorMeta, since: string, until: string) {
+  if (corretor.is_orion_principal || normalizeAccountId(corretor.meta_ad_account_id) === KRIPTO_PRINCIPAL_ACCOUNT_ID) {
+    return [];
+  }
   const start = `${since}T00:00:00.000-03:00`;
   const end = `${until}T23:59:59.999-03:00`;
   let corretorIds = corretor.scoped_corretor_ids?.length ? corretor.scoped_corretor_ids : [corretor.id];
@@ -403,7 +433,11 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const range = getMetaCompatibleRange(String(body.data_inicio || ''), String(body.data_fim || ''));
-    const accounts = await getAllowedAccounts(guard.profile, body.gestor_id ? String(body.gestor_id) : null);
+    const accounts = await getAllowedAccounts(
+      guard.profile,
+      body.gestor_id ? String(body.gestor_id) : null,
+      body.equipe ? String(body.equipe) : null
+    );
     const selectedId = normalizeAccountId(body.account_id || accounts[0]?.meta_ad_account_id);
     const selected = accounts.find((item) => normalizeAccountId(item.meta_ad_account_id) === selectedId) || accounts[0];
     if (!selected) return NextResponse.json({ success: true, accounts: [], selected: null });
