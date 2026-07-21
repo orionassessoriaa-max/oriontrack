@@ -86,7 +86,7 @@ export async function GET(request: Request) {
   const metaInvestment = guard.canViewMetaInvestment ? await fetchKriptoMetaInvestment(start, end) : { rows: null, error: null };
   const metaRows = metaInvestment.rows;
   const investmentRows: Array<{ data: string; valor: number }> = metaRows
-    ? metaRows.map((row) => ({ data: row.date, valor: row.value }))
+    ? metaRows.map((row: { date: string; value: number }) => ({ data: row.date, valor: row.value }))
     : (investmentResult.data || []).map((row: any) => ({ data: String(row.data), valor: Number(row.valor || 0) }));
   const investment = investmentRows.reduce((sum, row) => sum + Number(row.valor || 0), 0);
   const qualified = leads.filter((lead) => lead.lead_qualificado).length;
