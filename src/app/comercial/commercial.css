@@ -86,6 +86,8 @@
 .kh-badge.red { border-color: #6d2f3a; background: #2d1017; color: #ff8798; }
 
 .kh-loading { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #05080d; color: #a7b5c7; font-size: 13px; }
+.kh-loading-logo { width: 132px; height: auto; object-fit: contain; opacity: .92; }
+.kh-empty-logo { width: 58px; height: 28px; object-fit: contain; opacity: .52; }
 .kh-spin { animation: kh-spin 1s linear infinite; color: #45c7eb; }
 @keyframes kh-spin { to { transform: rotate(360deg); } }
 .kh-error-state { text-align: center; padding: 28px; }

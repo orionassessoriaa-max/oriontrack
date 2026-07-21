@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Bot, BriefcaseBusiness, CheckSquare2, ChevronDown, Eye, LayoutDashboard, LogOut, Menu, MessageSquare, Sparkles, Table2, UsersRound, X } from 'lucide-react';
+import { Bot, BriefcaseBusiness, CheckSquare2, ChevronDown, Eye, LayoutDashboard, LogOut, Menu, MessageSquare, Table2, UsersRound, X } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { commercialRoleLabel, type CommercialMember, type CommercialRole } from '@/lib/comercial';
 import { canSelectOperationalTeam } from '@/lib/teamSelection';
@@ -123,7 +123,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
     : baseNavigation, [role]);
   const currentMember = members.find((member) => member.profile_id === currentProfileId);
 
-  if (authLoading || loading) return <div className="kh-loading"><Sparkles className="kh-spin" size={26} /><span>Preparando operação comercial</span></div>;
+  if (authLoading || loading) return <div className="kh-loading"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-loading-logo" /><span>Preparando operação comercial</span></div>;
   if (error) return <div className="kh-loading kh-error-state"><div className="kh-error-icon"><X size={24} /></div><h1>Não foi possível abrir o comercial</h1><p>{error}</p><button type="button" onClick={() => void refreshAccess()}>Tentar novamente</button></div>;
 
   const directNavigation = navigation.slice(0, 4);
