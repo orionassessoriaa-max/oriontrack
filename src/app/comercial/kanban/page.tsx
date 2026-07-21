@@ -12,6 +12,8 @@ export default function CommercialKanbanPage() {
   const [stages, setStages] = useState<CommercialStage[]>(COMMERCIAL_STAGES);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [initialStatus, setInitialStatus] = useState('Oportunidade');
   const [dragging, setDragging] = useState<string | null>(null);
@@ -26,7 +28,13 @@ export default function CommercialKanbanPage() {
   useEffect(() => { void load(); void loadStages(); }, [load, loadStages]);
 
   const memberMap = useMemo(() => new Map(members.map((member) => [member.profile_id, member])), [members]);
-  const visible = useMemo(() => leads.filter((lead) => [lead.nome, lead.empresa, lead.telefone].join(' ').toLowerCase().includes(search.toLowerCase())), [leads, search]);
+  const visible = useMemo(() => leads.filter((lead) => {
+    const matchesSearch = [lead.nome, lead.empresa, lead.telefone].join(' ').toLowerCase().includes(search.toLowerCase());
+    const date = new Date(lead.data_entrada).getTime();
+    const matchesStart = !dateStart || date >= new Date(`${dateStart}T00:00:00`).getTime();
+    const matchesEnd = !dateEnd || date <= new Date(`${dateEnd}T23:59:59`).getTime();
+    return matchesSearch && matchesStart && matchesEnd;
+  }), [leads, search, dateStart, dateEnd]);
   const grouped = useMemo(() => Object.fromEntries(stages.map((stage) => [stage.id, visible.filter((lead) => lead.status === stage.id)])), [stages, visible]);
 
   async function moveLead(id: string, status: string) {
@@ -58,7 +66,7 @@ export default function CommercialKanbanPage() {
 
   return (
     <div className={`kh-kanban-page ${canViewCommercialFinancials ? '' : 'kh-hide-commercial-financials'}`}>
-      <header className="kh-page-head"><div><div className="kh-eyebrow">Pipeline de vendas</div><h1>Kanban</h1><p>Acompanhe a passagem do SDR para o closer e o avanco de cada negociacao.</p></div><div className="kh-actions"><div className="kh-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar lead..." /></div><button className="kh-icon-button" onClick={() => void load()} aria-label="Atualizar"><RefreshCw size={17} className={loading ? 'kh-spin' : ''} /></button><button className="kh-button primary" onClick={() => { setInitialStatus('Oportunidade'); setModalOpen(true); }}><Plus size={17} /> Novo lead</button></div></header>
+      <header className="kh-page-head"><div><div className="kh-eyebrow">Pipeline de vendas</div><h1>Kanban</h1><p>Acompanhe a passagem do SDR para o closer e o avanco de cada negociacao.</p></div><div className="kh-actions"><div className="kh-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar lead..." /></div><input className="kh-input kh-date-filter" type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} aria-label="Data inicial" /><input className="kh-input kh-date-filter" type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} aria-label="Data final" /><button className="kh-icon-button" onClick={() => void load()} aria-label="Atualizar"><RefreshCw size={17} className={loading ? 'kh-spin' : ''} /></button><button className="kh-button primary" onClick={() => { setInitialStatus('Oportunidade'); setModalOpen(true); }}><Plus size={17} /> Novo lead</button></div></header>
       {stageError && <div className="kh-inline-error kh-stage-error">{stageError}<button type="button" aria-label="Fechar aviso" onClick={() => setStageError(null)}><X size={15} /></button></div>}
       {role === 'coordenador' && <div className="kh-kanban-toolbar"><span>Arraste uma coluna para reorganizar o funil.</span><button type="button" className="kh-button" onClick={() => setNewStageOpen(true)} disabled={stageSaving}><Plus size={16} /> Adicionar etapa</button></div>}
       {role === 'coordenador' && newStageOpen && <form className="kh-stage-add" onSubmit={addStage}><input autoFocus className="kh-input" value={newStageName} onChange={(event) => setNewStageName(event.target.value)} placeholder="Nome da nova etapa" maxLength={60} required /><button className="kh-button primary">Criar etapa</button><button type="button" className="kh-button" onClick={() => setNewStageOpen(false)}>Cancelar</button></form>}
