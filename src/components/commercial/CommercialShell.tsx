@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  Bot, BriefcaseBusiness, CheckSquare2, ChevronLeft, LayoutDashboard, LogOut, Menu,
+  Bot, BriefcaseBusiness, CheckSquare2, ChevronLeft, Eye, LayoutDashboard, LogOut, Menu,
   PanelLeftClose, PanelLeftOpen, Sparkles, Table2, UsersRound, X,
 } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -19,6 +19,10 @@ type CommercialContextValue = {
   error: string | null;
   api: (url: string, init?: RequestInit) => Promise<any>;
   refreshAccess: () => Promise<void>;
+  canViewCommercialAsUser: boolean;
+  viewingCommercialProfileId: string | null;
+  startViewingCommercialMember: (profileId: string) => void;
+  stopViewingCommercialMember: () => void;
 };
 
 const CommercialContext = createContext<CommercialContextValue | null>(null);
@@ -46,21 +50,29 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   const [role, setRole] = useState<CommercialRole | null>(null);
   const [members, setMembers] = useState<CommercialMember[]>([]);
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const [viewingCommercialProfileId, setViewingCommercialProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const canViewCommercialAsUser = actualProfile?.tipo_usuario === 'admin' && Boolean(actualProfile?.is_admin_master);
 
   const api = useCallback(async (url: string, init: RequestInit = {}) => {
     const { data } = await import('@/lib/supabase/client').then(({ supabase }) => supabase.auth.getSession());
     const token = data.session?.access_token;
     if (!token) throw new Error('Sessão expirada. Entre novamente.');
+    const headers = new Headers(init.headers);
+    headers.set('Content-Type', 'application/json');
+    headers.set('Authorization', `Bearer ${token}`);
+    if (canViewCommercialAsUser && viewingCommercialProfileId) {
+      headers.set('x-commercial-view-profile-id', viewingCommercialProfileId);
+    }
     const response = await fetch(url, {
       ...init,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init.headers || {}) },
+      headers,
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || 'Não foi possível concluir a operação.');
     return payload;
-  }, []);
+  }, [canViewCommercialAsUser, viewingCommercialProfileId]);
 
   const refreshAccess = useCallback(async () => {
     setLoading(true);
@@ -84,9 +96,28 @@ export default function CommercialShell({ children }: { children: React.ReactNod
       return;
     }
     void refreshAccess();
-  }, [authLoading, refreshAccess, router, user]);
+  }, [authLoading, refreshAccess, router, user, viewingCommercialProfileId]);
+
+  useEffect(() => {
+    if (!canViewCommercialAsUser || typeof window === 'undefined') return;
+    const saved = window.sessionStorage.getItem('orion:commercial_view_profile_id');
+    if (saved) setViewingCommercialProfileId(saved);
+  }, [canViewCommercialAsUser]);
 
   useEffect(() => setMobileOpen(false), [pathname]);
+
+  const startViewingCommercialMember = useCallback((profileId: string) => {
+    if (!canViewCommercialAsUser) return;
+    setViewingCommercialProfileId(profileId);
+    window.sessionStorage.setItem('orion:commercial_view_profile_id', profileId);
+    router.push('/comercial');
+  }, [canViewCommercialAsUser, router]);
+
+  const stopViewingCommercialMember = useCallback(() => {
+    setViewingCommercialProfileId(null);
+    window.sessionStorage.removeItem('orion:commercial_view_profile_id');
+    router.push('/comercial/usuarios');
+  }, [router]);
 
   const navigation = useMemo(() => role === 'coordenador'
     ? [...baseNavigation, { href: '/comercial/usuarios', label: 'Usuários', icon: UsersRound }]
@@ -109,7 +140,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   }
 
   return (
-    <CommercialContext.Provider value={{ role, members, currentProfileId, loading, error, api, refreshAccess }}>
+    <CommercialContext.Provider value={{ role, members, currentProfileId, loading, error, api, refreshAccess, canViewCommercialAsUser, viewingCommercialProfileId, startViewingCommercialMember, stopViewingCommercialMember }}>
       <div className={`kh ${collapsed ? 'kh-collapsed' : ''}`}>
         {mobileOpen && <button className="kh-scrim" aria-label="Fechar menu" onClick={() => setMobileOpen(false)} />}
         <aside className={`kh-sidebar ${mobileOpen ? 'is-open' : ''}`}>
@@ -151,6 +182,11 @@ export default function CommercialShell({ children }: { children: React.ReactNod
           <header className="kh-topbar">
             <button className="kh-menu" aria-label="Abrir menu" onClick={() => setMobileOpen(true)}><Menu size={21} /></button>
             <div className="kh-topbar-context"><span>Operação comercial</span><strong>{pathname === '/comercial' ? 'Visão geral' : navigation.find((item) => pathname.startsWith(item.href) && item.href !== '/comercial')?.label || 'Kripto Hunters'}</strong></div>
+            {viewingCommercialProfileId && canViewCommercialAsUser && (
+              <button type="button" className="kh-viewing-pill" onClick={stopViewingCommercialMember} title="Sair da visualizacao do integrante">
+                <Eye size={15} /> Vendo como {currentMember?.nome || 'integrante'} <X size={14} />
+              </button>
+            )}
             <div className="kh-profile">
               <div className="kh-avatar">{String(currentMember?.nome || actualProfile?.nome || 'KH').split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</div>
               <div><strong>{currentMember?.nome || actualProfile?.nome}</strong><span>{commercialRoleLabel(role)}</span></div>
@@ -162,4 +198,3 @@ export default function CommercialShell({ children }: { children: React.ReactNod
     </CommercialContext.Provider>
   );
 }
-

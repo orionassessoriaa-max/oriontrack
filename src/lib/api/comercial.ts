@@ -15,7 +15,29 @@ export async function requireCommercialUser(
 ): Promise<CommercialGuard | { error: NextResponse }> {
   const baseResult = await requireApiUser(request);
   if (baseResult.error) return { error: baseResult.error };
-  const base = { user: baseResult.user, profile: baseResult.profile };
+  let base = { user: baseResult.user, profile: baseResult.profile };
+  const isMaster = base.profile.tipo_usuario === 'admin' && Boolean(base.profile.is_admin_master);
+  const viewProfileId = request.headers.get('x-commercial-view-profile-id') || new URL(request.url).searchParams.get('view_profile_id');
+
+  if (isMaster && viewProfileId && viewProfileId !== base.profile.id) {
+    const [{ data: viewMember }, { data: viewProfile }] = await Promise.all([
+      supabaseAdmin
+        .from('comercial_membros')
+        .select('profile_id,papel,ativo')
+        .eq('profile_id', viewProfileId)
+        .eq('ativo', true)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('profiles')
+        .select('id, email, email_real, nome, tipo_usuario, corretor_id, telefone, status, is_admin_master, equipe_orion')
+        .eq('id', viewProfileId)
+        .maybeSingle(),
+    ]);
+
+    if (viewMember?.ativo && viewProfile) {
+      base = { ...base, profile: viewProfile as ApiProfile };
+    }
+  }
 
   const { data: member, error } = await supabaseAdmin
     .from('comercial_membros')
@@ -32,7 +54,6 @@ export async function requireCommercialUser(
     };
   }
 
-  const isMaster = base.profile.tipo_usuario === 'admin' && Boolean(base.profile.is_admin_master);
   const role = (member?.ativo ? member.papel : isMaster ? 'coordenador' : null) as CommercialRole | null;
   if (!role) return { error: NextResponse.json({ error: 'Acesso restrito ao time comercial.' }, { status: 403 }) };
   if (coordinatorOnly && role !== 'coordenador') {
