@@ -824,6 +824,17 @@
   }
 }
 
+/* The goals video is a page background, not a framed panel. */
+.kh-main:has(.kh-goals-premium-page) { background: transparent; }
+.kh-goals-premium-page { min-height: calc(100dvh - 70px); margin: -30px clamp(-38px, -2.5vw, -18px) -48px; border: 0; border-radius: 0; background: transparent; padding: 54px clamp(18px, 5vw, 76px) 64px; }
+.kh-goals-premium-page::after { content: ''; position: fixed; inset: 70px 0 0; z-index: -1; background: rgba(2, 6, 23, .18); pointer-events: none; }
+.kh-goals-premium-page .kh-video-bg-container { position: fixed; inset: 70px 0 0; z-index: -2; }
+.kh-goals-premium-page .kh-video-bg-overlay { background: linear-gradient(90deg, rgba(2,6,23,.88) 0%, rgba(2,6,23,.48) 48%, rgba(2,6,23,.62) 100%); backdrop-filter: none; }
+@media (max-width: 900px) {
+  .kh-goals-premium-page { min-height: calc(100dvh - 64px); margin: -22px -14px -40px; padding: 40px 18px 52px; }
+  .kh-goals-premium-page::after, .kh-goals-premium-page .kh-video-bg-container { inset: 64px 0 0; }
+}
+
 .kh-goal-timeline { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin: 8px 0; padding: 44px 6% 10px; }
 .kh-goal-timeline-line { position: absolute; top: 53px; left: 10%; right: 10%; height: 2px; background: linear-gradient(90deg, #36a8ef, #9b7bff, #efb758); }
 .kh-goal-node { position: relative; display: grid; justify-items: center; gap: 7px; text-align: center; }
