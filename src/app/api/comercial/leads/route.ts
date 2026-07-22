@@ -113,3 +113,25 @@ export async function PATCH(request: Request) {
   });
   return NextResponse.json({ lead: redactFinancialFields(data, guard.canViewCommercialFinancials) });
 }
+
+export async function DELETE(request: Request) {
+  const guard = await requireCommercialUser(request, true);
+  if ('error' in guard) return guard.error;
+  const body = await request.json().catch(() => ({}));
+  const ids = Array.isArray(body.ids) ? body.ids.map((id: unknown) => String(id)).filter(Boolean) : [];
+  if (!ids.length) return NextResponse.json({ error: 'Selecione pelo menos um lead.' }, { status: 400 });
+
+  const { data: deleted, error } = await supabaseAdmin
+    .from('comercial_leads')
+    .delete()
+    .in('id', ids)
+    .select('id');
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await writeAuditLog(request, guard.profile, {
+    action: 'commercial.lead.bulk_delete',
+    entity_type: 'commercial_lead',
+    metadata: { ids: (deleted || []).map((lead) => lead.id) },
+  });
+  return NextResponse.json({ deleted: deleted?.length || 0 });
+}

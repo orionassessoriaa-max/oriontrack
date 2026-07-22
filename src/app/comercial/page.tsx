@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowUpRight, CalendarDays, CircleDollarSign, Clock3, RefreshCw, Target, UsersRound, WalletCards } from 'lucide-react';
+import { Activity, ArrowUpRight, CalendarDays, Check, CircleDollarSign, RefreshCw, Target, UsersRound, WalletCards } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import { currency, percent } from '@/lib/comercial';
 
@@ -10,6 +10,7 @@ type Overview = {
   trend: Array<{ date: string; leads: number; mql: number; meetings: number; sales: number; revenue: number; investment: number }>;
   team: Array<{ id: string; role: string; name: string; photo: string | null; leads: number; mql: number; meetings: number; sales: number; revenue: number }>;
   states: Array<{ state: string; leads: number; active: number }>;
+  campaigns?: string[];
   updatedAt?: string;
   meta_error?: string | null;
   investment_source?: 'meta' | 'manual_fallback';
@@ -22,6 +23,15 @@ type GeoStateFeature = {
 
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 function startOfMonth() { const date = new Date(); return isoDate(new Date(date.getFullYear(), date.getMonth(), 1)); }
+type DatePreset = 'todos' | 'hoje' | 'ontem' | '7dias' | '30dias' | 'mes' | 'personalizado';
+function getPresetRange(preset: DatePreset) {
+  const today = new Date(); const start = new Date(today); const end = new Date(today);
+  if (preset === 'ontem') { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); }
+  if (preset === '7dias') start.setDate(start.getDate() - 6);
+  if (preset === '30dias') start.setDate(start.getDate() - 29);
+  if (preset === 'mes') start.setDate(1);
+  return preset === 'todos' ? { start: '', end: '' } : { start: isoDate(start), end: isoDate(end) };
+}
 
 function TrendChart({ rows }: { rows: Overview['trend'] }) {
   const width = 860;
@@ -78,19 +88,33 @@ export default function CommercialDashboardPage() {
   const { api, role, currentProfileId, canViewCommercialFinancials } = useCommercial();
   const [start, setStart] = useState(startOfMonth());
   const [end, setEnd] = useState(isoDate(new Date()));
+  const [datePreset, setDatePreset] = useState<DatePreset>('mes');
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    try { setData(await api(`/api/comercial/overview?start=${start}&end=${end}`)); }
+    try {
+      const campaigns = selectedCampaigns.map((campaign) => encodeURIComponent(campaign)).join(',');
+      setData(await api(`/api/comercial/overview?start=${start}&end=${end}${campaigns ? `&campaigns=${campaigns}` : ''}`));
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'Erro ao carregar indicadores.'); }
     finally { setLoading(false); }
-  }, [api, end, start]);
+  }, [api, end, selectedCampaigns, start]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { const timer = window.setInterval(() => void load(), 30_000); return () => window.clearInterval(timer); }, [load]);
+
+  function changeDatePreset(next: DatePreset) {
+    setDatePreset(next);
+    if (next !== 'personalizado') { const range = getPresetRange(next); setStart(range.start); setEnd(range.end); }
+  }
+
+  function toggleCampaign(campaign: string) {
+    setSelectedCampaigns((current) => current.includes(campaign) ? current.filter((item) => item !== campaign) : [...current, campaign]);
+  }
 
   const m = data?.metrics || {};
   const selectedStateData = data?.states?.find((item) => item.state === selectedState);
@@ -122,8 +146,9 @@ export default function CommercialDashboardPage() {
       <header className="kh-page-head">
         <div><div className="kh-eyebrow">Performance comercial</div><h1>Visão geral</h1><p>Da entrada do lead ao faturamento, com os números reais da operação.</p></div>
         <div className="kh-actions kh-date-actions">
-          <label><span>De</span><input className="kh-filter" type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label>
-          <label><span>Até</span><input className="kh-filter" type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label>
+            <label className="kh-date-preset"><CalendarDays size={15} /><select value={datePreset} onChange={(event) => changeDatePreset(event.target.value as DatePreset)} aria-label="Periodo"><option value="todos">Todo o periodo</option><option value="hoje">Hoje</option><option value="ontem">Ontem</option><option value="7dias">Ultimos 7 dias</option><option value="30dias">Ultimos 30 dias</option><option value="mes">Este mes</option><option value="personalizado">Personalizado</option></select></label>
+            {datePreset === 'personalizado' && <><label><span>De</span><input className="kh-filter" type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label><span>Ate</span><input className="kh-filter" type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></>}
+            {canViewCommercialFinancials && <details className="kh-campaign-filter"><summary>Campanhas{selectedCampaigns.length ? ` (${selectedCampaigns.length})` : ''}</summary><div className="kh-campaign-menu"><button type="button" onClick={() => setSelectedCampaigns([])}>Todas as campanhas</button>{(data?.campaigns || []).map((campaign) => <label key={campaign}><input type="checkbox" checked={selectedCampaigns.includes(campaign)} onChange={() => toggleCampaign(campaign)} /><span>{selectedCampaigns.includes(campaign) && <Check size={12} />}{campaign}</span></label>)}{!data?.campaigns?.length && <small>Nenhuma campanha encontrada.</small>}</div></details>}
           <button className="kh-icon-button" type="button" onClick={() => void load()} aria-label="Atualizar indicadores"><RefreshCw size={17} className={loading ? 'kh-spin' : ''} /></button>
         </div>
       </header>

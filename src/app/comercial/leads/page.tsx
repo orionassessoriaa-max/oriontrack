@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckSquare2, Download, Edit3, Plus, RefreshCw, Search, Square, X } from 'lucide-react';
+import { CalendarDays, CheckSquare2, Download, Edit3, Plus, RefreshCw, Search, Square, Trash2, Upload, X } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import CommercialLeadModal from '@/components/commercial/CommercialLeadModal';
 import { COMMERCIAL_STATUSES, type CommercialLead } from '@/lib/comercial';
@@ -42,6 +42,10 @@ export default function CommercialLeadsPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CommercialLead | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [sheetLink, setSheetLink] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +87,30 @@ export default function CommercialLeadsPage() {
     setSelected(new Set());
   }
 
+  async function deleteSelected() {
+    if (!selected.size || !window.confirm(`Excluir ${selected.size} lead${selected.size > 1 ? 's' : ''}? Esta acao nao pode ser desfeita.`)) return;
+    setActionLoading(true); setNotice(null);
+    try {
+      const payload = await api('/api/comercial/leads', { method: 'DELETE', body: JSON.stringify({ ids: Array.from(selected) }) });
+      setSelected(new Set());
+      setNotice(`${payload.deleted || selected.size} lead${Number(payload.deleted || selected.size) === 1 ? '' : 's'} excluido${Number(payload.deleted || selected.size) === 1 ? '' : 's'}.`);
+      await load();
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Nao foi possivel excluir os leads.'); }
+    finally { setActionLoading(false); }
+  }
+
+  async function importSheet() {
+    if (!sheetLink.trim()) return;
+    setActionLoading(true); setNotice(null);
+    try {
+      const payload = await api('/api/comercial/leads/import-sheets', { method: 'POST', body: JSON.stringify({ link: sheetLink.trim() }) });
+      setImportOpen(false); setSheetLink('');
+      setNotice(`Importacao concluida: ${payload.created || 0} novos e ${payload.enriched || 0} atualizados.`);
+      await load();
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Nao foi possivel importar a planilha.'); }
+    finally { setActionLoading(false); }
+  }
+
   function exportCsv() {
     const headers = ['DATA', 'NOME', 'TELEFONE', 'EMAIL', ...(canViewCommercialFinancials ? ['JA INVESTIU EM TRAFEGO?', 'FATURAMENTO MENSAL'] : []), 'PRIORIDADE', ...(canViewCommercialFinancials ? ['INVESTIMENTO'] : []), 'VIDAS', 'STATUS DO CRM', 'UTM SOURCE', 'UTM MEDIUM', 'UTM CAMPAIGN', 'UTM TERM', 'UTM CONTENT'];
     const rows = visible.map((lead) => [formatDate(lead.data_entrada), lead.nome, lead.telefone || '', lead.email || '', ...(canViewCommercialFinancials ? [lead.ja_investiu_trafego || '', lead.faturamento_mensal || ''] : []), lead.prioridade || '', ...(canViewCommercialFinancials ? [lead.investimento || ''] : []), lead.vidas || '', lead.status, lead.utm_source || '', lead.utm_medium || '', lead.utm_campaign || '', lead.utm_term || '', lead.utm_content || '']);
@@ -104,10 +132,12 @@ export default function CommercialLeadsPage() {
   }
 
   return <div>
-    <header className="kh-page-head"><div><div className="kh-eyebrow">Central de leads</div><h1>Leads</h1><p>Planilha comercial com os dados de qualificacao, origem e acompanhamento.</p></div><div className="kh-actions"><button className="kh-button" onClick={exportCsv}><Download size={16} /> Exportar</button><button className="kh-icon-button" onClick={() => void load()} aria-label="Atualizar"><RefreshCw size={17} className={loading ? 'kh-spin' : ''} /></button><button className="kh-button primary" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus size={17} /> Adicionar lead</button></div></header>
+    <header className="kh-page-head"><div><div className="kh-eyebrow">Central de leads</div><h1>Leads</h1><p>Planilha comercial com os dados de qualificacao, origem e acompanhamento.</p></div><div className="kh-actions"><button className="kh-button" onClick={exportCsv}><Download size={16} /> Exportar</button><button className="kh-button" onClick={() => setImportOpen(true)}><Upload size={16} /> Importar planilha</button><button className="kh-icon-button" onClick={() => void load()} aria-label="Atualizar"><RefreshCw size={17} className={loading ? 'kh-spin' : ''} /></button><button className="kh-button primary" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus size={17} /> Adicionar lead</button></div></header>
+    {notice && <div className="kh-inline-notice" role="status">{notice}<button onClick={() => setNotice(null)} aria-label="Fechar aviso"><X size={14} /></button></div>}
     <section className="kh-sheet-filters"><div className="kh-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar nome, telefone ou e-mail..." /></div><label className="kh-date-preset"><CalendarDays size={15} /><select value={datePreset} onChange={(event) => changeDatePreset(event.target.value as DatePreset)} aria-label="Período"><option value="todos">Todo o período</option><option value="hoje">Hoje</option><option value="ontem">Ontem</option><option value="7dias">Últimos 7 dias</option><option value="30dias">Últimos 30 dias</option><option value="mes">Este mês</option><option value="personalizado">Personalizado</option></select></label>{datePreset === 'personalizado' && <><input className="kh-input kh-date-filter" type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} aria-label="Data inicial" /><input className="kh-input kh-date-filter" type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} aria-label="Data final" /></>}<select className="kh-select" value={status} onChange={(event) => setStatus(event.target.value)}><option value="todos">Todos os status</option>{COMMERCIAL_STATUSES.map((item) => <option key={item}>{item}</option>)}</select><span>{visible.length} de {leads.length} leads</span></section>
     <section className="kh-sheet-wrap"><table className="kh-sheet-table"><thead><tr><th className="select"><button onClick={toggleAll} aria-label="Selecionar todos">{selected.size === visible.length && visible.length ? <CheckSquare2 size={16} /> : <Square size={16} />}</button></th><th>#</th><th>DATA</th><th>NOME</th><th>TELEFONE</th><th>EMAIL</th>{canViewCommercialFinancials && <><th>JA INVESTIU EM TRAFEGO?</th><th>FATURAMENTO MENSAL</th></>}<th>PRIORIDADE</th>{canViewCommercialFinancials && <th>INVESTIMENTO</th>}<th>VIDAS</th><th>STATUS DO CRM</th><th>UTM SOURCE</th><th>UTM MEDIUM</th><th>UTM CAMPAIGN</th><th>UTM TERM</th><th>UTM CONTENT</th><th aria-label="Acoes" /></tr></thead><tbody>{visible.map((lead, index) => <tr key={lead.id} className={selected.has(lead.id) ? 'selected' : ''}><td className="select"><button onClick={() => toggle(lead.id)} aria-label={`Selecionar ${lead.nome}`}>{selected.has(lead.id) ? <CheckSquare2 size={15} /> : <Square size={15} />}</button></td><td>{index + 1}</td><td>{formatDate(lead.data_entrada)}</td><td className="name">{lead.nome}</td><td>{lead.telefone || '-'}</td><td>{lead.email || '-'}</td>{canViewCommercialFinancials && <><td>{lead.ja_investiu_trafego || '-'}</td><td>{lead.faturamento_mensal || '-'}</td></>}<td>{lead.prioridade || '-'}</td>{canViewCommercialFinancials && <td>{lead.investimento || '-'}</td>}<td>{lead.vidas || '-'}</td><td><select value={lead.status} onChange={(event) => void updateLead(lead.id, { status: event.target.value })} aria-label={`Alterar status de ${lead.nome}`}>{COMMERCIAL_STATUSES.map((item) => <option key={item}>{item}</option>)}</select></td><td>{lead.utm_source || '-'}</td><td>{lead.utm_medium || '-'}</td><td>{lead.utm_campaign || '-'}</td><td>{lead.utm_term || '-'}</td><td>{lead.utm_content || '-'}</td><td><button className="kh-row-action" aria-label={`Editar ${lead.nome}`} onClick={() => { setEditing(lead); setModalOpen(true); }}><Edit3 size={15} /></button></td></tr>)}{!visible.length && <tr><td colSpan={columnCount} className="kh-table-empty">{loading ? 'Carregando leads...' : 'Nenhum lead encontrado com esses filtros.'}</td></tr>}</tbody></table></section>
-    {selected.size > 0 && <div className="kh-bulk-bar"><strong>{selected.size} selecionado{selected.size > 1 ? 's' : ''}</strong><select className="kh-select" defaultValue="" onChange={(event) => { if (event.target.value) void bulkStatus(event.target.value); }}><option value="" disabled>Mover para status...</option>{COMMERCIAL_STATUSES.map((item) => <option key={item}>{item}</option>)}</select><button aria-label="Limpar selecao" onClick={() => setSelected(new Set())}><X size={17} /></button></div>}
+    {selected.size > 0 && <div className="kh-bulk-bar"><strong>{selected.size} selecionado{selected.size > 1 ? 's' : ''}</strong><select className="kh-select" defaultValue="" onChange={(event) => { if (event.target.value) void bulkStatus(event.target.value); }}><option value="" disabled>Mover para status...</option>{COMMERCIAL_STATUSES.map((item) => <option key={item}>{item}</option>)}</select><button className="danger" disabled={actionLoading} onClick={() => void deleteSelected()}><Trash2 size={15} /> Excluir lead{selected.size > 1 ? 's' : ''}</button><button aria-label="Limpar selecao" onClick={() => setSelected(new Set())}><X size={17} /></button></div>}
+    {importOpen && <div className="kh-modal-backdrop" role="presentation"><div className="kh-modal kh-import-modal" role="dialog" aria-modal="true" aria-labelledby="import-leads-title"><button className="kh-modal-close" onClick={() => setImportOpen(false)} aria-label="Fechar"><X size={18} /></button><div className="kh-eyebrow">Importacao</div><h2 id="import-leads-title">Importar planilha</h2><p>Use um link do Google Sheets publicado ou compartilhado para leitura.</p><input className="kh-input" value={sheetLink} onChange={(event) => setSheetLink(event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." /><div className="kh-modal-actions"><button className="kh-button" onClick={() => setImportOpen(false)}>Cancelar</button><button className="kh-button primary" disabled={actionLoading || !sheetLink.trim()} onClick={() => void importSheet()}><Upload size={16} /> {actionLoading ? 'Importando...' : 'Importar leads'}</button></div></div></div>}
     <CommercialLeadModal open={modalOpen} members={members} canViewFinancials={canViewCommercialFinancials} lead={editing} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={async (data) => { if (editing) await updateLead(editing.id, data); else await api('/api/comercial/leads', { method: 'POST', body: JSON.stringify(data) }); await load(); }} />
   </div>;
 }

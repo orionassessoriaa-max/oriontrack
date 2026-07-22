@@ -24,7 +24,8 @@ async function fetchKriptoMetaInvestment(start: string, end: string) {
 
   const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
   const url = new URL(`https://graph.facebook.com/${graphVersion}/act_${KRIPTO_PRINCIPAL_ACCOUNT_ID}/insights`);
-  url.searchParams.set('fields', 'spend,date_start');
+  url.searchParams.set('fields', 'spend,date_start,campaign_name');
+  url.searchParams.set('level', 'campaign');
   url.searchParams.set('time_range', JSON.stringify({ since: start, until: end }));
   url.searchParams.set('time_increment', '1');
   url.searchParams.set('limit', '500');
@@ -41,7 +42,7 @@ async function fetchKriptoMetaInvestment(start: string, end: string) {
   }
 
   return {
-    rows: (payload.data || []).map((row: any) => ({ date: String(row.date_start), value: Number(row.spend || 0) })),
+    rows: (payload.data || []).map((row: any) => ({ date: String(row.date_start), value: Number(row.spend || 0), campaign: String(row.campaign_name || 'Sem campanha') })),
     error: null,
   };
 }
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
   const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const start = url.searchParams.get('start') || defaultStart;
   const end = url.searchParams.get('end') || now.toISOString().slice(0, 10);
+  const selectedCampaigns = new Set((url.searchParams.get('campaigns') || '').split(',').map((item) => decodeURIComponent(item).trim()).filter(Boolean));
 
   let leadQuery = supabaseAdmin
     .from('comercial_leads')
@@ -85,8 +87,11 @@ export async function GET(request: Request) {
   });
   const metaInvestment = guard.canViewCommercialFinancials ? await fetchKriptoMetaInvestment(start, end) : { rows: null, error: null };
   const metaRows = metaInvestment.rows;
-  const investmentRows: Array<{ data: string; valor: number }> = metaRows
-    ? metaRows.map((row: { date: string; value: number }) => ({ data: row.date, valor: row.value }))
+  const filteredMetaRows = metaRows && selectedCampaigns.size
+    ? metaRows.filter((row: any) => selectedCampaigns.has(row.campaign))
+    : metaRows;
+  const investmentRows: Array<{ data: string; valor: number }> = filteredMetaRows
+    ? filteredMetaRows.map((row: { date: string; value: number }) => ({ data: row.date, valor: row.value }))
     : (investmentResult.data || []).map((row: any) => ({ data: String(row.data), valor: Number(row.valor || 0) }));
   const investment = investmentRows.reduce((sum, row) => sum + Number(row.valor || 0), 0);
   const qualified = leads.filter((lead) => lead.lead_qualificado).length;
@@ -189,6 +194,10 @@ export async function GET(request: Request) {
     metrics,
     trend,
     states: Array.from(stateMap.values()).sort((a, b) => b.leads - a.leads),
+    campaigns: Array.from(new Set([
+      ...(metaRows || []).map((row: any) => row.campaign).filter(Boolean),
+      ...leads.map((lead) => lead.campanha).filter(Boolean),
+    ])).sort(),
     role: guard.commercialRole,
     meta_error: metaInvestment.error,
     investment_source: metaRows ? 'meta' : 'manual_fallback',
