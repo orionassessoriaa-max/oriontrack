@@ -237,7 +237,7 @@
 .kh-kanban-column { width: 284px; min-width: 284px; min-height: calc(100dvh - 200px); overflow: hidden; border: 1px solid var(--kh-line); border-radius: 7px; background: #080d13; scroll-snap-align: start; transition: border-color 220ms ease, box-shadow 220ms ease, transform 220ms ease; }
 .kh-kanban-column.drop-target { border-color: #45c7eb; box-shadow: 0 0 0 2px rgba(69,199,235,.18), 0 14px 28px rgba(0,0,0,.22); transform: translateY(-2px); }
 .kh-kanban-column > header { min-height: 86px; border-bottom: 1px solid hsl(var(--stage-hue) 55% 35%); background: hsl(var(--stage-hue) 48% 17%); padding: 13px 14px; transition: filter 180ms ease, opacity 180ms ease; }
-.kh-kanban-column > header.stage-dragging { opacity: .55; filter: saturate(.7); }
+.kh-kanban-column.stage-dragging { opacity: .72; transform: rotate(1deg) scale(.985); filter: saturate(.72); box-shadow: 0 18px 36px rgba(0,0,0,.35), 0 0 0 2px rgba(69,199,235,.22); z-index: 2; }
 .kh-kanban-column > header { position: relative; cursor: grab; }
 .kh-kanban-column > header:active { cursor: grabbing; }
 .kh-stage-grip { color: #a9bbce; opacity: .75; }
@@ -287,12 +287,23 @@
 .kh-hide-commercial-financials .kh-sheet-table td:nth-child(12),
 .kh-hide-commercial-financials .kh-kanban-column > header > small,
 .kh-hide-commercial-financials .kh-kanban-cards article footer > strong { display: none; }
+.kh-lead-overlay { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(1, 6, 12, .78); backdrop-filter: blur(8px); animation: kh-fade-in 160ms ease-out; }
+.kh-lead-modal { width: min(900px, 100%); max-height: min(760px, calc(100dvh - 48px)); overflow: auto; border: 1px solid #2b526d; border-radius: 12px; background: #09131e; box-shadow: 0 28px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(0,202,238,.08); padding: 24px; animation: kh-modal-in 180ms cubic-bezier(.2,.8,.2,1); }
+.kh-lead-modal > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--kh-line); padding-bottom: 20px; }
+.kh-lead-modal h2 { margin: 5px 0 6px; font-size: clamp(22px, 3vw, 34px); }
+.kh-lead-modal header p { margin: 0; color: var(--kh-muted); font-size: 12px; }
+.kh-lead-modal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 22px 0; }
+.kh-lead-modal-grid > div { border: 1px solid var(--kh-line); border-radius: 8px; background: rgba(16,31,47,.55); padding: 13px; }
+.kh-lead-modal-grid small { display: block; color: var(--kh-muted); font-size: 9px; text-transform: uppercase; }
+.kh-lead-modal-grid strong { display: block; margin-top: 6px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes kh-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes kh-modal-in { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .kh-form-grid .wide { grid-column: 1 / -1; }
 .kh-check { min-height: 42px; display: flex; align-items: center; gap: 9px; align-self: end; }
 .kh-check input { width: 17px !important; min-height: 17px !important; height: 17px; accent-color: var(--kh-blue); }
 .kh-check span { margin: 0 !important; }
 .kh-modal-sheet > footer { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--kh-line); padding: 14px 20px; }
-@media (max-width: 620px) { .kh-form-grid { grid-template-columns: 1fr; } .kh-form-grid .wide { grid-column: auto; } .kh-kanban-column { width: 88vw; min-width: 88vw; } .kh-search { min-width: 100%; } }
+@media (max-width: 620px) { .kh-form-grid { grid-template-columns: 1fr; } .kh-form-grid .wide { grid-column: auto; } .kh-kanban-column { width: 88vw; min-width: 88vw; } .kh-search { min-width: 100%; } .kh-lead-overlay { padding: 10px; }.kh-lead-modal { max-height: calc(100dvh - 20px); padding: 16px; }.kh-lead-modal-grid { grid-template-columns: 1fr 1fr; } }
 
 .kh-sheet-filters { min-height: 64px; display: grid; grid-template-columns: minmax(260px, 1fr) 190px 220px auto; align-items: center; gap: 10px; border: 1px solid var(--kh-line); border-bottom: 0; background: var(--kh-surface); padding: 10px; }
 .kh-sheet-filters > span { color: var(--kh-muted); font-size: 10px; font-weight: 700; text-align: right; text-transform: uppercase; }
