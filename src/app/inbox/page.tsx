@@ -44,7 +44,8 @@ import {
   PhoneCall,
   Phone,
   ChevronDown,
-  PanelRight
+  PanelRight,
+  ExternalLink
 } from 'lucide-react';
 
 function WhatsAppGlyph({ className = '' }: { className?: string }) {
@@ -96,6 +97,16 @@ type SelectedAttachment = {
   id: string;
   file: File;
   preview: string;
+};
+
+type LeadTask = {
+  id: string;
+  titulo: string;
+  vencimento: string | null;
+  prioridade: string | null;
+  status: string | null;
+  responsavel_profile_id: string | null;
+  created_at: string;
 };
 
 function cleanInboxDisplayName(value?: string | null, fallback = 'Contato') {
@@ -297,6 +308,7 @@ export default function BrokerInboxPage() {
   const [loadingLead, setLoadingLead] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [leadActivities, setLeadActivities] = useState<any[]>([]);
+  const [leadTasks, setLeadTasks] = useState<LeadTask[]>([]);
   const [leadInfo, setLeadInfo] = useState<any>(null);
   const [leadDetailsOpen, setLeadDetailsOpen] = useState(false);
   const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);
@@ -842,9 +854,10 @@ export default function BrokerInboxPage() {
           ...current,
           tags: data.etiqueta ? [data.etiqueta] : current.tags || [],
         } : current);
-      } else {
-        setLeadInfo(null);
-      }
+    } else {
+      setLeadInfo(null);
+      setLeadTasks([]);
+    }
 
       const { data: activities } = await supabase
         .from('lead_atividades')
@@ -854,6 +867,14 @@ export default function BrokerInboxPage() {
         .limit(80);
 
       setLeadActivities(activities || []);
+
+      const { data: tasks } = await supabase
+        .from('lead_tarefas')
+        .select('id, titulo, vencimento, prioridade, status, responsavel_profile_id, created_at')
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      setLeadTasks((tasks || []) as LeadTask[]);
     } catch (err) {
       console.error('Erro ao buscar status do lead:', err);
     } finally {
@@ -1577,6 +1598,7 @@ export default function BrokerInboxPage() {
       setTaskDueTime('09:00');
       setTaskPriority('normal');
       setTaskResponsibleProfileId('');
+      await fetchLeadDetails(selectedConversation.lead_id);
     } catch (err: any) {
       console.error('Erro ao agendar tarefa:', err);
       alert('Erro ao agendar tarefa: ' + err.message);
@@ -1893,6 +1915,13 @@ export default function BrokerInboxPage() {
       createdAt: activity.created_at,
       author: activity.profiles?.nome || null,
     }));
+
+  const highlightedTask = useMemo(() => {
+    const active = leadTasks
+      .filter((task) => !['concluida', 'concluído', 'concluido', 'cancelada', 'cancelado'].includes(String(task.status || '').toLowerCase()))
+      .sort((a, b) => new Date(a.vencimento || a.created_at).getTime() - new Date(b.vencimento || b.created_at).getTime());
+    return active[0] || leadTasks[0] || null;
+  }, [leadTasks]);
 
   const getFilterCount = (filter: 'chatting' | 'waiting' | 'closed' | 'alerts') => {
     if (filter === 'chatting') return conversationsByResponsible.filter(c => c.status === 'aberta' || c.status === 'pausada').length;
@@ -2827,12 +2856,36 @@ export default function BrokerInboxPage() {
                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Follow-up</label>
                     <button
                       type="button"
-                      onClick={() => { window.location.href = '/tarefas'; }}
+                      onClick={() => {
+                        if (!selectedConversation?.lead_id) return;
+                        window.location.href = `/crm?lead=${encodeURIComponent(selectedConversation.lead_id)}`;
+                      }}
+                      disabled={!selectedConversation?.lead_id}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/20 transition-all cursor-pointer"
                     >
-                      <Calendar size={11} />
-                      Ver tarefas
+                      <ExternalLink size={11} />
+                      Abrir no Kanban
                     </button>
+                  </div>
+
+                  <div className="rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.04] px-3 py-2.5">
+                    {highlightedTask ? (
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[8px] font-black uppercase tracking-widest text-cyan-300">
+                            {highlightedTask.status && !['concluida', 'concluído', 'concluido', 'cancelada', 'cancelado'].includes(highlightedTask.status.toLowerCase()) ? 'Tarefa ativa' : 'Última tarefa'}
+                          </p>
+                          <p className="mt-1 truncate text-xs font-black text-white">{highlightedTask.titulo}</p>
+                          <p className="mt-1 text-[9px] font-bold text-slate-500">
+                            {highlightedTask.vencimento ? formatActivityDate(highlightedTask.vencimento) : 'Sem prazo definido'}
+                            {highlightedTask.prioridade ? ` · ${highlightedTask.prioridade}` : ''}
+                          </p>
+                        </div>
+                        <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-cyan-400" />
+                      </div>
+                    ) : (
+                      <p className="text-[10px] font-bold text-slate-500">Nenhuma tarefa registrada para este lead.</p>
+                    )}
                   </div>
 
                   <form onSubmit={handleScheduleTask} className="rounded-2xl border border-white/5 bg-slate-950/45 p-3 space-y-2.5">
