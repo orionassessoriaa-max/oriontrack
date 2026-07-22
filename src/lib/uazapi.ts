@@ -64,6 +64,8 @@ export function uazapiInstanceName(profileId: string) {
   return `${prefix}_${profileId.replace(/-/g, '')}`;
 }
 
+export const COMMERCIAL_MASTER_INSTANCE = process.env.COMMERCIAL_UAZAPI_INSTANCE || 'orion_commercial_sender';
+
 export function profileIdFromUazapiInstance(instance?: string | null) {
   const prefix = process.env.UAZAPI_INSTANCE_PREFIX || 'orion';
   const raw = String(instance || '');

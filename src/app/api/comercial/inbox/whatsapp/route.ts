@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
-import { supabaseAdmin } from '@/lib/supabase/admin';
-import { configureUazapiWebhook, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
-
-type TargetProfile = { id: string; nome: string | null; email: string | null; email_real: string | null; tipo_usuario: string };
+import { COMMERCIAL_MASTER_INSTANCE, configureUazapiWebhook, uazapiFetch } from '@/lib/uazapi';
 
 function stateFromPayload(payload: any): 'open' | 'connecting' | 'close' {
   const value = String(payload?.instance?.status || payload?.status?.status || payload?.status || payload?.state || '').toLowerCase();
@@ -16,15 +13,6 @@ function stateFromPayload(payload: any): 'open' | 'connecting' | 'close' {
 
 function qrFromPayload(payload: any): string | null {
   return payload?.qrcode || payload?.base64 || payload?.instance?.qrcode || payload?.instance?.base64 || payload?.data?.qrcode || payload?.data?.base64 || null;
-}
-
-async function targetForCommercial(fallback?: TargetProfile | null) {
-  const { data: config, error: configError } = await supabaseAdmin.from('comercial_config').select('ia_sdr_profile_id').eq('id', 1).maybeSingle();
-  if (configError && !/comercial_config|schema cache/i.test(configError.message)) throw configError;
-  if (!config?.ia_sdr_profile_id) return fallback || null;
-  const { data, error } = await supabaseAdmin.from('profiles').select('id,nome,email,email_real,tipo_usuario').eq('id', config.ia_sdr_profile_id).maybeSingle();
-  if (error) throw error;
-  return data as TargetProfile | null;
 }
 
 async function statusForInstance(instance: string) {
@@ -43,26 +31,13 @@ async function statusForInstance(instance: string) {
   }
 }
 
-function profilePayload(profile: TargetProfile) {
-  return { id: profile.id, nome: profile.nome, email: profile.email_real || profile.email, tipo_usuario: profile.tipo_usuario };
-}
-
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
   try {
-    const fallback = guard.isDevOps ? {
-      id: guard.profile.id,
-      nome: guard.profile.nome,
-      email: guard.profile.email,
-      email_real: guard.profile.email_real,
-      tipo_usuario: guard.profile.tipo_usuario,
-    } : null;
-    const target = await targetForCommercial(fallback);
-    if (!target) return NextResponse.json({ configured: false, connected: false, state: 'close', targetProfile: null });
-    const instance = uazapiInstanceName(target.id);
+    const instance = COMMERCIAL_MASTER_INSTANCE;
     const state = await statusForInstance(instance);
-    return NextResponse.json({ configured: true, connected: state === 'open', state, instance, targetProfile: profilePayload(target) });
+    return NextResponse.json({ configured: true, connected: state === 'open', state, instance, targetProfile: { nome: 'Orion' } });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel consultar o WhatsApp comercial.' }, { status: 500 });
   }
@@ -74,16 +49,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     if (!body.accepted_terms) return NextResponse.json({ error: 'Confirme o aceite para conectar o WhatsApp.' }, { status: 400 });
-    const fallback = guard.isDevOps ? {
-      id: guard.profile.id,
-      nome: guard.profile.nome,
-      email: guard.profile.email,
-      email_real: guard.profile.email_real,
-      tipo_usuario: guard.profile.tipo_usuario,
-    } : null;
-    const target = await targetForCommercial(fallback);
-    if (!target) return NextResponse.json({ error: 'Configure primeiro o perfil da instância na aba IA.' }, { status: 409 });
-    const instance = uazapiInstanceName(target.id);
+    const instance = COMMERCIAL_MASTER_INSTANCE;
     try {
       await uazapiFetch('/instance/init', { method: 'POST', body: JSON.stringify({ name: instance, instance, instanceName: instance }) }, { useAdminAuth: true });
     } catch (error: any) {
@@ -92,7 +58,7 @@ export async function POST(request: Request) {
     }
     await configureUazapiWebhook(instance);
     const payload = await uazapiFetch('/instance/connect', { method: 'POST', body: JSON.stringify({}) }, { instanceName: instance });
-    return NextResponse.json({ success: true, configured: true, connected: false, state: 'connecting', instance, qrcode: qrFromPayload(payload), targetProfile: profilePayload(target) });
+    return NextResponse.json({ success: true, configured: true, connected: false, state: 'connecting', instance, qrcode: qrFromPayload(payload), targetProfile: { nome: 'Orion' } });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel iniciar a conexao do WhatsApp.' }, { status: 502 });
   }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { normalizePhone, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
 import { DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
 
 export async function POST(request: Request) {
@@ -23,12 +23,6 @@ export async function POST(request: Request) {
     const { data: config, error: configError } = await supabaseAdmin.from('comercial_config').select('ia_sdr_ativa,ia_sdr_prompt,ia_sdr_profile_id').eq('id', 1).maybeSingle();
     if (configError && !/comercial_config|schema cache/i.test(configError.message)) throw configError;
     if (config?.ia_sdr_ativa === false) return NextResponse.json({ error: 'A IA SDR esta desativada para esta operacao.' }, { status: 409 });
-
-    const senderId = String(config?.ia_sdr_profile_id || (guard.isDevOps ? guard.profile.id : '')).trim();
-    if (!senderId) return NextResponse.json({ error: 'Selecione a instancia WhatsApp da IA na configuracao.' }, { status: 409 });
-    const { data: sender, error: senderError } = await supabaseAdmin.from('profiles').select('id,nome,telefone').eq('id', senderId).maybeSingle();
-    if (senderError) throw senderError;
-    if (!sender) return NextResponse.json({ error: 'Perfil da instancia WhatsApp nao encontrado.' }, { status: 404 });
 
     const prompt = String(config?.ia_sdr_prompt || DEFAULT_COMMERCIAL_SDR_PROMPT);
     const apiKey = process.env.OPENAI_API_KEY;
@@ -95,8 +89,8 @@ export async function POST(request: Request) {
     }
     if (leadError) throw leadError;
 
-    const payload = await uazapiFetch('/send/text', { method: 'POST', body: JSON.stringify({ number: phone, text: message, delay: 1200 }) }, { instanceName: uazapiInstanceName(sender.id) });
-    return NextResponse.json({ ok: true, lead, message, sender: { id: sender.id, nome: sender.nome, telefone: sender.telefone }, provider: payload });
+    const payload = await uazapiFetch('/send/text', { method: 'POST', body: JSON.stringify({ number: phone, text: message, delay: 1200 }) }, { instanceName: COMMERCIAL_MASTER_INSTANCE });
+    return NextResponse.json({ ok: true, lead, message, sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE }, provider: payload });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Nao foi possivel enviar o teste da IA.' }, { status: 502 });
   }

@@ -160,6 +160,9 @@
 .kh-card-inbox { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; padding: 6px 9px; border: 1px solid #126f95; background: #08283a; color: #7edcff; font: inherit; font-size: 10px; cursor: pointer; }
 .kh-card-inbox:hover { border-color: #18b9ed; background: #0b4059; color: #fff; }
 .kh-sdr-test { margin-top: 14px; }
+.kh-sdr-instance-fixed { display: grid; gap: 4px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--kh-line); background: #071a29; }
+.kh-sdr-instance-fixed strong { color: #eaf7ff; font-size: 12px; }
+.kh-sdr-instance-fixed small { color: var(--kh-muted); font-size: 10px; line-height: 1.45; }
 .kh-sdr-test-copy { margin: -6px 16px 14px; color: var(--kh-muted); font-size: 11px; }
 .kh-sdr-test-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 0 16px 16px; align-items: end; }
 .kh-sdr-test-grid .kh-test-wide { grid-column: span 2; }
