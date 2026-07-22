@@ -238,6 +238,16 @@ export async function POST(request: Request) {
     const explicitCloserId = normalizeText(field(rawPayload, ['closer_id', 'closer']));
     const sdrId = isUuid(explicitSdrId) ? explicitSdrId : await resolveDefaultCommercialMember('sdr');
     const closerId = isUuid(explicitCloserId) ? explicitCloserId : await resolveDefaultCommercialMember('closer');
+    const jaInvestiuTrafego = normalizeText(field(rawPayload, ['ja_investiu_trafego', 'ja investiu em trafego', 'traffic', 'tráfego'])) || null;
+    const faturamentoMensal = normalizeText(field(rawPayload, ['faturamento_mensal', 'faturamento mensal', 'revenue', 'faturamento'])) || null;
+    const prioridade = normalizeText(field(rawPayload, ['prioridade', 'priority'])) || null;
+    const investimento = normalizeText(field(rawPayload, ['investimento', 'investment'])) || null;
+    const vidas = normalizeText(field(rawPayload, ['vidas', 'lives', 'quantidade de vidas'])) || null;
+    const utmSource = normalizeText(field(rawPayload, ['utm_source'])) || null;
+    const utmMedium = normalizeText(field(rawPayload, ['utm_medium'])) || null;
+    const utmCampaign = normalizeText(field(rawPayload, ['utm_campaign'])) || null;
+    const utmTerm = normalizeText(field(rawPayload, ['utm_term'])) || null;
+    const utmContent = normalizeText(field(rawPayload, ['utm_content'])) || null;
 
     const incoming = {
       nome,
@@ -247,6 +257,16 @@ export async function POST(request: Request) {
       estado: normalizeText(field(rawPayload, ['estado', 'uf', 'state'])).toUpperCase().slice(0, 2) || null,
       origem: normalizeText(field(rawPayload, ['origem', 'source', 'utm_source', 'canal'])) || 'Funil comercial',
       campanha: normalizeText(field(rawPayload, ['campanha', 'campaign', 'utm_campaign', 'formulario', 'form'])) || null,
+      ja_investiu_trafego: jaInvestiuTrafego,
+      faturamento_mensal: faturamentoMensal,
+      prioridade,
+      investimento,
+      vidas,
+      utm_source: utmSource,
+      utm_medium: utmMedium,
+      utm_campaign: utmCampaign,
+      utm_term: utmTerm,
+      utm_content: utmContent,
       status,
       sdr_id: sdrId || null,
       closer_id: closerId || null,
@@ -268,8 +288,19 @@ export async function POST(request: Request) {
           telefone: existing.telefone || telefone,
           email: existing.email || email,
           empresa: existing.empresa || incoming.empresa,
+          estado: existing.estado || incoming.estado,
           origem: existing.origem || incoming.origem,
           campanha: existing.campanha || incoming.campanha,
+          ja_investiu_trafego: existing.ja_investiu_trafego || incoming.ja_investiu_trafego,
+          faturamento_mensal: existing.faturamento_mensal || incoming.faturamento_mensal,
+          prioridade: existing.prioridade || incoming.prioridade,
+          investimento: existing.investimento || incoming.investimento,
+          vidas: existing.vidas || incoming.vidas,
+          utm_source: existing.utm_source || incoming.utm_source,
+          utm_medium: existing.utm_medium || incoming.utm_medium,
+          utm_campaign: existing.utm_campaign || incoming.utm_campaign,
+          utm_term: existing.utm_term || incoming.utm_term,
+          utm_content: existing.utm_content || incoming.utm_content,
           observacoes: mergedNotes,
           updated_at: new Date().toISOString(),
         })
