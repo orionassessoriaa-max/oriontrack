@@ -149,6 +149,14 @@ async function getConversation(id: string) {
 async function canAccessConversation(profile: any, conversation: any) {
   if (!conversation) return false;
   if (profile.tipo_usuario === 'admin' || profile.tipo_usuario === 'account_manager') return true;
+  if (conversation.lead_id && profile.tipo_usuario !== 'corretor_membro') {
+    const { data: assignedLead } = await supabaseAdmin
+      .from('leads')
+      .select('responsavel_profile_id')
+      .eq('id', conversation.lead_id)
+      .maybeSingle();
+    if (assignedLead?.responsavel_profile_id === profile.id) return true;
+  }
   if (profile.tipo_usuario === 'corretor_membro') {
     if (conversation.lead_id) {
       const { data: lead } = await supabaseAdmin

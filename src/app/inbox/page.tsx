@@ -460,12 +460,31 @@ export default function BrokerInboxPage() {
       }
     }
 
+    // A conversa pode ter sido criada com o corretor-base de outro integrante,
+    // mas ainda pertencer ao responsável atual do lead. Incluímos esses leads
+    // para que o responsável não perca o histórico no Inbox.
+    let assignedLeadIds: string[] = [];
+    if (!isTeamMember) {
+      const { data: assignedLeads } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('responsavel_profile_id', profile.id)
+        .limit(500);
+      assignedLeadIds = (assignedLeads || []).map((lead) => String(lead.id)).filter(Boolean);
+    }
+
     let conversationsQuery = supabase
       .from('whatsapp_conversas')
       .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
       .in('corretor_id', idsToFetch)
       .order('ultima_mensagem_at', { ascending: false })
       .limit(80);
+
+    if (assignedLeadIds.length > 0) {
+      conversationsQuery = conversationsQuery.or(
+        `corretor_id.in.(${idsToFetch.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
+      );
+    }
 
     if (isTeamMember) {
       conversationsQuery = conversationsQuery.eq('leads.responsavel_profile_id', profile.id);
@@ -512,6 +531,12 @@ export default function BrokerInboxPage() {
           .or(`telefone.eq.${targetPhone},telefone.ilike.%${targetLast8}`)
           .order('ultima_mensagem_at', { ascending: false })
           .limit(1);
+
+        if (assignedLeadIds.length > 0) {
+          savedConversationQuery = savedConversationQuery.or(
+            `corretor_id.in.(${idsToFetch.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
+          );
+        }
 
         if (isTeamMember) {
           savedConversationQuery = savedConversationQuery.eq('leads.responsavel_profile_id', profile.id);
