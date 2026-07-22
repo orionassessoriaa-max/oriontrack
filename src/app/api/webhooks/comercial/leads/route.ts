@@ -43,6 +43,9 @@ function collectPayloadEntries(input: unknown, entries: Array<[string, unknown]>
 
 function flattenPayload(input: unknown) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const respondent = source.respondent && typeof source.respondent === 'object' && !Array.isArray(source.respondent)
+    ? source.respondent as Record<string, unknown>
+    : null;
   const nested = [
     source.body,
     source.data,
@@ -54,7 +57,7 @@ function flattenPayload(input: unknown) {
     source.form,
     source.payload,
     source.json,
-    (source.respondent as any)?.answers,
+    respondent?.answers,
     source.answers,
   ].filter((item) => item && typeof item === 'object' && !Array.isArray(item)) as Record<string, unknown>[];
 
@@ -75,6 +78,22 @@ function field(body: CommercialLeadPayload, aliases: string[]) {
   }
 
   return '';
+}
+
+function trackingField(body: CommercialLeadPayload, key: string, aliases: string[]) {
+  const names = [key, ...aliases];
+  const direct = field(body, names);
+  if (normalizeText(direct)) return normalizeText(direct);
+
+  for (const containerName of ['utm', 'utms', 'tracking', 'tracking_params', 'respondent_utms', 'respondentUtms']) {
+    const container = body[containerName];
+    if (container && typeof container === 'object' && !Array.isArray(container)) {
+      const nested = field(container as CommercialLeadPayload, names);
+      if (normalizeText(nested)) return normalizeText(nested);
+    }
+  }
+
+  return null;
 }
 
 async function readPayload(request: Request) {
@@ -243,11 +262,11 @@ export async function POST(request: Request) {
     const prioridade = normalizeText(field(rawPayload, ['prioridade', 'priority'])) || null;
     const investimento = normalizeText(field(rawPayload, ['investimento', 'investment'])) || null;
     const vidas = normalizeText(field(rawPayload, ['vidas', 'lives', 'quantidade de vidas'])) || null;
-    const utmSource = normalizeText(field(rawPayload, ['utm_source'])) || null;
-    const utmMedium = normalizeText(field(rawPayload, ['utm_medium'])) || null;
-    const utmCampaign = normalizeText(field(rawPayload, ['utm_campaign'])) || null;
-    const utmTerm = normalizeText(field(rawPayload, ['utm_term'])) || null;
-    const utmContent = normalizeText(field(rawPayload, ['utm_content'])) || null;
+    const utmSource = trackingField(rawPayload, 'utm_source', ['utmSource', 'utm source', 'source', 'origem']);
+    const utmMedium = trackingField(rawPayload, 'utm_medium', ['utmMedium', 'utm medium', 'medium', 'meio']);
+    const utmCampaign = trackingField(rawPayload, 'utm_campaign', ['utmCampaign', 'utm campaign', 'campaign_name', 'campaignName', 'campaign', 'campanha']);
+    const utmTerm = trackingField(rawPayload, 'utm_term', ['utmTerm', 'utm term', 'term', 'adset', 'ad_set', 'conjunto']);
+    const utmContent = trackingField(rawPayload, 'utm_content', ['utmContent', 'utm content', 'content', 'ad', 'creative', 'criativo']);
 
     const incoming = {
       nome,
@@ -338,7 +357,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true, lead: data, sheet }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao receber lead comercial.' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Erro ao receber lead comercial.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

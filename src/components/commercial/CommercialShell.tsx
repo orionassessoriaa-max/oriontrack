@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Bot, BriefcaseBusiness, CheckSquare2, ChevronDown, Eye, LayoutDashboard, LogOut, Menu, MessageSquare, Target, Table2, UsersRound, X } from 'lucide-react';
+import { Bot, BriefcaseBusiness, CheckSquare2, ChevronDown, ClipboardList, Eye, LayoutDashboard, LogOut, Menu, MessageSquare, Target, Table2, UsersRound, X } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { commercialRoleLabel, type CommercialMember, type CommercialRole } from '@/lib/comercial';
 import { canSelectOperationalTeam } from '@/lib/teamSelection';
@@ -38,6 +38,7 @@ const baseNavigation = [
   { href: '/comercial/inbox', label: 'Inbox', icon: MessageSquare },
   { href: '/comercial/kanban', label: 'Kanban', icon: BriefcaseBusiness },
   { href: '/comercial/leads', label: 'Leads', icon: Table2 },
+  { href: '/comercial/historico', label: 'Historico', icon: ClipboardList },
   { href: '/comercial/tarefas', label: 'Tarefas', icon: CheckSquare2 },
   { href: '/comercial/metas', label: 'Metas', icon: Target },
   { href: '/comercial/ia', label: 'IA e follow-up', icon: Bot },
