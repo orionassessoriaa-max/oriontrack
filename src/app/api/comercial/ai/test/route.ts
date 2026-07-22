@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     if (!message) return NextResponse.json({ error: 'A IA nao retornou uma mensagem.' }, { status: 502 });
 
     const now = new Date().toISOString();
-    const { data: lead, error: leadError } = await supabaseAdmin.from('comercial_leads').insert({
+    const leadData = {
       nome: name,
       telefone: phone,
       email,
@@ -67,7 +67,32 @@ export async function POST(request: Request) {
       created_by: guard.profile.id,
       data_entrada: now,
       sdr_id: guard.profile.id,
-    }).select('id,nome,telefone').single();
+    };
+    let { data: lead, error: leadError } = await supabaseAdmin.from('comercial_leads').insert(leadData).select('id,nome,telefone').single();
+    if (leadError && /column .*schema cache|could not find the .* column/i.test(leadError.message)) {
+      const fallbackNotes = [
+        'Lead criado pelo teste da IA SDR.',
+        `Idades: ${ages}`,
+        email ? `E-mail: ${email}` : '',
+        traffic ? `Tráfego pago: ${traffic}` : '',
+        revenue ? `Faturamento: ${revenue}` : '',
+        investment ? `Investimento: ${investment}` : '',
+        priority ? `Prioridade: ${priority}` : '',
+        lives ? `Vidas: ${lives}` : '',
+      ].filter(Boolean).join(' | ');
+      const fallback = await supabaseAdmin.from('comercial_leads').insert({
+        nome: name,
+        telefone: phone,
+        origem: 'Teste IA SDR',
+        status: 'Oportunidade',
+        observacoes: fallbackNotes,
+        created_by: guard.profile.id,
+        data_entrada: now,
+        sdr_id: guard.profile.id,
+      }).select('id,nome,telefone').single();
+      lead = fallback.data;
+      leadError = fallback.error;
+    }
     if (leadError) throw leadError;
 
     const payload = await uazapiFetch('/send/text', { method: 'POST', body: JSON.stringify({ number: phone, text: message, delay: 1200 }) }, { instanceName: uazapiInstanceName(sender.id) });
