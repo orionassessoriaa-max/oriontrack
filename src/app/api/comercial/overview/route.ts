@@ -47,6 +47,23 @@ async function fetchKriptoMetaInvestment(start: string, end: string) {
   };
 }
 
+async function fetchKriptoActiveCampaigns() {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) return [] as string[];
+  const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
+  const url = new URL(`https://graph.facebook.com/${graphVersion}/act_${KRIPTO_PRINCIPAL_ACCOUNT_ID}/campaigns`);
+  url.searchParams.set('fields', 'name,status,effective_status');
+  url.searchParams.set('limit', '500');
+  url.searchParams.set('access_token', token);
+  const response = await fetch(url.toString(), { next: { revalidate: 300 } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) return [];
+  return (payload.data || [])
+    .filter((campaign: any) => campaign.status === 'ACTIVE' || campaign.effective_status === 'ACTIVE')
+    .map((campaign: any) => String(campaign.name || '').trim())
+    .filter(Boolean);
+}
+
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
@@ -86,6 +103,7 @@ export async function GET(request: Request) {
     stateMap.set(state, current);
   });
   const metaInvestment = guard.canViewCommercialFinancials ? await fetchKriptoMetaInvestment(start, end) : { rows: null, error: null };
+  const activeCampaigns = guard.canViewCommercialFinancials ? await fetchKriptoActiveCampaigns() : [];
   const metaRows = metaInvestment.rows;
   const filteredMetaRows = metaRows && selectedCampaigns.size
     ? metaRows.filter((row: any) => selectedCampaigns.has(row.campaign))
@@ -195,6 +213,7 @@ export async function GET(request: Request) {
     trend,
     states: Array.from(stateMap.values()).sort((a, b) => b.leads - a.leads),
     campaigns: Array.from(new Set([
+      ...activeCampaigns,
       ...(metaRows || []).map((row: any) => row.campaign).filter(Boolean),
       ...leads.map((lead) => lead.campanha).filter(Boolean),
     ])).sort(),
