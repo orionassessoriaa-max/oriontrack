@@ -18,10 +18,10 @@ function qrFromPayload(payload: any): string | null {
   return payload?.qrcode || payload?.base64 || payload?.instance?.qrcode || payload?.instance?.base64 || payload?.data?.qrcode || payload?.data?.base64 || null;
 }
 
-async function targetForCommercial() {
+async function targetForCommercial(fallback?: TargetProfile | null) {
   const { data: config, error: configError } = await supabaseAdmin.from('comercial_config').select('ia_sdr_profile_id').eq('id', 1).maybeSingle();
   if (configError && !/comercial_config|schema cache/i.test(configError.message)) throw configError;
-  if (!config?.ia_sdr_profile_id) return null;
+  if (!config?.ia_sdr_profile_id) return fallback || null;
   const { data, error } = await supabaseAdmin.from('profiles').select('id,nome,email,email_real,tipo_usuario').eq('id', config.ia_sdr_profile_id).maybeSingle();
   if (error) throw error;
   return data as TargetProfile | null;
@@ -51,7 +51,14 @@ export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
   try {
-    const target = await targetForCommercial();
+    const fallback = guard.isDevOps ? {
+      id: guard.profile.id,
+      nome: guard.profile.nome,
+      email: guard.profile.email,
+      email_real: guard.profile.email_real,
+      tipo_usuario: guard.profile.tipo_usuario,
+    } : null;
+    const target = await targetForCommercial(fallback);
     if (!target) return NextResponse.json({ configured: false, connected: false, state: 'close', targetProfile: null });
     const instance = uazapiInstanceName(target.id);
     const state = await statusForInstance(instance);
@@ -67,7 +74,14 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     if (!body.accepted_terms) return NextResponse.json({ error: 'Confirme o aceite para conectar o WhatsApp.' }, { status: 400 });
-    const target = await targetForCommercial();
+    const fallback = guard.isDevOps ? {
+      id: guard.profile.id,
+      nome: guard.profile.nome,
+      email: guard.profile.email,
+      email_real: guard.profile.email_real,
+      tipo_usuario: guard.profile.tipo_usuario,
+    } : null;
+    const target = await targetForCommercial(fallback);
     if (!target) return NextResponse.json({ error: 'Configure primeiro o perfil da instância na aba IA.' }, { status: 409 });
     const instance = uazapiInstanceName(target.id);
     try {
