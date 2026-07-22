@@ -15,6 +15,11 @@ type Overview = {
   investment_source?: 'meta' | 'manual_fallback';
 };
 
+type GeoStateFeature = {
+  properties: { sigla: string; name: string };
+  geometry: { type: 'MultiPolygon' | 'Polygon'; coordinates: number[][][][] | number[][][] };
+};
+
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 function startOfMonth() { const date = new Date(); return isoDate(new Date(date.getFullYear(), date.getMonth(), 1)); }
 
@@ -44,10 +49,6 @@ function TrendChart({ rows }: { rows: Overview['trend'] }) {
   );
 }
 
-const statePositions: Record<string, [number, number]> = {
-  AC: [20, 20], RO: [29, 27], AM: [39, 20], RR: [48, 10], AP: [66, 13], PA: [57, 28], TO: [63, 42], MA: [76, 27], PI: [81, 39], CE: [88, 29], RN: [96, 32], PB: [96, 40], PE: [91, 48], AL: [91, 57], SE: [84, 63], BA: [76, 56], MT: [51, 58], GO: [62, 67], DF: [68, 61], MS: [51, 78], ES: [85, 75], MG: [72, 78], RJ: [78, 87], SP: [61, 89], PR: [54, 96], SC: [64, 104], RS: [53, 111],
-};
-
 function WeeklyMeetingsChart({ rows }: { rows: Overview['trend'] }) {
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - (6 - index));
@@ -59,9 +60,16 @@ function WeeklyMeetingsChart({ rows }: { rows: Overview['trend'] }) {
 }
 
 function StateMap({ states, selected, onSelect }: { states: Overview['states']; selected: string | null; onSelect: (state: string) => void }) {
+  const [features, setFeatures] = useState<GeoStateFeature[]>([]);
+  useEffect(() => { fetch('/brazil-states.geojson').then((response) => response.json()).then((payload) => setFeatures(payload.features || [])).catch(() => setFeatures([])); }, []);
   const values = new Map(states.map((item) => [item.state, item]));
   const max = Math.max(1, ...states.map((item) => item.leads));
-  return <div className="kh-state-map" aria-label="Mapa de origem dos leads por estado"><div className="kh-map-canvas">{Object.entries(statePositions).map(([state, [x, y]]) => { const item = values.get(state); const intensity = item ? 0.25 + (item.leads / max) * 0.75 : 0.08; return <button type="button" key={state} className={`kh-state-node ${selected === state ? 'selected' : ''}`} style={{ left: `${x}%`, top: `${y}px`, '--state-intensity': intensity } as React.CSSProperties} onClick={() => onSelect(state)} aria-label={`${state}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}><span>{state}</span>{item && <b>{item.leads}</b>}</button>; })}</div></div>;
+  function project(point: number[]) { return `${((point[0] + 75) / 42) * 1000},${((5 - point[1]) / 40) * 720}`; }
+  function pathFor(feature: GeoStateFeature) {
+    const polygons = (feature.geometry.type === 'MultiPolygon' ? feature.geometry.coordinates : [feature.geometry.coordinates]) as number[][][][];
+    return polygons.flatMap((polygon: number[][][]) => polygon.map((ring: number[][]) => `M ${ring.map((point) => project(point)).join(' L ')} Z`)).join(' ');
+  }
+  return <div className="kh-state-map" aria-label="Mapa de origem dos leads por estado"><div className="kh-map-canvas">{features.length ? <svg viewBox="0 0 1000 720" role="img" aria-label="Mapa do Brasil dividido por estados">{features.map((feature) => { const state = feature.properties.sigla; const item = values.get(state); const intensity = item ? 0.35 + (item.leads / max) * 0.65 : 0.08; return <g key={state} className={`kh-map-state ${selected === state ? 'selected' : ''}`} onClick={() => onSelect(state)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onSelect(state); }} aria-label={`${state}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}><path d={pathFor(feature)} style={{ fill: `rgba(34, 155, 235, ${intensity})` }}><title>{`${feature.properties.name}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}</title></path></g>; })}</svg> : <div className="kh-map-loading">Carregando mapa...</div>}</div></div>;
 }
 
 export default function CommercialDashboardPage() {
