@@ -63,6 +63,10 @@
 .kh-icon-button:hover:not(:disabled) { border-color: #4477a8; background: #142231; color: var(--kh-text); transform: translateY(-1px); }
 .kh-icon-button:disabled { cursor: wait; opacity: .55; }
 .kh-date-filter { width: 132px; min-height: 42px !important; }
+.kh-date-preset { min-height: 42px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--kh-line); border-radius: 8px; background: var(--kh-surface); color: var(--kh-muted); }
+.kh-date-preset svg { flex: 0 0 auto; color: var(--kh-accent); }
+.kh-date-preset select { min-width: 142px; border: 0; outline: 0; background: transparent; color: var(--kh-text); font: inherit; font-size: 12px; font-weight: 700; }
+.kh-date-preset option { background: var(--kh-surface); color: var(--kh-text); }
 
 .kh-filter, .kh-input, .kh-select, .kh-textarea { min-height: 42px !important; border: 1px solid var(--kh-line) !important; border-radius: 6px !important; background: #080d13 !important; color: var(--kh-text) !important; -webkit-text-fill-color: var(--kh-text) !important; padding: 0 12px; font-size: 12px; outline: none !important; }
 .kh-textarea { min-height: 96px !important; padding-block: 12px; resize: vertical; }
@@ -290,7 +294,7 @@
 .kh-modal-sheet > footer { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--kh-line); padding: 14px 20px; }
 @media (max-width: 620px) { .kh-form-grid { grid-template-columns: 1fr; } .kh-form-grid .wide { grid-column: auto; } .kh-kanban-column { width: 88vw; min-width: 88vw; } .kh-search { min-width: 100%; } }
 
-.kh-sheet-filters { min-height: 64px; display: grid; grid-template-columns: minmax(260px, 1fr) 132px 132px 220px auto; align-items: center; gap: 10px; border: 1px solid var(--kh-line); border-bottom: 0; background: var(--kh-surface); padding: 10px; }
+.kh-sheet-filters { min-height: 64px; display: grid; grid-template-columns: minmax(260px, 1fr) 190px 220px auto; align-items: center; gap: 10px; border: 1px solid var(--kh-line); border-bottom: 0; background: var(--kh-surface); padding: 10px; }
 .kh-sheet-filters > span { color: var(--kh-muted); font-size: 10px; font-weight: 700; text-align: right; text-transform: uppercase; }
 .kh-sheet-wrap { max-width: 100%; overflow: auto; border: 1px solid var(--kh-line); background: #080d13; scrollbar-color: #2d4057 #0a1017; }
 .kh-sheet-table { width: 100%; min-width: 1480px; border-collapse: collapse; color: #cdd7e4; table-layout: fixed; }
