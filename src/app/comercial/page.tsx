@@ -61,6 +61,7 @@ function WeeklyMeetingsChart({ rows }: { rows: Overview['trend'] }) {
 
 function StateMap({ states, selected, onSelect }: { states: Overview['states']; selected: string | null; onSelect: (state: string) => void }) {
   const [features, setFeatures] = useState<GeoStateFeature[]>([]);
+  const [hovered, setHovered] = useState<string | null>(null);
   useEffect(() => { fetch('/brazil-states.geojson').then((response) => response.json()).then((payload) => setFeatures(payload.features || [])).catch(() => setFeatures([])); }, []);
   const values = new Map(states.map((item) => [item.state, item]));
   const max = Math.max(1, ...states.map((item) => item.leads));
@@ -69,7 +70,8 @@ function StateMap({ states, selected, onSelect }: { states: Overview['states']; 
     const polygons = (feature.geometry.type === 'MultiPolygon' ? feature.geometry.coordinates : [feature.geometry.coordinates]) as number[][][][];
     return polygons.flatMap((polygon: number[][][]) => polygon.map((ring: number[][]) => `M ${ring.map((point) => project(point)).join(' L ')} Z`)).join(' ');
   }
-  return <div className="kh-state-map" aria-label="Mapa de origem dos leads por estado"><div className="kh-map-canvas">{features.length ? <svg viewBox="0 0 1000 720" role="img" aria-label="Mapa do Brasil dividido por estados">{features.map((feature) => { const state = feature.properties.sigla; const item = values.get(state); const intensity = item ? 0.35 + (item.leads / max) * 0.65 : 0.08; return <g key={state} className={`kh-map-state ${selected === state ? 'selected' : ''}`} onClick={() => onSelect(state)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onSelect(state); }} aria-label={`${state}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}><path d={pathFor(feature)} style={{ fill: `rgba(34, 155, 235, ${intensity})` }}><title>{`${feature.properties.name}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}</title></path></g>; })}</svg> : <div className="kh-map-loading">Carregando mapa...</div>}</div></div>;
+  const hoveredData = hovered ? values.get(hovered) : null;
+  return <div className="kh-state-map" aria-label="Mapa de origem dos leads por estado"><div className="kh-map-canvas">{features.length ? <svg viewBox="0 0 1000 720" role="img" aria-label="Mapa do Brasil dividido por estados">{features.map((feature) => { const state = feature.properties.sigla; const item = values.get(state); const intensity = item ? 0.35 + (item.leads / max) * 0.65 : 0.08; return <g key={state} className={`kh-map-state ${selected === state ? 'selected' : ''}`} onClick={() => onSelect(state)} onMouseEnter={() => setHovered(state)} onMouseLeave={() => setHovered(null)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onSelect(state); }} aria-label={`${state}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}><path d={pathFor(feature)} style={{ fill: `rgba(34, 155, 235, ${intensity})` }}><title>{`${feature.properties.name}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}</title></path></g>; })}</svg> : <div className="kh-map-loading">Carregando mapa...</div>}{hovered && <div className="kh-map-tooltip"><strong>{hovered}</strong><span>{hoveredData?.leads || 0} leads recebidos</span><b>{hoveredData?.active || 0} ativos na Orion</b><small>Região estimada</small></div>}</div></div>;
 }
 
 export default function CommercialDashboardPage() {
