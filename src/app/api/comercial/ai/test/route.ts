@@ -12,6 +12,12 @@ export async function POST(request: Request) {
     const phone = normalizePhone(body.telefone);
     const name = String(body.nome || 'Teste IA').trim().slice(0, 120) || 'Teste IA';
     const ages = String(body.idades || '32').trim().slice(0, 80) || '32';
+    const email = String(body.email || '').trim().slice(0, 160) || null;
+    const traffic = String(body.ja_investiu_trafego || '').trim().slice(0, 160) || null;
+    const revenue = String(body.faturamento_mensal || '').trim().slice(0, 160) || null;
+    const investment = String(body.investimento || '').trim().slice(0, 160) || null;
+    const priority = String(body.prioridade || '').trim().slice(0, 160) || null;
+    const lives = String(body.vidas || '').trim().slice(0, 160) || null;
     if (!phone || phone.length < 12) return NextResponse.json({ error: 'Informe um WhatsApp valido com DDD.' }, { status: 400 });
 
     const { data: config, error: configError } = await supabaseAdmin.from('comercial_config').select('ia_sdr_ativa,ia_sdr_prompt,ia_sdr_profile_id').eq('id', 1).maybeSingle();
@@ -35,7 +41,7 @@ export async function POST(request: Request) {
         temperature: 0.55,
         messages: [
           { role: 'system', content: `${prompt}\n\nResponda somente com a primeira mensagem curta para iniciar este teste. Nao mencione que e um teste, IA ou sistema.` },
-          { role: 'user', content: `Nome do lead: ${name}\nIdades: ${ages}\nEscreva a abertura do atendimento.` },
+          { role: 'user', content: `Nome: ${name}\nIdades: ${ages}\nE-mail: ${email || 'nao informado'}\nJa investiu em trafego: ${traffic || 'nao informado'}\nFaturamento mensal: ${revenue || 'nao informado'}\nInvestimento mensal: ${investment || 'nao informado'}\nPrioridade: ${priority || 'nao informada'}\nVidas/leads por mes: ${lives || 'nao informado'}\nEscreva a abertura do atendimento.` },
         ],
       }),
     });
@@ -48,7 +54,13 @@ export async function POST(request: Request) {
     const { data: lead, error: leadError } = await supabaseAdmin.from('comercial_leads').insert({
       nome: name,
       telefone: phone,
+      email,
       idades: ages,
+      ja_investiu_trafego: traffic,
+      faturamento_mensal: revenue,
+      investimento: investment,
+      prioridade: priority,
+      vidas: lives,
       origem: 'Teste IA SDR',
       status: 'Oportunidade',
       observacoes: 'Lead criado pelo teste da IA SDR.',
