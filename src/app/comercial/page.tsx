@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowUpRight, CalendarDays, Check, CircleDollarSign, RefreshCw, Target, UsersRound, WalletCards } from 'lucide-react';
+import { Activity, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleDollarSign, RefreshCw, Target, UsersRound, WalletCards } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import { currency, percent } from '@/lib/comercial';
 
@@ -23,15 +23,18 @@ type GeoStateFeature = {
 
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 function startOfMonth() { const date = new Date(); return isoDate(new Date(date.getFullYear(), date.getMonth(), 1)); }
-type DatePreset = 'todos' | 'hoje' | 'ontem' | '7dias' | '30dias' | 'mes' | 'personalizado';
+type DatePreset = 'todos' | 'hoje' | 'ontem' | '7dias' | '30dias' | 'mes' | 'mes_passado' | 'personalizado';
 function getPresetRange(preset: DatePreset) {
   const today = new Date(); const start = new Date(today); const end = new Date(today);
   if (preset === 'ontem') { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); }
   if (preset === '7dias') start.setDate(start.getDate() - 6);
   if (preset === '30dias') start.setDate(start.getDate() - 29);
   if (preset === 'mes') start.setDate(1);
+  if (preset === 'mes_passado') return { start: isoDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)), end: isoDate(new Date(today.getFullYear(), today.getMonth(), 0)) };
   return preset === 'todos' ? { start: '', end: '' } : { start: isoDate(start), end: isoDate(end) };
 }
+
+function shortDate(value: string) { return value ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR') : ''; }
 
 function TrendChart({ rows }: { rows: Overview['trend'] }) {
   const width = 860;
@@ -94,6 +97,10 @@ export default function CommercialDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [draftPreset, setDraftPreset] = useState<DatePreset>(datePreset);
+  const [draftStart, setDraftStart] = useState(start);
+  const [draftEnd, setDraftEnd] = useState(end);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -104,13 +111,25 @@ export default function CommercialDashboardPage() {
     catch (err) { setError(err instanceof Error ? err.message : 'Erro ao carregar indicadores.'); }
     finally { setLoading(false); }
   }, [api, end, selectedCampaigns, start]);
+  // This effect keeps dashboard metrics synchronized with the active filters.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { const timer = window.setInterval(() => void load(), 30_000); return () => window.clearInterval(timer); }, [load]);
 
-  function changeDatePreset(next: DatePreset) {
-    setDatePreset(next);
-    if (next !== 'personalizado') { const range = getPresetRange(next); setStart(range.start); setEnd(range.end); }
+  function openPeriod() {
+    setDraftPreset(datePreset); setDraftStart(start); setDraftEnd(end); setPeriodOpen((current) => !current);
   }
+
+  function choosePreset(next: DatePreset) {
+    setDraftPreset(next);
+    if (next !== 'personalizado') { const range = getPresetRange(next); setDraftStart(range.start); setDraftEnd(range.end); }
+  }
+
+  function applyPeriod() {
+    setDatePreset(draftPreset); setStart(draftStart); setEnd(draftEnd); setPeriodOpen(false);
+  }
+
+  const periodText = datePreset === 'todos' ? 'Todo o periodo' : `${({ hoje: 'Hoje', ontem: 'Ontem', '7dias': 'Ultimos 7 dias', '30dias': 'Ultimos 30 dias', mes: 'Este mes', mes_passado: 'Mes passado', personalizado: 'Periodo personalizado', todos: 'Todo o periodo' } as Record<DatePreset, string>)[datePreset]} (${shortDate(start)} a ${shortDate(end)})`;
 
   function toggleCampaign(campaign: string) {
     setSelectedCampaigns((current) => current.includes(campaign) ? current.filter((item) => item !== campaign) : [...current, campaign]);
@@ -146,8 +165,13 @@ export default function CommercialDashboardPage() {
       <header className="kh-page-head">
         <div><div className="kh-eyebrow">Performance comercial</div><h1>Visão geral</h1><p>Da entrada do lead ao faturamento, com os números reais da operação.</p></div>
         <div className="kh-actions kh-date-actions">
-            <label className="kh-date-preset"><CalendarDays size={15} /><select value={datePreset} onChange={(event) => changeDatePreset(event.target.value as DatePreset)} aria-label="Periodo"><option value="todos">Todo o periodo</option><option value="hoje">Hoje</option><option value="ontem">Ontem</option><option value="7dias">Ultimos 7 dias</option><option value="30dias">Ultimos 30 dias</option><option value="mes">Este mes</option><option value="personalizado">Personalizado</option></select></label>
-            {datePreset === 'personalizado' && <><label><span>De</span><input className="kh-filter" type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label><span>Ate</span><input className="kh-filter" type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label></>}
+            <div className="kh-period-control">
+              <button type="button" className="kh-period-trigger" onClick={openPeriod} aria-expanded={periodOpen}><CalendarDays size={15} /><strong>{periodText}</strong><ChevronDown size={14} /></button>
+              {periodOpen && <div className="kh-period-popover">
+                <div className="kh-period-quick"><span>Atalhos rapidos</span>{([['todos', 'Todo o periodo'], ['hoje', 'Hoje'], ['ontem', 'Ontem'], ['7dias', 'Ultimos 7 dias'], ['30dias', 'Ultimos 30 dias'], ['mes', 'Este mes'], ['mes_passado', 'Mes passado']] as Array<[DatePreset, string]>).map(([value, label]) => <button type="button" key={value} className={draftPreset === value ? 'active' : ''} onClick={() => choosePreset(value)}>{label}</button>)}</div>
+                <div className="kh-period-custom"><span>Periodo personalizado</span><label>Data de inicio<input type="date" value={draftStart} onChange={(event) => { setDraftPreset('personalizado'); setDraftStart(event.target.value); }} /></label><label>Data de fim<input type="date" value={draftEnd} onChange={(event) => { setDraftPreset('personalizado'); setDraftEnd(event.target.value); }} /></label><div className="kh-period-footer"><button type="button" onClick={() => setPeriodOpen(false)}>Cancelar</button><button type="button" className="primary" onClick={applyPeriod}>Aplicar</button></div></div>
+              </div>}
+            </div>
             {canViewCommercialFinancials && <details className="kh-campaign-filter"><summary>Campanhas{selectedCampaigns.length ? ` (${selectedCampaigns.length})` : ''}</summary><div className="kh-campaign-menu"><button type="button" onClick={() => setSelectedCampaigns([])}>Todas as campanhas</button>{(data?.campaigns || []).map((campaign) => <label key={campaign}><input type="checkbox" checked={selectedCampaigns.includes(campaign)} onChange={() => toggleCampaign(campaign)} /><span>{selectedCampaigns.includes(campaign) && <Check size={12} />}{campaign}</span></label>)}{!data?.campaigns?.length && <small>Nenhuma campanha encontrada.</small>}</div></details>}
           <button className="kh-icon-button" type="button" onClick={() => void load()} aria-label="Atualizar indicadores"><RefreshCw size={17} className={loading ? 'kh-spin' : ''} /></button>
         </div>

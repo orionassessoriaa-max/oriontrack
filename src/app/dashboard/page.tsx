@@ -36,6 +36,7 @@ import { useRouter } from 'next/navigation';
 import OrionFunnel from '@/components/ui/OrionFunnel';
 import { motion } from 'framer-motion';
 import { isLeadSale, normalizeLeadStatus } from '@/lib/leadStatus';
+import { isOrionLead } from '@/lib/leadOrigin';
 
 type CorretorDashboardData = {
   id: string;
@@ -55,6 +56,14 @@ type LeadMetricRow = {
   status: string | null;
   conta_como_venda?: boolean | null;
   data_entrada: string | null;
+  origem?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_term?: string | null;
+  utm_content?: string | null;
+  operadora?: string | null;
+  observacoes?: string | null;
   cidade?: string | null;
   valor_negociacao?: string | number | null;
   responsavel_profile_id?: string | null;
@@ -272,6 +281,7 @@ export default function DashboardPage() {
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
+    orionTotal: 0,
     waiting: 0,
     inicio: 0,
     contactMade: 0,
@@ -500,7 +510,7 @@ export default function DashboardPage() {
           const to = from + limitNum - 1;
           let statsRequest = supabase
             .from('leads')
-            .select('status, conta_como_venda, data_entrada, cidade, valor_negociacao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim')
+            .select('status, conta_como_venda, data_entrada, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes, cidade, valor_negociacao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim')
             .in('corretor_id', idsToFetch)
             .range(from, to);
 
@@ -544,7 +554,7 @@ export default function DashboardPage() {
         // Compute static 6-month performance timeline
         const months = getLastMonths();
         const monthMap = new Map(months.map((month) => [month.key, { ...month }]));
-        allLeads.forEach((lead) => {
+        allLeads.filter(isOrionLead).forEach((lead) => {
           if (!lead.data_entrada) return;
           if (dataFim && lead.data_entrada.slice(0, 10) > dataFim) return;
           const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
@@ -673,6 +683,7 @@ export default function DashboardPage() {
         }
 
         const soldLeads = statsRes.filter(isLeadSale);
+        const orionStatsRes = statsRes.filter(isOrionLead);
         let pendingTasks: Array<{ id: string; vencimento: string | null }> = [];
         if (idsToFetch.length > 0) {
           let tasksRequest = supabase
@@ -735,6 +746,7 @@ export default function DashboardPage() {
         
         setStats({
           total: statsRes.length,
+          orionTotal: orionStatsRes.length,
           waiting: waitingLeads.length,
           inicio: inicioLeads.length,
           contactMade: contactMadeLeads.length,
@@ -839,8 +851,8 @@ export default function DashboardPage() {
 
 
 
-  const periodCpl = stats.total > 0 ? periodSpend / stats.total : 0;
-  const periodConversion = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
+  const periodCpl = stats.orionTotal > 0 ? periodSpend / stats.orionTotal : 0;
+  const periodConversion = stats.orionTotal > 0 ? (stats.sold / stats.orionTotal) * 100 : 0;
 
   const periodLabelText = presetLabel === 'Todo o período'
     ? 'no período'
@@ -849,9 +861,9 @@ export default function DashboardPage() {
       : presetLabel === 'Mês passado'
         ? 'do mês passado'
         : `de ${presetLabel.toLowerCase()}`;
-  const displayPeriodCpl = stats.total > 0 ? periodCpl : null;
+  const displayPeriodCpl = stats.orionTotal > 0 ? periodCpl : null;
 
-  const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
+  const salesConversionRate = stats.orionTotal > 0 ? (stats.sold / stats.orionTotal) * 100 : 0;
   const chartHeight = 176;
   const maxWeeklyLeads = Math.max(...weeklyLeads.map((day) => day.leads), 1);
   const weeklyTotal = weeklyLeads.reduce((sum, day) => sum + day.leads, 0);
@@ -1146,7 +1158,7 @@ export default function DashboardPage() {
             </div>
             <div className="grid min-w-[180px] shrink-0 grid-cols-1 gap-3 border-t border-white/5 pt-3 text-left sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 sm:text-right">
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">CPL {periodLabelText}</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">CPL Orion {periodLabelText}</p>
                 <p className="mt-1 text-xl font-black text-white">
                   {displayPeriodCpl === null
                     ? 'N/A'
@@ -1262,10 +1274,10 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
                 <MiniMetric icon={DollarSign} label={`Investido ${periodLabelText}`} value={formatCurrency(periodSpend)} />
-                <MiniMetric icon={Target} label={`CPL ${periodLabelText}`} value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
+                <MiniMetric icon={Users} label={`Leads Orion ${periodLabelText}`} value={stats.orionTotal} />
+                <MiniMetric icon={Target} label={`CPL Orion ${periodLabelText}`} value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
                 <MiniMetric icon={TrendingUp} label={`Conversao ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
                 <MiniMetric icon={Clock} label="Em negociacao" value={stats.inProgress} />
-                <MiniMetric icon={TrendingUp} label="Vendas" value={stats.sold} />
               </div>
             )}
           </div>
