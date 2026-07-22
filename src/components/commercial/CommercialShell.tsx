@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Bot, BriefcaseBusiness, CheckSquare2, ChevronDown, Eye, LayoutDashboard, LogOut, Menu, MessageSquare, Table2, UsersRound, X } from 'lucide-react';
+import { Bot, BriefcaseBusiness, CheckSquare2, ChevronDown, Eye, LayoutDashboard, LogOut, Menu, MessageSquare, Target, Table2, UsersRound, X } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { commercialRoleLabel, type CommercialMember, type CommercialRole } from '@/lib/comercial';
 import { canSelectOperationalTeam } from '@/lib/teamSelection';
@@ -39,6 +39,7 @@ const baseNavigation = [
   { href: '/comercial/kanban', label: 'Kanban', icon: BriefcaseBusiness },
   { href: '/comercial/leads', label: 'Leads', icon: Table2 },
   { href: '/comercial/tarefas', label: 'Tarefas', icon: CheckSquare2 },
+  { href: '/comercial/metas', label: 'Metas', icon: Target },
   { href: '/comercial/ia', label: 'IA e follow-up', icon: Bot },
 ];
 
@@ -64,7 +65,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
     const token = data.session?.access_token;
     if (!token) throw new Error('Sessão expirada. Entre novamente.');
     const headers = new Headers(init.headers);
-    headers.set('Content-Type', 'application/json');
+    if (!(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
     headers.set('Authorization', `Bearer ${token}`);
     if (canViewCommercialAsUser && viewingCommercialProfileId) headers.set('x-commercial-view-profile-id', viewingCommercialProfileId);
     const response = await fetch(url, { ...init, headers });

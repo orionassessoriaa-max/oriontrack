@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CalendarPlus, ChevronDown, ChevronUp, GripVertical, Plus, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
+import { CalendarDays, CalendarPlus, ChevronDown, ChevronUp, GripVertical, MessageSquare, Paperclip, Plus, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import CommercialLeadModal from '@/components/commercial/CommercialLeadModal';
 import { COMMERCIAL_STAGES, currency, type CommercialLead, type CommercialStage } from '@/lib/comercial';
 
 type DatePreset = 'todos' | 'hoje' | 'ontem' | '7dias' | '30dias' | 'mes' | 'personalizado';
+type LeadInteraction = { id: string; comentario: string | null; anexo_url: string | null; anexo_nome: string | null; autor_nome: string; created_at: string };
 
 function localDateValue(date: Date) {
   const year = date.getFullYear();
@@ -48,10 +49,15 @@ export default function CommercialKanbanPage() {
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({ titulo: '', responsavel_id: '', vencimento: '', prioridade: 'normal', descricao: '' });
   const [taskSaving, setTaskSaving] = useState<string | null>(null);
+  const [interactions, setInteractions] = useState<LeadInteraction[]>([]);
+  const [interactionText, setInteractionText] = useState('');
+  const [interactionFile, setInteractionFile] = useState<File | null>(null);
+  const [interactionSaving, setInteractionSaving] = useState(false);
 
   const load = useCallback(async () => { setLoading(true); try { const payload = await api('/api/comercial/leads'); setLeads(payload.leads || []); } finally { setLoading(false); } }, [api]);
   const loadStages = useCallback(async () => { try { const payload = await api('/api/comercial/stages'); if (payload.stages?.length) setStages(payload.stages); } catch { /* fallback ate a migration ser aplicada */ } }, [api]);
   useEffect(() => { void load(); void loadStages(); }, [load, loadStages]);
+  useEffect(() => { if (!expandedLeadId) { setInteractions([]); return; } void api(`/api/comercial/leads/${expandedLeadId}/interactions`).then((payload) => setInteractions(payload.interactions || [])).catch(() => setInteractions([])); }, [api, expandedLeadId]);
 
   const memberMap = useMemo(() => new Map(members.map((member) => [member.profile_id, member])), [members]);
   const visible = useMemo(() => leads.filter((lead) => {
@@ -109,6 +115,20 @@ export default function CommercialKanbanPage() {
       setTaskSaving(null);
     }
   }
+  async function addInteraction(event: React.FormEvent, leadId: string) {
+    event.preventDefault();
+    if (!interactionText.trim() && !interactionFile) return;
+    setInteractionSaving(true);
+    try {
+      const form = new FormData();
+      if (interactionText.trim()) form.append('comentario', interactionText.trim());
+      if (interactionFile) form.append('anexo', interactionFile);
+      const payload = await api(`/api/comercial/leads/${leadId}/interactions`, { method: 'POST', body: form });
+      setInteractions((current) => [{ ...payload.interaction, autor_nome: 'Você' }, ...current]);
+      setInteractionText(''); setInteractionFile(null);
+      const input = document.getElementById('lead-attachment') as HTMLInputElement | null; if (input) input.value = '';
+    } finally { setInteractionSaving(false); }
+  }
 
   function changeDatePreset(next: DatePreset) {
     setDatePreset(next);
@@ -135,7 +155,7 @@ export default function CommercialKanbanPage() {
           </section>;
         })}
       </div>
-      {expandedLeadId && (() => { const lead = leads.find((item) => item.id === expandedLeadId); if (!lead) return null; const ownerId = lead.closer_id || lead.sdr_id || ''; return <div className="kh-lead-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setExpandedLeadId(null); }}><section className="kh-lead-modal" role="dialog" aria-modal="true" aria-label={`Detalhes de ${lead.nome}`}><header><div><span className="kh-eyebrow">Lead comercial</span><h2>{lead.nome}</h2><p>{lead.empresa || 'Sem empresa informada'} · {memberMap.get(ownerId)?.nome || 'Sem responsavel'}</p></div><button type="button" className="kh-icon-button" aria-label="Fechar detalhes" onClick={() => setExpandedLeadId(null)}><X size={18} /></button></header><div className="kh-lead-modal-grid"><div><small>Telefone</small><strong>{lead.telefone || 'Não informado'}</strong></div><div><small>E-mail</small><strong>{lead.email || 'Não informado'}</strong></div><div><small>Origem</small><strong>{lead.origem || 'Não informado'}</strong></div><div><small>Status</small><strong>{lead.status}</strong></div><div><small>Entrada</small><strong>{lead.data_entrada ? new Date(lead.data_entrada).toLocaleString('pt-BR') : 'Não informado'}</strong></div><div><small>Prioridade</small><strong>{lead.prioridade || 'Não informada'}</strong></div></div><form className="kh-card-task-form" onSubmit={(event) => void createLeadTask(event, lead)}><div className="kh-card-task-title"><CalendarPlus size={15} /><strong>Criar tarefa</strong></div><input className="kh-input" value={taskForm.titulo} onChange={(event) => setTaskForm((current) => ({ ...current, titulo: event.target.value }))} placeholder="Ex: Ligar para o lead" required /><div className="kh-card-task-fields"><select className="kh-select" value={taskForm.responsavel_id} onChange={(event) => setTaskForm((current) => ({ ...current, responsavel_id: event.target.value }))} disabled={role !== 'coordenador'} aria-label="Responsável">{members.filter((member) => member.ativo).map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select><input className="kh-input" type="datetime-local" value={taskForm.vencimento} onChange={(event) => setTaskForm((current) => ({ ...current, vencimento: event.target.value }))} aria-label="Prazo" /><select className="kh-select" value={taskForm.prioridade} onChange={(event) => setTaskForm((current) => ({ ...current, prioridade: event.target.value }))} aria-label="Prioridade"><option value="baixa">Baixa</option><option value="normal">Normal</option><option value="alta">Alta</option></select></div><textarea className="kh-textarea" value={taskForm.descricao} onChange={(event) => setTaskForm((current) => ({ ...current, descricao: event.target.value }))} placeholder="Observação opcional" /><button className="kh-button primary" disabled={taskSaving === lead.id}><CalendarPlus size={14} />{taskSaving === lead.id ? 'Salvando...' : 'Criar tarefa'}</button></form></section></div>; })()}
+      {expandedLeadId && (() => { const lead = leads.find((item) => item.id === expandedLeadId); if (!lead) return null; const ownerId = lead.closer_id || lead.sdr_id || ''; return <div className="kh-lead-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setExpandedLeadId(null); }}><section className="kh-lead-modal" role="dialog" aria-modal="true" aria-label={`Detalhes de ${lead.nome}`}><header><div><span className="kh-eyebrow">Lead comercial</span><h2>{lead.nome}</h2><p>{lead.empresa || 'Sem empresa informada'} · {memberMap.get(ownerId)?.nome || 'Sem responsavel'}</p></div><button type="button" className="kh-icon-button" aria-label="Fechar detalhes" onClick={() => setExpandedLeadId(null)}><X size={18} /></button></header><div className="kh-lead-modal-grid"><div><small>Telefone</small><strong>{lead.telefone || 'Não informado'}</strong></div><div><small>E-mail</small><strong>{lead.email || 'Não informado'}</strong></div><div><small>Origem</small><strong>{lead.origem || 'Não informado'}</strong></div><div><small>Status</small><strong>{lead.status}</strong></div><div><small>Entrada</small><strong>{lead.data_entrada ? new Date(lead.data_entrada).toLocaleString('pt-BR') : 'Não informado'}</strong></div><div><small>Prioridade</small><strong>{lead.prioridade || 'Não informada'}</strong></div></div><section className="kh-interactions"><div className="kh-card-task-title"><MessageSquare size={15} /><strong>Comentários e prints</strong></div><form className="kh-interaction-form" onSubmit={(event) => void addInteraction(event, lead.id)}><textarea className="kh-textarea" value={interactionText} onChange={(event) => setInteractionText(event.target.value)} placeholder="Registrar comentário sobre este lead..." /><div><label className="kh-file-button" htmlFor="lead-attachment"><Paperclip size={14} /> {interactionFile ? interactionFile.name : 'Anexar print'}</label><input id="lead-attachment" type="file" accept="image/*" onChange={(event) => setInteractionFile(event.target.files?.[0] || null)} /><button className="kh-button primary" disabled={interactionSaving}>{interactionSaving ? 'Salvando...' : 'Adicionar'}</button></div></form><div className="kh-interaction-list">{interactions.map((item) => <article key={item.id}><div><strong>{item.autor_nome}</strong><small>{new Date(item.created_at).toLocaleString('pt-BR')}</small></div>{item.comentario && <p>{item.comentario}</p>}{item.anexo_url && <a href={item.anexo_url} target="_blank" rel="noreferrer"><img src={item.anexo_url} alt={item.anexo_nome || 'Print anexado'} /></a>}</article>)}{!interactions.length && <span>Nenhum comentário ou print registrado.</span>}</div></section><form className="kh-card-task-form" onSubmit={(event) => void createLeadTask(event, lead)}><div className="kh-card-task-title"><CalendarPlus size={15} /><strong>Criar tarefa</strong></div><input className="kh-input" value={taskForm.titulo} onChange={(event) => setTaskForm((current) => ({ ...current, titulo: event.target.value }))} placeholder="Ex: Ligar para o lead" required /><div className="kh-card-task-fields"><select className="kh-select" value={taskForm.responsavel_id} onChange={(event) => setTaskForm((current) => ({ ...current, responsavel_id: event.target.value }))} disabled={role !== 'coordenador'} aria-label="Responsável">{members.filter((member) => member.ativo).map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select><input className="kh-input" type="datetime-local" value={taskForm.vencimento} onChange={(event) => setTaskForm((current) => ({ ...current, vencimento: event.target.value }))} aria-label="Prazo" /><select className="kh-select" value={taskForm.prioridade} onChange={(event) => setTaskForm((current) => ({ ...current, prioridade: event.target.value }))} aria-label="Prioridade"><option value="baixa">Baixa</option><option value="normal">Normal</option><option value="alta">Alta</option></select></div><textarea className="kh-textarea" value={taskForm.descricao} onChange={(event) => setTaskForm((current) => ({ ...current, descricao: event.target.value }))} placeholder="Observação opcional" /><button className="kh-button primary" disabled={taskSaving === lead.id}><CalendarPlus size={14} />{taskSaving === lead.id ? 'Salvando...' : 'Criar tarefa'}</button></form></section></div>; })()}
       <CommercialLeadModal open={modalOpen} members={members} stages={stages} initialStatus={initialStatus} canViewFinancials={canViewCommercialFinancials} onClose={() => setModalOpen(false)} onSave={async (data) => { await api('/api/comercial/leads', { method: 'POST', body: JSON.stringify(data) }); await load(); }} />
     </div>
   );

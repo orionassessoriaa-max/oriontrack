@@ -75,7 +75,7 @@ function StateMap({ states, selected, onSelect }: { states: Overview['states']; 
 }
 
 export default function CommercialDashboardPage() {
-  const { api, role, currentProfileId, canViewMetaInvestment } = useCommercial();
+  const { api, role, currentProfileId, canViewCommercialFinancials } = useCommercial();
   const [start, setStart] = useState(startOfMonth());
   const [end, setEnd] = useState(isoDate(new Date()));
   const [data, setData] = useState<Overview | null>(null);
@@ -95,11 +95,11 @@ export default function CommercialDashboardPage() {
   const m = data?.metrics || {};
   const selectedStateData = data?.states?.find((item) => item.state === selectedState);
   const primary = [
-    ...(canViewMetaInvestment ? [{ label: 'Investimento', value: currency(m.investment), helper: 'No período selecionado', icon: WalletCards, tone: 'blue' }] : []),
+    ...(canViewCommercialFinancials ? [{ label: 'Investimento', value: currency(m.investment), helper: 'No período selecionado', icon: WalletCards, tone: 'blue' }] : []),
     { label: 'Leads', value: String(m.leads || 0), helper: `${m.qualified || 0} qualificados`, icon: UsersRound, tone: 'cyan' },
-    ...(canViewMetaInvestment ? [{ label: 'Custo por lead', value: currency(m.cpl), helper: `MQL ${currency(m.costPerMql)}`, icon: CircleDollarSign, tone: 'green' }] : []),
+    ...(canViewCommercialFinancials ? [{ label: 'Custo por lead', value: currency(m.cpl), helper: `MQL ${currency(m.costPerMql)}`, icon: CircleDollarSign, tone: 'green' }] : []),
     { label: 'Reuniões', value: String(m.scheduled || 0), helper: `${m.realized || 0} realizadas`, icon: CalendarDays, tone: 'yellow' },
-    { label: 'Clientes fechados', value: String(m.closed || 0), helper: canViewMetaInvestment ? `CAC ${currency(m.cac)}` : 'Vendas no período', icon: Target, tone: 'violet' },
+    { label: 'Clientes fechados', value: String(m.closed || 0), helper: canViewCommercialFinancials ? `CAC ${currency(m.cac)}` : 'Vendas no período', icon: Target, tone: 'violet' },
   ];
   const funnel = [
     ['Leads', m.leads], ['MQLs', m.qualified], ['Agendadas', m.scheduled], ['Realizadas', m.realized], ['Qualificadas', m.qualifiedMeetings], ['Vendas', m.closed],
@@ -107,7 +107,7 @@ export default function CommercialDashboardPage() {
   const maxFunnel = Math.max(1, Number(m.leads || 0));
   const detailMetrics = useMemo(() => [
     ['Em negociação', currency(m.negotiation)], ['Faturamento', currency(m.revenue)], ['Ticket médio', currency(m.averageTicket)],
-    ...(canViewMetaInvestment ? [
+    ...(canViewCommercialFinancials ? [
       ['ROI', percent(m.roi)], ['ROAS', `${Number(m.roas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}x`],
       ['Custo por reunião', currency(m.costPerMeeting)], ['Custo por reunião qualificada', currency(m.costPerQualifiedMeeting)],
     ] : []),
@@ -115,7 +115,7 @@ export default function CommercialDashboardPage() {
     ['Conversão por reuniões qualificadas', percent(m.conversionQualifiedMeetings)], ['Taxa de agendamento', percent(m.schedulingRate)],
     ['Agendamento qualificado', percent(m.qualifiedSchedulingRate)], ['No-show', String(m.noShow || 0)],
     ['Reuniões desqualificadas', String(m.disqualifiedMeetings || 0)], ['Tempo médio de fechamento', `${Number(m.averageCloseDays || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} dias`],
-  ], [canViewMetaInvestment, m]);
+  ], [canViewCommercialFinancials, m]);
 
   return (
     <div>
@@ -130,7 +130,7 @@ export default function CommercialDashboardPage() {
       {error && <div className="kh-inline-error">{error}</div>}
       {data?.meta_error && <div className="kh-inline-error">{data.meta_error}</div>}
 
-      <section className={`kh-kpi-grid ${canViewMetaInvestment ? '' : 'restricted'}`} aria-label="Indicadores principais">
+      <section className={`kh-kpi-grid ${canViewCommercialFinancials ? '' : 'restricted'}`} aria-label="Indicadores principais">
         {primary.map((item) => <article key={item.label} className={`kh-kpi ${item.tone}`}><div className="kh-kpi-icon"><item.icon size={19} /></div><span>{item.label}</span><strong>{loading ? '—' : item.value}</strong><small>{item.helper}</small></article>)}
       </section>
 

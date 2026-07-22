@@ -68,7 +68,9 @@ export async function requireCommercialUser(
     return { error: NextResponse.json({ error: 'Acao restrita ao coordenador comercial.' }, { status: 403 }) };
   }
 
-  const canViewCommercialFinancials = role === 'coordenador' || canViewMetaInvestment;
+  // Acesso financeiro pertence ao coordenador da operacao. Nunca herdar a
+  // permissao do admin original quando ele estiver visualizando um integrante.
+  const canViewCommercialFinancials = role === 'coordenador';
   return { user: base.user, profile: base.profile, commercialRole: role, canViewCommercialFinancials, canViewMetaInvestment, isDevOps } as CommercialGuard;
 }
 

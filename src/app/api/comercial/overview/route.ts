@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     .order('data_entrada');
   leadQuery = scopedQuery(leadQuery, guard.commercialRole, guard.profile.id);
 
-  const investmentQuery = guard.canViewMetaInvestment
+  const investmentQuery = guard.canViewCommercialFinancials
     ? supabaseAdmin.from('comercial_investimentos').select('data,valor').gte('data', start).lte('data', end)
     : Promise.resolve({ data: [], error: null });
   const [leadResult, investmentResult, memberResult] = await Promise.all([
@@ -83,7 +83,7 @@ export async function GET(request: Request) {
     if (!LOST_STATES.has(normalized(lead.status))) current.active += 1;
     stateMap.set(state, current);
   });
-  const metaInvestment = guard.canViewMetaInvestment ? await fetchKriptoMetaInvestment(start, end) : { rows: null, error: null };
+  const metaInvestment = guard.canViewCommercialFinancials ? await fetchKriptoMetaInvestment(start, end) : { rows: null, error: null };
   const metaRows = metaInvestment.rows;
   const investmentRows: Array<{ data: string; valor: number }> = metaRows
     ? metaRows.map((row: { date: string; value: number }) => ({ data: row.date, valor: row.value }))
