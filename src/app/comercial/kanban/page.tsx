@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CalendarDays, CalendarPlus, ChevronDown, ChevronUp, GripVertical, MessageSquare, Paperclip, Plus, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import CommercialLeadModal from '@/components/commercial/CommercialLeadModal';
@@ -29,6 +30,7 @@ function getPresetRange(preset: DatePreset) {
 
 export default function CommercialKanbanPage() {
   const { api, members, role, canViewCommercialFinancials } = useCommercial();
+  const router = useRouter();
   const [leads, setLeads] = useState<CommercialLead[]>([]);
   const [stages, setStages] = useState<CommercialStage[]>(COMMERCIAL_STAGES);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,7 @@ export default function CommercialKanbanPage() {
   function openLeadInbox(event: React.MouseEvent, lead: CommercialLead) {
     event.stopPropagation();
     const params = new URLSearchParams({ lead: lead.id, telefone: lead.telefone || '' });
-    window.location.href = `/comercial/inbox?${params.toString()}`;
+    router.push(`/comercial/inbox?${params.toString()}`);
   }
 
   function toggleLeadDetails(lead: CommercialLead) {
