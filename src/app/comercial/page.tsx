@@ -114,7 +114,6 @@ export default function CommercialDashboardPage() {
   // This effect keeps dashboard metrics synchronized with the active filters.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { const timer = window.setInterval(() => void load(), 30_000); return () => window.clearInterval(timer); }, [load]);
 
   function openPeriod() {
     setDraftPreset(datePreset); setDraftStart(start); setDraftEnd(end); setPeriodOpen((current) => !current);
