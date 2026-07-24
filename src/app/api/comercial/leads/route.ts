@@ -85,10 +85,18 @@ export async function PATCH(request: Request) {
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'Lead obrigatorio.' }, { status: 400 });
 
-  let check = supabaseAdmin.from('comercial_leads').select('id,sdr_id,closer_id').eq('id', id);
+  let check = supabaseAdmin.from('comercial_leads').select('id,sdr_id,closer_id,status').eq('id', id);
   check = scopedQuery(check, guard.commercialRole, guard.profile.id);
   const { data: allowed } = await check.maybeSingle();
   if (!allowed) return NextResponse.json({ error: 'Lead nao encontrado ou sem permissao.' }, { status: 404 });
+
+  const targetStatus = String(body.status || '').trim();
+  const normalizedStatus = targetStatus.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const isScheduledStage = normalizedStatus.includes('reunio') && normalizedStatus.includes('agend');
+  const scheduledAt = body.reuniao_agendada_at ? new Date(String(body.reuniao_agendada_at)) : null;
+  if (isScheduledStage && (!scheduledAt || Number.isNaN(scheduledAt.getTime()))) {
+    return NextResponse.json({ error: 'Informe a data e o horario da reuniao antes de mover o lead.' }, { status: 400 });
+  }
 
   const allowedFields = [
     'nome', 'telefone', 'email', 'empresa', 'estado', 'origem', 'campanha', 'ja_investiu_trafego', 'faturamento_mensal',

@@ -8,6 +8,7 @@ import { currency, percent } from '@/lib/comercial';
 type Overview = {
   metrics: Record<string, number>;
   trend: Array<{ date: string; leads: number; mql: number; meetings: number; sales: number; revenue: number; investment: number }>;
+  weeklyMeetings?: Array<{ date: string; meetings: number }>;
   team: Array<{ id: string; role: string; name: string; photo: string | null; leads: number; mql: number; meetings: number; sales: number; revenue: number }>;
   states: Array<{ state: string; leads: number; active: number }>;
   campaigns?: string[];
@@ -62,7 +63,7 @@ function TrendChart({ rows }: { rows: Overview['trend'] }) {
   );
 }
 
-function WeeklyMeetingsChart({ rows }: { rows: Overview['trend'] }) {
+function WeeklyMeetingsChart({ rows }: { rows: Array<{ date: string; meetings: number }> }) {
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - (6 - index));
     const key = isoDate(date); const row = rows.find((item) => item.date === key);
@@ -196,7 +197,7 @@ export default function CommercialDashboardPage() {
       </section>
 
       <section className="kh-live-grid">
-        <article className="kh-panel kh-live-meetings"><div className="kh-panel-header"><div><span>Atualização automática a cada 30 segundos</span><h2>Reuniões da semana</h2></div><span className="kh-live-dot">Ao vivo</span></div><WeeklyMeetingsChart rows={data?.trend || []} /></article>
+        <article className="kh-panel kh-live-meetings"><div className="kh-panel-header"><div><span>Atualização automática a cada 30 segundos</span><h2>Reuniões da semana</h2></div><span className="kh-live-dot">Ao vivo</span></div><WeeklyMeetingsChart rows={data?.weeklyMeetings || []} /></article>
         <article className="kh-panel kh-origin-panel"><div className="kh-panel-header"><div><span>Origem geográfica dos leads</span><h2>Leads por estado</h2></div><span>{data?.states?.reduce((sum, item) => sum + item.leads, 0) || 0} mapeados</span></div><StateMap states={data?.states || []} selected={selectedState} onSelect={setSelectedState} />{selectedStateData ? <div className="kh-state-detail"><strong>{selectedStateData.state}</strong><span>{selectedStateData.leads} leads recebidos</span><b>{selectedStateData.active} ativos na Orion</b></div> : <div className="kh-state-hint">Selecione um estado para ver os leads recebidos e os que continuam ativos.</div>}</article>
       </section>
 

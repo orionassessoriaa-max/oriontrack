@@ -108,6 +108,16 @@ export async function GET(request: Request) {
   if (leadResult.error) return NextResponse.json({ error: leadResult.error.message }, { status: 500 });
 
   const leads = leadResult.data || [];
+  const weekStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 6)).toISOString().slice(0, 10);
+  const weekEnd = now.toISOString().slice(0, 10);
+  let weeklyMeetingQuery = supabaseAdmin
+    .from('comercial_leads')
+    .select('reuniao_agendada_at')
+    .not('reuniao_agendada_at', 'is', null)
+    .gte('reuniao_agendada_at', `${weekStart}T00:00:00-03:00`)
+    .lte('reuniao_agendada_at', `${weekEnd}T23:59:59-03:00`);
+  weeklyMeetingQuery = scopedQuery(weeklyMeetingQuery, guard.commercialRole, guard.profile.id);
+  const { data: weeklyMeetingRows } = await weeklyMeetingQuery;
   const stateMap = new Map<string, { state: string; leads: number; active: number }>();
   leads.forEach((lead) => {
     const state = String(lead.estado || '').trim().toUpperCase();
@@ -155,7 +165,10 @@ export async function GET(request: Request) {
     const day = ensureDay(String(lead.data_entrada).slice(0, 10));
     day.leads += 1;
     if (lead.lead_qualificado) day.mql += 1;
-    if (lead.reuniao_agendada_at) day.meetings += 1;
+    if (lead.reuniao_agendada_at) {
+      const meetingDay = ensureDay(String(lead.reuniao_agendada_at).slice(0, 10));
+      meetingDay.meetings += 1;
+    }
     if (lead.status === 'Negócio fechado' || Number(lead.valor_fechado || 0) > 0) {
       day.sales += 1;
       day.revenue += Number(lead.valor_fechado || 0);
@@ -226,6 +239,14 @@ export async function GET(request: Request) {
   return NextResponse.json({
     metrics,
     trend,
+    weeklyMeetings: (weeklyMeetingRows || []).reduce((rows: Array<{ date: string; meetings: number }>, lead: { reuniao_agendada_at: string | null }) => {
+      const date = String(lead.reuniao_agendada_at || '').slice(0, 10);
+      if (!date) return rows;
+      const row = rows.find((item) => item.date === date);
+      if (row) row.meetings += 1;
+      else rows.push({ date, meetings: 1 });
+      return rows;
+    }, []).sort((a, b) => a.date.localeCompare(b.date)),
     states: Array.from(stateMap.values()).sort((a, b) => b.leads - a.leads),
     campaigns: Array.from(new Set([
       ...activeCampaigns,

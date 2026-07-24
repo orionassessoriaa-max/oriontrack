@@ -415,6 +415,10 @@
 .kh-check input { width: 17px !important; min-height: 17px !important; height: 17px; accent-color: var(--kh-blue); }
 .kh-check span { margin: 0 !important; }
 .kh-modal-sheet > footer { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--kh-line); padding: 14px 20px; }
+.kh-meeting-modal { width: min(460px, 100%); }
+.kh-meeting-form { display: grid; gap: 16px; padding: 20px; }
+.kh-meeting-form p { margin: 0; color: var(--kh-muted); font-size: 12px; line-height: 1.55; }
+.kh-meeting-form label { display: grid; gap: 7px; color: var(--kh-text); font-size: 11px; font-weight: 800; }
 @media (max-width: 620px) { .kh-form-grid { grid-template-columns: 1fr; } .kh-form-grid .wide { grid-column: auto; } .kh-kanban-column { width: 88vw; min-width: 88vw; } .kh-search { min-width: 100%; } .kh-lead-overlay { padding: 10px; }.kh-lead-modal { max-height: calc(100dvh - 20px); padding: 16px; }.kh-lead-modal-grid { grid-template-columns: 1fr 1fr; }.kh-goal-form, .kh-goal-form .kh-input, .kh-goal-form .kh-button { width: 100%; }.kh-goal-progress { position: static; width: auto; }.kh-goal-timeline { margin-top: 18px; }.kh-goal-summary { grid-template-columns: 1fr; gap: 12px; }.kh-goal-summary > div { border-right: 0; border-bottom: 1px solid rgba(83,142,226,.2); padding: 0 0 10px; }.kh-goal-summary > div:last-child { border-bottom: 0; padding-bottom: 0; } }
 
 .kh-sheet-filters { min-height: 64px; display: grid; grid-template-columns: minmax(260px, 1fr) 190px 220px auto; align-items: center; gap: 10px; border: 0; background: transparent; padding: 10px 0; }

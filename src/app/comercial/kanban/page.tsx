@@ -55,6 +55,9 @@ export default function CommercialKanbanPage() {
   const [interactionText, setInteractionText] = useState('');
   const [interactionFile, setInteractionFile] = useState<File | null>(null);
   const [interactionSaving, setInteractionSaving] = useState(false);
+  const [meetingMove, setMeetingMove] = useState<{ leadId: string; status: string } | null>(null);
+  const [meetingAt, setMeetingAt] = useState('');
+  const [meetingSaving, setMeetingSaving] = useState(false);
 
   const load = useCallback(async () => { setLoading(true); try { const payload = await api('/api/comercial/leads'); setLeads(payload.leads || []); } finally { setLoading(false); } }, [api]);
   const loadStages = useCallback(async () => { try { const payload = await api('/api/comercial/stages'); if (payload.stages?.length) setStages(payload.stages); } catch { /* fallback ate a migration ser aplicada */ } }, [api]);
@@ -72,9 +75,32 @@ export default function CommercialKanbanPage() {
   const grouped = useMemo(() => Object.fromEntries(stages.map((stage) => [stage.id, visible.filter((lead) => lead.status === stage.id)])), [stages, visible]);
 
   async function moveLead(id: string, status: string) {
+    const normalizedStatus = status.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (normalizedStatus.includes('reunio') && normalizedStatus.includes('agend')) {
+      setMeetingMove({ leadId: id, status });
+      setMeetingAt('');
+      return;
+    }
     setMovingId(id);
     setLeads((current) => current.map((lead) => lead.id === id ? { ...lead, status } : lead));
     try { await api('/api/comercial/leads', { method: 'PATCH', body: JSON.stringify({ id, status }) }); } catch { await load(); } finally { setMovingId(null); }
+  }
+  async function confirmMeetingMove(event: React.FormEvent) {
+    event.preventDefault();
+    if (!meetingMove || !meetingAt) return;
+    setMeetingSaving(true);
+    setMovingId(meetingMove.leadId);
+    try {
+      const scheduledAt = new Date(meetingAt).toISOString();
+      await api('/api/comercial/leads', { method: 'PATCH', body: JSON.stringify({ id: meetingMove.leadId, status: meetingMove.status, reuniao_agendada_at: scheduledAt }) });
+      setLeads((current) => current.map((lead) => lead.id === meetingMove.leadId ? { ...lead, status: meetingMove.status, reuniao_agendada_at: scheduledAt } : lead));
+      setMeetingMove(null);
+    } catch (error) {
+      setStageError(error instanceof Error ? error.message : 'Nao foi possivel agendar a reuniao.');
+    } finally {
+      setMeetingSaving(false);
+      setMovingId(null);
+    }
   }
   async function saveStages(next: CommercialStage[]) {
     setStages(next);
@@ -164,6 +190,7 @@ export default function CommercialKanbanPage() {
         })}
       </div>
       {expandedLeadId && (() => { const lead = leads.find((item) => item.id === expandedLeadId); if (!lead) return null; const ownerId = lead.closer_id || lead.sdr_id || ''; return <div className="kh-lead-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setExpandedLeadId(null); }}><section className="kh-lead-modal" role="dialog" aria-modal="true" aria-label={`Detalhes de ${lead.nome}`}><header><div><span className="kh-eyebrow">Lead comercial</span><h2>{lead.nome}</h2><p>{lead.empresa || 'Sem empresa informada'} · {memberMap.get(ownerId)?.nome || 'Sem responsavel'}</p></div><button type="button" className="kh-icon-button" aria-label="Fechar detalhes" onClick={() => setExpandedLeadId(null)}><X size={18} /></button></header><div className="kh-lead-modal-grid"><div><small>Telefone</small><strong>{lead.telefone || 'Não informado'}</strong></div><div><small>E-mail</small><strong>{lead.email || 'Não informado'}</strong></div><div><small>Origem</small><strong>{lead.origem || 'Não informado'}</strong></div><div><small>Status</small><strong>{lead.status}</strong></div><div><small>Entrada</small><strong>{lead.data_entrada ? new Date(lead.data_entrada).toLocaleString('pt-BR') : 'Não informado'}</strong></div><div><small>Prioridade</small><strong>{lead.prioridade || 'Não informada'}</strong></div></div><section className="kh-interactions"><div className="kh-card-task-title"><MessageSquare size={15} /><strong>Comentários e prints</strong></div><form className="kh-interaction-form" onSubmit={(event) => void addInteraction(event, lead.id)}><textarea className="kh-textarea" value={interactionText} onChange={(event) => setInteractionText(event.target.value)} placeholder="Registrar comentário sobre este lead..." /><div><label className="kh-file-button" htmlFor="lead-attachment"><Paperclip size={14} /> {interactionFile ? interactionFile.name : 'Anexar print'}</label><input id="lead-attachment" type="file" accept="image/*" onChange={(event) => setInteractionFile(event.target.files?.[0] || null)} /><button className="kh-button primary" disabled={interactionSaving}>{interactionSaving ? 'Salvando...' : 'Adicionar'}</button></div></form><div className="kh-interaction-list">{interactions.map((item) => <article key={item.id}><div><strong>{item.autor_nome}</strong><small>{new Date(item.created_at).toLocaleString('pt-BR')}</small></div>{item.comentario && <p>{item.comentario}</p>}{item.anexo_url && <a href={item.anexo_url} target="_blank" rel="noreferrer"><img src={item.anexo_url} alt={item.anexo_nome || 'Print anexado'} /></a>}</article>)}{!interactions.length && <span>Nenhum comentário ou print registrado.</span>}</div></section><form className="kh-card-task-form" onSubmit={(event) => void createLeadTask(event, lead)}><div className="kh-card-task-title"><CalendarPlus size={15} /><strong>Criar tarefa</strong></div><input className="kh-input" value={taskForm.titulo} onChange={(event) => setTaskForm((current) => ({ ...current, titulo: event.target.value }))} placeholder="Ex: Ligar para o lead" required /><div className="kh-card-task-fields"><select className="kh-select" value={taskForm.responsavel_id} onChange={(event) => setTaskForm((current) => ({ ...current, responsavel_id: event.target.value }))} disabled={role !== 'coordenador'} aria-label="Responsável">{members.filter((member) => member.ativo).map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select><input className="kh-input" type="datetime-local" value={taskForm.vencimento} onChange={(event) => setTaskForm((current) => ({ ...current, vencimento: event.target.value }))} aria-label="Prazo" /><select className="kh-select" value={taskForm.prioridade} onChange={(event) => setTaskForm((current) => ({ ...current, prioridade: event.target.value }))} aria-label="Prioridade"><option value="baixa">Baixa</option><option value="normal">Normal</option><option value="alta">Alta</option></select></div><textarea className="kh-textarea" value={taskForm.descricao} onChange={(event) => setTaskForm((current) => ({ ...current, descricao: event.target.value }))} placeholder="Observação opcional" /><button className="kh-button primary" disabled={taskSaving === lead.id}><CalendarPlus size={14} />{taskSaving === lead.id ? 'Salvando...' : 'Criar tarefa'}</button></form></section></div>; })()}
+      {meetingMove && <div className="kh-modal" role="dialog" aria-modal="true" aria-labelledby="meeting-modal-title"><button type="button" className="kh-modal-scrim" aria-label="Fechar" onClick={() => setMeetingMove(null)} /><form className="kh-modal-sheet kh-meeting-modal" onSubmit={(event) => void confirmMeetingMove(event)}><header><div><span>Reunião agendada</span><h2 id="meeting-modal-title">Informe data e horário</h2></div><button type="button" aria-label="Fechar" onClick={() => setMeetingMove(null)}><X size={18} /></button></header><div className="kh-meeting-form"><p>Informe quando a reunião acontecerá. O lead só será movido para esta etapa depois que o agendamento for registrado.</p><label><span>Data e horário da reunião</span><input className="kh-input" type="datetime-local" value={meetingAt} onChange={(event) => setMeetingAt(event.target.value)} required autoFocus /></label></div><footer><button type="button" className="kh-button" onClick={() => setMeetingMove(null)}>Cancelar</button><button type="submit" className="kh-button primary" disabled={meetingSaving}>{meetingSaving ? <RefreshCw size={15} className="kh-spin" /> : <CalendarPlus size={15} />} {meetingSaving ? 'Salvando...' : 'Confirmar agendamento'}</button></footer></form></div>}
       <CommercialLeadModal open={modalOpen} members={members} stages={stages} initialStatus={initialStatus} canViewFinancials={canViewCommercialFinancials} onClose={() => setModalOpen(false)} onSave={async (data) => { await api('/api/comercial/leads', { method: 'POST', body: JSON.stringify(data) }); await load(); }} />
     </div>
   );
