@@ -12,6 +12,24 @@ function normalized(value: unknown) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
+const DDD_STATE: Record<string, string> = {
+  '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP', '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
+  '21': 'RJ', '22': 'RJ', '24': 'RJ', '27': 'ES', '28': 'ES',
+  '31': 'MG', '32': 'MG', '33': 'MG', '34': 'MG', '35': 'MG', '37': 'MG', '38': 'MG',
+  '41': 'PR', '42': 'PR', '43': 'PR', '44': 'PR', '45': 'PR', '46': 'PR',
+  '47': 'SC', '48': 'SC', '49': 'SC', '51': 'RS', '53': 'RS', '54': 'RS', '55': 'RS',
+  '61': 'DF', '62': 'GO', '63': 'TO', '64': 'GO', '65': 'MT', '66': 'MT', '67': 'MS',
+  '68': 'AC', '69': 'RO', '71': 'BA', '73': 'BA', '74': 'BA', '75': 'BA', '77': 'BA', '79': 'SE',
+  '81': 'PE', '82': 'AL', '83': 'PB', '84': 'RN', '85': 'CE', '86': 'PI', '87': 'PE', '88': 'CE', '89': 'PI',
+  '91': 'PA', '92': 'AM', '93': 'PA', '94': 'PA', '95': 'RR', '96': 'AP', '97': 'AM', '98': 'MA', '99': 'MA',
+};
+
+function stateFromPhone(phone: unknown) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const national = digits.startsWith('55') && digits.length >= 12 ? digits.slice(2) : digits;
+  return DDD_STATE[national.slice(0, 2)] || null;
+}
+
 function scopedQuery(query: any, role: string, profileId: string) {
   if (role === 'sdr') return query.eq('sdr_id', profileId);
   if (role === 'closer') return query.eq('closer_id', profileId);
@@ -120,7 +138,7 @@ export async function GET(request: Request) {
   const { data: weeklyMeetingRows } = await weeklyMeetingQuery;
   const stateMap = new Map<string, { state: string; leads: number; active: number }>();
   leads.forEach((lead) => {
-    const state = String(lead.estado || '').trim().toUpperCase();
+    const state = String(lead.estado || stateFromPhone(lead.telefone) || '').trim().toUpperCase();
     if (!/^[A-Z]{2}$/.test(state)) return;
     const current = stateMap.get(state) || { state, leads: 0, active: 0 };
     current.leads += 1;
