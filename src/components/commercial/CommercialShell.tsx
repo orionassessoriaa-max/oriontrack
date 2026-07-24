@@ -27,6 +27,25 @@ type CommercialContextValue = {
 
 const CommercialContext = createContext<CommercialContextValue | null>(null);
 
+type CommercialAccessPayload = {
+  role: CommercialRole | null;
+  canViewCommercialFinancials?: boolean;
+  members?: CommercialMember[];
+  currentProfileId?: string | null;
+  canViewMetaInvestment?: boolean;
+  isDevOps?: boolean;
+};
+
+type CommercialAccessCacheEntry = {
+  key: string;
+  payload: CommercialAccessPayload;
+};
+
+// Keep the last authorized access result between route remounts. The API is
+// still revalidated on every entry, but navigation no longer blanks the app.
+const commercialAccessCache = new Map<string, CommercialAccessCacheEntry>();
+let lastCommercialAccess: CommercialAccessCacheEntry | null = null;
+
 export function useCommercial() {
   const value = useContext(CommercialContext);
   if (!value) throw new Error('useCommercial deve ser usado dentro do painel comercial.');
@@ -48,18 +67,28 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const { user, actualProfile, loading: authLoading, signOut } = useAuth();
+  const initialCachedAccess = lastCommercialAccess?.payload;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [role, setRole] = useState<CommercialRole | null>(null);
-  const [canViewCommercialFinancials, setCanViewCommercialFinancials] = useState(false);
-  const [members, setMembers] = useState<CommercialMember[]>([]);
-  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
-  const [canViewMetaInvestment, setCanViewMetaInvestment] = useState(false);
-  const [isDevOps, setIsDevOps] = useState(false);
+  const [role, setRole] = useState<CommercialRole | null>(initialCachedAccess?.role || null);
+  const [canViewCommercialFinancials, setCanViewCommercialFinancials] = useState(Boolean(initialCachedAccess?.canViewCommercialFinancials));
+  const [members, setMembers] = useState<CommercialMember[]>(initialCachedAccess?.members || []);
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(initialCachedAccess?.currentProfileId || null);
+  const [canViewMetaInvestment, setCanViewMetaInvestment] = useState(Boolean(initialCachedAccess?.canViewMetaInvestment));
+  const [isDevOps, setIsDevOps] = useState(Boolean(initialCachedAccess?.isDevOps));
   const [viewingCommercialProfileId, setViewingCommercialProfileId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialCachedAccess);
   const [error, setError] = useState<string | null>(null);
   const canViewCommercialAsUser = actualProfile?.tipo_usuario === 'admin' && Boolean(actualProfile?.is_admin_master);
+
+  const applyAccess = useCallback((payload: CommercialAccessPayload) => {
+    setRole(payload.role);
+    setCanViewCommercialFinancials(Boolean(payload.canViewCommercialFinancials));
+    setMembers(payload.members || []);
+    setCurrentProfileId(payload.currentProfileId || null);
+    setCanViewMetaInvestment(Boolean(payload.canViewMetaInvestment));
+    setIsDevOps(Boolean(payload.isDevOps));
+  }, []);
 
   const api = useCallback(async (url: string, init: RequestInit = {}) => {
     const { data } = await import('@/lib/supabase/client').then(({ supabase }) => supabase.auth.getSession());
@@ -76,28 +105,38 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   }, [canViewCommercialAsUser, viewingCommercialProfileId]);
 
   const refreshAccess = useCallback(async () => {
-    setLoading(true);
+    const cacheKey = user ? `${user.id}:${viewingCommercialProfileId || ''}` : null;
+    const cached = cacheKey ? commercialAccessCache.get(cacheKey) : null;
+    // With cached access, refresh silently so the current page remains usable.
+    if (!cached) setLoading(true);
     setError(null);
     try {
       const payload = await api('/api/comercial/members');
-      setRole(payload.role);
-      setCanViewCommercialFinancials(Boolean(payload.canViewCommercialFinancials));
-      setMembers(payload.members || []);
-      setCurrentProfileId(payload.currentProfileId || null);
-      setCanViewMetaInvestment(Boolean(payload.canViewMetaInvestment));
-      setIsDevOps(Boolean(payload.isDevOps));
+      applyAccess(payload);
+      if (cacheKey) {
+        const entry = { key: cacheKey, payload };
+        commercialAccessCache.set(cacheKey, entry);
+        lastCommercialAccess = entry;
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao abrir o comercial.');
+      // A transient refresh failure must not blank an already authorized view.
+      if (!cached) setError(err instanceof Error ? err.message : 'Erro ao abrir o comercial.');
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, applyAccess, user, viewingCommercialProfileId]);
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) { router.replace('/login'); return; }
+    const cacheKey = `${user.id}:${viewingCommercialProfileId || ''}`;
+    const cached = commercialAccessCache.get(cacheKey);
+    if (cached) {
+      applyAccess(cached.payload);
+      setLoading(false);
+    }
     void refreshAccess();
-  }, [authLoading, refreshAccess, router, user, viewingCommercialProfileId]);
+  }, [applyAccess, authLoading, refreshAccess, router, user, viewingCommercialProfileId]);
 
   useEffect(() => {
     if (!canViewCommercialAsUser || typeof window === 'undefined') return;
