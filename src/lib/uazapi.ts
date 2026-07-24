@@ -64,7 +64,14 @@ export function uazapiInstanceName(profileId: string) {
   return `${prefix}_${profileId.replace(/-/g, '')}`;
 }
 
-export const COMMERCIAL_MASTER_INSTANCE = process.env.COMMERCIAL_UAZAPI_INSTANCE || 'orion_commercial_sender';
+// A IA comercial usa o WhatsApp proprio da Orion, nunca a instancia de uma corretora.
+// O fallback corresponde a instancia oficial provisionada no UAZAPI.
+const ORION_COMMERCIAL_INSTANCE = 'orion_7091766bbc444ad7b6c4caa2461bf26b';
+const configuredCommercialInstance = String(process.env.COMMERCIAL_UAZAPI_INSTANCE || '').trim();
+export const COMMERCIAL_MASTER_INSTANCE =
+  configuredCommercialInstance && configuredCommercialInstance !== 'orion_commercial_sender'
+    ? configuredCommercialInstance
+    : ORION_COMMERCIAL_INSTANCE;
 
 export function profileIdFromUazapiInstance(instance?: string | null) {
   const prefix = process.env.UAZAPI_INSTANCE_PREFIX || 'orion';
@@ -89,7 +96,9 @@ async function getUazapiInstanceToken(baseUrl: string, globalToken: string, inst
     throw new Error(payload?.message || payload?.error || 'Nao consegui listar instancias do UAZAPI.');
   }
 
-  const instance = asArray(payload).find((item) => readInstanceName(item) === instanceName);
+  const instance = asArray(payload).find(
+    (item) => readInstanceName(item).toLowerCase() === instanceName.toLowerCase()
+  );
   const token = readInstanceToken(instance);
   if (!token) {
     throw new Error(`Instancia UAZAPI ${instanceName} ainda nao foi criada ou nao possui token.`);

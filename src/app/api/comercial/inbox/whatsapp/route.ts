@@ -24,7 +24,7 @@ async function statusForInstance(instance: string) {
   try {
     const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
     const list = Array.isArray(payload) ? payload : payload?.data || payload?.instances || [];
-    const found = list.find((item: any) => String(item?.name || item?.instanceName || item?.instance || item?.session || '') === instance);
+    const found = list.find((item: any) => String(item?.name || item?.instanceName || item?.instance || item?.session || '').toLowerCase() === instance.toLowerCase());
     return found ? stateFromPayload(found) : 'close';
   } catch {
     return 'close';
