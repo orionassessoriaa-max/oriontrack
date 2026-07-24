@@ -31,20 +31,29 @@ async function fetchKriptoMetaInvestment(start: string, end: string) {
   url.searchParams.set('limit', '500');
   url.searchParams.set('access_token', token);
 
-  const response = await fetch(url.toString(), { next: { revalidate: 300 } });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) {
-    const message = String(payload?.error?.message || '').toLowerCase();
-    if (String(payload?.error?.code || '') === '190' || message.includes('access token')) {
-      return { rows: null, error: 'Token Meta expirado ou invalido. Gere um novo token para atualizar os valores.' };
+  const rows: Array<{ date: string; value: number; campaign: string }> = [];
+  let nextUrl: string | null = url.toString();
+  let lastPayload: any = {};
+  for (let page = 0; nextUrl && page < 50; page += 1) {
+    const response: Response = await fetch(nextUrl, { next: { revalidate: 300 } });
+    const payload: any = await response.json().catch(() => ({}));
+    lastPayload = payload;
+    if (!response.ok || payload.error) {
+      const message = String(payload?.error?.message || '').toLowerCase();
+      if (String(payload?.error?.code || '') === '190' || message.includes('access token')) {
+        return { rows: null, error: 'Token Meta expirado ou invalido. Gere um novo token para atualizar os valores.' };
+      }
+      return { rows: null, error: payload?.error?.message || 'Nao foi possivel consultar o investimento da conta Meta.' };
     }
-    return { rows: null, error: payload?.error?.message || 'Nao foi possivel consultar o investimento da conta Meta.' };
+    rows.push(...(payload.data || []).map((row: any) => ({
+      date: String(row.date_start),
+      value: Number(row.spend || 0),
+      campaign: String(row.campaign_name || 'Sem campanha'),
+    })));
+    nextUrl = payload?.paging?.next ? String(payload.paging.next) : null;
   }
 
-  return {
-    rows: (payload.data || []).map((row: any) => ({ date: String(row.date_start), value: Number(row.spend || 0), campaign: String(row.campaign_name || 'Sem campanha') })),
-    error: null,
-  };
+  return { rows, error: lastPayload?.error?.message || null };
 }
 
 async function fetchKriptoActiveCampaigns() {
@@ -55,13 +64,19 @@ async function fetchKriptoActiveCampaigns() {
   url.searchParams.set('fields', 'name,status,effective_status');
   url.searchParams.set('limit', '500');
   url.searchParams.set('access_token', token);
-  const response = await fetch(url.toString(), { next: { revalidate: 300 } });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) return [];
-  return (payload.data || [])
-    .filter((campaign: any) => campaign.status === 'ACTIVE' || campaign.effective_status === 'ACTIVE')
-    .map((campaign: any) => String(campaign.name || '').trim())
-    .filter(Boolean);
+  const campaigns: string[] = [];
+  let nextUrl: string | null = url.toString();
+  for (let page = 0; nextUrl && page < 20; page += 1) {
+    const response: Response = await fetch(nextUrl, { next: { revalidate: 300 } });
+    const payload: any = await response.json().catch(() => ({}));
+    if (!response.ok || payload.error) return campaigns;
+    campaigns.push(...(payload.data || [])
+      .filter((campaign: any) => campaign.status === 'ACTIVE' || campaign.effective_status === 'ACTIVE')
+      .map((campaign: any) => String(campaign.name || '').trim())
+      .filter(Boolean));
+    nextUrl = payload?.paging?.next ? String(payload.paging.next) : null;
+  }
+  return campaigns;
 }
 
 export async function GET(request: Request) {
