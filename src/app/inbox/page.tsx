@@ -339,6 +339,7 @@ export default function BrokerInboxPage() {
   const [taskDueTime, setTaskDueTime] = useState('09:00');
   const [taskPriority, setTaskPriority] = useState('normal');
   const [taskResponsibleProfileId, setTaskResponsibleProfileId] = useState('');
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [savingTask, setSavingTask] = useState(false);
 
   // History states
@@ -1574,25 +1575,28 @@ export default function BrokerInboxPage() {
     setSavingTask(true);
     try {
       const responsibleProfileId = taskResponsibleProfileId || leadInfo?.responsavel_profile_id || profile?.id || null;
-      const { error } = await supabase.from('lead_tarefas').insert([{
+      const taskData = {
         lead_id: selectedConversation.lead_id,
         corretor_id: selectedConversation.corretor_id,
         responsavel_profile_id: responsibleProfileId,
         titulo: taskTitle.trim(),
         vencimento: vencimentoDate ? vencimentoDate.toISOString() : null,
         prioridade: taskPriority,
-        status: 'pendente'
-      }]);
+      };
+      const { error } = editingTaskId
+        ? await supabase.from('lead_tarefas').update(taskData).eq('id', editingTaskId)
+        : await supabase.from('lead_tarefas').insert([{ ...taskData, status: 'pendente' }]);
       if (error) throw error;
 
       await logLeadActivity({
         tipo: 'tarefa',
-        titulo: 'Tarefa criada',
+        titulo: editingTaskId ? 'Tarefa editada' : 'Tarefa criada',
         descricao: `${taskTitle.trim()}${vencimentoDate ? ` | Prazo: ${formatActivityDate(vencimentoDate.toISOString())}` : ''}`,
       });
 
-      alert('Tarefa agendada com sucesso!');
+      alert(editingTaskId ? 'Tarefa atualizada com sucesso!' : 'Tarefa agendada com sucesso!');
       setShowTaskModal(false);
+      setEditingTaskId(null);
       setTaskTitle('');
       setTaskDueDate('');
       setTaskDueTime('09:00');
@@ -1605,6 +1609,17 @@ export default function BrokerInboxPage() {
     } finally {
       setSavingTask(false);
     }
+  };
+
+  const openTaskEditor = (task: LeadTask) => {
+    const due = task.vencimento ? new Date(task.vencimento) : null;
+    setEditingTaskId(task.id);
+    setTaskTitle(task.titulo);
+    setTaskDueDate(due && !Number.isNaN(due.getTime()) ? due.toISOString().slice(0, 10) : '');
+    setTaskDueTime(due && !Number.isNaN(due.getTime()) ? due.toTimeString().slice(0, 5) : '09:00');
+    setTaskPriority(task.prioridade || 'normal');
+    setTaskResponsibleProfileId(task.responsavel_profile_id || '');
+    setShowTaskModal(true);
   };
 
   const loadHistory = async () => {
@@ -2360,6 +2375,12 @@ export default function BrokerInboxPage() {
                           if (!selectedConversation?.lead_id) {
                             alert('Esta conversa não possui um Lead associado no CRM.');
                           } else {
+                            setEditingTaskId(null);
+                            setTaskTitle('');
+                            setTaskDueDate('');
+                            setTaskDueTime('09:00');
+                            setTaskPriority('normal');
+                            setTaskResponsibleProfileId('');
                             setShowTaskModal(true);
                           }
                         }} 
@@ -2852,20 +2873,34 @@ export default function BrokerInboxPage() {
 
                 {/* Follow-up / Tasks */}
                 <div className="space-y-3 shrink-0 border-b border-white/5 pb-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Follow-up</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!selectedConversation?.lead_id) return;
-                        window.location.href = `/crm?lead=${encodeURIComponent(selectedConversation.lead_id)}`;
-                      }}
-                      disabled={!selectedConversation?.lead_id}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/20 transition-all cursor-pointer"
-                    >
-                      <ExternalLink size={11} />
-                      Abrir no Kanban
-                    </button>
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedConversation?.lead_id) return;
+                          window.location.href = `/tarefas?lead=${encodeURIComponent(selectedConversation.lead_id)}`;
+                        }}
+                        disabled={!selectedConversation?.lead_id}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/20 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <CheckCircle2 size={11} />
+                        Ver tarefas
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedConversation?.lead_id) return;
+                          window.location.href = `/crm?lead=${encodeURIComponent(selectedConversation.lead_id)}`;
+                        }}
+                        disabled={!selectedConversation?.lead_id}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/20 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <ExternalLink size={11} />
+                        Abrir no Kanban
+                      </button>
+                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.04] px-3 py-2.5">
@@ -2881,7 +2916,7 @@ export default function BrokerInboxPage() {
                             {highlightedTask.prioridade ? ` · ${highlightedTask.prioridade}` : ''}
                           </p>
                         </div>
-                        <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-cyan-400" />
+                        <button type="button" onClick={() => openTaskEditor(highlightedTask)} className="shrink-0 rounded-lg border border-cyan-500/20 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/10" title="Editar tarefa">Editar</button>
                       </div>
                     ) : (
                       <p className="text-[10px] font-bold text-slate-500">Nenhuma tarefa registrada para este lead.</p>
@@ -3561,13 +3596,13 @@ export default function BrokerInboxPage() {
               <div className="flex items-center gap-3">
                 <Calendar size={20} className="text-cyan-400" />
                 <div>
-                  <h3 className="text-sm font-black text-white uppercase tracking-widest">Agendar Tarefa / Contato</h3>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest">{editingTaskId ? 'Editar tarefa' : 'Agendar Tarefa / Contato'}</h3>
                   <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Defina um lembrete para este lead no CRM</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowTaskModal(false)}
+                onClick={() => { setShowTaskModal(false); setEditingTaskId(null); }}
                 className="h-9 w-9 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X size={16} />
@@ -3640,7 +3675,7 @@ export default function BrokerInboxPage() {
             <div className="p-6 border-t border-white/5 bg-slate-950/20 flex gap-3 justify-end shrink-0">
               <button
                 type="button"
-                onClick={() => setShowTaskModal(false)}
+                onClick={() => { setShowTaskModal(false); setEditingTaskId(null); }}
                 className="px-5 py-2.5 rounded-xl bg-white/5 text-xs font-black uppercase tracking-wider text-slate-400 hover:bg-white/10 transition-all cursor-pointer"
               >
                 Cancelar
@@ -3651,7 +3686,7 @@ export default function BrokerInboxPage() {
                 className="px-5 py-2.5 rounded-xl bg-cyan-600 disabled:opacity-50 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-600/10 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center gap-2"
               >
                 {savingTask && <Loader2 size={12} className="animate-spin" />}
-                Agendar
+                {editingTaskId ? 'Salvar alteracoes' : 'Agendar'}
               </button>
             </div>
           </form>
