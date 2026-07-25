@@ -1,6 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
 import { DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
+import { hasRecentHumanOutbound, insertCommercialAiMessage, normalizeSdrText } from '@/lib/commercialInbox';
+import { registerAiOutbound } from '@/lib/leadAiAgent';
 
 type CommercialIncomingOptions = {
   leadId: string;
@@ -26,11 +28,11 @@ export async function continueCommercialSdrFromIncoming(options: CommercialIncom
     if (!lead) return { handled: false, reason: 'commercial_lead_not_found' };
     if (config?.ia_sdr_ativa === false) return { handled: false, reason: 'commercial_ai_disabled' };
 
-    const recentWindow = new Date(Date.now() - 90_000).toISOString();
-    const { data: recentOutbound } = await supabaseAdmin.from('whatsapp_mensagens')
-      .select('id').eq('conversa_id', options.conversationId).eq('direction', 'outbound')
-      .gte('created_at', recentWindow).limit(1).maybeSingle();
-    if (recentOutbound?.id) return { handled: false, reason: 'recent_reply_exists' };
+    // Trava apenas quando um humano respondeu agora; o eco das mensagens da
+    // propria IA nao pode calar o atendimento.
+    if (await hasRecentHumanOutbound(options.conversationId, 90_000)) {
+      return { handled: false, reason: 'recent_human_reply_exists' };
+    }
 
     const { data: history } = await supabaseAdmin.from('whatsapp_mensagens')
       .select('direction,remetente,mensagem,created_at').eq('conversa_id', options.conversationId)
@@ -71,17 +73,17 @@ Responda somente com a proxima mensagem que Aline deve enviar. Nao repita a aber
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload?.error?.message || 'A IA comercial nao conseguiu gerar a resposta.');
-    const reply = String(payload?.choices?.[0]?.message?.content || '').trim();
+    const reply = normalizeSdrText(String(payload?.choices?.[0]?.message?.content || ''));
     if (!reply) throw new Error('A IA comercial retornou uma resposta vazia.');
 
     const phone = normalizePhone(options.phone || lead.telefone);
+    registerAiOutbound(phone, reply);
     const providerPayload = await uazapiFetch('/send/text', {
       method: 'POST', body: JSON.stringify({ number: phone, text: reply, delay: 1200 }),
     }, { instanceName: COMMERCIAL_MASTER_INSTANCE });
-    await supabaseAdmin.from('whatsapp_mensagens').insert([{
-      conversa_id: options.conversationId, direction: 'outbound', remetente: 'Aline', mensagem: reply,
-      metadata: { ...(providerPayload || {}), ai_agent: 'commercial_sdr', instance: COMMERCIAL_MASTER_INSTANCE },
-    }]);
+    await insertCommercialAiMessage(options.conversationId, reply, {
+      ...(providerPayload || {}), instance: COMMERCIAL_MASTER_INSTANCE,
+    });
     const updatedAt = new Date().toISOString();
     await Promise.all([
       supabaseAdmin.from('whatsapp_conversas').update({ ultima_mensagem_at: updatedAt, updated_at: updatedAt }).eq('id', options.conversationId),

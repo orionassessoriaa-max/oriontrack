@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { continueCommercialSdrFromIncoming } from '@/lib/commercialSdrAgent';
+import { ensureCommercialConversation, findCommercialConversation } from '@/lib/commercialInbox';
 
 function readText(body: any) {
   return pickString(
@@ -1073,7 +1074,12 @@ export async function POST(request: Request) {
       profile = await findProfileById(commercialLead.created_by || commercialLead.sdr_id || commercialLead.closer_id);
     }
 
-    if (!profile?.corretor_id) {
+    // A operacao comercial nao tem corretora vinculada: os profiles do time
+    // comercial ficam sem corretor_id, entao o lead comercial precisa passar
+    // por aqui mesmo sem profile resolvido.
+    const commercialMode = Boolean(commercialLead);
+
+    if (!profile?.corretor_id && !commercialMode) {
       console.warn('[uazapi_webhook] Ignorado: nao consegui resolver profile da instancia/owner.', {
         instance,
         owner: readOwnerJid(body),
@@ -1205,7 +1211,7 @@ export async function POST(request: Request) {
     if (!message || !phone) {
       console.warn('[uazapi_webhook] Ignorado: mensagem ou telefone ausente.', {
         instance,
-        profile: profile.id,
+        profile: profile?.id || null,
         event,
         hasMessage: Boolean(message),
         hasPhone: Boolean(phone),
@@ -1222,12 +1228,14 @@ export async function POST(request: Request) {
     }
 
     if (!aiCustomerMessage) aiCustomerMessage = audioTranscript || message;
-    const lead = commercialLead || await findLead(profile, phone);
-    const currentConversation = await findConversation(profile.corretor_id, phone, lead?.id || null);
+    const lead = commercialLead || await findLead(profile!, phone);
+    const currentConversation = commercialMode
+      ? await findCommercialConversation(phone)
+      : await findConversation(profile!.corretor_id, phone, lead?.id || null);
 
     // Ignorar mensagens de contatos pessoais
     if (!lead && !currentConversation) {
-      console.log(`[uazapi_webhook] Ignorando contato pessoal: ${phone} (corretor: ${profile.corretor_id})`);
+      console.log(`[uazapi_webhook] Ignorando contato pessoal: ${phone} (corretor: ${profile?.corretor_id})`);
       return NextResponse.json({ ok: true, ignored: true, reason: 'Not a CRM lead' });
     }
 
@@ -1236,26 +1244,32 @@ export async function POST(request: Request) {
 
     let conversation = currentConversation;
     if (!conversation) {
-      const { data: created, error } = await supabaseAdmin
-        .from('whatsapp_conversas')
-        .insert([{
-          corretor_id: profile.corretor_id,
-          lead_id: lead?.id || null,
-          telefone: phone,
-          nome_contato: contactName,
-          status: 'aberta',
-          ultima_mensagem_at: new Date().toISOString(),
-        }])
-        .select('*')
-        .single();
+      // No modo comercial a conversa nasce sem corretora e sem lead_id, porque
+      // whatsapp_conversas.lead_id referencia public.leads e nao comercial_leads.
+      if (commercialMode) {
+        conversation = await ensureCommercialConversation(phone, contactName);
+      } else {
+        const { data: created, error } = await supabaseAdmin
+          .from('whatsapp_conversas')
+          .insert([{
+            corretor_id: profile!.corretor_id,
+            lead_id: lead?.id || null,
+            telefone: phone,
+            nome_contato: contactName,
+            status: 'aberta',
+            ultima_mensagem_at: new Date().toISOString(),
+          }])
+          .select('*')
+          .single();
 
-      if (error) throw error;
-      conversation = created;
+        if (error) throw error;
+        conversation = created;
+      }
     } else {
       await supabaseAdmin
         .from('whatsapp_conversas')
         .update({
-          lead_id: currentConversation.lead_id || lead?.id || null,
+          lead_id: commercialMode ? currentConversation.lead_id : (currentConversation.lead_id || lead?.id || null),
           nome_contato: cleanContactDisplayName(lead?.nome || currentConversation.nome_contato || contactName, contactName),
           telefone: currentConversation.telefone || phone,
           ultima_mensagem_at: new Date().toISOString(),
@@ -1296,7 +1310,7 @@ export async function POST(request: Request) {
     const { error: insertError } = await supabaseAdmin.from('whatsapp_mensagens').insert([{
       conversa_id: conversation.id,
       direction,
-      remetente: fromMe ? (profile.nome || 'Orion') : contactName,
+      remetente: fromMe ? (commercialMode ? 'Aline' : (profile!.nome || 'Orion')) : contactName,
       mensagem: message,
       provider_message_id: providerId || null,
       metadata: {
@@ -1305,7 +1319,7 @@ export async function POST(request: Request) {
         messageType: callEvent ? 'call' : body?.type,
         mediaType: callEvent ? 'call' : body?.type,
         isBrokerCall: callEvent ? fromMe : undefined,
-        brokerName: (callEvent && fromMe) ? (profile.nome || 'Orion') : undefined,
+        brokerName: (callEvent && fromMe) ? (profile?.nome || 'Orion') : undefined,
         audio_transcript: audioTranscript || undefined,
         ai_customer_message: aiCustomerMessage || undefined,
         audio_transcription_failed: hasAudio ? audioTranscriptionFailed : undefined,

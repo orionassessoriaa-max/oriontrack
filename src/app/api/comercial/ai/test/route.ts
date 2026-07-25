@@ -3,6 +3,8 @@ import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
 import { DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
+import { ensureCommercialConversation, insertCommercialAiMessage, normalizeSdrText } from '@/lib/commercialInbox';
+import { registerAiOutbound } from '@/lib/leadAiAgent';
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request, true);
@@ -34,14 +36,18 @@ export async function POST(request: Request) {
         model: process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini',
         temperature: 0.55,
         messages: [
-          { role: 'system', content: `${prompt}\n\nResponda somente com a primeira mensagem curta para iniciar este teste. Nao mencione que e um teste, IA ou sistema.` },
+          { role: 'system', content: `${prompt}\n\nPara este teste, gere as duas mensagens da abertura e separe-as exatamente com o marcador [[NOVA_MENSAGEM]]. Nao mencione que e um teste, IA ou sistema.` },
           { role: 'user', content: `Nome: ${name}\nIdades: ${ages}\nE-mail: ${email || 'nao informado'}\nJa investiu em trafego: ${traffic || 'nao informado'}\nFaturamento mensal: ${revenue || 'nao informado'}\nInvestimento mensal: ${investment || 'nao informado'}\nPrioridade: ${priority || 'nao informada'}\nVidas/leads por mes: ${lives || 'nao informado'}\nEscreva a abertura do atendimento.` },
         ],
       }),
     });
     const aiPayload = await aiResponse.json().catch(() => ({}));
     if (!aiResponse.ok) return NextResponse.json({ error: aiPayload?.error?.message || 'A IA nao conseguiu gerar a mensagem.' }, { status: 502 });
-    const message = String(aiPayload?.choices?.[0]?.message?.content || '').trim();
+    const rawMessage = normalizeSdrText(String(aiPayload?.choices?.[0]?.message?.content || ''));
+    // O prompt salvo no banco vem com CRLF, entao a IA devolve \r\n\r\n e o
+    // separador precisa aceitar as duas quebras, senao a abertura sai num balao unico.
+    const outboundMessages = rawMessage.split(/\s*\[\[NOVA_MENSAGEM\]\]\s*|(?:\r?\n){2,}/i).map((item: string) => item.trim()).filter(Boolean).slice(0, 2);
+    const message = outboundMessages.join('\n\n');
     if (!message) return NextResponse.json({ error: 'A IA nao retornou uma mensagem.' }, { status: 502 });
 
     const now = new Date().toISOString();
@@ -89,8 +95,22 @@ export async function POST(request: Request) {
     }
     if (leadError) throw leadError;
 
-    const payload = await uazapiFetch('/send/text', { method: 'POST', body: JSON.stringify({ number: phone, text: message, delay: 1200 }) }, { instanceName: COMMERCIAL_MASTER_INSTANCE });
-    return NextResponse.json({ ok: true, lead, message, sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE }, provider: payload });
+    // A abertura precisa ficar registrada na conversa: e desse historico que a
+    // IA parte quando o lead responde, e e o que aparece no inbox comercial.
+    const conversation = await ensureCommercialConversation(phone, lead?.nome || name);
+    const providers = [];
+    for (const text of outboundMessages) {
+      registerAiOutbound(phone, text);
+      const providerPayload = await uazapiFetch('/send/text', { method: 'POST', body: JSON.stringify({ number: phone, text, delay: 1200 }) }, { instanceName: COMMERCIAL_MASTER_INSTANCE });
+      providers.push(providerPayload);
+      await insertCommercialAiMessage(conversation.id, text, { ...(providerPayload || {}), instance: COMMERCIAL_MASTER_INSTANCE });
+    }
+    const sentAt = new Date().toISOString();
+    await Promise.all([
+      supabaseAdmin.from('whatsapp_conversas').update({ ultima_mensagem_at: sentAt, updated_at: sentAt }).eq('id', conversation.id),
+      lead?.id ? supabaseAdmin.from('comercial_leads').update({ ultimo_contato_at: sentAt, updated_at: sentAt }).eq('id', lead.id) : Promise.resolve(),
+    ]);
+    return NextResponse.json({ ok: true, lead, message, sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE }, provider: providers });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Nao foi possivel enviar o teste da IA.' }, { status: 502 });
   }
