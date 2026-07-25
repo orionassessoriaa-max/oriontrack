@@ -1484,6 +1484,7 @@ export default function CrmPage() {
 
   return (
     <InternalLayout>
+      <div className="orion-crm">
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div className="min-w-0">
           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-600">CRM Orion</p>
@@ -2630,6 +2631,7 @@ export default function CrmPage() {
         </div>
       )}
 
+      </div>
     </InternalLayout>
   );
 }

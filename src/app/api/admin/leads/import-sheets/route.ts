@@ -655,6 +655,22 @@ function mergeNotes(...parts: string[]) {
     .join(' | ');
 }
 
+function normalizeImportOrigin(value: unknown) {
+  const raw = String(value || '').trim();
+  const normalized = raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (normalized === 'orion' || normalized.includes('campanha')) return 'Orion';
+  if (normalized.includes('base')) return 'Base antiga';
+  if (normalized.includes('indic')) return 'Indicacao';
+  if (normalized.includes('organ')) return 'Organico';
+  if (normalized.includes('manual')) return 'Manual';
+  if (normalized.includes('outro')) return 'Outro';
+  return raw || 'Manual';
+}
+
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'admin:leads:import-sheets', { limit: 6, windowMs: 10 * 60_000 });
@@ -666,6 +682,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const corretorId = String(body.corretor_id || '').trim();
     const sheetUrl = String(body.sheet_url || '').trim();
+    const importOrigin = normalizeImportOrigin(body.origem || body.import_origin || body.source_origin);
 
     if (!corretorId || !sheetUrl) {
       return NextResponse.json({ error: 'Selecione o corretor e informe o link da planilha.' }, { status: 400 });
@@ -790,7 +807,7 @@ export async function POST(request: Request) {
               utm_content: pick(row, ['utm_content', 'content', 'anuncio', 'anÃºncio', 'ad', 'criativo']),
               operadora: inferOperadora(row, sheetName),
               observacoes: buildNotes(row),
-            }),
+            }, importOrigin),
             utm_source: pick(row, ['utm_source', 'source', 'origem', 'utm origem']),
             utm_medium: pick(row, ['utm_medium', 'medium', 'meio', 'utm meio']),
             utm_campaign: pick(row, ['utm_campaign', 'campaign', 'campanha', 'nome campanha']),

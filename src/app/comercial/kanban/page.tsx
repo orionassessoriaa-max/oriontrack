@@ -18,6 +18,25 @@ function localDateValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function formatLeadEntry(value: string | null | undefined) {
+  if (!value) return 'Entrada não informada';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Entrada não informada';
+  return `Entrou ${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function formatStageCadence(value: string | null | undefined) {
+  if (!value) return 'Cadência não informada';
+  const startedAt = new Date(value).getTime();
+  if (Number.isNaN(startedAt)) return 'Cadência não informada';
+  const minutes = Math.max(0, Math.floor((Date.now() - startedAt) / 60000));
+  if (minutes < 60) return `Na etapa há ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Na etapa há ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `Na etapa há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+}
+
 function getPresetRange(preset: DatePreset) {
   const today = new Date();
   const end = new Date(today);
@@ -187,7 +206,7 @@ export default function CommercialKanbanPage() {
           const total = statusLeads.reduce((sum, lead) => sum + Number(lead.valor_negociacao || 0), 0);
           return <section key={stage.id} className={`kh-kanban-column ${dropStage === stage.id ? 'drop-target' : ''} ${stageDragging === stage.id ? 'stage-dragging' : ''}`} draggable={role === 'coordenador'} onDragStart={(event) => { event.stopPropagation(); if (role === 'coordenador') setStageDragging(stage.id); }} onDragEnd={() => setStageDragging(null)} onDragOver={(event) => { event.preventDefault(); if (dragging) setDropStage(stage.id); }} onDragEnter={() => dragging && setDropStage(stage.id)} onDragLeave={() => setDropStage(null)} onDrop={(event) => { event.stopPropagation(); if (stageDragging && role === 'coordenador') reorderStages(stage.id); else if (dragging) void moveLead(dragging, stage.id); setDragging(null); setStageDragging(null); setDropStage(null); }}>
             <header style={{ '--stage-hue': `${205 + (index * 7) % 105}` } as React.CSSProperties}><div><GripVertical size={14} className="kh-stage-grip" /><strong>{stage.label}</strong><b>{statusLeads.length}</b></div>{canViewCommercialFinancials && <small>{currency(total)}</small>}{role === 'coordenador' && stage.protected && <div className="kh-stage-actions"><em>fixa</em></div>}</header>
-            <div className="kh-kanban-cards">{statusLeads.map((lead) => { const ownerId = lead.closer_id || lead.sdr_id || ''; return <article key={lead.id} draggable onDragStart={(event) => { event.stopPropagation(); setDragging(lead.id); }} onDragEnd={() => { setDragging(null); setDropStage(null); }} onClick={() => toggleLeadDetails(lead)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleLeadDetails(lead); } }} tabIndex={0} role="button" className={`${dragging === lead.id ? 'dragging' : ''}`}><div className="kh-card-top"><span className={`kh-dot ${lead.lead_qualificado ? 'qualified' : ''}`} /><small>{lead.lead_qualificado ? 'MQL' : 'Lead'}</small><span className="kh-card-expand"><ChevronDown size={14} /></span></div><h3>{lead.nome}</h3><p>{lead.empresa || lead.telefone || 'Sem empresa informada'}</p><div className="kh-card-owner"><UserRound size={13} /><span>{memberMap.get(ownerId)?.nome || 'Sem responsavel'}</span></div><footer><strong>{currency(lead.valor_negociacao)}</strong><span className="kh-card-stage">{lead.status}</span></footer><button type="button" className="kh-card-inbox" onClick={(event) => openLeadInbox(event, lead)}><MessageSquare size={13} /> Abrir no Inbox</button></article>; })}{!statusLeads.length && <div className="kh-column-empty"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-empty-logo" /><span>Sem leads</span></div>}<button type="button" className="kh-add-lead-column" onClick={() => { setInitialStatus(stage.id); setModalOpen(true); }}><Plus size={16} /> Adicionar lead</button>{role === 'coordenador' && !stage.protected && <button type="button" className="kh-remove-stage" onClick={() => { if (window.confirm(`Excluir a etapa \"${stage.label}\"?`)) void removeStage(stage); }}><Trash2 size={13} /> Excluir etapa</button>}</div>
+            <div className="kh-kanban-cards">{statusLeads.map((lead) => { return <article key={lead.id} draggable onDragStart={(event) => { event.stopPropagation(); setDragging(lead.id); }} onDragEnd={() => { setDragging(null); setDropStage(null); }} onClick={() => toggleLeadDetails(lead)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleLeadDetails(lead); } }} tabIndex={0} role="button" className={`${dragging === lead.id ? 'dragging' : ''}`}><div className="kh-card-top"><span className={`kh-dot ${lead.lead_qualificado ? 'qualified' : ''}`} /><small>{lead.lead_qualificado ? 'MQL' : 'Lead'}</small><span className="kh-card-expand"><ChevronDown size={14} /></span></div><h3>{lead.nome}</h3><p>{lead.empresa || lead.telefone || 'Sem empresa informada'}</p><div className="kh-card-owner"><UserRound size={13} /><span>Orion Assessoria</span></div><div className="kh-card-meta"><span>{formatLeadEntry(lead.data_entrada)}</span></div><footer><strong>{currency(lead.valor_negociacao)}</strong><span className="kh-card-cadence">{formatStageCadence(lead.status_started_at || lead.updated_at || lead.data_entrada)}</span></footer><button type="button" className="kh-card-inbox" onClick={(event) => openLeadInbox(event, lead)}><MessageSquare size={13} /> Abrir no Inbox</button></article>; })}{!statusLeads.length && <div className="kh-column-empty"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-empty-logo" /><span>Sem leads</span></div>}<button type="button" className="kh-add-lead-column" onClick={() => { setInitialStatus(stage.id); setModalOpen(true); }}><Plus size={16} /> Adicionar lead</button>{role === 'coordenador' && !stage.protected && <button type="button" className="kh-remove-stage" onClick={() => { if (window.confirm(`Excluir a etapa \"${stage.label}\"?`)) void removeStage(stage); }}><Trash2 size={13} /> Excluir etapa</button>}</div>
           </section>;
         })}
       </div>

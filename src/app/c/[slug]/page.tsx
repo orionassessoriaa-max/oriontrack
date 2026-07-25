@@ -78,6 +78,8 @@ export default function CapturePage() {
           tem_plano_ativo: formData.tem_plano_ativo,
           plano_atual: formData.plano_atual,
           investimento: formData.investimento,
+          origem: 'Pagina Comercial',
+          utm_source: 'Pagina Comercial',
           status: 'aguardando-atendimento',
           data_entrada: new Date().toISOString()
         }]);
@@ -117,10 +119,10 @@ export default function CapturePage() {
       <header className="bg-white border-b border-gray-100 py-6 sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-6 flex justify-between items-center">
           <Link href="/" className="block">
-            <img 
-              src="/brand-logo.png" 
-              alt="ORION CORRETORA" 
-              className="h-16 w-auto" 
+            <img
+              src="/orion-empty-logo-dark.png"
+              alt="ORION CORRETORA"
+              className="h-10 w-auto"
             />
           </Link>
           <div className="hidden md:flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest">
@@ -321,4 +323,3 @@ export default function CapturePage() {
     </div>
   );
 }
-

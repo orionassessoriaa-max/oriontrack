@@ -159,6 +159,15 @@ const EMPTY_MANUAL_LEAD = {
   responsavel_membro_id: 'unassigned',
 };
 
+const IMPORT_ORIGIN_OPTIONS = [
+  { value: 'Orion', label: 'Orion / campanha' },
+  { value: 'Manual', label: 'Manual' },
+  { value: 'Base antiga', label: 'Base antiga' },
+  { value: 'Indicacao', label: 'Indicacao' },
+  { value: 'Organico', label: 'Organico' },
+  { value: 'Outro', label: 'Outro' },
+];
+
 function noteValue(lead: Lead, key: string) {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = String(lead.observacoes || '').match(new RegExp(`${escaped}:\\s*([^|]+)`, 'i'));
@@ -222,6 +231,7 @@ export default function BrokerLeadsPage() {
   const [manualLeadError, setManualLeadError] = useState<string | null>(null);
   const [crmApiUrl, setCrmApiUrl] = useState('');
   const [sheetUrl, setSheetUrl] = useState('');
+  const [sheetOrigin, setSheetOrigin] = useState('Manual');
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [commercialModal, setCommercialModal] = useState<CommercialModalState>(null);
@@ -680,6 +690,7 @@ export default function BrokerLeadsPage() {
       body: JSON.stringify({
         corretor_id: brokerCorretorId,
         sheet_url: sheetUrl,
+        origem: sheetOrigin,
       }),
     });
 
@@ -696,6 +707,7 @@ export default function BrokerLeadsPage() {
     const incompleteText = payload.incomplete ? ` ${payload.incomplete} lead(s) vieram com dados incompletos e foram marcados com aviso.` : '';
     setImportMessage(`${payload.imported} lead(s) importado(s).${paginasText}${incompleteText}${skippedText}`);
     setSheetUrl('');
+    setSheetOrigin('Manual');
     await fetchLeads(0, false);
   };
 
@@ -1616,6 +1628,21 @@ export default function BrokerLeadsPage() {
                   placeholder="https://docs.google.com/spreadsheets/d/..."
                   className="w-full rounded-2xl border border-white/10 bg-slate-950 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20"
                 />
+              </div>
+              <div className="space-y-2">
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Origem dos leads</label>
+                <select
+                  value={sheetOrigin}
+                  onChange={(event) => setSheetOrigin(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-5 py-4 text-sm font-bold text-white outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20"
+                >
+                  {IMPORT_ORIGIN_OPTIONS.map((origin) => (
+                    <option key={origin.value} value={origin.value}>{origin.label}</option>
+                  ))}
+                </select>
+                <p className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs font-bold leading-5 text-emerald-200">
+                  Leads que nao forem Orion entram no CRM, Kanban e Inbox, mas ficam fora do CPL e da conversao das campanhas. Se a planilha tiver [ORION], o sistema marca como Orion automaticamente.
+                </p>
               </div>
               <button disabled={importing} className="flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-600 py-5 font-black text-white shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-50">
                 {importing ? <Loader2 className="animate-spin" size={20} /> : <><Upload size={18} /> Importar leads</>}

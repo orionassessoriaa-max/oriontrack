@@ -71,6 +71,7 @@ export type CommercialLead = {
   ultimo_contato_at: string | null;
   fechado_at: string | null;
   data_entrada: string;
+  status_started_at: string | null;
   created_at: string;
   updated_at: string;
 };

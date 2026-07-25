@@ -50,6 +50,40 @@ function getConcessionariaName(corretor?: Pick<BrokerOption, 'nome' | 'nome_empr
   return String(corretor?.nome_empresa || corretor?.nome || 'Sem concessionaria').trim();
 }
 
+const LEAD_ORIGIN_OPTIONS = [
+  { value: 'Orion', label: 'Orion / campanha' },
+  { value: 'Manual', label: 'Manual' },
+  { value: 'Base antiga', label: 'Base antiga' },
+  { value: 'Indicacao', label: 'Indicacao' },
+  { value: 'Organico', label: 'Organico' },
+  { value: 'Outro', label: 'Outro' },
+];
+
+function leadOriginLabel(lead: Pick<Lead, 'origem' | 'utm_source' | 'utm_campaign' | 'utm_term' | 'utm_content'>) {
+  const markers = [lead.origem, lead.utm_source, lead.utm_campaign, lead.utm_term, lead.utm_content]
+    .map((value) => String(value || ''));
+
+  if (markers.some((value) => /\[\s*orion\s*\]/i.test(value)) || String(lead.origem || lead.utm_source || '').toLowerCase() === 'orion') {
+    return 'Orion';
+  }
+
+  return String(lead.origem || lead.utm_source || 'Manual').trim() || 'Manual';
+}
+
+function leadOriginBadgeClass(origin: string) {
+  const normalized = origin
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (normalized === 'orion') return 'bg-blue-50 text-blue-700 border-blue-100';
+  if (normalized.includes('manual')) return 'bg-slate-50 text-slate-700 border-slate-100';
+  if (normalized.includes('base')) return 'bg-amber-50 text-amber-700 border-amber-100';
+  if (normalized.includes('indic')) return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+  if (normalized.includes('organ')) return 'bg-violet-50 text-violet-700 border-violet-100';
+  return 'bg-gray-50 text-gray-700 border-gray-100';
+}
+
 export default function AdminLeadsPage() {
   const [leads, setLeads] = useState<LeadWithBroker[]>([]);
   const [corretores, setCorretores] = useState<BrokerOption[]>([]);
@@ -60,11 +94,13 @@ export default function AdminLeadsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterConcessionaria, setFilterConcessionaria] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterOrigem, setFilterOrigem] = useState('');
   const [filterCidade, setFilterCidade] = useState('');
   const [filterDataInicio, setFilterDataInicio] = useState('');
   const [filterDataFim, setFilterDataFim] = useState('');
   const [sheetUrl, setSheetUrl] = useState('');
   const [sheetCorretorId, setSheetCorretorId] = useState('');
+  const [sheetOrigin, setSheetOrigin] = useState('Manual');
   const [showImportBox, setShowImportBox] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -168,6 +204,7 @@ export default function AdminLeadsPage() {
     setSearchTerm('');
     setFilterConcessionaria('');
     setFilterStatus('');
+    setFilterOrigem('');
     setFilterCidade('');
     setFilterDataInicio('');
     setFilterDataFim('');
@@ -193,6 +230,7 @@ export default function AdminLeadsPage() {
       'Status',
       'Página/Operadora',
       'Concessionaria',
+      'Origem',
       'Origem (UTM Source)',
       'Meio (UTM Medium)',
       'Campanha (UTM Campaign)',
@@ -215,6 +253,7 @@ export default function AdminLeadsPage() {
       lead.status || '',
       lead.operadora || '',
       getConcessionariaName(lead.corretores),
+      leadOriginLabel(lead),
       lead.utm_source || '',
       lead.utm_medium || '',
       lead.utm_campaign || '',
@@ -287,7 +326,8 @@ export default function AdminLeadsPage() {
       },
       body: JSON.stringify({
         corretor_id: sheetCorretorId,
-        sheet_url: sheetUrl
+        sheet_url: sheetUrl,
+        origem: sheetOrigin,
       })
     });
     const payload = await response.json();
@@ -301,6 +341,7 @@ export default function AdminLeadsPage() {
     const skippedText = payload.skipped ? ` ${payload.skipped} linha(s) ignorada(s) por falta de nome ou telefone.` : '';
     setImportMessage(`${payload.imported} lead(s) importado(s) para ${payload.corretor}.${skippedText}`);
     setSheetUrl('');
+    setSheetOrigin('Manual');
     await fetchData();
   };
 
@@ -351,6 +392,7 @@ export default function AdminLeadsPage() {
       || selectedConcessionaria.brokerIds.includes(String(lead.corretor_id || ''))
       || getConcessionariaName(lead.corretores).toLowerCase() === selectedConcessionaria.key;
     const matchesStatus = !filterStatus || lead.status === filterStatus;
+    const matchesOrigem = !filterOrigem || leadOriginLabel(lead) === filterOrigem;
     const matchesCidade = !filterCidade || (lead.cidade?.toLowerCase() || '').includes(filterCidade.toLowerCase());
     
     let matchesDate = true;
@@ -364,7 +406,7 @@ export default function AdminLeadsPage() {
       matchesDate = matchesDate && new Date(lead.data_entrada) <= endDate;
     }
 
-    return matchesSearch && matchesConcessionaria && matchesStatus && matchesCidade && matchesDate;
+    return matchesSearch && matchesConcessionaria && matchesStatus && matchesOrigem && matchesCidade && matchesDate;
   });
 
   const loadedDeleteScopeLeadsCount = selectedConcessionaria
@@ -473,9 +515,9 @@ export default function AdminLeadsPage() {
       {showImportBox && (
         <div className="mb-8 rounded-[2rem] border border-emerald-100 bg-emerald-50 p-5">
           <h2 className="mb-2 text-lg font-black text-emerald-950">Importar leads por planilha</h2>
-          <p className="mb-4 text-sm font-bold text-emerald-800">Selecione a concessionaria, cole o link do Google Sheets e importe os leads. A planilha precisa estar compartilhada para visualizacao por link.</p>
+          <p className="mb-4 text-sm font-bold text-emerald-800">Selecione a concessionaria, a origem dos leads e cole o link do Google Sheets. Leads manuais entram no CRM, mas nao entram no CPL e na conversao das campanhas.</p>
           {importMessage && <div className="mb-4 rounded-2xl bg-white p-4 text-sm font-black text-emerald-800">{importMessage}</div>}
-          <div className="grid gap-3 md:grid-cols-[260px_1fr_auto]">
+          <div className="grid gap-3 md:grid-cols-[260px_220px_1fr_auto]">
             <select
               value={sheetCorretorId}
               onChange={(event) => setSheetCorretorId(event.target.value)}
@@ -486,6 +528,15 @@ export default function AdminLeadsPage() {
                 <option key={concessionaria.key} value={concessionaria.primaryId}>
                   {concessionaria.nome}{concessionaria.brokers.length > 1 ? ` (${concessionaria.brokers.length} corretores)` : ''}
                 </option>
+              ))}
+            </select>
+            <select
+              value={sheetOrigin}
+              onChange={(event) => setSheetOrigin(event.target.value)}
+              className="rounded-2xl border-none bg-white px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20"
+            >
+              {LEAD_ORIGIN_OPTIONS.map((origin) => (
+                <option key={origin.value} value={origin.value}>{origin.label}</option>
               ))}
             </select>
             <input
@@ -501,6 +552,9 @@ export default function AdminLeadsPage() {
             >
               {importing ? <Loader2 className="animate-spin" size={18} /> : 'Importar agora'}
             </button>
+          </div>
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-white/70 p-4 text-xs font-bold leading-5 text-emerald-900">
+            Se a planilha tiver campanha, conjunto ou anuncio com marcador [ORION], esses leads serao tratados como Orion automaticamente. Caso contrario, vale a origem escolhida acima.
           </div>
         </div>
       )}
@@ -549,6 +603,20 @@ export default function AdminLeadsPage() {
                 <option value="Em negociação">Em negociação</option>
                 <option value="Venda realizada">Venda realizada</option>
                 <option value="Não tive retorno">Não tive retorno</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Origem</label>
+              <select
+                value={filterOrigem}
+                onChange={(e) => setFilterOrigem(e.target.value)}
+                className="w-full bg-white border-none px-4 py-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 transition-all font-bold shadow-sm appearance-none"
+              >
+                <option value="">Todas origens</option>
+                {LEAD_ORIGIN_OPTIONS.map((origin) => (
+                  <option key={origin.value} value={origin.value}>{origin.label}</option>
+                ))}
               </select>
             </div>
 
@@ -610,7 +678,7 @@ export default function AdminLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[1900px]">
+            <table className="w-full text-left border-collapse min-w-[2000px]">
               <thead>
                 <tr className="bg-gray-50/50">
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Data</th>
@@ -622,6 +690,7 @@ export default function AdminLeadsPage() {
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Plano Atual</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cidade</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Origem</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Página / Operadora</th>
                   <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Concessionaria</th>
@@ -632,7 +701,7 @@ export default function AdminLeadsPage() {
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan={14} className="py-20 text-center">
+                    <td colSpan={15} className="py-20 text-center">
                       <Loader2 className="animate-spin text-blue-600 mx-auto" size={40} />
                     </td>
                   </tr>
@@ -657,6 +726,16 @@ export default function AdminLeadsPage() {
                     <td className="px-6 py-5 text-sm text-slate-500 font-medium">{lead.plano_atual || '-'}</td>
                     <td className="px-6 py-5 text-sm text-slate-600 font-bold">{lead.investimento || '-'}</td>
                     <td className="px-6 py-5 text-sm text-slate-500 font-medium">{lead.cidade || '-'}</td>
+                    <td className="px-6 py-5">
+                      {(() => {
+                        const origin = leadOriginLabel(lead);
+                        return (
+                          <span className={`inline-flex rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-widest ${leadOriginBadgeClass(origin)}`}>
+                            {origin}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td className="px-6 py-5 text-center">
                       <span className="inline-block px-3 py-1.5 bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-widest rounded-full">
                         {lead.status}
