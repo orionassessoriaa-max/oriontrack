@@ -3,6 +3,7 @@ import { normalizePhone, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
+import { continueCommercialSdrFromIncoming } from '@/lib/commercialSdrAgent';
 
 function readText(body: any) {
   return pickString(
@@ -940,6 +941,25 @@ async function findLead(profile: any, phone: string) {
   return exact || rows[0] || null;
 }
 
+async function findCommercialLead(phone: string) {
+  const digits = normalizePhone(phone);
+  if (digits.length < 8) return null;
+  const last8 = digits.slice(-8);
+  const last8WithHyphen = `${last8.slice(0, 4)}-${last8.slice(4)}`;
+  const { data } = await supabaseAdmin.from('comercial_leads').select('*')
+    .or(`telefone.ilike.%${last8},telefone.ilike.%${last8WithHyphen}`)
+    .order('data_entrada', { ascending: false }).limit(30);
+  return (data || []).find((row) => normalizePhone(row?.telefone) === digits) || null;
+}
+
+async function findProfileById(profileId?: string | null) {
+  if (!profileId) return null;
+  const { data } = await supabaseAdmin.from('profiles')
+    .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
+    .eq('id', profileId).maybeSingle();
+  return data || null;
+}
+
 async function pickLeadWithActiveAiSession(rows: any[]) {
   const leadIds = Array.from(new Set((rows || []).map((row) => row?.id).filter(Boolean)));
   if (!leadIds.length) return null;
@@ -1047,7 +1067,11 @@ export async function POST(request: Request) {
       remoteJid = providerPhone;
     }
     let phone = normalizePhone(remoteJid.split('@')[0]);
-    const profile = await findProfileFromWebhook(body, instance) || await findProfileFromCrmPhone(phone);
+    const commercialLead = await findCommercialLead(phone);
+    let profile = await findProfileFromWebhook(body, instance) || await findProfileFromCrmPhone(phone);
+    if (!profile?.corretor_id && commercialLead) {
+      profile = await findProfileById(commercialLead.created_by || commercialLead.sdr_id || commercialLead.closer_id);
+    }
 
     if (!profile?.corretor_id) {
       console.warn('[uazapi_webhook] Ignorado: nao consegui resolver profile da instancia/owner.', {
@@ -1198,7 +1222,7 @@ export async function POST(request: Request) {
     }
 
     if (!aiCustomerMessage) aiCustomerMessage = audioTranscript || message;
-    const lead = await findLead(profile, phone);
+    const lead = commercialLead || await findLead(profile, phone);
     const currentConversation = await findConversation(profile.corretor_id, phone, lead?.id || null);
 
     // Ignorar mensagens de contatos pessoais
@@ -1304,7 +1328,7 @@ export async function POST(request: Request) {
 
     if (!fromMe && lead?.id) {
       try {
-        if (hasAudio && !audioTranscript) {
+        if (hasAudio && !audioTranscript && !commercialLead) {
           await handoffLeadAiToResponsible(
             lead.id,
             'audio recebido, mas nao foi possivel transcrever automaticamente. Responsavel deve ouvir o audio no inbox e assumir o atendimento sem resposta automatica ao cliente.'
@@ -1312,14 +1336,25 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true, audio_handoff: true });
         }
 
-        await continueLeadAiFromIncoming({
+        if (commercialLead) {
+          await continueCommercialSdrFromIncoming({
+            leadId: commercialLead.id,
+            conversationId: conversation.id,
+            customerMessage: hasAudio && !audioTranscript
+              ? 'O cliente enviou um audio, mas nao foi possivel transcrever. Responda pedindo que envie a informacao por texto.'
+              : aiCustomerMessage || message,
+            phone,
+          });
+        } else {
+          await continueLeadAiFromIncoming({
           leadId: lead.id,
           conversationId: conversation.id,
           customerMessage: hasAudio && !audioTranscript
             ? 'O cliente enviou um audio, mas nao foi possivel transcrever. Responda em uma frase curta dizendo que nao conseguiu ouvir direitinho e peça para enviar a informacao por texto.'
             : aiCustomerMessage || message,
-          incomingWasAudio: hasAudio,
-        });
+            incomingWasAudio: hasAudio,
+          });
+        }
       } catch (aiErr) {
         console.error('[uazapi_webhook] Failed continuing lead AI:', aiErr);
       }
