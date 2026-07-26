@@ -971,3 +971,43 @@
   .kh-goal-marker small { font-size: 10px; }
   .kh-goal-cover-footer { display: grid; gap: 8px; }
 }
+
+/* The goal journey is an open visual cover, not a card inside the page. */
+.kh-goal-cover {
+  overflow: visible;
+  margin: 18px 0 28px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 26px 0 10px;
+}
+.kh-goal-cover::before {
+  content: '';
+  position: absolute;
+  inset: 22% 8% 18%;
+  z-index: -1;
+  background: linear-gradient(90deg, transparent, rgba(44, 153, 239, .13) 35%, rgba(143, 106, 255, .1) 58%, transparent 88%);
+  filter: blur(34px);
+  pointer-events: none;
+}
+.kh-goal-cover-heading { padding: 0 2px; }
+.kh-goal-progress-stage { padding: 92px 8% 78px; }
+.kh-goal-progress-track { height: 8px; }
+.kh-goal-rocket { top: -88px; width: 108px; }
+.kh-goal-rocket span { display: none; }
+.kh-goal-cover-footer { padding-inline: 2px; }
+
+/* Kanban lead cards use the same compact field language as the edit form. */
+.kh-card-sheet-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 13px; }
+.kh-card-sheet-grid > div { min-width: 0; border: 1px solid #243247; border-radius: 4px; background: #0a111b; padding: 7px 8px; }
+.kh-card-sheet-grid small { display: block; overflow: hidden; color: #71869d; font-size: 7px; font-weight: 700; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.kh-card-sheet-grid strong { display: block; overflow: hidden; margin-top: 4px; color: #e7f0fa; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.kh-kanban-cards article { min-height: 0; }
+.kh-kanban-cards footer { margin-top: 10px; }
+.kh-kanban-cards footer .kh-card-cadence { max-width: 100%; text-align: left; }
+@media (max-width: 620px) {
+  .kh-goal-progress-stage { padding-inline: 3%; }
+  .kh-goal-rocket { width: 82px; top: -68px; }
+  .kh-card-sheet-grid { gap: 5px; }
+}
