@@ -32,6 +32,8 @@ export default function CommercialGoalsPage() {
   const target = Number(data?.goal?.meta_valor || 0);
   const progress = target ? Math.min(100, (Number(data?.sold || 0) / target) * 100) : 0;
   const projectionProgress = target ? Math.min(100, (Number(data?.projection || 0) / target) * 100) : 0;
+  const journeyProgress = target ? Math.max(2, progress) : 2;
+  const journeyLabel = progress >= 100 ? 'Meta alcançada' : data?.negotiation ? 'Em negociação' : 'Início da jornada';
   const monthLabel = useMemo(() => new Date(`${month}-15T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }), [month]);
 
   async function save(event: React.FormEvent) {
@@ -58,11 +60,10 @@ export default function CommercialGoalsPage() {
           </form>
         </header>
 
-        <section className="kh-goal-timeline" aria-label="Linha do tempo da meta comercial">
-          <div className="kh-goal-timeline-line" />
-          <div className="kh-goal-node sold"><span>VENDIDO</span><strong>{currency(data?.sold)}</strong><small>{Math.round(progress)}% da meta</small></div>
-          <div className="kh-goal-node negotiation"><span>EM NEGOCIACAO</span><strong>{currency(data?.negotiation)}</strong><small>Pipeline atual</small></div>
-          <div className="kh-goal-node target"><span>META FINAL</span><strong>{currency(target)}</strong><small>Projecao: {Math.round(projectionProgress)}%</small></div>
+        <section className="kh-goal-cover" aria-label="Progresso da meta comercial">
+          <div className="kh-goal-cover-heading"><div><span>Jornada comercial</span><h2>{journeyLabel}</h2><p>O time avança conforme as oportunidades se transformam em vendas.</p></div><strong>{Math.round(progress)}%<small>da meta vendida</small></strong></div>
+          <div className="kh-goal-progress-stage"><div className="kh-goal-progress-track"><div className="kh-goal-progress-fill" style={{ width: `${journeyProgress}%` }} /><span className="kh-goal-marker sold" style={{ left: '0%' }}><b>Vendido</b><small>{currency(data?.sold)}</small></span><span className="kh-goal-marker negotiation" style={{ left: '50%' }}><b>Em negociação</b><small>{currency(data?.negotiation)}</small></span><span className="kh-goal-marker target" style={{ left: '100%' }}><b>Meta final</b><small>{currency(target)}</small></span><div className="kh-goal-rocket" style={{ left: `${journeyProgress}%` }}><img src="/comercial-foguete.png" alt="Time comercial avançando" /><span>Momento atual</span></div></div></div>
+          <div className="kh-goal-cover-footer"><span>Projeção consolidada: <b>{Math.round(projectionProgress)}%</b></span><span>Pipeline em negociação: <b>{currency(data?.negotiation)}</b></span></div>
         </section>
 
         <section className="kh-premium-stats-grid">
