@@ -22,6 +22,29 @@ type GeoStateFeature = {
   geometry: { type: 'MultiPolygon' | 'Polygon'; coordinates: number[][][][] | number[][][] };
 };
 
+type BrazilRegion = 'Norte' | 'Nordeste' | 'Centro-Oeste' | 'Sudeste' | 'Sul';
+
+const REGION_COLORS: Record<BrazilRegion, string> = {
+  Norte: '#73bf45',
+  Nordeste: '#10b9d7',
+  'Centro-Oeste': '#f2d51b',
+  Sudeste: '#4dbdbb',
+  Sul: '#087eaf',
+};
+
+function regionForState(state: string): BrazilRegion {
+  if (['AC', 'AP', 'AM', 'PA', 'RO', 'RR', 'TO'].includes(state)) return 'Norte';
+  if (['AL', 'BA', 'CE', 'MA', 'PB', 'PE', 'PI', 'RN', 'SE'].includes(state)) return 'Nordeste';
+  if (['DF', 'GO', 'MT', 'MS'].includes(state)) return 'Centro-Oeste';
+  if (['ES', 'MG', 'RJ', 'SP'].includes(state)) return 'Sudeste';
+  return 'Sul';
+}
+
+function rgba(hex: string, alpha: number) {
+  const value = hex.replace('#', '');
+  return `rgba(${Number.parseInt(value.slice(0, 2), 16)}, ${Number.parseInt(value.slice(2, 4), 16)}, ${Number.parseInt(value.slice(4, 6), 16)}, ${alpha})`;
+}
+
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 function startOfMonth() { const date = new Date(); return isoDate(new Date(date.getFullYear(), date.getMonth(), 1)); }
 type DatePreset = 'todos' | 'hoje' | 'ontem' | '7dias' | '30dias' | 'mes' | 'mes_passado' | 'personalizado';
@@ -73,7 +96,7 @@ function WeeklyMeetingsChart({ rows }: { rows: Array<{ date: string; meetings: n
   return <div className="kh-weekly-chart" aria-label="Reuniões agendadas nos últimos sete dias"><div className="kh-weekly-y"><span>{max}</span><span>{Math.ceil(max / 2)}</span><span>0</span></div><div className="kh-weekly-bars">{days.map((day) => <div className="kh-weekly-day" key={day.key}><div className="kh-weekly-track"><i style={{ height: `${day.value ? Math.max(10, (day.value / max) * 100) : 3}%` }}><b>{day.value}</b></i></div><span>{day.label}</span></div>)}</div></div>;
 }
 
-function StateMap({ states, selected, onSelect }: { states: Overview['states']; selected: string | null; onSelect: (state: string) => void }) {
+function StateMapFlat({ states, selected, onSelect }: { states: Overview['states']; selected: string | null; onSelect: (state: string) => void }) {
   const [features, setFeatures] = useState<GeoStateFeature[]>([]);
   const [hovered, setHovered] = useState<string | null>(null);
   useEffect(() => { fetch('/brazil-states.geojson').then((response) => response.json()).then((payload) => setFeatures(payload.features || [])).catch(() => setFeatures([])); }, []);
@@ -86,6 +109,21 @@ function StateMap({ states, selected, onSelect }: { states: Overview['states']; 
   }
   const hoveredData = hovered ? values.get(hovered) : null;
   return <div className="kh-state-map" aria-label="Mapa de origem dos leads por estado"><div className="kh-map-canvas">{features.length ? <svg viewBox="0 0 1000 720" role="img" aria-label="Mapa do Brasil dividido por estados">{features.map((feature) => { const state = feature.properties.sigla; const item = values.get(state); const intensity = item ? 0.35 + (item.leads / max) * 0.65 : 0.08; return <g key={state} className={`kh-map-state ${selected === state ? 'selected' : ''}`} onClick={() => onSelect(state)} onMouseEnter={() => setHovered(state)} onMouseLeave={() => setHovered(null)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onSelect(state); }} aria-label={`${state}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}><path d={pathFor(feature)} style={{ fill: `rgba(34, 155, 235, ${intensity})` }}><title>{`${feature.properties.name}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}</title></path></g>; })}</svg> : <div className="kh-map-loading">Carregando mapa...</div>}{hovered && <div className="kh-map-tooltip"><strong>{hovered}</strong><span>{hoveredData?.leads || 0} leads recebidos</span><b>{hoveredData?.active || 0} ativos na Orion</b><small>Região estimada</small></div>}</div></div>;
+}
+
+function StateMap3D({ states, selected, onSelect }: { states: Overview['states']; selected: string | null; onSelect: (state: string) => void }) {
+  const [features, setFeatures] = useState<GeoStateFeature[]>([]);
+  const [hovered, setHovered] = useState<string | null>(null);
+  useEffect(() => { fetch('/brazil-states.geojson').then((response) => response.json()).then((payload) => setFeatures(payload.features || [])).catch(() => setFeatures([])); }, []);
+  const values = new Map(states.map((item) => [item.state, item]));
+  const max = Math.max(1, ...states.map((item) => item.leads));
+  function project(point: number[]) { return `${((point[0] + 75) / 42) * 1000},${((5 - point[1]) / 40) * 720}`; }
+  function pathFor(feature: GeoStateFeature) {
+    const polygons = (feature.geometry.type === 'MultiPolygon' ? feature.geometry.coordinates : [feature.geometry.coordinates]) as number[][][][];
+    return polygons.flatMap((polygon: number[][][]) => polygon.map((ring: number[][]) => `M ${ring.map((point) => project(point)).join(' L ')} Z`)).join(' ');
+  }
+  const hoveredData = hovered ? values.get(hovered) : null;
+  return <div className="kh-state-map kh-state-map-3d" aria-label="Mapa 3D de origem dos leads por estado"><div className="kh-map-canvas">{features.length ? <svg viewBox="0 0 1000 720" role="img" aria-label="Mapa 3D do Brasil dividido por estados">{features.map((feature) => { const state = feature.properties.sigla; const item = values.get(state); const region = regionForState(state); const color = REGION_COLORS[region]; const intensity = item ? 0.5 + (item.leads / max) * 0.5 : 0.18; const path = pathFor(feature); return <g key={state} className={`kh-map-state ${selected === state ? 'selected' : ''}`} onClick={() => onSelect(state)} onMouseEnter={() => setHovered(state)} onMouseLeave={() => setHovered(null)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onSelect(state); }} aria-label={`${state}: ${item?.leads || 0} leads, ${item?.active || 0} ativos`}><path className="kh-map-extrusion" d={path} transform="translate(0 18)" style={{ fill: rgba(color, 0.5) }} /><path className="kh-map-front" d={path} style={{ fill: rgba(color, intensity) }}><title>{`${feature.properties.name} (${region}): ${item?.leads || 0} leads, ${item?.active || 0} ativos`}</title></path></g>; })}</svg> : <div className="kh-map-loading">Carregando mapa...</div>}{hovered && <div className="kh-map-tooltip"><strong>{hovered}</strong><span>{hoveredData?.leads || 0} leads recebidos</span><b>{hoveredData?.active || 0} ativos na Orion</b><small>{regionForState(hovered)} · passe o mouse para ver o relevo</small></div>}</div><div className="kh-map-legend" aria-label="Legenda das regiões do Brasil">{(Object.keys(REGION_COLORS) as BrazilRegion[]).map((region) => <span key={region}><i style={{ background: REGION_COLORS[region] }} />{region}</span>)}</div></div>;
 }
 
 export default function CommercialDashboardPage() {
@@ -198,7 +236,7 @@ export default function CommercialDashboardPage() {
 
       <section className="kh-live-grid">
         <article className="kh-panel kh-live-meetings"><div className="kh-panel-header"><div><span>Atualização automática a cada 30 segundos</span><h2>Reuniões da semana</h2></div><span className="kh-live-dot">Ao vivo</span></div><WeeklyMeetingsChart rows={data?.weeklyMeetings || []} /></article>
-        <article className="kh-panel kh-origin-panel"><div className="kh-panel-header"><div><span>Origem geográfica dos leads</span><h2>Leads por estado</h2></div><span>{data?.states?.reduce((sum, item) => sum + item.leads, 0) || 0} mapeados</span></div><StateMap states={data?.states || []} selected={selectedState} onSelect={setSelectedState} />{selectedStateData ? <div className="kh-state-detail"><strong>{selectedStateData.state}</strong><span>{selectedStateData.leads} leads recebidos</span><b>{selectedStateData.active} ativos na Orion</b></div> : <div className="kh-state-hint">Selecione um estado para ver os leads recebidos e os que continuam ativos.</div>}</article>
+        <article className="kh-panel kh-origin-panel"><div className="kh-panel-header"><div><span>Origem geográfica dos leads</span><h2>Leads por estado</h2></div><span>{data?.states?.reduce((sum, item) => sum + item.leads, 0) || 0} mapeados</span></div><StateMap3D states={data?.states || []} selected={selectedState} onSelect={setSelectedState} />{selectedStateData ? <div className="kh-state-detail"><strong>{selectedStateData.state}</strong><span>{selectedStateData.leads} leads recebidos</span><b>{selectedStateData.active} ativos na Orion</b></div> : <div className="kh-state-hint">Selecione um estado para ver os leads recebidos e os que continuam ativos.</div>}</article>
       </section>
 
       <section className="kh-bottom-grid">
