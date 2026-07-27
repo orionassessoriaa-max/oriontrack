@@ -1003,6 +1003,9 @@
 .kh-card-sheet-grid > div { min-width: 0; border: 1px solid #243247; border-radius: 4px; background: #0a111b; padding: 7px 8px; }
 .kh-card-sheet-grid small { display: block; overflow: hidden; color: #71869d; font-size: 7px; font-weight: 700; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .kh-card-sheet-grid strong { display: block; overflow: hidden; margin-top: 4px; color: #e7f0fa; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.kh-card-sheet-grid-compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 9px; }
+.kh-card-sheet-grid-compact > div { padding: 6px 7px; }
+.kh-card-sheet-grid-compact strong { margin-top: 3px; }
 .kh-kanban-cards article { min-height: 0; }
 .kh-kanban-cards footer { margin-top: 10px; }
 .kh-kanban-cards footer .kh-card-cadence { max-width: 100%; text-align: left; }
