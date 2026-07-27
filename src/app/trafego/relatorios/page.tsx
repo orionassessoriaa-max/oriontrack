@@ -14,7 +14,10 @@ import {
   FileText,
   Eye,
   ShieldAlert,
-  RefreshCw
+  RefreshCw,
+  CalendarDays,
+  Send,
+  MessageCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -43,6 +46,23 @@ interface TrafficReport {
   corretores: { nome: string };
 }
 
+type WeeklyReportItem = {
+  corretor_id: string;
+  concessionaria: string;
+  meta_ad_account_name: string | null;
+  leads: number;
+  investimento: number | null;
+  cpl: number | null;
+  mensagem: string;
+};
+
+type ReportDestination = { id: string; corretor_id: string; tipo: 'account' | 'grupo'; nome: string; destino: string; ativo: boolean };
+
+function formatDateInput(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
 export default function TrafficReportsPage() {
   const { profile } = useAuth();
   const [corretores, setCorretores] = useState<ReportCorretor[]>([]);
@@ -55,6 +75,20 @@ export default function TrafficReportsPage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [fetchingMetaSpend, setFetchingMetaSpend] = useState(false);
   const [metaSpendError, setMetaSpendError] = useState<string | null>(null);
+  const [weeklyGenerating, setWeeklyGenerating] = useState(false);
+  const [weeklyPreview, setWeeklyPreview] = useState<WeeklyReportItem[] | null>(null);
+  const [weeklyReportId, setWeeklyReportId] = useState<string | null>(null);
+  const [weeklyError, setWeeklyError] = useState<string | null>(null);
+  const [weeklyDestination, setWeeklyDestination] = useState<'account' | 'grupo'>('account');
+  const [weeklyRange, setWeeklyRange] = useState(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 6);
+    return { data_inicio: formatDateInput(start), data_fim: formatDateInput(end) };
+  });
+  const [destinations, setDestinations] = useState<ReportDestination[]>([]);
+  const [destinationSaving, setDestinationSaving] = useState(false);
+  const [destinationForm, setDestinationForm] = useState({ corretor_id: '', tipo: 'grupo' as 'account' | 'grupo', nome: '', destino: '' });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -349,12 +383,114 @@ export default function TrafficReportsPage() {
     alert('Relatório copiado!');
   };
 
+  const generateWeeklyReport = async () => {
+    setWeeklyGenerating(true);
+    setWeeklyError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessão expirada. Entre novamente.');
+      const response = await fetch('/api/trafego/relatorios/semanal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(weeklyRange),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível gerar o relatório semanal.');
+      setWeeklyPreview(payload.items || []);
+      setWeeklyReportId(payload.report_id || null);
+    } catch (err: any) {
+      setWeeklyError(err.message || 'Erro ao gerar relatório semanal.');
+    } finally {
+      setWeeklyGenerating(false);
+    }
+  };
+
+  const copyWeeklyReport = () => {
+    if (!weeklyPreview) return;
+    const text = weeklyPreview.map((item) => `${item.concessionaria}\n${item.mensagem}`).join('\n\n--------------------\n\n');
+    navigator.clipboard.writeText(text);
+    alert('Relatórios semanais copiados.');
+  };
+
+  const saveDestination = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setDestinationSaving(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessão expirada. Entre novamente.');
+      const response = await fetch('/api/trafego/relatorios/destinos', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(destinationForm) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar o destino.');
+      setDestinations((current) => [...current.filter((item) => item.id !== payload.destination.id), payload.destination]);
+      setDestinationForm({ ...destinationForm, nome: '', destino: '' });
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar destino.');
+    } finally {
+      setDestinationSaving(false);
+    }
+  };
+
   return (
     <InternalLayout>
       <div className="mb-10">
         <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Relatórios de Tráfego</h1>
         <p className="text-gray-500 font-medium">Gere relatórios de performance e CPL para os parceiros.</p>
       </div>
+
+      <section className="mb-10 overflow-hidden rounded-[2.5rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-xl">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-cyan-300"><CalendarDays size={15} /> Relatório semanal</p>
+            <h2 className="text-2xl font-black">Gerar relatório para todas as concessionárias</h2>
+            <p className="mt-2 max-w-2xl text-sm font-medium text-slate-400">Cria uma prévia de mensagem com leads do CRM, investimento Meta e CPL. Nada é enviado automaticamente.</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-xs font-bold text-slate-400">Início<input type="date" value={weeklyRange.data_inicio} onChange={(e) => setWeeklyRange({ ...weeklyRange, data_inicio: e.target.value })} className="mt-2 block rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-sm text-white" /></label>
+            <label className="text-xs font-bold text-slate-400">Fim<input type="date" value={weeklyRange.data_fim} onChange={(e) => setWeeklyRange({ ...weeklyRange, data_fim: e.target.value })} className="mt-2 block rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-sm text-white" /></label>
+            <button type="button" onClick={generateWeeklyReport} disabled={weeklyGenerating} className="inline-flex h-[46px] items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black transition hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60">
+              {weeklyGenerating ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+              {weeklyGenerating ? 'Gerando...' : 'Gerar relatório semanal'}
+            </button>
+          </div>
+        </div>
+        {weeklyError && <p className="mt-5 rounded-xl border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm font-bold text-red-300">{weeklyError}</p>}
+      </section>
+
+      {weeklyPreview && (
+        <section className="mb-10 rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-xl">
+          <div className="flex flex-col gap-4 border-b border-slate-100 pb-6 lg:flex-row lg:items-center lg:justify-between">
+            <div><p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Prévia para revisão</p><h2 className="mt-1 text-2xl font-black text-slate-900">Mensagens da semana</h2><p className="mt-1 text-sm text-slate-500">Relatório {weeklyReportId ? `#${weeklyReportId.slice(0, 8)}` : ''} salvo no histórico. Revise antes de enviar.</p></div>
+            <div className="flex flex-wrap gap-3">
+              <select value={weeklyDestination} onChange={(e) => setWeeklyDestination(e.target.value as 'account' | 'grupo')} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700"><option value="account">Enviar para conta</option><option value="grupo">Enviar para grupo</option></select>
+              <button type="button" disabled title="Envio será liberado após configurar a conta do Lucas e os grupos das concessionárias" className="inline-flex items-center gap-2 rounded-xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-500 disabled:cursor-not-allowed"><Send size={16} /> Enviar para {weeklyDestination === 'account' ? 'conta' : 'grupos'}</button>
+              <button type="button" onClick={copyWeeklyReport} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"><Copy size={16} /> Copiar prévia</button>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            {weeklyPreview.map((item) => (
+              <article key={item.corretor_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-black text-slate-900">{item.concessionaria}</h3><p className="mt-1 text-xs font-bold uppercase tracking-wider text-slate-400">{item.meta_ad_account_name || 'Conta Meta não identificada'}</p></div><MessageCircle className="text-blue-600" size={20} /></div>
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-white p-3"><b className="block text-lg text-slate-900">{item.leads}</b><span className="text-[10px] font-black uppercase text-slate-400">Leads</span></div><div className="rounded-xl bg-white p-3"><b className="block text-sm text-slate-900">{item.investimento === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.investimento)}</b><span className="text-[10px] font-black uppercase text-slate-400">Investimento</span></div><div className="rounded-xl bg-white p-3"><b className="block text-sm text-slate-900">{item.cpl === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.cpl)}</b><span className="text-[10px] font-black uppercase text-slate-400">CPL</span></div></div>
+                <pre className="mt-4 whitespace-pre-wrap rounded-xl bg-white p-4 font-sans text-sm leading-6 text-slate-700">{item.mensagem}</pre>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="mb-10 rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="mb-6"><p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Destinos WhatsApp</p><h2 className="mt-1 text-xl font-black text-slate-900">Cadastrar conta e grupo por concessionária</h2><p className="mt-1 text-sm text-slate-500">Este cadastro prepara os destinos. O envio continua bloqueado até a revisão e a liberação da operação.</p></div>
+        <form onSubmit={saveDestination} className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <select required value={destinationForm.corretor_id} onChange={(e) => setDestinationForm({ ...destinationForm, corretor_id: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-700"><option value="">Concessionária</option>{corretores.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select>
+          <select value={destinationForm.tipo} onChange={(e) => setDestinationForm({ ...destinationForm, tipo: e.target.value as 'account' | 'grupo' })} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-700"><option value="grupo">Grupo WhatsApp</option><option value="account">Conta do Lucas</option></select>
+          <input required value={destinationForm.nome} onChange={(e) => setDestinationForm({ ...destinationForm, nome: e.target.value })} placeholder="Nome do destino" className="rounded-xl border border-slate-200 px-3 py-3 text-sm" />
+          <input required value={destinationForm.destino} onChange={(e) => setDestinationForm({ ...destinationForm, destino: e.target.value })} placeholder="ID ou número WhatsApp" className="rounded-xl border border-slate-200 px-3 py-3 text-sm" />
+          <button type="submit" disabled={destinationSaving} className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60">{destinationSaving ? 'Salvando...' : 'Adicionar destino'}</button>
+        </form>
+        {destinations.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{destinations.map((item) => <span key={item.id} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">{item.nome} · {item.tipo === 'grupo' ? 'Grupo' : 'Conta'}</span>)}</div>}
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         {/* Form Column */}
