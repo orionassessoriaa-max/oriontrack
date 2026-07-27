@@ -46,5 +46,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!comentario && !anexoUrl) return NextResponse.json({ error: 'Adicione um comentario ou uma imagem.' }, { status: 400 });
   const { data, error } = await supabaseAdmin.from('comercial_lead_interacoes').insert({ lead_id: id, autor_id: guard.profile.id, comentario, anexo_url: anexoUrl, anexo_nome: anexoNome }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ interaction: data }, { status: 201 });
+  return NextResponse.json({ interaction: { ...data, autor_nome: guard.profile.nome || 'Equipe comercial' } }, { status: 201 });
 }
