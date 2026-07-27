@@ -15,10 +15,12 @@ export default function CommercialUsersPage() {
   const [newRole, setNewRole] = useState<CommercialRole>('sdr');
   const [saving, setSaving] = useState(false);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function add() {
     if (!nome.trim()) return;
     setSaving(true);
+    setFormError(null);
     try {
       const payload = await api('/api/comercial/members', {
         method: 'POST',
@@ -27,6 +29,8 @@ export default function CommercialUsersPage() {
       setCredentials(payload.credentials);
       setNome(''); setEmail(''); setTelefone(''); setNewRole('sdr');
       await refreshAccess();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Não foi possível criar o integrante.');
     } finally { setSaving(false); }
   }
 
@@ -51,6 +55,7 @@ export default function CommercialUsersPage() {
         <input className="kh-input" value={telefone} onChange={(event) => setTelefone(event.target.value)} placeholder="Telefone (opcional)" type="tel" aria-label="Telefone" />
         <select className="kh-select" value={newRole} onChange={(event) => setNewRole(event.target.value as CommercialRole)} aria-label="Função comercial"><option value="sdr">SDR</option><option value="closer">Closer</option><option value="coordenador">Coordenador comercial</option></select>
         <button className="kh-button primary" disabled={!nome.trim() || saving} onClick={() => void add()}><Plus size={16} /> Criar usuário</button>
+        {formError && <div className="kh-inline-error" role="alert">{formError}</div>}
       </section>
 
       {credentials && <section className="kh-credentials kh-panel"><div><strong>Acesso criado</strong><span>Envie estes dados ao integrante. A senha deverá ser trocada no primeiro acesso.</span></div><div><span>Login</span><strong>{credentials.email}</strong></div><div><span>Senha provisória</span><strong>{credentials.senhaProvisoria}</strong></div><button className="kh-button" type="button" onClick={() => void navigator.clipboard?.writeText(`Login: ${credentials.email}\nSenha: ${credentials.senhaProvisoria}`)}><Copy size={15} /> Copiar acesso</button></section>}

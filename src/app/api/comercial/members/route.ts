@@ -15,11 +15,14 @@ export async function GET(request: Request) {
 
   const profileIds = (rows || []).map((row) => row.profile_id);
   const { data: profiles } = profileIds.length
-    ? await supabaseAdmin.from('profiles').select('id,nome,email,email_real,foto_url,status').in('id', profileIds)
+    ? await supabaseAdmin.from('profiles').select('id,nome,email,email_real,foto_url,status,corretor_id').in('id', profileIds)
     : { data: [] };
   const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
 
-  const members = (rows || []).map((row) => {
+  const members = (rows || []).filter((row) => {
+    const profile = profileMap.get(row.profile_id);
+    return profile && !profile.corretor_id;
+  }).map((row) => {
     const profile = profileMap.get(row.profile_id);
     return {
       ...row,
@@ -33,13 +36,13 @@ export async function GET(request: Request) {
   if (guard.commercialRole === 'coordenador') {
     const { data } = await supabaseAdmin
       .from('profiles')
-      .select('id,nome,email,email_real,status')
+      .select('id,nome,email,email_real,status,corretor_id')
       .or('status.eq.active,status.eq.ativo,status.eq.Ativo')
       .order('nome')
       .limit(200);
     const memberIds = new Set(profileIds);
     candidates = (data || [])
-      .filter((profile) => !memberIds.has(profile.id))
+      .filter((profile) => !memberIds.has(profile.id) && !profile.corretor_id)
       .map((profile) => ({ id: profile.id, nome: profile.nome, email: profile.email_real || profile.email || null }));
   }
 
@@ -95,7 +98,17 @@ export async function POST(request: Request) {
       precisa_trocar_senha: true,
       equipe_orion: 'kripto_hunters',
     };
-    const { error: profileError } = await supabaseAdmin.from('profiles').insert(profilePayload);
+    let { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .upsert(profilePayload, { onConflict: 'id' });
+    if (profileError && /equipe_orion|schema cache/i.test(String(profileError.message || ''))) {
+      const profileWithoutTeam = { ...profilePayload };
+      delete profileWithoutTeam.equipe_orion;
+      const retry = await supabaseAdmin
+        .from('profiles')
+        .upsert(profileWithoutTeam, { onConflict: 'id' });
+      profileError = retry.error;
+    }
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return NextResponse.json({ error: profileError.message }, { status: 500 });
@@ -117,6 +130,16 @@ export async function POST(request: Request) {
   const papel = String(body.papel || '');
   if (!profileId || !['coordenador', 'closer', 'sdr'].includes(papel)) {
     return NextResponse.json({ error: 'Perfil e funcao sao obrigatorios.' }, { status: 400 });
+  }
+
+  const { data: targetProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('id,corretor_id')
+    .eq('id', profileId)
+    .maybeSingle();
+  if (!targetProfile) return NextResponse.json({ error: 'Usuario nao encontrado.' }, { status: 404 });
+  if (targetProfile.corretor_id) {
+    return NextResponse.json({ error: 'Corretores nao podem ser vinculados ao time comercial.' }, { status: 400 });
   }
 
   const { error } = await supabaseAdmin.from('comercial_membros').upsert({
