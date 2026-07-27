@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
+import { TRAFFIC_RULES } from '@/lib/trafego/rules';
 
 type CorretorMeta = {
   id: string;
@@ -17,13 +18,6 @@ type CorretorMeta = {
 };
 
 const KRIPTO_PRINCIPAL_ACCOUNT_ID = '1531044161152262';
-
-const TRAFFIC_RULES = {
-  cplAttention: 20,
-  cplCritical: 28,
-  cpcMax: 6,
-  ctrMin: 1,
-};
 
 async function requireTrafficAccess(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -228,10 +222,43 @@ async function fetchCrmLeads(corretor: CorretorMeta, since: string, until: strin
   return (data || []).filter(isOrionLead);
 }
 
-function countLeads(leads: any[], field: 'utm_campaign' | 'utm_term' | 'utm_content', name?: string | null) {
+function attributionMatch(value?: string | null, name?: string | null) {
+  const source = normalizeKey(value);
   const target = normalizeKey(name);
-  if (!target) return 0;
-  return leads.filter((lead) => normalizeKey(lead[field]) === target).length;
+  if (!source || !target) return false;
+  if (source === target) return true;
+
+  // UTMs sometimes carry a shortened Meta name. Only accept containment when
+  // both sides are sufficiently specific, avoiding matches on words like cbo.
+  if (source.length >= 8 && target.length >= 8 && (source.includes(target) || target.includes(source))) return true;
+
+  // Some forms shorten the name to its main Meta tokens (audience, placement,
+  // region). Two shared specific tokens are enough to attribute the lead.
+  const tokens = (input: string) => input.split(/[^a-z0-9]+/).filter((token) => token.length >= 4 && !['orion', 'campanha', 'conjunto', 'anuncio'].includes(token));
+  const sourceTokens = tokens(source);
+  const targetTokens = new Set(tokens(target));
+  const overlap = sourceTokens.filter((token) => targetTokens.has(token));
+  return overlap.length >= 2;
+}
+
+function countLeadsForNode(
+  leads: any[],
+  node: { campaignName?: string | null; adsetName?: string | null; adName?: string | null; level: 'campaign' | 'adset' | 'ad' }
+) {
+  return leads.filter((lead) => {
+    const campaignMatch = node.campaignName
+      ? attributionMatch(lead.utm_campaign, node.campaignName)
+      : true;
+    if (!campaignMatch) return false;
+
+    if (node.level === 'campaign') return true;
+    const adsetMatch = attributionMatch(lead.utm_term, node.adsetName)
+      || attributionMatch(lead.utm_content, node.adsetName);
+    if (node.level === 'adset') return adsetMatch;
+
+    return attributionMatch(lead.utm_content, node.adName)
+      || attributionMatch(lead.utm_term, node.adName);
+  }).length;
 }
 
 function metricRow(row: any, crmLeads: number, currency = 'BRL') {
@@ -330,7 +357,7 @@ function buildTree(
   return campaignRows.map((campaign) => {
     const campaignKey = String(campaign.campaign_id || campaign.campaign_name || 'sem-campanha');
     const campaignName = campaign.campaign_name || 'Campanha sem nome';
-    const campaignLeads = countLeads(leads, 'utm_campaign', campaignName);
+    const campaignLeads = countLeadsForNode(leads, { level: 'campaign', campaignName });
     const campaignMeta = statusFromDetails(campaignDetails.get(campaign.campaign_id));
 
     return {
@@ -342,7 +369,7 @@ function buildTree(
       adsets: (adsetsByCampaign.get(campaignKey) || []).map((adset) => {
         const adsetKey = String(adset.adset_id || adset.adset_name || 'sem-conjunto');
         const adsetName = adset.adset_name || 'Conjunto sem nome';
-        const adsetLeads = countLeads(leads, 'utm_term', adsetName);
+        const adsetLeads = countLeadsForNode(leads, { level: 'adset', campaignName, adsetName });
         const adsetMeta = statusFromDetails(adsetDetails.get(adset.adset_id));
         return {
           id: adsetKey,
@@ -367,7 +394,7 @@ function buildTree(
                 title: details.creative.title || details.creative.object_story_spec?.link_data?.name || null,
                 body: details.creative.body || details.creative.object_story_spec?.link_data?.message || null,
               } : null,
-              metrics: metricRow(ad, countLeads(leads, 'utm_content', adName), currency),
+              metrics: metricRow(ad, countLeadsForNode(leads, { level: 'ad', campaignName, adsetName, adName }), currency),
             };
           }),
         };
