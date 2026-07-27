@@ -131,7 +131,8 @@ function fallbackDraft(payload: any, account: CorretorMeta) {
       {
         name: 'AD ou criativo citado no prompt',
         status: 'PAUSED',
-        creative_reference: 'Extrair do prompt quando existir.',
+        creative_reference: payload.creative_attachment?.url || 'Extrair do prompt quando existir.',
+        creative_url: payload.creative_attachment?.url || null,
         drive_folder: 'Extrair do prompt quando existir.',
         primary_text: 'Gerar ou revisar conforme pedido do gestor.',
       },
@@ -173,6 +174,8 @@ Regras obrigatorias:
 - Leads oficiais sao do CRM, mas aqui voce esta criando estrutura de campanha, nao julgando resultado.
 - Extraia do proprio prompt qualquer referencia de Drive/pasta/criativo, por exemplo "AD 2 da pasta SulAmerica DF". Se o gestor nao informar link nem nome de pasta, coloque isso em missing_info.
 - Se houver link/pasta Drive, registre a pasta no campo drive_folder. Nao invente arquivo que nao foi citado.
+- Se houver um creative_attachment, preserve sua url em ads[].creative_url e trate-o como o criativo anexado pelo gestor. Nao invente creative_id.
+- Se houver link/pasta Drive, registre a pasta no campo drive_folder. Nao invente arquivo que nao foi citado.
 - Retorne apenas JSON valido com: mode, publish_status, summary, actions, campaign, adsets, ads, human_review_checklist, missing_info.
 - Nao invente ID do Meta.`
         },
@@ -183,6 +186,7 @@ Regras obrigatorias:
             meta_ad_account_name: account.meta_ad_account_name,
             meta_ad_account_id: account.meta_ad_account_id,
             prompt: payload.prompt,
+            creative_attachment: payload.creative_attachment || null,
             current_metrics: payload.metrics,
             fallback_shape: base,
           }).slice(0, 12000),
@@ -202,6 +206,9 @@ Regras obrigatorias:
       ...parsed,
       mode: 'draft',
       publish_status: parsed.publish_status || 'REVIEW_REQUIRED',
+      ads: Array.isArray(parsed.ads) && payload.creative_attachment?.url
+        ? parsed.ads.map((ad: any) => ({ ...ad, creative_url: ad.creative_url || payload.creative_attachment.url }))
+        : parsed.ads,
     };
   } catch {
     return base;

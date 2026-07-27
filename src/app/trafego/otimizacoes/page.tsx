@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { BarChart3, CheckCircle2, ChevronDown, ChevronRight, Loader2, Maximize2, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle } from 'lucide-react';
+import { BarChart3, CheckCircle2, ChevronDown, ChevronRight, Loader2, Maximize2, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud, FileVideo2 } from 'lucide-react';
 import { TRAFFIC_RULES, formatBRL, formatPercent } from '@/lib/trafego/rules';
 
 type AccountOption = {
@@ -107,6 +107,10 @@ export default function OtimizacoesPage() {
   const [fullscreenCreative, setFullscreenCreative] = useState<AdNode | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState('');
   const [optimizePrompt, setOptimizePrompt] = useState('');
+  const [creativeFile, setCreativeFile] = useState<File | null>(null);
+  const [creativeUrl, setCreativeUrl] = useState<string | null>(null);
+  const [draggingCreative, setDraggingCreative] = useState(false);
+  const [uploadingCreative, setUploadingCreative] = useState(false);
   const [optimizationDraft, setOptimizationDraft] = useState<OptimizationDraft | null>(null);
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [creatingDraft, setCreatingDraft] = useState(false);
@@ -118,6 +122,7 @@ export default function OtimizacoesPage() {
   const [error, setError] = useState<string | null>(null);
   const [initialAccountId, setInitialAccountId] = useState<string | null>(null);
   const optimizationRequestRef = useRef(0);
+  const creativeInputRef = useRef<HTMLInputElement | null>(null);
 
   const gestorIdParam = actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
     ? profile.id
@@ -184,6 +189,27 @@ export default function OtimizacoesPage() {
       return;
     }
 
+    let uploadedCreativeUrl = creativeUrl;
+    if (creativeFile && !uploadedCreativeUrl) {
+      setUploadingCreative(true);
+      const formData = new FormData();
+      formData.append('file', creativeFile);
+      const uploadResponse = await fetch('/api/integrations/meta/optimize-draft/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const uploadPayload = await uploadResponse.json();
+      setUploadingCreative(false);
+      if (!uploadResponse.ok) {
+        setDraftError(uploadPayload.error || 'Nao foi possivel anexar o criativo.');
+        setGeneratingDraft(false);
+        return;
+      }
+      uploadedCreativeUrl = uploadPayload.file?.url || null;
+      setCreativeUrl(uploadedCreativeUrl);
+    }
+
     const response = await fetch('/api/integrations/meta/optimize-draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -193,6 +219,9 @@ export default function OtimizacoesPage() {
         metrics: total,
         equipe: selectedOperationalTeam(),
         gestor_id: gestorIdParam,
+        creative_attachment: uploadedCreativeUrl
+          ? { name: creativeFile?.name || 'criativo anexado', type: creativeFile?.type || '', url: uploadedCreativeUrl }
+          : null,
       }),
     });
 
@@ -206,6 +235,22 @@ export default function OtimizacoesPage() {
 
     setOptimizationDraft(payload.draft || null);
     setDraftExecution(null);
+  }
+
+  function acceptCreative(file?: File | null) {
+    if (!file) return;
+    const validType = file.type.startsWith('image/') || file.type === 'video/mp4' || file.type === 'video/quicktime' || file.type === 'video/webm';
+    if (!validType) {
+      setDraftError('Anexe uma imagem ou video.');
+      return;
+    }
+    if (file.size > 30 * 1024 * 1024) {
+      setDraftError('O criativo deve ter no maximo 30 MB.');
+      return;
+    }
+    setDraftError(null);
+    setCreativeFile(file);
+    setCreativeUrl(null);
   }
 
   async function createOptimizationDraft() {
@@ -508,12 +553,61 @@ export default function OtimizacoesPage() {
                   </div>
 
                   <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
+                    <div className="space-y-3">
                     <textarea
                       value={optimizePrompt}
                       onChange={(event) => setOptimizePrompt(event.target.value)}
                       placeholder="Ex: pause o AD-4 Amil-SP. Ou: crie campanha ABO SulAmerica DF, público 30 a 58 anos, verba R$ 50/dia, use o criativo AD 2 da pasta SulAmerica DF."
                       className="min-h-32 w-full resize-y p-4 text-sm leading-relaxed"
                     />
+                    <input
+                      ref={creativeInputRef}
+                      type="file"
+                      accept="image/*,video/mp4,video/quicktime,video/webm"
+                      className="hidden"
+                      onChange={(event) => acceptCreative(event.target.files?.[0])}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => creativeInputRef.current?.click()}
+                      onDragOver={(event) => { event.preventDefault(); setDraggingCreative(true); }}
+                      onDragLeave={() => setDraggingCreative(false)}
+                      onDrop={(event) => { event.preventDefault(); setDraggingCreative(false); acceptCreative(event.dataTransfer.files?.[0]); }}
+                      className="mt-3 flex min-h-20 w-full items-center gap-3 rounded-xl border border-dashed px-4 py-3 text-left transition"
+                      style={{
+                        background: draggingCreative ? 'var(--tf-accent-soft)' : 'var(--tf-surface-2)',
+                        borderColor: draggingCreative ? 'var(--tf-accent)' : 'var(--tf-border)',
+                        color: 'var(--tf-ink-soft)',
+                      }}
+                    >
+                      {creativeFile?.type.startsWith('video/') ? <FileVideo2 size={20} /> : <UploadCloud size={20} />}
+                      <span className="min-w-0 flex-1 text-xs">
+                        {creativeFile ? (
+                          <>
+                            <strong className="block truncate" style={{ color: 'var(--tf-ink)' }}>{creativeFile.name}</strong>
+                            <span>{uploadingCreative ? 'Enviando criativo...' : 'Criativo anexado ao pedido.'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <strong className="block" style={{ color: 'var(--tf-ink)' }}>Arraste o criativo aqui</strong>
+                            <span>ou clique para selecionar uma imagem ou video. Opcional: use o Drive no prompt.</span>
+                          </>
+                        )}
+                      </span>
+                      {creativeFile ? (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Remover criativo"
+                          onClick={(event) => { event.stopPropagation(); setCreativeFile(null); setCreativeUrl(null); }}
+                          onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setCreativeFile(null); setCreativeUrl(null); } }}
+                        >
+                          <X size={16} />
+                        </span>
+                      ) : null}
+                    </button>
+
+                    </div>
 
                     <div className="rounded-xl border p-4" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
                       <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>
@@ -546,11 +640,11 @@ export default function OtimizacoesPage() {
                       <button
                         type="button"
                         onClick={generateOptimizationDraft}
-                        disabled={generatingDraft || !selected || optimizePrompt.trim().length < 12}
+                        disabled={generatingDraft || uploadingCreative || !selected || optimizePrompt.trim().length < 12}
                         className="tf-no-lift mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white transition disabled:opacity-50"
                         style={{ background: 'var(--tf-accent)' }}
                       >
-                        {generatingDraft ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+                        {generatingDraft || uploadingCreative ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
                         Gerar plano
                       </button>
                     </div>
