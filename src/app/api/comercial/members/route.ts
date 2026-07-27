@@ -102,8 +102,9 @@ export async function POST(request: Request) {
       .from('profiles')
       .upsert(profilePayload, { onConflict: 'id' });
     if (profileError && /equipe_orion|schema cache/i.test(String(profileError.message || ''))) {
-      const profileWithoutTeam = { ...profilePayload };
-      delete profileWithoutTeam.equipe_orion;
+      const profileWithoutTeam = Object.fromEntries(
+        Object.entries(profilePayload).filter(([key]) => key !== 'equipe_orion'),
+      );
       const retry = await supabaseAdmin
         .from('profiles')
         .upsert(profileWithoutTeam, { onConflict: 'id' });
