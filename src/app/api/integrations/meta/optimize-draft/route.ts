@@ -115,13 +115,15 @@ function fallbackDraft(payload: any, account: CorretorMeta) {
       buying_type: 'AUCTION',
       status: 'PAUSED',
       budget_mode: 'ABO',
+      special_ad_categories: [],
     },
     adsets: [
       {
         name: `ABO | Publico principal | ${now}`,
         status: 'PAUSED',
-        daily_budget: 'Definir no prompt ou revisar manualmente',
-        targeting: 'Publico, idade, regiao e interesses extraidos do prompt.',
+        daily_budget: null,
+        targeting: { geo_locations: { countries: ['BR'] } },
+        billing_event: 'IMPRESSIONS',
         optimization_goal: 'LEAD_GENERATION',
       },
     ],
@@ -164,6 +166,8 @@ Regras obrigatorias:
 - O gestor pode pedir qualquer otimizacao: criar campanha, criar conjunto, criar anuncio, pausar anuncio, pausar criativo, pausar conjunto, pausar campanha, trocar criativo, ajustar verba, duplicar, revisar copy ou reorganizar estrutura.
 - Nunca execute de verdade neste endpoint. Gere apenas rascunho operacional revisavel.
 - Toda criacao nova de campanha, conjunto ou anuncio deve sair com status PAUSED.
+- Para permitir a criacao real depois da confirmacao, retorne campaign com name, objective, buying_type e special_ad_categories; adsets com name, daily_budget em centavos, billing_event, optimization_goal e targeting como objeto JSON; ads com name e creative_id somente quando o ID real da Meta tiver sido informado.
+- Nao invente daily_budget nem creative_id. Se faltar verba, deixe daily_budget nulo e informe missing_info. Se houver apenas referencia a uma pasta do Drive, registre-a, mas nao transforme isso em creative_id.
 - Acoes de pausa/troca/verba devem virar itens em actions, com alvo, motivo, risco e checklist.
 - Se o usuario pedir ABO, usar budget_mode ABO e verba no conjunto.
 - Leads oficiais sao do CRM, mas aqui voce esta criando estrutura de campanha, nao julgando resultado.

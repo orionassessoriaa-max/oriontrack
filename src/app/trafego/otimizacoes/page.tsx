@@ -5,7 +5,8 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { BarChart3, CheckCircle2, ChevronDown, ChevronRight, FileText, Loader2, Maximize2, RefreshCw, Search, Sparkles, Wand2, X } from 'lucide-react';
+import { BarChart3, CheckCircle2, ChevronDown, ChevronRight, Loader2, Maximize2, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle } from 'lucide-react';
+import { TRAFFIC_RULES, formatBRL, formatPercent } from '@/lib/trafego/rules';
 
 type AccountOption = {
   id: string;
@@ -45,6 +46,7 @@ type CreativePreview = {
 type AdNode = MetaStatus & { id: string; name: string; level: 'ad'; metrics: Metrics; creative?: CreativePreview | null };
 type AdsetNode = MetaStatus & { id: string; name: string; level: 'adset'; metrics: Metrics; ads: AdNode[] };
 type CampaignNode = MetaStatus & { id: string; name: string; level: 'campaign'; metrics: Metrics; adsets: AdsetNode[] };
+
 type OptimizationDraft = {
   summary?: string;
   publish_status?: string;
@@ -56,25 +58,20 @@ type OptimizationDraft = {
   missing_info?: string[];
 };
 
+type DraftExecutionItem = { level: 'campaign' | 'adset' | 'ad'; id: string; name: string; status: string };
+type DraftExecutionResult = {
+  created: DraftExecutionItem[];
+  skipped: { level: string; name: string; reason: string }[];
+  warnings: string[];
+};
+
 function todayLocal() {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
-function currentMonthStart() {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60000;
-  const first = new Date(now.getFullYear(), now.getMonth(), 1);
-  return new Date(first.getTime() - offset).toISOString().slice(0, 10);
-}
-
-function formatCurrency(value: number | null | undefined, currency = 'BRL') {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value));
-}
-
-function formatPercent(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return '0,00%';
-  return `${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+function daysAgo(days: number) {
+  const date = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
 function accountKey(account: AccountOption) {
@@ -88,8 +85,7 @@ function selectedOperationalTeam() {
 
 function bestCreativeImage(creative?: CreativePreview | null) {
   if (creative?.image_url) return creative.image_url;
-  const thumbnail = creative?.thumbnail_url || '';
-  return thumbnail
+  return String(creative?.thumbnail_url || '')
     .replace(/\/p\d+x\d+\//g, '/p1080x1080/')
     .replace(/s\d+x\d+/, 's1080x1080')
     .replace(/\/\d+x\d+\//g, '/1080x1080/');
@@ -102,9 +98,9 @@ export default function OtimizacoesPage() {
   const [total, setTotal] = useState<Metrics | null>(null);
   const [tree, setTree] = useState<CampaignNode[]>([]);
   const [search, setSearch] = useState('');
-  const [dateStart, setDateStart] = useState(currentMonthStart());
+  const [dateStart, setDateStart] = useState(daysAgo(30));
   const [dateEnd, setDateEnd] = useState(todayLocal());
-  const [presetLabel, setPresetLabel] = useState('Este mês');
+  const [presetLabel, setPresetLabel] = useState('Últimos 30 dias');
   const [expandedCampaigns, setExpandedCampaigns] = useState<Record<string, boolean>>({});
   const [expandedAdsets, setExpandedAdsets] = useState<Record<string, boolean>>({});
   const [expandedAds, setExpandedAds] = useState<Record<string, boolean>>({});
@@ -113,12 +109,19 @@ export default function OtimizacoesPage() {
   const [optimizePrompt, setOptimizePrompt] = useState('');
   const [optimizationDraft, setOptimizationDraft] = useState<OptimizationDraft | null>(null);
   const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+  const [draftExecution, setDraftExecution] = useState<DraftExecutionResult | null>(null);
+  const [activationBusy, setActivationBusy] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialAccountId, setInitialAccountId] = useState<string | null>(null);
   const optimizationRequestRef = useRef(0);
+
+  const gestorIdParam = actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
+    ? profile.id
+    : undefined;
 
   async function fetchOptimization(accountId?: string | null, analyze = false) {
     if (!profile?.id) return;
@@ -147,7 +150,7 @@ export default function OtimizacoesPage() {
         account_id: accountId || selected?.meta_ad_account_id,
         analyze,
         equipe: selectedOperationalTeam(),
-        gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego' ? profile.id : undefined,
+        gestor_id: gestorIdParam,
       }),
     });
 
@@ -176,7 +179,7 @@ export default function OtimizacoesPage() {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) {
-      setDraftError('Sessao expirada.');
+      setDraftError('Sessão expirada.');
       setGeneratingDraft(false);
       return;
     }
@@ -189,7 +192,7 @@ export default function OtimizacoesPage() {
         prompt: optimizePrompt,
         metrics: total,
         equipe: selectedOperationalTeam(),
-        gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego' ? profile.id : undefined,
+        gestor_id: gestorIdParam,
       }),
     });
 
@@ -197,11 +200,62 @@ export default function OtimizacoesPage() {
     setGeneratingDraft(false);
 
     if (!response.ok) {
-      setDraftError(payload.error || 'Erro ao gerar rascunho.');
+      setDraftError(payload.error || 'Erro ao gerar o plano.');
       return;
     }
 
     setOptimizationDraft(payload.draft || null);
+    setDraftExecution(null);
+  }
+
+  async function createOptimizationDraft() {
+    if (!selected?.meta_ad_account_id || !optimizationDraft) return;
+    setCreatingDraft(true);
+    setDraftError(null);
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setDraftError('Sessao expirada.');
+      setCreatingDraft(false);
+      return;
+    }
+    const response = await fetch('/api/integrations/meta/execute-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ account_id: selected.meta_ad_account_id, draft: optimizationDraft, confirmar_criacao: true, equipe: selectedOperationalTeam(), gestor_id: gestorIdParam }),
+    });
+    const payload = await response.json();
+    setCreatingDraft(false);
+    if (!response.ok) {
+      setDraftError(payload.error || 'Nao foi possivel criar a estrutura pausada.');
+      return;
+    }
+    setDraftExecution({ created: payload.created || [], skipped: payload.skipped || [], warnings: payload.warnings || [] });
+  }
+
+  async function activateDraftItem(item: DraftExecutionItem) {
+    if (!selected?.meta_ad_account_id || item.status === 'ACTIVE') return;
+    setActivationBusy(item.id);
+    setDraftError(null);
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setDraftError('Sessao expirada.');
+      setActivationBusy(null);
+      return;
+    }
+    const response = await fetch('/api/integrations/meta/execute-draft', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ account_id: selected.meta_ad_account_id, object_id: item.id, level: item.level, confirmar: true, equipe: selectedOperationalTeam(), gestor_id: gestorIdParam }),
+    });
+    const payload = await response.json();
+    setActivationBusy(null);
+    if (!response.ok) {
+      setDraftError(payload.error || 'Nao foi possivel ativar o item.');
+      return;
+    }
+    setDraftExecution((current) => current ? { ...current, created: current.created.map((entry) => entry.id === item.id ? { ...entry, status: 'ACTIVE' } : entry) } : current);
   }
 
   useEffect(() => {
@@ -216,273 +270,586 @@ export default function OtimizacoesPage() {
     const accountFromUrl = params.get('conta');
     setInitialAccountId(accountFromUrl);
     void fetchOptimization(accountFromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, actualProfile?.id]);
 
   useEffect(() => {
     if (!profile?.id) return;
     if (initialAccountId === null) return;
     void fetchOptimization(selected?.meta_ad_account_id || initialAccountId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateStart, dateEnd, profile?.id, actualProfile?.id]);
 
   const filteredAccounts = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return accounts;
-    return accounts.filter((account) => `${account.concessionaria} ${account.responsavel} ${account.meta_ad_account_name || ''}`.toLowerCase().includes(term));
+    return accounts.filter((account) =>
+      `${account.concessionaria} ${account.responsavel} ${account.meta_ad_account_name || ''}`.toLowerCase().includes(term)
+    );
   }, [accounts, search]);
 
   return (
     <InternalLayout>
-      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">Meta Ads + CRM</p>
-          <h1 className="text-3xl font-black text-white sm:text-4xl">Otimizações</h1>
-          <p className="mt-1 max-w-3xl text-sm font-semibold text-slate-400">
-            Campanhas, conjuntos e anúncios com CPL calculado somente pelos leads de origem Orion no CRM.
-          </p>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <MetaDatePicker
-            startDate={dateStart}
-            endDate={dateEnd}
-            preset={presetLabel}
-            onChange={(start, end, label) => {
-              setDateStart(start);
-              setDateEnd(end);
-              setPresetLabel(label);
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fetchOptimization(selected?.meta_ad_account_id, true)}
-            disabled={loading || reviewing || !selected}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-black uppercase tracking-wider text-white hover:bg-blue-500 disabled:opacity-60"
-          >
-            {reviewing ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
-            Revisar com IA
-          </button>
-        </div>
-      </div>
-
-      <div className="grid min-h-[700px] gap-6 xl:grid-cols-[310px_1fr]">
-        <aside className="border-r border-white/10 pr-4">
-          <label className="relative mb-4 block">
-            <Search className="absolute left-0 top-1/2 -translate-y-1/2 text-slate-500" size={17} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar concessionária..."
-              className="w-full border-b border-white/10 bg-transparent py-3 pl-7 text-sm font-bold text-white outline-none focus:border-cyan-400"
-            />
-          </label>
-
-          <div className="max-h-[calc(100vh-250px)] space-y-1 overflow-auto pr-1">
-            {filteredAccounts.map((account) => {
-              const isSelected = accountKey(account) === accountKey(selected || account);
-              return (
-                <button
-                  key={accountKey(account)}
-                  type="button"
-                  onClick={() => fetchOptimization(account.meta_ad_account_id)}
-                  className={`w-full border-l-2 px-3 py-3 text-left transition ${isSelected ? 'border-cyan-400 bg-cyan-400/10' : 'border-transparent hover:border-white/30 hover:bg-white/[0.03]'}`}
-                >
-                  <p className="truncate text-sm font-black text-white">{account.concessionaria}</p>
-                  <p className="mt-1 truncate text-[11px] font-bold text-slate-500">{account.meta_ad_account_name || `act_${account.meta_ad_account_id}`}</p>
-                </button>
-              );
-            })}
+      <div className="orion-trafego" style={{ color: 'var(--tf-ink)' }}>
+        <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tf-accent-ink)' }}>
+              Meta Ads + CRM
+            </p>
+            <h1 className="mt-1 text-3xl font-black tracking-tight sm:text-[34px]">Otimizações</h1>
+            <p className="mt-1.5 max-w-2xl text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
+              Campanhas, conjuntos e anúncios com CPL calculado só pelos leads de origem Orion no CRM.
+            </p>
           </div>
-        </aside>
+          <div className="flex flex-wrap items-center gap-3">
+            <MetaDatePicker
+              startDate={dateStart}
+              endDate={dateEnd}
+              preset={presetLabel}
+              onChange={(start, end, label) => {
+                setDateStart(start);
+                setDateEnd(end);
+                setPresetLabel(label);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fetchOptimization(selected?.meta_ad_account_id, true)}
+              disabled={loading || reviewing || !selected}
+              className="tf-no-lift inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold text-white transition disabled:opacity-60"
+              style={{ background: 'var(--tf-accent)' }}
+            >
+              {reviewing ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+              Revisar com IA
+            </button>
+          </div>
+        </header>
 
-        <main className="min-w-0">
-          {error && <div className="mb-4 border-l-2 border-red-400 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-200">{error}</div>}
+        <div className="grid gap-6 xl:grid-cols-[290px_1fr]">
+          <aside
+            className="h-fit rounded-2xl border p-3"
+            style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
+          >
+            <label className="relative mb-3 block">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2" size={16} style={{ color: 'var(--tf-ink-mute)' }} />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar concessionária..."
+                className="w-full py-2.5 pl-9 pr-3 text-sm"
+              />
+            </label>
 
-          {loading ? (
-            <div className="flex h-[520px] items-center justify-center">
-              <Loader2 className="animate-spin text-cyan-400" size={38} />
-            </div>
-          ) : !selected || !total ? (
-            <div className="flex h-[520px] items-center justify-center text-sm font-bold text-slate-500">Nenhuma concessionária selecionada.</div>
-          ) : (
-            <>
-              <div className="mb-5 border-b border-white/10 pb-5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Concessionária</p>
-                <h2 className="mt-1 text-3xl font-black text-white">{selected.concessionaria}</h2>
-                <p className="mt-1 text-sm font-bold text-slate-500">{selected.meta_ad_account_name || `act_${selected.meta_ad_account_id}`}</p>
-              </div>
-
-              <div className="mb-5 grid grid-cols-2 gap-x-8 gap-y-4 border-b border-white/10 pb-5 lg:grid-cols-6">
-                <Metric label="Total" value={formatCurrency(total.spend, total.currency)} />
-                <Metric label="Leads CRM" value={String(total.leads_crm || 0)} />
-                <Metric label="CPL Orion CRM" value={formatCurrency(total.cpl_crm, total.currency)} alert={Number(total.cpl_crm || 0) >= 28} />
-                <Metric label="CPC" value={formatCurrency(total.cpc || 0, total.currency)} alert={Number(total.cpc || 0) > 6} />
-                <Metric label="CPM" value={formatCurrency(total.cpm || 0, total.currency)} />
-                <Metric label="CTR" value={formatPercent(total.ctr)} alert={Number(total.ctr || 0) < 1} />
-              </div>
-
-              <section className="mb-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <BarChart3 size={17} className="text-cyan-300" />
-                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Estrutura da conta</h3>
-                  </div>
-                  <button onClick={() => fetchOptimization(selected.meta_ad_account_id)} className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-cyan-300">
-                    <RefreshCw size={13} /> Atualizar
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto border-y border-white/10">
-                  <table className="w-full min-w-[1080px] border-collapse text-left">
-                    <thead className="border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      <tr>
-                        <th className="py-3 pr-4">Nome</th>
-                        <th className="px-3 py-3 text-right">Total</th>
-                        <th className="px-3 py-3 text-right">Leads CRM</th>
-                        <th className="px-3 py-3 text-right">CPL Orion CRM</th>
-                        <th className="px-3 py-3 text-right">CPC</th>
-                        <th className="px-3 py-3 text-right">CPM</th>
-                        <th className="px-3 py-3 text-right">CTR</th>
-                        <th className="px-3 py-3 text-right">Freq.</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {tree.map((campaign) => (
-                        <CampaignRows
-                          key={campaign.id}
-                          campaign={campaign}
-                          expandedCampaigns={expandedCampaigns}
-                          expandedAdsets={expandedAdsets}
-                          expandedAds={expandedAds}
-                          setExpandedCampaigns={setExpandedCampaigns}
-                          setExpandedAdsets={setExpandedAdsets}
-                          setExpandedAds={setExpandedAds}
-                          onOpenCreative={setFullscreenCreative}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section className="border-t border-white/10 pt-5">
-                <div className="mb-2 flex items-center gap-2">
-                  <Sparkles size={16} className="text-cyan-300" />
-                  <h3 className="text-sm font-black uppercase tracking-widest text-white">Recomendação da IA</h3>
-                </div>
-                <p className="max-w-5xl whitespace-pre-line text-sm font-bold leading-relaxed text-slate-300">
-                  {aiRecommendation || 'Clique em Revisar com IA para gerar uma análise real com base nas regras de CPL, CPC, CTR e leads Orion no CRM.'}
+            <div className="max-h-[calc(100vh-260px)] space-y-1 overflow-auto">
+              {filteredAccounts.length === 0 ? (
+                <p className="px-3 py-6 text-center text-xs" style={{ color: 'var(--tf-ink-mute)' }}>
+                  Nenhuma concessionária encontrada.
                 </p>
-              </section>
+              ) : filteredAccounts.map((account) => {
+                const isSelected = selected ? accountKey(account) === accountKey(selected) : false;
+                return (
+                  <button
+                    key={accountKey(account)}
+                    type="button"
+                    onClick={() => fetchOptimization(account.meta_ad_account_id)}
+                    className="tf-no-lift w-full rounded-lg border px-3 py-2.5 text-left transition"
+                    style={{
+                      background: isSelected ? 'var(--tf-accent-soft)' : 'transparent',
+                      borderColor: isSelected ? 'var(--tf-accent-border)' : 'transparent',
+                    }}
+                  >
+                    <span className="block truncate text-sm font-bold">{account.concessionaria}</span>
+                    <span className="mt-0.5 block truncate text-xs" style={{ color: 'var(--tf-ink-mute)' }}>
+                      {account.meta_ad_account_name || `act_${account.meta_ad_account_id}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
 
-              <section className="mt-6 border-t border-white/10 pt-5">
-                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2">
-                    <Wand2 size={17} className="text-cyan-300" />
-                    <div>
-                      <h3 className="text-sm font-black uppercase tracking-widest text-white">Otimizar</h3>
-                      <p className="text-xs font-semibold text-slate-500">Peça campanhas, pausas, trocas de criativo, verba ou ajustes. A IA gera um plano revisável.</p>
-                    </div>
+          <main className="min-w-0">
+            {error ? (
+              <div
+                className="mb-4 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm font-medium"
+                style={{ background: 'var(--tf-crit-soft)', borderColor: 'var(--tf-crit-border)', color: 'var(--tf-crit)' }}
+              >
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                {error}
+              </div>
+            ) : null}
+
+            {loading ? (
+              <div className="grid h-[480px] place-items-center">
+                <Loader2 className="animate-spin" size={34} style={{ color: 'var(--tf-accent)' }} />
+              </div>
+            ) : !selected || !total ? (
+              <div
+                className="grid h-[480px] place-items-center rounded-2xl border text-sm"
+                style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}
+              >
+                Nenhuma concessionária selecionada.
+              </div>
+            ) : (
+              <>
+                <section
+                  className="mb-4 rounded-2xl border p-5"
+                  style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tf-accent-ink)' }}>
+                    Concessionária
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black">{selected.concessionaria}</h2>
+                  <p className="mt-1 text-xs" style={{ color: 'var(--tf-ink-mute)' }}>
+                    {selected.meta_ad_account_name || `act_${selected.meta_ad_account_id}`}
+                  </p>
+
+                  <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t pt-5 lg:grid-cols-6" style={{ borderColor: 'var(--tf-border)' }}>
+                    <Metric label="Investimento" value={formatBRL(total.spend, total.currency)} />
+                    <Metric label="Leads CRM" value={String(total.leads_crm || 0)} />
+                    <Metric label="CPL Orion" value={formatBRL(total.cpl_crm, total.currency)} alert={Number(total.cpl_crm || 0) >= TRAFFIC_RULES.cplCritical} />
+                    <Metric label="CPC" value={formatBRL(total.cpc || 0, total.currency)} alert={Number(total.cpc || 0) > TRAFFIC_RULES.cpcMax} />
+                    <Metric label="CPM" value={formatBRL(total.cpm || 0, total.currency)} />
+                    <Metric label="CTR" value={formatPercent(total.ctr)} alert={Number(total.ctr || 0) < TRAFFIC_RULES.ctrMin} />
                   </div>
-                  <span className="w-fit rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-200">Revisão obrigatória</span>
-                </div>
+                </section>
 
-                <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-                  <div className="space-y-3">
+                <section
+                  className="mb-4 overflow-hidden rounded-2xl border"
+                  style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
+                >
+                  <div className="flex items-center justify-between gap-3 px-5 py-4">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 size={16} style={{ color: 'var(--tf-accent-ink)' }} />
+                      <h3 className="text-base font-bold">Estrutura da conta</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fetchOptimization(selected.meta_ad_account_id)}
+                      className="tf-no-lift inline-flex items-center gap-1.5 text-xs font-bold"
+                      style={{ color: 'var(--tf-accent-ink)' }}
+                    >
+                      <RefreshCw size={13} /> Atualizar
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto border-t" style={{ borderColor: 'var(--tf-border)' }}>
+                    <table className="w-full min-w-[980px] border-collapse text-left">
+                      <thead style={{ background: 'var(--tf-surface-2)' }}>
+                        <tr className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>
+                          <th className="py-3 pl-5 pr-4">Nome</th>
+                          <th className="px-3 py-3 text-right">Investimento</th>
+                          <th className="px-3 py-3 text-right">Leads CRM</th>
+                          <th className="px-3 py-3 text-right">CPL Orion</th>
+                          <th className="px-3 py-3 text-right">CPC</th>
+                          <th className="px-3 py-3 text-right">CPM</th>
+                          <th className="px-3 py-3 text-right">CTR</th>
+                          <th className="px-3 py-3 pr-5 text-right">Freq.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tree.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="px-5 py-10 text-center text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
+                              Nenhuma campanha com entrega no período.
+                            </td>
+                          </tr>
+                        ) : tree.map((campaign) => (
+                          <CampaignRows
+                            key={campaign.id}
+                            campaign={campaign}
+                            expandedCampaigns={expandedCampaigns}
+                            expandedAdsets={expandedAdsets}
+                            expandedAds={expandedAds}
+                            setExpandedCampaigns={setExpandedCampaigns}
+                            setExpandedAdsets={setExpandedAdsets}
+                            setExpandedAds={setExpandedAds}
+                            onOpenCreative={setFullscreenCreative}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section
+                  className="mb-4 rounded-2xl border p-5"
+                  style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <Sparkles size={16} style={{ color: 'var(--tf-accent-ink)' }} />
+                    <h3 className="text-base font-bold">Leitura da IA</h3>
+                  </div>
+                  <p className="whitespace-pre-line text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>
+                    {aiRecommendation || 'Clique em Revisar com IA para gerar a análise desta conta no período selecionado.'}
+                  </p>
+                </section>
+
+                <section
+                  className="rounded-2xl border p-5"
+                  style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
+                >
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Wand2 size={16} style={{ color: 'var(--tf-accent-ink)' }} />
+                      <div>
+                        <h3 className="text-base font-bold">Pedido manual</h3>
+                        <p className="mt-0.5 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>
+                          Peça uma campanha, pausa, troca de criativo ou ajuste de verba. Sai um plano revisável, nada é publicado.
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+                      style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)', color: 'var(--tf-warn)' }}
+                    >
+                      Revisão obrigatória
+                    </span>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
                     <textarea
                       value={optimizePrompt}
                       onChange={(event) => setOptimizePrompt(event.target.value)}
-                      placeholder="Ex: Pause o AD-4 Amil-SP. Ou: crie campanha ABO SulAmerica DF, publico 30 a 58 anos, verba R$ 50/dia, use o criativo AD 2 da pasta SulAmerica DF."
-                      className="min-h-32 w-full resize-y rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm font-semibold leading-relaxed text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
+                      placeholder="Ex: pause o AD-4 Amil-SP. Ou: crie campanha ABO SulAmerica DF, público 30 a 58 anos, verba R$ 50/dia, use o criativo AD 2 da pasta SulAmerica DF."
+                      className="min-h-32 w-full resize-y p-4 text-sm leading-relaxed"
                     />
+
+                    <div className="rounded-xl border p-4" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>
+                        Como funciona
+                      </p>
+                      <ul className="mt-3 space-y-2 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>
+                        <li className="flex gap-2">
+                          <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-ok)' }} />
+                          Entende criar, pausar, trocar criativo e ajustar verba.
+                        </li>
+                        <li className="flex gap-2">
+                          <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-ok)' }} />
+                          Citou uma pasta do Drive, ela entra registrada no plano.
+                        </li>
+                        <li className="flex gap-2">
+                          <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-ok)' }} />
+                          Toda criação sai pausada. Publicar é sempre manual.
+                        </li>
+                      </ul>
+
+                      {draftError ? (
+                        <p
+                          className="mt-4 rounded-lg border p-3 text-xs font-medium"
+                          style={{ background: 'var(--tf-crit-soft)', borderColor: 'var(--tf-crit-border)', color: 'var(--tf-crit)' }}
+                        >
+                          {draftError}
+                        </p>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={generateOptimizationDraft}
+                        disabled={generatingDraft || !selected || optimizePrompt.trim().length < 12}
+                        className="tf-no-lift mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white transition disabled:opacity-50"
+                        style={{ background: 'var(--tf-accent)' }}
+                      >
+                        {generatingDraft ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+                        Gerar plano
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Fluxo seguro</p>
-                    <div className="mt-3 space-y-3 text-xs font-bold text-slate-400">
-                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Entende criar, pausar, trocar criativo, ajustar verba e revisar estrutura.</p>
-                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Se citar Drive no prompt, registra pasta e criativo no plano.</p>
-                      <p className="flex gap-2"><CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> Ação real só depois de revisão humana.</p>
-                    </div>
-                    {draftError ? <p className="mt-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-xs font-bold text-red-200">{draftError}</p> : null}
-                    <button
-                      type="button"
-                      onClick={generateOptimizationDraft}
-                      disabled={generatingDraft || !selected || optimizePrompt.trim().length < 12}
-                      className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-blue-500 disabled:opacity-50"
-                    >
-                      {generatingDraft ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
-                      Gerar plano de ação
-                    </button>
-                  </div>
-                </div>
+                  {optimizationDraft ? (
+                    <DraftView
+                      draft={optimizationDraft}
+                      onCreate={createOptimizationDraft}
+                      creating={creatingDraft}
+                      execution={draftExecution}
+                      onActivate={activateDraftItem}
+                      activationBusy={activationBusy}
+                    />
+                  ) : null}
+                </section>
+              </>
+            )}
+          </main>
+        </div>
 
-                {optimizationDraft ? (
-                  <div className="mt-5 rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.04] p-4">
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Rascunho gerado</p>
-                        <h4 className="mt-1 text-xl font-black text-white">{optimizationDraft.campaign?.name || 'Campanha pausada'}</h4>
-                      </div>
-                      <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-200">
-                        {optimizationDraft.publish_status || 'PAUSED'}
-                      </span>
-                    </div>
-                    {optimizationDraft.summary ? <p className="mb-4 text-sm font-bold leading-relaxed text-slate-300">{optimizationDraft.summary}</p> : null}
-                    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-                      <DraftBlock title="Ações" data={optimizationDraft.actions} />
-                      <DraftBlock title="Campanha" data={optimizationDraft.campaign} />
-                      <DraftBlock title="Conjuntos" data={optimizationDraft.adsets} />
-                      <DraftBlock title="Anuncios" data={optimizationDraft.ads} />
-                    </div>
-                    {optimizationDraft.human_review_checklist?.length ? (
-                      <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
-                        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Checklist humano</p>
-                        <ul className="space-y-2 text-xs font-bold text-slate-300">
-                          {optimizationDraft.human_review_checklist.map((item, index) => (
-                            <li key={`${item}-${index}`} className="flex gap-2"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-300" /> {item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </div>
+        {fullscreenCreative && bestCreativeImage(fullscreenCreative.creative) ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4">
+            <button
+              type="button"
+              onClick={() => setFullscreenCreative(null)}
+              className="tf-no-lift absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white"
+              aria-label="Fechar"
+            >
+              <X size={20} />
+            </button>
+            <div
+              className="grid max-h-[92vh] w-full max-w-[1200px] gap-4 overflow-auto rounded-2xl border p-4 lg:grid-cols-[minmax(0,1fr)_320px]"
+              style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}
+            >
+              <div className="grid min-h-[60vh] place-items-center rounded-xl p-3" style={{ background: 'var(--tf-surface-2)' }}>
+                <img
+                  src={bestCreativeImage(fullscreenCreative.creative)}
+                  alt={fullscreenCreative.creative?.name || fullscreenCreative.name}
+                  className="max-h-[82vh] w-auto max-w-full rounded-lg object-contain"
+                />
+              </div>
+              <div className="min-w-0 p-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tf-accent-ink)' }}>
+                  Visualização do anúncio
+                </p>
+                <h3 className="mt-2 text-xl font-black">
+                  {fullscreenCreative.creative?.title || fullscreenCreative.creative?.name || fullscreenCreative.name}
+                </h3>
+                {fullscreenCreative.creative?.body ? (
+                  <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>
+                    {fullscreenCreative.creative.body}
+                  </p>
                 ) : null}
-              </section>
-            </>
-          )}
-        </main>
-      </div>
-      {bestCreativeImage(fullscreenCreative?.creative) ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 p-4 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => setFullscreenCreative(null)}
-            className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20"
-            aria-label="Fechar visualizacao"
-          >
-            <X size={22} />
-          </button>
-          <div className="grid max-h-[94vh] w-full max-w-[1500px] gap-4 overflow-auto rounded-2xl border border-white/10 bg-[#08111d] p-4 shadow-2xl lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="flex min-h-[68vh] items-center justify-center rounded-xl bg-black/35 p-3">
-              <img
-                src={bestCreativeImage(fullscreenCreative!.creative)}
-                alt={fullscreenCreative!.creative?.name || fullscreenCreative!.name}
-                className="h-auto max-h-[88vh] w-auto max-w-full rounded-lg object-contain"
-              />
-            </div>
-            <div className="min-w-0 p-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Visualizacao do anuncio</p>
-              <h3 className="mt-3 text-2xl font-black text-white">{fullscreenCreative!.creative?.title || fullscreenCreative!.creative?.name || fullscreenCreative!.name}</h3>
-              {fullscreenCreative!.creative?.body ? (
-                <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-300">{fullscreenCreative!.creative.body}</p>
-              ) : null}
-              <div className="mt-5 flex flex-wrap items-center gap-2">
-                <StatusBadge status={fullscreenCreative!.effective_status || fullscreenCreative!.status} />
-                <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">ID: {fullscreenCreative!.id}</span>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <StatusBadge status={fullscreenCreative.effective_status || fullscreenCreative.status} />
+                  <span className="text-[11px]" style={{ color: 'var(--tf-ink-mute)' }}>ID: {fullscreenCreative.id}</span>
+                </div>
               </div>
             </div>
           </div>
+        ) : null}
+      </div>
+    </InternalLayout>
+  );
+}
+
+const DRAFT_FIELD_LABELS: Record<string, string> = {
+  name: 'Nome',
+  objective: 'Objetivo',
+  status: 'Status',
+  buying_type: 'Tipo de compra',
+  budget_mode: 'Modo de verba',
+  daily_budget: 'Verba diária',
+  lifetime_budget: 'Verba total',
+  targeting: 'Público',
+  optimization_goal: 'Otimização',
+  creative_reference: 'Criativo',
+  drive_folder: 'Pasta no Drive',
+  primary_text: 'Texto principal',
+  headline: 'Título',
+  type: 'Tipo',
+  target: 'Alvo',
+  reason: 'Motivo',
+  risk: 'Risco',
+  instruction: 'Instrução',
+  status_after_action: 'Status após a ação',
+};
+
+function humanizeKey(key: string) {
+  return DRAFT_FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/^./, (letra) => letra.toUpperCase());
+}
+
+function renderValue(value: any): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+  if (Array.isArray(value)) return value.map((item) => renderValue(item)).join(', ');
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .map(([chave, item]) => `${humanizeKey(chave)}: ${renderValue(item)}`)
+      .join(' | ');
+  }
+  return String(value);
+}
+
+function FieldList({ data }: { data: Record<string, any> }) {
+  const entries = Object.entries(data || {}).filter(([, value]) => value !== null && value !== undefined && value !== '');
+  if (entries.length === 0) return null;
+
+  return (
+    <dl className="space-y-2">
+      {entries.map(([chave, value]) => (
+        <div key={chave} className="grid gap-0.5 sm:grid-cols-[150px_1fr] sm:gap-3">
+          <dt className="text-xs font-semibold" style={{ color: 'var(--tf-ink-mute)' }}>{humanizeKey(chave)}</dt>
+          <dd className="text-sm" style={{ color: 'var(--tf-ink)' }}>{renderValue(value)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function DraftCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border p-4" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
+      <p className="mb-3 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function DraftView({
+  draft,
+  onCreate,
+  creating,
+  execution,
+  onActivate,
+  activationBusy,
+}: {
+  draft: OptimizationDraft;
+  onCreate: () => void;
+  creating: boolean;
+  execution: DraftExecutionResult | null;
+  onActivate: (item: DraftExecutionItem) => void;
+  activationBusy: string | null;
+}) {
+  const acoes = Array.isArray(draft.actions) ? draft.actions : [];
+  const conjuntos = Array.isArray(draft.adsets) ? draft.adsets : [];
+  const anuncios = Array.isArray(draft.ads) ? draft.ads : [];
+  const checklist = Array.isArray(draft.human_review_checklist) ? draft.human_review_checklist : [];
+  const faltando = Array.isArray(draft.missing_info) ? draft.missing_info : [];
+
+  return (
+    <div className="mt-5 rounded-xl border p-4" style={{ background: 'var(--tf-accent-soft)', borderColor: 'var(--tf-accent-border)' }}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tf-accent-ink)' }}>
+            Plano gerado
+          </p>
+          <h4 className="mt-1 text-lg font-bold">{draft.campaign?.name || 'Plano de otimização'}</h4>
+        </div>
+        <span
+          className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+          style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)', color: 'var(--tf-warn)' }}
+        >
+          {draft.publish_status === 'REVIEW_REQUIRED' ? 'Aguardando revisão' : draft.publish_status || 'Aguardando revisão'}
+        </span>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
+        <div>
+          <p className="text-sm font-semibold">Executar na Meta</p>
+          <p className="text-xs" style={{ color: 'var(--tf-ink-soft)' }}>
+            A estrutura será criada como PAUSED. A ativação fica separada e depende da sua confirmação.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={creating || Boolean(execution?.created.length)}
+          className="inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold text-white transition disabled:opacity-50"
+          style={{ background: 'var(--tf-accent)' }}
+        >
+          {creating ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+          {creating ? 'Criando pausada...' : execution?.created.length ? 'Estrutura criada' : 'Criar pausada na Meta'}
+        </button>
+      </div>
+
+      {execution ? (
+        <div className="mb-4 rounded-xl border p-4" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--tf-accent-ink)' }}>Resultado da criação</p>
+          <div className="space-y-2">
+            {execution.created.map((item) => (
+              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3" style={{ borderColor: 'var(--tf-border)' }}>
+                <div>
+                  <p className="text-sm font-semibold">{item.name}</p>
+                  <p className="text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{item.level === 'campaign' ? 'Campanha' : item.level === 'adset' ? 'Conjunto' : 'Criativo/anúncio'} · {item.status === 'ACTIVE' ? 'ATIVO' : 'PAUSADO'}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onActivate(item)}
+                  disabled={activationBusy === item.id || item.status === 'ACTIVE'}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition disabled:opacity-50"
+                  style={{ borderColor: 'var(--tf-ok)', color: 'var(--tf-ok)' }}
+                >
+                  {activationBusy === item.id ? <Loader2 className="animate-spin" size={13} /> : <CheckCircle2 size={13} />}
+                  {item.status === 'ACTIVE' ? 'Ativo' : 'Ativar'}
+                </button>
+              </div>
+            ))}
+          </div>
+          {execution.skipped.length > 0 ? (
+            <div className="mt-3 space-y-1 text-xs" style={{ color: 'var(--tf-warn)' }}>
+              {execution.skipped.map((item, index) => <p key={index}>Não criado: {item.name} · {item.reason}</p>)}
+            </div>
+          ) : null}
+          {execution.warnings.map((warning, index) => <p key={index} className="mt-3 text-xs" style={{ color: 'var(--tf-warn)' }}>{warning}</p>)}
         </div>
       ) : null}
-    </InternalLayout>
+
+      {draft.summary ? (
+        <p className="mb-4 text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{draft.summary}</p>
+      ) : null}
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {acoes.length > 0 ? (
+          <DraftCard title={`Ações (${acoes.length})`}>
+            <div className="space-y-3">
+              {acoes.map((acao, index) => (
+                <div key={index} className="border-b pb-3 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--tf-border)' }}>
+                  <FieldList data={acao} />
+                </div>
+              ))}
+            </div>
+          </DraftCard>
+        ) : null}
+
+        {draft.campaign && Object.keys(draft.campaign).length > 0 ? (
+          <DraftCard title="Campanha">
+            <FieldList data={draft.campaign} />
+          </DraftCard>
+        ) : null}
+
+        {conjuntos.length > 0 ? (
+          <DraftCard title={`Conjuntos (${conjuntos.length})`}>
+            <div className="space-y-3">
+              {conjuntos.map((conjunto, index) => (
+                <div key={index} className="border-b pb-3 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--tf-border)' }}>
+                  <FieldList data={conjunto} />
+                </div>
+              ))}
+            </div>
+          </DraftCard>
+        ) : null}
+
+        {anuncios.length > 0 ? (
+          <DraftCard title={`Anúncios (${anuncios.length})`}>
+            <div className="space-y-3">
+              {anuncios.map((anuncio, index) => (
+                <div key={index} className="border-b pb-3 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--tf-border)' }}>
+                  <FieldList data={anuncio} />
+                </div>
+              ))}
+            </div>
+          </DraftCard>
+        ) : null}
+      </div>
+
+      {faltando.length > 0 ? (
+        <div
+          className="mt-3 rounded-xl border p-4"
+          style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)' }}
+        >
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--tf-warn)' }}>
+            Falta você informar
+          </p>
+          <ul className="space-y-1.5 text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
+            {faltando.map((item, index) => (
+              <li key={index} className="flex gap-2">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-warn)' }} />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {checklist.length > 0 ? (
+        <DraftCard title="Antes de executar, confira">
+          <ul className="space-y-1.5 text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
+            {checklist.map((item, index) => (
+              <li key={index} className="flex gap-2">
+                <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-ok)' }} />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </DraftCard>
+      ) : null}
+    </div>
   );
 }
 
@@ -526,7 +893,7 @@ function CampaignRows({
               level="Conjunto"
               status={adset.effective_status || adset.status}
               metrics={adset.metrics}
-              indent="pl-8"
+              indent="pl-10"
               open={adsetOpen}
               hasChildren={adset.ads.length > 0}
               onToggle={() => setExpandedAdsets((current) => ({ ...current, [adset.id]: !current[adset.id] }))}
@@ -541,7 +908,7 @@ function CampaignRows({
                     level="Anúncio"
                     status={ad.effective_status || ad.status}
                     metrics={ad.metrics}
-                    indent="pl-14"
+                    indent="pl-16"
                     open={adOpen}
                     hasChildren={hasPreview}
                     onToggle={() => setExpandedAds((current) => ({ ...current, [ad.id]: !current[ad.id] }))}
@@ -568,26 +935,30 @@ function MetricRow({ name, level, status, metrics, indent = '', open = false, ha
   onToggle?: () => void;
 }) {
   return (
-    <tr className="group hover:bg-white/[0.025]">
-      <td className={`max-w-[440px] py-3 pr-4 ${indent}`}>
-        <button type="button" onClick={onToggle} disabled={!hasChildren} className="flex min-w-0 items-center gap-2 text-left">
-          {hasChildren ? (open ? <ChevronDown size={15} className="text-cyan-300" /> : <ChevronRight size={15} className="text-slate-500" />) : <span className="w-[15px]" />}
+    <tr className="border-t" style={{ borderColor: 'var(--tf-border)' }}>
+      <td className={`max-w-[420px] py-3 pr-4 ${indent || 'pl-5'}`}>
+        <button type="button" onClick={onToggle} disabled={!hasChildren} className="tf-no-lift flex min-w-0 items-center gap-2 text-left disabled:cursor-default">
+          {hasChildren ? (
+            open
+              ? <ChevronDown size={15} style={{ color: 'var(--tf-accent-ink)' }} />
+              : <ChevronRight size={15} style={{ color: 'var(--tf-ink-mute)' }} />
+          ) : <span className="w-[15px]" />}
           <span className="min-w-0">
-            <span className="block truncate text-sm font-black text-white">{name}</span>
-            <span className="mt-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            <span className="block truncate text-sm font-semibold">{name}</span>
+            <span className="mt-1 flex items-center gap-2 text-[11px]" style={{ color: 'var(--tf-ink-mute)' }}>
               {level}
               <StatusBadge status={status} />
             </span>
           </span>
         </button>
       </td>
-      <DataCell value={formatCurrency(metrics.spend, metrics.currency)} />
+      <DataCell value={formatBRL(metrics.spend, metrics.currency)} />
       <DataCell value={String(metrics.leads_crm || 0)} />
-      <DataCell value={formatCurrency(metrics.cpl_crm, metrics.currency)} alert={Number(metrics.cpl_crm || 0) >= 28} />
-      <DataCell value={formatCurrency(metrics.cpc, metrics.currency)} alert={Number(metrics.cpc || 0) > 6} />
-      <DataCell value={formatCurrency(metrics.cpm, metrics.currency)} />
-      <DataCell value={formatPercent(metrics.ctr)} alert={Number(metrics.ctr || 0) < 1} />
-      <DataCell value={Number(metrics.frequency || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} />
+      <DataCell value={formatBRL(metrics.cpl_crm, metrics.currency)} alert={Number(metrics.cpl_crm || 0) >= TRAFFIC_RULES.cplCritical} />
+      <DataCell value={formatBRL(metrics.cpc, metrics.currency)} alert={Number(metrics.cpc || 0) > TRAFFIC_RULES.cpcMax} />
+      <DataCell value={formatBRL(metrics.cpm, metrics.currency)} />
+      <DataCell value={formatPercent(metrics.ctr)} alert={Number(metrics.ctr || 0) < TRAFFIC_RULES.ctrMin} />
+      <DataCell value={Number(metrics.frequency || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} last />
     </tr>
   );
 }
@@ -596,52 +967,39 @@ function CreativeRow({ ad, onOpenCreative }: { ad: AdNode; onOpenCreative: (ad: 
   const creative = ad.creative;
   const previewImage = bestCreativeImage(creative);
   return (
-    <tr className="bg-black/20">
-      <td colSpan={8} className="py-4 pl-20 pr-4">
-        <div className="grid gap-4 border-l-2 border-cyan-400/40 pl-4 sm:grid-cols-[140px_1fr]">
+    <tr style={{ background: 'var(--tf-surface-2)' }}>
+      <td colSpan={8} className="px-5 py-4">
+        <div className="grid gap-4 border-l-2 pl-4 sm:grid-cols-[130px_1fr]" style={{ borderColor: 'var(--tf-accent-border)' }}>
           {previewImage ? (
-            <div className="relative h-28 w-36 overflow-hidden rounded-lg ring-1 ring-white/10">
+            <div className="relative h-24 w-32 overflow-hidden rounded-lg border" style={{ borderColor: 'var(--tf-border)' }}>
               <img src={previewImage} alt={creative?.name || ad.name} className="h-full w-full object-cover" />
               <button
                 type="button"
                 onClick={() => onOpenCreative(ad)}
-                className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full border border-white/20 bg-black/65 text-white backdrop-blur transition hover:bg-cyan-500"
-                aria-label="Abrir criativo em tela cheia"
+                className="tf-no-lift absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white"
+                aria-label="Abrir criativo"
               >
-                <Maximize2 size={15} />
+                <Maximize2 size={13} />
               </button>
             </div>
           ) : (
-            <div className="grid h-28 w-36 place-items-center rounded-lg bg-white/[0.04] text-[10px] font-black uppercase tracking-widest text-slate-500 ring-1 ring-white/10">
+            <div
+              className="grid h-24 w-32 place-items-center rounded-lg border text-[11px] font-semibold"
+              style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-mute)' }}
+            >
               Sem preview
             </div>
           )}
           <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Visualização do anúncio</p>
-              <StatusBadge status={ad.effective_status || ad.status} />
-            </div>
-            <p className="truncate text-sm font-black text-white">{creative?.title || creative?.name || ad.name}</p>
-            {creative?.body ? <p className="mt-2 max-w-3xl text-xs font-semibold leading-relaxed text-slate-400">{creative.body}</p> : null}
-            <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-600">ID: {ad.id}</p>
+            <p className="text-sm font-bold">{creative?.title || creative?.name || ad.name}</p>
+            {creative?.body ? (
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{creative.body}</p>
+            ) : null}
+            <p className="mt-2 text-[11px]" style={{ color: 'var(--tf-ink-mute)' }}>ID: {ad.id}</p>
           </div>
         </div>
       </td>
     </tr>
-  );
-}
-
-function DraftBlock({ title, data }: { title: string; data: any }) {
-  return (
-    <div className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <FileText size={15} className="text-cyan-300" />
-        <p className="text-xs font-black uppercase tracking-widest text-white">{title}</p>
-      </div>
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words text-[11px] font-semibold leading-relaxed text-slate-300">
-        {JSON.stringify(data || {}, null, 2)}
-      </pre>
-    </div>
   );
 }
 
@@ -666,30 +1024,40 @@ function StatusBadge({ status }: { status?: string }) {
   const problem = ['WITH_ISSUES', 'DISAPPROVED', 'DELETED'].includes(normalized);
   const paused = normalized.includes('PAUSED') || normalized === 'ARCHIVED';
 
+  const cores = active
+    ? { fg: 'var(--tf-ok)', bg: 'var(--tf-ok-soft)', border: 'var(--tf-ok-border)' }
+    : problem
+      ? { fg: 'var(--tf-crit)', bg: 'var(--tf-crit-soft)', border: 'var(--tf-crit-border)' }
+      : paused
+        ? { fg: 'var(--tf-warn)', bg: 'var(--tf-warn-soft)', border: 'var(--tf-warn-border)' }
+        : { fg: 'var(--tf-idle)', bg: 'var(--tf-idle-soft)', border: 'var(--tf-idle-border)' };
+
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${
-      active
-        ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
-        : problem
-          ? 'border-red-400/25 bg-red-400/10 text-red-300'
-          : paused
-            ? 'border-amber-400/25 bg-amber-400/10 text-amber-300'
-            : 'border-slate-400/20 bg-white/[0.04] text-slate-400'
-    }`}>
+    <span
+      className="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{ background: cores.bg, borderColor: cores.border, color: cores.fg }}
+    >
       {label}
     </span>
   );
 }
 
-function DataCell({ value, alert = false }: { value: string; alert?: boolean }) {
-  return <td className={`whitespace-nowrap px-3 py-3 text-right text-sm font-black ${alert ? 'text-red-300' : 'text-slate-200'}`}>{value}</td>;
+function DataCell({ value, alert = false, last = false }: { value: string; alert?: boolean; last?: boolean }) {
+  return (
+    <td
+      className={`whitespace-nowrap px-3 py-3 text-right text-sm font-semibold tabular-nums ${last ? 'pr-5' : ''}`}
+      style={{ color: alert ? 'var(--tf-crit)' : 'var(--tf-ink)' }}
+    >
+      {value}
+    </td>
+  );
 }
 
 function Metric({ label, value, alert = false }: { label: string; value: string; alert?: boolean }) {
   return (
     <div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
-      <p className={`mt-1 text-xl font-black ${alert ? 'text-red-300' : 'text-white'}`}>{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>{label}</p>
+      <p className="mt-1 text-lg font-black tabular-nums" style={{ color: alert ? 'var(--tf-crit)' : 'var(--tf-ink)' }}>{value}</p>
     </div>
   );
 }
