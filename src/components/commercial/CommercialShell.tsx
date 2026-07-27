@@ -60,7 +60,7 @@ const baseNavigation = [
   { href: '/comercial/historico', label: 'Historico', icon: ClipboardList },
   { href: '/comercial/tarefas', label: 'Tarefas', icon: CheckSquare2 },
   { href: '/comercial/metas', label: 'Metas', icon: Target },
-  { href: '/comercial/ia', label: 'IA e follow-up', icon: Bot },
+  { href: '/comercial/ia', label: 'IA', icon: Bot },
 ];
 
 export default function CommercialShell({ children }: { children: React.ReactNode }) {

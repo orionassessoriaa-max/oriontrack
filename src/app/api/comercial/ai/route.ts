@@ -52,7 +52,7 @@ Escreva somente a proxima mensagem para este lead.`;
     }),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) return NextResponse.json({ error: payload?.error?.message || 'Erro ao gerar follow-up.' }, { status: 502 });
+  if (!response.ok) return NextResponse.json({ error: payload?.error?.message || 'Erro ao gerar mensagem da IA.' }, { status: 502 });
   const message = String(payload?.choices?.[0]?.message?.content || '').trim();
   return NextResponse.json({ message });
 }

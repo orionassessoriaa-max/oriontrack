@@ -23,9 +23,10 @@ export async function continueCommercialSdrFromIncoming(options: CommercialIncom
   try {
     const [{ data: lead }, { data: config }] = await Promise.all([
       supabaseAdmin.from('comercial_leads').select('*').eq('id', options.leadId).maybeSingle(),
-      supabaseAdmin.from('comercial_config').select('ia_sdr_ativa,ia_sdr_prompt').eq('id', 1).maybeSingle(),
+      supabaseAdmin.from('comercial_config').select('ia_sdr_ativa,ia_sdr_prompt,bot_comercial_ativo').eq('id', 1).maybeSingle(),
     ]);
     if (!lead) return { handled: false, reason: 'commercial_lead_not_found' };
+    if (config?.bot_comercial_ativo === true) return { handled: false, reason: 'commercial_bot_enabled' };
     if (config?.ia_sdr_ativa === false) return { handled: false, reason: 'commercial_ai_disabled' };
 
     // Trava apenas quando um humano respondeu agora; o eco das mensagens da
