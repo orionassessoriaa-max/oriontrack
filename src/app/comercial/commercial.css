@@ -1014,3 +1014,42 @@
   .kh-goal-rocket { width: 82px; top: -68px; }
   .kh-card-sheet-grid { gap: 5px; }
 }
+
+/* Compact Kanban card aligned with the Danilo CRM reference. */
+.kh-danilo-card {
+  box-sizing: border-box;
+  height: 158px;
+  min-height: 158px !important;
+  overflow: hidden;
+  border: 1px solid #23354a !important;
+  border-radius: 6px !important;
+  background: #07111b !important;
+  padding: 10px !important;
+}
+.kh-danilo-card .kh-card-top { min-height: 15px; gap: 6px; }
+.kh-danilo-card .kh-card-top small { color: #8aa0b7; font-size: 8px; letter-spacing: .05em; }
+.kh-danilo-card .kh-card-expand { color: #00c9e8; }
+.kh-danilo-card h3 { margin: 9px 0 8px; font-size: 13px; line-height: 1.1; }
+.kh-danilo-card .kh-card-sheet-grid-compact { gap: 5px; margin-top: 0; }
+.kh-danilo-card .kh-card-sheet-grid-compact > div {
+  height: 39px;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #26394f;
+  border-radius: 4px;
+  background: #091521;
+  padding: 6px 7px;
+}
+.kh-danilo-card .kh-card-sheet-grid small { color: #7f94aa; font-size: 7px; }
+.kh-danilo-card .kh-card-sheet-grid strong { margin-top: 3px; color: #edf6ff; font-size: 9px; }
+.kh-danilo-card .kh-card-inbox {
+  min-height: 29px;
+  margin-top: 9px;
+  border: 1px solid #13b77c;
+  background: #063c2c;
+  color: #63e6b1;
+  padding: 5px 9px;
+  font-size: 10px;
+  line-height: 1;
+}
+.kh-danilo-card .kh-card-inbox:hover { border-color: #2ce6a3; background: #08714c; color: #fff; }
