@@ -7,9 +7,7 @@ function digits(value: unknown) { return String(value || '').replace(/\D/g, '').
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
-  let leadQuery = supabaseAdmin.from('comercial_leads').select('id,nome,telefone,sdr_id,closer_id,status,updated_at').limit(5000);
-  if (guard.commercialRole === 'sdr') leadQuery = leadQuery.eq('sdr_id', guard.profile.id);
-  if (guard.commercialRole === 'closer') leadQuery = leadQuery.eq('closer_id', guard.profile.id);
+  const leadQuery = supabaseAdmin.from('comercial_leads').select('id,nome,telefone,sdr_id,closer_id,status,updated_at').limit(5000);
   const { data: leads, error: leadError } = await leadQuery;
   if (leadError) return NextResponse.json({ error: leadError.message }, { status: 500 });
   const phoneMap = new Map<string, any>();

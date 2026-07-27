@@ -82,10 +82,12 @@ export async function requireCommercialUser(
 
 export function applyCommercialLeadScope<T extends { eq: (column: string, value: string) => T }>(
   query: T,
-  role: CommercialRole,
-  profileId: string,
+  _role: CommercialRole,
+  _profileId: string,
 ) {
-  if (role === 'sdr') return query.eq('sdr_id', profileId);
-  if (role === 'closer') return query.eq('closer_id', profileId);
+  // The commercial funnel is shared by SDRs and Closers. Financial fields are
+  // redacted separately by each endpoint according to the user's role.
+  void _role;
+  void _profileId;
   return query;
 }

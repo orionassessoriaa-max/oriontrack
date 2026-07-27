@@ -3,9 +3,9 @@ import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
 
-function scopedQuery(query: any, role: string, profileId: string) {
-  if (role === 'sdr') return query.eq('sdr_id', profileId);
-  if (role === 'closer') return query.eq('closer_id', profileId);
+function scopedQuery(query: any, _role: string, _profileId: string) {
+  void _role;
+  void _profileId;
   return query;
 }
 

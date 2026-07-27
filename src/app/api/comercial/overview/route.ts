@@ -30,9 +30,11 @@ function stateFromPhone(phone: unknown) {
   return DDD_STATE[national.slice(0, 2)] || null;
 }
 
-function scopedQuery(query: any, role: string, profileId: string) {
-  if (role === 'sdr') return query.eq('sdr_id', profileId);
-  if (role === 'closer') return query.eq('closer_id', profileId);
+function scopedQuery(query: any, _role: string, _profileId: string) {
+  // SDR and Closer share the complete commercial funnel. This scope is only
+  // used for commercial data; Meta/financial access remains role protected.
+  void _role;
+  void _profileId;
   return query;
 }
 

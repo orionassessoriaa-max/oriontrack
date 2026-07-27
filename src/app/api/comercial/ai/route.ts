@@ -10,9 +10,7 @@ export async function POST(request: Request) {
   const leadId = String(body.lead_id || '');
   if (!leadId) return NextResponse.json({ error: 'Lead obrigatorio.' }, { status: 400 });
 
-  let query = supabaseAdmin.from('comercial_leads').select('*').eq('id', leadId);
-  if (guard.commercialRole === 'sdr') query = query.eq('sdr_id', guard.profile.id);
-  if (guard.commercialRole === 'closer') query = query.eq('closer_id', guard.profile.id);
+  const query = supabaseAdmin.from('comercial_leads').select('*').eq('id', leadId);
   const { data: lead } = await query.maybeSingle();
   if (!lead) return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
 
