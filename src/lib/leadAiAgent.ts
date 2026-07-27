@@ -84,6 +84,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
 - Quando for pedir o agendamento, nunca use "funciona melhor". Pergunte: "Que dia e horario voce esta mais confortavel pra voce?"
 - Quando o cliente responder com dia e horario, responda apenas que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradeca pelo atendimento, defina handoff true e nao faca mais nenhuma pergunta.
 - Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o encaminhamento de forma curta e natural.
+- Se o cliente recusar a ligacao ou reuniao, aceite sem insistir. Nao peca outro horario, nao repita o convite e nao tente convencer o cliente. Responda de forma acolhedora que esta tudo bem continuar por ali e que um especialista da equipe entrara em contato por outro numero para prosseguir com o atendimento; defina handoff true.
 - Nunca diga "pode mandar audio" depois que o cliente ja enviou audio ou quando a mensagem atual vier como "Audio transcrito do cliente". Se a mensagem disser que o audio nao foi transcrito, responda curto pedindo para o cliente enviar a informacao por texto.
 - Priorize respostas humanas, curtas e diretas, sem cara de script.`;
 
@@ -145,6 +146,7 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 - Se o cliente disser "sim", "posso" ou algo vago: pergunte qual dia e horario especificos.
 - Ao pedir dia e horario, nao escreva "funciona melhor". Escreva de forma humana: "Que dia e horario voce esta mais confortavel pra voce?"
 - Ao cliente responder dia e horario: preencha *Agendado* no summary, defina "handoff": true e responda somente que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradecendo pelo atendimento. Depois disso nao pergunte mais nada.
+- Se o cliente disser que nao quer ligacao/reuniao, que prefere nao falar por telefone ou pedir para continuar por mensagem: nao insista e nao faca nova pergunta. Responda: "Sem problema, [primeiro nome]. Podemos continuar por aqui. Um especialista da nossa equipe vai entrar em contato por outro numero para prosseguir com seu atendimento." Defina "handoff": true.
 - Handoff silencioso ("handoff": true, "reply": "") se: cliente pedir detalhes tecnicos de operadora, reclamar, pedir para falar com humano, ou enviar exatamente "alvorada" como mensagem isolada. Para pedido de valor/preco, responda de forma gentil oferecendo chamar um especialista e defina handoff true. Nao use essa regra quando Alvorada for hospital, clinica, bairro ou regiao.
 - Se o cliente pedir esclarecimento ("como assim?", "nao entendi", "pq?"): reexplique de forma simples e natural — NAO faca handoff.
 
@@ -435,6 +437,27 @@ function isValueRequest(text?: string | null) {
   return (
     /\b(valor|valores|preco|precos|preco exato|mensalidade|tabela|quanto custa|quanto fica|quanto sai|qual o valor|passa o valor|me passa o valor|manda o valor|simulacao pronta)\b/.test(normalized) ||
     /\br\$\s*\d/i.test(String(text || ''))
+  );
+}
+
+function isCallRefusal(text?: string | null) {
+  const normalized = normalizeAiText(text)
+    .replace(/[!?.,;:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized) return false;
+
+  return (
+    /\b(nao|nunca|sem)\b.{0,24}\b(ligacao|ligar|telefone|reuniao|reuniao|chamada|call)\b/.test(normalized) ||
+    /\b(prefiro|quero|gostaria)\b.{0,24}\b(por mensagem|por aqui|sem ligacao|sem reuniao)\b/.test(normalized) ||
+    /\b(ligacao|reuniao|chamada|call)\b.{0,24}\b(nao|nunca)\b/.test(normalized)
+  );
+}
+
+function callRefusalHandoffReply(lead: LeadRow) {
+  return polishAiReply(
+    `Sem problema, ${leadFirstName(lead)}. Podemos continuar por aqui. Um especialista da nossa equipe vai entrar em contato por outro numero para prosseguir com seu atendimento.`
   );
 }
 
@@ -1531,7 +1554,16 @@ export async function continueLeadAiFromIncoming(options: {
   }
 
   let ai: any;
-  if (isValueRequest(options.customerMessage)) {
+  if (isCallRefusal(options.customerMessage)) {
+    ai = {
+      handoff: true,
+      reply: callRefusalHandoffReply(lead),
+      summary: appendSummaryLine(
+        session.summary || leadFacts(lead),
+        'IA encerrada: cliente recusou ligacao/reuniao e pediu continuidade sem chamada. Especialista deve assumir por outro numero.'
+      ),
+    };
+  } else if (isValueRequest(options.customerMessage)) {
     ai = {
       handoff: true,
       reply: 'Consigo pedir para um especialista te passar os valores certinhos, porque isso depende da cotacao, da rede escolhida e dos dados do perfil. Vou chamar ele para te orientar melhor.',
