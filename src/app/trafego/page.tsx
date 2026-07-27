@@ -3,90 +3,58 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { 
-  Users, 
-  BarChart3, 
-  TrendingUp, 
-  DollarSign, 
-  UserPlus,
+import {
+  Users,
+  TrendingUp,
   Loader2,
-  Calendar,
   AlertTriangle,
-  Globe,
-  FileSearch,
-  CheckCircle2,
   ChevronRight,
+  ChevronDown,
   ShieldAlert,
-  Clock,
-  RefreshCw,
-  Activity,
-  MousePointerClick,
-  Eye,
-  LayoutDashboard,
+  Sparkles,
   Image as ImageIcon,
   ListChecks,
   Pause,
-  Circle,
+  PlugZap,
+  X,
+  Check,
+  Ban,
   Maximize2,
-  X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import Link from 'next/link';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { getOnboardingStatus } from '@/lib/onboarding';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import {
+  ACTION_LABELS,
+  TRACKING_LABELS,
+  classifyAccount,
+  formatBRL,
+  scoreAccount,
+  type AccountLike,
+  type RecommendationAction,
+  type TrackingStatus,
+} from '@/lib/trafego/rules';
 
 type Corretor = {
   id: string;
   nome: string;
   nome_empresa?: string | null;
-  email: string;
-  telefone: string | null;
-  link_pagina: string | null;
-  gestor_trafego_id: string | null;
   campanhas_ativas: boolean;
-  onboarding_status: 'pendente' | 'dados_completos' | 'campanhas_ativas' | null | undefined;
-  time_operacional: any;
-  created_at: string;
 };
 
-type MetaAccountAlert = {
-  corretor_id: string;
+type MetaAccount = AccountLike & {
   corretor_nome: string;
-  concessionaria_nome?: string;
-  meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
-  spend: number;
-  leads: number;
-  cpl: number | null;
-  ctr: number;
-  cpc?: number;
-  cpm?: number;
-  frequency?: number;
-  link_clicks?: number;
-  landing_page_views?: number;
-  cost_per_link_click?: number;
-  cost_per_landing_page_view?: number;
-  saldo: number | null;
-  currency: string;
-  forma_pagamento?: string;
-  alerta_cpl_alto: boolean;
-  alerta_cpl_atencao?: boolean;
-  alerta_metricas_secundarias?: boolean;
-  alerta_saldo_baixo: boolean;
-  dados_crm_pendentes?: boolean;
-  error?: string;
+  rastreio: TrackingStatus;
+  rastreio_desde?: string | null;
 };
 
 type ActiveCreative = {
   id: string;
   ad_name: string;
   concessionaria_nome: string;
-  meta_ad_account_id: string | null;
-  meta_ad_account_name: string | null;
   thumbnail_url?: string | null;
   image_url?: string | null;
   spend: number;
@@ -96,80 +64,49 @@ type ActiveCreative = {
   status?: string;
 };
 
-function formatCurrency(value: number | null | undefined, currency = 'BRL') {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value));
+type Recomendacao = {
+  id?: string;
+  concessionaria_nome: string;
+  meta_ad_account_id: string | null;
+  nivel: string;
+  alvo_id: string | null;
+  alvo_nome: string | null;
+  acao: RecommendationAction;
+  severidade: 'critico' | 'atencao' | 'informativo';
+  motivo: string;
+  metricas: Record<string, any>;
+};
+
+const TONE_VAR: Record<string, { fg: string; bg: string; border: string }> = {
+  red: { fg: 'var(--tf-crit)', bg: 'var(--tf-crit-soft)', border: 'var(--tf-crit-border)' },
+  amber: { fg: 'var(--tf-warn)', bg: 'var(--tf-warn-soft)', border: 'var(--tf-warn-border)' },
+  emerald: { fg: 'var(--tf-ok)', bg: 'var(--tf-ok-soft)', border: 'var(--tf-ok-border)' },
+  blue: { fg: 'var(--tf-info)', bg: 'var(--tf-info-soft)', border: 'var(--tf-info-border)' },
+  slate: { fg: 'var(--tf-idle)', bg: 'var(--tf-idle-soft)', border: 'var(--tf-idle-border)' },
+};
+
+const ACTION_ICON: Record<RecommendationAction, any> = {
+  pausar_campanha: Pause,
+  pausar_conjunto: Pause,
+  pausar_anuncio: Pause,
+  trocar_criativo: ImageIcon,
+  revisar_publico: Users,
+  revisar_rastreio: PlugZap,
+  avisar_admin: ShieldAlert,
+};
+
+function daysAgo(days: number) {
+  const date = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
-function formatPercent(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return '0,00%';
-  return `${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+function today() {
+  return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
-function classifyMetaAccount(account: MetaAccountAlert) {
-  const paymentText = String(account.forma_pagamento || '').toLowerCase();
-  const isCard = paymentText.includes('cartao') || paymentText.includes('cartão') || paymentText.includes('card') || paymentText.includes('visa') || paymentText.includes('mastercard');
-  const hasPaymentError = account.error && /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(account.error));
-
-  if (account.error && !hasPaymentError) return { label: 'Erro Meta', tone: 'amber', detail: account.error };
-  if (isCard && hasPaymentError) return { label: 'Erro pagamento', tone: 'red', detail: 'Falha no processamento do cartão. Admin deve acompanhar.' };
-  if (!isCard && account.saldo !== null && account.saldo <= 0) return { label: 'Sem saldo', tone: 'red', detail: 'Conta pré-paga sem saldo. Admin deve ser avisado.' };
-  if (account.alerta_cpl_alto) return { label: 'CPL crítico', tone: 'red', detail: 'CPL chegou a R$ 28,00 ou mais. Revisão obrigatória antes de qualquer ação.' };
-  if (account.dados_crm_pendentes) return { label: 'CRM pendente', tone: 'blue', detail: 'Existe investimento na Meta, mas nenhum lead Orion no CRM. Conferir automação/UTM antes de julgar o CPL.' };
-  if (account.alerta_cpl_atencao || account.alerta_metricas_secundarias) return { label: 'Em atenção', tone: 'amber', detail: 'CPL acima de R$ 20,00. Avaliar CPC, CTR, CPM, página de destino e frequência.' };
-  if (!isCard && account.alerta_saldo_baixo) return { label: 'Saldo baixo', tone: 'amber', detail: 'Saldo abaixo do mínimo operacional.' };
-  return { label: 'Saudável', tone: 'emerald', detail: 'Sem alerta crítico no período selecionado.' };
-}
-
-function getToneClasses(tone: string) {
-  if (tone === 'red') return 'border-red-500/30 bg-red-500/10 text-red-300';
-  if (tone === 'amber') return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
-  if (tone === 'blue') return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
-  return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
-}
-
-function scoreTrafficAccount(account: MetaAccountAlert) {
-  let score = 100;
-  const cpl = Number(account.cpl || 0);
-  const cpc = Number(account.cpc || 0);
-  const ctr = Number(account.ctr || 0);
-  const frequency = Number(account.frequency || 0);
-  const leads = Number(account.leads || 0);
-  const spend = Number(account.spend || 0);
-
-  if (account.error) score -= 35;
-  if (spend > 0 && leads === 0) score -= 45;
-  if (cpl >= 28) score -= 45;
-  else if (cpl >= 20) score -= 22;
-  if (cpc > 6) score -= 14;
-  if (ctr > 0 && ctr < 1) score -= 14;
-  if (frequency >= 3.5) score -= 8;
-  score += Math.min(leads, 50) * 0.35;
-
-  return Math.max(0, Math.round(score));
-}
-
-function scoreActiveCreative(creative: ActiveCreative) {
-  let score = 0;
-  const leads = Number(creative.leads || 0);
-  const spend = Number(creative.spend || 0);
-  const cpl = creative.cpl === null || creative.cpl === undefined ? null : Number(creative.cpl);
-
-  score += Math.min(leads, 50) * 3;
-  if (leads === 0 && spend > 0) score -= 30;
-  if (cpl !== null) {
-    if (cpl < 20) score += 25;
-    else if (cpl < 28) score += 8;
-    else score -= 25;
-  }
-
-  return score;
-}
-
-function bestActiveCreativeImage(creative?: ActiveCreative | null) {
+function bestCreativeImage(creative?: ActiveCreative | null) {
   if (creative?.image_url) return creative.image_url;
-  const thumbnail = creative?.thumbnail_url || '';
-  return thumbnail
+  return String(creative?.thumbnail_url || '')
     .replace(/\/p\d+x\d+\//g, '/p1080x1080/')
     .replace(/s\d+x\d+/, 's1080x1080')
     .replace(/\/\d+x\d+\//g, '/1080x1080/');
@@ -178,1078 +115,821 @@ function bestActiveCreativeImage(creative?: ActiveCreative | null) {
 export default function GestorDashboardPage() {
   const { profile, actualProfile } = useAuth();
   const [corretores, setCorretores] = useState<Corretor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [totalLeads, setTotalLeads] = useState(0);
-  const [metaAccounts, setMetaAccounts] = useState<MetaAccountAlert[]>([]);
+  const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
   const [activeCreatives, setActiveCreatives] = useState<ActiveCreative[]>([]);
-  const [portfolioAiReview, setPortfolioAiReview] = useState('');
-  const [loadingAlerts, setLoadingAlerts] = useState(false);
-  const [alertsUpdatedAt, setAlertsUpdatedAt] = useState<string | null>(null);
-  const [presetLabel, setPresetLabel] = useState('Todo o período');
+  const [recomendacoes, setRecomendacoes] = useState<Recomendacao[]>([]);
+  const [resumoIa, setResumoIa] = useState('');
+  const [analisesHoje, setAnalisesHoje] = useState(0);
+  const [ultimaAnalise, setUltimaAnalise] = useState<string | null>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [otimizando, setOtimizando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [approvedRecommendations, setApprovedRecommendations] = useState<Record<string, boolean>>({});
-  const dashboardRequestRef = useRef(0);
+  const [aviso, setAviso] = useState<{ tone: 'ok' | 'erro'; texto: string } | null>(null);
 
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
+  const [dataInicio, setDataInicio] = useState(daysAgo(30));
+  const [dataFim, setDataFim] = useState(today());
+  const [presetLabel, setPresetLabel] = useState('Últimos 30 dias');
 
-  useEffect(() => {
-    const todayStr = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    setDataInicio('2025-01-01');
-    setDataFim(todayStr);
-  }, []);
+  const [confirmando, setConfirmando] = useState<Recomendacao | null>(null);
+  const [decidindo, setDecidindo] = useState<string | null>(null);
+  const [fullscreenCreative, setFullscreenCreative] = useState<ActiveCreative | null>(null);
 
-  useEffect(() => {
-    setCorretores([]);
-    setMetaAccounts([]);
-    setActiveCreatives([]);
-    setPortfolioAiReview('');
-    fetchDashboardData(false);
-  }, [profile?.id, actualProfile?.id, dataInicio, dataFim]);
+  const requestRef = useRef(0);
 
-  const fetchDashboardData = async (analyze = false) => {
+  const gestorIdParam = actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
+    ? profile.id
+    : undefined;
+
+  async function getToken() {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || null;
+  }
+
+  async function carregar(analisar: boolean) {
     if (!profile?.id) return;
-    const requestId = ++dashboardRequestRef.current;
-    const isCurrentRequest = () => dashboardRequestRef.current === requestId;
-    
-    setLoading(true);
+    const requestId = ++requestRef.current;
+    const atual = () => requestRef.current === requestId;
+
+    if (analisar) {
+      setOtimizando(true);
+    } else {
+      setLoading(true);
+      // Troca de periodo nao pode exibir os numeros do periodo anterior.
+      setMetaAccounts([]);
+      setActiveCreatives([]);
+    }
     setError(null);
+
     try {
-      // 1. Fetch all active brokers
-      const { data: corretoresData, error: cError } = await supabase
+      const { data: corretoresData } = await supabase
         .from('corretores')
-        .select('*')
+        .select('id, nome, nome_empresa, campanhas_ativas, gestor_trafego_id, time_operacional')
         .in('status', ['active', 'ativo', 'Ativo'])
         .order('nome', { ascending: true });
 
-      if (cError) throw cError;
-      if (!isCurrentRequest()) return;
-
-      // Filter brokers where current user is their traffic manager
-      let filteredCorretores: Corretor[] = corretoresData || [];
+      let lista = (corretoresData || []) as any[];
       if (profile.tipo_usuario === 'gestor_trafego') {
-        filteredCorretores = filteredCorretores.filter(c => isGestorLinkedToConcessionariaCorretor(c, profile));
+        lista = lista.filter((c) => isGestorLinkedToConcessionariaCorretor(c, profile));
       }
-      if (!isCurrentRequest()) return;
-      setCorretores(filteredCorretores);
+      if (!atual()) return;
+      setCorretores(lista as Corretor[]);
 
-      // 2. Fetch total leads for these brokers
-      if (filteredCorretores.length > 0) {
-        const brokerIds = filteredCorretores.map(c => c.id);
-        let leadsRequest = supabase
-          .from('leads')
-          .select('*', { count: 'exact', head: true })
-          .in('corretor_id', brokerIds);
-
-        if (dataInicio) {
-          leadsRequest = leadsRequest.gte('data_entrada', `${dataInicio}T00:00:00.000Z`);
-        }
-        if (dataFim) {
-          leadsRequest = leadsRequest.lte('data_entrada', `${dataFim}T23:59:59.999Z`);
-        }
-
-        const { count, error: lError } = await leadsRequest;
-
-        if (lError) console.error('Error fetching leads count:', lError);
-        if (isCurrentRequest()) setTotalLeads(count || 0);
-      } else if (isCurrentRequest()) {
-        setTotalLeads(0);
+      const token = await getToken();
+      if (!token) {
+        if (atual()) setError('Sessão expirada. Entre novamente.');
+        return;
       }
 
-      // 3. Fetch Meta Ads alerts to identify critical accounts under gestor management
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (accessToken) {
-        setLoadingAlerts(true);
-        try {
-          const response = await fetch('/api/integrations/meta/alerts', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({
-              analyze,
-              data_inicio: dataInicio,
-              data_fim: dataFim,
-              gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
-                ? profile.id
-                : undefined,
-            }),
-          });
-          if (response.ok) {
-            const payload = await response.json();
-            if (!isCurrentRequest()) return;
-            setMetaAccounts(payload.accounts || []);
-            setActiveCreatives(payload.active_creatives || []);
-            setPortfolioAiReview(payload.portfolio_ai_review || '');
-            setAlertsUpdatedAt(payload.refreshed_at || new Date().toISOString());
-          }
-        } catch (err) {
-          console.error('Error loading critical accounts on gestor dashboard:', err);
-        } finally {
-          if (isCurrentRequest()) setLoadingAlerts(false);
-        }
+      const response = await fetch('/api/integrations/meta/alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          analyze: analisar,
+          data_inicio: dataInicio,
+          data_fim: dataFim,
+          gestor_id: gestorIdParam,
+          acumulado_orion: true,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!atual()) return;
+
+      if (!response.ok) {
+        setError(payload.error || 'Erro ao carregar o painel.');
+        return;
       }
-    } catch (err: any) {
-      console.error('Error loading gestor dashboard:', err);
-      if (isCurrentRequest()) setError('Erro ao carregar dados do painel.');
+
+      setMetaAccounts(payload.accounts || []);
+      setActiveCreatives(payload.active_creatives || []);
+      setRecomendacoes(payload.recomendacoes || []);
+      setAnalisesHoje(payload.analises_hoje || 0);
+      setUltimaAnalise(payload.ultima_analise_em || null);
+      setResumoIa(payload.portfolio_ai_review || '');
+
+      if (analisar) {
+        setAviso({
+          tone: 'ok',
+          texto: `Análise concluída. ${(payload.recomendacoes || []).length} ação(ões) na fila.`,
+        });
+      }
+    } catch {
+      if (atual()) setError('Erro ao carregar dados do painel.');
     } finally {
-      if (isCurrentRequest()) setLoading(false);
-    }
-  };
-
-  const activeCampaignsCount = corretores.filter(c => c.campanhas_ativas).length;
-  const pendingOnboardingCount = corretores.filter(c => !c.onboarding_status || c.onboarding_status === 'pendente').length;
-  const concessionarias = useMemo(() => {
-    const grouped = new Map<string, { nome: string; active: boolean; corretores: Corretor[] }>();
-
-    corretores.forEach((corretor) => {
-      const nome = String((corretor as any).nome_empresa || corretor.nome || '').trim();
-      if (!nome) return;
-      const key = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const current = grouped.get(key);
-      if (current) {
-        current.corretores.push(corretor);
-        current.active = current.active || Boolean(corretor.campanhas_ativas);
-      } else {
-        grouped.set(key, { nome, active: Boolean(corretor.campanhas_ativas), corretores: [corretor] });
+      if (atual()) {
+        setLoading(false);
+        setOtimizando(false);
       }
+    }
+  }
+
+  async function recarregarFila() {
+    const token = await getToken();
+    if (!token) return;
+    const url = new URL('/api/trafego/recomendacoes', window.location.origin);
+    if (gestorIdParam) url.searchParams.set('gestor_id', gestorIdParam);
+
+    const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) return;
+    const payload = await response.json();
+    setRecomendacoes(payload.recomendacoes || []);
+    setAnalisesHoje(payload.analises_hoje || 0);
+    setUltimaAnalise(payload.ultima_analise_em || null);
+  }
+
+  async function decidir(recomendacao: Recomendacao, decisao: 'aprovar' | 'ignorar', confirmar = false) {
+    if (!recomendacao.id) {
+      setAviso({ tone: 'erro', texto: 'Esta recomendação ainda não foi salva. Rode Otimizar novamente.' });
+      return;
+    }
+
+    setDecidindo(recomendacao.id);
+    setAviso(null);
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        setAviso({ tone: 'erro', texto: 'Sessão expirada. Entre novamente.' });
+        return;
+      }
+
+      const response = await fetch('/api/trafego/recomendacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: recomendacao.id, decisao, confirmar, gestor_id: gestorIdParam }),
+      });
+
+      const payload = await response.json();
+
+      if (response.status === 428) {
+        setConfirmando(recomendacao);
+        return;
+      }
+
+      if (!response.ok) {
+        setAviso({ tone: 'erro', texto: payload.error || 'Não consegui registrar a decisão.' });
+        return;
+      }
+
+      setConfirmando(null);
+      setAviso({
+        tone: 'ok',
+        texto: payload.mensagem || (decisao === 'ignorar' ? 'Recomendação ignorada.' : 'Recomendação aprovada.'),
+      });
+      await recarregarFila();
+    } catch {
+      setAviso({ tone: 'erro', texto: 'Falha de rede ao registrar a decisão.' });
+    } finally {
+      setDecidindo(null);
+    }
+  }
+
+  useEffect(() => {
+    void carregar(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id, actualProfile?.id, dataInicio, dataFim]);
+
+  const concessionarias = useMemo(() => {
+    const grupos = new Map<string, { nome: string; ativa: boolean }>();
+    corretores.forEach((corretor) => {
+      const nome = String(corretor.nome_empresa || corretor.nome || '').trim();
+      if (!nome) return;
+      const chave = nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      const atual = grupos.get(chave);
+      if (atual) atual.ativa = atual.ativa || Boolean(corretor.campanhas_ativas);
+      else grupos.set(chave, { nome, ativa: Boolean(corretor.campanhas_ativas) });
     });
-
-    return Array.from(grouped.values());
+    return Array.from(grupos.values());
   }, [corretores]);
-  const reviewAccounts = metaAccounts
-    .map((account) => ({ account, status: classifyMetaAccount(account) }))
-    .filter(({ status }) => status.label !== 'Saudável');
-  const criticalReviewCount = reviewAccounts.filter(({ status }) => status.tone === 'red').length;
-  const attentionReviewCount = reviewAccounts.filter(({ status }) => status.tone === 'amber').length;
-  const crmPendingCount = reviewAccounts.filter(({ status }) => status.label === 'CRM pendente').length;
-  const totalSpend = metaAccounts.reduce((sum, account) => sum + Number(account.spend || 0), 0);
-  const crmLeadCount = metaAccounts.reduce((sum, account) => sum + Number(account.leads || 0), 0);
-  const averageCpl = crmLeadCount > 0 ? totalSpend / crmLeadCount : null;
-  const highestCplAccount = metaAccounts
-    .filter((account) => account.cpl !== null && account.cpl !== undefined)
-    .sort((a, b) => Number(b.cpl || 0) - Number(a.cpl || 0))[0] || null;
-  const healthyAccountsCount = Math.max(metaAccounts.length - reviewAccounts.length, 0);
-  const approvalQueue = reviewAccounts.slice(0, 4);
-  const analysisAccount = reviewAccounts[0]?.account || metaAccounts[0] || null;
-  const analysisStatus = analysisAccount ? classifyMetaAccount(analysisAccount) : null;
 
-  const quickActions = [
-    {
-      title: 'Leads das Concessionarias',
-      desc: 'Visualizar leads por concessionaria',
-      href: '/trafego/leads',
-      icon: FileSearch,
-      color: 'from-blue-600 to-indigo-600',
-      borderColor: 'border-blue-500/20 hover:border-blue-500/50'
-    },
-    {
-      title: 'Entrada de Corretor',
-      desc: 'Liberar acessos e operadoras',
-      href: '/trafego/entrada',
-      icon: UserPlus,
-      color: 'from-cyan-600 to-blue-600',
-      borderColor: 'border-cyan-500/20 hover:border-cyan-500/50'
-    },
-    {
-      title: 'Avisos Meta',
-      desc: 'Acompanhar bloqueios ou alertas',
-      href: '/trafego/avisos-meta',
-      icon: AlertTriangle,
-      color: 'from-amber-600 to-orange-600',
-      borderColor: 'border-amber-500/20 hover:border-amber-500/50'
-    },
-    {
-      title: 'Gerar Relatório',
-      desc: 'Extrair CPL e investimento',
-      href: '/trafego/relatorios',
-      icon: TrendingUp,
-      color: 'from-emerald-600 to-teal-600',
-      borderColor: 'border-emerald-500/20 hover:border-emerald-500/50'
-    },
-  ];
+  const semRastreio = metaAccounts.filter((conta) => conta.rastreio === 'aguardando_integracao');
+  const comRastreio = metaAccounts.filter((conta) => conta.rastreio === 'ativo');
+  const emAtencao = metaAccounts
+    .map((conta) => ({ conta, status: classifyAccount(conta) }))
+    .filter(({ status }) => status.tone !== 'emerald' && status.tone !== 'slate');
+
+  const criticas = recomendacoes.filter((item) => item.severidade === 'critico').length;
+  const investimento = metaAccounts.reduce((soma, conta) => soma + Number(conta.spend || 0), 0);
+  const leadsTotais = comRastreio.reduce((soma, conta) => soma + Number(conta.leads || 0), 0);
+  const investimentoRastreado = comRastreio.reduce((soma, conta) => soma + Number(conta.spend || 0), 0);
+  const cplMedio = leadsTotais > 0 ? investimentoRastreado / leadsTotais : null;
+
+  const ranking = metaAccounts.slice().sort((a, b) => scoreAccount(b) - scoreAccount(a));
+  const maxSpend = Math.max(...ranking.map((conta) => Number(conta.spend || 0)), 1);
+  const criativos = activeCreatives.slice().sort((a, b) => Number(b.spend || 0) - Number(a.spend || 0));
 
   return (
     <InternalLayout>
-      {/* Header Section */}
-      <div className="hidden">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2">
-              Gestão de Tráfego
-            </h1>
-            <span className="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-400/20">
-              Operacional
-            </span>
-          </div>
-          <p className="text-slate-400 font-medium text-base sm:text-lg">Monitore campanhas, CPL de clientes e onboarding técnico.</p>
-        </div>
-        <div className="bg-[#090e1a]/80 backdrop-blur-md px-6 py-4 rounded-2xl border border-white/5 shadow-2xl flex items-center gap-4">
-          <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-cyan-400">
-            <Calendar size={20} />
-          </div>
+      <div className="orion-trafego" style={{ color: 'var(--tf-ink)' }}>
+        <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1.5">Data Atual</p>
-            <p className="font-extrabold text-white leading-none">
-              {format(new Date(), "dd 'de' MMMM", { locale: ptBR })}
+            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tf-accent-ink)' }}>
+              Meta Ads + CRM
+            </p>
+            <h1 className="mt-1 text-3xl font-black tracking-tight sm:text-[34px]">Gestão de tráfego</h1>
+            <p className="mt-1.5 max-w-2xl text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
+              As ações abaixo saem de regra fixa sobre os números do período. A IA só resume a carteira.
             </p>
           </div>
-        </div>
-      </div>
 
-      {/* Date Filter Bar */}
-      <div className="hidden">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-white/5 text-cyan-400 rounded-xl">
-            <Calendar size={18} />
+          <div className="flex flex-wrap items-center gap-3">
+            <MetaDatePicker
+              startDate={dataInicio}
+              endDate={dataFim}
+              preset={presetLabel}
+              onChange={(inicio, fim, label) => {
+                setDataInicio(inicio);
+                setDataFim(fim);
+                setPresetLabel(label);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => carregar(true)}
+              disabled={loading || otimizando}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold text-white transition disabled:opacity-60"
+              style={{ background: 'var(--tf-accent)' }}
+            >
+              {otimizando ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+              {otimizando ? 'Analisando...' : 'Otimizar'}
+            </button>
           </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1.5">Filtrar Período</p>
-            <p className="text-xs font-black text-white leading-none">Monitoramento de leads do período</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-          <MetaDatePicker
-            startDate={dataInicio}
-            endDate={dataFim}
-            preset={presetLabel}
-            onChange={(start, end, label) => {
-              setDataInicio(start);
-              setDataFim(end);
-              setPresetLabel(label);
+        </header>
+
+        {aviso ? (
+          <div
+            className="mb-5 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-medium"
+            style={{
+              background: aviso.tone === 'ok' ? 'var(--tf-ok-soft)' : 'var(--tf-crit-soft)',
+              borderColor: aviso.tone === 'ok' ? 'var(--tf-ok-border)' : 'var(--tf-crit-border)',
+              color: aviso.tone === 'ok' ? 'var(--tf-ok)' : 'var(--tf-crit)',
             }}
-          />
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="py-32 flex flex-col items-center justify-center">
-          <Loader2 className="animate-spin text-cyan-400 mb-4" size={40} />
-          <p className="text-slate-400 font-extrabold uppercase tracking-widest text-xs">Carregando painel...</p>
-        </div>
-      ) : error ? (
-        <div className="py-24 text-center">
-          <div className="w-16 h-16 bg-red-500/10 text-red-400 border border-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <ShieldAlert size={32} />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">Erro Operacional</h3>
-          <p className="text-slate-400 font-medium max-w-md mx-auto mb-6">{error}</p>
-          <button 
-            onClick={() => fetchDashboardData(false)}
-            className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-white/10"
           >
-            Tentar Novamente
-          </button>
-        </div>
-      ) : (
-        <>
-          <TrafficCommandCenter
-            corretores={corretores}
-            concessionarias={concessionarias}
-            activeCampaignsCount={activeCampaignsCount}
-            totalLeads={totalLeads}
-            metaAccounts={metaAccounts}
-            reviewAccounts={reviewAccounts}
-            criticalReviewCount={criticalReviewCount}
-            attentionReviewCount={attentionReviewCount}
-            crmPendingCount={crmPendingCount}
-            healthyAccountsCount={healthyAccountsCount}
-            approvalQueue={approvalQueue}
-            analysisAccount={analysisAccount}
-            analysisStatus={analysisStatus}
-            averageCpl={averageCpl}
-            highestCplAccount={highestCplAccount}
-            totalSpend={totalSpend}
-            loadingAlerts={loadingAlerts}
-            alertsUpdatedAt={alertsUpdatedAt}
-            onReview={() => fetchDashboardData(true)}
-            activeCreatives={activeCreatives}
-            portfolioAiReview={portfolioAiReview}
-            approvedRecommendations={approvedRecommendations}
-            onApproveRecommendation={(key) => setApprovedRecommendations((current) => ({ ...current, [key]: true }))}
-          />
-          <div className="hidden">
-          {/* Central de Revisao Meta / CRM */}
-          <div className="mb-10 rounded-[2rem] border border-white/5 bg-[#090e1a]/85 p-6 shadow-2xl backdrop-blur-md">
-            <div className="mb-6 flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-300">
-                  <Activity size={24} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">MVP de otimização</p>
-                  <h2 className="mt-1 text-2xl font-black tracking-tight text-white">Revisão Meta com leads reais do CRM</h2>
-                  <p className="mt-1 max-w-3xl text-sm font-semibold leading-relaxed text-slate-400">
-                    O sistema monitora as contas conectadas, calcula CPL usando somente leads Orion no CRM e separa o que é crítico, atenção ou apenas dado pendente. Nenhuma campanha é pausada automaticamente neste MVP.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => fetchDashboardData(true)}
-                disabled={loading || loadingAlerts}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loadingAlerts ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-                Revisar contas
-              </button>
-            </div>
+            <span>{aviso.texto}</span>
+            <button type="button" onClick={() => setAviso(null)} aria-label="Fechar aviso" className="tf-no-lift shrink-0">
+              <X size={16} />
+            </button>
+          </div>
+        ) : null}
 
-            <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <div className="rounded-2xl border border-red-500/15 bg-red-500/10 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-red-300">Crítico</p>
-                <p className="mt-2 text-3xl font-black text-white">{criticalReviewCount}</p>
-                <p className="mt-1 text-xs font-bold text-red-200/80">CPL &gt;= R$ 28, sem saldo ou erro de pagamento.</p>
-              </div>
-              <div className="rounded-2xl border border-amber-500/15 bg-amber-500/10 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">Atenção</p>
-                <p className="mt-2 text-3xl font-black text-white">{attentionReviewCount}</p>
-                <p className="mt-1 text-xs font-bold text-amber-200/80">CPL &gt;= R$ 20 exige leitura das métricas secundárias.</p>
-              </div>
-              <div className="rounded-2xl border border-blue-500/15 bg-blue-500/10 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-300">CRM pendente</p>
-                <p className="mt-2 text-3xl font-black text-white">{crmPendingCount}</p>
-                <p className="mt-1 text-xs font-bold text-blue-200/80">Investimento existe, mas ainda nao ha leads no CRM.</p>
-              </div>
-              <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/10 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Contas lidas</p>
-                <p className="mt-2 text-3xl font-black text-white">{metaAccounts.length}</p>
-                <p className="mt-1 text-xs font-bold text-emerald-200/80">Base conectada via Meta, leads conferidos no Orion.</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ultima revisao</p>
-                <p className="mt-2 text-sm font-black text-white">{alertsUpdatedAt ? new Date(alertsUpdatedAt).toLocaleString('pt-BR') : 'Ainda nao revisado'}</p>
-                <p className="mt-1 text-xs font-bold text-slate-500">Rotina prevista: 2 vezes ao dia + revisão manual.</p>
-              </div>
-            </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-28">
+            <Loader2 className="animate-spin" size={34} style={{ color: 'var(--tf-accent)' }} />
+            <p className="mt-4 text-sm font-medium" style={{ color: 'var(--tf-ink-soft)' }}>Carregando painel...</p>
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border p-10 text-center" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
+            <ShieldAlert size={30} className="mx-auto mb-4" style={{ color: 'var(--tf-crit)' }} />
+            <h2 className="text-lg font-bold">Não consegui carregar</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm" style={{ color: 'var(--tf-ink-soft)' }}>{error}</p>
+            <button
+              type="button"
+              onClick={() => carregar(false)}
+              className="mt-6 inline-flex h-11 items-center rounded-xl px-5 text-sm font-bold text-white"
+              style={{ background: 'var(--tf-accent)' }}
+            >
+              Tentar de novo
+            </button>
+          </div>
+        ) : (
+          <>
+            {semRastreio.length > 0 ? (
+              <IntegrationBanner contas={semRastreio} />
+            ) : null}
 
-            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-black text-white">Contas para revisar agora</h3>
-                    <p className="text-xs font-bold text-slate-500">Ordenadas por risco operacional. Danilo deve aparecer fiel quando os leads estiverem no CRM.</p>
-                  </div>
-                  <Link href="/trafego/avisos-meta" className="text-[10px] font-black uppercase tracking-widest text-cyan-300 hover:text-cyan-200">
-                    Ver todos
-                  </Link>
-                </div>
-
+            {/* Faixa 1 — acao */}
+            <Panel
+              className="mb-6"
+              title="Ações recomendadas"
+              subtitle="Cada item aponta o alvo exato e o número que disparou a regra."
+              badge={recomendacoes.length > 0 ? `${recomendacoes.length} na fila` : undefined}
+              badgeTone={criticas > 0 ? 'red' : 'slate'}
+            >
+              {recomendacoes.length === 0 ? (
+                <Empty
+                  titulo="Nada aguardando decisão."
+                  texto="Clique em Otimizar para reler as contas e gerar a fila do período selecionado."
+                />
+              ) : (
                 <div className="space-y-3">
-                  {loadingAlerts ? (
-                    <div className="flex items-center justify-center py-10 text-slate-400"><Loader2 className="animate-spin" size={24} /></div>
-                  ) : reviewAccounts.length === 0 ? (
-                    <p className="rounded-xl border border-white/5 bg-white/[0.02] p-5 text-sm font-bold text-slate-400">Nenhum alerta para revisar no periodo selecionado.</p>
-                  ) : reviewAccounts.slice(0, 6).map(({ account, status }) => (
-                    <div key={`${account.corretor_id}-${account.meta_ad_account_id}`} className="rounded-2xl border border-white/5 bg-white/[0.025] p-4 transition hover:border-cyan-400/25 hover:bg-white/[0.04]">
-                      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-black text-white">{account.corretor_nome}</p>
-                          <p className="mt-1 text-[10px] font-bold text-slate-500">{account.meta_ad_account_name || `act_${account.meta_ad_account_id}`}</p>
-                        </div>
-                        <span className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
-                          status.tone === 'red' ? 'border-red-400/25 bg-red-500/10 text-red-300' :
-                          status.tone === 'amber' ? 'border-amber-400/25 bg-amber-500/10 text-amber-300' :
-                          status.tone === 'blue' ? 'border-blue-400/25 bg-blue-500/10 text-blue-300' :
-                          'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'
-                        }`}>{status.label}</span>
-                      </div>
-                      <p className="mb-3 text-xs font-bold leading-relaxed text-slate-300">{status.detail}</p>
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                        <MetricMini label="Leads CRM" value={String(account.leads || 0)} />
-                        <MetricMini label="CPL real" value={formatCurrency(account.cpl, account.currency)} />
-                        <MetricMini label="CTR" value={formatPercent(account.ctr)} />
-                        <MetricMini label="CPC" value={formatCurrency(account.cpc || 0, account.currency)} />
-                      </div>
-                    </div>
+                  {recomendacoes.map((item, index) => (
+                    <RecommendationCard
+                      key={item.id || `${item.meta_ad_account_id}-${item.alvo_id}-${index}`}
+                      item={item}
+                      ocupado={decidindo === item.id}
+                      onAprovar={() => {
+                        if (
+                          (item.acao === 'pausar_anuncio' && item.nivel === 'anuncio') ||
+                          (item.acao === 'pausar_conjunto' && item.nivel === 'conjunto') ||
+                          (item.acao === 'pausar_campanha' && item.nivel === 'campanha')
+                        ) setConfirmando(item);
+                        else void decidir(item, 'aprovar');
+                      }}
+                      onIgnorar={() => decidir(item, 'ignorar')}
+                    />
                   ))}
                 </div>
-              </div>
+              )}
+            </Panel>
 
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                <h3 className="text-base font-black text-white">Regras do MVP</h3>
-                <div className="mt-4 space-y-3">
-                  <RuleRow icon={TrendingUp} title="CPL crítico" text="Pausar só entra como recomendação quando CPL real chegar a R$ 28,00 com dados confiáveis." tone="red" />
-                  <RuleRow icon={Activity} title="CPL em atenção" text="Acima de R$ 20,00 o painel exige leitura de CPC, CTR, CPM, visualização de página e frequência." tone="amber" />
-                  <RuleRow icon={MousePointerClick} title="Métricas secundárias" text="CPC máximo R$ 6,00, CTR mínimo 1%. Frequência fica como indicador de fadiga." tone="blue" />
-                  <RuleRow icon={Eye} title="Fonte dos leads" text="Para CPL, o lead oficial e somente o lead de origem Orion no CRM. Se a Meta tem gasto e nao ha lead Orion, o status vira CRM pendente." tone="emerald" />
+            {/* Faixa 2 — leitura */}
+            <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Kpi
+                icon={Users}
+                label="Concessionárias"
+                value={String(concessionarias.length)}
+                detail={`${comRastreio.length} com rastreio ativo`}
+              />
+              <Kpi
+                icon={ListChecks}
+                label="Ações críticas"
+                value={String(criticas)}
+                detail={`${recomendacoes.length} no total da fila`}
+                tone={criticas > 0 ? 'red' : undefined}
+              />
+              <Kpi
+                icon={TrendingUp}
+                label="CPL médio"
+                value={cplMedio === null ? '—' : formatBRL(cplMedio)}
+                detail={cplMedio === null ? 'Sem leads rastreados no período' : `${leadsTotais} leads Orion no CRM`}
+              />
+              <Kpi
+                icon={Sparkles}
+                label="Análises hoje"
+                value={String(analisesHoje)}
+                detail={ultimaAnalise ? `Última: ${new Date(ultimaAnalise).toLocaleString('pt-BR')}` : 'Nenhuma análise registrada'}
+              />
+            </div>
+
+            <div className="mb-6 grid gap-4 xl:grid-cols-2">
+              <Panel title="Concessionárias em atenção" subtitle="Ordenadas por risco.">
+                {emAtencao.length === 0 ? (
+                  <Empty titulo="Nenhuma concessionária em atenção." texto="Todas as contas com rastreio ativo estão dentro das regras." />
+                ) : (
+                  <ul className="space-y-1.5">
+                    {emAtencao.slice(0, 6).map(({ conta, status }) => (
+                      <li key={`atencao-${conta.corretor_id}-${conta.meta_ad_account_id}`}>
+                        <Link
+                          href={`/trafego/otimizacoes?conta=${encodeURIComponent(conta.meta_ad_account_id || '')}`}
+                          className="tf-no-lift flex items-center gap-3 rounded-xl border px-3 py-2.5 transition"
+                          style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface)' }}
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-bold">{conta.concessionaria_nome || conta.corretor_nome}</span>
+                            <span className="mt-0.5 block truncate text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{status.detail}</span>
+                          </span>
+                          <Badge tone={status.tone} label={status.label} />
+                          <ChevronRight size={15} style={{ color: 'var(--tf-ink-mute)' }} />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+
+              <Panel title="Leitura da IA" subtitle="Resumo da carteira. Não gera ação sozinha.">
+                {resumoIa ? (
+                  <p className="whitespace-pre-line text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{resumoIa}</p>
+                ) : (
+                  <Empty titulo="Sem leitura da IA ainda." texto="Clique em Otimizar para gerar o resumo do período." />
+                )}
+              </Panel>
+            </div>
+
+            {/* Faixa 3 — contexto */}
+            <Collapsible title="Ranking da carteira" detail={`${ranking.length} conta(s) | ${formatBRL(investimento)} investidos no período`}>
+              {ranking.length === 0 ? (
+                <Empty titulo="Nenhuma conta Meta no período." texto="Confira se as concessionárias têm conta de anúncio vinculada." />
+              ) : (
+                <div className="space-y-3">
+                  {ranking.map((conta, index) => {
+                    const status = classifyAccount(conta);
+                    const semRastreioAtivo = conta.rastreio !== 'ativo';
+                    return (
+                      <div
+                        key={`rank-${conta.corretor_id}-${conta.meta_ad_account_id}`}
+                        className="grid gap-3 border-b pb-3 last:border-b-0 last:pb-0 lg:grid-cols-[28px_200px_1fr_120px] lg:items-center"
+                        style={{ borderColor: 'var(--tf-border)' }}
+                      >
+                        <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--tf-ink-mute)' }}>{index + 1}</span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">{conta.concessionaria_nome || conta.corretor_nome}</p>
+                          <Badge tone={status.tone} label={status.label} />
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--tf-surface-2)' }}>
+                            <span
+                              className="block h-full rounded-full"
+                              style={{ width: `${Math.max(3, (Number(conta.spend || 0) / maxSpend) * 100)}%`, background: 'var(--tf-accent)' }}
+                            />
+                          </span>
+                          <span className="w-24 text-right text-sm font-semibold tabular-nums">{formatBRL(conta.spend, conta.currency)}</span>
+                        </div>
+                        <div className="lg:text-right">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>CPL</p>
+                          <p
+                            className="text-base font-black tabular-nums"
+                            style={{ color: semRastreioAtivo ? 'var(--tf-ink-mute)' : Number(conta.cpl || 0) >= 28 ? 'var(--tf-crit)' : 'var(--tf-ink)' }}
+                          >
+                            {semRastreioAtivo ? '—' : formatBRL(conta.cpl, conta.currency)}
+                          </p>
+                          <p className="text-[11px]" style={{ color: 'var(--tf-ink-mute)' }}>
+                            {semRastreioAtivo ? 'sem rastreio' : `${conta.leads || 0} leads`}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            </div>
-          </div>
+              )}
+            </Collapsible>
 
-          {/* Stats Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            <Link href="/trafego/corretores">
-              <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-blue-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition-all duration-300">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Parceiros sob Gestão</p>
-                  <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 group-hover:scale-110 transition-transform">
-                    <Users size={18} />
-                  </div>
+            <Collapsible title="Criativos ativos" detail={`${criativos.length} anúncio(s) rodando`}>
+              {criativos.length === 0 ? (
+                <Empty titulo="Nenhum criativo ativo no período." texto="Rode Otimizar para reler os anúncios na Meta." />
+              ) : (
+                <div className="space-y-3">
+                  {criativos.map((criativo) => {
+                    const preview = bestCreativeImage(criativo);
+                    return (
+                      <div
+                        key={`criativo-${criativo.id}`}
+                        className="grid gap-3 border-b pb-3 last:border-b-0 last:pb-0 lg:grid-cols-[52px_1fr_110px_92px_110px] lg:items-center"
+                        style={{ borderColor: 'var(--tf-border)' }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => preview && setFullscreenCreative(criativo)}
+                          disabled={!preview}
+                          className="tf-no-lift group relative grid h-12 w-12 place-items-center overflow-hidden rounded-lg border disabled:cursor-default"
+                          style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface-2)' }}
+                          aria-label="Abrir criativo"
+                        >
+                          {preview ? (
+                            <>
+                              <img src={preview} alt={criativo.ad_name} className="h-full w-full object-cover" />
+                              <span className="absolute inset-0 grid place-items-center bg-black/45 opacity-0 transition group-hover:opacity-100">
+                                <Maximize2 size={14} className="text-white" />
+                              </span>
+                            </>
+                          ) : (
+                            <ImageIcon size={15} style={{ color: 'var(--tf-ink-mute)' }} />
+                          )}
+                        </button>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">{criativo.ad_name}</p>
+                          <p className="truncate text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{criativo.concessionaria_nome}</p>
+                        </div>
+                        <p className="text-sm font-semibold tabular-nums lg:text-right">{formatBRL(criativo.spend, criativo.currency)}</p>
+                        <p className="text-sm tabular-nums lg:text-right" style={{ color: 'var(--tf-ink-soft)' }}>{criativo.leads || 0} leads</p>
+                        <p
+                          className="text-sm font-bold tabular-nums lg:text-right"
+                          style={{ color: Number(criativo.cpl || 0) >= 28 ? 'var(--tf-crit)' : 'var(--tf-ink)' }}
+                        >
+                          {formatBRL(criativo.cpl, criativo.currency)}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
-                <p className="text-3xl font-black text-white group-hover:text-blue-400 transition-colors">{corretores.length}</p>
-                <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500/0 via-blue-500/40 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </Link>
+              )}
+            </Collapsible>
+          </>
+        )}
 
-            <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-emerald-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all duration-300">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Campanhas Ativas</p>
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:scale-110 transition-transform">
-                  <CheckCircle2 size={18} />
-                </div>
-              </div>
-              <p className="text-3xl font-black text-white group-hover:text-emerald-400 transition-colors">{activeCampaignsCount}</p>
-              <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-emerald-500/0 via-emerald-500/40 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
+        {confirmando ? (
+          <ConfirmDialog
+            item={confirmando}
+            ocupado={decidindo === confirmando.id}
+            onCancelar={() => setConfirmando(null)}
+            onConfirmar={() => decidir(confirmando, 'aprovar', true)}
+          />
+        ) : null}
 
-            <div className="group relative bg-[#090e1a]/70 border border-white/5 hover:border-purple-500/30 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(168,85,247,0.15)] transition-all duration-300">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Entradas Pendentes</p>
-                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 group-hover:scale-110 transition-transform">
-                  <Clock size={18} />
-                </div>
-              </div>
-              <p className="text-3xl font-black text-white group-hover:text-purple-400 transition-colors">
-                {pendingOnboardingCount}
-              </p>
-              <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-purple-500/0 via-purple-500/40 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
+        {fullscreenCreative && bestCreativeImage(fullscreenCreative) ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4">
+            <button
+              type="button"
+              onClick={() => setFullscreenCreative(null)}
+              className="tf-no-lift absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white"
+              aria-label="Fechar"
+            >
+              <X size={20} />
+            </button>
+            <img
+              src={bestCreativeImage(fullscreenCreative)}
+              alt={fullscreenCreative.ad_name}
+              className="max-h-[88vh] w-auto max-w-full rounded-xl object-contain"
+            />
           </div>
-
-          {/* Quick Actions Grid */}
-          <div className="mb-12">
-            <div className="flex items-center gap-4 mb-6">
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Atalhos Operacionais</h2>
-              <div className="h-px flex-1 bg-white/5" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {quickActions.map((action, idx) => (
-                <Link 
-                  key={idx} 
-                  href={action.href}
-                  className={`group p-5 rounded-2xl border ${action.borderColor} bg-[#090e1a]/80 backdrop-blur-md hover:scale-[1.02] shadow-xl hover:shadow-cyan-500/5 transition-all duration-300 flex flex-col justify-between h-48`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className={`p-2.5 rounded-xl bg-gradient-to-br ${action.color} text-white shadow-lg transition-transform duration-300 group-hover:scale-110`}>
-                      <action.icon size={20} />
-                    </div>
-                    <ChevronRight size={16} className="text-slate-500 group-hover:text-white transition-colors" />
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-base font-black text-white mb-1 group-hover:text-cyan-400 transition-colors">{action.title}</h3>
-                    <p className="text-xs font-semibold text-slate-500 leading-normal">
-                      {action.desc}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Brokers Table Section */}
-          <div className="mb-12">
-            <div className="flex items-center gap-4 mb-6">
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Carteira de Clientes Ativos</h2>
-              <div className="h-px flex-1 bg-white/5" />
-            </div>
-
-            <div className="bg-[#090e1a]/85 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-white/[0.02] border-b border-white/5">
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Corretor / Parceiro</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Página de Captação</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Status Onboarding</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Campanha Meta</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {corretores.map((c) => {
-                      const onboardingStatus = getOnboardingStatus(c);
-                      return (
-                        <tr key={c.id} className="hover:bg-white/[0.01] transition-colors group">
-                          <td className="px-8 py-5">
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-blue-500/10 text-cyan-400 border border-cyan-500/15 rounded-xl flex items-center justify-center font-black text-base group-hover:bg-gradient-to-br group-hover:from-blue-500 group-hover:to-cyan-400 group-hover:text-white transition-all">
-                                {c.nome?.[0].toUpperCase() || '?'}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-extrabold text-white group-hover:text-cyan-400 transition-colors leading-snug">{c.nome}</p>
-                                <p className="text-[10px] font-bold text-slate-500 tracking-tighter leading-none mt-1">{c.email}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-8 py-5">
-                            {c.link_pagina ? (
-                              <div className="flex items-center gap-2">
-                                <Globe size={13} className="text-cyan-400" />
-                                <a 
-                                  href={c.link_pagina} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-xs font-semibold text-slate-400 hover:text-cyan-400 transition-colors truncate max-w-[200px]"
-                                >
-                                  {c.link_pagina}
-                                </a>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] font-bold text-slate-600 tracking-widest uppercase italic">Não vinculada</span>
-                            )}
-                          </td>
-                          <td className="px-8 py-5 text-center">
-                            <span className={`px-3.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-slate-900/50 ${onboardingStatus.className.replace('text-', 'text-').replace('bg-', 'bg-slate-900/')}`}>
-                              {onboardingStatus.label}
-                            </span>
-                          </td>
-                          <td className="px-8 py-5 text-center">
-                            <span className={`inline-flex h-2 w-2 rounded-full ${c.campanhas_ativas ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]'}`} />
-                          </td>
-                          <td className="px-8 py-5 text-right">
-                            <div className="flex justify-end gap-2">
-                              <Link 
-                                href={`/trafego/entrada`}
-                                className="px-3 py-1.5 bg-white/5 border border-white/5 hover:border-cyan-500/30 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-400 font-extrabold text-[9px] uppercase tracking-widest rounded-lg transition-all"
-                              >
-                                Configurar
-                              </Link>
-                              <Link 
-                                href={`/trafego/relatorios`}
-                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[9px] uppercase tracking-widest rounded-lg transition-all shadow-md shadow-blue-600/15"
-                              >
-                                Relatório
-                              </Link>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          </div>
-        </>
-      )}
-
-      {/* Footer Decoration */}
-      <div className="hidden">
-        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Orion Track v2.0</p>
-        <div className="flex gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-        </div>
+        ) : null}
       </div>
     </InternalLayout>
   );
 }
 
-function TrafficCommandCenter({
-  corretores,
-  concessionarias,
-  activeCampaignsCount,
-  totalLeads,
-  metaAccounts,
-  reviewAccounts,
-  criticalReviewCount,
-  attentionReviewCount,
-  crmPendingCount,
-  healthyAccountsCount,
-  approvalQueue,
-  analysisAccount,
-  analysisStatus,
-  averageCpl,
-  highestCplAccount,
-  totalSpend,
-  loadingAlerts,
-  alertsUpdatedAt,
-  onReview,
-  activeCreatives,
-  portfolioAiReview,
-  approvedRecommendations,
-  onApproveRecommendation,
-}: {
-  corretores: Corretor[];
-  concessionarias: { nome: string; active: boolean; corretores: Corretor[] }[];
-  activeCampaignsCount: number;
-  totalLeads: number;
-  metaAccounts: MetaAccountAlert[];
-  reviewAccounts: { account: MetaAccountAlert; status: { label: string; tone: string; detail: string } }[];
-  criticalReviewCount: number;
-  attentionReviewCount: number;
-  crmPendingCount: number;
-  healthyAccountsCount: number;
-  approvalQueue: { account: MetaAccountAlert; status: { label: string; tone: string; detail: string } }[];
-  analysisAccount: MetaAccountAlert | null;
-  analysisStatus: { label: string; tone: string; detail: string } | null;
-  averageCpl: number | null;
-  highestCplAccount: MetaAccountAlert | null;
-  totalSpend: number;
-  loadingAlerts: boolean;
-  alertsUpdatedAt: string | null;
-  onReview: () => void;
-  activeCreatives: ActiveCreative[];
-  portfolioAiReview: string;
-  approvedRecommendations: Record<string, boolean>;
-  onApproveRecommendation: (key: string) => void;
-}) {
-  const [fullscreenCreative, setFullscreenCreative] = useState<ActiveCreative | null>(null);
-  const monitoredCount = concessionarias.length;
-  const dailyAnalyses = 0;
-  const displayedAttention = reviewAccounts.slice(0, 5);
-  const activeConcessionarias = concessionarias.filter((item) => item.active).length;
-  const portfolioRows = metaAccounts
-    .slice()
-    .sort((a, b) => scoreTrafficAccount(b) - scoreTrafficAccount(a));
-  const maxPortfolioSpend = Math.max(...portfolioRows.map((account) => Number(account.spend || 0)), 1);
-  const maxPortfolioLeads = Math.max(...portfolioRows.map((account) => Number(account.leads || 0)), 1);
-  const summaryRows = metaAccounts
-    .slice()
-    .sort((a, b) => {
-      const toneOrder: Record<string, number> = { red: 0, amber: 1, blue: 2, emerald: 3 };
-      return (toneOrder[classifyMetaAccount(a).tone] ?? 2) - (toneOrder[classifyMetaAccount(b).tone] ?? 2);
-    })
-    .slice(0, 12);
-  const creativeRows = activeCreatives
-    .slice()
-    .sort((a, b) => scoreActiveCreative(b) - scoreActiveCreative(a));
-  const maxCreativeSpend = Math.max(...creativeRows.map((creative) => Number(creative.spend || 0)), 1);
-  const maxCreativeLeads = Math.max(...creativeRows.map((creative) => Number(creative.leads || 0)), 1);
+function IntegrationBanner({ contas }: { contas: MetaAccount[] }) {
+  const [aberto, setAberto] = useState(false);
 
   return (
-    <section className="-mx-4 -mt-6 rounded-3xl border border-cyan-400/10 bg-[#050b14] p-4 text-white shadow-2xl sm:-mx-6 sm:p-6 lg:-mx-8 xl:p-8">
-          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Dashboard</h1>
-              <p className="mt-1 text-sm font-semibold text-slate-400">Monitoramento das concessionárias do gestor e recomendações operacionais.</p>
-            </div>
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Última revisão</p>
-                <p className="mt-1 text-xs font-black text-slate-200">{alertsUpdatedAt ? new Date(alertsUpdatedAt).toLocaleString('pt-BR') : 'Sem revisão registrada'}</p>
-              </div>
-              <button
-                onClick={onReview}
-                disabled={loadingAlerts}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-60"
-              >
-                {loadingAlerts ? <Loader2 className="animate-spin" size={15} /> : <RefreshCw size={15} />}
-                Revisar contas
-              </button>
-            </div>
+    <div
+      className="mb-6 rounded-2xl border p-4"
+      style={{ background: 'var(--tf-idle-soft)', borderColor: 'var(--tf-idle-border)' }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex gap-3">
+          <PlugZap size={18} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-idle)' }} />
+          <div>
+            <p className="text-sm font-bold">
+              {contas.length} concessionária{contas.length > 1 ? 's' : ''} ainda sem integração de leads
+            </p>
+            <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
+              Os leads dessas contas ainda não chegam ao CRM, então o CPL delas não pode ser calculado. Elas ficaram
+              fora do ranking, dos alertas e da fila de ações de propósito: o que falta é integração, não campanha.
+            </p>
           </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setAberto((valor) => !valor)}
+          className="tf-no-lift text-xs font-bold underline"
+          style={{ color: 'var(--tf-accent-ink)' }}
+        >
+          {aberto ? 'Esconder' : 'Ver quais'}
+        </button>
+      </div>
 
-          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <TrafficKpi href="/trafego/corretores" icon={Users} label="Concessionárias monitoradas" value={String(monitoredCount)} detail={`Ativas: ${activeConcessionarias} | Pausadas: ${Math.max(monitoredCount - activeConcessionarias, 0)}`} tone="cyan" />
-            <TrafficKpi href="/trafego/avisos-meta" icon={TrendingUp} label="Análises hoje" value={String(dailyAnalyses)} detail="Sem registro de análise automática hoje" tone="blue" />
-            <TrafficKpi href="/trafego/avisos-meta" icon={DollarSign} label="Maior CPL" value={formatCurrency(highestCplAccount?.cpl, highestCplAccount?.currency)} detail={highestCplAccount?.concessionaria_nome || highestCplAccount?.corretor_nome || 'Nenhuma conta com CPL'} tone="emerald" />
-            <TrafficKpi href="/trafego/avisos-meta" icon={AlertTriangle} label="Alertas ativos" value={String(criticalReviewCount + attentionReviewCount + crmPendingCount)} detail={`${criticalReviewCount} críticos | ${attentionReviewCount} atenção`} tone="red" />
-            <TrafficKpi href="#recomendacoes" icon={ListChecks} label="Recomendações" value={String(approvalQueue.length)} detail="Aguardando aprovar ou revisar" tone="amber" />
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Panel title="Concessionárias em atenção" action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Abrir otimizacoes</Link>}>
-              <div className="mb-3 grid grid-cols-[1fr_76px_76px_16px] gap-2 px-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                <span>Concessionária</span>
-                <span>Status</span>
-                <span>CPL</span>
-                <span />
-              </div>
-              <div className="space-y-2">
-                {displayedAttention.length === 0 ? (
-                  <EmptyPanel text="Nenhuma concessionária em atenção agora." />
-                ) : displayedAttention.map(({ account, status }) => (
-                  <Link
-                    key={`attention-${account.corretor_id}-${account.meta_ad_account_id}`}
-                    href={`/trafego/otimizacoes?conta=${encodeURIComponent(account.meta_ad_account_id || account.corretor_id)}`}
-                    className="grid min-h-12 grid-cols-[1fr_76px_76px_16px] items-center gap-2 rounded-xl border border-white/5 bg-white/[0.025] px-2 transition hover:border-cyan-400/30 hover:bg-white/[0.05]"
-                  >
-                    <span className="flex min-w-0 items-center gap-3">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-600 text-xs font-black">{account.corretor_nome?.[0] || '?'}</span>
-                      <span className="truncate text-xs font-black text-white">{account.concessionaria_nome || account.corretor_nome}</span>
-                    </span>
-                    <span className={`w-fit rounded-md border px-2 py-1 text-[9px] font-black ${getToneClasses(status.tone)}`}>{status.label}</span>
-                    <span className="text-xs font-black text-slate-200">{formatCurrency(account.cpl, account.currency)}</span>
-                    <ChevronRight size={14} className="text-slate-500" />
-                  </Link>
-                ))}
-              </div>
-            </Panel>
-
-            <Panel title="Recomendações" badge={String(approvalQueue.length)} action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Abrir otimizacoes</Link>}>
-              <div className="space-y-3">
-                {approvalQueue.length === 0 ? (
-                  <EmptyPanel text="Nada aguardando decisão humana agora." />
-                ) : approvalQueue.map(({ account, status }, index) => {
-                  const Icon = status.tone === 'red' ? Pause : status.tone === 'amber' ? ImageIcon : TrendingUp;
-                  return (
-                    <div id={index === 0 ? 'recomendacoes' : undefined} key={`queue-${account.corretor_id}-${index}`} className="grid gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-3 lg:grid-cols-[44px_1fr_84px]">
-                      <div className={`grid h-11 w-11 place-items-center rounded-xl border ${getToneClasses(status.tone)}`}>
-                        <Icon size={18} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-black text-white">{status.tone === 'red' ? 'Pausar anúncio' : status.tone === 'amber' ? 'Trocar criativo' : 'Revisar conta'}</p>
-                          <span className={`rounded px-2 py-0.5 text-[9px] font-black uppercase ${getToneClasses(status.tone)}`}>{status.tone === 'red' ? 'Crítico' : 'Atenção'}</span>
-                        </div>
-                        <p className="mt-1 line-clamp-2 text-xs font-semibold leading-relaxed text-slate-400">{account.concessionaria_nome || account.corretor_nome}: {status.detail}</p>
-                        <p className="mt-1 text-[10px] font-bold text-slate-500">CPL: {formatCurrency(account.cpl, account.currency)} | CTR: {formatPercent(account.ctr)} | CPC: {formatCurrency(account.cpc || 0, account.currency)}</p>
-                      </div>
-                      <div className="flex gap-2 lg:flex-col">
-                        <button
-                          type="button"
-                          onClick={() => onApproveRecommendation(`${account.corretor_id}-${account.meta_ad_account_id}-${index}`)}
-                          className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-center text-[10px] font-black text-white hover:bg-blue-500"
-                        >
-                          {approvedRecommendations[`${account.corretor_id}-${account.meta_ad_account_id}-${index}`] ? 'Aprovado' : 'Aprovar'}
-                        </button>
-                        <Link href={`/trafego/otimizacoes?conta=${encodeURIComponent(account.meta_ad_account_id || account.corretor_id)}`} className="flex-1 rounded-lg bg-white/5 px-3 py-2 text-center text-[10px] font-black text-slate-300 hover:bg-white/10">Revisar</Link>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Panel>
-          </div>
-
-          <div className="mt-4">
-            <Panel title="Ranking da carteira" action={<Link href="/trafego/otimizacoes" className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Abrir otimizações</Link>}>
-              <div className="space-y-4">
-                {portfolioRows.length === 0 ? (
-                  <EmptyPanel text="Nenhuma concessionaria com dados Meta neste periodo." />
-                ) : portfolioRows.map((account, index) => {
-                  const status = classifyMetaAccount(account);
-                  const score = scoreTrafficAccount(account);
-                  return (
-                  <div key={`portfolio-${account.corretor_id}-${account.meta_ad_account_id}`} className="grid gap-3 border-b border-white/5 pb-4 last:border-b-0 last:pb-0 lg:grid-cols-[44px_190px_1fr_112px] lg:items-center">
-                    <div className={`grid h-9 w-9 place-items-center rounded-xl border text-xs font-black ${getToneClasses(status.tone)}`}>#{index + 1}</div>
-                    <div>
-                      <p className="truncate text-xs font-black text-white">{account.concessionaria_nome || account.corretor_nome}</p>
-                      <p className="truncate text-[10px] font-bold text-slate-500">{status.label} | Score {score}</p>
-                    </div>
-                    <div className="space-y-2.5">
-                      <div className="grid grid-cols-[86px_1fr_96px] items-center gap-3">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Investimento</span>
-                        <span className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
-                          <span className="block h-full rounded-full bg-cyan-500/80" style={{ width: `${Math.max(3, (Number(account.spend || 0) / maxPortfolioSpend) * 100)}%` }} />
-                        </span>
-                        <span className="text-right text-xs font-black tabular-nums text-white">{formatCurrency(account.spend, account.currency)}</span>
-                      </div>
-                      <div className="grid grid-cols-[86px_1fr_96px] items-center gap-3">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Leads CRM</span>
-                        <span className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
-                          <span className="block h-full rounded-full bg-emerald-400/80" style={{ width: `${Math.max(3, (Number(account.leads || 0) / maxPortfolioLeads) * 100)}%` }} />
-                        </span>
-                        <span className="text-right text-xs font-black tabular-nums text-white">{account.leads || 0} leads</span>
-                      </div>
-                    </div>
-                    <div className="lg:text-right">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">CPL Orion</p>
-                      <p className={`mt-1 text-sm font-black tabular-nums ${Number(account.cpl || 0) >= 28 ? 'text-red-300' : 'text-slate-200'}`}>{formatCurrency(account.cpl, account.currency)}</p>
-                    </div>
-                  </div>
-                  );
-                })}
-              </div>
-            </Panel>
-          </div>
-
-          {portfolioAiReview ? (
-            <div className="mt-4">
-              <Panel title="Leitura da IA">
-                <p className="whitespace-pre-line text-sm font-bold leading-relaxed text-slate-300">{portfolioAiReview}</p>
-              </Panel>
-            </div>
-          ) : null}
-
-          <div className="hidden">
-            <Panel
-              title="Análise da IA"
-              badge={analysisStatus?.tone === 'red' ? 'Crítico' : analysisStatus?.label || 'Seguro'}
-              badgeTone={analysisStatus?.tone || 'emerald'}
+      {aberto ? (
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+          {contas.map((conta) => (
+            <li
+              key={`sem-rastreio-${conta.corretor_id}-${conta.meta_ad_account_id}`}
+              className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
+              style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}
             >
-              {analysisAccount && analysisStatus ? (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Conta analisada</p>
-                    <p className="mt-1 text-lg font-black text-white">{analysisAccount.corretor_nome}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-500">{analysisAccount.meta_ad_account_name || `act_${analysisAccount.meta_ad_account_id}`}</p>
-                  </div>
-                  <div className={`rounded-xl border p-4 ${getToneClasses(analysisStatus.tone)}`}>
-                    <div className="mb-2 flex items-center gap-2">
-                      <AlertTriangle size={16} />
-                      <p className="text-sm font-black text-white">{analysisStatus.label}</p>
-                    </div>
-                    <p className="text-xs font-semibold leading-relaxed text-slate-200">{analysisStatus.detail}</p>
-                  </div>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold">{conta.concessionaria_nome || conta.corretor_nome}</span>
+                <span className="text-xs" style={{ color: 'var(--tf-ink-mute)' }}>
+                              {formatBRL(conta.spend, conta.currency)} investidos desde o início Orion
+                </span>
+              </span>
+              <Badge tone="slate" label={TRACKING_LABELS.aguardando_integracao} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <AnalysisMetric label="CTR" value={formatPercent(analysisAccount.ctr)} />
-                    <AnalysisMetric label="CPC" value={formatCurrency(analysisAccount.cpc || 0, analysisAccount.currency)} />
-                    <AnalysisMetric label="CPM" value={formatCurrency(analysisAccount.cpm || 0, analysisAccount.currency)} />
-                    <AnalysisMetric label="Frequência" value={Number(analysisAccount.frequency || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} />
-                    <AnalysisMetric label="Leads CRM" value={String(analysisAccount.leads || 0)} />
-                    <AnalysisMetric label="Investimento" value={formatCurrency(analysisAccount.spend, analysisAccount.currency)} />
-                  </div>
+function RecommendationCard({
+  item,
+  ocupado,
+  onAprovar,
+  onIgnorar,
+}: {
+  item: Recomendacao;
+  ocupado: boolean;
+  onAprovar: () => void;
+  onIgnorar: () => void;
+}) {
+  const Icon = ACTION_ICON[item.acao] || AlertTriangle;
+  const tone = item.severidade === 'critico' ? 'red' : 'amber';
+  const cores = TONE_VAR[tone];
+  const pausaNaMeta =
+    (item.acao === 'pausar_anuncio' && item.nivel === 'anuncio') ||
+    (item.acao === 'pausar_conjunto' && item.nivel === 'conjunto') ||
+    (item.acao === 'pausar_campanha' && item.nivel === 'campanha');
 
-                  <div className="rounded-xl border border-white/5 bg-black/20 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Recomendação da IA</p>
-                    <p className="mt-2 text-sm font-bold leading-relaxed text-red-200">
-                      {analysisAccount.alerta_cpl_alto
-                        ? 'Revisar anúncio e criativo antes de qualquer mudança. Pausa só deve ser aprovada por humano.'
-                        : analysisAccount.dados_crm_pendentes
-                          ? 'Conferir importação de leads no CRM antes de avaliar o CPL desta conta.'
-                          : 'Acompanhar métricas secundárias e manter observação no próximo ciclo.'}
-                    </p>
-                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full rounded-full bg-blue-500" style={{ width: `${analysisStatus.tone === 'red' ? 92 : analysisStatus.tone === 'amber' ? 68 : 42}%` }} />
-                    </div>
-                    <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Nível de confiança</p>
-                  </div>
-                </div>
-              ) : (
-                <EmptyPanel text="Sem conta Meta analisada neste período." />
-              )}
-            </Panel>
-          </div>
+  return (
+    <div
+      className="grid gap-3 rounded-xl border p-4 lg:grid-cols-[40px_1fr_auto] lg:items-start"
+      style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}
+    >
+      <div
+        className="grid h-10 w-10 place-items-center rounded-lg border"
+        style={{ background: cores.bg, borderColor: cores.border, color: cores.fg }}
+      >
+        <Icon size={18} />
+      </div>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr]">
-            <Panel title="Resumo da carteira">
-              <div className="space-y-2">
-                {summaryRows.length === 0 ? (
-                  <EmptyPanel text="Nenhuma conta monitorada neste periodo." />
-                ) : summaryRows.map((account) => {
-                  const status = classifyMetaAccount(account);
-                  return (
-                    <div key={`summary-${account.corretor_id}-${account.meta_ad_account_id}`} className="flex items-center justify-between gap-3 border-b border-white/5 py-2 last:border-b-0">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <Circle size={10} className={status.tone === 'red' ? 'fill-red-400 text-red-400' : status.tone === 'amber' ? 'fill-amber-300 text-amber-300' : status.tone === 'blue' ? 'fill-blue-300 text-blue-300' : 'fill-emerald-300 text-emerald-300'} />
-                        <p className="truncate text-xs font-black text-white">{account.concessionaria_nome || account.corretor_nome}</p>
-                      </div>
-                      <span className={`shrink-0 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-widest ${getToneClasses(status.tone)}`}>{status.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </Panel>
-            <Panel title="Criativos ativos">
-              <div className="space-y-4">
-                {creativeRows.length === 0 ? (
-                  <EmptyPanel text="Nenhum criativo ativo encontrado no periodo." />
-                ) : creativeRows.map((creative) => {
-                  const preview = bestActiveCreativeImage(creative);
-                  return (
-                  <div key={`creative-${creative.id}`} className="grid gap-2 lg:grid-cols-[56px_190px_1fr_92px_1fr_86px_96px] lg:items-center">
-                    <button
-                      type="button"
-                      onClick={() => preview && setFullscreenCreative(creative)}
-                      disabled={!preview}
-                      className="group relative grid h-12 w-12 place-items-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] disabled:cursor-default"
-                      aria-label="Abrir criativo em tela cheia"
-                    >
-                      {preview ? (
-                        <>
-                          <img src={preview} alt={creative.ad_name} className="h-full w-full object-cover transition group-hover:scale-105" />
-                          <span className="absolute inset-0 grid place-items-center bg-black/45 opacity-0 transition group-hover:opacity-100">
-                            <Maximize2 size={15} className="text-white" />
-                          </span>
-                        </>
-                      ) : (
-                        <ImageIcon size={16} className="text-slate-600" />
-                      )}
-                    </button>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-black text-white">{creative.ad_name}</p>
-                      <p className="truncate text-[10px] font-bold text-slate-500">{creative.concessionaria_nome}</p>
-                    </div>
-                    <div className="h-6 bg-white/[0.04]">
-                      <div className="h-full bg-cyan-500/75" style={{ width: `${Math.max(3, (Number(creative.spend || 0) / maxCreativeSpend) * 100)}%` }} />
-                    </div>
-                    <p className="text-right text-xs font-black text-white">{formatCurrency(creative.spend, creative.currency)}</p>
-                    <div className="h-6 bg-white/[0.04]">
-                      <div className="h-full bg-emerald-400/75" style={{ width: `${Math.max(3, (Number(creative.leads || 0) / maxCreativeLeads) * 100)}%` }} />
-                    </div>
-                    <p className="text-right text-xs font-black text-white">{creative.leads || 0} leads</p>
-                    <p className={`text-right text-xs font-black ${Number(creative.cpl || 0) >= 28 ? 'text-red-300' : 'text-slate-200'}`}>{formatCurrency(creative.cpl, creative.currency)}</p>
-                  </div>
-                  );
-                })}
-              </div>
-            </Panel>
-          </div>
-
-          {bestActiveCreativeImage(fullscreenCreative) ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
-              <button
-                type="button"
-                onClick={() => setFullscreenCreative(null)}
-                className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20"
-                aria-label="Fechar criativo"
-              >
-                <X size={22} />
-              </button>
-              <div className="grid max-h-[94vh] w-full max-w-[1400px] gap-4 overflow-auto rounded-2xl border border-white/10 bg-[#08111d] p-4 shadow-2xl lg:grid-cols-[minmax(0,1fr)_340px]">
-                <div className="flex min-h-[68vh] items-center justify-center rounded-xl bg-black/35 p-3">
-                  <img src={bestActiveCreativeImage(fullscreenCreative)} alt={fullscreenCreative?.ad_name || 'Criativo'} className="h-auto max-h-[88vh] w-auto max-w-full rounded-lg object-contain" />
-                </div>
-                <div className="min-w-0 p-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Criativo ativo</p>
-                  <h3 className="mt-3 text-2xl font-black text-white">{fullscreenCreative?.ad_name}</h3>
-                  <p className="mt-2 text-sm font-bold text-slate-400">{fullscreenCreative?.concessionaria_nome}</p>
-                  <div className="mt-5 grid grid-cols-2 gap-3">
-                    <MetricMini label="Investimento" value={formatCurrency(fullscreenCreative?.spend, fullscreenCreative?.currency)} />
-                    <MetricMini label="Leads CRM" value={String(fullscreenCreative?.leads || 0)} />
-                    <MetricMini label="CPL" value={formatCurrency(fullscreenCreative?.cpl, fullscreenCreative?.currency)} />
-                    <MetricMini label="Status" value={fullscreenCreative?.status || 'Ativo'} />
-                  </div>
-                </div>
-              </div>
-            </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-bold">{ACTION_LABELS[item.acao]}</p>
+          <Badge tone={tone} label={item.severidade === 'critico' ? 'Crítico' : 'Atenção'} />
+          {pausaNaMeta ? (
+            <span className="text-[11px] font-semibold" style={{ color: 'var(--tf-ink-mute)' }}>
+              executa na Meta
+            </span>
           ) : null}
+        </div>
 
-          <div className="hidden">
-            <Panel title="Resumo da carteira">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <AnalysisMetric label="Saudáveis" value={String(healthyAccountsCount)} />
-                <AnalysisMetric label="CRM pendente" value={String(crmPendingCount)} />
-                <AnalysisMetric label="Investimento Meta" value={formatCurrency(totalSpend)} />
-              </div>
-            </Panel>
-            <Panel title="Regra de segurança">
-              <p className="text-sm font-semibold leading-relaxed text-slate-300">
-                O painel usa somente leads de origem Orion no CRM para calcular CPL. Quando existe gasto na Meta e nenhum lead Orion no CRM, a conta entra como “CRM pendente” para evitar decisão errada.
-              </p>
-            </Panel>
-          </div>
+        {item.alvo_nome ? (
+          <p className="mt-1.5 truncate text-sm font-semibold" style={{ color: 'var(--tf-accent-ink)' }}>
+            {item.nivel === 'anuncio' ? 'Anúncio: ' : ''}{item.alvo_nome}
+          </p>
+        ) : null}
+
+        <p className="mt-1 text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{item.motivo}</p>
+
+        <p className="mt-1.5 text-xs" style={{ color: 'var(--tf-ink-mute)' }}>
+          {item.concessionaria_nome}
+        </p>
+      </div>
+
+      <div className="flex gap-2 lg:flex-col">
+        <button
+          type="button"
+          onClick={onAprovar}
+          disabled={ocupado || !item.id}
+          className="tf-no-lift inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-bold text-white transition disabled:opacity-50 lg:w-32"
+          style={{ background: 'var(--tf-accent)' }}
+        >
+          {ocupado ? <Loader2 className="animate-spin" size={13} /> : <Check size={13} />}
+          Aprovar
+        </button>
+        <button
+          type="button"
+          onClick={onIgnorar}
+          disabled={ocupado || !item.id}
+          className="tf-no-lift inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold transition disabled:opacity-50 lg:w-32"
+          style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}
+        >
+          <Ban size={13} />
+          Ignorar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  item,
+  ocupado,
+  onCancelar,
+  onConfirmar,
+}: {
+  item: Recomendacao;
+  ocupado: boolean;
+  onCancelar: () => void;
+  onConfirmar: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4">
+      <div
+        className="w-full max-w-md rounded-2xl border p-6"
+        style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
+      >
+        <div
+          className="mb-4 grid h-11 w-11 place-items-center rounded-xl border"
+          style={{ background: 'var(--tf-crit-soft)', borderColor: 'var(--tf-crit-border)', color: 'var(--tf-crit)' }}
+        >
+          <Pause size={20} />
+        </div>
+
+        <h2 className="text-lg font-bold">Pausar este {item.nivel} na Meta?</h2>
+        <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>
+          A pausa acontece agora, direto na conta de anúncios. Para religar, é preciso entrar no Gerenciador de Anúncios.
+        </p>
+
+        <div className="mt-4 rounded-xl border p-3" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
+          <p className="text-sm font-bold">{item.alvo_nome}</p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{item.concessionaria_nome}</p>
+          <p className="mt-2 text-sm" style={{ color: 'var(--tf-ink-soft)' }}>{item.motivo}</p>
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="tf-no-lift h-11 flex-1 rounded-xl border text-sm font-bold"
+            style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onConfirmar}
+            disabled={ocupado}
+            className="tf-no-lift inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-bold text-white disabled:opacity-60"
+            style={{ background: 'var(--tf-crit)' }}
+          >
+            {ocupado ? <Loader2 className="animate-spin" size={15} /> : <Pause size={15} />}
+            Pausar agora
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Panel({
+  title,
+  subtitle,
+  children,
+  badge,
+  badgeTone = 'slate',
+  className = '',
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  badge?: string;
+  badgeTone?: string;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`rounded-2xl border p-5 ${className}`}
+      style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
+    >
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-bold">{title}</h2>
+          {subtitle ? <p className="mt-0.5 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{subtitle}</p> : null}
+        </div>
+        {badge ? <Badge tone={badgeTone} label={badge} /> : null}
+      </div>
+      {children}
     </section>
   );
 }
 
-function TrafficKpi({
-  href,
+function Collapsible({ title, detail, children }: { title: string; detail?: string; children: ReactNode }) {
+  const [aberto, setAberto] = useState(false);
+
+  return (
+    <section
+      className="mb-4 overflow-hidden rounded-2xl border"
+      style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}
+    >
+      <button
+        type="button"
+        onClick={() => setAberto((valor) => !valor)}
+        className="tf-no-lift flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+      >
+        <span>
+          <span className="block text-base font-bold">{title}</span>
+          {detail ? <span className="mt-0.5 block text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{detail}</span> : null}
+        </span>
+        {aberto ? <ChevronDown size={17} style={{ color: 'var(--tf-ink-mute)' }} /> : <ChevronRight size={17} style={{ color: 'var(--tf-ink-mute)' }} />}
+      </button>
+      {aberto ? <div className="border-t px-5 py-4" style={{ borderColor: 'var(--tf-border)' }}>{children}</div> : null}
+    </section>
+  );
+}
+
+function Kpi({
   icon: Icon,
   label,
   value,
   detail,
   tone,
 }: {
-  href: string;
   icon: any;
   label: string;
   value: string;
   detail: string;
-  tone: 'cyan' | 'blue' | 'emerald' | 'red' | 'amber';
+  tone?: string;
 }) {
-  const tones = {
-    cyan: 'from-cyan-500/20 to-cyan-500/5 text-cyan-300 border-cyan-400/15',
-    blue: 'from-blue-500/20 to-blue-500/5 text-blue-300 border-blue-400/15',
-    emerald: 'from-emerald-500/20 to-emerald-500/5 text-emerald-300 border-emerald-400/15',
-    red: 'from-red-500/20 to-red-500/5 text-red-300 border-red-400/15',
-    amber: 'from-amber-500/20 to-amber-500/5 text-amber-300 border-amber-400/15',
-  }[tone];
+  const cores = tone ? TONE_VAR[tone] : null;
 
   return (
-    <Link href={href} className={`block rounded-xl border bg-gradient-to-br p-4 transition hover:-translate-y-0.5 hover:border-cyan-300/35 hover:shadow-xl hover:shadow-cyan-950/20 ${tones}`}>
-      <div className="mb-3 flex items-center justify-between">
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-black/20">
-          <Icon size={19} />
-        </div>
-        <ChevronRight size={16} className="text-slate-500" />
+    <div
+      className="rounded-2xl border p-4"
+      style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <Icon size={15} style={{ color: 'var(--tf-ink-mute)' }} />
+        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>{label}</p>
       </div>
-      <p className="text-3xl font-black text-white">{value}</p>
-      <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-2 text-[11px] font-bold text-slate-500">{detail}</p>
-    </Link>
-  );
-}
-
-function Panel({
-  title,
-  children,
-  action,
-  badge,
-  badgeTone = 'blue',
-}: {
-  title: string;
-  children: ReactNode;
-  action?: ReactNode;
-  badge?: string;
-  badgeTone?: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#0a1422]/85 p-4 shadow-xl shadow-black/20">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-black text-white">{title}</h2>
-          {badge ? <span className={`rounded-md border px-2 py-0.5 text-[10px] font-black ${getToneClasses(badgeTone)}`}>{badge}</span> : null}
-        </div>
-        {action}
-      </div>
-      {children}
+      <p className="text-3xl font-black tabular-nums" style={{ color: cores ? cores.fg : 'var(--tf-ink)' }}>{value}</p>
+      <p className="mt-1.5 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{detail}</p>
     </div>
   );
 }
 
-function AnalysisMetric({ label, value }: { label: string; value: string }) {
+function Badge({ tone, label }: { tone: string; label: string }) {
+  const cores = TONE_VAR[tone] || TONE_VAR.slate;
   return (
-    <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-lg font-black text-white">{value}</p>
-    </div>
+    <span
+      className="inline-flex w-fit items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+      style={{ background: cores.bg, borderColor: cores.border, color: cores.fg }}
+    >
+      {label}
+    </span>
   );
 }
 
-function EmptyPanel({ text }: { text: string }) {
+function Empty({ titulo, texto }: { titulo: string; texto: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm font-bold text-slate-500">
-      {text}
-    </div>
-  );
-}
-
-function MetricMini({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-black text-white">{value}</p>
-    </div>
-  );
-}
-
-function RuleRow({
-  icon: Icon,
-  title,
-  text,
-  tone,
-}: {
-  icon: any;
-  title: string;
-  text: string;
-  tone: 'red' | 'amber' | 'blue' | 'emerald';
-}) {
-  const toneClass = {
-    red: 'border-red-400/15 bg-red-500/10 text-red-300',
-    amber: 'border-amber-400/15 bg-amber-500/10 text-amber-300',
-    blue: 'border-blue-400/15 bg-blue-500/10 text-blue-300',
-    emerald: 'border-emerald-400/15 bg-emerald-500/10 text-emerald-300',
-  }[tone];
-
-  return (
-    <div className="flex gap-3 rounded-2xl border border-white/5 bg-white/[0.025] p-4">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${toneClass}`}>
-        <Icon size={18} />
-      </div>
-      <div>
-        <p className="text-sm font-black text-white">{title}</p>
-        <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-400">{text}</p>
-      </div>
+    <div
+      className="rounded-xl border border-dashed px-4 py-6 text-center"
+      style={{ borderColor: 'var(--tf-border)' }}
+    >
+      <p className="text-sm font-semibold">{titulo}</p>
+      <p className="mx-auto mt-1 max-w-md text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{texto}</p>
     </div>
   );
 }

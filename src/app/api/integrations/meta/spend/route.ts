@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { fetchOrionCumulativeSpend } from '@/lib/meta/orionSpend';
 
 async function requireTrafficAccess(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -150,6 +151,29 @@ export async function POST(request: Request) {
     const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
     const metaRange = getMetaCompatibleRange(since, until);
     const accountId = String(metaAccount.meta_ad_account_id).replace(/^act_/, '');
+
+    if (body.acumulado_orion === true) {
+      const cumulative = await fetchOrionCumulativeSpend(
+        accountId,
+        metaRange.until,
+        accessToken,
+        graphVersion
+      );
+
+      if (cumulative.spend !== null) {
+        return NextResponse.json({
+          success: true,
+          corretor_id: corretor.id,
+          meta_ad_account_id: metaAccount.meta_ad_account_id,
+          meta_ad_account_name: metaAccount.meta_ad_account_name,
+          spend: cumulative.spend,
+          data_inicio: cumulative.since,
+          data_fim: metaRange.until,
+          acumulado_orion: true,
+        });
+      }
+    }
+
     const url = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
     url.searchParams.set('fields', 'spend');
     url.searchParams.set('time_range', JSON.stringify({ since: metaRange.since, until: metaRange.until }));

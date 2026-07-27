@@ -312,6 +312,7 @@ export default function DashboardPage() {
     salesPotential: 0
   });
   const [periodSpend, setPeriodSpend] = useState(0);
+  const [allTimeOrionLeads, setAllTimeOrionLeads] = useState(0);
   const [chartAnimate, setChartAnimate] = useState(false);
   const dashboardFetchRequestRef = useRef(0);
 
@@ -535,6 +536,7 @@ export default function DashboardPage() {
 
         // Calculate all-time summary (used for the 4 financial cards step 3)
         const allTimeSoldLeads = allLeads.filter(isLeadSale);
+        const allTimeOrionCount = allLeads.filter(isOrionLead).length;
         const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
         
         if (!isCurrentRequest()) return;
@@ -547,6 +549,7 @@ export default function DashboardPage() {
             .filter((lead) => activeRevenueStatuses.includes(normalizeLeadStatus(lead.status)))
             .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
         });
+        setAllTimeOrionLeads(allTimeOrionCount);
 
         // Calculate current month summary (used for the progress bars step 6)
         const thisMonthKey = monthKey(new Date());
@@ -587,7 +590,8 @@ export default function DashboardPage() {
             .slice(0, 5)
         );
 
-        // Fetch exact period Meta spend
+        // Investment and CPL Orion are cumulative from the first Orion campaign.
+        // The date picker continues to control the operational funnel below.
         let currentPeriodSpend = 0;
         if (accessToken && profile.corretor_id && dataInicio && dataFim) {
           try {
@@ -598,11 +602,12 @@ export default function DashboardPage() {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({
-                corretor_id: profile.corretor_id,
-                data_inicio: metaRange.since,
-                data_fim: metaRange.until,
-              }),
+                body: JSON.stringify({
+                  corretor_id: profile.corretor_id,
+                  data_inicio: metaRange.since,
+                  data_fim: metaRange.until,
+                  acumulado_orion: true,
+                }),
             });
 
             const spendPayload = await spendResponse.json().catch(() => ({}));
@@ -851,7 +856,7 @@ export default function DashboardPage() {
 
 
 
-  const periodCpl = stats.orionTotal > 0 ? periodSpend / stats.orionTotal : 0;
+  const periodCpl = allTimeOrionLeads > 0 ? periodSpend / allTimeOrionLeads : 0;
   const periodConversion = stats.orionTotal > 0 ? (stats.sold / stats.orionTotal) * 100 : 0;
 
   const periodLabelText = presetLabel === 'Todo o período'
@@ -1273,9 +1278,9 @@ export default function DashboardPage() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
-                <MiniMetric icon={DollarSign} label={`Investido ${periodLabelText}`} value={formatCurrency(periodSpend)} />
-                <MiniMetric icon={Users} label={`Leads Orion ${periodLabelText}`} value={stats.orionTotal} />
-                <MiniMetric icon={Target} label={`CPL Orion ${periodLabelText}`} value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
+                <MiniMetric icon={DollarSign} label="Investimento Orion acumulado" value={formatCurrency(periodSpend)} />
+                <MiniMetric icon={Users} label="Leads Orion acumulados" value={allTimeOrionLeads} />
+                <MiniMetric icon={Target} label="CPL Orion acumulado" value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
                 <MiniMetric icon={TrendingUp} label={`Conversao ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
                 <MiniMetric icon={Clock} label="Em negociacao" value={stats.inProgress} />
               </div>

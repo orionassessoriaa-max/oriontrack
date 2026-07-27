@@ -3,6 +3,16 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
+import { fetchOrionCumulativeSpend } from '@/lib/meta/orionSpend';
+import {
+  TRAFFIC_RULES,
+  buildRecommendations,
+  resolveTrackingStatus,
+  type AccountLike,
+  type CreativeLike,
+  type Recommendation,
+  type TrackingStatus,
+} from '@/lib/trafego/rules';
 
 type CorretorMeta = {
   id: string;
@@ -12,15 +22,9 @@ type CorretorMeta = {
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
   time_operacional?: unknown;
+  rastreio_status?: string | null;
+  rastreio_desde?: string | null;
   scoped_corretor_ids?: string[];
-};
-
-const TRAFFIC_RULES = {
-  cplAttention: 20,
-  cplCritical: 28,
-  cpcMax: 6,
-  ctrMin: 1,
-  lowBalance: 100,
 };
 
 async function requireTrafficAccess(request: Request) {
@@ -116,28 +120,32 @@ function describeMetaError(error: any, accountId?: string | null) {
   return message || 'Nao consegui consultar esta conta Meta agora.';
 }
 
+async function resolveCorretorGroupIds(corretor: CorretorMeta) {
+  if (corretor.scoped_corretor_ids?.length) return corretor.scoped_corretor_ids;
+
+  const corretoraNome = String(corretor.nome_empresa || '').trim();
+  if (!corretoraNome) return [corretor.id];
+
+  let groupQuery = supabaseAdmin
+    .from('corretores')
+    .select('id')
+    .eq('nome_empresa', corretoraNome);
+
+  if (corretor.gestor_trafego_id) {
+    groupQuery = groupQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
+  }
+
+  const { data, error } = await groupQuery;
+  if (error) throw new Error(`Erro ao buscar corretores da concessionaria: ${error.message}`);
+
+  const ids = (data || []).map((item) => item.id).filter(Boolean);
+  return ids.length > 0 ? ids : [corretor.id];
+}
+
 async function fetchSheetLeads(corretor: CorretorMeta, since: string, until: string) {
   const start = `${since}T00:00:00.000-03:00`;
   const end = `${until}T23:59:59.999-03:00`;
-  let corretorIds = corretor.scoped_corretor_ids?.length ? corretor.scoped_corretor_ids : [corretor.id];
-
-  const corretoraNome = String(corretor.nome_empresa || '').trim();
-  if (!corretor.scoped_corretor_ids?.length && corretoraNome) {
-    let groupQuery = supabaseAdmin
-      .from('corretores')
-      .select('id')
-      .eq('nome_empresa', corretoraNome);
-
-    if (corretor.gestor_trafego_id) {
-      groupQuery = groupQuery.eq('gestor_trafego_id', corretor.gestor_trafego_id);
-    }
-
-    const { data: groupCorretores, error: groupError } = await groupQuery;
-
-    if (groupError) throw new Error(`Erro ao buscar corretores da concessionaria: ${groupError.message}`);
-    const groupIds = (groupCorretores || []).map((item) => item.id).filter(Boolean);
-    if (groupIds.length > 0) corretorIds = groupIds;
-  }
+  const corretorIds = await resolveCorretorGroupIds(corretor);
 
   let { data, error }: { data: any[] | null; error: any } = await supabaseAdmin
     .from('leads')
@@ -161,10 +169,29 @@ async function fetchSheetLeads(corretor: CorretorMeta, since: string, until: str
   return (data || []).filter(isOrionLead);
 }
 
+/**
+ * Quais concessionarias ja receberam algum lead Orion alguma vez, sem filtro de
+ * periodo. E o que separa "ainda nao integrei" de "integrei e quebrou". Uma
+ * consulta so para toda a carteira, apoiada no indice de leads.origem.
+ */
+async function fetchCorretoresComHistoricoOrion(corretorIds: string[]) {
+  if (corretorIds.length === 0) return new Set<string>();
+
+  const { data, error } = await supabaseAdmin
+    .from('leads')
+    .select('corretor_id')
+    .in('corretor_id', corretorIds)
+    .eq('origem', 'Orion')
+    .limit(10000);
+
+  if (error) return null;
+  return new Set((data || []).map((row: any) => String(row.corretor_id)).filter(Boolean));
+}
+
 function normalizeKey(value?: string | null) {
   return String(value || '')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .trim()
     .toLowerCase();
 }
@@ -195,7 +222,14 @@ async function fetchObjectMap(ids: string[], fields: string, accessToken: string
   return result;
 }
 
-async function fetchActiveCreatives(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
+async function fetchActiveCreatives(
+  corretor: CorretorMeta,
+  since: string,
+  until: string,
+  accessToken: string,
+  graphVersion: string,
+  leads: any[]
+) {
   const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
   const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
   insightsUrl.searchParams.set('fields', 'spend,ctr,cpc,cpm,frequency,inline_link_clicks,ad_id,ad_name');
@@ -204,10 +238,7 @@ async function fetchActiveCreatives(corretor: CorretorMeta, since: string, until
   insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
   insightsUrl.searchParams.set('access_token', accessToken);
 
-  const [insightsResponse, leads] = await Promise.all([
-    fetch(insightsUrl.toString(), { next: { revalidate: 600 } }),
-    fetchSheetLeads(corretor, since, until),
-  ]);
+  const insightsResponse = await fetch(insightsUrl.toString(), { next: { revalidate: 600 } });
   const insightsPayload = await insightsResponse.json();
   if (!insightsResponse.ok || insightsPayload.error) throw new Error(describeMetaError(insightsPayload.error, accountId));
 
@@ -228,6 +259,7 @@ async function fetchActiveCreatives(corretor: CorretorMeta, since: string, until
       return {
         id: String(row.ad_id || row.ad_name),
         ad_name: row.ad_name || details?.name || 'Anuncio sem nome',
+        corretor_id: corretor.id,
         concessionaria_nome: corretor.nome_empresa || corretor.nome,
         meta_ad_account_id: corretor.meta_ad_account_id,
         meta_ad_account_name: corretor.meta_ad_account_name,
@@ -245,50 +277,57 @@ async function fetchActiveCreatives(corretor: CorretorMeta, since: string, until
     .slice(0, 10);
 }
 
-function localPortfolioReview(accounts: any[], activeCreatives: any[]) {
-  const critical = accounts.filter((account) => account.alerta_cpl_alto || account.error).length;
-  const crmPending = accounts.filter((account) => account.dados_crm_pendentes).length;
-  const attention = accounts.filter((account) => account.alerta_cpl_atencao || account.alerta_metricas_secundarias).length;
+function localPortfolioReview(accounts: any[], activeCreatives: any[], recommendations: Recommendation[]) {
+  const critical = recommendations.filter((item) => item.severidade === 'critico').length;
+  const waiting = accounts.filter((account) => account.rastreio === 'aguardando_integracao').length;
+  const broken = accounts.filter((account) => account.rastreio === 'rastreio_quebrado').length;
   const best = accounts
-    .filter((account) => Number(account.leads || 0) > 0 && Number(account.cpl || 999) < TRAFFIC_RULES.cplAttention)
+    .filter((account) => account.rastreio === 'ativo' && Number(account.leads || 0) > 0 && Number(account.cpl || 999) < TRAFFIC_RULES.cplAttention)
     .sort((a, b) => Number(a.cpl || 999) - Number(b.cpl || 999))[0];
   const topCreative = activeCreatives
     .filter((creative) => Number(creative.leads || 0) > 0)
     .sort((a, b) => Number(b.leads || 0) - Number(a.leads || 0))[0];
 
   return [
-    `Resumo: ${critical} conta(s) critica(s), ${attention} em atencao e ${crmPending} com CRM pendente.`,
-    best ? `Melhor conta no momento: ${best.concessionaria_nome || best.corretor_nome}, com CPL Orion CRM de ${Number(best.cpl || 0).toLocaleString('pt-BR', { style: 'currency', currency: best.currency || 'BRL' })}.` : 'Nenhuma conta saudavel com leads Orion no CRM suficientes para ranquear como melhor.',
-    topCreative ? `Criativo com mais leads Orion no CRM: ${topCreative.ad_name}, em ${topCreative.concessionaria_nome}, com ${topCreative.leads} lead(s).` : 'Ainda nao ha criativo ativo com lead Orion no CRM atribuido por UTM de anuncio.',
-    'Regra de seguranca: quando ha investimento e zero lead Orion no CRM, revisar webhook/UTM antes de julgar CPL ou aprovar qualquer acao.',
-  ].join('\n');
+    `Resumo: ${recommendations.length} acao(oes) na fila, sendo ${critical} critica(s).`,
+    waiting ? `${waiting} concessionaria(s) ainda sem integracao de leads. Elas ficaram fora do calculo de CPL.` : 'Todas as concessionarias monitoradas tem rastreio de leads.',
+    broken ? `${broken} conta(s) com rastreio quebrado: ja receberam leads antes e zeraram agora.` : '',
+    best ? `Melhor conta no momento: ${best.concessionaria_nome || best.corretor_nome}, com CPL de ${Number(best.cpl || 0).toLocaleString('pt-BR', { style: 'currency', currency: best.currency || 'BRL' })}.` : '',
+    topCreative ? `Criativo com mais leads: ${topCreative.ad_name}, em ${topCreative.concessionaria_nome}, com ${topCreative.leads} lead(s).` : '',
+  ].filter(Boolean).join('\n');
 }
 
-async function generatePortfolioAiReview(accounts: any[], activeCreatives: any[], since: string, until: string) {
+async function generatePortfolioAiReview(
+  accounts: any[],
+  activeCreatives: any[],
+  recommendations: Recommendation[],
+  since: string,
+  until: string
+) {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return localPortfolioReview(accounts, activeCreatives);
+  if (!apiKey) return localPortfolioReview(accounts, activeCreatives, recommendations);
 
   const payload = {
     periodo: { since, until },
     regras: TRAFFIC_RULES,
+    // Contas sem rastreio ativo entram marcadas para a IA nunca sugerir pausa
+    // em cima de um CPL que nao existe.
     contas: accounts.map((account) => ({
       concessionaria: account.concessionaria_nome || account.corretor_nome,
+      rastreio: account.rastreio,
       investimento: account.spend,
-      leads_crm: account.leads,
-      cpl_crm: account.cpl,
+      leads_crm: account.rastreio === 'ativo' ? account.leads : null,
+      cpl_crm: account.rastreio === 'ativo' ? account.cpl : null,
       cpc: account.cpc,
       ctr: account.ctr,
-      cpm: account.cpm,
       frequencia: account.frequency,
-      status: account.error ? account.error : account.dados_crm_pendentes ? 'CRM pendente' : account.alerta_cpl_alto ? 'CPL critico' : account.alerta_cpl_atencao ? 'Atencao' : 'Saudavel',
     })),
-    criativos_ativos: activeCreatives.map((creative) => ({
-      concessionaria: creative.concessionaria_nome,
-      anuncio: creative.ad_name,
-      investimento: creative.spend,
-      leads_crm: creative.leads,
-      cpl_crm: creative.cpl,
-      status: creative.status,
+    acoes_ja_decididas_pela_regra: recommendations.map((item) => ({
+      concessionaria: item.concessionaria_nome,
+      alvo: item.alvo_nome,
+      acao: item.acao,
+      severidade: item.severidade,
+      motivo: item.motivo,
     })),
   };
 
@@ -302,26 +341,33 @@ async function generatePortfolioAiReview(accounts: any[], activeCreatives: any[]
       messages: [
         {
           role: 'system',
-          content: `Voce e uma IA de gestao de trafego para corretoras de planos de saude. Regras fixas:
-- Leads oficiais para CPL sao somente leads Orion no CRM, nunca leads reportados pela Meta nem leads manuais.
-- CPL critico quando CPL Orion CRM chegar a R$ 28,00 ou mais.
-- CPL acima de R$ 20,00 exige avaliar CPC, CTR, CPM, visualizacao de pagina e frequencia.
-- CPC maximo R$ 6,00.
-- CTR minimo 1%.
-- Se houver investimento e zero lead Orion no CRM, classifique como CRM pendente e recomende revisar webhook/UTM antes de otimizar.
-Responda em portugues do Brasil, curto, em bullets, sem inventar dados.`
+          content: `Voce e uma IA de gestao de trafego para corretoras de planos de saude.
+As acoes ja foram decididas por regra deterministica e vem prontas no campo acoes_ja_decididas_pela_regra.
+Sua funcao e apenas resumir a carteira em portugues do Brasil, curto, em bullets, para o gestor entender a prioridade do dia.
+Regras fixas:
+- Nunca invente numero nem crie acao que nao esteja na lista recebida.
+- Conta com rastreio "aguardando_integracao" nao tem CPL. Nunca sugira pausar nada nela e deixe claro que a pendencia e de integracao, nao de campanha.
+- Conta com rastreio "rastreio_quebrado" precisa de conferencia de webhook e UTM antes de qualquer otimizacao.
+- CPL critico e ${TRAFFIC_RULES.cplCritical} reais, atencao e ${TRAFFIC_RULES.cplAttention}, CPC maximo ${TRAFFIC_RULES.cpcMax}, CTR minimo ${TRAFFIC_RULES.ctrMin}%.`
         },
         { role: 'user', content: JSON.stringify(payload).slice(0, 16000) },
       ],
     }),
   });
 
-  if (!response.ok) return localPortfolioReview(accounts, activeCreatives);
+  if (!response.ok) return localPortfolioReview(accounts, activeCreatives, recommendations);
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || localPortfolioReview(accounts, activeCreatives);
+  return data.choices?.[0]?.message?.content || localPortfolioReview(accounts, activeCreatives, recommendations);
 }
 
-async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until: string, accessToken: string, graphVersion: string) {
+async function fetchAccountMetrics(
+  corretor: CorretorMeta,
+  since: string,
+  until: string,
+  accessToken: string,
+  graphVersion: string,
+  leads: any[]
+) {
   const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
   const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
   insightsUrl.searchParams.set('fields', 'spend,ctr,cpc,cpm,frequency,clicks,inline_link_clicks,cost_per_inline_link_click,actions,cost_per_action_type');
@@ -333,10 +379,9 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   accountUrl.searchParams.set('fields', 'balance,currency,amount_spent,funding_source_details');
   accountUrl.searchParams.set('access_token', accessToken);
 
-  const [insightsResponse, accountResponse, sheetLeads] = await Promise.all([
+  const [insightsResponse, accountResponse] = await Promise.all([
     fetch(insightsUrl.toString(), { next: { revalidate: 900 } }),
     fetch(accountUrl.toString(), { next: { revalidate: 900 } }),
-    fetchSheetLeads(corretor, since, until),
   ]);
 
   const [insightsPayload, accountPayload] = await Promise.all([
@@ -354,8 +399,8 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
 
   const row = insightsPayload.data?.[0] || {};
   const spend = Number(row.spend || 0);
-  const leads = sheetLeads.length;
-  const cpl = leads > 0 ? spend / leads : null;
+  const leadCount = leads.length;
+  const cpl = leadCount > 0 ? spend / leadCount : null;
   const ctr = Number(row.ctr || 0);
   const cpc = Number(row.cpc || 0);
   const cpm = Number(row.cpm || 0);
@@ -376,34 +421,34 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     ? 'Cartao'
     : fundingDetails?.display_string || fundingDetails?.type || (balance !== null ? 'Saldo pre-pago' : 'Nao informado');
 
-    return {
+  return {
     corretor_id: corretor.id,
     corretor_nome: corretor.nome,
     concessionaria_nome: corretor.nome_empresa || corretor.nome,
     meta_ad_account_id: corretor.meta_ad_account_id,
     meta_ad_account_name: corretor.meta_ad_account_name,
     spend,
-    leads,
+    leads: leadCount,
     cpl,
     ctr,
     saldo: isCard ? null : effectiveBalance,
-      currency: accountPayload?.currency || 'BRL',
-      forma_pagamento: formaPagamento,
-      clicks,
-      link_clicks: linkClicks,
-      cpc,
-      cpm,
-      frequency,
-      landing_page_views: landingPageViews,
-      cost_per_link_click: costPerLinkClick,
-      cost_per_landing_page_view: costPerLandingPageView,
-      alerta_cpl_alto: cpl !== null && cpl >= TRAFFIC_RULES.cplCritical,
-      alerta_cpl_atencao: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && cpl < TRAFFIC_RULES.cplCritical,
-      alerta_metricas_secundarias: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && (cpc > TRAFFIC_RULES.cpcMax || ctr < TRAFFIC_RULES.ctrMin),
-      alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < TRAFFIC_RULES.lowBalance,
-      dados_crm_pendentes: spend > 0 && leads === 0,
-      regras: TRAFFIC_RULES,
-    };
+    currency: accountPayload?.currency || 'BRL',
+    forma_pagamento: formaPagamento,
+    clicks,
+    link_clicks: linkClicks,
+    cpc,
+    cpm,
+    frequency,
+    landing_page_views: landingPageViews,
+    cost_per_link_click: costPerLinkClick,
+    cost_per_landing_page_view: costPerLandingPageView,
+    alerta_cpl_alto: cpl !== null && cpl >= TRAFFIC_RULES.cplCritical,
+    alerta_cpl_atencao: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && cpl < TRAFFIC_RULES.cplCritical,
+    alerta_metricas_secundarias: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && (cpc > TRAFFIC_RULES.cpcMax || ctr < TRAFFIC_RULES.ctrMin),
+    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < TRAFFIC_RULES.lowBalance,
+    dados_crm_pendentes: spend > 0 && leadCount === 0,
+    regras: TRAFFIC_RULES,
+  };
 }
 
 function resolveBrokerageMetaAccount(corretor: CorretorMeta, scopedCorretores: CorretorMeta[]) {
@@ -429,6 +474,82 @@ function resolveBrokerageMetaAccount(corretor: CorretorMeta, scopedCorretores: C
   };
 }
 
+/**
+ * Grava a fila do gestor. Recomendacao pendente identica e atualizada em vez de
+ * duplicada, e pendencia que a regra deixou de emitir e descartada para a fila
+ * nao acumular acao que ja perdeu a validade.
+ */
+const DECISION_COOLDOWN_DAYS = 7;
+
+function targetKey(accountId: unknown, alvoId: unknown, acao: unknown) {
+  return `${accountId || ''}::${alvoId || ''}::${acao}`;
+}
+
+async function persistRecommendations(recommendations: Recommendation[], since: string, until: string, accountIds: string[]) {
+  if (accountIds.length === 0) return [] as any[];
+
+  const cooldownSince = new Date(Date.now() - DECISION_COOLDOWN_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: decided } = await supabaseAdmin
+    .from('trafego_recomendacoes')
+    .select('meta_ad_account_id, alvo_id, acao, status, decidido_em')
+    .in('meta_ad_account_id', accountIds)
+    .in('status', ['ignorada', 'executada', 'aprovada'])
+    .gte('decidido_em', cooldownSince);
+
+  // Acao que o gestor ja decidiu nos ultimos dias nao volta para a fila.
+  const recentlyDecided = new Set((decided || []).map((row: any) => targetKey(row.meta_ad_account_id, row.alvo_id, row.acao)));
+
+  // A fila pendente e sempre regenerada a partir das metricas do momento, entao
+  // pendencia que a regra deixou de emitir some sozinha. Decisoes ja tomadas
+  // ficam preservadas porque so as pendentes sao apagadas.
+  const { error: deleteError } = await supabaseAdmin
+    .from('trafego_recomendacoes')
+    .delete()
+    .eq('status', 'pendente')
+    .in('meta_ad_account_id', accountIds);
+
+  if (deleteError) {
+    console.error('Erro ao limpar fila de recomendacoes:', deleteError.message);
+    return [];
+  }
+
+  const rows = recommendations
+    .filter((item) => !recentlyDecided.has(targetKey(item.meta_ad_account_id, item.alvo_id, item.acao)))
+    .map((item) => ({
+      corretor_id: item.corretor_id,
+      concessionaria_nome: item.concessionaria_nome,
+      meta_ad_account_id: item.meta_ad_account_id,
+      nivel: item.nivel,
+      alvo_id: item.alvo_id,
+      alvo_nome: item.alvo_nome,
+      acao: item.acao,
+      severidade: item.severidade,
+      motivo: item.motivo,
+      metricas: item.metricas,
+      periodo_inicio: since,
+      periodo_fim: until,
+      status: 'pendente',
+      updated_at: new Date().toISOString(),
+    }));
+
+  if (rows.length === 0) return [];
+
+  const { data, error } = await supabaseAdmin
+    .from('trafego_recomendacoes')
+    .insert(rows)
+    .select('id, corretor_id, concessionaria_nome, meta_ad_account_id, nivel, alvo_id, alvo_nome, acao, severidade, motivo, metricas, status');
+
+  if (error) {
+    // A fila nao pode derrubar o painel. Sem persistencia o gestor ainda ve as
+    // acoes, so nao consegue aprovar.
+    console.error('Erro ao gravar recomendacoes de trafego:', error.message);
+    return [];
+  }
+
+  return data || [];
+}
+
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'meta:alerts', { limit: 30, windowMs: 5 * 60_000 });
@@ -451,6 +572,7 @@ export async function POST(request: Request) {
     const corretorId = body.corretor_id ? String(body.corretor_id) : null;
     const requestedGestorId = body.gestor_id ? String(body.gestor_id) : null;
     const shouldAnalyze = Boolean(body.analyze);
+    const useCumulativeOrion = body.acumulado_orion === true;
     let scopedGestorProfile = guard.profile;
 
     if (guard.profile.tipo_usuario === 'admin' && requestedGestorId) {
@@ -472,31 +594,51 @@ export async function POST(request: Request) {
       scopedGestorProfile = gestorProfile;
     }
 
-    const query = supabaseAdmin
-      .from('corretores')
-      .select('id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional')
-      .order('nome', { ascending: true });
-
-    if (scopedGestorProfile.tipo_usuario === 'gestor_trafego') {
-      if (corretorId) {
-        query.eq('id', corretorId);
-      } else {
-        query.not('nome_empresa', 'is', null);
-      }
-    } else if (['corretor', 'corretor_admin', 'corretor_membro'].includes(guard.profile.tipo_usuario)) {
-      if (!guard.profile.corretor_id) {
-        return NextResponse.json({ success: true, accounts: [] });
-      }
-      query.eq('id', guard.profile.corretor_id);
-    } else if (guard.profile.tipo_usuario === 'admin') {
-      if (corretorId) {
-        query.eq('id', corretorId);
-      } else {
-        query.not('meta_ad_account_id', 'is', null);
-      }
+    const isCorretorRole = ['corretor', 'corretor_admin', 'corretor_membro'].includes(guard.profile.tipo_usuario);
+    if (isCorretorRole && !guard.profile.corretor_id) {
+      return NextResponse.json({ success: true, accounts: [] });
     }
 
-    const { data: corretores, error } = await query;
+    // O escopo por papel precisa ser aplicado nas DUAS consultas. Quando o
+    // filtro so existia na primeira, o fallback abaixo devolvia a carteira
+    // inteira para um usuario corretor.
+    const aplicaEscopo = (consulta: any) => {
+      if (scopedGestorProfile.tipo_usuario === 'gestor_trafego') {
+        return corretorId ? consulta.eq('id', corretorId) : consulta.not('nome_empresa', 'is', null);
+      }
+      if (isCorretorRole) {
+        return consulta.eq('id', guard.profile.corretor_id);
+      }
+      if (guard.profile.tipo_usuario === 'admin') {
+        return corretorId ? consulta.eq('id', corretorId) : consulta.not('meta_ad_account_id', 'is', null);
+      }
+      return consulta;
+    };
+
+    const colunasBase = 'id, nome, gestor_trafego_id, nome_empresa, meta_ad_account_id, meta_ad_account_name, time_operacional';
+
+    const primeira = await aplicaEscopo(
+      supabaseAdmin
+        .from('corretores')
+        .select(`${colunasBase}, rastreio_status, rastreio_desde`)
+        .order('nome', { ascending: true })
+    );
+
+    let corretores: CorretorMeta[] | null = primeira.data;
+    let error = primeira.error;
+
+    // A coluna de rastreio pode ainda nao ter sido migrada neste ambiente.
+    if (error && String(error.message || '').includes('rastreio_status')) {
+      const retry = await aplicaEscopo(
+        supabaseAdmin
+          .from('corretores')
+          .select(colunasBase)
+          .order('nome', { ascending: true })
+      );
+      corretores = ((retry.data || []) as CorretorMeta[]).map((row) => ({ ...row, rastreio_status: null, rastreio_desde: null }));
+      error = retry.error;
+    }
+
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
@@ -531,14 +673,81 @@ export async function POST(request: Request) {
     });
 
     const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
+
+    const cumulativeByCorretor = new Map<string, { spend: number | null; since: string | null }>();
+    if (useCumulativeOrion) {
+      const cumulativeSettled = await Promise.allSettled(
+        filtered.map((corretor) => fetchOrionCumulativeSpend(
+          String(corretor.meta_ad_account_id || ''),
+          until,
+          accessToken,
+          graphVersion
+        ))
+      );
+      filtered.forEach((corretor, index) => {
+        const result = cumulativeSettled[index];
+        if (result.status === 'fulfilled') cumulativeByCorretor.set(corretor.id, result.value);
+      });
+    }
+
+    // Leads do CRM sao buscados uma unica vez por concessionaria e reaproveitados
+    // pelas metricas de conta e pelos criativos.
+    const leadsSettled = await Promise.allSettled(
+      filtered.map((corretor) => {
+        const cumulativeSince = cumulativeByCorretor.get(corretor.id)?.since;
+        return fetchSheetLeads(corretor, cumulativeSince || since, until);
+      })
+    );
+    const leadsByCorretor = new Map<string, any[]>();
+    filtered.forEach((corretor, index) => {
+      const result = leadsSettled[index];
+      leadsByCorretor.set(corretor.id, result.status === 'fulfilled' ? result.value : []);
+    });
+
+    const allGroupIds = Array.from(new Set(filtered.flatMap((corretor) => corretor.scoped_corretor_ids || [corretor.id])));
+    const historicoOrion = await fetchCorretoresComHistoricoOrion(allGroupIds);
+
     const settled = await Promise.allSettled(
-      filtered.map((corretor) => fetchAccountMetrics(corretor, since, until, accessToken, graphVersion))
+      filtered.map((corretor) =>
+        fetchAccountMetrics(corretor, since, until, accessToken, graphVersion, leadsByCorretor.get(corretor.id) || [])
+      )
     );
 
     const accounts = settled
       .map((result, index) => {
-        if (result.status === 'fulfilled') return result.value;
         const corretor = filtered[index];
+        const groupIds = corretor.scoped_corretor_ids || [corretor.id];
+        const everHadOrionLead = historicoOrion === null
+          ? (leadsByCorretor.get(corretor.id) || []).length > 0
+          : groupIds.some((id) => historicoOrion.has(id));
+
+        if (result.status === 'fulfilled') {
+          const cumulative = cumulativeByCorretor.get(corretor.id);
+          const spend = cumulative?.spend !== null && cumulative?.spend !== undefined
+            ? cumulative.spend
+            : result.value.spend;
+          const leads = leadsByCorretor.get(corretor.id) || [];
+          const rastreio: TrackingStatus = resolveTrackingStatus({
+            explicitStatus: corretor.rastreio_status,
+            everHadOrionLead,
+            spend,
+            leadsInPeriod: leads.length,
+          });
+          return {
+            ...result.value,
+            spend,
+            leads: leads.length,
+            rastreio,
+            rastreio_desde: corretor.rastreio_desde || null,
+            // Sem rastreio ativo o CPL nao significa nada e nao pode alimentar alerta.
+            cpl: rastreio === 'ativo' && leads.length > 0 ? spend / leads.length : null,
+            alerta_cpl_alto: rastreio === 'ativo' && result.value.alerta_cpl_alto,
+            alerta_cpl_atencao: rastreio === 'ativo' && result.value.alerta_cpl_atencao,
+            alerta_metricas_secundarias: rastreio === 'ativo' && result.value.alerta_metricas_secundarias,
+            dados_crm_pendentes: rastreio === 'rastreio_quebrado',
+          };
+        }
+
         return {
           corretor_id: corretor.id,
           corretor_nome: corretor.nome,
@@ -560,6 +769,8 @@ export async function POST(request: Request) {
           saldo: null,
           currency: 'BRL',
           forma_pagamento: 'Nao informado',
+          rastreio: (everHadOrionLead ? 'ativo' : 'aguardando_integracao') as TrackingStatus,
+          rastreio_desde: corretor.rastreio_desde || null,
           alerta_cpl_alto: false,
           alerta_cpl_atencao: false,
           alerta_metricas_secundarias: false,
@@ -572,14 +783,50 @@ export async function POST(request: Request) {
       .sort((a, b) => Number(b.alerta_cpl_alto) - Number(a.alerta_cpl_alto));
 
     const creativeSettled = await Promise.allSettled(
-      filtered.map((corretor) => fetchActiveCreatives(corretor, since, until, accessToken, graphVersion))
+      filtered.map((corretor) =>
+        fetchActiveCreatives(corretor, since, until, accessToken, graphVersion, leadsByCorretor.get(corretor.id) || [])
+      )
     );
     const activeCreatives = creativeSettled
       .flatMap((result) => result.status === 'fulfilled' ? result.value : [])
       .sort((a: any, b: any) => Number(b.spend || 0) - Number(a.spend || 0));
+
+    const recommendations = buildRecommendations({
+      accounts: accounts as unknown as AccountLike[],
+      creatives: activeCreatives as unknown as CreativeLike[],
+    });
+
+    const accountIds = filtered.map((corretor) => String(corretor.meta_ad_account_id || '')).filter(Boolean);
+    const persisted = await persistRecommendations(recommendations, since, until, accountIds);
+
     const portfolioAiReview = shouldAnalyze
-      ? await generatePortfolioAiReview(accounts, activeCreatives, since, until)
+      ? await generatePortfolioAiReview(accounts, activeCreatives, recommendations, since, until)
       : '';
+
+    if (shouldAnalyze) {
+      await supabaseAdmin.from('trafego_analises').insert({
+        gestor_id: scopedGestorProfile.id,
+        periodo_inicio: since,
+        periodo_fim: until,
+        contas_lidas: accounts.length,
+        recomendacoes_geradas: recommendations.length,
+        resumo_ia: portfolioAiReview,
+      });
+    }
+
+    const { count: analisesHoje } = await supabaseAdmin
+      .from('trafego_analises')
+      .select('id', { count: 'exact', head: true })
+      .eq('gestor_id', scopedGestorProfile.id)
+      .gte('created_at', `${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}T00:00:00.000Z`);
+
+    const { data: ultimaAnalise } = await supabaseAdmin
+      .from('trafego_analises')
+      .select('created_at, resumo_ia')
+      .eq('gestor_id', scopedGestorProfile.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     return NextResponse.json({
       success: true,
@@ -590,7 +837,10 @@ export async function POST(request: Request) {
       rules: TRAFFIC_RULES,
       accounts,
       active_creatives: activeCreatives,
-      portfolio_ai_review: portfolioAiReview,
+      recomendacoes: persisted.length > 0 ? persisted : recommendations,
+      analises_hoje: analisesHoje || 0,
+      ultima_analise_em: ultimaAnalise?.created_at || null,
+      portfolio_ai_review: portfolioAiReview || ultimaAnalise?.resumo_ia || '',
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao buscar avisos Meta.' }, { status: 500 });
