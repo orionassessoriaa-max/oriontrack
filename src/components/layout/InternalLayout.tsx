@@ -37,6 +37,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isTrafficManager = profile.tipo_usuario === 'gestor_trafego';
         const isCorretor = profile.tipo_usuario === 'corretor' || profile.tipo_usuario === 'corretor_admin';
         const isCorretorMember = profile.tipo_usuario === 'corretor_membro';
+        const isCommercialMember = isCorretorMember && profile.equipe_orion === 'kripto_hunters';
         const isDesigner = profile.tipo_usuario === 'designer';
         const isAccountManager = profile.tipo_usuario === 'account_manager';
         
@@ -67,6 +68,9 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         // 1. Corretor Access: Only broker routes
         if (isCorretor) {
           if (!isLimitedBrokerRoute) router.push('/dashboard');
+        }
+        else if (isCommercialMember) {
+          if (!pathname.startsWith('/comercial')) router.push('/comercial');
         }
         else if (isCorretorMember) {
           const isMemberRoute = ['/dashboard', '/crm', '/tarefas', '/leads', '/historico', '/simulador', '/inbox', '/ferramentas', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));

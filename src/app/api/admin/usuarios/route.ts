@@ -338,7 +338,9 @@ export async function POST(request: Request) {
           telefone: telefone || null,
           foto_url: fotoUrl,
           precisa_trocar_senha: true,
-          equipe_orion: ['corretor', 'corretor_membro'].includes(profileRole) ? null : equipeOrion,
+          // Integrantes do Kripto tambem precisam carregar a operacao no perfil.
+          // Corretor dono continua sem equipe: a equipe dele vem da concessionaria.
+          equipe_orion: profileRole === 'corretor' ? null : equipeOrion,
         };
 
       let { error: profileError } = await supabaseAdmin
@@ -355,6 +357,13 @@ export async function POST(request: Request) {
 
       if (profileError) throw profileError;
       await upsertNotificationPhone(authUser.user.id, telefone);
+
+      if (profileRole === 'corretor_membro' && equipeOrion === 'kripto_hunters') {
+        const { error: commercialMemberError } = await supabaseAdmin
+          .from('comercial_membros')
+          .upsert({ profile_id: authUser.user.id, papel: body.papel || 'sdr', ativo: true, updated_at: new Date().toISOString() }, { onConflict: 'profile_id' });
+        if (commercialMemberError) throw commercialMemberError;
+      }
 
       if (profileRole !== role) {
         await supabaseAdmin.auth.admin.updateUserById(authUser.user.id, {
@@ -497,6 +506,15 @@ export async function PATCH(request: Request) {
 
       if (updateProfileError) {
         return NextResponse.json({ error: updateProfileError.message }, { status: 500 });
+      }
+
+      if (roleToSave === 'corretor_membro' && nextEquipe === 'kripto_hunters') {
+        const { error: commercialMemberError } = await supabaseAdmin
+          .from('comercial_membros')
+          .upsert({ profile_id: id, papel: body.papel || 'sdr', ativo: true, updated_at: new Date().toISOString() }, { onConflict: 'profile_id' });
+        if (commercialMemberError) return NextResponse.json({ error: commercialMemberError.message }, { status: 500 });
+      } else if (targetProfile.tipo_usuario === 'corretor_membro' && nextEquipe !== 'kripto_hunters') {
+        await supabaseAdmin.from('comercial_membros').update({ ativo: false, updated_at: new Date().toISOString() }).eq('profile_id', id);
       }
 
       await supabaseAdmin.auth.admin.updateUserById(id, {

@@ -124,7 +124,7 @@ export default function AdminUsuariosPage() {
       participa_rodizio: true,
       foto_url: profile.foto_url || '',
       operadora_outros: customOperadora || '',
-      equipe_orion: ['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario) ? '' : (profile.equipe_orion || ''),
+      equipe_orion: profile.tipo_usuario === 'corretor' ? '' : (profile.equipe_orion || ''),
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -494,13 +494,12 @@ export default function AdminUsuariosPage() {
                 onChange={(event) => {
                   const tipo_usuario = event.target.value as UserRole;
                   const isBrokerOwner = tipo_usuario === 'corretor';
-                  const isBrokerAccess = ['corretor', 'corretor_membro'].includes(tipo_usuario);
                   setForm((current) => ({
                     ...current,
                     tipo_usuario,
                     time_operacional: isBrokerOwner ? current.time_operacional : [],
                     operadoras: isBrokerOwner ? current.operadoras : [],
-                    equipe_orion: isBrokerAccess ? '' : current.equipe_orion
+                    equipe_orion: isBrokerOwner ? '' : current.equipe_orion
                   }));
                 }}
                 className="mt-2 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-black focus:ring-2 focus:ring-blue-500/20"
@@ -514,7 +513,7 @@ export default function AdminUsuariosPage() {
               </select>
             </div>
 
-            {!['corretor', 'corretor_membro'].includes(form.tipo_usuario) && (
+            {form.tipo_usuario !== 'corretor' && (
               <div>
                 <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Time interno</label>
                 <select
