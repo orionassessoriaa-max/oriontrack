@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarDays, CalendarPlus, ChevronDown, ChevronUp, GripVertical, MessageSquare, Paperclip, Plus, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
+import { CalendarDays, CalendarPlus, ChevronDown, ChevronUp, GripVertical, MessageSquare, Paperclip, Phone, Plus, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import CommercialLeadModal from '@/components/commercial/CommercialLeadModal';
 import CommercialLeadDetailsModal from '@/components/commercial/CommercialLeadDetailsModal';
@@ -35,6 +35,30 @@ function formatStageCadence(value: string | null | undefined) {
   if (hours < 24) return `Na etapa há ${hours}h`;
   const days = Math.floor(hours / 24);
   return `Na etapa há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+}
+
+function formatDaniloEntry(value: string | null | undefined) {
+  if (!value) return 'Entrada não informada';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Entrada não informada';
+  return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function formatDaniloCadence(value: string | null | undefined) {
+  if (!value) return 'Cadência: dia 1';
+  const startedAt = new Date(value).getTime();
+  if (Number.isNaN(startedAt)) return 'Cadência: dia 1';
+  const days = Math.max(1, Math.floor(Math.max(0, Date.now() - startedAt) / 86400000) + 1);
+  return `Cadência: dia ${days}`;
+}
+
+function formatDaniloCnpj(lead: CommercialLead) {
+  const cnpjLead = lead as CommercialLead & { possui_cnpj?: string | null };
+  const value = String(cnpjLead.possui_cnpj || '').trim().toLowerCase();
+  if (!value) return 'CNPJ: não informado';
+  if (value.includes('mei')) return 'CNPJ: tenho MEI';
+  if (value.includes('não') || value.includes('nao') || value.includes('cpf')) return 'CNPJ: não';
+  return 'CNPJ: sim';
 }
 
 function getPresetRange(preset: DatePreset) {
@@ -206,7 +230,7 @@ export default function CommercialKanbanPage() {
           const total = statusLeads.reduce((sum, lead) => sum + Number(lead.valor_negociacao || 0), 0);
           return <section key={stage.id} className={`kh-kanban-column ${dropStage === stage.id ? 'drop-target' : ''} ${stageDragging === stage.id ? 'stage-dragging' : ''}`} draggable={role === 'coordenador'} onDragStart={(event) => { event.stopPropagation(); if (role === 'coordenador') setStageDragging(stage.id); }} onDragEnd={() => setStageDragging(null)} onDragOver={(event) => { event.preventDefault(); if (dragging) setDropStage(stage.id); }} onDragEnter={() => dragging && setDropStage(stage.id)} onDragLeave={() => setDropStage(null)} onDrop={(event) => { event.stopPropagation(); if (stageDragging && role === 'coordenador') reorderStages(stage.id); else if (dragging) void moveLead(dragging, stage.id); setDragging(null); setStageDragging(null); setDropStage(null); }}>
             <header style={{ '--stage-hue': `${205 + (index * 7) % 105}` } as React.CSSProperties}><div><GripVertical size={14} className="kh-stage-grip" /><strong>{stage.label}</strong><b>{statusLeads.length}</b></div>{canViewCommercialFinancials && <small>{currency(total)}</small>}{role === 'coordenador' && stage.protected && <div className="kh-stage-actions"><em>fixa</em></div>}</header>
-            <div className="kh-kanban-cards">{statusLeads.map((lead) => { return <article key={lead.id} draggable onDragStart={(event) => { event.stopPropagation(); setDragging(lead.id); }} onDragEnd={() => { setDragging(null); setDropStage(null); }} onClick={() => toggleLeadDetails(lead)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleLeadDetails(lead); } }} tabIndex={0} role="button" className={`kh-danilo-card ${dragging === lead.id ? 'dragging' : ''}`}><div className="kh-card-top"><span className={`kh-dot ${lead.lead_qualificado ? 'qualified' : ''}`} /><small>Lead</small><span className="kh-card-expand"><ChevronDown size={14} /></span></div><h3>{lead.nome}</h3><div className="kh-card-sheet-grid kh-card-sheet-grid-compact"><div><small>Celular</small><strong>{lead.telefone || '-'}</strong></div><div><small>Prioridade</small><strong>{lead.prioridade || '-'}</strong></div><div><small>Entrada</small><strong>{formatLeadEntry(lead.data_entrada)}</strong></div></div><button type="button" className="kh-card-inbox" onClick={(event) => openLeadInbox(event, lead)}><MessageSquare size={13} /> Abrir no Inbox</button></article>; })}{!statusLeads.length && <div className="kh-column-empty"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-empty-logo" /><span>Sem leads</span></div>}<button type="button" className="kh-add-lead-column" onClick={() => { setInitialStatus(stage.id); setModalOpen(true); }}><Plus size={16} /> Adicionar lead</button>{role === 'coordenador' && !stage.protected && <button type="button" className="kh-remove-stage" onClick={() => { if (window.confirm(`Excluir a etapa \"${stage.label}\"?`)) void removeStage(stage); }}><Trash2 size={13} /> Excluir etapa</button>}</div>
+            <div className="kh-kanban-cards">{statusLeads.map((lead) => { return <article key={lead.id} draggable onDragStart={(event) => { event.stopPropagation(); setDragging(lead.id); }} onDragEnd={() => { setDragging(null); setDropStage(null); }} onClick={() => toggleLeadDetails(lead)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleLeadDetails(lead); } }} tabIndex={0} role="button" className={`kh-danilo-card ${dragging === lead.id ? 'dragging' : ''}`}><div className="kh-card-top"><span className={`kh-dot ${lead.lead_qualificado ? 'qualified' : ''}`} /><small>Lead</small><span className="kh-card-expand"><ChevronDown size={14} /></span></div><h3>{lead.nome}</h3><div className="kh-card-phone"><Phone size={12} /><span>{lead.telefone || 'Telefone nao informado'}</span></div><span className="kh-card-cnpj">{formatDaniloCnpj(lead)}</span><div className="kh-card-cadence">{formatDaniloCadence(lead.status_started_at || lead.data_entrada)}</div><div className="kh-card-entry"><CalendarDays size={12} /><span>{formatDaniloEntry(lead.data_entrada)}</span></div><button type="button" className="kh-card-inbox" onClick={(event) => openLeadInbox(event, lead)}><MessageSquare size={13} /> Abrir no Inbox</button></article>; })}{!statusLeads.length && <div className="kh-column-empty"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-empty-logo" /><span>Sem leads</span></div>}<button type="button" className="kh-add-lead-column" onClick={() => { setInitialStatus(stage.id); setModalOpen(true); }}><Plus size={16} /> Adicionar lead</button>{role === 'coordenador' && !stage.protected && <button type="button" className="kh-remove-stage" onClick={() => { if (window.confirm(`Excluir a etapa \"${stage.label}\"?`)) void removeStage(stage); }}><Trash2 size={13} /> Excluir etapa</button>}</div>
           </section>;
         })}
       </div>

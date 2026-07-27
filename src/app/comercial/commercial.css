@@ -1018,8 +1018,8 @@
 /* Compact Kanban card aligned with the Danilo CRM reference. */
 .kh-danilo-card {
   box-sizing: border-box;
-  height: 158px;
-  min-height: 158px !important;
+  height: 206px;
+  min-height: 206px !important;
   overflow: hidden;
   border: 1px solid #23354a !important;
   border-radius: 6px !important;
@@ -1029,19 +1029,16 @@
 .kh-danilo-card .kh-card-top { min-height: 15px; gap: 6px; }
 .kh-danilo-card .kh-card-top small { color: #8aa0b7; font-size: 8px; letter-spacing: .05em; }
 .kh-danilo-card .kh-card-expand { color: #00c9e8; }
-.kh-danilo-card h3 { margin: 9px 0 8px; font-size: 13px; line-height: 1.1; }
-.kh-danilo-card .kh-card-sheet-grid-compact { gap: 5px; margin-top: 0; }
-.kh-danilo-card .kh-card-sheet-grid-compact > div {
-  height: 39px;
-  min-width: 0;
-  box-sizing: border-box;
-  border: 1px solid #26394f;
-  border-radius: 4px;
-  background: #091521;
-  padding: 6px 7px;
-}
-.kh-danilo-card .kh-card-sheet-grid small { color: #7f94aa; font-size: 7px; }
-.kh-danilo-card .kh-card-sheet-grid strong { margin-top: 3px; color: #edf6ff; font-size: 9px; }
+.kh-danilo-card h3 { margin: 10px 0 5px; font-size: 13px; line-height: 1.1; }
+.kh-danilo-card .kh-card-phone,
+.kh-danilo-card .kh-card-entry { display: flex; align-items: center; gap: 5px; color: #8aa0b7; font-size: 9px; line-height: 1.2; }
+.kh-danilo-card .kh-card-phone svg,
+.kh-danilo-card .kh-card-entry svg { flex: 0 0 auto; color: #8aa0b7; }
+.kh-danilo-card .kh-card-phone span,
+.kh-danilo-card .kh-card-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kh-danilo-card .kh-card-cnpj { display: inline-flex; max-width: 100%; margin-top: 8px; overflow: hidden; border: 1px solid #087b59; border-radius: 999px; background: #062b26; color: #13d89a; padding: 3px 7px; font-size: 8px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.kh-danilo-card .kh-card-cadence { display: block; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #f4dcfa; color: #8a0f9f; padding: 5px 8px; font-size: 9px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.kh-danilo-card .kh-card-entry { margin-top: 8px; color: #b8c8d8; }
 .kh-danilo-card .kh-card-inbox {
   min-height: 29px;
   margin-top: 9px;
