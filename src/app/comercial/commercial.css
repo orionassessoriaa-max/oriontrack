@@ -1037,7 +1037,7 @@
 .kh-danilo-card .kh-card-phone span,
 .kh-danilo-card .kh-card-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kh-danilo-card .kh-card-cnpj { display: inline-flex; max-width: 100%; margin-top: 8px; overflow: hidden; border: 1px solid #087b59; border-radius: 999px; background: #062b26; color: #13d89a; padding: 3px 7px; font-size: 8px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.kh-danilo-card .kh-card-cadence { display: block; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #f4dcfa; color: #8a0f9f; padding: 5px 8px; font-size: 9px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.kh-danilo-card .kh-card-cadence { display: block; width: 100%; max-width: none; box-sizing: border-box; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #f4dcfa; color: #8a0f9f; padding: 5px 9px; font-size: 9px; font-weight: 800; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .kh-danilo-card .kh-card-entry { margin-top: 8px; color: #b8c8d8; }
 .kh-danilo-card .kh-card-inbox {
   min-height: 29px;
@@ -1045,7 +1045,8 @@
   border: 1px solid #13b77c;
   background: #063c2c;
   color: #63e6b1;
-  padding: 5px 9px;
+  align-self: flex-start;
+  padding: 5px 10px;
   font-size: 10px;
   line-height: 1;
 }
