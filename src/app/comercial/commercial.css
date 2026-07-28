@@ -1063,3 +1063,9 @@
   line-height: 1;
 }
 .kh-danilo-card .kh-card-inbox:hover { border-color: #2ce6a3; background: #08714c; color: #fff; }
+.kh-danilo-card .kh-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 6px; min-height: 25px; }
+.kh-danilo-card .kh-card-actions .kh-card-inbox { margin-top: 0; }
+.kh-danilo-card .kh-card-start { min-height: 25px; border: 1px solid #2d8cff; border-radius: 4px; background: #0d5ec9; color: #fff; padding: 4px 9px; font: inherit; font-size: 9px; font-weight: 800; line-height: 1; cursor: pointer; }
+.kh-danilo-card .kh-card-start:hover:not(:disabled) { border-color: #69b0ff; background: #1678ed; }
+.kh-danilo-card .kh-card-start:disabled { cursor: wait; opacity: .65; }
+.kh-danilo-card .kh-card-owner { min-height: 25px; display: inline-flex; align-items: center; border: 1px solid #24405b; border-radius: 4px; background: #0b1724; color: #9bb1c8; padding: 4px 7px; font-size: 8px; font-weight: 700; }

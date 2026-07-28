@@ -73,7 +73,7 @@ function getPresetRange(preset: DatePreset) {
 }
 
 export default function CommercialKanbanPage() {
-  const { api, members, role, canViewCommercialFinancials } = useCommercial();
+  const { api, members, role, currentProfileId, canViewCommercialFinancials } = useCommercial();
   const router = useRouter();
   const [leads, setLeads] = useState<CommercialLead[]>([]);
   const [stages, setStages] = useState<CommercialStage[]>(COMMERCIAL_STAGES);
@@ -104,6 +104,7 @@ export default function CommercialKanbanPage() {
   const [meetingMove, setMeetingMove] = useState<{ leadId: string; status: string } | null>(null);
   const [meetingAt, setMeetingAt] = useState('');
   const [meetingSaving, setMeetingSaving] = useState(false);
+  const [startingId, setStartingId] = useState<string | null>(null);
 
   const load = useCallback(async () => { setLoading(true); try { const payload = await api('/api/comercial/leads'); setLeads(payload.leads || []); } finally { setLoading(false); } }, [api]);
   const loadStages = useCallback(async () => { try { const payload = await api('/api/comercial/stages'); if (payload.stages?.length) setStages(payload.stages); } catch { /* fallback ate a migration ser aplicada */ } }, [api]);
@@ -187,6 +188,21 @@ export default function CommercialKanbanPage() {
     router.push(`/comercial/inbox?${params.toString()}`);
   }
 
+  async function startLead(event: React.MouseEvent, lead: CommercialLead) {
+    event.stopPropagation();
+    if (role !== 'sdr' || lead.sdr_id || startingId) return;
+    setStartingId(lead.id);
+    try {
+      const payload = await api('/api/comercial/leads/start', { method: 'POST', body: JSON.stringify({ id: lead.id }) });
+      setLeads((current) => current.map((item) => item.id === lead.id ? { ...item, sdr_id: payload.sdr_id || currentProfileId } : item));
+    } catch (error) {
+      setStageError(error instanceof Error ? error.message : 'Nao foi possivel iniciar este lead.');
+      await load();
+    } finally {
+      setStartingId(null);
+    }
+  }
+
   function toggleLeadDetails(lead: CommercialLead) {
     const nextId = expandedLeadId === lead.id ? null : lead.id;
     setExpandedLeadId(nextId);
@@ -250,7 +266,7 @@ export default function CommercialKanbanPage() {
           const total = statusLeads.reduce((sum, lead) => sum + Number(lead.valor_negociacao || 0), 0);
           return <section key={stage.id} className={`kh-kanban-column ${dropStage === stage.id ? 'drop-target' : ''} ${stageDragging === stage.id ? 'stage-dragging' : ''}`} draggable={role === 'coordenador'} onDragStart={(event) => { event.stopPropagation(); if (role === 'coordenador') setStageDragging(stage.id); }} onDragEnd={() => setStageDragging(null)} onDragOver={(event) => { event.preventDefault(); if (dragging) setDropStage(stage.id); }} onDragEnter={() => dragging && setDropStage(stage.id)} onDragLeave={() => setDropStage(null)} onDrop={(event) => { event.stopPropagation(); if (stageDragging && role === 'coordenador') reorderStages(stage.id); else if (dragging) void moveLead(dragging, stage.id); setDragging(null); setStageDragging(null); setDropStage(null); }}>
             <header style={{ '--stage-hue': `${205 + (index * 7) % 105}` } as React.CSSProperties}><div><GripVertical size={14} className="kh-stage-grip" /><strong>{stage.label}</strong><b>{statusLeads.length}</b></div>{canViewCommercialFinancials && <small>{currency(total)}</small>}{role === 'coordenador' && stage.protected && <div className="kh-stage-actions"><em>fixa</em></div>}</header>
-            <div className="kh-kanban-cards"><div className="kh-kanban-list">{statusLeads.map((lead) => { return <article key={lead.id} draggable onDragStart={(event) => { event.stopPropagation(); setDragging(lead.id); }} onDragEnd={() => { setDragging(null); setDropStage(null); }} onClick={() => toggleLeadDetails(lead)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleLeadDetails(lead); } }} tabIndex={0} role="button" className={`kh-danilo-card ${dragging === lead.id ? 'dragging' : ''}`}><div className="kh-card-top"><span className={`kh-dot ${lead.lead_qualificado ? 'qualified' : ''}`} /><small>Lead</small><span className="kh-card-expand"><ChevronDown size={14} /></span></div><h3>{lead.nome}</h3><div className="kh-card-phone"><Phone size={12} /><span>{lead.telefone || 'Telefone nao informado'}</span></div><span className="kh-card-cnpj">{formatDaniloCnpj(lead)}</span><div className="kh-card-cadence">{formatDaniloCadence(lead.status_started_at || lead.data_entrada)}</div><div className="kh-card-entry"><CalendarDays size={12} /><span>{formatDaniloEntry(lead.data_entrada)}</span></div><button type="button" className="kh-card-inbox" onClick={(event) => openLeadInbox(event, lead)}><MessageSquare size={13} /> Abrir no Inbox</button></article>; })}{!statusLeads.length && <div className="kh-column-empty"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-empty-logo" /><span>Sem leads</span></div>}</div><button type="button" className="kh-add-lead-column" onClick={() => { setInitialStatus(stage.id); setModalOpen(true); }}><Plus size={16} /> Adicionar lead</button>{role === 'coordenador' && !stage.protected && <button type="button" className="kh-remove-stage" onClick={() => { if (window.confirm(`Excluir a etapa \"${stage.label}\"?`)) void removeStage(stage); }}><Trash2 size={13} /> Excluir etapa</button>}</div>
+            <div className="kh-kanban-cards"><div className="kh-kanban-list">{statusLeads.map((lead) => { const assignedSdr = lead.sdr_id ? memberMap.get(lead.sdr_id) : null; return <article key={lead.id} draggable onDragStart={(event) => { event.stopPropagation(); setDragging(lead.id); }} onDragEnd={() => { setDragging(null); setDropStage(null); }} onClick={() => toggleLeadDetails(lead)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleLeadDetails(lead); } }} tabIndex={0} role="button" className={`kh-danilo-card ${dragging === lead.id ? 'dragging' : ''}`}><div className="kh-card-top"><span className={`kh-dot ${lead.lead_qualificado ? 'qualified' : ''}`} /><small>Lead</small><span className="kh-card-expand"><ChevronDown size={14} /></span></div><h3>{lead.nome}</h3><div className="kh-card-phone"><Phone size={12} /><span>{lead.telefone || 'Telefone nao informado'}</span></div><span className="kh-card-cnpj">{formatDaniloCnpj(lead)}</span><div className="kh-card-cadence">{formatDaniloCadence(lead.status_started_at || lead.data_entrada)}</div><div className="kh-card-entry"><CalendarDays size={12} /><span>{formatDaniloEntry(lead.data_entrada)}</span></div><div className="kh-card-actions"><button type="button" className="kh-card-inbox" onClick={(event) => openLeadInbox(event, lead)}><MessageSquare size={13} /> Abrir no Inbox</button>{role === 'sdr' && !assignedSdr && <button type="button" className="kh-card-start" disabled={startingId === lead.id} onClick={(event) => void startLead(event, lead)}>{startingId === lead.id ? 'Iniciando...' : 'Start'}</button>}{role === 'sdr' && assignedSdr && <span className="kh-card-owner">SDR: {assignedSdr.nome.split(' ')[0]}</span>}</div></article>; })}{!statusLeads.length && <div className="kh-column-empty"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-empty-logo" /><span>Sem leads</span></div>}</div><button type="button" className="kh-add-lead-column" onClick={() => { setInitialStatus(stage.id); setModalOpen(true); }}><Plus size={16} /> Adicionar lead</button>{role === 'coordenador' && !stage.protected && <button type="button" className="kh-remove-stage" onClick={() => { if (window.confirm(`Excluir a etapa \"${stage.label}\"?`)) void removeStage(stage); }}><Trash2 size={13} /> Excluir etapa</button>}</div>
           </section>;
         })}
       </div>
