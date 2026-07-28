@@ -5,12 +5,14 @@ import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/u
 import { DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
 import { ensureCommercialConversation, insertCommercialAiMessage, normalizeSdrText } from '@/lib/commercialInbox';
 import { registerAiOutbound } from '@/lib/leadAiAgent';
+import { startCommercialBotIfEligible } from '@/lib/commercialBot';
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request, true);
   if ('error' in guard) return guard.error;
   try {
     const body = await request.json().catch(() => ({}));
+    const testMode = body.mode === 'bot' ? 'bot' : 'ia';
     const phone = normalizePhone(body.telefone);
     const name = String(body.nome || 'Teste IA').trim().slice(0, 120) || 'Teste IA';
     const ages = String(body.idades || '32').trim().slice(0, 80) || '32';
@@ -22,9 +24,31 @@ export async function POST(request: Request) {
     const lives = String(body.vidas || '').trim().slice(0, 160) || null;
     if (!phone || phone.length < 12) return NextResponse.json({ error: 'Informe um WhatsApp valido com DDD.' }, { status: 400 });
 
-    const { data: config, error: configError } = await supabaseAdmin.from('comercial_config').select('ia_sdr_ativa,ia_sdr_prompt,ia_sdr_profile_id').eq('id', 1).maybeSingle();
-    if (configError && !/comercial_config|schema cache/i.test(configError.message)) throw configError;
-    if (config?.ia_sdr_ativa === false) return NextResponse.json({ error: 'A IA SDR esta desativada para esta operacao.' }, { status: 409 });
+    const { data: config, error: configError } = await supabaseAdmin.from('comercial_config').select('ia_sdr_ativa,ia_sdr_prompt,bot_comercial_ativo,bot_comercial_prompt').eq('id', 1).maybeSingle();
+    if (configError) throw new Error(`Configuracao comercial indisponivel: ${configError.message}`);
+    if (!config) return NextResponse.json({ error: 'A configuracao comercial ainda nao foi criada no banco.' }, { status: 503 });
+    if (testMode === 'bot' && config?.bot_comercial_ativo !== true) return NextResponse.json({ error: 'O Bot esta desativado para esta operacao.' }, { status: 409 });
+    if (testMode === 'ia' && config?.ia_sdr_ativa === false) return NextResponse.json({ error: 'A IA SDR esta desativada para esta operacao.' }, { status: 409 });
+
+    if (testMode === 'bot') {
+      const now = new Date().toISOString();
+      const { data: testLead, error: testLeadError } = await supabaseAdmin.from('comercial_leads').insert({
+        nome: name,
+        telefone: phone,
+        email,
+        idades: ages,
+        origem: 'Teste Bot comercial',
+        status: 'Oportunidade',
+        observacoes: 'Lead criado pelo teste do Bot comercial.',
+        created_by: guard.profile.id,
+        data_entrada: now,
+        sdr_id: guard.profile.id,
+      }).select('id,nome,telefone').single();
+      if (testLeadError) throw testLeadError;
+      const botResult = await startCommercialBotIfEligible(testLead.id);
+      if (!botResult.started) return NextResponse.json({ error: `O Bot nao enviou: ${botResult.reason}.` }, { status: 502 });
+      return NextResponse.json({ ok: true, lead: testLead, mode: 'bot' });
+    }
 
     const prompt = String(config?.ia_sdr_prompt || DEFAULT_COMMERCIAL_SDR_PROMPT);
     const apiKey = process.env.OPENAI_API_KEY;
