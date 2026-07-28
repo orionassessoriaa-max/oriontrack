@@ -161,6 +161,9 @@ export default function GestorDashboardPage() {
     }
     setError(null);
 
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 60000);
+
     try {
       const { data: corretoresData } = await supabase
         .from('corretores')
@@ -184,6 +187,7 @@ export default function GestorDashboardPage() {
       const response = await fetch('/api/integrations/meta/alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        signal: controller.signal,
         body: JSON.stringify({
           analyze: analisar,
           data_inicio: dataInicio,
@@ -214,9 +218,14 @@ export default function GestorDashboardPage() {
           texto: `Análise concluída. ${(payload.recomendacoes || []).length} ação(ões) na fila.`,
         });
       }
-    } catch {
-      if (atual()) setError('Erro ao carregar dados do painel.');
+    } catch (error: any) {
+      if (atual()) {
+        setError(error?.name === 'AbortError'
+          ? 'A análise demorou mais de 60 segundos. Verifique o token Meta e tente novamente.'
+          : 'Erro ao carregar dados do painel.');
+      }
     } finally {
+      window.clearTimeout(timeout);
       if (atual()) {
         setLoading(false);
         setOtimizando(false);

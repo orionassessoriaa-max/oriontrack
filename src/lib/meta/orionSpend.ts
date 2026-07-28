@@ -1,5 +1,7 @@
 type MetaPage<T> = { data?: T[]; paging?: { next?: string } };
 
+import { fetchWithTimeout } from './fetchWithTimeout';
+
 function normalizeAccountId(value: string) {
   return value.replace(/^act_/, '');
 }
@@ -13,7 +15,7 @@ async function fetchAll<T>(url: URL, maxPages = 20): Promise<T[]> {
   let next = url.toString();
 
   for (let page = 0; page < maxPages && next; page += 1) {
-    const response = await fetch(next, { next: { revalidate: 300 } });
+    const response = await fetchWithTimeout(next, { next: { revalidate: 300 } });
     const payload = await response.json() as MetaPage<T> & { error?: any };
     if (!response.ok || payload.error) {
       throw new Error(payload.error?.message || 'Falha ao consultar campanhas Orion na Meta.');

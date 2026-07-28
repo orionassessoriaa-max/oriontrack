@@ -4,6 +4,7 @@ import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 import { fetchOrionCumulativeSpend } from '@/lib/meta/orionSpend';
+import { fetchWithTimeout } from '@/lib/meta/fetchWithTimeout';
 import {
   TRAFFIC_RULES,
   buildRecommendations,
@@ -213,7 +214,7 @@ async function fetchObjectMap(ids: string[], fields: string, accessToken: string
     url.searchParams.set('fields', fields);
     url.searchParams.set('access_token', accessToken);
 
-    const response = await fetch(url.toString(), { next: { revalidate: 600 } });
+    const response = await fetchWithTimeout(url.toString(), { next: { revalidate: 600 } });
     const payload = await response.json();
     if (!response.ok || payload.error) continue;
     Object.entries(payload || {}).forEach(([id, value]) => result.set(id, value));
@@ -238,7 +239,7 @@ async function fetchActiveCreatives(
   insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
   insightsUrl.searchParams.set('access_token', accessToken);
 
-  const insightsResponse = await fetch(insightsUrl.toString(), { next: { revalidate: 600 } });
+  const insightsResponse = await fetchWithTimeout(insightsUrl.toString(), { next: { revalidate: 600 } });
   const insightsPayload = await insightsResponse.json();
   if (!insightsResponse.ok || insightsPayload.error) throw new Error(describeMetaError(insightsPayload.error, accountId));
 
@@ -331,7 +332,7 @@ async function generatePortfolioAiReview(
     })),
   };
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -380,8 +381,8 @@ async function fetchAccountMetrics(
   accountUrl.searchParams.set('access_token', accessToken);
 
   const [insightsResponse, accountResponse] = await Promise.all([
-    fetch(insightsUrl.toString(), { next: { revalidate: 900 } }),
-    fetch(accountUrl.toString(), { next: { revalidate: 900 } }),
+    fetchWithTimeout(insightsUrl.toString(), { next: { revalidate: 900 } }),
+    fetchWithTimeout(accountUrl.toString(), { next: { revalidate: 900 } }),
   ]);
 
   const [insightsPayload, accountPayload] = await Promise.all([
