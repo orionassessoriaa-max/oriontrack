@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MessageSquare, Paperclip, Pencil, X } from 'lucide-react';
 import type { CommercialLead, CommercialMember, CommercialStage } from '@/lib/comercial';
 
@@ -23,6 +23,7 @@ type Props = {
   interactionText: string;
   interactionFile: File | null;
   interactionSaving: boolean;
+  interactionError: string | null;
   onInteractionTextChange: (value: string) => void;
   onInteractionFileChange: (file: File | null) => void;
   onAddInteraction: (event: React.FormEvent<HTMLFormElement>) => void;
@@ -48,6 +49,7 @@ export default function CommercialLeadDetailsModal({
   interactionText,
   interactionFile,
   interactionSaving,
+  interactionError,
   onInteractionTextChange,
   onInteractionFileChange,
   onAddInteraction,
@@ -55,6 +57,18 @@ export default function CommercialLeadDetailsModal({
   onEdit,
 }: Props) {
   const [activeTab, setActiveTab] = useState<'dados' | 'comentarios'>('dados');
+  const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!interactionFile) {
+      setAttachmentPreview(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(interactionFile);
+    setAttachmentPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [interactionFile]);
+
   if (!lead) return null;
 
   const memberName = (id: string | null, fallback: string) => members.find((member) => member.profile_id === id)?.nome || fallback;
@@ -80,7 +94,7 @@ export default function CommercialLeadDetailsModal({
       <div className="kh-lead-stage-bar"><label htmlFor="lead-stage-select">Etapa atual</label><select id="lead-stage-select" value={lead.status} onChange={(event) => onMoveStage(event.target.value)}><option value={lead.status}>{lead.status}</option>{stages.filter((stage) => stage.id !== lead.status).map((stage) => <option key={stage.id} value={stage.id}>{stage.label}</option>)}</select></div>
       <nav className="kh-lead-detail-tabs" aria-label="Detalhes do lead"><button type="button" className={activeTab === 'dados' ? 'active' : ''} onClick={() => setActiveTab('dados')}>Dados</button><button type="button" className={activeTab === 'comentarios' ? 'active' : ''} onClick={() => setActiveTab('comentarios')}><MessageSquare size={14} /> Comentarios <span>{interactions.length}</span></button></nav>
       {activeTab === 'dados' ? <div className="kh-lead-details-grid">{fields.map(([label, content]) => <div key={label} className={label === 'Observacoes' ? 'wide' : ''}><small>{label}</small><strong>{content}</strong></div>)}</div> : <section className="kh-lead-comments-panel">
-        <form className="kh-interaction-form" onSubmit={onAddInteraction}><textarea className="kh-textarea" value={interactionText} onChange={(event) => onInteractionTextChange(event.target.value)} placeholder="Escreva um comentario para a equipe..." /><div><label className="kh-file-button" htmlFor="lead-attachment-modal"><Paperclip size={14} /> {interactionFile ? interactionFile.name : 'Anexar print'}</label><input id="lead-attachment-modal" type="file" accept="image/*" onChange={(event) => onInteractionFileChange(event.target.files?.[0] || null)} /><button className="kh-button primary" disabled={interactionSaving}>{interactionSaving ? 'Salvando...' : 'Comentar'}</button></div></form>
+        <form className="kh-interaction-form" onSubmit={onAddInteraction}><textarea className="kh-textarea" value={interactionText} onChange={(event) => onInteractionTextChange(event.target.value)} onPaste={(event) => { const image = Array.from(event.clipboardData.files).find((file) => file.type.startsWith('image/')); if (image) { event.preventDefault(); onInteractionFileChange(image); } }} placeholder="Escreva um comentario para a equipe... Cole um print com Ctrl+V." />{attachmentPreview && <div className="kh-attachment-preview"><img src={attachmentPreview} alt="Previa do print anexado" /><button type="button" onClick={() => onInteractionFileChange(null)}>Remover print</button></div>}{interactionError && <div className="kh-inline-error" role="alert">{interactionError}</div>}<div><label className="kh-file-button" htmlFor="lead-attachment-modal"><Paperclip size={14} /> {interactionFile ? interactionFile.name : 'Anexar print'}</label><input id="lead-attachment-modal" type="file" accept="image/*" onChange={(event) => onInteractionFileChange(event.target.files?.[0] || null)} /><button className="kh-button primary" disabled={interactionSaving}>{interactionSaving ? 'Salvando...' : 'Comentar'}</button></div></form>
         <div className="kh-interaction-list">{interactions.map((item) => <article key={item.id}><div><strong>{item.autor_nome}</strong><small>{new Date(item.created_at).toLocaleString('pt-BR')}</small></div>{item.comentario && <p>{item.comentario}</p>}{item.anexo_url && <a href={item.anexo_url} target="_blank" rel="noreferrer"><img src={item.anexo_url} alt={item.anexo_nome || 'Print anexado'} /></a>}</article>)}{!interactions.length && <span>Nenhum comentario registrado para este lead.</span>}</div>
       </section>}
     </section>
