@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { BarChart3, CheckCircle2, ChevronDown, ChevronRight, Loader2, Maximize2, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud, FileVideo2 } from 'lucide-react';
+import { ArrowLeft, BarChart3, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileImage, FileVideo2, Folder, HardDrive, Loader2, Maximize2, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
 import { TRAFFIC_RULES, formatBRL, formatPercent } from '@/lib/trafego/rules';
 
 type AccountOption = {
@@ -41,6 +41,17 @@ type CreativePreview = {
   image_url?: string | null;
   title?: string | null;
   body?: string | null;
+};
+
+type DriveEntry = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+  webViewLink?: string;
+  parents?: string[];
+  modifiedTime?: string;
+  thumbnailLink?: string;
 };
 
 type AdNode = MetaStatus & { id: string; name: string; level: 'ad'; metrics: Metrics; creative?: CreativePreview | null };
@@ -111,6 +122,14 @@ export default function OtimizacoesPage() {
   const [optimizePrompt, setOptimizePrompt] = useState('');
   const [creativeFile, setCreativeFile] = useState<File | null>(null);
   const [creativeUrl, setCreativeUrl] = useState<string | null>(null);
+  const [driveBrowserOpen, setDriveBrowserOpen] = useState(false);
+  const [driveFolderId, setDriveFolderId] = useState<string | null>(null);
+  const [driveBreadcrumbs, setDriveBreadcrumbs] = useState<DriveEntry[]>([]);
+  const [driveFolders, setDriveFolders] = useState<DriveEntry[]>([]);
+  const [driveFiles, setDriveFiles] = useState<DriveEntry[]>([]);
+  const [driveLoading, setDriveLoading] = useState(false);
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const [selectedDriveFile, setSelectedDriveFile] = useState<DriveEntry | null>(null);
   const [draggingCreative, setDraggingCreative] = useState(false);
   const [uploadingCreative, setUploadingCreative] = useState(false);
   const [optimizationDraft, setOptimizationDraft] = useState<OptimizationDraft | null>(null);
@@ -130,6 +149,46 @@ export default function OtimizacoesPage() {
   const [initialAccountId, setInitialAccountId] = useState<string | null>(null);
   const optimizationRequestRef = useRef(0);
   const creativeInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function browseDrive(folderId?: string | null, breadcrumbs: DriveEntry[] = []) {
+    setDriveLoading(true);
+    setDriveError(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
+      const response = await fetch('/api/integrations/meta/drive-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'browse', folder_id: folderId || null }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel abrir os criativos do Drive.');
+      const currentFolder = payload.currentFolder || null;
+      setDriveFolderId(currentFolder?.id || folderId || null);
+      setDriveBreadcrumbs(breadcrumbs.length ? breadcrumbs : currentFolder ? [currentFolder] : []);
+      setDriveFolders(payload.folders || []);
+      setDriveFiles(payload.files || []);
+    } catch (error: any) {
+      setDriveError(error.message || 'Nao foi possivel abrir o Google Drive.');
+    } finally {
+      setDriveLoading(false);
+    }
+  }
+
+  function openDriveBrowser() {
+    const nextOpen = !driveBrowserOpen;
+    setDriveBrowserOpen(nextOpen);
+    if (nextOpen && !driveFolderId) void browseDrive(null, []);
+  }
+
+  function selectDriveFile(file: DriveEntry) {
+    setSelectedDriveFile(file);
+    setOptimizePrompt((current) => current.includes(file.name)
+      ? current
+      : `${current}${current ? '\n' : ''}Use o criativo "${file.name}" selecionado na pasta do Google Drive.`);
+    setDriveError(null);
+  }
 
   const gestorIdParam = actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
     ? profile.id
@@ -226,6 +285,9 @@ export default function OtimizacoesPage() {
         metrics: total,
         equipe: selectedOperationalTeam(),
         gestor_id: gestorIdParam,
+        drive_file_id: selectedDriveFile?.id || null,
+        drive_file_name: selectedDriveFile?.name || null,
+        drive_folder_id: selectedDriveFile?.parents?.[0] || driveFolderId || null,
         creative_attachment: uploadedCreativeUrl
           ? { name: creativeFile?.name || 'criativo anexado', type: creativeFile?.type || '', url: uploadedCreativeUrl }
           : null,
@@ -289,6 +351,9 @@ export default function OtimizacoesPage() {
         metrics: total,
         tree,
         messages: nextMessages,
+        drive_file_id: selectedDriveFile?.id || null,
+        drive_file_name: selectedDriveFile?.name || null,
+        drive_folder_id: selectedDriveFile?.parents?.[0] || driveFolderId || null,
         creative_attachment: uploadedCreativeUrl
           ? { name: creativeFile?.name || 'print anexado', type: creativeFile?.type || '', url: uploadedCreativeUrl }
           : null,
@@ -648,6 +713,92 @@ export default function OtimizacoesPage() {
                       placeholder="Ex: o CPL desta campanha esta correto? Cole um print com Ctrl+V ou peca ao Apolo para revisar um anuncio."
                       className="min-h-32 w-full resize-y p-4 text-sm leading-relaxed"
                     />
+                    <div className="rounded-xl border p-3" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <HardDrive size={16} style={{ color: 'var(--tf-accent-ink)' }} />
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold" style={{ color: 'var(--tf-ink)' }}>Criativos Orion</p>
+                            <p className="text-[11px]" style={{ color: 'var(--tf-ink-mute)' }}>DF ou SP → operadora → criativo</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={openDriveBrowser}
+                          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] font-bold transition"
+                          style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-accent-ink)' }}
+                        >
+                          <Folder size={14} /> {driveBrowserOpen ? 'Fechar Drive' : 'Explorar Drive'}
+                        </button>
+                      </div>
+
+                      {driveBrowserOpen ? (
+                        <div className="mt-3 rounded-lg border p-3" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
+                          <div className="mb-3 flex items-center gap-1 overflow-x-auto text-[11px]" style={{ color: 'var(--tf-ink-soft)' }}>
+                            {driveBreadcrumbs.map((folder, index) => (
+                              <Fragment key={folder.id}>
+                                {index > 0 ? <ChevronRight size={13} className="shrink-0" /> : null}
+                                <button
+                                  type="button"
+                                  className="shrink-0 font-semibold hover:underline"
+                                  onClick={() => void browseDrive(folder.id, driveBreadcrumbs.slice(0, index + 1))}
+                                >
+                                  {index === 0 ? 'Criativos Orion' : folder.name}
+                                </button>
+                              </Fragment>
+                            ))}
+                          </div>
+
+                          {driveLoading ? (
+                            <div className="flex items-center gap-2 py-5 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>
+                              <Loader2 size={15} className="animate-spin" /> Abrindo pasta...
+                            </div>
+                          ) : driveError ? (
+                            <p className="rounded-lg border p-3 text-xs" style={{ background: 'var(--tf-crit-soft)', borderColor: 'var(--tf-crit-border)', color: 'var(--tf-crit)' }}>{driveError}</p>
+                          ) : (
+                            <>
+                              {driveBreadcrumbs.length > 1 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void browseDrive(driveBreadcrumbs[driveBreadcrumbs.length - 2]?.id, driveBreadcrumbs.slice(0, -1))}
+                                  className="mb-2 inline-flex items-center gap-1 text-[11px] font-semibold"
+                                  style={{ color: 'var(--tf-accent-ink)' }}
+                                >
+                                  <ArrowLeft size={13} /> Voltar
+                                </button>
+                              ) : null}
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {driveFolders.map((folder) => (
+                                  <button
+                                    key={folder.id}
+                                    type="button"
+                                    onClick={() => void browseDrive(folder.id, [...driveBreadcrumbs, folder])}
+                                    className="flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition hover:border-cyan-400"
+                                    style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }}
+                                  >
+                                    <Folder size={16} style={{ color: 'var(--tf-accent-ink)' }} />
+                                    <span className="truncate text-xs font-semibold">{folder.name}</span>
+                                    <ChevronRight size={14} className="ml-auto shrink-0" style={{ color: 'var(--tf-ink-mute)' }} />
+                                  </button>
+                                ))}
+                                {driveFiles.map((file) => (
+                                  <div key={file.id} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: selectedDriveFile?.id === file.id ? 'var(--tf-accent)' : 'var(--tf-border)' }}>
+                                    {file.mimeType.startsWith('video/') ? <FileVideo2 size={16} style={{ color: 'var(--tf-accent-ink)' }} /> : <FileImage size={16} style={{ color: 'var(--tf-accent-ink)' }} />}
+                                    <span className="min-w-0 flex-1 truncate text-xs font-semibold" style={{ color: 'var(--tf-ink)' }}>{file.name}</span>
+                                    {file.webViewLink ? <a href={file.webViewLink} target="_blank" rel="noreferrer" aria-label={`Abrir ${file.name}`} className="shrink-0" style={{ color: 'var(--tf-ink-mute)' }}><ExternalLink size={13} /></a> : null}
+                                    <button type="button" onClick={() => selectDriveFile(file)} className="shrink-0 rounded-md px-2 py-1 text-[10px] font-bold" style={{ background: selectedDriveFile?.id === file.id ? 'var(--tf-ok-soft)' : 'var(--tf-accent-soft)', color: 'var(--tf-accent-ink)' }}>
+                                      {selectedDriveFile?.id === file.id ? 'Selecionado' : 'Usar'}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                              {!driveFolders.length && !driveFiles.length ? <p className="py-4 text-xs" style={{ color: 'var(--tf-ink-mute)' }}>Esta pasta esta vazia.</p> : null}
+                            </>
+                          )}
+                        </div>
+                      ) : null}
+                      {selectedDriveFile ? <p className="mt-2 truncate text-[11px]" style={{ color: 'var(--tf-ok)' }}>Criativo selecionado: {selectedDriveFile.name}</p> : null}
+                    </div>
                     <input
                       ref={creativeInputRef}
                       type="file"

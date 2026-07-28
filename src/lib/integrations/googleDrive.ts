@@ -7,7 +7,11 @@ export type DriveFile = {
   size?: string;
   webViewLink?: string;
   parents?: string[];
+  modifiedTime?: string;
+  thumbnailLink?: string;
 };
+
+export type DriveFolder = DriveFile;
 
 export function isGoogleDriveConfigured() {
   return Boolean(
@@ -79,8 +83,25 @@ export async function searchDriveFiles(options: { query?: string; folderId?: str
   return (await driveFetch(`files?${params.toString()}`)).files as DriveFile[] || [];
 }
 
+export async function listDriveChildren(folderId?: string | null, pageSize = 100) {
+  const parentId = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID || null;
+  if (!parentId) throw new Error('Defina GOOGLE_DRIVE_FOLDER_ID com a pasta Criativos Orion.');
+  const clauses = ["trashed = false", `'${parentId}' in parents`];
+  const params = new URLSearchParams({
+    q: clauses.join(' and '),
+    pageSize: String(Math.min(Math.max(pageSize, 1), 1000)),
+    fields: 'files(id,name,mimeType,size,webViewLink,parents,modifiedTime,thumbnailLink),nextPageToken',
+    orderBy: 'folder,name',
+  });
+  const files = (await driveFetch(`files?${params.toString()}`)).files as DriveFile[] || [];
+  return {
+    folders: files.filter((file) => file.mimeType === 'application/vnd.google-apps.folder') as DriveFolder[],
+    files: files.filter((file) => file.mimeType !== 'application/vnd.google-apps.folder'),
+  };
+}
+
 export async function getDriveFile(fileId: string) {
-  const params = new URLSearchParams({ fields: 'id,name,mimeType,size,webViewLink,parents' });
+  const params = new URLSearchParams({ fields: 'id,name,mimeType,size,webViewLink,parents,modifiedTime,thumbnailLink' });
   return (await driveFetch(`files/${encodeURIComponent(fileId)}?${params.toString()}`)) as DriveFile;
 }
 
