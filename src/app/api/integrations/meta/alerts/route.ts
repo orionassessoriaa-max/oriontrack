@@ -486,14 +486,15 @@ function targetKey(accountId: unknown, alvoId: unknown, acao: unknown) {
 }
 
 async function persistRecommendations(recommendations: Recommendation[], since: string, until: string, accountIds: string[]) {
-  if (accountIds.length === 0) return [] as any[];
+  const uniqueAccountIds = Array.from(new Set(accountIds.filter(Boolean)));
+  if (uniqueAccountIds.length === 0) return [] as any[];
 
   const cooldownSince = new Date(Date.now() - DECISION_COOLDOWN_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: decided } = await supabaseAdmin
     .from('trafego_recomendacoes')
     .select('meta_ad_account_id, alvo_id, acao, status, decidido_em')
-    .in('meta_ad_account_id', accountIds)
+    .in('meta_ad_account_id', uniqueAccountIds)
     .in('status', ['ignorada', 'executada', 'aprovada'])
     .gte('decidido_em', cooldownSince);
 
@@ -507,14 +508,23 @@ async function persistRecommendations(recommendations: Recommendation[], since: 
     .from('trafego_recomendacoes')
     .delete()
     .eq('status', 'pendente')
-    .in('meta_ad_account_id', accountIds);
+    .in('meta_ad_account_id', uniqueAccountIds);
 
   if (deleteError) {
     console.error('Erro ao limpar fila de recomendacoes:', deleteError.message);
-    return [];
+    throw new Error(`Nao foi possivel preparar a fila de recomendacoes: ${deleteError.message}`);
   }
 
-  const rows = recommendations
+  // Uma mesma conta pode aparecer mais de uma vez no retorno da Meta. A fila
+  // tem uma restricao unica por conta + alvo + acao, entao deduplicamos antes
+  // do insert para garantir que cada recomendacao receba um id persistido.
+  const uniqueRecommendations = new Map<string, Recommendation>();
+  recommendations.forEach((item) => {
+    const key = targetKey(item.meta_ad_account_id, item.alvo_id, item.acao);
+    if (!uniqueRecommendations.has(key)) uniqueRecommendations.set(key, item);
+  });
+
+  const rows = Array.from(uniqueRecommendations.values())
     .filter((item) => !recentlyDecided.has(targetKey(item.meta_ad_account_id, item.alvo_id, item.acao)))
     .map((item) => ({
       corretor_id: item.corretor_id,
@@ -541,10 +551,8 @@ async function persistRecommendations(recommendations: Recommendation[], since: 
     .select('id, corretor_id, concessionaria_nome, meta_ad_account_id, nivel, alvo_id, alvo_nome, acao, severidade, motivo, metricas, status');
 
   if (error) {
-    // A fila nao pode derrubar o painel. Sem persistencia o gestor ainda ve as
-    // acoes, so nao consegue aprovar.
     console.error('Erro ao gravar recomendacoes de trafego:', error.message);
-    return [];
+    throw new Error(`Nao foi possivel salvar as recomendacoes: ${error.message}`);
   }
 
   return data || [];
@@ -837,7 +845,9 @@ export async function POST(request: Request) {
       rules: TRAFFIC_RULES,
       accounts,
       active_creatives: activeCreatives,
-      recomendacoes: persisted.length > 0 ? persisted : recommendations,
+      // As acoes precisam vir do banco para carregar o id usado por Aprovar,
+      // Pausar e Ignorar. Nunca devolver a lista calculada sem id.
+      recomendacoes: persisted,
       analises_hoje: analisesHoje || 0,
       ultima_analise_em: ultimaAnalise?.created_at || null,
       portfolio_ai_review: portfolioAiReview || ultimaAnalise?.resumo_ia || '',

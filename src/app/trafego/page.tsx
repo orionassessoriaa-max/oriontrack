@@ -746,8 +746,8 @@ function RecommendationCard({
           className="tf-no-lift inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-bold text-white transition disabled:opacity-50 lg:w-32"
           style={{ background: 'var(--tf-accent)' }}
         >
-          {ocupado ? <Loader2 className="animate-spin" size={13} /> : <Check size={13} />}
-          Aprovar
+          {ocupado ? <Loader2 className="animate-spin" size={13} /> : pausaNaMeta ? <Pause size={13} /> : <Check size={13} />}
+          {pausaNaMeta ? 'Pausar' : 'Aprovar'}
         </button>
         <button
           type="button"
