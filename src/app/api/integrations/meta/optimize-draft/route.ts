@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { fetchWithTimeout } from '@/lib/meta/fetchWithTimeout';
+import { extractDriveId, resolveDriveFile } from '@/lib/integrations/googleDrive';
 
 type CorretorMeta = {
   id: string;
@@ -151,7 +153,7 @@ async function generateDraftWithAi(payload: any, account: CorretorMeta) {
   const base = fallbackDraft(payload, account);
   if (!apiKey) return base;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -215,6 +217,31 @@ Regras obrigatorias:
   }
 }
 
+function driveRequestFromPrompt(prompt: string, body: any) {
+  const fileUrl = prompt.match(/https?:\/\/drive\.google\.com\/file\/d\/[^\s)]+/i)?.[0] || null;
+  const folderUrl = prompt.match(/https?:\/\/drive\.google\.com\/drive\/folders\/[^\s)]+/i)?.[0] || null;
+  const fileHint = body.drive_file_name || prompt.match(/(?:criativo|anuncio|ad)\s*(?:de|numero|n[ºo]?|#|-)?\s*([a-z0-9][a-z0-9 _-]{1,50})/i)?.[1]?.trim() || null;
+  return {
+    fileId: body.drive_file_id || (fileUrl ? extractDriveId(fileUrl) : null),
+    folderId: body.drive_folder_id || (folderUrl ? extractDriveId(folderUrl) : null),
+    fileName: fileHint,
+  };
+}
+
+async function attachDriveResolution(draft: any, payload: any) {
+  const request = driveRequestFromPrompt(String(payload.prompt || ''), payload);
+  if (!request.fileId && !request.folderId && !request.fileName) return { draft, drive: { configured: null, status: 'not_requested' } };
+  const resolution = await resolveDriveFile(request);
+  if (!resolution.configured) return { draft, drive: { configured: false, status: 'not_configured' } };
+  if (resolution.file.length !== 1) {
+    return { draft, drive: { configured: true, status: resolution.file.length === 0 ? 'not_found' : 'multiple_matches', matches: resolution.file } };
+  }
+  const file = resolution.file[0];
+  const ads = Array.isArray(draft.ads) ? draft.ads : [];
+  const nextAds = ads.length ? ads.map((ad: any) => ({ ...ad, drive_file_id: file.id, drive_file_name: file.name, drive_mime_type: file.mimeType, drive_url: file.webViewLink || null })) : [{ name: file.name, status: 'PAUSED', drive_file_id: file.id, drive_file_name: file.name, drive_mime_type: file.mimeType, drive_url: file.webViewLink || null }];
+  return { draft: { ...draft, ads: nextAds, drive_file: file }, drive: { configured: true, status: 'resolved', file } };
+}
+
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'meta:optimize-draft', { limit: 30, windowMs: 5 * 60_000 });
@@ -241,8 +268,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Conta nao encontrada ou fora do escopo deste gestor.' }, { status: 403 });
     }
 
-    const draft = await generateDraftWithAi(body, account);
-    return NextResponse.json({ success: true, draft });
+    const initialDraft = await generateDraftWithAi(body, account);
+    const resolved = await attachDriveResolution(initialDraft, body);
+    const draft = resolved.drive.status === 'resolved'
+      ? resolved.draft
+      : { ...resolved.draft, drive_resolution: resolved.drive };
+    return NextResponse.json({ success: true, draft, drive: resolved.drive });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao gerar rascunho de otimizacao.' }, { status: 500 });
   }

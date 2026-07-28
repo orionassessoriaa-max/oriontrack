@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
@@ -65,6 +65,8 @@ type DraftExecutionResult = {
   warnings: string[];
 };
 
+type ApoloMessage = { role: 'user' | 'assistant'; content: string };
+
 function todayLocal() {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
@@ -117,6 +119,11 @@ export default function OtimizacoesPage() {
   const [draftExecution, setDraftExecution] = useState<DraftExecutionResult | null>(null);
   const [activationBusy, setActivationBusy] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [apoloMessages, setApoloMessages] = useState<ApoloMessage[]>([
+    { role: 'assistant', content: 'Sou o Apolo. Posso analisar esta conta, revisar uma recomendacao ou montar um plano de acao. Me diga o que voce quer conferir.' },
+  ]);
+  const [apoloInput, setApoloInput] = useState('');
+  const [apoloBusy, setApoloBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -237,6 +244,74 @@ export default function OtimizacoesPage() {
     setDraftExecution(null);
   }
 
+  async function sendApoloMessage() {
+    const text = apoloInput.trim();
+    if (!text || !selected?.meta_ad_account_id || apoloBusy) return;
+    setApoloBusy(true);
+    setDraftError(null);
+    const nextMessages = [...apoloMessages, { role: 'user' as const, content: text }];
+    setApoloMessages(nextMessages);
+    setApoloInput('');
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setDraftError('Sessao expirada.');
+      setApoloBusy(false);
+      return;
+    }
+
+    let uploadedCreativeUrl = creativeUrl;
+    if (creativeFile && !uploadedCreativeUrl) {
+      setUploadingCreative(true);
+      const formData = new FormData();
+      formData.append('file', creativeFile);
+      const uploadResponse = await fetch('/api/integrations/meta/optimize-draft/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const uploadPayload = await uploadResponse.json();
+      setUploadingCreative(false);
+      if (!uploadResponse.ok) {
+        setDraftError(uploadPayload.error || 'Nao foi possivel anexar o print.');
+        setApoloBusy(false);
+        return;
+      }
+      uploadedCreativeUrl = uploadPayload.file?.url || null;
+      setCreativeUrl(uploadedCreativeUrl);
+    }
+
+    const response = await fetch('/api/integrations/meta/apolo-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        account: selected,
+        metrics: total,
+        tree,
+        messages: nextMessages,
+        creative_attachment: uploadedCreativeUrl
+          ? { name: creativeFile?.name || 'print anexado', type: creativeFile?.type || '', url: uploadedCreativeUrl }
+          : null,
+      }),
+    });
+    const payload = await response.json();
+    setApoloBusy(false);
+    if (!response.ok) {
+      setDraftError(payload.error || 'Nao foi possivel falar com o Apolo.');
+      return;
+    }
+    setApoloMessages((current) => [...current, { role: 'assistant', content: payload.reply }]);
+    if (payload.draft) setOptimizationDraft(payload.draft);
+  }
+
+  function handleApoloPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const file = Array.from(event.clipboardData.files).find((item) => item.type.startsWith('image/') || item.type.startsWith('video/'));
+    if (!file) return;
+    event.preventDefault();
+    acceptCreative(file);
+    setApoloInput((current) => `${current}${current ? '\n' : ''}[Print anexado para analise]`);
+  }
+
   function acceptCreative(file?: File | null) {
     if (!file) return;
     const validType = file.type.startsWith('image/') || file.type === 'video/mp4' || file.type === 'video/quicktime' || file.type === 'video/webm';
@@ -311,6 +386,8 @@ export default function OtimizacoesPage() {
     setTree([]);
     setAiRecommendation('');
     setError(null);
+    setApoloMessages([{ role: 'assistant', content: 'Sou o Apolo. Posso analisar esta conta, revisar uma recomendacao ou montar um plano de acao. Me diga o que voce quer conferir.' }]);
+    setApoloInput('');
     const params = new URLSearchParams(window.location.search);
     const accountFromUrl = params.get('conta');
     setInitialAccountId(accountFromUrl);
@@ -538,9 +615,9 @@ export default function OtimizacoesPage() {
                     <div className="flex items-center gap-2">
                       <Wand2 size={16} style={{ color: 'var(--tf-accent-ink)' }} />
                       <div>
-                        <h3 className="text-base font-bold">Pedido manual</h3>
+                        <h3 className="text-base font-bold">Conversa com o Apolo</h3>
                         <p className="mt-0.5 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>
-                          Peça uma campanha, pausa, troca de criativo ou ajuste de verba. Sai um plano revisável, nada é publicado.
+                          Converse com o Apolo, corrija a analise e faca um plano de otimizacao. Nada e publicado sem sua aprovacao.
                         </p>
                       </div>
                     </div>
@@ -554,10 +631,21 @@ export default function OtimizacoesPage() {
 
                   <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
                     <div className="space-y-3">
+                    <div className="max-h-72 space-y-2 overflow-y-auto rounded-xl border p-3" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
+                      {apoloMessages.map((message, index) => (
+                        <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <p className="max-w-[92%] whitespace-pre-wrap rounded-xl px-3 py-2 text-xs leading-relaxed" style={{ background: message.role === 'user' ? 'var(--tf-accent)' : 'var(--tf-surface)', color: message.role === 'user' ? '#fff' : 'var(--tf-ink-soft)', border: `1px solid ${message.role === 'user' ? 'transparent' : 'var(--tf-border)'}` }}>
+                            {message.content}
+                          </p>
+                        </div>
+                      ))}
+                      {apoloBusy ? <Loader2 className="animate-spin" size={15} style={{ color: 'var(--tf-accent-ink)' }} /> : null}
+                    </div>
                     <textarea
-                      value={optimizePrompt}
-                      onChange={(event) => setOptimizePrompt(event.target.value)}
-                      placeholder="Ex: pause o AD-4 Amil-SP. Ou: crie campanha ABO SulAmerica DF, público 30 a 58 anos, verba R$ 50/dia, use o criativo AD 2 da pasta SulAmerica DF."
+                      value={apoloInput}
+                      onChange={(event) => setApoloInput(event.target.value)}
+                      onPaste={handleApoloPaste}
+                      placeholder="Ex: o CPL desta campanha esta correto? Cole um print com Ctrl+V ou peca ao Apolo para revisar um anuncio."
                       className="min-h-32 w-full resize-y p-4 text-sm leading-relaxed"
                     />
                     <input
@@ -590,7 +678,7 @@ export default function OtimizacoesPage() {
                         ) : (
                           <>
                             <strong className="block" style={{ color: 'var(--tf-ink)' }}>Arraste o criativo aqui</strong>
-                            <span>ou clique para selecionar uma imagem ou video. Opcional: use o Drive no prompt.</span>
+                            <span>ou clique para selecionar uma imagem ou video. Voce tambem pode colar um print com Ctrl+V.</span>
                           </>
                         )}
                       </span>
@@ -620,7 +708,7 @@ export default function OtimizacoesPage() {
                         </li>
                         <li className="flex gap-2">
                           <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-ok)' }} />
-                          Citou uma pasta do Drive, ela entra registrada no plano.
+                          Um print anexado entra na analise. O Apolo tambem pode localizar um criativo no Drive quando a integracao estiver configurada.
                         </li>
                         <li className="flex gap-2">
                           <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-ok)' }} />
@@ -639,13 +727,13 @@ export default function OtimizacoesPage() {
 
                       <button
                         type="button"
-                        onClick={generateOptimizationDraft}
-                        disabled={generatingDraft || uploadingCreative || !selected || optimizePrompt.trim().length < 12}
+                        onClick={sendApoloMessage}
+                        disabled={apoloBusy || uploadingCreative || !selected || !apoloInput.trim()}
                         className="tf-no-lift mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white transition disabled:opacity-50"
                         style={{ background: 'var(--tf-accent)' }}
                       >
-                        {generatingDraft || uploadingCreative ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
-                        Gerar plano
+                        {apoloBusy || uploadingCreative ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+                        Enviar para o Apolo
                       </button>
                     </div>
                   </div>

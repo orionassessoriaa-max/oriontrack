@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { downloadDriveFile, getDriveFile } from '@/lib/integrations/googleDrive';
 
 type MetaAccount = {
   id: string;
@@ -67,6 +68,16 @@ async function graphPost(path: string, params: Record<string, string>) {
   return json;
 }
 
+async function graphPostForm(path: string, form: FormData) {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN nao configurado no ambiente da aplicacao.');
+  form.append('access_token', token);
+  const response = await fetch(graphUrl(path), { method: 'POST', body: form });
+  const json = await response.json();
+  if (!response.ok || json.error) throw new Error(json.error?.message || `Meta recusou o upload (${response.status}).`);
+  return json;
+}
+
 function moneyToCents(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value * 100);
   const raw = String(value ?? '').replace(/[^0-9,.-]/g, '').replace(/\.(?=.*\.)/g, '').replace(',', '.');
@@ -122,10 +133,51 @@ async function createPaused(accountId: string, draft: any) {
 
   const ads = Array.isArray(draft?.ads) ? draft.ads : [];
   for (const ad of ads) {
-    const creativeId = ad.creative_id || ad.meta_creative_id;
+    let creativeId = ad.creative_id || ad.meta_creative_id;
     const adsetId = ad.adset_id || created.find((item) => item.level === 'adset')?.id;
+    if (!creativeId && ad.drive_file_id) {
+      const driveFile = await getDriveFile(String(ad.drive_file_id));
+      if (!driveFile.mimeType.startsWith('image/')) {
+        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'A primeira versao aceita criativos de imagem do Drive. Videos precisam do fluxo de upload de video da Meta.' });
+        continue;
+      }
+      const content = await downloadDriveFile(driveFile.id);
+      if (content.byteLength > 30 * 1024 * 1024) {
+        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'A imagem do Drive excede o limite de 30 MB.' });
+        continue;
+      }
+      const imageForm = new FormData();
+      imageForm.append('filename', new Blob([content], { type: driveFile.mimeType }), driveFile.name);
+      const imageResult = await graphPostForm(`${accountPath}/adimages`, imageForm);
+      const images = imageResult.images || {};
+      const uploaded = Object.values(images)[0] as any;
+      const imageHash = uploaded?.hash;
+      if (!imageHash) {
+        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'A Meta nao retornou o hash da imagem enviada.' });
+        continue;
+      }
+      const pageId = String(ad.page_id || draft.page_id || process.env.META_DEFAULT_PAGE_ID || '').trim();
+      const link = String(ad.link_url || draft.link_url || process.env.META_DEFAULT_LEAD_LINK || '').trim();
+      if (!pageId || !link) {
+        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'Informe page_id e link_url no rascunho ou META_DEFAULT_PAGE_ID/META_DEFAULT_LEAD_LINK para montar o criativo da Meta.' });
+        continue;
+      }
+      const creativeResult = await graphPost(`${accountPath}/adcreatives`, {
+        name: String(ad.creative_name || `${ad.name || driveFile.name} | Orion Creative`),
+        object_story_spec: JSON.stringify({
+          page_id: pageId,
+          link_data: {
+            image_hash: imageHash,
+            link,
+            message: String(ad.primary_text || draft.primary_text || 'Conheca nossas solucoes.'),
+            name: String(ad.headline || draft.headline || driveFile.name),
+          },
+        }),
+      });
+      creativeId = String(creativeResult.id || '');
+    }
     if (!creativeId || !adsetId) {
-      skipped.push({ level: 'ad', name: ad.name || 'Anuncio', reason: creativeId ? 'Nenhum conjunto criado para vincular o anuncio.' : 'Informe um creative_id da Meta; uma pasta do Drive sozinha nao cria o criativo na Meta.' });
+      skipped.push({ level: 'ad', name: ad.name || 'Anuncio', reason: creativeId ? 'Nenhum conjunto criado para vincular o anuncio.' : 'Informe um creative_id da Meta ou resolva um arquivo de imagem do Drive.' });
       continue;
     }
     const result = await graphPost(`${adsetId}/ads`, {
