@@ -4120,3 +4120,130 @@ html.theme-claro .orion-crm .kanban-stage-header {
 
 
 
+
+/* =========================================================================
+   PAINEL DE TRAFEGO  (escopado em .orion-trafego)
+   Mesma linguagem do CRM: branco/cinza, ZERO neon, acento unico = azul
+   petroleo. Aqui a marcacao ja nasce em tokens, entao nao ha retrofit de
+   classe ciano como no .orion-crm — so a troca de valores por tema.
+
+   Semaforo (critico/atencao/ok) vive apenas em badge e no numero do CPL.
+   Nunca no fundo do card inteiro: painel operacional que pisca vermelho
+   inteiro cansa e esconde a hierarquia.
+   ========================================================================= */
+
+.orion-trafego {
+  --tf-bg: #f6f8fb;
+  --tf-surface: #ffffff;
+  --tf-surface-2: #eef2f6;
+  --tf-border: #e2e8f0;
+  --tf-ink: #0f172a;
+  --tf-ink-soft: #475569;
+  --tf-ink-mute: #64748b;
+
+  --tf-accent: #14566a;
+  --tf-accent-hover: #0e4453;
+  --tf-accent-soft: #e4eef1;
+  --tf-accent-border: #c9dee3;
+  --tf-accent-ink: #0f4c5c;
+
+  --tf-crit: #b42318;
+  --tf-crit-soft: #fef3f2;
+  --tf-crit-border: #fecdca;
+
+  --tf-warn: #b54708;
+  --tf-warn-soft: #fffaeb;
+  --tf-warn-border: #fedf89;
+
+  --tf-ok: #067647;
+  --tf-ok-soft: #ecfdf3;
+  --tf-ok-border: #abefc6;
+
+  --tf-info: #175cd3;
+  --tf-info-soft: #eff8ff;
+  --tf-info-border: #b2ddff;
+
+  --tf-idle: #475467;
+  --tf-idle-soft: #f2f4f7;
+  --tf-idle-border: #e4e7ec;
+
+  --tf-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.04);
+}
+
+html.theme-noturno .orion-trafego {
+  --tf-bg: #0b1220;
+  --tf-surface: #111a2b;
+  --tf-surface-2: #17233a;
+  --tf-border: #24324a;
+  --tf-ink: #e8eef7;
+  --tf-ink-soft: #a9b6c9;
+  --tf-ink-mute: #7f8da3;
+
+  --tf-accent: #2b7f96;
+  --tf-accent-hover: #3597b1;
+  --tf-accent-soft: #14303a;
+  --tf-accent-border: #1f4d5c;
+  --tf-accent-ink: #7fc7db;
+
+  --tf-crit: #ff9a92;
+  --tf-crit-soft: #2a1614;
+  --tf-crit-border: #5c2a26;
+
+  --tf-warn: #f5c26b;
+  --tf-warn-soft: #2a2013;
+  --tf-warn-border: #5c4526;
+
+  --tf-ok: #6fce9f;
+  --tf-ok-soft: #12271d;
+  --tf-ok-border: #235c3e;
+
+  --tf-info: #8fc0f5;
+  --tf-info-soft: #131f2f;
+  --tf-info-border: #26456b;
+
+  --tf-idle: #a3aebf;
+  --tf-idle-soft: #1a2333;
+  --tf-idle-border: #2c3a52;
+
+  --tf-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+/* Os inputs globais sao forcados para fundo escuro dentro de @layer components.
+   Declaracao !important em camada vence !important fora de camada, entao este
+   override precisa morar na MESMA camada — senao a especificidade nao adianta
+   e o campo continua preto no tema claro. */
+/* Os campos globais sao forcados para fundo escuro por uma regra !important
+   dentro de @layer components. Para declaracoes !important a cascata inverte:
+   estilo EM CAMADA vence estilo FORA de camada, entao especificidade sozinha
+   nao resolve. Este override precisa morar na mesma camada e ser mais
+   especifico que `main :is(input, select, textarea)`. */
+@layer components {
+  html .orion-trafego :is(input, select, textarea),
+  html.theme-claro main .orion-trafego :is(input, select, textarea),
+  html.theme-noturno main .orion-trafego :is(input, select, textarea) {
+    background: var(--tf-surface) !important;
+    color: var(--tf-ink) !important;
+    -webkit-text-fill-color: var(--tf-ink) !important;
+    border: 1px solid var(--tf-border) !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+  }
+
+  html .orion-trafego :is(input, select, textarea):focus,
+  html.theme-claro main .orion-trafego :is(input, select, textarea):focus,
+  html.theme-noturno main .orion-trafego :is(input, select, textarea):focus {
+    border-color: var(--tf-accent) !important;
+    outline: 3px solid color-mix(in srgb, var(--tf-accent) 16%, transparent) !important;
+  }
+
+  html .orion-trafego :is(input, select, textarea)::placeholder {
+    color: var(--tf-ink-mute) !important;
+    -webkit-text-fill-color: var(--tf-ink-mute) !important;
+  }
+}
+
+/* O layout aplica um hover global de translateY em todo button/a. Nos cards e
+   linhas de tabela do painel isso faz a lista inteira tremer ao passar o mouse. */
+.orion-trafego .tf-no-lift:hover {
+  transform: none !important;
+}

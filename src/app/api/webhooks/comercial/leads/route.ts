@@ -331,6 +331,11 @@ export async function POST(request: Request) {
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
       const sheet = await sendLeadToSheet(data, rawPayload);
+      try {
+        await startCommercialBotIfEligible(data.id);
+      } catch (botError) {
+        console.error('commercial_bot_first_message_failed', botError);
+      }
       await writeAuditLog(request, null, {
         action: 'commercial.lead.webhook_duplicate',
         entity_type: 'commercial_lead',

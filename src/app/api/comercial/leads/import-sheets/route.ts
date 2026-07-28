@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { startCommercialBotIfEligible } from '@/lib/commercialBot';
 
 function key(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -100,8 +101,15 @@ export async function POST(request: Request) {
         if (Object.keys(update).length > 1) { await supabaseAdmin.from('comercial_leads').update(update).eq('id', existing.id); enriched += 1; }
         continue;
       }
-      const { error } = await supabaseAdmin.from('comercial_leads').insert(lead);
-      if (!error) created += 1;
+      const { data: inserted, error } = await supabaseAdmin.from('comercial_leads').insert(lead).select('id').single();
+      if (!error && inserted?.id) {
+        created += 1;
+        try {
+          await startCommercialBotIfEligible(inserted.id);
+        } catch (botError) {
+          console.error('commercial_bot_first_message_failed', botError);
+        }
+      }
     }
     return NextResponse.json({ created, enriched, ignored: rows.length - 1 - leads.length });
   } catch (error) {

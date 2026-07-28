@@ -21,14 +21,18 @@ export async function startCommercialBotIfEligible(leadId: string) {
   locks.add(leadId);
 
   try {
-    const [{ data: lead }, { data: config }] = await Promise.all([
+    const [{ data: lead, error: leadError }, { data: config, error: configError }] = await Promise.all([
       supabaseAdmin.from('comercial_leads').select('id,nome,telefone').eq('id', leadId).maybeSingle(),
-      supabaseAdmin.from('comercial_config').select('bot_comercial_ativo,bot_comercial_prompt,ia_sdr_profile_id').eq('id', 1).maybeSingle(),
+      // O remetente comercial e o numero oficial da Orion. Ele nao depende de
+      // um perfil de corretor/coordenador selecionado na configuracao.
+      supabaseAdmin.from('comercial_config').select('bot_comercial_ativo,bot_comercial_prompt').eq('id', 1).maybeSingle(),
     ]);
 
+    if (leadError) throw new Error(`Nao consegui ler o lead do bot: ${leadError.message}`);
+    if (configError) throw new Error(`Nao consegui ler a configuracao do bot: ${configError.message}`);
     if (!lead?.id || !normalizePhone(lead.telefone)) return { started: false, reason: 'lead_without_phone' };
-    if (config?.bot_comercial_ativo !== true) return { started: false, reason: 'bot_disabled' };
-    if (!config.ia_sdr_profile_id) return { started: false, reason: 'commercial_sender_not_configured' };
+    if (!config) return { started: false, reason: 'bot_config_not_found' };
+    if (config.bot_comercial_ativo !== true) return { started: false, reason: 'bot_disabled' };
 
     const conversation = await ensureCommercialConversation(lead.telefone, lead.nome);
     const { data: existing } = await supabaseAdmin
@@ -48,7 +52,7 @@ export async function startCommercialBotIfEligible(leadId: string) {
       body: JSON.stringify({ number: phone, text: message, delay: 1200 }),
     }, { instanceName: COMMERCIAL_MASTER_INSTANCE });
 
-    await supabaseAdmin.from('whatsapp_mensagens').insert({
+    const { error: messageError } = await supabaseAdmin.from('whatsapp_mensagens').insert({
       conversa_id: conversation.id,
       direction: 'outbound',
       remetente: 'Orion',
@@ -56,7 +60,9 @@ export async function startCommercialBotIfEligible(leadId: string) {
       provider_message_id: String(providerPayload?.messageId || providerPayload?.id || providerPayload?.key?.id || ''),
       metadata: { commercial_bot_first_contact: true, ai_agent: 'commercial_bot', provider: 'uazapi' },
     });
-    await supabaseAdmin.from('whatsapp_conversas').update({ ultima_mensagem: message, ultima_mensagem_at: new Date().toISOString() }).eq('id', conversation.id);
+    if (messageError) throw new Error(`Mensagem enviada, mas nao foi registrada no Inbox: ${messageError.message}`);
+    const { error: conversationError } = await supabaseAdmin.from('whatsapp_conversas').update({ ultima_mensagem: message, ultima_mensagem_at: new Date().toISOString() }).eq('id', conversation.id);
+    if (conversationError) throw new Error(`Mensagem enviada, mas nao foi atualizada no Inbox: ${conversationError.message}`);
     return { started: true, conversation_id: conversation.id };
   } finally {
     locks.delete(leadId);

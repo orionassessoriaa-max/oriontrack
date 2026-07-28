@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
+import { startCommercialBotIfEligible } from '@/lib/commercialBot';
 
 function scopedQuery(query: any, _role: string, _profileId: string) {
   void _role;
@@ -74,6 +75,13 @@ export async function POST(request: Request) {
   };
   const { data, error } = await supabaseAdmin.from('comercial_leads').insert(payload).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    await startCommercialBotIfEligible(data.id);
+  } catch (botError) {
+    // O lead deve continuar sendo criado mesmo que o provedor de WhatsApp
+    // esteja temporariamente indisponivel.
+    console.error('commercial_bot_first_message_failed', botError);
+  }
   await writeAuditLog(request, guard.profile, { action: 'commercial.lead.create', entity_type: 'commercial_lead', entity_id: data.id });
   return NextResponse.json({ lead: redactFinancialFields(data, guard.canViewCommercialFinancials) }, { status: 201 });
 }
