@@ -17,7 +17,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     if (body.action === 'browse') {
       const rootFolderId = extractDriveId(body.folder_id) || extractDriveId(process.env.GOOGLE_DRIVE_FOLDER_ID);
-      if (!rootFolderId) return NextResponse.json({ configured: true, error: 'Defina a pasta raiz Criativos Orion no Google Drive.' }, { status: 400 });
+      if (!rootFolderId) {
+        return NextResponse.json({
+          configured: true,
+          error: 'GOOGLE_DRIVE_FOLDER_ID nao configurado na VPS. Informe o ID da pasta raiz Criativos Orion no .env.production e publique novamente.',
+        }, { status: 503 });
+      }
       const folderId = extractDriveId(body.folder_id) || rootFolderId;
       const [currentFolder, children] = await Promise.all([getDriveFile(folderId), listDriveChildren(folderId)]);
       return NextResponse.json({ configured: true, rootFolderId, currentFolder, ...children });
@@ -25,6 +30,10 @@ export async function POST(request: Request) {
     const files = await searchDriveFiles({ query: String(body.query || ''), folderId: extractDriveId(body.folder || body.folder_id) });
     return NextResponse.json({ configured: true, files });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Nao foi possivel pesquisar no Google Drive.' }, { status: 502 });
+    const message = String(error?.message || 'Nao foi possivel pesquisar no Google Drive.');
+    const friendlyMessage = /File not found/i.test(message)
+      ? 'A pasta Criativos Orion nao foi encontrada para a conta conectada. Verifique se ela foi restaurada da Lixeira e compartilhada com orionassessoriaa@gmail.com.'
+      : message;
+    return NextResponse.json({ error: friendlyMessage }, { status: 502 });
   }
 }

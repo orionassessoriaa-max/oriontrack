@@ -79,6 +79,8 @@ export async function searchDriveFiles(options: { query?: string; folderId?: str
     pageSize: String(Math.min(Math.max(options.pageSize || 50, 1), 100)),
     fields: 'files(id,name,mimeType,size,webViewLink,parents),nextPageToken',
     orderBy: 'name',
+    supportsAllDrives: 'true',
+    includeItemsFromAllDrives: 'true',
   });
   return (await driveFetch(`files?${params.toString()}`)).files as DriveFile[] || [];
 }
@@ -92,6 +94,8 @@ export async function listDriveChildren(folderId?: string | null, pageSize = 100
     pageSize: String(Math.min(Math.max(pageSize, 1), 1000)),
     fields: 'files(id,name,mimeType,size,webViewLink,parents,modifiedTime,thumbnailLink),nextPageToken',
     orderBy: 'folder,name',
+    supportsAllDrives: 'true',
+    includeItemsFromAllDrives: 'true',
   });
   const files = (await driveFetch(`files?${params.toString()}`)).files as DriveFile[] || [];
   return {
@@ -101,13 +105,24 @@ export async function listDriveChildren(folderId?: string | null, pageSize = 100
 }
 
 export async function getDriveFile(fileId: string) {
-  const params = new URLSearchParams({ fields: 'id,name,mimeType,size,webViewLink,parents,modifiedTime,thumbnailLink' });
-  return (await driveFetch(`files/${encodeURIComponent(fileId)}?${params.toString()}`)) as DriveFile;
+  const normalizedId = extractDriveId(fileId);
+  if (!normalizedId) {
+    throw new Error('ID do arquivo ou da pasta do Google Drive vazio ou invalido.');
+  }
+  const params = new URLSearchParams({
+    fields: 'id,name,mimeType,size,webViewLink,parents,modifiedTime,thumbnailLink',
+    supportsAllDrives: 'true',
+  });
+  return (await driveFetch(`files/${encodeURIComponent(normalizedId)}?${params.toString()}`)) as DriveFile;
 }
 
 export async function downloadDriveFile(fileId: string) {
+  const normalizedId = extractDriveId(fileId);
+  if (!normalizedId) {
+    throw new Error('ID do criativo do Google Drive vazio ou invalido.');
+  }
   const token = await accessToken();
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(normalizedId)}?alt=media&supportsAllDrives=true`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error(`Nao foi possivel baixar o criativo do Drive (${response.status}).`);

@@ -104,6 +104,13 @@ function bestCreativeImage(creative?: CreativePreview | null) {
     .replace(/\/\d+x\d+\//g, '/1080x1080/');
 }
 
+function drivePreviewUrl(file?: DriveEntry | null) {
+  if (!file?.thumbnailLink) return '';
+  return String(file.thumbnailLink)
+    .replace(/=s\d+(?:-[^&]*)?$/, '=s1200')
+    .replace(/=w\d+-h\d+$/, '=s1200');
+}
+
 export default function OtimizacoesPage() {
   const { profile, actualProfile } = useAuth();
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
@@ -118,6 +125,7 @@ export default function OtimizacoesPage() {
   const [expandedAdsets, setExpandedAdsets] = useState<Record<string, boolean>>({});
   const [expandedAds, setExpandedAds] = useState<Record<string, boolean>>({});
   const [fullscreenCreative, setFullscreenCreative] = useState<AdNode | null>(null);
+  const [fullscreenDriveFile, setFullscreenDriveFile] = useState<DriveEntry | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState('');
   const [optimizePrompt, setOptimizePrompt] = useState('');
   const [creativeFile, setCreativeFile] = useState<File | null>(null);
@@ -149,6 +157,15 @@ export default function OtimizacoesPage() {
   const [initialAccountId, setInitialAccountId] = useState<string | null>(null);
   const optimizationRequestRef = useRef(0);
   const creativeInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!fullscreenDriveFile) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullscreenDriveFile(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fullscreenDriveFile]);
 
   async function browseDrive(folderId?: string | null, breadcrumbs: DriveEntry[] = []) {
     setDriveLoading(true);
@@ -781,23 +798,66 @@ export default function OtimizacoesPage() {
                                     <ChevronRight size={14} className="ml-auto shrink-0" style={{ color: 'var(--tf-ink-mute)' }} />
                                   </button>
                                 ))}
-                                {driveFiles.map((file) => (
-                                  <div key={file.id} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: selectedDriveFile?.id === file.id ? 'var(--tf-accent)' : 'var(--tf-border)' }}>
-                                    {file.mimeType.startsWith('video/') ? <FileVideo2 size={16} style={{ color: 'var(--tf-accent-ink)' }} /> : <FileImage size={16} style={{ color: 'var(--tf-accent-ink)' }} />}
-                                    <span className="min-w-0 flex-1 truncate text-xs font-semibold" style={{ color: 'var(--tf-ink)' }}>{file.name}</span>
-                                    {file.webViewLink ? <a href={file.webViewLink} target="_blank" rel="noreferrer" aria-label={`Abrir ${file.name}`} className="shrink-0" style={{ color: 'var(--tf-ink-mute)' }}><ExternalLink size={13} /></a> : null}
-                                    <button type="button" onClick={() => selectDriveFile(file)} className="shrink-0 rounded-md px-2 py-1 text-[10px] font-bold" style={{ background: selectedDriveFile?.id === file.id ? 'var(--tf-ok-soft)' : 'var(--tf-accent-soft)', color: 'var(--tf-accent-ink)' }}>
-                                      {selectedDriveFile?.id === file.id ? 'Selecionado' : 'Usar'}
-                                    </button>
-                                  </div>
-                                ))}
+                                {driveFiles.map((file) => {
+                                  const previewUrl = drivePreviewUrl(file);
+                                  return (
+                                    <div key={file.id} className="flex min-w-0 items-center gap-2 rounded-lg border px-2 py-2" style={{ borderColor: selectedDriveFile?.id === file.id ? 'var(--tf-accent)' : 'var(--tf-border)' }}>
+                                      <button
+                                        type="button"
+                                        disabled={!previewUrl}
+                                        onClick={() => previewUrl && setFullscreenDriveFile(file)}
+                                        className="group relative h-12 w-14 shrink-0 overflow-hidden rounded-md border disabled:cursor-default"
+                                        style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface-2)' }}
+                                        aria-label={previewUrl ? `Ampliar miniatura de ${file.name}` : `Miniatura indisponível para ${file.name}`}
+                                      >
+                                        {previewUrl ? (
+                                          <>
+                                            <img src={previewUrl} alt={`Miniatura de ${file.name}`} className="h-full w-full object-cover transition group-hover:scale-105" />
+                                            <span className="absolute inset-0 grid place-items-center bg-black/45 text-white opacity-0 transition group-hover:opacity-100"><Maximize2 size={14} /></span>
+                                          </>
+                                        ) : file.mimeType.startsWith('video/') ? <FileVideo2 size={16} style={{ color: 'var(--tf-accent-ink)' }} /> : <FileImage size={16} style={{ color: 'var(--tf-accent-ink)' }} />}
+                                      </button>
+                                      <span className="min-w-0 flex-1 truncate text-xs font-semibold" style={{ color: 'var(--tf-ink)' }}>{file.name}</span>
+                                      {file.webViewLink ? <a href={file.webViewLink} target="_blank" rel="noreferrer" aria-label={`Abrir ${file.name}`} className="shrink-0" style={{ color: 'var(--tf-ink-mute)' }}><ExternalLink size={13} /></a> : null}
+                                      <button type="button" onClick={() => selectDriveFile(file)} className="shrink-0 rounded-md px-2 py-1 text-[10px] font-bold" style={{ background: selectedDriveFile?.id === file.id ? 'var(--tf-ok-soft)' : 'var(--tf-accent-soft)', color: 'var(--tf-accent-ink)' }}>
+                                        {selectedDriveFile?.id === file.id ? 'Selecionado' : 'Usar'}
+                                      </button>
+                                    </div>
+                                  );
+                                })}
                               </div>
                               {!driveFolders.length && !driveFiles.length ? <p className="py-4 text-xs" style={{ color: 'var(--tf-ink-mute)' }}>Esta pasta esta vazia.</p> : null}
                             </>
                           )}
                         </div>
                       ) : null}
-                      {selectedDriveFile ? <p className="mt-2 truncate text-[11px]" style={{ color: 'var(--tf-ok)' }}>Criativo selecionado: {selectedDriveFile.name}</p> : null}
+                      {selectedDriveFile ? (() => {
+                        const previewUrl = drivePreviewUrl(selectedDriveFile);
+                        return (
+                          <div className="mt-2 flex items-center gap-3 rounded-lg border p-2" style={{ borderColor: 'var(--tf-ok-border)', background: 'var(--tf-ok-soft)' }}>
+                            <button
+                              type="button"
+                              disabled={!previewUrl}
+                              onClick={() => previewUrl && setFullscreenDriveFile(selectedDriveFile)}
+                              className="group relative h-14 w-20 shrink-0 overflow-hidden rounded-md border disabled:cursor-default"
+                              style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface-2)' }}
+                              aria-label={previewUrl ? `Ampliar criativo selecionado ${selectedDriveFile.name}` : 'Miniatura indisponível'}
+                            >
+                              {previewUrl ? (
+                                <>
+                                  <img src={previewUrl} alt={`Miniatura de ${selectedDriveFile.name}`} className="h-full w-full object-cover" />
+                                  <span className="absolute inset-0 grid place-items-center bg-black/45 text-white opacity-0 transition group-hover:opacity-100"><Maximize2 size={14} /></span>
+                                </>
+                              ) : selectedDriveFile.mimeType.startsWith('video/') ? <FileVideo2 size={16} style={{ color: 'var(--tf-accent-ink)' }} /> : <FileImage size={16} style={{ color: 'var(--tf-accent-ink)' }} />}
+                            </button>
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: 'var(--tf-ok)' }}>Criativo selecionado</p>
+                              <p className="truncate text-[11px] font-semibold" style={{ color: 'var(--tf-ink)' }}>{selectedDriveFile.name}</p>
+                              {previewUrl ? <p className="text-[10px]" style={{ color: 'var(--tf-ink-mute)' }}>Clique na miniatura para ampliar</p> : null}
+                            </div>
+                          </div>
+                        );
+                      })() : null}
                     </div>
                     <input
                       ref={creativeInputRef}
@@ -943,6 +1003,32 @@ export default function OtimizacoesPage() {
                   <span className="text-[11px]" style={{ color: 'var(--tf-ink-mute)' }}>ID: {fullscreenCreative.id}</span>
                 </div>
               </div>
+            </div>
+          </div>
+        ) : null}
+        {fullscreenDriveFile && drivePreviewUrl(fullscreenDriveFile) ? (
+          <div
+            className="fixed inset-0 z-[60] grid place-items-center bg-black/90 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Visualização do criativo ${fullscreenDriveFile.name}`}
+            onClick={() => setFullscreenDriveFile(null)}
+          >
+            <button
+              type="button"
+              onClick={() => setFullscreenDriveFile(null)}
+              className="tf-no-lift absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
+              aria-label="Fechar visualização"
+            >
+              <X size={20} />
+            </button>
+            <div className="flex max-h-[92vh] max-w-[94vw] flex-col items-center gap-3" onClick={(event) => event.stopPropagation()}>
+              <img
+                src={drivePreviewUrl(fullscreenDriveFile)}
+                alt={fullscreenDriveFile.name}
+                className="max-h-[84vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
+              />
+              <p className="max-w-[90vw] truncate text-sm font-semibold text-white">{fullscreenDriveFile.name}</p>
             </div>
           </div>
         ) : null}
