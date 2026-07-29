@@ -76,7 +76,12 @@ export default function DialogProvider({ children }: { children: React.ReactNode
     <DialogContext.Provider value={value}>
       {children}
       {dialog ? (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          data-escape-overlay
+        >
           <div className="w-full max-w-md overflow-hidden rounded-[1.75rem] border border-white/20 bg-white shadow-2xl dark:border-blue-400/20 dark:bg-[#07182b]">
             <div className="flex items-start gap-4 border-b border-slate-100 p-6 dark:border-blue-400/10">
               <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
@@ -92,7 +97,7 @@ export default function DialogProvider({ children }: { children: React.ReactNode
                 <h2 className="text-xl font-black text-slate-950 dark:text-white">{dialog.title}</h2>
                 <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600 dark:text-blue-100">{dialog.message}</p>
               </div>
-              <button onClick={() => close(false)} className="cursor-pointer rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white">
+              <button aria-label="Fechar" onClick={() => close(false)} className="cursor-pointer rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white">
                 <X size={18} />
               </button>
             </div>

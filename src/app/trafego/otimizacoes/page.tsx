@@ -713,23 +713,39 @@ export default function OtimizacoesPage() {
 
                   <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
                     <div className="space-y-3">
-                    <div className="max-h-72 space-y-2 overflow-y-auto rounded-xl border p-3" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
-                      {apoloMessages.map((message, index) => (
-                        <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                          <p className="max-w-[92%] whitespace-pre-wrap rounded-xl px-3 py-2 text-xs leading-relaxed" style={{ background: message.role === 'user' ? 'var(--tf-accent)' : 'var(--tf-surface)', color: message.role === 'user' ? '#fff' : 'var(--tf-ink-soft)', border: `1px solid ${message.role === 'user' ? 'transparent' : 'var(--tf-border)'}` }}>
-                            {message.content}
-                          </p>
+                    <div className="overflow-hidden rounded-xl border" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
+                      <div className="max-h-[min(52vh,520px)] min-h-[280px] space-y-2 overflow-y-auto p-3 sm:min-h-[320px]">
+                        {apoloMessages.map((message, index) => (
+                          <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <p className="max-w-[92%] whitespace-pre-wrap rounded-xl px-3 py-2 text-xs leading-relaxed" style={{ background: message.role === 'user' ? 'var(--tf-accent)' : 'var(--tf-surface)', color: message.role === 'user' ? '#fff' : 'var(--tf-ink-soft)', border: `1px solid ${message.role === 'user' ? 'transparent' : 'var(--tf-border)'}` }}>
+                              {message.content}
+                            </p>
+                          </div>
+                        ))}
+                        {apoloBusy ? <Loader2 className="animate-spin" size={15} style={{ color: 'var(--tf-accent-ink)' }} /> : null}
+                      </div>
+                      <div className="border-t p-2.5" style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface)' }}>
+                        <div className="flex items-end gap-2">
+                          <textarea
+                            value={apoloInput}
+                            onChange={(event) => setApoloInput(event.target.value)}
+                            onPaste={handleApoloPaste}
+                            placeholder="Escreva para o Apolo ou cole um print com Ctrl+V..."
+                            className="min-h-16 max-h-28 min-w-0 flex-1 resize-y border-0 bg-transparent p-2 text-sm leading-relaxed outline-none focus:ring-0"
+                          />
+                          <button
+                            type="button"
+                            onClick={sendApoloMessage}
+                            disabled={apoloBusy || uploadingCreative || !selected || !apoloInput.trim()}
+                            className="tf-no-lift inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg px-3 text-xs font-bold text-white transition disabled:opacity-50"
+                            style={{ background: 'var(--tf-accent)' }}
+                          >
+                            {apoloBusy || uploadingCreative ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+                            Enviar
+                          </button>
                         </div>
-                      ))}
-                      {apoloBusy ? <Loader2 className="animate-spin" size={15} style={{ color: 'var(--tf-accent-ink)' }} /> : null}
+                      </div>
                     </div>
-                    <textarea
-                      value={apoloInput}
-                      onChange={(event) => setApoloInput(event.target.value)}
-                      onPaste={handleApoloPaste}
-                      placeholder="Ex: o CPL desta campanha esta correto? Cole um print com Ctrl+V ou peca ao Apolo para revisar um anuncio."
-                      className="min-h-32 w-full resize-y p-4 text-sm leading-relaxed"
-                    />
                     <div className="rounded-xl border p-3" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-2">
@@ -936,16 +952,6 @@ export default function OtimizacoesPage() {
                         </p>
                       ) : null}
 
-                      <button
-                        type="button"
-                        onClick={sendApoloMessage}
-                        disabled={apoloBusy || uploadingCreative || !selected || !apoloInput.trim()}
-                        className="tf-no-lift mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white transition disabled:opacity-50"
-                        style={{ background: 'var(--tf-accent)' }}
-                      >
-                        {apoloBusy || uploadingCreative ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
-                        Enviar para o Apolo
-                      </button>
                     </div>
                   </div>
 
