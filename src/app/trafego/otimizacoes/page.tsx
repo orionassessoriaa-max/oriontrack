@@ -78,6 +78,15 @@ type DraftExecutionResult = {
 
 type ApoloMessage = { role: 'user' | 'assistant'; content: string };
 
+function initialApoloMessages(brokerage?: string | null): ApoloMessage[] {
+  return [{
+    role: 'assistant',
+    content: brokerage
+      ? `Sou o Apolo. Estou trabalhando exclusivamente na conta ${brokerage}. Posso analisar esta conta ou montar uma campanha para ela.`
+      : 'Sou o Apolo. Selecione uma corretora para analisar a conta ou montar uma campanha.',
+  }];
+}
+
 function todayLocal() {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
@@ -146,9 +155,7 @@ export default function OtimizacoesPage() {
   const [draftExecution, setDraftExecution] = useState<DraftExecutionResult | null>(null);
   const [activationBusy, setActivationBusy] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const [apoloMessages, setApoloMessages] = useState<ApoloMessage[]>([
-    { role: 'assistant', content: 'Sou o Apolo. Posso analisar esta conta, revisar uma recomendacao ou montar um plano de acao. Me diga o que voce quer conferir.' },
-  ]);
+  const [apoloMessages, setApoloMessages] = useState<ApoloMessage[]>(initialApoloMessages());
   const [apoloInput, setApoloInput] = useState('');
   const [apoloBusy, setApoloBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -156,7 +163,49 @@ export default function OtimizacoesPage() {
   const [error, setError] = useState<string | null>(null);
   const [initialAccountId, setInitialAccountId] = useState<string | null>(null);
   const optimizationRequestRef = useRef(0);
+  const accountContextRef = useRef('');
   const creativeInputRef = useRef<HTMLInputElement | null>(null);
+
+  function resetAccountWorkspace(brokerage?: string | null) {
+    setCreativeFile(null);
+    setCreativeUrl(null);
+    setSelectedDriveFile(null);
+    setDriveBrowserOpen(false);
+    setDriveFolderId(null);
+    setDriveBreadcrumbs([]);
+    setDriveFolders([]);
+    setDriveFiles([]);
+    setDriveLoading(false);
+    setDriveError(null);
+    setFullscreenCreative(null);
+    setFullscreenDriveFile(null);
+    setOptimizePrompt('');
+    setOptimizationDraft(null);
+    setDraftExecution(null);
+    setActivationBusy(null);
+    setDraftError(null);
+    setApoloMessages(initialApoloMessages(brokerage));
+    setApoloInput('');
+    setApoloBusy(false);
+    setUploadingCreative(false);
+    setGeneratingDraft(false);
+    setCreatingDraft(false);
+    if (creativeInputRef.current) creativeInputRef.current.value = '';
+  }
+
+  function selectAccount(account: AccountOption) {
+    const nextContext = accountKey(account);
+    if (nextContext !== accountContextRef.current) {
+      accountContextRef.current = nextContext;
+      resetAccountWorkspace(account.concessionaria);
+      setTotal(null);
+      setTree([]);
+      setAiRecommendation('');
+      setError(null);
+      setSelected(account);
+    }
+    void fetchOptimization(account.meta_ad_account_id);
+  }
 
   useEffect(() => {
     if (!fullscreenDriveFile) return;
@@ -168,6 +217,7 @@ export default function OtimizacoesPage() {
   }, [fullscreenDriveFile]);
 
   async function browseDrive(folderId?: string | null, breadcrumbs: DriveEntry[] = []) {
+    const contextAccountId = accountContextRef.current;
     setDriveLoading(true);
     setDriveError(null);
     try {
@@ -180,6 +230,7 @@ export default function OtimizacoesPage() {
         body: JSON.stringify({ action: 'browse', folder_id: folderId || null }),
       });
       const payload = await response.json();
+      if (accountContextRef.current !== contextAccountId) return;
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel abrir os criativos do Drive.');
       const currentFolder = payload.currentFolder || null;
       setDriveFolderId(currentFolder?.id || folderId || null);
@@ -187,9 +238,10 @@ export default function OtimizacoesPage() {
       setDriveFolders(payload.folders || []);
       setDriveFiles(payload.files || []);
     } catch (error: any) {
+      if (accountContextRef.current !== contextAccountId) return;
       setDriveError(error.message || 'Nao foi possivel abrir o Google Drive.');
     } finally {
-      setDriveLoading(false);
+      if (accountContextRef.current === contextAccountId) setDriveLoading(false);
     }
   }
 
@@ -252,8 +304,14 @@ export default function OtimizacoesPage() {
       return;
     }
 
+    const nextSelected = payload.selected || null;
+    const nextContext = nextSelected ? accountKey(nextSelected) : '';
+    if (nextContext && nextContext !== accountContextRef.current) {
+      accountContextRef.current = nextContext;
+      resetAccountWorkspace(nextSelected.concessionaria);
+    }
     setAccounts(payload.accounts || []);
-    setSelected(payload.selected || null);
+    setSelected(nextSelected);
     setTotal(payload.total || null);
     setTree(payload.tree || []);
     setAiRecommendation(payload.ai_recommendation || payload.fallback_recommendation || '');
@@ -261,6 +319,7 @@ export default function OtimizacoesPage() {
 
   async function generateOptimizationDraft() {
     if (!selected?.meta_ad_account_id) return;
+    const contextAccountId = accountKey(selected);
     setGeneratingDraft(true);
     setDraftError(null);
 
@@ -283,6 +342,7 @@ export default function OtimizacoesPage() {
         body: formData,
       });
       const uploadPayload = await uploadResponse.json();
+      if (accountContextRef.current !== contextAccountId) return;
       setUploadingCreative(false);
       if (!uploadResponse.ok) {
         setDraftError(uploadPayload.error || 'Nao foi possivel anexar o criativo.');
@@ -312,6 +372,7 @@ export default function OtimizacoesPage() {
     });
 
     const payload = await response.json();
+    if (accountContextRef.current !== contextAccountId) return;
     setGeneratingDraft(false);
 
     if (!response.ok) {
@@ -326,6 +387,10 @@ export default function OtimizacoesPage() {
   async function sendApoloMessage() {
     const text = apoloInput.trim();
     if (!text || !selected?.meta_ad_account_id || apoloBusy) return;
+    const selectedSnapshot = selected;
+    const metricsSnapshot = total;
+    const treeSnapshot = tree;
+    const contextAccountId = accountKey(selectedSnapshot);
     setApoloBusy(true);
     setDraftError(null);
     const nextMessages = [...apoloMessages, { role: 'user' as const, content: text }];
@@ -350,6 +415,7 @@ export default function OtimizacoesPage() {
         body: formData,
       });
       const uploadPayload = await uploadResponse.json();
+      if (accountContextRef.current !== contextAccountId) return;
       setUploadingCreative(false);
       if (!uploadResponse.ok) {
         setDraftError(uploadPayload.error || 'Nao foi possivel anexar o print.');
@@ -364,9 +430,11 @@ export default function OtimizacoesPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        account: selected,
-        metrics: total,
-        tree,
+        selected_account_id: selectedSnapshot.meta_ad_account_id,
+        selected_brokerage: selectedSnapshot.concessionaria,
+        account: selectedSnapshot,
+        metrics: metricsSnapshot,
+        tree: treeSnapshot,
         messages: nextMessages,
         drive_file_id: selectedDriveFile?.id || null,
         drive_file_name: selectedDriveFile?.name || null,
@@ -377,6 +445,7 @@ export default function OtimizacoesPage() {
       }),
     });
     const payload = await response.json();
+    if (accountContextRef.current !== contextAccountId) return;
     setApoloBusy(false);
     if (!response.ok) {
       setDraftError(payload.error || 'Nao foi possivel falar com o Apolo.');
@@ -412,6 +481,7 @@ export default function OtimizacoesPage() {
 
   async function createOptimizationDraft() {
     if (!selected?.meta_ad_account_id || !optimizationDraft) return;
+    const contextAccountId = accountKey(selected);
     setCreatingDraft(true);
     setDraftError(null);
     const { data } = await supabase.auth.getSession();
@@ -427,6 +497,7 @@ export default function OtimizacoesPage() {
       body: JSON.stringify({ account_id: selected.meta_ad_account_id, draft: optimizationDraft, confirmar_criacao: true, equipe: selectedOperationalTeam(), gestor_id: gestorIdParam }),
     });
     const payload = await response.json();
+    if (accountContextRef.current !== contextAccountId) return;
     setCreatingDraft(false);
     if (!response.ok) {
       setDraftError(payload.error || 'Nao foi possivel criar a estrutura pausada.');
@@ -437,6 +508,7 @@ export default function OtimizacoesPage() {
 
   async function activateDraftItem(item: DraftExecutionItem) {
     if (!selected?.meta_ad_account_id || item.status === 'ACTIVE') return;
+    const contextAccountId = accountKey(selected);
     setActivationBusy(item.id);
     setDraftError(null);
     const { data } = await supabase.auth.getSession();
@@ -452,6 +524,7 @@ export default function OtimizacoesPage() {
       body: JSON.stringify({ account_id: selected.meta_ad_account_id, object_id: item.id, level: item.level, confirmar: true, equipe: selectedOperationalTeam(), gestor_id: gestorIdParam }),
     });
     const payload = await response.json();
+    if (accountContextRef.current !== contextAccountId) return;
     setActivationBusy(null);
     if (!response.ok) {
       setDraftError(payload.error || 'Nao foi possivel ativar o item.');
@@ -468,8 +541,8 @@ export default function OtimizacoesPage() {
     setTree([]);
     setAiRecommendation('');
     setError(null);
-    setApoloMessages([{ role: 'assistant', content: 'Sou o Apolo. Posso analisar esta conta, revisar uma recomendacao ou montar um plano de acao. Me diga o que voce quer conferir.' }]);
-    setApoloInput('');
+    accountContextRef.current = '';
+    resetAccountWorkspace(null);
     const params = new URLSearchParams(window.location.search);
     const accountFromUrl = params.get('conta');
     setInitialAccountId(accountFromUrl);
@@ -555,7 +628,7 @@ export default function OtimizacoesPage() {
                   <button
                     key={accountKey(account)}
                     type="button"
-                    onClick={() => fetchOptimization(account.meta_ad_account_id)}
+                    onClick={() => selectAccount(account)}
                     className="tf-no-lift w-full rounded-lg border px-3 py-2.5 text-left transition"
                     style={{
                       background: isSelected ? 'var(--tf-accent-soft)' : 'transparent',
@@ -703,12 +776,22 @@ export default function OtimizacoesPage() {
                         </p>
                       </div>
                     </div>
-                    <span
-                      className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
-                      style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)', color: 'var(--tf-warn)' }}
-                    >
-                      Revisão obrigatória
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selected ? (
+                        <span
+                          className="rounded-md border px-2 py-0.5 text-[11px] font-bold"
+                          style={{ background: 'var(--tf-accent-soft)', borderColor: 'var(--tf-accent-border)', color: 'var(--tf-accent-ink)' }}
+                        >
+                          Conta ativa: {selected.concessionaria}
+                        </span>
+                      ) : null}
+                      <span
+                        className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+                        style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)', color: 'var(--tf-warn)' }}
+                      >
+                        Revisão obrigatória
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid gap-3 lg:grid-cols-[1fr_260px]">

@@ -28,8 +28,12 @@ import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 type ReportCorretor = {
   id: string;
   nome: string;
+  nome_empresa?: string | null;
   gestor_trafego_id?: string | null;
   time_operacional?: any;
+  meta_ad_account_id?: string | null;
+  meta_ad_account_name?: string | null;
+  corretor_ids: string[];
 };
 
 interface TrafficReport {
@@ -43,17 +47,19 @@ interface TrafficReport {
   cpl: number | null;
   observacoes: string;
   created_at: string;
-  corretores: { nome: string };
+  corretores: { nome: string; nome_empresa?: string | null };
 }
 
 type WeeklyReportItem = {
   corretor_id: string;
   concessionaria: string;
   meta_ad_account_name: string | null;
-  leads: number;
+  leads: number | null;
   investimento: number | null;
   cpl: number | null;
   mensagem: string;
+  erro_leads?: string | null;
+  erro_investimento?: string | null;
 };
 
 type ReportDestination = { id: string; corretor_id: string; tipo: 'account' | 'grupo'; nome: string; destino: string; ativo: boolean };
@@ -64,7 +70,7 @@ function formatDateInput(date: Date) {
 }
 
 export default function TrafficReportsPage() {
-  const { profile } = useAuth();
+  const { profile, actualProfile } = useAuth();
   const [corretores, setCorretores] = useState<ReportCorretor[]>([]);
   const [reports, setReports] = useState<TrafficReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +85,8 @@ export default function TrafficReportsPage() {
   const [weeklyPreview, setWeeklyPreview] = useState<WeeklyReportItem[] | null>(null);
   const [weeklyReportId, setWeeklyReportId] = useState<string | null>(null);
   const [weeklyError, setWeeklyError] = useState<string | null>(null);
-  const [weeklyDestination, setWeeklyDestination] = useState<'account' | 'grupo'>('account');
+  const [weeklySending, setWeeklySending] = useState(false);
+  const [weeklySendMessage, setWeeklySendMessage] = useState<string | null>(null);
   const [weeklyRange, setWeeklyRange] = useState(() => {
     const end = new Date();
     const start = new Date();
@@ -88,7 +95,7 @@ export default function TrafficReportsPage() {
   });
   const [destinations, setDestinations] = useState<ReportDestination[]>([]);
   const [destinationSaving, setDestinationSaving] = useState(false);
-  const [destinationForm, setDestinationForm] = useState({ corretor_id: '', tipo: 'grupo' as 'account' | 'grupo', nome: '', destino: '' });
+  const [destinationForm, setDestinationForm] = useState({ corretor_id: '', tipo: 'grupo' as const, nome: '', destino: '' });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -124,13 +131,13 @@ export default function TrafficReportsPage() {
     try {
       const corretoresQuery = supabase
         .from('corretores')
-        .select('id, nome, gestor_trafego_id, time_operacional, nome_empresa')
+        .select('id, nome, gestor_trafego_id, time_operacional, nome_empresa, meta_ad_account_id, meta_ad_account_name')
         .in('status', ['active', 'ativo', 'Ativo'])
         .order('nome', { ascending: true });
 
       const reportsQuery = supabase
         .from('relatorios_trafego')
-        .select('*, corretores(nome)')
+        .select('*, corretores(nome, nome_empresa)')
         .order('created_at', { ascending: false });
 
       if (profile.tipo_usuario === 'gestor_trafego') {
@@ -158,7 +165,30 @@ export default function TrafficReportsPage() {
         filteredCorretores = filteredCorretores.filter(c => isGestorLinkedToConcessionariaCorretor(c, profile));
       }
 
-      setCorretores(filteredCorretores);
+      const concessionarias = new Map<string, ReportCorretor>();
+      filteredCorretores.forEach((corretor) => {
+        const concessionaria = String(corretor.nome_empresa || corretor.nome || '').trim();
+        if (!concessionaria) return;
+        const key = concessionaria.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const current = concessionarias.get(key);
+        if (!current) {
+          concessionarias.set(key, {
+            ...corretor,
+            nome: concessionaria,
+            nome_empresa: concessionaria,
+            corretor_ids: [corretor.id],
+          });
+          return;
+        }
+        current.corretor_ids.push(corretor.id);
+        if (!current.meta_ad_account_id && corretor.meta_ad_account_id) {
+          current.id = corretor.id;
+          current.meta_ad_account_id = corretor.meta_ad_account_id;
+          current.meta_ad_account_name = corretor.meta_ad_account_name;
+        }
+      });
+
+      setCorretores(Array.from(concessionarias.values()).sort((a, b) => a.nome.localeCompare(b.nome)));
       setReports((reportsData as TrafficReport[]) || []);
     } catch (err: unknown) {
       console.error('Catch Error:', err);
@@ -211,7 +241,7 @@ export default function TrafficReportsPage() {
   const generatePreview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.corretor_id) {
-      alert('Selecione o corretor.');
+      alert('Selecione a concessionária.');
       return;
     }
 
@@ -220,7 +250,7 @@ export default function TrafficReportsPage() {
       return;
     }
     if (!corretores.some((corretor) => corretor.id === formData.corretor_id)) {
-      alert('Selecione um corretor vinculado à sua gestão.');
+      alert('Selecione uma concessionária vinculada à sua gestão.');
       return;
     }
 
@@ -251,10 +281,12 @@ export default function TrafficReportsPage() {
         fonteLeads = 'manual';
       } else {
         investido = await fetchMetaSpend();
+        const selectedConcessionaria = corretores.find((item) => item.id === formData.corretor_id);
+        const corretorIds = selectedConcessionaria?.corretor_ids || [formData.corretor_id];
         let { data: crmLeads, error: supabaseError }: { data: any[] | null; error: any } = await supabase
           .from('leads')
           .select('id, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes')
-          .eq('corretor_id', formData.corretor_id)
+          .in('corretor_id', corretorIds)
           .gte('data_entrada', new Date(formData.data_inicio).toISOString())
           .lte('data_entrada', new Date(formData.data_fim + 'T23:59:59').toISOString());
 
@@ -262,7 +294,7 @@ export default function TrafficReportsPage() {
           const retry = await supabase
             .from('leads')
             .select('id, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes')
-            .eq('corretor_id', formData.corretor_id)
+            .in('corretor_id', corretorIds)
             .gte('data_entrada', new Date(formData.data_inicio).toISOString())
             .lte('data_entrada', new Date(formData.data_fim + 'T23:59:59').toISOString());
           crmLeads = retry.data;
@@ -281,7 +313,7 @@ export default function TrafficReportsPage() {
       const corretor = corretores.find(c => c.id === formData.corretor_id);
 
       if (!corretor) {
-        alert('Corretor não encontrado para este gestor.');
+        alert('Concessionária não encontrada para este gestor.');
         return;
       }
 
@@ -303,7 +335,7 @@ export default function TrafficReportsPage() {
   const saveReport = async () => {
     if (!preview || !profile) return;
     if (!corretores.some((corretor) => corretor.id === formData.corretor_id)) {
-      alert('Selecione um corretor vinculado à sua gestão.');
+      alert('Selecione uma concessionária vinculada à sua gestão.');
       return;
     }
 
@@ -386,6 +418,7 @@ export default function TrafficReportsPage() {
   const generateWeeklyReport = async () => {
     setWeeklyGenerating(true);
     setWeeklyError(null);
+    setWeeklySendMessage(null);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -393,7 +426,12 @@ export default function TrafficReportsPage() {
       const response = await fetch('/api/trafego/relatorios/semanal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(weeklyRange),
+        body: JSON.stringify({
+          ...weeklyRange,
+          gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
+            ? profile.id
+            : null,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Não foi possível gerar o relatório semanal.');
@@ -403,6 +441,35 @@ export default function TrafficReportsPage() {
       setWeeklyError(err.message || 'Erro ao gerar relatório semanal.');
     } finally {
       setWeeklyGenerating(false);
+    }
+  };
+
+  const sendWeeklyToAccount = async () => {
+    if (!weeklyReportId) return;
+    setWeeklySending(true);
+    setWeeklyError(null);
+    setWeeklySendMessage(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessão expirada. Entre novamente.');
+      const response = await fetch('/api/trafego/relatorios/semanal/enviar-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          report_id: weeklyReportId,
+          gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
+            ? profile.id
+            : null,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar o relatório para o Account Manager.');
+      setWeeklySendMessage(payload.message || 'Relatório enviado para o Account Manager.');
+    } catch (err: any) {
+      setWeeklyError(err.message || 'Erro ao enviar relatório para o Account Manager.');
+    } finally {
+      setWeeklySending(false);
     }
   };
 
@@ -463,16 +530,23 @@ export default function TrafficReportsPage() {
           <div className="flex flex-col gap-4 border-b border-slate-100 pb-6 lg:flex-row lg:items-center lg:justify-between">
             <div><p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Prévia para revisão</p><h2 className="mt-1 text-2xl font-black text-slate-900">Mensagens da semana</h2><p className="mt-1 text-sm text-slate-500">Relatório {weeklyReportId ? `#${weeklyReportId.slice(0, 8)}` : ''} salvo no histórico. Revise antes de enviar.</p></div>
             <div className="flex flex-wrap gap-3">
-              <select value={weeklyDestination} onChange={(e) => setWeeklyDestination(e.target.value as 'account' | 'grupo')} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700"><option value="account">Enviar para conta</option><option value="grupo">Enviar para grupo</option></select>
-              <button type="button" disabled title="Envio será liberado após configurar a conta do Lucas e os grupos das concessionárias" className="inline-flex items-center gap-2 rounded-xl bg-slate-200 px-4 py-3 text-sm font-black text-slate-500 disabled:cursor-not-allowed"><Send size={16} /> Enviar para {weeklyDestination === 'account' ? 'conta' : 'grupos'}</button>
+              <button type="button" onClick={sendWeeklyToAccount} disabled={weeklySending || !weeklyReportId} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {weeklySending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Enviar para Account Manager
+              </button>
               <button type="button" onClick={copyWeeklyReport} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"><Copy size={16} /> Copiar prévia</button>
             </div>
           </div>
+          {weeklySendMessage && <p className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{weeklySendMessage}</p>}
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {weeklyPreview.map((item) => (
               <article key={item.corretor_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-black text-slate-900">{item.concessionaria}</h3><p className="mt-1 text-xs font-bold uppercase tracking-wider text-slate-400">{item.meta_ad_account_name || 'Conta Meta não identificada'}</p></div><MessageCircle className="text-blue-600" size={20} /></div>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-white p-3"><b className="block text-lg text-slate-900">{item.leads}</b><span className="text-[10px] font-black uppercase text-slate-400">Leads</span></div><div className="rounded-xl bg-white p-3"><b className="block text-sm text-slate-900">{item.investimento === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.investimento)}</b><span className="text-[10px] font-black uppercase text-slate-400">Investimento</span></div><div className="rounded-xl bg-white p-3"><b className="block text-sm text-slate-900">{item.cpl === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.cpl)}</b><span className="text-[10px] font-black uppercase text-slate-400">CPL</span></div></div>
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-white p-3"><b className="block text-lg text-slate-900">{item.leads === null ? 'N/A' : item.leads}</b><span className="text-[10px] font-black uppercase text-slate-400">Leads</span></div><div className="rounded-xl bg-white p-3"><b className="block text-sm text-slate-900">{item.investimento === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.investimento)}</b><span className="text-[10px] font-black uppercase text-slate-400">Investimento</span></div><div className="rounded-xl bg-white p-3"><b className="block text-sm text-slate-900">{item.cpl === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.cpl)}</b><span className="text-[10px] font-black uppercase text-slate-400">CPL</span></div></div>
+                {(item.erro_leads || item.erro_investimento) && (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                    {[item.erro_leads, item.erro_investimento].filter(Boolean).join(' · ')}
+                  </div>
+                )}
                 <pre className="mt-4 whitespace-pre-wrap rounded-xl bg-white p-4 font-sans text-sm leading-6 text-slate-700">{item.mensagem}</pre>
               </article>
             ))}
@@ -481,10 +555,9 @@ export default function TrafficReportsPage() {
       )}
 
       <section className="mb-10 rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-6"><p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Destinos WhatsApp</p><h2 className="mt-1 text-xl font-black text-slate-900">Cadastrar conta e grupo por concessionária</h2><p className="mt-1 text-sm text-slate-500">Este cadastro prepara os destinos. O envio continua bloqueado até a revisão e a liberação da operação.</p></div>
-        <form onSubmit={saveDestination} className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mb-6"><p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Destinos WhatsApp</p><h2 className="mt-1 text-xl font-black text-slate-900">Cadastrar grupo por concessionária</h2><p className="mt-1 text-sm text-slate-500">Os grupos são destinos externos. O envio para Account Manager acontece internamente pelo usuário atribuído no time operacional.</p></div>
+        <form onSubmit={saveDestination} className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <select required value={destinationForm.corretor_id} onChange={(e) => setDestinationForm({ ...destinationForm, corretor_id: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-700"><option value="">Concessionária</option>{corretores.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select>
-          <select value={destinationForm.tipo} onChange={(e) => setDestinationForm({ ...destinationForm, tipo: e.target.value as 'account' | 'grupo' })} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-700"><option value="grupo">Grupo WhatsApp</option><option value="account">Conta do Lucas</option></select>
           <input required value={destinationForm.nome} onChange={(e) => setDestinationForm({ ...destinationForm, nome: e.target.value })} placeholder="Nome do destino" className="rounded-xl border border-slate-200 px-3 py-3 text-sm" />
           <input required value={destinationForm.destino} onChange={(e) => setDestinationForm({ ...destinationForm, destino: e.target.value })} placeholder="ID ou número WhatsApp" className="rounded-xl border border-slate-200 px-3 py-3 text-sm" />
           <button type="submit" disabled={destinationSaving} className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60">{destinationSaving ? 'Salvando...' : 'Adicionar destino'}</button>
@@ -503,7 +576,7 @@ export default function TrafficReportsPage() {
             
             <form onSubmit={generatePreview} className="space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Corretor / Cliente</label>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Concessionária</label>
                 <select 
                   required
                   value={formData.corretor_id}
@@ -712,7 +785,7 @@ export default function TrafficReportsPage() {
                 <thead>
                   <tr className="bg-gray-50/50">
                     <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Geração</th>
-                    <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Corretor</th>
+                    <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Concessionária</th>
                     <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Período</th>
                     <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Leads</th>
                     <th className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimento</th>
@@ -735,7 +808,7 @@ export default function TrafficReportsPage() {
                         {format(new Date(r.created_at), 'dd/MM/yyyy')}
                       </td>
                       <td className="px-8 py-5">
-                        <p className="font-bold text-gray-900">{r.corretores?.nome || 'N/A'}</p>
+                        <p className="font-bold text-gray-900">{r.corretores?.nome_empresa || r.corretores?.nome || 'N/A'}</p>
                       </td>
                       <td className="px-8 py-5 text-xs text-gray-500 font-medium">
                         {format(new Date(r.data_inicio), 'dd/MM/yyyy')} - {format(new Date(r.data_fim), 'dd/MM/yyyy')}

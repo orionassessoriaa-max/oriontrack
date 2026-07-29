@@ -29,11 +29,18 @@ export async function POST(request: Request) {
     const messages = Array.isArray(body.messages) ? body.messages.slice(-12) as ChatMessage[] : [];
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'user') return NextResponse.json({ error: 'Envie uma mensagem para o Apolo.' }, { status: 400 });
+    const selectedAccountId = String(body.selected_account_id || '').replace(/^act_/, '').trim();
+    const contextAccountId = String(body.account?.meta_ad_account_id || '').replace(/^act_/, '').trim();
+    if (!selectedAccountId || !contextAccountId || selectedAccountId !== contextAccountId) {
+      return NextResponse.json({ error: 'O contexto da corretora selecionada mudou. Envie a mensagem novamente.' }, { status: 409 });
+    }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'OPENAI_API_KEY nao configurada.' }, { status: 503 });
 
     const context = JSON.stringify({
+      conta_selecionada_id: body.selected_account_id || body.account?.meta_ad_account_id || null,
+      corretora_selecionada: body.selected_brokerage || body.account?.concessionaria || null,
       conta: body.account || null,
       metricas: body.metrics || null,
       estrutura: body.tree || null,
@@ -46,6 +53,8 @@ export async function POST(request: Request) {
         role: 'system',
         content: `Voce e o Apolo, analista senior de trafego da Orion. Converse com o gestor em portugues do Brasil.
 Use somente os dados de contexto e os prints recebidos. Nao invente metricas, IDs, nomes de campanha, saldo ou resultado.
+A corretora em "corretora_selecionada" e a conta ativa escolhida pelo gestor na barra lateral. Toda resposta, analise e draft deve tratar exclusivamente dela.
+Nunca reutilize conversa, criativo, arquivo do Drive ou rascunho pertencente a outra corretora.
 Se o gestor corrigir sua leitura, reconheca a correcao, atualize a analise e explique o que mudou. Separe fato de hipotese.
 Regras oficiais: ${JSON.stringify(TRAFFIC_RULES)}.
 O CPL deve usar somente leads CRM de origem Orion. Conta sem rastreio ativo nao pode gerar pausa por CPL.
