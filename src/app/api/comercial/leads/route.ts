@@ -1,14 +1,9 @@
 import { NextResponse } from 'next/server';
-import { requireCommercialUser } from '@/lib/api/comercial';
+import { applyCommercialLeadScope, requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
 import { startCommercialBotIfEligible } from '@/lib/commercialBot';
-
-function scopedQuery(query: any, _role: string, _profileId: string) {
-  void _role;
-  void _profileId;
-  return query;
-}
+import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
 
 function redactFinancialFields<T extends Record<string, any>>(lead: T, canView: boolean) {
   if (canView) return lead;
@@ -27,7 +22,7 @@ export async function GET(request: Request) {
   const search = url.searchParams.get('search')?.trim();
 
   let query = supabaseAdmin.from('comercial_leads').select('*').order('data_entrada', { ascending: false }).limit(2000);
-  query = scopedQuery(query, guard.commercialRole, guard.profile.id);
+  query = applyCommercialLeadScope(query, guard.commercialRole, guard.profile.id);
   if (start) query = query.gte('data_entrada', `${start}T00:00:00-03:00`);
   if (end) query = query.lte('data_entrada', `${end}T23:59:59-03:00`);
   if (status && status !== 'todos') query = query.eq('status', status);
@@ -46,6 +41,9 @@ export async function POST(request: Request) {
   if (!nome) return NextResponse.json({ error: 'Nome do lead e obrigatorio.' }, { status: 400 });
 
   const status = String(body.status || 'Oportunidade').trim().slice(0, 80) || 'Oportunidade';
+  const assignedSdrId = guard.commercialRole === 'sdr'
+    ? guard.profile.id
+    : body.sdr_id || await assignNextCommercialSdr();
   const payload = {
     nome,
     telefone: String(body.telefone || '').trim() || null,
@@ -66,7 +64,7 @@ export async function POST(request: Request) {
     utm_term: String(body.utm_term || '').trim() || null,
     utm_content: String(body.utm_content || '').trim() || null,
     status,
-    sdr_id: guard.commercialRole === 'sdr' ? guard.profile.id : body.sdr_id || null,
+    sdr_id: assignedSdrId || null,
     closer_id: guard.commercialRole === 'closer' ? guard.profile.id : body.closer_id || null,
     lead_qualificado: Boolean(body.lead_qualificado),
     valor_negociacao: guard.canViewCommercialFinancials ? Number(body.valor_negociacao || 0) : 0,
@@ -94,7 +92,7 @@ export async function PATCH(request: Request) {
   if (!id) return NextResponse.json({ error: 'Lead obrigatorio.' }, { status: 400 });
 
   let check = supabaseAdmin.from('comercial_leads').select('id,sdr_id,closer_id,status').eq('id', id);
-  check = scopedQuery(check, guard.commercialRole, guard.profile.id);
+  check = applyCommercialLeadScope(check, guard.commercialRole, guard.profile.id);
   const { data: allowed } = await check.maybeSingle();
   if (!allowed) return NextResponse.json({ error: 'Lead nao encontrado ou sem permissao.' }, { status: 404 });
 
@@ -116,6 +114,7 @@ export async function PATCH(request: Request) {
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const field of allowedFields) {
     if (!guard.canViewCommercialFinancials && ['ja_investiu_trafego', 'faturamento_mensal', 'investimento', 'valor_negociacao', 'valor_fechado'].includes(field)) continue;
+    if (guard.commercialRole === 'sdr' && ['sdr_id', 'closer_id'].includes(field)) continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
   }
   if (update.status === 'Negócio fechado' && !Object.prototype.hasOwnProperty.call(body, 'fechado_at')) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
-import { COMMERCIAL_MASTER_INSTANCE, configureUazapiWebhook, uazapiFetch } from '@/lib/uazapi';
+import { configureUazapiWebhook, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { writeAuditLog } from '@/lib/api/security';
 
 function stateFromPayload(payload: any): 'open' | 'connecting' | 'close' {
   const value = String(payload?.instance?.status || payload?.status?.status || payload?.status || payload?.state || '').toLowerCase();
@@ -35,21 +36,36 @@ export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
   try {
-    const instance = COMMERCIAL_MASTER_INSTANCE;
+    const instance = uazapiInstanceName(guard.profile.id);
     const state = await statusForInstance(instance);
-    return NextResponse.json({ configured: true, connected: state === 'open', state, instance, targetProfile: { nome: 'Orion' } });
+    return NextResponse.json({
+      configured: true,
+      connected: state === 'open',
+      state,
+      instance,
+      targetProfile: { id: guard.profile.id, nome: guard.profile.nome || 'Integrante Kripto' },
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel consultar o WhatsApp comercial.' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
-  const guard = await requireCommercialUser(request, true);
+  const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
   try {
     const body = await request.json().catch(() => ({}));
     if (!body.accepted_terms) return NextResponse.json({ error: 'Confirme o aceite para conectar o WhatsApp.' }, { status: 400 });
-    const instance = COMMERCIAL_MASTER_INSTANCE;
+    const instance = uazapiInstanceName(guard.profile.id);
+    await writeAuditLog(request, guard.profile, {
+      action: 'commercial.whatsapp.terms.accept',
+      entity_type: 'profile',
+      entity_id: guard.profile.id,
+      metadata: {
+        terms_version: body.terms_version || 'commercial-inbox-v2',
+        commercial_role: guard.commercialRole,
+      },
+    });
     try {
       await uazapiFetch('/instance/init', { method: 'POST', body: JSON.stringify({ name: instance, instance, instanceName: instance }) }, { useAdminAuth: true });
     } catch (error: any) {
@@ -58,7 +74,15 @@ export async function POST(request: Request) {
     }
     await configureUazapiWebhook(instance);
     const payload = await uazapiFetch('/instance/connect', { method: 'POST', body: JSON.stringify({}) }, { instanceName: instance });
-    return NextResponse.json({ success: true, configured: true, connected: false, state: 'connecting', instance, qrcode: qrFromPayload(payload), targetProfile: { nome: 'Orion' } });
+    return NextResponse.json({
+      success: true,
+      configured: true,
+      connected: false,
+      state: 'connecting',
+      instance,
+      qrcode: qrFromPayload(payload),
+      targetProfile: { id: guard.profile.id, nome: guard.profile.nome || 'Integrante Kripto' },
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel iniciar a conexao do WhatsApp.' }, { status: 502 });
   }

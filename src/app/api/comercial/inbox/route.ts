@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireCommercialUser } from '@/lib/api/comercial';
+import { applyCommercialLeadScope, requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 function digits(value: unknown) { return String(value || '').replace(/\D/g, '').slice(-11); }
@@ -7,7 +7,11 @@ function digits(value: unknown) { return String(value || '').replace(/\D/g, '').
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
-  const leadQuery = supabaseAdmin.from('comercial_leads').select('id,nome,telefone,sdr_id,closer_id,status,updated_at').limit(5000);
+  let leadQuery = supabaseAdmin
+    .from('comercial_leads')
+    .select('id,nome,telefone,sdr_id,closer_id,status,updated_at')
+    .limit(5000);
+  leadQuery = applyCommercialLeadScope(leadQuery, guard.commercialRole, guard.profile.id);
   const { data: leads, error: leadError } = await leadQuery;
   if (leadError) return NextResponse.json({ error: leadError.message }, { status: 500 });
   const phoneMap = new Map<string, any>();

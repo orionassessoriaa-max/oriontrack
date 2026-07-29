@@ -30,14 +30,6 @@ function stateFromPhone(phone: unknown) {
   return DDD_STATE[national.slice(0, 2)] || null;
 }
 
-function scopedQuery(query: any, _role: string, _profileId: string) {
-  // SDR and Closer share the complete commercial funnel. This scope is only
-  // used for commercial data; Meta/financial access remains role protected.
-  void _role;
-  void _profileId;
-  return query;
-}
-
 async function fetchKriptoMetaInvestment(start: string, end: string) {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) return { rows: null as Array<{ date: string; value: number }> | null, error: 'META_ACCESS_TOKEN nao configurado no servidor.' };
@@ -115,7 +107,7 @@ export async function GET(request: Request) {
     .gte('data_entrada', `${start}T00:00:00-03:00`)
     .lte('data_entrada', `${end}T23:59:59-03:00`)
     .order('data_entrada');
-  leadQuery = scopedQuery(leadQuery, guard.commercialRole, guard.profile.id);
+  if (guard.commercialRole === 'sdr') leadQuery = leadQuery.eq('sdr_id', guard.profile.id);
 
   const investmentQuery = guard.canViewCommercialFinancials
     ? supabaseAdmin.from('comercial_investimentos').select('data,valor').gte('data', start).lte('data', end)
@@ -136,7 +128,9 @@ export async function GET(request: Request) {
     .not('reuniao_agendada_at', 'is', null)
     .gte('reuniao_agendada_at', `${weekStart}T00:00:00-03:00`)
     .lte('reuniao_agendada_at', `${weekEnd}T23:59:59-03:00`);
-  weeklyMeetingQuery = scopedQuery(weeklyMeetingQuery, guard.commercialRole, guard.profile.id);
+  if (guard.commercialRole === 'sdr') {
+    weeklyMeetingQuery = weeklyMeetingQuery.eq('sdr_id', guard.profile.id);
+  }
   const { data: weeklyMeetingRows } = await weeklyMeetingQuery;
   const stateMap = new Map<string, { state: string; leads: number; active: number }>();
   leads.forEach((lead) => {

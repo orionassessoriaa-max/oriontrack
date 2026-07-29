@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { startCommercialBotIfEligible } from '@/lib/commercialBot';
+import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
 
 function key(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -101,7 +102,12 @@ export async function POST(request: Request) {
         if (Object.keys(update).length > 1) { await supabaseAdmin.from('comercial_leads').update(update).eq('id', existing.id); enriched += 1; }
         continue;
       }
-      const { data: inserted, error } = await supabaseAdmin.from('comercial_leads').insert(lead).select('id').single();
+      const sdrId = await assignNextCommercialSdr();
+      const { data: inserted, error } = await supabaseAdmin
+        .from('comercial_leads')
+        .insert({ ...lead, sdr_id: sdrId })
+        .select('id')
+        .single();
       if (!error && inserted?.id) {
         created += 1;
         try {

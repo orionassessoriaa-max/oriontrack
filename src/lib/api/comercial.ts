@@ -42,15 +42,9 @@ export async function requireCommercialUser(
         .maybeSingle(),
     ]);
 
-    if (viewMember?.ativo && viewProfile && !viewProfile.corretor_id) {
+    if (viewMember?.ativo && viewProfile) {
       base = { ...base, profile: viewProfile as ApiProfile };
     }
-  }
-
-  // Corretor profiles belong to the Apollo/operational area, never to the
-  // Kripto Hunters commercial team, even if an old membership row remains.
-  if (base.profile.corretor_id && !isMaster && !isDevOps) {
-    return { error: NextResponse.json({ error: 'Acesso restrito ao time comercial.' }, { status: 403 }) };
   }
 
   const { data: member, error } = await supabaseAdmin
@@ -82,12 +76,11 @@ export async function requireCommercialUser(
 
 export function applyCommercialLeadScope<T extends { eq: (column: string, value: string) => T }>(
   query: T,
-  _role: CommercialRole,
-  _profileId: string,
+  role: CommercialRole,
+  profileId: string,
 ) {
-  // The commercial funnel is shared by SDRs and Closers. Financial fields are
-  // redacted separately by each endpoint according to the user's role.
-  void _role;
-  void _profileId;
+  // Cada SDR opera uma carteira isolada. Closer e coordenador permanecem com
+  // visao de supervisao sobre o funil inteiro.
+  if (role === 'sdr') return query.eq('sdr_id', profileId);
   return query;
 }

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
+import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
 import { hasRecentHumanOutbound, insertCommercialAiMessage, normalizeSdrText } from '@/lib/commercialInbox';
 import { registerAiOutbound } from '@/lib/leadAiAgent';
@@ -78,12 +78,13 @@ Responda somente com a proxima mensagem que Aline deve enviar. Nao repita a aber
     if (!reply) throw new Error('A IA comercial retornou uma resposta vazia.');
 
     const phone = normalizePhone(options.phone || lead.telefone);
+    const instance = lead.sdr_id ? uazapiInstanceName(lead.sdr_id) : COMMERCIAL_MASTER_INSTANCE;
     registerAiOutbound(phone, reply);
     const providerPayload = await uazapiFetch('/send/text', {
       method: 'POST', body: JSON.stringify({ number: phone, text: reply, delay: 1200 }),
-    }, { instanceName: COMMERCIAL_MASTER_INSTANCE });
+    }, { instanceName: instance });
     await insertCommercialAiMessage(options.conversationId, reply, {
-      ...(providerPayload || {}), instance: COMMERCIAL_MASTER_INSTANCE,
+      ...(providerPayload || {}), instance, sdr_id: lead.sdr_id,
     });
     const updatedAt = new Date().toISOString();
     await Promise.all([

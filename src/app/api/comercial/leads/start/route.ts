@@ -46,29 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ lead: data, sdr_id: requestedSdrId });
   }
 
-  if (guard.commercialRole !== 'sdr') {
-    return NextResponse.json({ error: 'Somente SDRs podem iniciar um lead sem escolher um responsavel.' }, { status: 403 });
-  }
-
-  // The null check makes the first click win when two SDRs start the same lead.
-  const { data, error } = await supabaseAdmin
-    .from('comercial_leads')
-    .update({ sdr_id: guard.profile.id, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .is('sdr_id', null)
-    .select('*')
-    .maybeSingle();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data) {
-    const { data: current } = await supabaseAdmin.from('comercial_leads').select('sdr_id').eq('id', id).maybeSingle();
-    return NextResponse.json({ error: current?.sdr_id ? 'Este lead ja foi iniciado por outro SDR.' : 'Lead nao encontrado.' }, { status: 409 });
-  }
-
-  await writeAuditLog(request, guard.profile, {
-    action: 'commercial.lead.start',
-    entity_type: 'commercial_lead',
-    entity_id: id,
-  });
-  return NextResponse.json({ lead: data, sdr_id: guard.profile.id, sdr_nome: guard.profile.nome || 'SDR' });
+  return NextResponse.json({
+    error: 'A atribuicao e feita pelo rodizio. Somente coordenadores podem alterar o responsavel.',
+  }, { status: 403 });
 }

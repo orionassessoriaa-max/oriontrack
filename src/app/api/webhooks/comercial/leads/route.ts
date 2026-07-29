@@ -3,6 +3,7 @@ import { COMMERCIAL_STATUSES } from '@/lib/comercial';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { startCommercialBotIfEligible } from '@/lib/commercialBot';
+import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
 
 type CommercialLeadPayload = Record<string, unknown>;
 
@@ -169,7 +170,7 @@ function buildNotes(body: CommercialLeadPayload) {
   return lines.slice(0, 40).join(' | ') || null;
 }
 
-async function resolveDefaultCommercialMember(role: 'sdr' | 'closer') {
+async function resolveDefaultCommercialMember(role: 'closer') {
   const { data } = await supabaseAdmin
     .from('comercial_membros')
     .select('profile_id')
@@ -256,7 +257,7 @@ export async function POST(request: Request) {
     const dataEntrada = parseDate(field(rawPayload, ['data_entrada', 'data entrada', 'data', 'created_time', 'timestamp'])) || new Date().toISOString();
     const explicitSdrId = normalizeText(field(rawPayload, ['sdr_id', 'sdr']));
     const explicitCloserId = normalizeText(field(rawPayload, ['closer_id', 'closer']));
-    const sdrId = isUuid(explicitSdrId) ? explicitSdrId : await resolveDefaultCommercialMember('sdr');
+    const sdrId = isUuid(explicitSdrId) ? explicitSdrId : null;
     const closerId = isUuid(explicitCloserId) ? explicitCloserId : await resolveDefaultCommercialMember('closer');
     const jaInvestiuTrafego = normalizeText(field(rawPayload, ['ja_investiu_trafego', 'ja investiu em trafego', 'traffic', 'tráfego'])) || null;
     const faturamentoMensal = normalizeText(field(rawPayload, ['faturamento_mensal', 'faturamento mensal', 'revenue', 'faturamento'])) || null;
@@ -345,6 +346,8 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ success: true, duplicated: true, lead: data, sheet });
     }
+
+    if (!incoming.sdr_id) incoming.sdr_id = await assignNextCommercialSdr();
 
     const { data, error } = await supabaseAdmin
       .from('comercial_leads')

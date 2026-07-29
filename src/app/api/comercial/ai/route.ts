@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireCommercialUser } from '@/lib/api/comercial';
+import { applyCommercialLeadScope, requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
 
@@ -10,7 +10,8 @@ export async function POST(request: Request) {
   const leadId = String(body.lead_id || '');
   if (!leadId) return NextResponse.json({ error: 'Lead obrigatorio.' }, { status: 400 });
 
-  const query = supabaseAdmin.from('comercial_leads').select('*').eq('id', leadId);
+  let query = supabaseAdmin.from('comercial_leads').select('*').eq('id', leadId);
+  query = applyCommercialLeadScope(query, guard.commercialRole, guard.profile.id);
   const { data: lead } = await query.maybeSingle();
   if (!lead) return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
 

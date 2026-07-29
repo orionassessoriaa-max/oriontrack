@@ -149,6 +149,35 @@ async function getConversation(id: string) {
 async function canAccessConversation(profile: any, conversation: any) {
   if (!conversation) return false;
   if (profile.tipo_usuario === 'admin' || profile.tipo_usuario === 'account_manager') return true;
+
+  // O papel no Kripto Hunter prevalece sobre o papel operacional do profile.
+  // Assim SDRs ficam isolados mesmo quando o cadastro base e "corretor", e
+  // closer/coordenador conseguem supervisionar as conversas comerciais.
+  const { data: commercialMember } = await supabaseAdmin
+    .from('comercial_membros')
+    .select('papel,ativo')
+    .eq('profile_id', profile.id)
+    .eq('ativo', true)
+    .maybeSingle();
+  if (commercialMember) {
+    const commercialPhone = String(conversation.telefone || '').replace(/\D/g, '');
+    const commercialLast8 = commercialPhone.slice(-8);
+    if (commercialLast8) {
+      let commercialQuery = supabaseAdmin
+        .from('comercial_leads')
+        .select('id,sdr_id,closer_id')
+        .or(`telefone.eq.${conversation.telefone},telefone.ilike.%${commercialLast8}`);
+      if (commercialMember.papel === 'sdr') {
+        commercialQuery = commercialQuery.eq('sdr_id', profile.id);
+      }
+      const { data: commercialLead } = await commercialQuery.limit(1).maybeSingle();
+      if (commercialLead) return true;
+    }
+    // Se e conversa comercial mas nao pertence ao SDR, nao deixa a regra de
+    // corretora abaixo abrir acesso cruzado por coincidencia de corretor_id.
+    if (commercialMember.papel === 'sdr' && !conversation.corretor_id) return false;
+  }
+
   if (conversation.lead_id && profile.tipo_usuario !== 'corretor_membro') {
     const { data: assignedLead } = await supabaseAdmin
       .from('leads')
@@ -167,22 +196,7 @@ async function canAccessConversation(profile: any, conversation: any) {
       if (lead?.responsavel_profile_id === profile.id) return true;
     }
 
-    // O comercial pode usar perfis sem corretor_id. Nesse caso, a permissao vem
-    // do lead comercial atribuido ao SDR/Closer, ou do coordenador comercial.
-    const { data: member } = await supabaseAdmin
-      .from('comercial_membros')
-      .select('papel,ativo')
-      .eq('profile_id', profile.id)
-      .eq('ativo', true)
-      .maybeSingle();
-    if (!member) return false;
-    const commercialPhone = String(conversation.telefone || '').replace(/\D/g, '');
-    const commercialLast8 = commercialPhone.slice(-8);
-    let commercialQuery = supabaseAdmin.from('comercial_leads').select('id,sdr_id,closer_id').or(`telefone.eq.${conversation.telefone},telefone.ilike.%${commercialLast8}`);
-    if (member.papel === 'sdr') commercialQuery = commercialQuery.eq('sdr_id', profile.id);
-    if (member.papel === 'closer') commercialQuery = commercialQuery.eq('closer_id', profile.id);
-    const { data: commercialLead } = await commercialQuery.limit(1).maybeSingle();
-    return Boolean(commercialLead);
+    if (commercialMember) return false;
   }
   if (!profile.corretor_id) return false;
   if (profile.corretor_id === conversation.corretor_id) return true;

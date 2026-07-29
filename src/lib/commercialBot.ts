@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
+import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { ensureCommercialConversation, normalizeSdrText } from '@/lib/commercialInbox';
 
 const DEFAULT_MESSAGE = 'Ola, {primeiro_nome}! Tudo bem?\n\nVi que voce acabou de preencher nosso formulario. Vou te fazer algumas perguntas bem rapidinhas para entender seu momento e te direcionar melhor, tudo bem?';
@@ -22,7 +22,7 @@ export async function startCommercialBotIfEligible(leadId: string) {
 
   try {
     const [{ data: lead, error: leadError }, { data: config, error: configError }] = await Promise.all([
-      supabaseAdmin.from('comercial_leads').select('id,nome,telefone').eq('id', leadId).maybeSingle(),
+      supabaseAdmin.from('comercial_leads').select('id,nome,telefone,sdr_id').eq('id', leadId).maybeSingle(),
       // O remetente comercial e o numero oficial da Orion. Ele nao depende de
       // um perfil de corretor/coordenador selecionado na configuracao.
       supabaseAdmin.from('comercial_config').select('bot_comercial_ativo,bot_comercial_prompt').eq('id', 1).maybeSingle(),
@@ -47,10 +47,11 @@ export async function startCommercialBotIfEligible(leadId: string) {
 
     const phone = normalizePhone(lead.telefone);
     const message = renderMessage(config.bot_comercial_prompt, lead.nome);
+    const instance = lead.sdr_id ? uazapiInstanceName(lead.sdr_id) : COMMERCIAL_MASTER_INSTANCE;
     const providerPayload = await uazapiFetch('/send/text', {
       method: 'POST',
       body: JSON.stringify({ number: phone, text: message, delay: 1200 }),
-    }, { instanceName: COMMERCIAL_MASTER_INSTANCE });
+    }, { instanceName: instance });
 
     const { error: messageError } = await supabaseAdmin.from('whatsapp_mensagens').insert({
       conversa_id: conversation.id,
@@ -58,7 +59,7 @@ export async function startCommercialBotIfEligible(leadId: string) {
       remetente: 'Orion',
       mensagem: message,
       provider_message_id: String(providerPayload?.messageId || providerPayload?.id || providerPayload?.key?.id || ''),
-      metadata: { commercial_bot_first_contact: true, ai_agent: 'commercial_bot', provider: 'uazapi' },
+      metadata: { commercial_bot_first_contact: true, ai_agent: 'commercial_bot', provider: 'uazapi', instance, sdr_id: lead.sdr_id },
     });
     if (messageError) throw new Error(`Mensagem enviada, mas nao foi registrada no Inbox: ${messageError.message}`);
     const { error: conversationError } = await supabaseAdmin.from('whatsapp_conversas').update({ ultima_mensagem: message, ultima_mensagem_at: new Date().toISOString() }).eq('id', conversation.id);
