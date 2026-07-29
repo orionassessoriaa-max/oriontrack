@@ -29,10 +29,14 @@ import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import {
   ACTION_LABELS,
   TRACKING_LABELS,
+  TRAFFIC_RULES,
   classifyAccount,
   formatBRL,
+  isCardFunding,
+  isPaymentError,
   scoreAccount,
   type AccountLike,
+  type AccountStatus,
   type RecommendationAction,
   type TrackingStatus,
 } from '@/lib/trafego/rules';
@@ -146,7 +150,10 @@ export default function GestorDashboardPage() {
     return data.session?.access_token || null;
   }
 
-  async function carregar(analisar: boolean) {
+  async function carregar(
+    analisar: boolean,
+    periodo?: { inicio: string; fim: string }
+  ) {
     if (!profile?.id) return;
     const requestId = ++requestRef.current;
     const atual = () => requestRef.current === requestId;
@@ -190,10 +197,10 @@ export default function GestorDashboardPage() {
         signal: controller.signal,
         body: JSON.stringify({
           analyze: analisar,
-          data_inicio: dataInicio,
-          data_fim: dataFim,
+          data_inicio: periodo?.inicio || dataInicio,
+          data_fim: periodo?.fim || dataFim,
           gestor_id: gestorIdParam,
-          acumulado_orion: true,
+          acumulado_orion: false,
         }),
       });
 
@@ -297,7 +304,7 @@ export default function GestorDashboardPage() {
   useEffect(() => {
     void carregar(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id, actualProfile?.id, dataInicio, dataFim]);
+  }, [profile?.id, actualProfile?.id]);
 
   const concessionarias = useMemo(() => {
     const grupos = new Map<string, { nome: string; ativa: boolean }>();
@@ -317,6 +324,23 @@ export default function GestorDashboardPage() {
   const emAtencao = metaAccounts
     .map((conta) => ({ conta, status: classifyAccount(conta) }))
     .filter(({ status }) => status.tone !== 'emerald' && status.tone !== 'slate');
+  const alertasSaldo = metaAccounts
+    .filter((conta) =>
+      isPaymentError(conta)
+      || (!isCardFunding(conta) && conta.saldo !== null && conta.saldo <= TRAFFIC_RULES.lowBalance)
+    )
+    .map((conta) => {
+      if (isPaymentError(conta)) return { conta, status: classifyAccount(conta) };
+      const semSaldo = Number(conta.saldo) <= 0;
+      const status: AccountStatus = {
+        label: semSaldo ? 'Sem saldo' : 'Saldo baixo',
+        tone: semSaldo ? 'red' : 'amber',
+        detail: semSaldo
+          ? 'Conta pré-paga zerada. Recarregar para retomar as campanhas.'
+          : `Conta pré-paga com ${formatBRL(conta.saldo, conta.currency)} disponível.`,
+      };
+      return { conta, status };
+    });
 
   const criticas = recomendacoes.filter((item) => item.severidade === 'critico').length;
   const investimento = metaAccounts.reduce((soma, conta) => soma + Number(conta.spend || 0), 0);
@@ -351,6 +375,7 @@ export default function GestorDashboardPage() {
                 setDataInicio(inicio);
                 setDataFim(fim);
                 setPresetLabel(label);
+                void carregar(false, { inicio, fim });
               }}
             />
             <button
@@ -406,6 +431,40 @@ export default function GestorDashboardPage() {
             {semRastreio.length > 0 ? (
               <IntegrationBanner contas={semRastreio} />
             ) : null}
+
+            <Panel
+              className="mb-6"
+              title="Saldo e pagamentos"
+              subtitle={`Somente contas pré-pagas com saldo de ${formatBRL(TRAFFIC_RULES.lowBalance)} ou menos. Cartão aparece apenas com erro de pagamento.`}
+              badge={alertasSaldo.length > 0 ? `${alertasSaldo.length} alerta(s)` : undefined}
+              badgeTone={alertasSaldo.some(({ status }) => status.tone === 'red') ? 'red' : 'amber'}
+            >
+              {alertasSaldo.length === 0 ? (
+                <Empty
+                  titulo="Nenhum alerta de saldo."
+                  texto="As contas pré-pagas estão acima do limite e não há erro de pagamento em cartão."
+                />
+              ) : (
+                <ul className="space-y-1.5">
+                  {alertasSaldo.map(({ conta, status }) => (
+                    <li key={`saldo-${conta.corretor_id}-${conta.meta_ad_account_id}`}>
+                      <Link
+                        href={`/trafego/otimizacoes?conta=${encodeURIComponent(conta.meta_ad_account_id || '')}`}
+                        className="tf-no-lift flex items-center gap-3 rounded-xl border px-3 py-2.5 transition"
+                        style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface)' }}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-bold">{conta.concessionaria_nome || conta.corretor_nome}</span>
+                          <span className="mt-0.5 block truncate text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{status.detail}</span>
+                        </span>
+                        <Badge tone={status.tone} label={status.label} />
+                        <ChevronRight size={15} style={{ color: 'var(--tf-ink-mute)' }} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
 
             {/* Faixa 1 — acao */}
             <Panel

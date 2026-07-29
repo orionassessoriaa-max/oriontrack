@@ -206,7 +206,7 @@ function getBrokerMetaStatus(account: any, cplPeriodo: number | null, periodLabe
   }
 
   // 4. Saldo Baixo (Pré-pago)
-  if (!isCard && account.saldo !== null && account.saldo < 100) {
+  if (!isCard && account.saldo !== null && account.saldo <= 80) {
     return {
       status: 'saldo_baixo',
       title: 'Saldo Baixo',

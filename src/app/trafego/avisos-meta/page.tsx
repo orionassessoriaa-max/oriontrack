@@ -252,7 +252,7 @@ export default function TrafficMetaAlertsPage() {
                   badgeText = 'Sem Saldo';
                   badgeTone = 'red';
                   rowBgClass = 'bg-red-50/40';
-                } else if (!isCard && row.saldo !== null && row.saldo < 100) {
+                } else if (!isCard && row.saldo !== null && row.saldo <= 80) {
                   badgeText = 'Saldo Baixo';
                   badgeTone = 'amber';
                   rowBgClass = 'bg-amber-50/40';
@@ -289,7 +289,7 @@ export default function TrafficMetaAlertsPage() {
                       {isCard ? (
                         <span className="text-xs font-bold text-slate-400">-</span>
                       ) : (
-                        <span className={`rounded-full px-3 py-1 text-xs font-black ${row.saldo !== null && row.saldo < 100 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                        <span className={`rounded-full px-3 py-1 text-xs font-black ${row.saldo !== null && row.saldo <= 80 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
                           {formatCurrency(row.saldo, row.currency)}
                         </span>
                       )}

@@ -416,6 +416,7 @@ async function fetchAccountMetrics(
   const fundingDetails = accountPayload?.funding_source_details;
   const fundingText = JSON.stringify(fundingDetails || {}).toLowerCase();
   const isCard = fundingText.includes('card') || fundingText.includes('cart') || fundingText.includes('visa') || fundingText.includes('mastercard') || fundingText.includes('amex');
+  const cardPaymentError = isCard && /failed|declined|past.?due|unpaid|payment.?error|billing.?error|recusad|falh/.test(fundingText);
   const displayBalance = parseMoneyFromMetaText(fundingDetails?.display_string);
   const effectiveBalance = displayBalance ?? balance;
   const formaPagamento = isCard
@@ -446,8 +447,9 @@ async function fetchAccountMetrics(
     alerta_cpl_alto: cpl !== null && cpl >= TRAFFIC_RULES.cplCritical,
     alerta_cpl_atencao: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && cpl < TRAFFIC_RULES.cplCritical,
     alerta_metricas_secundarias: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && (cpc > TRAFFIC_RULES.cpcMax || ctr < TRAFFIC_RULES.ctrMin),
-    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < TRAFFIC_RULES.lowBalance,
+    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance <= TRAFFIC_RULES.lowBalance,
     dados_crm_pendentes: spend > 0 && leadCount === 0,
+    error: cardPaymentError ? 'A Meta informou um erro de pagamento no cartao desta conta.' : undefined,
     regras: TRAFFIC_RULES,
   };
 }

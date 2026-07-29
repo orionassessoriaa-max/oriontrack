@@ -95,7 +95,7 @@ export default function NotificacoesPage() {
       (data || []).forEach((c: any) => {
         initial[c.id] = {
           cpl: String(c.operadoras_info?.alerta_limite_cpl ?? 25),
-          saldo: String(c.operadoras_info?.alerta_limite_saldo ?? 100)
+          saldo: '80'
         };
       });
       setThresholds(initial);
@@ -252,12 +252,10 @@ export default function NotificacoesPage() {
       if (!corr) return;
 
       const currentCpl = parseFloat(thresholds[corretorId]?.cpl || '25');
-      const currentSaldo = parseFloat(thresholds[corretorId]?.saldo || '100');
-
       const updatedOperadorasInfo = {
         ...(corr.operadoras_info || {}),
         alerta_limite_cpl: isNaN(currentCpl) ? 25 : currentCpl,
-        alerta_limite_saldo: isNaN(currentSaldo) ? 100 : currentSaldo
+        alerta_limite_saldo: 80
       };
 
       const { error: updateError } = await supabase
@@ -422,7 +420,7 @@ export default function NotificacoesPage() {
             <div>
               <h3 className={`text-base font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>Alertas do Apolo AI • Configuração de Limites</h3>
               <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
-                Monitore o tráfego do Meta Ads. Defina o limite de CPL e saldo baixo para envio automático de avisos via WhatsApp.
+                Monitore o tráfego do Meta Ads. O alerta de saldo é fixo em R$ 80; o limite de CPL pode ser personalizado.
               </p>
             </div>
           </div>
@@ -485,12 +483,8 @@ export default function NotificacoesPage() {
                         <span className={`absolute left-3.5 text-xs font-bold ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>R$</span>
                         <input
                           type="number"
-                          placeholder="100"
-                          value={thresholds[corretor.id]?.saldo || ''}
-                          onChange={(e) => setThresholds({
-                            ...thresholds,
-                            [corretor.id]: { ...thresholds[corretor.id], saldo: e.target.value }
-                          })}
+                          value="80"
+                          disabled
                           className={`w-28 rounded-xl border-none pl-9 pr-3 py-2 text-xs font-bold text-right focus:ring-2 focus:ring-blue-500 ${
                             isDark ? 'bg-black/40 text-white' : 'bg-white text-gray-800'
                           }`}

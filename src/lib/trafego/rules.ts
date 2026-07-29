@@ -12,7 +12,7 @@ export const TRAFFIC_RULES = {
   cpcMax: 6,
   ctrMin: 1,
   frequencyFatigue: 3.5,
-  lowBalance: 100,
+  lowBalance: 80,
   // Abaixo deste investimento nao ha volume suficiente para julgar um anuncio.
   minSpendToJudge: 50,
 };
@@ -181,7 +181,7 @@ export function classifyAccount(account: AccountLike): AccountStatus {
   if (account.cpl !== null && account.cpl >= TRAFFIC_RULES.cplCritical) {
     return { label: 'CPL crítico', tone: 'red', detail: `CPL de ${formatBRL(account.cpl, account.currency)} contra o teto de ${formatBRL(TRAFFIC_RULES.cplCritical)}.` };
   }
-  if (!card && account.saldo !== null && account.saldo < TRAFFIC_RULES.lowBalance) {
+  if (!card && account.saldo !== null && account.saldo <= TRAFFIC_RULES.lowBalance) {
     return { label: 'Saldo baixo', tone: 'amber', detail: `Saldo de ${formatBRL(account.saldo, account.currency)}, abaixo do mínimo operacional.` };
   }
   if (account.cpl !== null && account.cpl >= TRAFFIC_RULES.cplAttention) {
@@ -323,7 +323,7 @@ export function buildRecommendations(input: {
 
     const prepaidBalanceAlert = !isCardFunding(account)
       && account.saldo !== null
-      && account.saldo < TRAFFIC_RULES.lowBalance;
+      && account.saldo <= TRAFFIC_RULES.lowBalance;
 
     if (isPaymentError(account) || prepaidBalanceAlert) {
       const noBalance = prepaidBalanceAlert && Number(account.saldo) <= 0;
@@ -336,7 +336,7 @@ export function buildRecommendations(input: {
           ? 'A Meta recusou a cobrança desta conta. As campanhas param sozinhas se ninguém resolver.'
           : noBalance
             ? 'Conta pré-paga sem saldo. As campanhas não entregam até a recarga.'
-            : `Conta pré-paga com saldo abaixo de ${formatBRL(TRAFFIC_RULES.lowBalance, currency)}. Avisar antes que as campanhas parem.`,
+            : `Conta pré-paga com saldo igual ou abaixo de ${formatBRL(TRAFFIC_RULES.lowBalance, currency)}. Avisar antes que as campanhas parem.`,
         metricas: { saldo: account.saldo, forma_pagamento: account.forma_pagamento, currency },
       });
       return;

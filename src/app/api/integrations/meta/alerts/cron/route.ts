@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone } from '@/lib/evolution';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
+import { TRAFFIC_RULES } from '@/lib/trafego/rules';
 
 type CorretorMeta = {
   id: string;
@@ -105,6 +106,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   const fundingDetails = accountPayload?.funding_source_details;
   const fundingText = JSON.stringify(fundingDetails || {}).toLowerCase();
   const isCard = fundingText.includes('card') || fundingText.includes('cart') || fundingText.includes('visa') || fundingText.includes('mastercard') || fundingText.includes('amex');
+  const cardPaymentError = isCard && /failed|declined|past.?due|unpaid|payment.?error|billing.?error|recusad|falh/.test(fundingText);
   const displayBalance = parseMoneyFromMetaText(fundingDetails?.display_string);
   const effectiveBalance = displayBalance ?? balance;
   const formaPagamento = isCard
@@ -113,7 +115,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
 
   // Dynamic alert thresholds per broker
   const cplLimit = Number(corretor.operadoras_info?.alerta_limite_cpl ?? 25);
-  const balanceLimit = Number(corretor.operadoras_info?.alerta_limite_saldo ?? 100);
+  const balanceLimit = TRAFFIC_RULES.lowBalance;
 
   return {
     corretor_id: corretor.id,
@@ -129,8 +131,8 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     currency: accountPayload?.currency || 'BRL',
     forma_pagamento: formaPagamento,
     alerta_cpl_alto: cpl !== null && cpl > cplLimit,
-    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance < balanceLimit,
-    error: undefined as string | undefined,
+    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance <= balanceLimit,
+    error: cardPaymentError ? 'A Meta informou um erro de pagamento no cartao desta conta.' : undefined as string | undefined,
     operadoras_info: corretor.operadoras_info,
   };
 }
@@ -218,7 +220,7 @@ export async function POST(request: Request) {
 
       // Fetch dynamic thresholds for message formatting
       const cplLimit = Number(acc.operadoras_info?.alerta_limite_cpl ?? 25);
-      const balanceLimit = Number(acc.operadoras_info?.alerta_limite_saldo ?? 100);
+      const balanceLimit = TRAFFIC_RULES.lowBalance;
 
       let alertMessage = '';
 
@@ -228,8 +230,8 @@ export async function POST(request: Request) {
         alertMessage = `🔴 ERRO NO PAGAMENTO: Cobrança falhou no cartão de crédito.`;
       } else if (!isCard && acc.saldo !== null && acc.saldo <= 0) {
         alertMessage = `🔴 SEM SALDO: Conta zerada, campanhas pausadas.`;
-      } else if (!isCard && acc.saldo !== null && acc.saldo < balanceLimit) {
-        alertMessage = `🟡 SALDO BAIXO: Restam R$ ${acc.saldo.toFixed(2).replace('.', ',')} (Abaixo de R$ ${balanceLimit.toFixed(2).replace('.', ',')})`;
+      } else if (!isCard && acc.saldo !== null && acc.saldo <= balanceLimit) {
+        alertMessage = `🟡 SALDO BAIXO: Restam R$ ${acc.saldo.toFixed(2).replace('.', ',')} (R$ ${balanceLimit.toFixed(2).replace('.', ',')} ou menos)`;
       } else if (acc.error && !isCard) {
         alertMessage = `🟡 ERRO DE INTEGRAÇÃO: ${acc.error}`;
       }
@@ -243,7 +245,7 @@ export async function POST(request: Request) {
       }
 
       const hasBalanceAlert = !isCard && (
-        (acc.saldo !== null && acc.saldo < balanceLimit) ||
+        (acc.saldo !== null && acc.saldo <= balanceLimit) ||
         Boolean(acc.error)
       );
       if (hasBalanceAlert) {
