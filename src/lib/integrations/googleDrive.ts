@@ -15,10 +15,21 @@ export type ResolvedCreativeFile = {
   file: DriveFile;
   brokerageFolder: DriveFolder;
   path: DriveFolder[];
-  region: 'SP' | 'DF' | null;
+  region: string | null;
 };
 
 const DRIVE_FOLDER_MIME = 'application/vnd.google-apps.folder';
+const BRAZILIAN_REGIONS = [
+  ['AC', 'Acre'], ['AL', 'Alagoas'], ['AP', 'Amapa'], ['AM', 'Amazonas'],
+  ['BA', 'Bahia'], ['CE', 'Ceara'], ['DF', 'Distrito Federal'],
+  ['ES', 'Espirito Santo'], ['GO', 'Goias'], ['MA', 'Maranhao'],
+  ['MT', 'Mato Grosso'], ['MS', 'Mato Grosso do Sul'], ['MG', 'Minas Gerais'],
+  ['PA', 'Para'], ['PB', 'Paraiba'], ['PR', 'Parana'], ['PE', 'Pernambuco'],
+  ['PI', 'Piaui'], ['RJ', 'Rio de Janeiro'], ['RN', 'Rio Grande do Norte'],
+  ['RS', 'Rio Grande do Sul'], ['RO', 'Rondonia'], ['RR', 'Roraima'],
+  ['SC', 'Santa Catarina'], ['SP', 'Sao Paulo'], ['SE', 'Sergipe'],
+  ['TO', 'Tocantins'],
+] as const;
 
 function normalizeDriveName(value?: string | null) {
   return String(value || '')
@@ -49,13 +60,28 @@ function nameScore(expected?: string | null, actual?: string | null) {
   return expectedTokens.filter((token) => actualTokens.has(token)).length / expectedTokens.length;
 }
 
-function pathHasRegion(path: DriveFolder[], region: 'SP' | 'DF') {
-  return path.some((folder) => {
-    const name = normalizeDriveName(folder.name);
-    return region === 'SP'
-      ? name === 'sp' || name.includes('sao paulo')
-      : name === 'df' || name.includes('distrito federal');
-  });
+export function regionFromAdsetName(value: string): string | null {
+  const normalized = ` ${normalizeDriveName(value)} `;
+  const aliases = BRAZILIAN_REGIONS
+    .flatMap(([uf, name]) => [
+      { uf, alias: normalizeDriveName(name) },
+      { uf, alias: normalizeDriveName(uf) },
+    ])
+    .sort((a, b) => b.alias.length - a.alias.length);
+  return aliases.find(({ alias }) => normalized.includes(` ${alias} `))?.uf || null;
+}
+
+function pathHasRegion(path: DriveFolder[], region: string) {
+  const normalizedRegion = normalizeDriveName(region);
+  const knownRegion = BRAZILIAN_REGIONS.find(
+    ([uf, name]) => normalizeDriveName(uf) === normalizedRegion || normalizeDriveName(name) === normalizedRegion
+  );
+  const acceptedNames = new Set(
+    knownRegion
+      ? [normalizeDriveName(knownRegion[0]), normalizeDriveName(knownRegion[1])]
+      : [normalizedRegion]
+  );
+  return path.some((folder) => acceptedNames.has(normalizeDriveName(folder.name)));
 }
 
 function isSupportedCreative(file: DriveFile) {
@@ -155,12 +181,12 @@ export async function listDriveChildren(folderId?: string | null, pageSize = 100
 
 /**
  * Busca dentro da pasta da corretora e usa a identificação do conjunto.
- * Se o nome do conjunto indicar SP/DF, somente considera arquivos na região.
+ * Se o nome do conjunto indicar uma UF, somente considera arquivos na região.
  */
 export async function resolveCreativeForAdset(options: {
   brokerageName: string;
   adsetName: string;
-  region?: 'SP' | 'DF' | null;
+  region?: string | null;
   rootFolderId?: string | null;
   maxDepth?: number;
   mediaKind?: 'image' | 'video' | null;

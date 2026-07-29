@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
-import { downloadDriveFile, resolveCreativeForAdset } from '@/lib/integrations/googleDrive';
+import { downloadDriveFile, regionFromAdsetName, resolveCreativeForAdset } from '@/lib/integrations/googleDrive';
 
 type DecisionBody = {
   id?: string;
@@ -176,13 +176,6 @@ async function graphPostForm(path: string, form: FormData) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload?.error) throw new Error(payload?.error?.message || 'A Meta recusou o upload do criativo.');
   return payload;
-}
-
-function regionFromAdsetName(name: string): 'SP' | 'DF' | null {
-  const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  if (/(^|[^a-z0-9])(df|distrito federal)([^a-z0-9]|$)/.test(normalized)) return 'DF';
-  if (/(^|[^a-z0-9])(sp|sao paulo)([^a-z0-9]|$)/.test(normalized)) return 'SP';
-  return null;
 }
 
 async function replaceCreativeAutomatically(recommendation: TrafficRecommendationRow) {

@@ -835,7 +835,6 @@ export default function OtimizacoesPage() {
                           <HardDrive size={16} style={{ color: 'var(--tf-accent-ink)' }} />
                           <div className="min-w-0">
                             <p className="truncate text-xs font-bold" style={{ color: 'var(--tf-ink)' }}>Criativos Orion</p>
-                            <p className="text-[11px]" style={{ color: 'var(--tf-ink-mute)' }}>DF ou SP → operadora → criativo</p>
                           </div>
                         </div>
                         <button
