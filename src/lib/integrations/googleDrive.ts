@@ -168,14 +168,46 @@ export async function resolveCreativeForAdset(options: {
   const rootId = options.rootFolderId || process.env.GOOGLE_DRIVE_FOLDER_ID || null;
   if (!rootId) throw new Error('GOOGLE_DRIVE_FOLDER_ID nao configurado com a pasta raiz de criativos.');
 
-  const root = await listDriveChildren(rootId, 1000);
-  const brokerage = root.folders
-    .map((folder) => ({ folder, score: nameScore(options.brokerageName, folder.name) }))
-    .sort((a, b) => b.score - a.score)[0];
-
-  if (!brokerage || brokerage.score < 0.5) {
-    throw new Error(`Nao encontrei a pasta da corretora "${options.brokerageName}" no Google Drive.`);
+  let root: Awaited<ReturnType<typeof listDriveChildren>>;
+  try {
+    root = await listDriveChildren(rootId, 1000);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/file not found/i.test(message)) {
+      throw new Error('Pasta raiz de criativos nao encontrada no Google Drive.');
+    }
+    throw error;
   }
+
+  const expectedBrokerageName = normalizeDriveName(options.brokerageName);
+  if (!expectedBrokerageName) {
+    throw new Error('Nome da concessionaria vazio; pasta nao encontrada no Google Drive.');
+  }
+  let brokerageMatches: Array<{ folder: DriveFolder; parentPath: DriveFolder[] }> = [];
+  const brokerageSearchDepth = 4;
+  let brokerageLevel = root.folders.map((folder) => ({ folder, parentPath: [] as DriveFolder[] }));
+  for (let depth = 1; depth <= brokerageSearchDepth && brokerageLevel.length; depth += 1) {
+    brokerageMatches = brokerageLevel.filter(
+      ({ folder }) => normalizeDriveName(folder.name) === expectedBrokerageName
+    );
+    if (brokerageMatches.length > 0 || depth === brokerageSearchDepth) break;
+
+    const nested = await Promise.all(brokerageLevel.map(async ({ folder, parentPath }) => {
+      const children = await listDriveChildren(folder.id, 1000);
+      return children.folders.map((child) => ({
+        folder: child,
+        parentPath: [...parentPath, folder],
+      }));
+    }));
+    brokerageLevel = nested.flat();
+  }
+  if (brokerageMatches.length === 0) {
+    throw new Error(`Pasta da concessionaria "${options.brokerageName}" nao encontrada no Google Drive.`);
+  }
+  if (brokerageMatches.length > 1) {
+    throw new Error(`Mais de uma pasta com o nome da concessionaria "${options.brokerageName}" foi encontrada no Google Drive.`);
+  }
+  const brokerageFolder = brokerageMatches[0].folder;
 
   const candidates: Array<{ file: DriveFile; path: DriveFolder[]; score: number }> = [];
   const maxDepth = Math.min(Math.max(options.maxDepth ?? 5, 1), 8);
@@ -199,13 +231,13 @@ export async function resolveCreativeForAdset(options: {
     await Promise.all(children.folders.map((child) => walk(child, currentPath, depth + 1)));
   }
 
-  await walk(brokerage.folder, [], 1);
+  await walk(brokerageFolder, [], 1);
   const regionalCandidates = options.region
     ? candidates.filter((candidate) => pathHasRegion(candidate.path, options.region!))
     : candidates;
 
   if (options.region && regionalCandidates.length === 0) {
-    throw new Error(`Nao encontrei criativo na pasta ${options.region} da corretora "${options.brokerageName}".`);
+    throw new Error(`Pasta ${options.region} da concessionaria "${options.brokerageName}" nao encontrada ou sem criativo compativel.`);
   }
 
   const selected = regionalCandidates.sort((a, b) => {
@@ -214,12 +246,12 @@ export async function resolveCreativeForAdset(options: {
   })[0];
 
   if (!selected || selected.score < 0.35) {
-    throw new Error(`Nao encontrei uma pasta compativel com o conjunto "${options.adsetName}" dentro de "${brokerage.folder.name}".`);
+    throw new Error(`Pasta compativel com o conjunto "${options.adsetName}" nao encontrada dentro de "${brokerageFolder.name}".`);
   }
 
   return {
     file: selected.file,
-    brokerageFolder: brokerage.folder,
+    brokerageFolder,
     path: selected.path,
     region: options.region || null,
   };
