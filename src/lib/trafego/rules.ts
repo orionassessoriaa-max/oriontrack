@@ -233,12 +233,20 @@ export function buildRecommendations(input: {
 }): Recommendation[] {
   const recommendations: Recommendation[] = [];
   const accountsWithAdAction = new Set<string>();
+  const topCreativeByAccount = new Map<string, CreativeLike>();
 
   const accountByMetaId = new Map<string, AccountLike>();
   input.accounts.forEach((account) => {
     const key = String(account.meta_ad_account_id || '');
     if (key) accountByMetaId.set(key, account);
   });
+  [...input.creatives]
+    .filter((creative) => String(creative.status || '').toUpperCase() === 'ACTIVE')
+    .sort((a, b) => Number(b.spend || 0) - Number(a.spend || 0))
+    .forEach((creative) => {
+      const key = String(creative.meta_ad_account_id || '');
+      if (key && !topCreativeByAccount.has(key)) topCreativeByAccount.set(key, creative);
+    });
 
   input.creatives.forEach((creative) => {
     const account = accountByMetaId.get(String(creative.meta_ad_account_id || ''));
@@ -313,15 +321,22 @@ export function buildRecommendations(input: {
       executavel: false,
     };
 
-    if (isPaymentError(account) || (!isCardFunding(account) && account.saldo !== null && account.saldo <= 0)) {
+    const prepaidBalanceAlert = !isCardFunding(account)
+      && account.saldo !== null
+      && account.saldo < TRAFFIC_RULES.lowBalance;
+
+    if (isPaymentError(account) || prepaidBalanceAlert) {
+      const noBalance = prepaidBalanceAlert && Number(account.saldo) <= 0;
       recommendations.push({
         ...base,
         chave: recommendationKey(account.meta_ad_account_id, null, 'avisar_admin'),
         acao: 'avisar_admin',
-        severidade: 'critico',
+        severidade: isPaymentError(account) || noBalance ? 'critico' : 'atencao',
         motivo: isPaymentError(account)
           ? 'A Meta recusou a cobrança desta conta. As campanhas param sozinhas se ninguém resolver.'
-          : 'Conta pré-paga sem saldo. As campanhas não entregam até a recarga.',
+          : noBalance
+            ? 'Conta pré-paga sem saldo. As campanhas não entregam até a recarga.'
+            : `Conta pré-paga com saldo abaixo de ${formatBRL(TRAFFIC_RULES.lowBalance, currency)}. Avisar antes que as campanhas parem.`,
         metricas: { saldo: account.saldo, forma_pagamento: account.forma_pagamento, currency },
       });
       return;
@@ -349,11 +364,20 @@ export function buildRecommendations(input: {
     const ctr = Number(account.ctr || 0);
     const frequency = Number(account.frequency || 0);
     const metricas = { cpl, cpc, ctr, frequency, spend: account.spend, leads: account.leads, currency };
+    const topCreative = topCreativeByAccount.get(accountId);
+    const creativeSwapBase = topCreative
+      ? {
+          ...base,
+          nivel: 'anuncio' as const,
+          alvo_id: topCreative.id,
+          alvo_nome: topCreative.ad_name,
+        }
+      : base;
 
     if (cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && ctr > 0 && ctr < TRAFFIC_RULES.ctrMin) {
       recommendations.push({
-        ...base,
-        chave: recommendationKey(account.meta_ad_account_id, null, 'trocar_criativo'),
+        ...creativeSwapBase,
+        chave: recommendationKey(account.meta_ad_account_id, creativeSwapBase.alvo_id, 'trocar_criativo'),
         acao: 'trocar_criativo',
         severidade: 'atencao',
         motivo: `CPL em ${formatBRL(cpl, currency)} com CTR de ${formatPercent(ctr)}. Pouca gente clica: o criativo é o gargalo.`,
@@ -376,8 +400,8 @@ export function buildRecommendations(input: {
 
     if (frequency >= TRAFFIC_RULES.frequencyFatigue) {
       recommendations.push({
-        ...base,
-        chave: recommendationKey(account.meta_ad_account_id, null, 'trocar_criativo'),
+        ...creativeSwapBase,
+        chave: recommendationKey(account.meta_ad_account_id, creativeSwapBase.alvo_id, 'trocar_criativo'),
         acao: 'trocar_criativo',
         severidade: 'atencao',
         motivo: `Frequência em ${frequency.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}. O mesmo público já viu o anúncio vezes demais.`,

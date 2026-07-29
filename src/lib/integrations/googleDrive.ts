@@ -1,5 +1,3 @@
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
-
 export type DriveFile = {
   id: string;
   name: string;
@@ -12,6 +10,57 @@ export type DriveFile = {
 };
 
 export type DriveFolder = DriveFile;
+
+export type ResolvedCreativeFile = {
+  file: DriveFile;
+  brokerageFolder: DriveFolder;
+  path: DriveFolder[];
+  region: 'SP' | 'DF' | null;
+};
+
+const DRIVE_FOLDER_MIME = 'application/vnd.google-apps.folder';
+
+function normalizeDriveName(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function meaningfulTokens(value?: string | null) {
+  const ignored = new Set([
+    'conjunto', 'adset', 'anuncio', 'campanha', 'criativo', 'orion',
+    'sp', 'df', 'sao', 'paulo', 'distrito', 'federal',
+  ]);
+  return normalizeDriveName(value).split(' ').filter((token) => token.length > 1 && !ignored.has(token));
+}
+
+function nameScore(expected?: string | null, actual?: string | null) {
+  const left = normalizeDriveName(expected);
+  const right = normalizeDriveName(actual);
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  if (left.includes(right) || right.includes(left)) return 0.9;
+  const expectedTokens = meaningfulTokens(expected);
+  if (!expectedTokens.length) return 0;
+  const actualTokens = new Set(meaningfulTokens(actual));
+  return expectedTokens.filter((token) => actualTokens.has(token)).length / expectedTokens.length;
+}
+
+function pathHasRegion(path: DriveFolder[], region: 'SP' | 'DF') {
+  return path.some((folder) => {
+    const name = normalizeDriveName(folder.name);
+    return region === 'SP'
+      ? name === 'sp' || name.includes('sao paulo')
+      : name === 'df' || name.includes('distrito federal');
+  });
+}
+
+function isSupportedCreative(file: DriveFile) {
+  return file.mimeType.startsWith('image/') || file.mimeType.startsWith('video/');
+}
 
 export function isGoogleDriveConfigured() {
   return Boolean(
@@ -99,8 +148,80 @@ export async function listDriveChildren(folderId?: string | null, pageSize = 100
   });
   const files = (await driveFetch(`files?${params.toString()}`)).files as DriveFile[] || [];
   return {
-    folders: files.filter((file) => file.mimeType === 'application/vnd.google-apps.folder') as DriveFolder[],
-    files: files.filter((file) => file.mimeType !== 'application/vnd.google-apps.folder'),
+    folders: files.filter((file) => file.mimeType === DRIVE_FOLDER_MIME) as DriveFolder[],
+    files: files.filter((file) => file.mimeType !== DRIVE_FOLDER_MIME),
+  };
+}
+
+/**
+ * Busca dentro da pasta da corretora e usa a identificação do conjunto.
+ * Se o nome do conjunto indicar SP/DF, somente considera arquivos na região.
+ */
+export async function resolveCreativeForAdset(options: {
+  brokerageName: string;
+  adsetName: string;
+  region?: 'SP' | 'DF' | null;
+  rootFolderId?: string | null;
+  maxDepth?: number;
+  mediaKind?: 'image' | 'video' | null;
+}): Promise<ResolvedCreativeFile> {
+  const rootId = options.rootFolderId || process.env.GOOGLE_DRIVE_FOLDER_ID || null;
+  if (!rootId) throw new Error('GOOGLE_DRIVE_FOLDER_ID nao configurado com a pasta raiz de criativos.');
+
+  const root = await listDriveChildren(rootId, 1000);
+  const brokerage = root.folders
+    .map((folder) => ({ folder, score: nameScore(options.brokerageName, folder.name) }))
+    .sort((a, b) => b.score - a.score)[0];
+
+  if (!brokerage || brokerage.score < 0.5) {
+    throw new Error(`Nao encontrei a pasta da corretora "${options.brokerageName}" no Google Drive.`);
+  }
+
+  const candidates: Array<{ file: DriveFile; path: DriveFolder[]; score: number }> = [];
+  const maxDepth = Math.min(Math.max(options.maxDepth ?? 5, 1), 8);
+
+  async function walk(folder: DriveFolder, path: DriveFolder[], depth: number): Promise<void> {
+    const children = await listDriveChildren(folder.id, 1000);
+    const currentPath = [...path, folder];
+    const pathScore = Math.max(...currentPath.map((item) => nameScore(options.adsetName, item.name)));
+
+    children.files
+      .filter((file) => isSupportedCreative(file) && (
+        !options.mediaKind || file.mimeType.startsWith(`${options.mediaKind}/`)
+      ))
+      .forEach((file) => candidates.push({
+        file,
+        path: currentPath,
+        score: Math.max(pathScore, nameScore(options.adsetName, file.name) * 0.8),
+      }));
+
+    if (depth >= maxDepth) return;
+    await Promise.all(children.folders.map((child) => walk(child, currentPath, depth + 1)));
+  }
+
+  await walk(brokerage.folder, [], 1);
+  const regionalCandidates = options.region
+    ? candidates.filter((candidate) => pathHasRegion(candidate.path, options.region!))
+    : candidates;
+
+  if (options.region && regionalCandidates.length === 0) {
+    throw new Error(`Nao encontrei criativo na pasta ${options.region} da corretora "${options.brokerageName}".`);
+  }
+
+  const selected = regionalCandidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return String(b.file.modifiedTime || '').localeCompare(String(a.file.modifiedTime || ''));
+  })[0];
+
+  if (!selected || selected.score < 0.35) {
+    throw new Error(`Nao encontrei uma pasta compativel com o conjunto "${options.adsetName}" dentro de "${brokerage.folder.name}".`);
+  }
+
+  return {
+    file: selected.file,
+    brokerageFolder: brokerage.folder,
+    path: selected.path,
+    region: options.region || null,
   };
 }
 

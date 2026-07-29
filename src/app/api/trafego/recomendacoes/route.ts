@@ -2,12 +2,28 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { downloadDriveFile, resolveCreativeForAdset } from '@/lib/integrations/googleDrive';
 
 type DecisionBody = {
   id?: string;
   decisao?: 'aprovar' | 'ignorar';
   confirmar?: boolean;
   gestor_id?: string;
+};
+
+type TrafficRecommendationRow = {
+  corretor_id: string;
+  concessionaria_nome: string | null;
+  meta_ad_account_id: string | null;
+  nivel: string;
+  alvo_id: string | null;
+  alvo_nome: string | null;
+  metricas: Record<string, unknown> | null;
+};
+
+type BrokerNotificationProfile = {
+  id: string;
+  tipo_usuario: string;
 };
 
 async function requireTrafficAccess(request: Request) {
@@ -120,6 +136,194 @@ async function pauseMetaObject(objectId: string, level: PauseLevel) {
   }
 
   return payload;
+}
+
+function graphUrl(path: string) {
+  const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
+  return `https://graph.facebook.com/${graphVersion}/${path.replace(/^\//, '')}`;
+}
+
+async function graphGet(path: string, fields: string) {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN nao configurado no servidor.');
+  const url = new URL(graphUrl(path));
+  url.searchParams.set('fields', fields);
+  url.searchParams.set('access_token', token);
+  const response = await fetch(url);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.error) throw new Error(payload?.error?.message || 'A Meta recusou a consulta do anuncio.');
+  return payload;
+}
+
+async function graphPost(path: string, params: Record<string, string>) {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN nao configurado no servidor.');
+  const response = await fetch(graphUrl(path), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ ...params, access_token: token }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.error) throw new Error(payload?.error?.message || 'A Meta recusou a troca do criativo.');
+  return payload;
+}
+
+async function graphPostForm(path: string, form: FormData) {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN nao configurado no servidor.');
+  form.append('access_token', token);
+  const response = await fetch(graphUrl(path), { method: 'POST', body: form });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.error) throw new Error(payload?.error?.message || 'A Meta recusou o upload do criativo.');
+  return payload;
+}
+
+function regionFromAdsetName(name: string): 'SP' | 'DF' | null {
+  const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/(^|[^a-z0-9])(df|distrito federal)([^a-z0-9]|$)/.test(normalized)) return 'DF';
+  if (/(^|[^a-z0-9])(sp|sao paulo)([^a-z0-9]|$)/.test(normalized)) return 'SP';
+  return null;
+}
+
+async function replaceCreativeAutomatically(recommendation: TrafficRecommendationRow) {
+  if (!recommendation.alvo_id || recommendation.nivel !== 'anuncio') {
+    throw new Error('A troca automatica precisa apontar para um anuncio especifico.');
+  }
+  const accountId = String(recommendation.meta_ad_account_id || '').replace(/^act_/, '').trim();
+  if (!accountId) throw new Error('A recomendacao nao possui uma conta Meta valida.');
+
+  const ad = await graphGet(
+    String(recommendation.alvo_id),
+    'id,name,adset_id,adset{id,name},creative{id,name,object_story_spec}'
+  );
+  const adsetId = String(ad.adset_id || ad.adset?.id || '').trim();
+  const adset = ad.adset?.name
+    ? ad.adset
+    : adsetId
+      ? await graphGet(adsetId, 'id,name')
+      : null;
+  const adsetName = String(adset?.name || '').trim();
+  if (!adsetName) throw new Error('Nao foi possivel identificar o conjunto deste anuncio na Meta.');
+
+  const originalSpec = ad.creative?.object_story_spec;
+  if (!originalSpec || typeof originalSpec !== 'object') {
+    throw new Error('O anuncio nao possui uma estrutura de criativo reutilizavel na Meta.');
+  }
+
+  const mediaKind: 'image' | 'video' = originalSpec.video_data ? 'video' : 'image';
+  const region = regionFromAdsetName(adsetName);
+  const resolved = await resolveCreativeForAdset({
+    brokerageName: String(recommendation.concessionaria_nome || ''),
+    adsetName,
+    region,
+    mediaKind,
+  });
+  const content = await downloadDriveFile(resolved.file.id);
+  const maxBytes = mediaKind === 'video' ? 200 * 1024 * 1024 : 30 * 1024 * 1024;
+  if (content.byteLength > maxBytes) {
+    throw new Error(`O criativo "${resolved.file.name}" excede o limite de upload automatico.`);
+  }
+
+  const spec = structuredClone(originalSpec);
+  if (mediaKind === 'image') {
+    const form = new FormData();
+    form.append('filename', new Blob([content], { type: resolved.file.mimeType }), resolved.file.name);
+    const upload = await graphPostForm(`act_${accountId}/adimages`, form);
+    const imageHash = (Object.values(upload.images || {})[0] as { hash?: string } | undefined)?.hash;
+    if (!imageHash) throw new Error('A Meta nao retornou o hash da imagem enviada.');
+    if (spec.link_data) spec.link_data.image_hash = imageHash;
+    else if (spec.photo_data) spec.photo_data.image_hash = imageHash;
+    else throw new Error('O formato atual do anuncio nao aceita substituicao automatica por imagem.');
+  } else {
+    const form = new FormData();
+    form.append('source', new Blob([content], { type: resolved.file.mimeType }), resolved.file.name);
+    const upload = await graphPostForm(`act_${accountId}/advideos`, form);
+    const videoId = String(upload.id || '').trim();
+    if (!videoId) throw new Error('A Meta nao retornou o ID do video enviado.');
+    if (!spec.video_data) throw new Error('O formato atual do anuncio nao aceita substituicao automatica por video.');
+    spec.video_data.video_id = videoId;
+  }
+
+  const creative = await graphPost(`act_${accountId}/adcreatives`, {
+    name: `${ad.name || recommendation.alvo_nome || 'Anuncio'} | ${resolved.file.name} | Orion Auto`,
+    object_story_spec: JSON.stringify(spec),
+  });
+  const creativeId = String(creative.id || '').trim();
+  if (!creativeId) throw new Error('A Meta nao retornou o ID do novo criativo.');
+
+  await graphPost(String(recommendation.alvo_id), {
+    creative: JSON.stringify({ creative_id: creativeId }),
+  });
+
+  return {
+    creative_id: creativeId,
+    drive_file_id: resolved.file.id,
+    drive_file_name: resolved.file.name,
+    drive_path: resolved.path.map((folder) => folder.name),
+    adset_id: adsetId,
+    adset_name: adsetName,
+    region,
+  };
+}
+
+async function notifyBrokerAdmin(recommendation: TrafficRecommendationRow, senderProfileId: string) {
+  const { data: broker } = await supabaseAdmin
+    .from('corretores')
+    .select('id, nome, nome_empresa')
+    .eq('id', recommendation.corretor_id)
+    .maybeSingle();
+
+  const profileQueries = [
+    supabaseAdmin
+      .from('profiles')
+      .select('id, tipo_usuario')
+      .eq('corretor_id', recommendation.corretor_id)
+      .in('tipo_usuario', ['corretor_admin', 'corretor'])
+      .in('status', ['active', 'ativo', 'Ativo']),
+  ];
+  if (broker?.nome_empresa) {
+    profileQueries.push(
+      supabaseAdmin
+        .from('profiles')
+        .select('id, tipo_usuario')
+        .eq('nome_empresa', broker.nome_empresa)
+        .in('tipo_usuario', ['corretor_admin', 'corretor'])
+        .in('status', ['active', 'ativo', 'Ativo'])
+    );
+  }
+
+  const settled = await Promise.all(profileQueries);
+  const profiles = Array.from(new Map(
+    settled
+      .flatMap((result) => (result.data || []) as BrokerNotificationProfile[])
+      .map((profile) => [profile.id, profile] as const)
+  ).values());
+  const admins = profiles.filter((profile) => profile.tipo_usuario === 'corretor_admin');
+  const targets = admins.length ? admins : profiles.filter((profile) => profile.tipo_usuario === 'corretor');
+  if (!targets.length) throw new Error('Nao encontrei o perfil do corretor admin para receber o aviso.');
+
+  const saldo = Number(recommendation.metricas?.saldo);
+  const semSaldo = Number.isFinite(saldo) && saldo <= 0;
+  const titulo = semSaldo ? 'Conta de anuncios sem saldo' : 'Saldo de anuncios ficando baixo';
+  const balanceText = Number.isFinite(saldo)
+    ? saldo.toLocaleString('pt-BR', { style: 'currency', currency: String(recommendation.metricas?.currency || 'BRL') })
+    : 'indisponivel';
+  const mensagem = semSaldo
+    ? `A conta Meta da ${recommendation.concessionaria_nome || broker?.nome_empresa || broker?.nome} esta sem saldo. Recarregue para retomar a entrega das campanhas.`
+    : `O saldo da conta Meta da ${recommendation.concessionaria_nome || broker?.nome_empresa || broker?.nome} esta em ${balanceText}. Recarregue para evitar que as campanhas parem.`;
+
+  const { error } = await supabaseAdmin.from('notificacoes').insert(
+    targets.map((profile) => ({
+      titulo,
+      mensagem,
+      remetente_profile_id: senderProfileId,
+      destinatario_profile_id: profile.id,
+      destinatario_tipo: null,
+      lida: false,
+    }))
+  );
+  if (error) throw new Error(error.message);
+  return { destinatarios: targets.map((profile) => profile.id), titulo, mensagem };
 }
 
 export async function GET(request: Request) {
@@ -246,14 +450,91 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, status: 'ignorada' });
     }
 
+    if (recomendacao.acao === 'trocar_criativo' || recomendacao.acao === 'avisar_admin') {
+      try {
+        const result = recomendacao.acao === 'trocar_criativo'
+          ? await replaceCreativeAutomatically(recomendacao)
+          : await notifyBrokerAdmin(recomendacao, guard.profile.id);
+
+        const { data: updated, error } = await supabaseAdmin
+          .from('trafego_recomendacoes')
+          .update({
+            status: 'executada',
+            decidido_por: guard.profile.id,
+            decidido_em: now,
+            executado_em: now,
+            execucao_erro: null,
+            updated_at: now,
+          })
+          .eq('id', id)
+          .eq('status', 'pendente')
+          .select('id');
+
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        if (!updated?.length) return NextResponse.json({ error: 'Esta recomendacao ja foi decidida.' }, { status: 409 });
+
+        await writeAuditLog({
+          profile: guard.profile,
+          action: recomendacao.acao === 'trocar_criativo'
+            ? 'trafego.meta.criativo_trocado'
+            : 'trafego.corretor_admin.notificado',
+          entityId: id,
+          metadata: {
+            alvo_id: recomendacao.alvo_id,
+            alvo: recomendacao.alvo_nome,
+            concessionaria: recomendacao.concessionaria_nome,
+            meta_ad_account_id: recomendacao.meta_ad_account_id,
+            resultado: result,
+          },
+          request,
+        });
+
+        return NextResponse.json({
+          success: true,
+          status: 'executada',
+          executada_na_meta: recomendacao.acao === 'trocar_criativo',
+          notificacao_enviada: recomendacao.acao === 'avisar_admin',
+          resultado: result,
+          mensagem: recomendacao.acao === 'trocar_criativo'
+            ? `Criativo trocado automaticamente no anuncio "${recomendacao.alvo_nome}".`
+            : 'Corretor admin notificado na dashboard sobre o saldo da conta.',
+        });
+      } catch (executionError: unknown) {
+        const message = executionError instanceof Error
+          ? executionError.message
+          : 'Falha ao executar a recomendacao.';
+        await supabaseAdmin
+          .from('trafego_recomendacoes')
+          .update({
+            status: 'erro',
+            execucao_erro: message,
+            decidido_por: guard.profile.id,
+            decidido_em: now,
+            updated_at: now,
+          })
+          .eq('id', id)
+          .eq('status', 'pendente');
+
+        await writeAuditLog({
+          profile: guard.profile,
+          action: 'trafego.recomendacao.execucao_falhou',
+          entityId: id,
+          metadata: { acao: recomendacao.acao, alvo: recomendacao.alvo_nome, erro: message },
+          request,
+        });
+
+        return NextResponse.json({ error: message }, { status: 502 });
+      }
+    }
+
     const pauseLevel = (['campanha', 'conjunto', 'anuncio'] as const).find(
       (level) => recomendacao.nivel === level && recomendacao.acao === PAUSE_ACTION_BY_LEVEL[level]
     ) || null;
     const executavelNaMeta = Boolean(pauseLevel && recomendacao.alvo_id);
 
     if (!executavelNaMeta) {
-      // Trocar criativo, revisar publico, revisar rastreio e avisar admin nao tem
-      // equivalente seguro em chamada de API. Viram pendencia de execucao manual.
+      // As revisoes de publico e rastreio continuam manuais porque dependem de
+      // diagnostico humano. Criativo e aviso ao admin ja foram tratados acima.
       const { data: updated, error } = await supabaseAdmin
         .from('trafego_recomendacoes')
         .update({ status: 'aprovada', decidido_por: guard.profile.id, decidido_em: now, updated_at: now })
