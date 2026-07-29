@@ -15,6 +15,7 @@ import {
   Image as ImageIcon,
   ListChecks,
   Pause,
+  Play,
   PlugZap,
   X,
   Check,
@@ -79,6 +80,18 @@ type Recomendacao = {
   severidade: 'critico' | 'atencao' | 'informativo';
   motivo: string;
   metricas: Record<string, any>;
+  status?: 'pendente' | 'aprovada' | 'ignorada' | 'executada' | 'erro';
+};
+
+type CreativeSwap = {
+  old_ad_id: string;
+  old_ad_name: string;
+  new_ad_id: string;
+  new_ad_name: string;
+  asset_id: string;
+  asset_name: string;
+  asset_url?: string | null;
+  adset_name: string;
 };
 
 const TONE_VAR: Record<string, { fg: string; bg: string; border: string }> = {
@@ -116,6 +129,16 @@ function bestCreativeImage(creative?: ActiveCreative | null) {
     .replace(/\/\d+x\d+\//g, '/1080x1080/');
 }
 
+function preparedCreativeSwap(item?: Recomendacao | null) {
+  const value = item?.metricas?.troca_criativo;
+  if (!value || typeof value !== 'object' || !value.new_ad_id || !value.old_ad_id) return null;
+  return value as CreativeSwap;
+}
+
+function awaitsCreativeActivation(item: Recomendacao) {
+  return item.acao === 'trocar_criativo' && item.status === 'aprovada' && Boolean(preparedCreativeSwap(item));
+}
+
 export default function GestorDashboardPage() {
   const { profile, actualProfile } = useAuth();
   const [corretores, setCorretores] = useState<Corretor[]>([]);
@@ -136,6 +159,7 @@ export default function GestorDashboardPage() {
   const [presetLabel, setPresetLabel] = useState('Últimos 30 dias');
 
   const [confirmando, setConfirmando] = useState<Recomendacao | null>(null);
+  const [ativacaoPendente, setAtivacaoPendente] = useState<Recomendacao | null>(null);
   const [decidindo, setDecidindo] = useState<string | null>(null);
   const [fullscreenCreative, setFullscreenCreative] = useState<ActiveCreative | null>(null);
 
@@ -289,6 +313,16 @@ export default function GestorDashboardPage() {
       }
 
       setConfirmando(null);
+      if (payload.requer_ativacao && payload.resultado) {
+        setAtivacaoPendente({
+          ...recomendacao,
+          status: 'aprovada',
+          metricas: {
+            ...(recomendacao.metricas || {}),
+            troca_criativo: payload.resultado,
+          },
+        });
+      }
       setAviso({
         tone: 'ok',
         texto: payload.mensagem || (decisao === 'ignorar' ? 'Recomendação ignorada.' : 'Recomendação aprovada.'),
@@ -296,6 +330,44 @@ export default function GestorDashboardPage() {
       await recarregarFila();
     } catch {
       setAviso({ tone: 'erro', texto: 'Falha de rede ao registrar a decisão.' });
+    } finally {
+      setDecidindo(null);
+    }
+  }
+
+  async function ativarTroca(recomendacao: Recomendacao) {
+    if (!recomendacao.id) return;
+    setDecidindo(recomendacao.id);
+    setAviso(null);
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        setAviso({ tone: 'erro', texto: 'Sessão expirada. Entre novamente.' });
+        return;
+      }
+      const response = await fetch('/api/trafego/recomendacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: recomendacao.id,
+          decisao: 'aprovar',
+          confirmar: true,
+          acao_execucao: 'ativar_troca',
+          gestor_id: gestorIdParam,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setAviso({ tone: 'erro', texto: payload.error || 'Não consegui ativar o novo anúncio.' });
+        return;
+      }
+
+      setAtivacaoPendente(null);
+      setAviso({ tone: 'ok', texto: payload.mensagem || 'Novo anúncio ativado e anterior pausado.' });
+      await recarregarFila();
+    } catch {
+      setAviso({ tone: 'erro', texto: 'Falha de rede ao ativar a troca de criativo.' });
     } finally {
       setDecidindo(null);
     }
@@ -487,7 +559,9 @@ export default function GestorDashboardPage() {
                       item={item}
                       ocupado={decidindo === item.id}
                       onAprovar={() => {
-                        if (
+                        if (awaitsCreativeActivation(item)) {
+                          setAtivacaoPendente(item);
+                        } else if (
                           (item.acao === 'pausar_anuncio' && item.nivel === 'anuncio') ||
                           (item.acao === 'pausar_conjunto' && item.nivel === 'conjunto') ||
                           (item.acao === 'pausar_campanha' && item.nivel === 'campanha')
@@ -675,6 +749,15 @@ export default function GestorDashboardPage() {
           />
         ) : null}
 
+        {ativacaoPendente ? (
+          <ActivationDialog
+            item={ativacaoPendente}
+            ocupado={decidindo === ativacaoPendente.id}
+            onCancelar={() => setAtivacaoPendente(null)}
+            onConfirmar={() => void ativarTroca(ativacaoPendente)}
+          />
+        ) : null}
+
         {fullscreenCreative && bestCreativeImage(fullscreenCreative) ? (
           <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4">
             <button
@@ -769,6 +852,7 @@ function RecommendationCard({
     (item.acao === 'pausar_anuncio' && item.nivel === 'anuncio') ||
     (item.acao === 'pausar_conjunto' && item.nivel === 'conjunto') ||
     (item.acao === 'pausar_campanha' && item.nivel === 'campanha');
+  const aguardandoAtivacao = awaitsCreativeActivation(item);
 
   return (
     <div
@@ -789,6 +873,11 @@ function RecommendationCard({
           {pausaNaMeta ? (
             <span className="text-[11px] font-semibold" style={{ color: 'var(--tf-ink-mute)' }}>
               executa na Meta
+            </span>
+          ) : null}
+          {aguardandoAtivacao ? (
+            <span className="text-[11px] font-semibold" style={{ color: 'var(--tf-accent-ink)' }}>
+              novo anúncio pausado
             </span>
           ) : null}
         </div>
@@ -814,19 +903,102 @@ function RecommendationCard({
           className="tf-no-lift inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-bold text-white transition disabled:opacity-50 lg:w-32"
           style={{ background: 'var(--tf-accent)' }}
         >
-          {ocupado ? <Loader2 className="animate-spin" size={13} /> : pausaNaMeta ? <Pause size={13} /> : <Check size={13} />}
-          {pausaNaMeta ? 'Pausar' : 'Aprovar'}
+          {ocupado ? (
+            <Loader2 className="animate-spin" size={13} />
+          ) : aguardandoAtivacao ? (
+            <Play size={13} />
+          ) : pausaNaMeta ? (
+            <Pause size={13} />
+          ) : (
+            <Check size={13} />
+          )}
+          {aguardandoAtivacao ? 'Ativar' : pausaNaMeta ? 'Pausar' : 'Aprovar'}
         </button>
-        <button
-          type="button"
-          onClick={onIgnorar}
-          disabled={ocupado || !item.id}
-          className="tf-no-lift inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold transition disabled:opacity-50 lg:w-32"
-          style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}
+        {!aguardandoAtivacao ? (
+          <button
+            type="button"
+            onClick={onIgnorar}
+            disabled={ocupado || !item.id}
+            className="tf-no-lift inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold transition disabled:opacity-50 lg:w-32"
+            style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}
+          >
+            <Ban size={13} />
+            Ignorar
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ActivationDialog({
+  item,
+  ocupado,
+  onCancelar,
+  onConfirmar,
+}: {
+  item: Recomendacao;
+  ocupado: boolean;
+  onCancelar: () => void;
+  onConfirmar: () => void;
+}) {
+  const swap = preparedCreativeSwap(item);
+  if (!swap) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4">
+      <div
+        className="w-full max-w-lg rounded-2xl border p-6"
+        style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
+      >
+        <div
+          className="mb-4 grid h-11 w-11 place-items-center rounded-xl border"
+          style={{ background: 'var(--tf-ok-soft)', borderColor: 'var(--tf-ok-border)', color: 'var(--tf-ok)' }}
         >
-          <Ban size={13} />
-          Ignorar
-        </button>
+          <Play size={20} />
+        </div>
+
+        <h2 className="text-lg font-bold">Ativar o novo anúncio?</h2>
+        <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>
+          O novo anúncio foi criado pausado. Ao confirmar, o CRM ativa o novo e somente depois pausa o anúncio anterior.
+        </p>
+
+        <div className="mt-4 space-y-3 rounded-xl border p-4" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Novo anúncio</p>
+            <p className="mt-1 text-sm font-bold">{swap.new_ad_name}</p>
+            <p className="mt-1 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>Criativo: {swap.asset_name}</p>
+          </div>
+          <div className="border-t pt-3" style={{ borderColor: 'var(--tf-border)' }}>
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Anúncio que será pausado</p>
+            <p className="mt-1 text-sm font-semibold">{swap.old_ad_name}</p>
+          </div>
+          <p className="text-xs" style={{ color: 'var(--tf-ink-mute)' }}>
+            {item.concessionaria_nome} · conjunto {swap.adset_name}
+          </p>
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancelar}
+            disabled={ocupado}
+            className="tf-no-lift h-11 flex-1 rounded-xl border text-sm font-bold disabled:opacity-60"
+            style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}
+          >
+            Agora não
+          </button>
+          <button
+            type="button"
+            onClick={onConfirmar}
+            disabled={ocupado}
+            className="tf-no-lift inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-bold text-white disabled:opacity-60"
+            style={{ background: 'var(--tf-ok)' }}
+          >
+            {ocupado ? <Loader2 className="animate-spin" size={15} /> : <Play size={15} />}
+            Ativar e pausar anterior
+          </button>
+        </div>
       </div>
     </div>
   );

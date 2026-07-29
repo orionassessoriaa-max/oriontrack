@@ -546,19 +546,34 @@ async function persistRecommendations(recommendations: Recommendation[], since: 
       updated_at: new Date().toISOString(),
     }));
 
-  if (rows.length === 0) return [];
-
-  const { data, error } = await supabaseAdmin
+  // A troca aprovada cria o novo anuncio pausado e fica na fila ate o gestor
+  // confirmar a ativacao. Ela precisa sobreviver a toda nova leitura da Meta.
+  const { data: awaitingActivation, error: awaitingError } = await supabaseAdmin
     .from('trafego_recomendacoes')
-    .insert(rows)
-    .select('id, corretor_id, concessionaria_nome, meta_ad_account_id, nivel, alvo_id, alvo_nome, acao, severidade, motivo, metricas, status');
-
-  if (error) {
-    console.error('Erro ao gravar recomendacoes de trafego:', error.message);
-    throw new Error(`Nao foi possivel salvar as recomendacoes: ${error.message}`);
+    .select('id, corretor_id, concessionaria_nome, meta_ad_account_id, nivel, alvo_id, alvo_nome, acao, severidade, motivo, metricas, status')
+    .in('meta_ad_account_id', uniqueAccountIds)
+    .eq('status', 'aprovada')
+    .eq('acao', 'trocar_criativo');
+  if (awaitingError) {
+    console.error('Erro ao carregar trocas aguardando ativacao:', awaitingError.message);
+    throw new Error(`Nao foi possivel carregar as trocas aguardando ativacao: ${awaitingError.message}`);
   }
 
-  return data || [];
+  let inserted: Record<string, unknown>[] = [];
+  if (rows.length > 0) {
+    const { data, error } = await supabaseAdmin
+      .from('trafego_recomendacoes')
+      .insert(rows)
+      .select('id, corretor_id, concessionaria_nome, meta_ad_account_id, nivel, alvo_id, alvo_nome, acao, severidade, motivo, metricas, status');
+
+    if (error) {
+      console.error('Erro ao gravar recomendacoes de trafego:', error.message);
+      throw new Error(`Nao foi possivel salvar as recomendacoes: ${error.message}`);
+    }
+    inserted = data || [];
+  }
+
+  return [...(awaitingActivation || []), ...inserted];
 }
 
 export async function POST(request: Request) {

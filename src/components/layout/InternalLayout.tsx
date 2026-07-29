@@ -90,7 +90,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
             router.push('/trafego');
             return;
           }
-          if (isAllowedTrafficAdminRoute || isTrafficRoute || isTeamRoute || pathname === '/tarefas') return;
+          if (isAllowedTrafficAdminRoute || isTrafficRoute || isCreativeRoute || isTeamRoute || pathname === '/tarefas') return;
           if (isBrokerRoute || isDesignerRoute || isAccountRoute || pathname.startsWith('/simulador')) {
             router.push('/trafego');
           }

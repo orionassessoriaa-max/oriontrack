@@ -1,0 +1,676 @@
+'use client';
+
+/* The library renders runtime Supabase URLs and local data URLs from Ctrl+V.
+ * Keeping native img avoids broad remote-host allowlists and supports previews before upload. */
+/* eslint-disable @next/next/no-img-element */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  Check,
+  Download,
+  Folder,
+  FolderOpen,
+  ImagePlus,
+  Loader2,
+  Maximize2,
+  Paperclip,
+  Plus,
+  Search,
+  Sparkles,
+  Upload,
+  X,
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
+
+type LibraryAsset = {
+  id: string;
+  corretor_id: string;
+  titulo: string;
+  descricao: string | null;
+  arquivo_url: string | null;
+  status: string;
+  created_at: string;
+};
+
+type CreativeFolder = {
+  id: string;
+  key: string;
+  name: string;
+  corretor_ids: string[];
+  assets: LibraryAsset[];
+};
+
+type Props = {
+  managerName?: string | null;
+  gestorId?: string | null;
+};
+
+const FORMATS = [
+  { value: '1024x1024', label: 'Feed quadrado', detail: '1:1' },
+  { value: '1024x1536', label: 'Stories / Reels', detail: 'Vertical' },
+  { value: '1536x1024', label: 'Paisagem', detail: 'Horizontal' },
+] as const;
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Nao foi possivel ler a imagem.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+async function getAuthToken() {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token || null;
+}
+
+export default function CreativeLibrary({ managerName, gestorId }: Props) {
+  const [folders, setFolders] = useState<CreativeFolder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [selectedFolderKey, setSelectedFolderKey] = useState<string | null>(null);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [size, setSize] = useState<(typeof FORMATS)[number]['value']>('1024x1024');
+  const [referenceDataUrl, setReferenceDataUrl] = useState<string | null>(null);
+  const [referenceName, setReferenceName] = useState('');
+  const [generatedDataUrl, setGeneratedDataUrl] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [destinationId, setDestinationId] = useState('');
+  const [creativeName, setCreativeName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchLibrary = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const params = new URLSearchParams();
+      if (gestorId) params.set('gestor_id', gestorId);
+      const response = await fetch(`/api/criativos/library?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel carregar as pastas.');
+      setFolders(payload.folders || []);
+    } catch (error: unknown) {
+      setLoadError(errorMessage(error, 'Erro ao carregar as pastas.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [gestorId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void fetchLibrary(), 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchLibrary]);
+
+  useEffect(() => {
+    if (!generatorOpen) return;
+
+    const handlePaste = async (event: ClipboardEvent) => {
+      const image = [...(event.clipboardData?.items || [])]
+        .find((item) => item.type.startsWith('image/'))
+        ?.getAsFile();
+      if (!image) return;
+      event.preventDefault();
+      try {
+        if (image.size > 10 * 1024 * 1024) throw new Error('A referencia deve ter no maximo 10 MB.');
+        setReferenceDataUrl(await readFileAsDataUrl(image));
+        setReferenceName(image.name || 'Imagem colada');
+        setGenerationError(null);
+      } catch (error: unknown) {
+        setGenerationError(errorMessage(error, 'Nao foi possivel colar a imagem.'));
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [generatorOpen]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (expandedUrl) setExpandedUrl(null);
+      else if (generatorOpen && !generating && !saving) setGeneratorOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [expandedUrl, generatorOpen, generating, saving]);
+
+  const visibleFolders = useMemo(() => {
+    const normalized = search.trim().toLocaleLowerCase('pt-BR');
+    if (!normalized) return folders;
+    return folders.filter((folder) => folder.name.toLocaleLowerCase('pt-BR').includes(normalized));
+  }, [folders, search]);
+
+  const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
+
+  const resetGenerator = () => {
+    setPrompt('');
+    setSize('1024x1024');
+    setReferenceDataUrl(null);
+    setReferenceName('');
+    setGeneratedDataUrl(null);
+    setGenerationError(null);
+    setDestinationId(selectedFolder?.id || '');
+    setCreativeName('');
+    setSuccessMessage(null);
+  };
+
+  const openGenerator = () => {
+    resetGenerator();
+    setGeneratorOpen(true);
+  };
+
+  const attachReference = async (file?: File | null) => {
+    if (!file) return;
+    try {
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        throw new Error('Use uma imagem PNG, JPG ou WebP.');
+      }
+      if (file.size > 10 * 1024 * 1024) throw new Error('A referencia deve ter no maximo 10 MB.');
+      setReferenceDataUrl(await readFileAsDataUrl(file));
+      setReferenceName(file.name);
+      setGenerationError(null);
+    } catch (error: unknown) {
+      setGenerationError(errorMessage(error, 'Nao foi possivel anexar a imagem.'));
+    }
+  };
+
+  const generateCreative = async () => {
+    if (prompt.trim().length < 12) {
+      setGenerationError('Descreva melhor o criativo antes de gerar.');
+      return;
+    }
+
+    setGenerating(true);
+    setGenerationError(null);
+    setSuccessMessage(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const response = await fetch('/api/criativos/generate', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: prompt.trim(),
+          size,
+          reference_data_url: referenceDataUrl,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel gerar o criativo.');
+      setGeneratedDataUrl(payload.image_data_url);
+      setCreativeName(prompt.trim().split(/[.!?\n]/)[0].slice(0, 80) || 'Criativo gerado por IA');
+      setDestinationId(selectedFolder?.id || '');
+    } catch (error: unknown) {
+      setGenerationError(errorMessage(error, 'Erro ao gerar o criativo.'));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const saveCreative = async () => {
+    if (!generatedDataUrl || !destinationId || !creativeName.trim()) {
+      setGenerationError('Escolha a pasta e informe o nome do criativo.');
+      return;
+    }
+
+    setSaving(true);
+    setGenerationError(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const response = await fetch('/api/criativos/library', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          corretor_id: destinationId,
+          gestor_id: gestorId,
+          titulo: creativeName.trim(),
+          prompt: prompt.trim(),
+          image_data_url: generatedDataUrl,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel salvar o criativo.');
+      const folder = folders.find((item) => item.id === destinationId);
+      setSuccessMessage(`Criativo salvo na pasta ${folder?.name || 'selecionada'}.`);
+      await fetchLibrary();
+    } catch (error: unknown) {
+      setGenerationError(errorMessage(error, 'Erro ao salvar o criativo.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="mx-auto max-w-[1500px]">
+        <header className="mb-8 overflow-hidden rounded-[28px] border border-cyan-400/15 bg-[radial-gradient(circle_at_top_right,rgba(6,182,212,0.16),transparent_34%),linear-gradient(135deg,#07111f_0%,#0b1728_100%)] p-6 shadow-2xl shadow-slate-950/20 sm:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-3 flex items-center gap-2 text-cyan-300">
+                <Sparkles size={17} aria-hidden="true" />
+                <p className="text-xs font-black uppercase tracking-[0.2em]">Central de criativos</p>
+              </div>
+              <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+                Pastas das suas concessionarias
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-300 sm:text-base">
+                {managerName ? `${managerName}, aqui aparecem somente as concessionarias atribuidas a voce.` : 'Organize e gere novas artes sem sair do CRM.'}
+                {' '}Gere com IA, revise o resultado e escolha a pasta somente depois.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={openGenerator}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-6 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition duration-200 hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/40"
+            >
+              <Sparkles size={18} aria-hidden="true" />
+              Gerar criativo
+            </button>
+          </div>
+        </header>
+
+        {selectedFolder ? (
+          <section>
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedFolderKey(null)}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700/40 bg-slate-900/50 text-slate-300 transition hover:border-cyan-400/50 hover:text-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                  aria-label="Voltar para todas as pastas"
+                >
+                  <ArrowLeft size={19} />
+                </button>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-500">Concessionaria</p>
+                  <h2 className="text-2xl font-black text-slate-100">{selectedFolder.name}</h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={openGenerator}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400/30"
+              >
+                <Plus size={18} />
+                Novo criativo
+              </button>
+            </div>
+
+            {selectedFolder.assets.length === 0 ? (
+              <div className="rounded-[28px] border border-dashed border-slate-700 bg-slate-900/40 px-6 py-16 text-center">
+                <ImagePlus className="mx-auto text-slate-600" size={42} />
+                <h3 className="mt-4 text-lg font-black text-slate-200">Esta pasta ainda esta vazia</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-slate-500">
+                  Gere o primeiro criativo com IA e atribua a esta concessionaria.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {selectedFolder.assets.map((asset) => (
+                  <article key={asset.id} className="group overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/70 shadow-xl shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/40">
+                    <button
+                      type="button"
+                      onClick={() => asset.arquivo_url && setExpandedUrl(asset.arquivo_url)}
+                      disabled={!asset.arquivo_url}
+                      className="relative block aspect-square w-full overflow-hidden bg-slate-950/60 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-cyan-400 disabled:cursor-default"
+                      aria-label={`Ampliar ${asset.titulo}`}
+                    >
+                      {asset.arquivo_url ? (
+                        <img src={asset.arquivo_url} alt={asset.titulo} className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.02]" loading="lazy" />
+                      ) : (
+                        <ImagePlus className="m-auto text-slate-700" size={36} />
+                      )}
+                      <span className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950/75 text-white opacity-0 backdrop-blur transition group-hover:opacity-100">
+                        <Maximize2 size={16} />
+                      </span>
+                    </button>
+                    <div className="p-5">
+                      <h3 className="truncate text-base font-black text-slate-100">{asset.titulo}</h3>
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <p className="text-xs font-bold text-slate-500">{formatDate(asset.created_at)}</p>
+                        {asset.arquivo_url && (
+                          <a
+                            href={asset.arquivo_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            download
+                            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-black text-cyan-400 transition hover:bg-cyan-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          >
+                            <Download size={15} />
+                            Baixar
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : (
+          <section>
+            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-500">Biblioteca</p>
+                <h2 className="mt-1 text-2xl font-black text-slate-100">Escolha uma pasta</h2>
+              </div>
+              <label className="relative block w-full sm:max-w-sm">
+                <span className="sr-only">Buscar concessionaria</span>
+                <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar concessionaria..."
+                  className="min-h-12 w-full rounded-2xl border border-slate-700 bg-slate-900/70 py-3 pl-11 pr-4 text-base font-semibold text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
+                />
+              </label>
+            </div>
+
+            {loading ? (
+              <div className="flex min-h-72 items-center justify-center rounded-[28px] border border-slate-800 bg-slate-900/40">
+                <Loader2 className="animate-spin text-cyan-400" size={34} aria-label="Carregando pastas" />
+              </div>
+            ) : loadError ? (
+              <div role="alert" className="rounded-2xl border border-red-400/20 bg-red-500/10 p-5 text-sm font-bold text-red-200">
+                {loadError}
+              </div>
+            ) : visibleFolders.length === 0 ? (
+              <div className="rounded-[28px] border border-dashed border-slate-700 bg-slate-900/40 px-6 py-16 text-center">
+                <Folder className="mx-auto text-slate-600" size={44} />
+                <h3 className="mt-4 text-lg font-black text-slate-200">
+                  {search ? 'Nenhuma pasta encontrada' : 'Nenhuma concessionaria atribuida'}
+                </h3>
+                <p className="mx-auto mt-2 max-w-lg text-sm font-semibold text-slate-500">
+                  {search ? 'Tente buscar por outro nome.' : 'Assim que uma concessionaria for atribuida ao gestor, a pasta aparecera aqui automaticamente.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {visibleFolders.map((folder) => {
+                  const cover = folder.assets.find((asset) => asset.arquivo_url)?.arquivo_url;
+                  return (
+                    <button
+                      key={folder.key}
+                      type="button"
+                      onClick={() => setSelectedFolderKey(folder.key)}
+                      className="group min-h-52 overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/70 text-left shadow-xl shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/50 hover:shadow-cyan-950/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400/25"
+                    >
+                      <div className="relative h-28 overflow-hidden bg-gradient-to-br from-slate-800 to-slate-950">
+                        {cover ? (
+                          <img src={cover} alt="" className="h-full w-full object-cover opacity-45 transition duration-300 group-hover:scale-105 group-hover:opacity-60" loading="lazy" />
+                        ) : (
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.2),transparent_50%)]" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent" />
+                        <span className="absolute bottom-3 left-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/15 text-cyan-300 backdrop-blur">
+                          <FolderOpen size={24} />
+                        </span>
+                      </div>
+                      <div className="flex items-end justify-between gap-4 p-5">
+                        <div className="min-w-0">
+                          <h3 className="truncate text-base font-black text-slate-100">{folder.name}</h3>
+                          <p className="mt-1 text-xs font-bold text-slate-500">
+                            {folder.assets.length} {folder.assets.length === 1 ? 'criativo' : 'criativos'}
+                          </p>
+                        </div>
+                        <span className="text-xs font-black text-cyan-400 transition group-hover:translate-x-0.5">Abrir</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+
+      {generatorOpen && (
+        <div className="fixed inset-0 z-[120] overflow-y-auto bg-slate-950/85 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="creative-generator-title">
+          <div className="mx-auto my-3 max-w-6xl overflow-hidden rounded-[28px] border border-slate-700 bg-[#08111f] shadow-2xl shadow-black/60">
+            <div className="flex items-start justify-between gap-5 border-b border-slate-800 px-5 py-5 sm:px-7">
+              <div>
+                <div className="flex items-center gap-2 text-cyan-400">
+                  <Sparkles size={17} />
+                  <p className="text-xs font-black uppercase tracking-[0.2em]">Geracao com IA</p>
+                </div>
+                <h2 id="creative-generator-title" className="mt-1 text-2xl font-black text-white">Criar novo criativo</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-400">Primeiro gere a arte. Depois escolha em qual pasta ela sera salva.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGeneratorOpen(false)}
+                disabled={generating || saving}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 text-slate-400 transition hover:border-slate-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:opacity-40"
+                aria-label="Fechar gerador"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="space-y-6 border-b border-slate-800 p-5 sm:p-7 lg:border-b-0 lg:border-r">
+                <div>
+                  <label htmlFor="creative-prompt" className="text-sm font-black text-slate-200">O que voce quer criar?</label>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Informe oferta, publico, estilo, cores e os textos exatos que precisam aparecer. A IA nao deve inventar informacoes.</p>
+                  <textarea
+                    id="creative-prompt"
+                    value={prompt}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    placeholder="Ex.: Criativo moderno para plano de saude PME, fundo azul, familia sorrindo, destaque para atendimento nacional..."
+                    className="mt-3 min-h-40 w-full resize-y rounded-2xl border border-slate-700 bg-slate-950/60 p-4 text-base font-semibold leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
+                    maxLength={3000}
+                  />
+                  <p className="mt-1 text-right text-[11px] font-bold text-slate-600">{prompt.length}/3000</p>
+                </div>
+
+                <fieldset>
+                  <legend className="text-sm font-black text-slate-200">Formato</legend>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    {FORMATS.map((format) => (
+                      <button
+                        key={format.value}
+                        type="button"
+                        onClick={() => setSize(format.value)}
+                        className={`min-h-16 rounded-2xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                          size === format.value
+                            ? 'border-cyan-400 bg-cyan-400/10 text-cyan-200'
+                            : 'border-slate-700 bg-slate-950/40 text-slate-400 hover:border-slate-500'
+                        }`}
+                        aria-pressed={size === format.value}
+                      >
+                        <span className="block text-xs font-black">{format.label}</span>
+                        <span className="mt-1 block text-[11px] font-bold opacity-70">{format.detail}</span>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <div>
+                  <p className="text-sm font-black text-slate-200">Imagem de referencia <span className="font-semibold text-slate-600">(opcional)</span></p>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mt-3 flex min-h-28 w-full items-center gap-4 rounded-2xl border border-dashed border-slate-600 bg-slate-950/35 p-4 text-left transition hover:border-cyan-500/70 hover:bg-cyan-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                  >
+                    {referenceDataUrl ? (
+                      <>
+                        <img src={referenceDataUrl} alt="Referencia anexada" className="h-20 w-20 shrink-0 rounded-xl object-cover" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-black text-slate-200">{referenceName || 'Imagem colada'}</span>
+                          <span className="mt-1 block text-xs font-semibold text-cyan-400">Clique para trocar ou use Ctrl+V novamente</span>
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-cyan-400">
+                          <Paperclip size={21} />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-black text-slate-200">Cole com Ctrl+V ou escolha uma imagem</span>
+                          <span className="mt-1 block text-xs font-semibold text-slate-500">PNG, JPG ou WebP de ate 10 MB</span>
+                        </span>
+                      </>
+                    )}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(event) => void attachReference(event.target.files?.[0])}
+                  />
+                  {referenceDataUrl && (
+                    <button
+                      type="button"
+                      onClick={() => { setReferenceDataUrl(null); setReferenceName(''); }}
+                      className="mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-black text-slate-500 transition hover:bg-slate-800 hover:text-slate-300"
+                    >
+                      <X size={14} /> Remover referencia
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={generateCreative}
+                  disabled={generating || saving || prompt.trim().length < 12}
+                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {generating ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                  {generating ? 'Criando a arte...' : generatedDataUrl ? 'Gerar outra versao' : 'Gerar criativo'}
+                </button>
+                {generating && (
+                  <p className="text-center text-xs font-semibold leading-5 text-slate-500">
+                    Uma geracao detalhada pode levar ate dois minutos. Mantenha esta janela aberta.
+                  </p>
+                )}
+              </div>
+
+              <div className="p-5 sm:p-7">
+                <div className="flex min-h-[420px] items-center justify-center overflow-hidden rounded-3xl border border-slate-700 bg-[linear-gradient(45deg,#0b1524_25%,transparent_25%),linear-gradient(-45deg,#0b1524_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#0b1524_75%),linear-gradient(-45deg,transparent_75%,#0b1524_75%)] bg-[length:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0px]">
+                  {generating ? (
+                    <div className="px-6 text-center">
+                      <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-cyan-400/10 text-cyan-400">
+                        <Loader2 className="animate-spin" size={30} />
+                      </span>
+                      <h3 className="mt-5 text-lg font-black text-slate-200">A IA esta montando o criativo</h3>
+                      <p className="mt-2 text-sm font-semibold text-slate-500">Composicao, texto e referencia estao sendo processados.</p>
+                    </div>
+                  ) : generatedDataUrl ? (
+                    <img src={generatedDataUrl} alt="Criativo gerado pela IA" className="max-h-[650px] w-full object-contain" />
+                  ) : (
+                    <div className="px-6 text-center">
+                      <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-800 text-slate-500">
+                        <ImagePlus size={30} />
+                      </span>
+                      <h3 className="mt-5 text-lg font-black text-slate-300">A previa aparecera aqui</h3>
+                      <p className="mx-auto mt-2 max-w-sm text-sm font-semibold leading-6 text-slate-600">Escreva o briefing, adicione uma referencia se quiser e clique em gerar.</p>
+                    </div>
+                  )}
+                </div>
+
+                {generationError && (
+                  <div role="alert" className="mt-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm font-bold leading-5 text-red-200">
+                    {generationError}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div aria-live="polite" className="mt-4 flex items-center gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm font-bold text-emerald-200">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400/15"><Check size={17} /></span>
+                    {successMessage}
+                  </div>
+                )}
+
+                {generatedDataUrl && (
+                  <div className="mt-5 rounded-3xl border border-cyan-400/20 bg-cyan-400/[0.04] p-5">
+                    <div className="flex items-center gap-2 text-cyan-400">
+                      <FolderOpen size={17} />
+                      <p className="text-xs font-black uppercase tracking-[0.18em]">Agora atribua a uma pasta</p>
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="text-xs font-black text-slate-300">Pasta da concessionaria</span>
+                        <select
+                          value={destinationId}
+                          onChange={(event) => setDestinationId(event.target.value)}
+                          className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
+                        >
+                          <option value="">Selecione...</option>
+                          {folders.map((folder) => <option key={folder.key} value={folder.id}>{folder.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-black text-slate-300">Nome do criativo</span>
+                        <input
+                          value={creativeName}
+                          onChange={(event) => setCreativeName(event.target.value)}
+                          maxLength={160}
+                          className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={saveCreative}
+                      disabled={saving || !destinationId || !creativeName.trim()}
+                      className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400/30 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      {saving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
+                      {saving ? 'Salvando na pasta...' : 'Salvar na pasta'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {expandedUrl && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/95 p-4" role="dialog" aria-modal="true" aria-label="Criativo ampliado" onClick={() => setExpandedUrl(null)}>
+          <button
+            type="button"
+            onClick={() => setExpandedUrl(null)}
+            className="absolute right-5 top-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-black/30 text-white backdrop-blur transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            aria-label="Fechar imagem ampliada"
+          >
+            <X size={20} />
+          </button>
+          <img src={expandedUrl} alt="Criativo em tamanho ampliado" className="max-h-[90vh] max-w-[94vw] object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+        </div>
+      )}
+    </>
+  );
+}

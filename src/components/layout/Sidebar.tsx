@@ -228,6 +228,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const trafficMenu = [
     { icon: Home, label: 'Dashboard', href: '/trafego' },
     { icon: Building2, label: 'Concessionarias', href: '/admin/corretoras' },
+    { icon: Palette, label: 'Criativos', href: '/criativos' },
     { icon: TrendingUp, label: 'Otimizacoes', href: '/trafego/otimizacoes' },
     { icon: FileSearch, label: 'Leads dos corretores', href: '/trafego/leads' },
     { icon: UserPlus, label: 'Entrada', href: '/trafego/entrada' },
