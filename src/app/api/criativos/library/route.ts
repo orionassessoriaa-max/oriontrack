@@ -40,6 +40,11 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function isDriveWriteScopeError(error: unknown) {
+  return /insufficient authentication scopes|insufficient.*scope|insufficientPermissions/i
+    .test(errorMessage(error, ''));
+}
+
 function safeFileName(name: string) {
   return name
     .normalize('NFD')
@@ -125,14 +130,24 @@ async function resolveDriveLibraryScope(
   const root = await listDriveChildren(rootId, 1000);
   let managerFolder = findManagerFolder(root.folders, manager.nome);
   const createdFolders: string[] = [];
+  let writePermissionMissing = false;
   if (!managerFolder) {
     if (!options.createMissing) {
       throw new Error(`Pasta do gestor "${manager.nome}" nao encontrada no Google Drive.`);
     }
-    managerFolder = await createDriveFolder({
-      parentId: rootId,
-      name: normalizeFolderName(manager.nome).split(' ')[0].toUpperCase(),
-    });
+    try {
+      managerFolder = await createDriveFolder({
+        parentId: rootId,
+        name: normalizeFolderName(manager.nome).split(' ')[0].toUpperCase(),
+      });
+    } catch (error: unknown) {
+      if (isDriveWriteScopeError(error)) {
+        throw new Error(
+          `A pasta do gestor "${manager.nome}" nao existe e a conexao atual do Google Drive permite somente leitura.`
+        );
+      }
+      throw error;
+    }
     createdFolders.push(managerFolder.name);
   }
 
@@ -161,10 +176,19 @@ async function resolveDriveLibraryScope(
 
   if (options.createMissing) {
     for (const assigned of assignedFolders.filter((folder) => !matchedKeys.has(folder.key))) {
-      const created = await createDriveFolder({
-        parentId: managerFolder.id,
-        name: assigned.name,
-      });
+      let created: DriveFolder;
+      try {
+        created = await createDriveFolder({
+          parentId: managerFolder.id,
+          name: assigned.name,
+        });
+      } catch (error: unknown) {
+        if (isDriveWriteScopeError(error)) {
+          writePermissionMissing = true;
+          break;
+        }
+        throw error;
+      }
       matchedKeys.add(assigned.key);
       createdFolders.push(`${managerFolder.name}/${created.name}`);
       folders.push({
@@ -184,6 +208,7 @@ async function resolveDriveLibraryScope(
       .filter((folder) => !matchedKeys.has(folder.key))
       .map((folder) => folder.name),
     createdFolders,
+    writePermissionMissing,
     managerFolder,
   };
 }
@@ -229,6 +254,7 @@ export async function GET(request: Request) {
       })),
       missing_folders: driveScope.missingFolders,
       created_folders: driveScope.createdFolders,
+      drive_write_permission_missing: driveScope.writePermissionMissing,
       manager_drive_folder: {
         id: driveScope.managerFolder.id,
         name: driveScope.managerFolder.name,

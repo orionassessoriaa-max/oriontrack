@@ -87,6 +87,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [missingFolders, setMissingFolders] = useState<string[]>([]);
   const [createdFolders, setCreatedFolders] = useState<string[]>([]);
+  const [driveWritePermissionMissing, setDriveWritePermissionMissing] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedFolderKey, setSelectedFolderKey] = useState<string | null>(null);
   const [generatorOpen, setGeneratorOpen] = useState(false);
@@ -120,6 +121,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       setFolders(payload.folders || []);
       setMissingFolders(payload.missing_folders || []);
       setCreatedFolders(payload.created_folders || []);
+      setDriveWritePermissionMissing(Boolean(payload.drive_write_permission_missing));
     } catch (error: unknown) {
       setLoadError(errorMessage(error, 'Erro ao carregar as pastas.'));
     } finally {
@@ -428,6 +430,11 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
               {createdFolders.length > 0 && !search ? (
                 <div className="mb-5 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 text-sm font-bold leading-6 text-cyan-100">
                   {createdFolders.length} pasta(s) foram sincronizadas fisicamente com o Google Drive.
+                </div>
+              ) : null}
+              {driveWritePermissionMissing && !search ? (
+                <div className="mb-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm font-bold leading-6 text-amber-100">
+                  As pastas existentes foram carregadas. A conexao atual do Google Drive permite visualizar, mas nao criar as pastas que faltam.
                 </div>
               ) : null}
               {missingFolders.length > 0 && !search ? (
