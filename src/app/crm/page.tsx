@@ -1686,7 +1686,7 @@ export default function CrmPage() {
               ) : (
                 <>
                 <div
-                  className="scrollbar-visible flex h-[calc(100dvh-360px)] min-h-[560px] gap-4 overflow-x-auto overscroll-x-contain scroll-smooth pb-4 pr-2 sm:gap-5 [scrollbar-gutter:stable] [touch-action:pan-x_pan-y]"
+                  className="crm-kanban-scroll scrollbar-visible flex h-[calc(100dvh-360px)] min-h-[560px] gap-4 overflow-x-auto overscroll-x-contain scroll-smooth pb-4 pr-2 sm:gap-5 [scrollbar-gutter:stable] [touch-action:pan-x_pan-y]"
                 >
                   {boardColumns.map((column) => {
                     const columnLeads = getLeadsByStatus(column.id);
@@ -1710,7 +1710,7 @@ export default function CrmPage() {
                           }
                         }}
                         onDrop={() => draggedColumnId && canManageKanbanStructure ? handleColumnDrop(column.id) : handleDrop(column.id)}
-                        className={`orion-kanban-column flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-all duration-200 ease-out sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId || draggedColumnId ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'} ${draggedColumnId === column.id ? 'scale-[1.015] shadow-2xl shadow-blue-900/20 ring-2 ring-blue-300/70' : ''}`}
+                        className={`orion-kanban-column flex h-full min-w-[250px] max-w-[270px] flex-none flex-col overflow-hidden rounded-[1.35rem] border transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out sm:min-w-[270px] sm:max-w-[290px] ${draggedLeadId || draggedColumnId ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'} ${draggedColumnId === column.id ? 'scale-[1.01] shadow-xl shadow-blue-900/15 ring-2 ring-blue-300/70' : ''}`}
                       >
                         <header
                           draggable={canEditColumn && !isEditingColumn}
@@ -1820,7 +1820,7 @@ export default function CrmPage() {
                                 onDragStart={() => setDraggedLeadId(lead.id)}
                                 onDragEnd={() => setDraggedLeadId(null)}
                                 onClick={() => openLeadDetails(lead)}
-                                className={`w-full rounded-2xl border bg-white px-3 py-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-blue-300 ring-4 ring-blue-100' : 'border-white'}`}
+                                className={`crm-lead-card w-full rounded-2xl border bg-white px-3 py-3 text-left shadow-sm transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-blue-300 ring-4 ring-blue-100' : 'border-white'}`}
                               >
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Activity,
   Bell,
   Bot,
   Building2,
@@ -200,6 +201,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const adminMenu = [
     { icon: Home, label: 'Visao Geral', href: '/admin' },
+    { icon: Activity, label: 'Atendimento e Analise', href: '/atendimento-analise' },
     { icon: Shield, label: 'Usuarios', href: '/admin/usuarios' },
     { icon: Building2, label: 'Concessionarias', href: '/admin/corretoras' },
     { icon: Cpu, label: 'IA', href: '/admin/ia' },
@@ -227,6 +229,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const trafficMenu = [
     { icon: Home, label: 'Dashboard', href: '/trafego' },
+    { icon: Activity, label: 'Atendimento e Analise', href: '/atendimento-analise' },
     { icon: Building2, label: 'Concessionarias', href: '/admin/corretoras' },
     { icon: Palette, label: 'Criativos', href: '/criativos' },
     { icon: TrendingUp, label: 'Otimizacoes', href: '/trafego/otimizacoes' },
@@ -243,6 +246,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const designerMenu = [
     { icon: Palette, label: 'Designer', href: '/designer' },
+    { icon: Activity, label: 'Atendimento e Analise', href: '/atendimento-analise' },
     { icon: FileText, label: 'Ofertas', href: '/designer/ofertas' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
     { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
@@ -251,6 +255,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const accountMenu = [
     { icon: Home, label: 'Account', href: '/account' },
+    { icon: Activity, label: 'Atendimento e Analise', href: '/atendimento-analise' },
     { icon: Users, label: 'Corretores', href: '/account/corretores' },
     { icon: MessageSquare, label: 'Inbox', href: '/account/inbox' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },

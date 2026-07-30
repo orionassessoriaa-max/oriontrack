@@ -47,6 +47,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         const isAccountRoute = pathname.startsWith('/account');
         const isCreativeRoute = pathname.startsWith('/criativos');
         const isTeamRoute = pathname.startsWith('/equipe');
+        const isAnalysisRoute = pathname.startsWith('/atendimento-analise');
         const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/apolo-one') || pathname.startsWith('/ajuda');
         const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/inbox', '/historico', '/minha-pagina', '/time', '/ferramentas'].some(p => pathname.startsWith(p)) || isCreativeRoute;
         const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/historico', '/minha-pagina', '/simulador', '/inbox', '/time', '/ferramentas', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos'].some(p => pathname.startsWith(p));
@@ -64,6 +65,7 @@ export default function InternalLayout({ children }: { children: React.ReactNode
         }
 
         if (isSharedRoute) return;
+        if (isAnalysisRoute && (isAdmin || isTrafficManager || isDesigner || isAccountManager)) return;
 
         // 1. Corretor Access: Only broker routes
         if (isCorretor) {
@@ -90,19 +92,19 @@ export default function InternalLayout({ children }: { children: React.ReactNode
             router.push('/trafego');
             return;
           }
-          if (isAllowedTrafficAdminRoute || isTrafficRoute || isCreativeRoute || isTeamRoute || pathname === '/tarefas') return;
+          if (isAllowedTrafficAdminRoute || isTrafficRoute || isCreativeRoute || isTeamRoute || isAnalysisRoute || pathname === '/tarefas') return;
           if (isBrokerRoute || isDesignerRoute || isAccountRoute || pathname.startsWith('/simulador')) {
             router.push('/trafego');
           }
         }
         else if (isDesigner) {
-          if (!isDesignerRoute && !isCreativeRoute && !isTeamRoute && pathname !== '/perfil' && pathname !== '/notificacoes') {
+          if (!isDesignerRoute && !isCreativeRoute && !isTeamRoute && !isAnalysisRoute && pathname !== '/perfil' && pathname !== '/notificacoes') {
             router.push('/designer');
           }
         }
         else if (isAccountManager) {
           if (isViewingAsCorretor && isBrokerRoute) return;
-          if (!isAccountRoute && !isCreativeRoute && !isTeamRoute && !pathname.startsWith('/trafego/relatorios') && pathname !== '/perfil' && pathname !== '/notificacoes') {
+          if (!isAccountRoute && !isCreativeRoute && !isTeamRoute && !isAnalysisRoute && !pathname.startsWith('/trafego/relatorios') && pathname !== '/perfil' && pathname !== '/notificacoes') {
             router.push('/account');
           }
         }

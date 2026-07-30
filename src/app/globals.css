@@ -4247,3 +4247,36 @@ html.theme-noturno .orion-trafego {
 .orion-trafego .tf-no-lift:hover {
   transform: none !important;
 }
+
+/* Isola a pintura dos kanbans durante scroll e arraste. */
+.orion-crm .orion-kanban-column,
+.analysis-board .analysis-stage {
+  contain: layout paint style;
+}
+
+.orion-crm .crm-lead-card,
+.analysis-board .analysis-card {
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.orion-crm .crm-kanban-scroll,
+.analysis-board .analysis-board-scroll {
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+}
+
+.orion-crm .orion-kanban-column,
+.analysis-board .analysis-stage {
+  scroll-snap-align: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orion-crm *,
+  .analysis-board * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

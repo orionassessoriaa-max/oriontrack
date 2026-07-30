@@ -27,6 +27,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import Link from 'next/link';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
+import WeeklyAccountAnalysis from '@/components/trafego/WeeklyAccountAnalysis';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import {
   ACTION_LABELS,
@@ -527,6 +528,8 @@ export default function GestorDashboardPage() {
             </button>
           </div>
         </header>
+
+        <WeeklyAccountAnalysis gestorId={gestorIdParam} />
 
         {aviso ? (
           <div
