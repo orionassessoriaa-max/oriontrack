@@ -5,6 +5,7 @@ import AuthProvider from "@/components/providers/AuthProvider";
 import DatePickerEnhancer from "@/components/ui/DatePickerEnhancer";
 import EscapeToClose from "@/components/ui/EscapeToClose";
 import DialogProvider from "@/components/providers/DialogProvider";
+import CreativeJobsProvider from "@/components/creatives/CreativeJobsProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,7 +38,9 @@ export default function RootLayout({
         <EscapeToClose />
         <DialogProvider>
           <AuthProvider>
-            {children}
+            <CreativeJobsProvider>
+              {children}
+            </CreativeJobsProvider>
           </AuthProvider>
         </DialogProvider>
       </body>

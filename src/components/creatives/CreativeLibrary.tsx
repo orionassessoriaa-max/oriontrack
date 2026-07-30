@@ -7,12 +7,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  Building2,
   Check,
   Download,
   Folder,
   FolderOpen,
   ImagePlus,
   Loader2,
+  MapPin,
   Maximize2,
   Paperclip,
   Plus,
@@ -22,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { useCreativeJobs } from '@/components/creatives/CreativeJobsProvider';
 
 type LibraryAsset = {
   id: string;
@@ -30,7 +33,18 @@ type LibraryAsset = {
   descricao: string | null;
   arquivo_url: string | null;
   status: string;
+  operadora: string | null;
+  regiao: string | null;
+  headline: string | null;
+  legenda: string | null;
   created_at: string;
+};
+
+type CreativeStrategy = {
+  id: string;
+  corretor_id: string;
+  operadora: string;
+  regiao: string;
 };
 
 type CreativeFolder = {
@@ -42,6 +56,7 @@ type CreativeFolder = {
   drive_web_view_link: string | null;
   drive_files_count: number;
   assets: LibraryAsset[];
+  strategies: CreativeStrategy[];
 };
 
 type Props = {
@@ -77,12 +92,22 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function pathKey(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'geral';
+}
+
 async function getAuthToken() {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token || null;
 }
 
 export default function CreativeLibrary({ managerName, gestorId }: Props) {
+  const { jobsVersion, refreshJobs } = useCreativeJobs();
   const [folders, setFolders] = useState<CreativeFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -91,6 +116,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [driveWritePermissionMissing, setDriveWritePermissionMissing] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedFolderKey, setSelectedFolderKey] = useState<string | null>(null);
+  const [selectedRegionKey, setSelectedRegionKey] = useState<string | null>(null);
+  const [selectedOperatorKey, setSelectedOperatorKey] = useState<string | null>(null);
   const [generatorOpen, setGeneratorOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [size, setSize] = useState<(typeof FORMATS)[number]['value']>('1024x1024');
@@ -110,8 +137,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchLibrary = useCallback(async () => {
-    setLoading(true);
+  const fetchLibrary = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setLoadError(null);
     try {
       const token = await getAuthToken();
@@ -120,6 +147,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       if (gestorId) params.set('gestor_id', gestorId);
       const response = await fetch(`/api/criativos/library?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel carregar as pastas.');
@@ -130,7 +158,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     } catch (error: unknown) {
       setLoadError(errorMessage(error, 'Erro ao carregar as pastas.'));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [gestorId]);
 
@@ -138,6 +166,13 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     const timer = window.setTimeout(() => void fetchLibrary(), 0);
     return () => window.clearTimeout(timer);
   }, [fetchLibrary]);
+
+  const jobsVersionRef = useRef(jobsVersion);
+  useEffect(() => {
+    if (jobsVersionRef.current === jobsVersion) return;
+    jobsVersionRef.current = jobsVersion;
+    void fetchLibrary(true);
+  }, [fetchLibrary, jobsVersion]);
 
   useEffect(() => {
     if (!generatorOpen) return;
@@ -179,6 +214,43 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   }, [folders, search]);
 
   const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
+  const folderHierarchy = useMemo(() => {
+    if (!selectedFolder) return [];
+    const regions = new Map<string, {
+      key: string;
+      name: string;
+      operators: Map<string, { key: string; name: string; assets: LibraryAsset[] }>;
+    }>();
+    const ensurePath = (regionValue?: string | null, operatorValue?: string | null) => {
+      const regionName = String(regionValue || '').trim() || 'Sem região definida';
+      const operatorName = String(operatorValue || '').trim() || 'Geral';
+      const regionKey = pathKey(regionName);
+      const operatorKey = pathKey(operatorName);
+      if (!regions.has(regionKey)) {
+        regions.set(regionKey, { key: regionKey, name: regionName, operators: new Map() });
+      }
+      const region = regions.get(regionKey)!;
+      if (!region.operators.has(operatorKey)) {
+        region.operators.set(operatorKey, { key: operatorKey, name: operatorName, assets: [] });
+      }
+      return region.operators.get(operatorKey)!;
+    };
+    (selectedFolder.strategies || []).forEach((strategy) => {
+      ensurePath(strategy.regiao, strategy.operadora);
+    });
+    selectedFolder.assets.forEach((asset) => {
+      ensurePath(asset.regiao, asset.operadora).assets.push(asset);
+    });
+    return [...regions.values()]
+      .map((region) => ({
+        ...region,
+        operators: [...region.operators.values()]
+          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [selectedFolder]);
+  const selectedRegion = folderHierarchy.find((region) => region.key === selectedRegionKey) || null;
+  const selectedOperator = selectedRegion?.operators.find((operator) => operator.key === selectedOperatorKey) || null;
 
   const resetGenerator = () => {
     setPrompt('');
@@ -189,8 +261,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     setGenerationError(null);
     setDestinationId(selectedFolder?.id || '');
     setCreativeName('');
-    setBatchOperator('');
-    setBatchRegion('');
+    setBatchOperator(selectedOperator?.name || '');
+    setBatchRegion(selectedRegion?.name || '');
     setBatchQuantity(4);
     setSuccessMessage(null);
   };
@@ -283,6 +355,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel iniciar a geracao.');
       setSuccessMessage(payload.message || 'Lote iniciado. Voce pode fechar esta janela e continuar trabalhando.');
+      await refreshJobs();
       setPrompt('');
       setReferenceDataUrl(null);
       setReferenceName('');
@@ -366,15 +439,31 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setSelectedFolderKey(null)}
+                  onClick={() => {
+                    if (selectedOperatorKey) {
+                      setSelectedOperatorKey(null);
+                    } else if (selectedRegionKey) {
+                      setSelectedRegionKey(null);
+                    } else {
+                      setSelectedFolderKey(null);
+                    }
+                  }}
                   className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700/40 bg-slate-900/50 text-slate-300 transition hover:border-cyan-400/50 hover:text-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                  aria-label="Voltar para todas as pastas"
+                  aria-label="Voltar um nível"
                 >
                   <ArrowLeft size={19} />
                 </button>
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-500">Concessionaria</p>
-                  <h2 className="text-2xl font-black text-slate-100">{selectedFolder.name}</h2>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-black uppercase tracking-[0.14em] text-cyan-500">
+                    {selectedFolder.name}
+                    {selectedRegion ? ` / ${selectedRegion.name}` : ''}
+                  </p>
+                  <h2 className="truncate text-2xl font-black text-slate-100">
+                    {selectedOperator?.name || selectedRegion?.name || selectedFolder.name}
+                  </h2>
+                  <p className="mt-1 text-xs font-bold text-slate-500">
+                    {selectedOperator ? 'Criativos da operadora' : selectedRegion ? 'Escolha uma operadora' : 'Escolha primeiro a região'}
+                  </p>
                 </div>
               </div>
               <button
@@ -387,17 +476,103 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
               </button>
             </div>
 
-            {selectedFolder.assets.length === 0 ? (
+            {!selectedRegion ? (
+              folderHierarchy.length === 0 ? (
+                <div className="rounded-[28px] border border-dashed border-slate-700 bg-slate-900/40 px-6 py-16 text-center">
+                  <MapPin className="mx-auto text-slate-600" size={42} />
+                  <h3 className="mt-4 text-lg font-black text-slate-200">Nenhuma região criada ainda</h3>
+                  <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-slate-500">
+                    Gere o primeiro lote informando região e operadora. A estrutura será criada automaticamente.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {folderHierarchy.map((region) => {
+                    const assetsCount = region.operators.reduce((sum, operator) => sum + operator.assets.length, 0);
+                    return (
+                      <button
+                        key={region.key}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRegionKey(region.key);
+                          setSelectedOperatorKey(null);
+                        }}
+                        className="group min-h-48 overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/70 text-left shadow-xl shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400/25"
+                      >
+                        <div className="relative h-24 bg-gradient-to-br from-cyan-950/60 to-slate-950">
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.24),transparent_52%)]" />
+                          <span className="absolute bottom-3 left-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/15 text-cyan-300">
+                            <MapPin size={24} />
+                          </span>
+                        </div>
+                        <div className="flex items-end justify-between gap-4 p-5">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-500">Região</p>
+                            <h3 className="mt-1 truncate text-lg font-black text-slate-100">{region.name}</h3>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {region.operators.length} {region.operators.length === 1 ? 'operadora' : 'operadoras'} · {assetsCount} {assetsCount === 1 ? 'criativo' : 'criativos'}
+                            </p>
+                          </div>
+                          <span className="text-xs font-black text-cyan-400 transition group-hover:translate-x-0.5">Abrir</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            ) : !selectedOperator ? (
+              selectedRegion.operators.length === 0 ? (
+                <div className="rounded-[28px] border border-dashed border-slate-700 bg-slate-900/40 px-6 py-16 text-center">
+                  <Building2 className="mx-auto text-slate-600" size={42} />
+                  <h3 className="mt-4 text-lg font-black text-slate-200">Nenhuma operadora nesta região</h3>
+                </div>
+              ) : (
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {selectedRegion.operators.map((operator) => {
+                    const cover = operator.assets.find((asset) => asset.arquivo_url)?.arquivo_url;
+                    return (
+                      <button
+                        key={operator.key}
+                        type="button"
+                        onClick={() => setSelectedOperatorKey(operator.key)}
+                        className="group min-h-48 overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/70 text-left shadow-xl shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:border-blue-500/50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400/25"
+                      >
+                        <div className="relative h-24 overflow-hidden bg-gradient-to-br from-blue-950/70 to-slate-950">
+                          {cover ? (
+                            <img src={cover} alt="" className="h-full w-full object-cover opacity-35 transition duration-300 group-hover:scale-105 group-hover:opacity-50" loading="lazy" />
+                          ) : (
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.24),transparent_52%)]" />
+                          )}
+                          <span className="absolute bottom-3 left-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-300/20 bg-blue-400/15 text-blue-300 backdrop-blur">
+                            <Building2 size={24} />
+                          </span>
+                        </div>
+                        <div className="flex items-end justify-between gap-4 p-5">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">Operadora</p>
+                            <h3 className="mt-1 truncate text-lg font-black text-slate-100">{operator.name}</h3>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {operator.assets.length} {operator.assets.length === 1 ? 'criativo' : 'criativos'}
+                            </p>
+                          </div>
+                          <span className="text-xs font-black text-cyan-400 transition group-hover:translate-x-0.5">Abrir</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            ) : selectedOperator.assets.length === 0 ? (
               <div className="rounded-[28px] border border-dashed border-slate-700 bg-slate-900/40 px-6 py-16 text-center">
                 <ImagePlus className="mx-auto text-slate-600" size={42} />
-                <h3 className="mt-4 text-lg font-black text-slate-200">Esta pasta ainda esta vazia</h3>
+                <h3 className="mt-4 text-lg font-black text-slate-200">Esta operadora ainda está vazia</h3>
                 <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-slate-500">
-                  Gere o primeiro criativo com IA e atribua a esta concessionaria.
+                  Gere o primeiro criativo para {selectedOperator.name} em {selectedRegion.name}.
                 </p>
               </div>
             ) : (
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                {selectedFolder.assets.map((asset) => (
+                {selectedOperator.assets.map((asset) => (
                   <article key={asset.id} className="group overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/70 shadow-xl shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/40">
                     <button
                       type="button"
@@ -417,6 +592,9 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                     </button>
                     <div className="p-5">
                       <h3 className="truncate text-base font-black text-slate-100">{asset.titulo}</h3>
+                      {asset.headline && (
+                        <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-400">{asset.headline}</p>
+                      )}
                       <div className="mt-2 flex items-center justify-between gap-3">
                         <p className="text-xs font-bold text-slate-500">{formatDate(asset.created_at)}</p>
                         {asset.arquivo_url && (
@@ -499,7 +677,11 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                     <button
                       key={folder.key}
                       type="button"
-                      onClick={() => setSelectedFolderKey(folder.key)}
+                      onClick={() => {
+                        setSelectedFolderKey(folder.key);
+                        setSelectedRegionKey(null);
+                        setSelectedOperatorKey(null);
+                      }}
                       className="group min-h-52 overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/70 text-left shadow-xl shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/50 hover:shadow-cyan-950/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400/25"
                     >
                       <div className="relative h-28 overflow-hidden bg-gradient-to-br from-slate-800 to-slate-950">
@@ -517,7 +699,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                         <div className="min-w-0">
                           <h3 className="truncate text-base font-black text-slate-100">{folder.name}</h3>
                           <p className="mt-1 text-xs font-bold text-slate-500">
-                            {folder.drive_files_count} {folder.drive_files_count === 1 ? 'arquivo no Drive' : 'arquivos no Drive'}
+                            {folder.assets.length} {folder.assets.length === 1 ? 'criativo' : 'criativos'}
                           </p>
                         </div>
                         <span className="text-xs font-black text-cyan-400 transition group-hover:translate-x-0.5">Abrir</span>

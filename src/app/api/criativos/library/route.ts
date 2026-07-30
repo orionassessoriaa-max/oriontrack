@@ -27,7 +27,18 @@ type LibraryAsset = {
   descricao: string | null;
   arquivo_url: string | null;
   status: string;
+  operadora: string | null;
+  regiao: string | null;
+  headline: string | null;
+  legenda: string | null;
   created_at: string;
+};
+
+type LibraryStrategy = {
+  id: string;
+  corretor_id: string;
+  operadora: string;
+  regiao: string;
 };
 
 type ScopedDriveFolder = ReturnType<typeof groupCreativeFolders>[number] & {
@@ -163,14 +174,13 @@ async function resolveDriveLibraryScope(
     }
     const assigned = matches[0];
     if (!assigned) continue;
-    const children = await listDriveChildren(driveFolder.id, 1000);
     matchedKeys.add(assigned.key);
     folders.push({
       ...assigned,
       name: driveFolder.name,
       drive_folder_id: driveFolder.id,
       drive_web_view_link: driveFolder.webViewLink || null,
-      drive_files_count: children.files.length,
+      drive_files_count: 0,
     });
   }
 
@@ -236,21 +246,33 @@ export async function GET(request: Request) {
     const corretorIds = corretores.map((corretor) => corretor.id);
 
     let assets: LibraryAsset[] = [];
+    let strategies: LibraryStrategy[] = [];
     if (corretorIds.length > 0) {
-      const { data, error } = await supabaseAdmin
-        .from('criativo_assets')
-        .select('id, corretor_id, titulo, descricao, arquivo_url, status, created_at')
-        .in('corretor_id', corretorIds)
-        .order('created_at', { ascending: false })
-        .limit(1000);
-      if (error) throw error;
-      assets = data || [];
+      const [assetsResult, strategiesResult] = await Promise.all([
+        supabaseAdmin
+          .from('criativo_assets')
+          .select('id, corretor_id, titulo, descricao, arquivo_url, status, operadora, regiao, headline, legenda, created_at')
+          .in('corretor_id', corretorIds)
+          .order('created_at', { ascending: false })
+          .limit(1000),
+        supabaseAdmin
+          .from('trafego_estrategias_criativos')
+          .select('id, corretor_id, operadora, regiao')
+          .in('corretor_id', corretorIds)
+          .eq('ativa', true)
+          .order('created_at', { ascending: false }),
+      ]);
+      if (assetsResult.error) throw assetsResult.error;
+      if (strategiesResult.error) throw strategiesResult.error;
+      assets = assetsResult.data || [];
+      strategies = strategiesResult.data || [];
     }
 
     return NextResponse.json({
       folders: folders.map((folder) => ({
         ...folder,
         assets: assets.filter((asset) => folder.corretor_ids.includes(asset.corretor_id)),
+        strategies: strategies.filter((strategy) => folder.corretor_ids.includes(strategy.corretor_id)),
       })),
       missing_folders: driveScope.missingFolders,
       created_folders: driveScope.createdFolders,

@@ -37,12 +37,32 @@ export async function GET(request: Request) {
     : guard.profile.id;
   const { data, error } = await supabaseAdmin
     .from('criativo_generation_jobs')
-    .select('id, corretor_id, gestor_id, operadora, regiao, quantidade, origem, status, progresso, resultado, erro, created_at, finished_at')
+    .select('id, corretor_id, gestor_id, operadora, regiao, quantidade, origem, status, progresso, erro, created_at, finished_at')
     .eq('gestor_id', gestorId)
     .order('created_at', { ascending: false })
-    .limit(100);
+    .limit(30);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ jobs: data || [] });
+  const jobs = data || [];
+  const corretorIds = [...new Set(jobs.map((job) => job.corretor_id))];
+  const { data: corretores, error: corretoresError } = corretorIds.length
+    ? await supabaseAdmin
+      .from('corretores')
+      .select('id, nome, nome_empresa')
+      .in('id', corretorIds)
+    : { data: [], error: null };
+  if (corretoresError) return NextResponse.json({ error: corretoresError.message }, { status: 500 });
+  const concessionariaById = new Map(
+    (corretores || []).map((corretor) => [
+      corretor.id,
+      String(corretor.nome_empresa || corretor.nome || 'Concessionaria').trim(),
+    ])
+  );
+  return NextResponse.json({
+    jobs: jobs.map((job) => ({
+      ...job,
+      concessionaria: concessionariaById.get(job.corretor_id) || 'Concessionaria',
+    })),
+  });
 }
 
 export async function POST(request: Request) {
