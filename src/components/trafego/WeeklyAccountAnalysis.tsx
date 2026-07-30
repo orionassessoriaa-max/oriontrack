@@ -221,10 +221,11 @@ export default function WeeklyAccountAnalysis({ gestorId }: { gestorId?: string 
                         <div className="relative">
                           <select
                             value={status}
+                            data-status={status || 'nao_analisada'}
                             onChange={(event) => void updateStatus(concessionaria, day.date, event.target.value as Status)}
                             disabled={saving === key}
                             aria-label={`${concessionaria.nome}, ${day.label}`}
-                            className={`h-10 w-full cursor-pointer rounded-xl border px-3 text-xs font-black transition-colors disabled:cursor-wait disabled:opacity-60 ${statusClass(status)}`}
+                            className={`weekly-analysis-status h-10 w-full cursor-pointer rounded-xl border px-3 text-xs font-black transition-colors disabled:cursor-wait disabled:opacity-60 ${statusClass(status)}`}
                           >
                             {STATUS_OPTIONS.map((option) => <option key={option.value || 'empty'} value={option.value}>{option.label}</option>)}
                           </select>

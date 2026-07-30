@@ -4240,6 +4240,36 @@ html.theme-noturno .orion-trafego {
     color: var(--tf-ink-mute) !important;
     -webkit-text-fill-color: var(--tf-ink-mute) !important;
   }
+
+  html main .orion-trafego select.weekly-analysis-status[data-status="boa"] {
+    background: #059669 !important;
+    border-color: #34d399 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.2), 0 7px 18px rgba(5, 150, 105, 0.26) !important;
+  }
+
+  html main .orion-trafego select.weekly-analysis-status[data-status="atencao"] {
+    background: #ea580c !important;
+    border-color: #fb923c !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.2), 0 7px 18px rgba(234, 88, 12, 0.26) !important;
+  }
+
+  html main .orion-trafego select.weekly-analysis-status[data-status="ruim"] {
+    background: #dc2626 !important;
+    border-color: #f87171 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.2), 0 7px 18px rgba(220, 38, 38, 0.26) !important;
+  }
+
+  html main .orion-trafego select.weekly-analysis-status option {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+    -webkit-text-fill-color: #f8fafc !important;
+  }
 }
 
 /* O layout aplica um hover global de translateY em todo button/a. Nos cards e
