@@ -1348,8 +1348,12 @@ export default function BrokerInboxPage() {
   const playUrl = (url: string, messageId: string) => {
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.src = '';
     }
-    const audio = new Audio(url);
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = url;
+    audio.currentTime = 0;
     audioRef.current = audio;
     audio.play().catch(e => console.error('Erro ao tocar áudio:', e));
     setPlayingAudioId(messageId);
@@ -1423,7 +1427,7 @@ export default function BrokerInboxPage() {
     setLoadingAudioId(messageId);
     try {
       const token = await getToken();
-      const response = await fetch(`/api/inbox/messages/media?message_id=${messageId}`, {
+      const response = await fetch(`/api/inbox/messages/media?message_id=${messageId}&refresh=1`, {
         headers: {
           Authorization: `Bearer ${token}`,
           ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),

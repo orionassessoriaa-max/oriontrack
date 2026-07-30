@@ -406,6 +406,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const messageId = searchParams.get('message_id');
+    const forceRefresh = searchParams.get('refresh') === '1';
     if (!messageId) {
       return NextResponse.json({ error: 'ID da mensagem invalido.' }, { status: 400 });
     }
@@ -438,12 +439,12 @@ export async function GET(request: Request) {
       null;
 
     const directBase64 = pickMediaBase64(message.metadata);
-    if (directBase64) {
+    if (directBase64 && (!forceRefresh || !message.provider_message_id)) {
       return NextResponse.json({ base64: directBase64, mimeType, fileName });
     }
 
     const directUrl = pickMediaUrl(message.metadata);
-    if (directUrl) {
+    if (directUrl && (!forceRefresh || !message.provider_message_id)) {
       return NextResponse.json({ url: directUrl, mimeType, fileName });
     }
 
