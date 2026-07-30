@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ArrowLeft, BarChart3, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileImage, FileVideo2, Folder, HardDrive, Loader2, Maximize2, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
 import { TRAFFIC_RULES, formatBRL, formatPercent } from '@/lib/trafego/rules';
+import { normalizeOptimizationDraft, type NormalizedOptimizationDraft } from '@/lib/trafego/optimizationDraft';
 
 type AccountOption = {
   id: string;
@@ -58,16 +59,7 @@ type AdNode = MetaStatus & { id: string; name: string; level: 'ad'; metrics: Met
 type AdsetNode = MetaStatus & { id: string; name: string; level: 'adset'; metrics: Metrics; ads: AdNode[] };
 type CampaignNode = MetaStatus & { id: string; name: string; level: 'campaign'; metrics: Metrics; adsets: AdsetNode[] };
 
-type OptimizationDraft = {
-  summary?: string;
-  publish_status?: string;
-  actions?: Record<string, any>[];
-  campaign?: Record<string, any>;
-  adsets?: Record<string, any>[];
-  ads?: Record<string, any>[];
-  human_review_checklist?: string[];
-  missing_info?: string[];
-};
+type OptimizationDraft = NormalizedOptimizationDraft;
 
 type DraftExecutionItem = { level: 'campaign' | 'adset' | 'ad'; id: string; name: string; status: string };
 type DraftExecutionResult = {
@@ -386,7 +378,7 @@ export default function OtimizacoesPage() {
       return;
     }
 
-    setOptimizationDraft(payload.draft || null);
+    setOptimizationDraft(payload.draft ? normalizeOptimizationDraft(payload.draft) : null);
     setDraftExecution(null);
   }
 
@@ -464,7 +456,7 @@ export default function OtimizacoesPage() {
     }
     setApoloMessages((current) => [...current, { role: 'assistant', content: payload.reply }]);
     setPendingCreativeRequests(Array.isArray(payload.creative_requests) ? payload.creative_requests : []);
-    if (payload.draft) setOptimizationDraft(payload.draft);
+    if (payload.draft) setOptimizationDraft(normalizeOptimizationDraft(payload.draft));
   }
 
   async function confirmApoloCreativeRequests(useReference: boolean) {
@@ -563,6 +555,12 @@ export default function OtimizacoesPage() {
       return;
     }
     setDraftExecution({ created: payload.created || [], skipped: payload.skipped || [], warnings: payload.warnings || [] });
+    if (Array.isArray(payload.created) && payload.created.length > 0) {
+      setApoloMessages((current) => [...current, {
+        role: 'assistant',
+        content: `Tudo certo: criei ${payload.created.length} item(ns) como PAUSADO. Deseja ativar? Revise o resultado no plano e clique em Ativar somente no que estiver aprovado.`,
+      }]);
+    }
   }
 
   async function activateDraftItem(item: DraftExecutionItem) {
@@ -864,6 +862,25 @@ export default function OtimizacoesPage() {
                             </p>
                           </div>
                         ))}
+                        {optimizationDraft ? (
+                          <DraftView
+                            draft={optimizationDraft}
+                            error={draftError}
+                            onCreate={createOptimizationDraft}
+                            creating={creatingDraft}
+                            execution={draftExecution}
+                            onActivate={activateDraftItem}
+                            activationBusy={activationBusy}
+                          />
+                        ) : draftError ? (
+                          <div
+                            role="alert"
+                            className="max-w-[92%] rounded-xl border px-3 py-2 text-xs font-semibold"
+                            style={{ background: 'var(--tf-crit-soft)', borderColor: 'var(--tf-crit-border)', color: 'var(--tf-crit)' }}
+                          >
+                            {draftError}
+                          </div>
+                        ) : null}
                         {pendingCreativeRequests.length > 0 ? (
                           <div className="rounded-xl border p-3" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-accent-border)' }}>
                             <p className="text-xs font-black" style={{ color: 'var(--tf-ink)' }}>Modelo de referência</p>
@@ -1125,28 +1142,8 @@ export default function OtimizacoesPage() {
                         </li>
                       </ul>
 
-                      {draftError ? (
-                        <p
-                          className="mt-4 rounded-lg border p-3 text-xs font-medium"
-                          style={{ background: 'var(--tf-crit-soft)', borderColor: 'var(--tf-crit-border)', color: 'var(--tf-crit)' }}
-                        >
-                          {draftError}
-                        </p>
-                      ) : null}
-
                     </div>
                   </div>
-
-                  {optimizationDraft ? (
-                    <DraftView
-                      draft={optimizationDraft}
-                      onCreate={createOptimizationDraft}
-                      creating={creatingDraft}
-                      execution={draftExecution}
-                      onActivate={activateDraftItem}
-                      activationBusy={activationBusy}
-                    />
-                  ) : null}
                 </section>
               </>
             )}
@@ -1290,6 +1287,7 @@ function DraftCard({ title, children }: { title: string; children: React.ReactNo
 
 function DraftView({
   draft,
+  error,
   onCreate,
   creating,
   execution,
@@ -1297,69 +1295,115 @@ function DraftView({
   activationBusy,
 }: {
   draft: OptimizationDraft;
+  error: string | null;
   onCreate: () => void;
   creating: boolean;
   execution: DraftExecutionResult | null;
   onActivate: (item: DraftExecutionItem) => void;
   activationBusy: string | null;
 }) {
-  const acoes = Array.isArray(draft.actions) ? draft.actions : [];
-  const conjuntos = Array.isArray(draft.adsets) ? draft.adsets : [];
-  const anuncios = Array.isArray(draft.ads) ? draft.ads : [];
-  const checklist = Array.isArray(draft.human_review_checklist) ? draft.human_review_checklist : [];
-  const faltando = Array.isArray(draft.missing_info) ? draft.missing_info : [];
+  const campaign = draft.campaign || {};
+  const conjuntos = draft.adsets || [];
+  const anuncios = draft.ads || [];
+  const checklist = draft.human_review_checklist || [];
+  const faltando = draft.missing_info || [];
+  const usesExistingStructure = Boolean(campaign.existing_id || conjuntos.some((item) => item.existing_id || item.adset_id));
+  const actionLabel = usesExistingStructure && anuncios.length
+    ? `Criar ${anuncios.length > 1 ? `${anuncios.length} anúncios` : 'anúncio'} pausado${anuncios.length > 1 ? 's' : ''}`
+    : 'Criar estrutura pausada';
 
   return (
-    <div className="mt-5 rounded-xl border p-4" style={{ background: 'var(--tf-accent-soft)', borderColor: 'var(--tf-accent-border)' }}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tf-accent-ink)' }}>
-            Plano gerado
-          </p>
-          <h4 className="mt-1 text-lg font-bold">{draft.campaign?.name || 'Plano de otimização'}</h4>
+    <div
+      className="max-w-[96%] overflow-hidden rounded-2xl border shadow-sm"
+      style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-accent-border)' }}
+    >
+      <div className="flex items-start justify-between gap-3 border-b px-4 py-3" style={{ background: 'var(--tf-accent-soft)', borderColor: 'var(--tf-accent-border)' }}>
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg" style={{ background: 'var(--tf-accent)', color: '#fff' }}>
+            <Wand2 size={16} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--tf-accent-ink)' }}>Plano do Apolo</p>
+            <h4 className="truncate text-sm font-black" style={{ color: 'var(--tf-ink)' }}>
+              {usesExistingStructure ? 'Novo criativo em estrutura existente' : String(campaign.name || 'Plano de otimização')}
+            </h4>
+          </div>
         </div>
         <span
-          className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+          className="shrink-0 rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wide"
           style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)', color: 'var(--tf-warn)' }}
         >
-          {draft.publish_status === 'REVIEW_REQUIRED' ? 'Aguardando revisão' : draft.publish_status || 'Aguardando revisão'}
+          Revisar
         </span>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
-        <div>
-          <p className="text-sm font-semibold">Executar na Meta</p>
-          <p className="text-xs" style={{ color: 'var(--tf-ink-soft)' }}>
-            A estrutura será criada como PAUSED. A ativação fica separada e depende da sua confirmação.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onCreate}
-          disabled={creating || Boolean(execution?.created.length)}
-          className="inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold text-white transition disabled:opacity-50"
-          style={{ background: 'var(--tf-accent)' }}
-        >
-          {creating ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
-          {creating ? 'Criando pausada...' : execution?.created.length ? 'Estrutura criada' : 'Criar pausada na Meta'}
-        </button>
-      </div>
+      <div className="space-y-3 p-4">
+        {draft.summary ? <p className="text-xs leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{draft.summary}</p> : null}
 
-      {execution ? (
-        <div className="mb-4 rounded-xl border p-4" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
-          <p className="mb-3 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--tf-accent-ink)' }}>Resultado da criação</p>
+        <div className="space-y-2 rounded-xl border p-3" style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)' }}>
+          <div className="flex items-center gap-2">
+            <span className="rounded-md px-2 py-1 text-[9px] font-black uppercase" style={{ background: 'var(--tf-accent-soft)', color: 'var(--tf-accent-ink)' }}>
+              {campaign.existing_id ? 'Campanha destino' : 'Nova campanha'}
+            </span>
+            <p className="min-w-0 flex-1 truncate text-xs font-bold" style={{ color: 'var(--tf-ink)' }}>{String(campaign.name || 'Campanha')}</p>
+          </div>
+
+          {conjuntos.map((conjunto, index) => (
+            <div key={`adset-${index}`} className="ml-3 border-l-2 pl-3" style={{ borderColor: 'var(--tf-accent-border)' }}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] font-black uppercase" style={{ color: 'var(--tf-ink-mute)' }}>
+                  {conjunto.existing_id || conjunto.adset_id ? 'Conjunto destino' : 'Novo conjunto'}
+                </span>
+                <p className="text-xs font-semibold" style={{ color: 'var(--tf-ink)' }}>{String(conjunto.name || `Conjunto ${index + 1}`)}</p>
+                {conjunto.daily_budget ? (
+                  <span className="text-[10px]" style={{ color: 'var(--tf-ink-soft)' }}>· {formatBRL(Number(conjunto.daily_budget))}/dia</span>
+                ) : null}
+              </div>
+            </div>
+          ))}
+
+          {anuncios.map((anuncio, index) => (
+            <div key={`ad-${index}`} className="ml-6 rounded-lg border px-3 py-2" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
+              <div className="flex items-start gap-2">
+                <FileImage size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-accent-ink)' }} />
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold" style={{ color: 'var(--tf-ink)' }}>{String(anuncio.name || `Anúncio ${index + 1}`)}</p>
+                  {anuncio.drive_file_name ? <p className="truncate text-[10px]" style={{ color: 'var(--tf-ok)' }}>{String(anuncio.drive_file_name)}</p> : null}
+                  {anuncio.headline ? <p className="mt-1 text-[11px] font-semibold" style={{ color: 'var(--tf-ink)' }}>{String(anuncio.headline)}</p> : null}
+                  {anuncio.primary_text ? <p className="mt-1 line-clamp-3 text-[11px] leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{String(anuncio.primary_text)}</p> : null}
+                </div>
+                <span className="ml-auto shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-black" style={{ background: 'var(--tf-warn-soft)', color: 'var(--tf-warn)' }}>PAUSADO</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {faltando.length ? (
+          <div role="alert" className="rounded-lg border px-3 py-2" style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)' }}>
+            <p className="flex items-center gap-1.5 text-[11px] font-black" style={{ color: 'var(--tf-warn)' }}><AlertCircle size={13} /> Complete antes de criar</p>
+            {faltando.map((item, index) => <p key={index} className="mt-1 text-[11px]" style={{ color: 'var(--tf-ink-soft)' }}>• {item}</p>)}
+          </div>
+        ) : null}
+
+        {error ? (
+          <div role="alert" className="rounded-lg border px-3 py-2 text-[11px] font-semibold leading-relaxed" style={{ background: 'var(--tf-crit-soft)', borderColor: 'var(--tf-crit-border)', color: 'var(--tf-crit)' }}>
+            <span className="font-black">Não foi possível criar. </span>{error}
+          </div>
+        ) : null}
+
+        {execution ? (
           <div className="space-y-2">
             {execution.created.map((item) => (
-              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3" style={{ borderColor: 'var(--tf-border)' }}>
-                <div>
-                  <p className="text-sm font-semibold">{item.name}</p>
-                  <p className="text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{item.level === 'campaign' ? 'Campanha' : item.level === 'adset' ? 'Conjunto' : 'Criativo/anúncio'} · {item.status === 'ACTIVE' ? 'ATIVO' : 'PAUSADO'}</p>
+              <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2" style={{ background: 'var(--tf-ok-soft)', borderColor: 'var(--tf-ok-border)' }}>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold" style={{ color: 'var(--tf-ink)' }}>{item.name}</p>
+                  <p className="text-[10px]" style={{ color: 'var(--tf-ok)' }}>{item.status === 'ACTIVE' ? 'Ativo na Meta' : 'Criado pausado'}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => onActivate(item)}
                   disabled={activationBusy === item.id || item.status === 'ACTIVE'}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition disabled:opacity-50"
+                  className="tf-no-lift inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-black transition disabled:opacity-50"
                   style={{ borderColor: 'var(--tf-ok)', color: 'var(--tf-ok)' }}
                 >
                   {activationBusy === item.id ? <Loader2 className="animate-spin" size={13} /> : <CheckCircle2 size={13} />}
@@ -1367,95 +1411,36 @@ function DraftView({
                 </button>
               </div>
             ))}
+            {execution.skipped.map((item, index) => <p key={index} className="text-[10px]" style={{ color: 'var(--tf-warn)' }}>Não criado: {item.name} · {item.reason}</p>)}
+            {execution.warnings.map((warning, index) => <p key={index} className="text-[10px]" style={{ color: 'var(--tf-ink-soft)' }}>{warning}</p>)}
           </div>
-          {execution.skipped.length > 0 ? (
-            <div className="mt-3 space-y-1 text-xs" style={{ color: 'var(--tf-warn)' }}>
-              {execution.skipped.map((item, index) => <p key={index}>Não criado: {item.name} · {item.reason}</p>)}
-            </div>
-          ) : null}
-          {execution.warnings.map((warning, index) => <p key={index} className="mt-3 text-xs" style={{ color: 'var(--tf-warn)' }}>{warning}</p>)}
-        </div>
-      ) : null}
-
-      {draft.summary ? (
-        <p className="mb-4 text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{draft.summary}</p>
-      ) : null}
-
-      <div className="grid gap-3 lg:grid-cols-2">
-        {acoes.length > 0 ? (
-          <DraftCard title={`Ações (${acoes.length})`}>
-            <div className="space-y-3">
-              {acoes.map((acao, index) => (
-                <div key={index} className="border-b pb-3 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--tf-border)' }}>
-                  <FieldList data={acao} />
-                </div>
-              ))}
-            </div>
-          </DraftCard>
         ) : null}
 
-        {draft.campaign && Object.keys(draft.campaign).length > 0 ? (
-          <DraftCard title="Campanha">
-            <FieldList data={draft.campaign} />
-          </DraftCard>
+        {checklist.length ? (
+          <details className="rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}>
+            <summary className="cursor-pointer font-bold" style={{ color: 'var(--tf-ink)' }}>O que será conferido ({checklist.length})</summary>
+            <div className="mt-2 space-y-1">{checklist.map((item, index) => <p key={index}>• {item}</p>)}</div>
+          </details>
         ) : null}
 
-        {conjuntos.length > 0 ? (
-          <DraftCard title={`Conjuntos (${conjuntos.length})`}>
-            <div className="space-y-3">
-              {conjuntos.map((conjunto, index) => (
-                <div key={index} className="border-b pb-3 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--tf-border)' }}>
-                  <FieldList data={conjunto} />
-                </div>
-              ))}
-            </div>
-          </DraftCard>
-        ) : null}
-
-        {anuncios.length > 0 ? (
-          <DraftCard title={`Anúncios (${anuncios.length})`}>
-            <div className="space-y-3">
-              {anuncios.map((anuncio, index) => (
-                <div key={index} className="border-b pb-3 last:border-b-0 last:pb-0" style={{ borderColor: 'var(--tf-border)' }}>
-                  <FieldList data={anuncio} />
-                </div>
-              ))}
-            </div>
-          </DraftCard>
+        {!execution?.created.length ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3" style={{ borderColor: 'var(--tf-border)' }}>
+            <p className="max-w-sm text-[10px] leading-relaxed" style={{ color: 'var(--tf-ink-mute)' }}>
+              Nada será ativado automaticamente. Depois da criação, o Apolo perguntará o que você deseja ativar.
+            </p>
+            <button
+              type="button"
+              onClick={onCreate}
+              disabled={creating || faltando.length > 0}
+              className="tf-no-lift inline-flex min-h-10 items-center gap-2 rounded-lg px-4 text-xs font-black text-white transition disabled:cursor-not-allowed disabled:opacity-45"
+              style={{ background: 'var(--tf-accent)' }}
+            >
+              {creating ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+              {creating ? 'Criando na Meta...' : actionLabel}
+            </button>
+          </div>
         ) : null}
       </div>
-
-      {faltando.length > 0 ? (
-        <div
-          className="mt-3 rounded-xl border p-4"
-          style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)' }}
-        >
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--tf-warn)' }}>
-            Falta você informar
-          </p>
-          <ul className="space-y-1.5 text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
-            {faltando.map((item, index) => (
-              <li key={index} className="flex gap-2">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-warn)' }} />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {checklist.length > 0 ? (
-        <DraftCard title="Antes de executar, confira">
-          <ul className="space-y-1.5 text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
-            {checklist.map((item, index) => (
-              <li key={index} className="flex gap-2">
-                <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-ok)' }} />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </DraftCard>
-      ) : null}
     </div>
   );
 }

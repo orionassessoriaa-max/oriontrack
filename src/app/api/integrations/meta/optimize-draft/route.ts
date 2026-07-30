@@ -4,6 +4,7 @@ import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { fetchWithTimeout } from '@/lib/meta/fetchWithTimeout';
 import { extractDriveId, resolveDriveFile } from '@/lib/integrations/googleDrive';
+import { normalizeOptimizationDraft } from '@/lib/trafego/optimizationDraft';
 
 type CorretorMeta = {
   id: string;
@@ -169,7 +170,8 @@ Regras obrigatorias:
 - O gestor pode pedir qualquer otimizacao: criar campanha, criar conjunto, criar anuncio, pausar anuncio, pausar criativo, pausar conjunto, pausar campanha, trocar criativo, ajustar verba, duplicar, revisar copy ou reorganizar estrutura.
 - Nunca execute de verdade neste endpoint. Gere apenas rascunho operacional revisavel.
 - Toda criacao nova de campanha, conjunto ou anuncio deve sair com status PAUSED.
-- Para permitir a criacao real depois da confirmacao, retorne campaign com name, objective, buying_type e special_ad_categories; adsets com name, daily_budget em centavos, billing_event, optimization_goal e targeting como objeto JSON; ads com name e creative_id somente quando o ID real da Meta tiver sido informado.
+- Para permitir a criacao real depois da confirmacao, retorne campaign sempre como objeto com name, objective, buying_type e special_ad_categories; adsets como array de objetos com name, daily_budget em reais, billing_event, optimization_goal e targeting como objeto JSON; ads como array separado com name e creative_id somente quando o ID real da Meta tiver sido informado.
+- Nunca coloque ads dentro de adsets e nunca retorne campaign como texto.
 - Nao invente daily_budget nem creative_id. Se faltar verba, deixe daily_budget nulo e informe missing_info. Se houver apenas referencia a uma pasta do Drive, registre-a, mas nao transforme isso em creative_id.
 - Acoes de pausa/troca/verba devem virar itens em actions, com alvo, motivo, risco e checklist.
 - Se o usuario pedir ABO, usar budget_mode ABO e verba no conjunto.
@@ -270,9 +272,9 @@ export async function POST(request: Request) {
 
     const initialDraft = await generateDraftWithAi(body, account);
     const resolved = await attachDriveResolution(initialDraft, body);
-    const draft = resolved.drive.status === 'resolved'
+    const draft = normalizeOptimizationDraft(resolved.drive.status === 'resolved'
       ? resolved.draft
-      : { ...resolved.draft, drive_resolution: resolved.drive };
+      : { ...resolved.draft, drive_resolution: resolved.drive });
     return NextResponse.json({ success: true, draft, drive: resolved.drive });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao gerar rascunho de otimizacao.' }, { status: 500 });

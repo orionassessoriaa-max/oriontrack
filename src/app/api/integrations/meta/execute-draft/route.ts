@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { downloadDriveFile, getDriveFile } from '@/lib/integrations/googleDrive';
+import { normalizeOptimizationDraft } from '@/lib/trafego/optimizationDraft';
 
 type MetaAccount = {
   id: string;
@@ -58,23 +59,38 @@ function graphUrl(path: string) {
   return `https://graph.facebook.com/${version}/${path.replace(/^\//, '')}`;
 }
 
-async function graphPost(path: string, params: Record<string, string>) {
+function metaErrorMessage(json: any, fallback: string) {
+  const error = json?.error;
+  if (!error) return fallback;
+  const detail = String(error.error_user_msg || error.message || fallback).trim();
+  const title = String(error.error_user_title || '').trim();
+  const reference = [error.code ? `codigo ${error.code}` : '', error.error_subcode ? `subcodigo ${error.error_subcode}` : '']
+    .filter(Boolean)
+    .join(', ');
+  return `${title ? `${title}: ` : ''}${detail}${reference ? ` (${reference})` : ''}`;
+}
+
+async function graphPost(path: string, params: Record<string, string>, operation = 'operacao') {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) throw new Error('META_ACCESS_TOKEN nao configurado no ambiente da aplicacao.');
   const body = new URLSearchParams({ ...params, access_token: token });
   const response = await fetch(graphUrl(path), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
   const json = await response.json();
-  if (!response.ok || json.error) throw new Error(json.error?.message || `Meta recusou a operacao (${response.status}).`);
+  if (!response.ok || json.error) {
+    throw new Error(`A Meta recusou ${operation}. ${metaErrorMessage(json, `Erro HTTP ${response.status}.`)}`);
+  }
   return json;
 }
 
-async function graphPostForm(path: string, form: FormData) {
+async function graphPostForm(path: string, form: FormData, operation = 'o upload do criativo') {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) throw new Error('META_ACCESS_TOKEN nao configurado no ambiente da aplicacao.');
   form.append('access_token', token);
   const response = await fetch(graphUrl(path), { method: 'POST', body: form });
   const json = await response.json();
-  if (!response.ok || json.error) throw new Error(json.error?.message || `Meta recusou o upload (${response.status}).`);
+  if (!response.ok || json.error) {
+    throw new Error(`A Meta recusou ${operation}. ${metaErrorMessage(json, `Erro HTTP ${response.status}.`)}`);
+  }
   return json;
 }
 
@@ -97,44 +113,59 @@ function jsonObject(value: unknown, fallback: Record<string, unknown>) {
 }
 
 async function createPaused(accountId: string, draft: any) {
+  const normalizedDraft = normalizeOptimizationDraft(draft);
   const created: any[] = [];
   const skipped: any[] = [];
   const warnings: string[] = [];
   const accountPath = `act_${accountId}`;
-  const campaign = draft?.campaign || {};
-  const campaignResult = await graphPost(`${accountPath}/campaigns`, {
-    name: String(campaign.name || `[ORION] Campanha | ${new Date().toISOString().slice(0, 10)}`),
-    objective: String(campaign.objective || 'OUTCOME_LEADS'),
-    buying_type: String(campaign.buying_type || 'AUCTION'),
-    status: 'PAUSED',
-    special_ad_categories: JSON.stringify(campaign.special_ad_categories || []),
-  });
-  const campaignItem = { level: 'campaign', id: String(campaignResult.id), name: String(campaign.name || campaignResult.id), status: 'PAUSED' };
-  created.push(campaignItem);
+  const campaign = normalizedDraft.campaign;
+  const existingCampaignId = String(campaign.existing_id || '').trim();
+  let campaignId = existingCampaignId;
+  if (!campaignId) {
+    const campaignResult = await graphPost(`${accountPath}/campaigns`, {
+      name: String(campaign.name),
+      objective: String(campaign.objective),
+      buying_type: String(campaign.buying_type),
+      status: 'PAUSED',
+      special_ad_categories: JSON.stringify(campaign.special_ad_categories || []),
+    }, 'a criacao da campanha pausada');
+    campaignId = String(campaignResult.id);
+    created.push({ level: 'campaign', id: campaignId, name: String(campaign.name || campaignResult.id), status: 'PAUSED' });
+  } else {
+    warnings.push(`A campanha existente "${String(campaign.name)}" sera usada somente como destino. Ela nao foi alterada.`);
+  }
 
-  const adsets = Array.isArray(draft?.adsets) ? draft.adsets : [];
+  const availableAdsetIds: string[] = [];
+  const adsets = normalizedDraft.adsets;
   for (const adset of adsets) {
+    const existingAdsetId = String(adset.existing_id || adset.adset_id || '').trim();
+    if (existingAdsetId) {
+      availableAdsetIds.push(existingAdsetId);
+      continue;
+    }
     const budget = moneyToCents(adset.daily_budget);
     if (!budget) {
       skipped.push({ level: 'adset', name: adset.name || 'Conjunto', reason: 'Informe uma verba diaria valida no pedido.' });
       continue;
     }
-    const result = await graphPost(`${campaignResult.id}/adsets`, {
+    const result = await graphPost(`${campaignId}/adsets`, {
       name: String(adset.name || 'Conjunto ABO'),
-      campaign_id: String(campaignResult.id),
+      campaign_id: campaignId,
       daily_budget: String(budget),
       billing_event: String(adset.billing_event || 'IMPRESSIONS'),
       optimization_goal: String(adset.optimization_goal || 'LEAD_GENERATION'),
       targeting: JSON.stringify(jsonObject(adset.targeting, { geo_locations: { countries: ['BR'] } })),
       status: 'PAUSED',
-    });
-    created.push({ level: 'adset', id: String(result.id), name: String(adset.name || result.id), status: 'PAUSED' });
+    }, `a criacao do conjunto "${String(adset.name || 'Conjunto ABO')}"`);
+    const newAdsetId = String(result.id);
+    availableAdsetIds.push(newAdsetId);
+    created.push({ level: 'adset', id: newAdsetId, name: String(adset.name || result.id), status: 'PAUSED' });
   }
 
-  const ads = Array.isArray(draft?.ads) ? draft.ads : [];
+  const ads = normalizedDraft.ads;
   for (const ad of ads) {
     let creativeId = ad.creative_id || ad.meta_creative_id;
-    const adsetId = ad.adset_id || created.find((item) => item.level === 'adset')?.id;
+    const adsetId = String(ad.adset_id || ad.existing_adset_id || availableAdsetIds[0] || '').trim();
     if (!creativeId && ad.drive_file_id) {
       const driveFile = await getDriveFile(String(ad.drive_file_id));
       if (!driveFile.mimeType.startsWith('image/')) {
@@ -148,7 +179,7 @@ async function createPaused(accountId: string, draft: any) {
       }
       const imageForm = new FormData();
       imageForm.append('filename', new Blob([content], { type: driveFile.mimeType }), driveFile.name);
-      const imageResult = await graphPostForm(`${accountPath}/adimages`, imageForm);
+      const imageResult = await graphPostForm(`${accountPath}/adimages`, imageForm, `o upload da imagem "${driveFile.name}"`);
       const images = imageResult.images || {};
       const uploaded = Object.values(images)[0] as any;
       const imageHash = uploaded?.hash;
@@ -156,8 +187,8 @@ async function createPaused(accountId: string, draft: any) {
         skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'A Meta nao retornou o hash da imagem enviada.' });
         continue;
       }
-      const pageId = String(ad.page_id || draft.page_id || process.env.META_DEFAULT_PAGE_ID || '').trim();
-      const link = String(ad.link_url || draft.link_url || process.env.META_DEFAULT_LEAD_LINK || '').trim();
+      const pageId = String(ad.page_id || normalizedDraft.page_id || process.env.META_DEFAULT_PAGE_ID || '').trim();
+      const link = String(ad.link_url || normalizedDraft.link_url || process.env.META_DEFAULT_LEAD_LINK || '').trim();
       if (!pageId || !link) {
         skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'Informe page_id e link_url no rascunho ou META_DEFAULT_PAGE_ID/META_DEFAULT_LEAD_LINK para montar o criativo da Meta.' });
         continue;
@@ -169,11 +200,11 @@ async function createPaused(accountId: string, draft: any) {
           link_data: {
             image_hash: imageHash,
             link,
-            message: String(ad.primary_text || draft.primary_text || 'Conheca nossas solucoes.'),
-            name: String(ad.headline || draft.headline || driveFile.name),
+            message: String(ad.primary_text || normalizedDraft.primary_text || 'Conheca nossas solucoes.'),
+            name: String(ad.headline || normalizedDraft.headline || driveFile.name),
           },
         }),
-      });
+      }, `a criacao do criativo "${String(ad.name || driveFile.name)}"`);
       creativeId = String(creativeResult.id || '');
     }
     if (!creativeId || !adsetId) {
@@ -185,7 +216,7 @@ async function createPaused(accountId: string, draft: any) {
       adset_id: String(adsetId),
       creative: JSON.stringify({ creative_id: String(creativeId) }),
       status: 'PAUSED',
-    });
+    }, `a criacao do anuncio "${String(ad.name || 'Anuncio Orion')}"`);
     created.push({ level: 'ad', id: String(result.id), name: String(ad.name || result.id), status: 'PAUSED' });
   }
   if (skipped.length) warnings.push('Alguns itens nao foram criados porque faltam verba, conjunto ou creative_id da Meta.');
@@ -203,7 +234,25 @@ export async function POST(request: Request) {
     if (!accountId || !body.confirmar_criacao) return NextResponse.json({ error: 'Confirme a criacao pausada antes de continuar.' }, { status: 400 });
     const account = await allowedAccount(access.profile, accountId, body.equipe ? String(body.equipe) : null, body.gestor_id ? String(body.gestor_id) : null);
     if (!account) return NextResponse.json({ error: 'Conta fora do escopo deste gestor.' }, { status: 403 });
-    const result = await createPaused(accountId, body.draft);
+    const normalizedDraft = normalizeOptimizationDraft(body.draft);
+    if (normalizedDraft.missing_info.length) {
+      return NextResponse.json({ error: `Complete o plano antes de criar: ${normalizedDraft.missing_info.join(' ')}` }, { status: 400 });
+    }
+    if (normalizedDraft.ads.length && !normalizedDraft.adsets.length) {
+      return NextResponse.json({ error: 'O plano precisa indicar o conjunto de destino do novo anuncio.' }, { status: 400 });
+    }
+    const driveAdsWithoutCreativeConfig = normalizedDraft.ads.filter((ad) => {
+      if (!ad.drive_file_id || ad.creative_id || ad.meta_creative_id) return false;
+      const pageId = String(ad.page_id || normalizedDraft.page_id || process.env.META_DEFAULT_PAGE_ID || '').trim();
+      const link = String(ad.link_url || normalizedDraft.link_url || process.env.META_DEFAULT_LEAD_LINK || '').trim();
+      return !pageId || !link;
+    });
+    if (driveAdsWithoutCreativeConfig.length) {
+      return NextResponse.json({
+        error: 'Para enviar a imagem do Drive, configure a Pagina da Meta e o link de destino da concessionaria antes de criar.',
+      }, { status: 400 });
+    }
+    const result = await createPaused(accountId, normalizedDraft);
     return NextResponse.json({ success: true, account: account.nome_empresa || account.nome, ...result, activate_available: result.created.length > 0 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel criar a estrutura pausada na Meta.' }, { status: 502 });
@@ -220,7 +269,7 @@ export async function PUT(request: Request) {
     if (!accountId || !body.confirmar || !body.object_id || !['campaign', 'adset', 'ad'].includes(level)) return NextResponse.json({ error: 'Dados de ativacao incompletos.' }, { status: 400 });
     const account = await allowedAccount(access.profile, accountId, body.equipe ? String(body.equipe) : null, body.gestor_id ? String(body.gestor_id) : null);
     if (!account) return NextResponse.json({ error: 'Conta fora do escopo deste gestor.' }, { status: 403 });
-    await graphPost(String(body.object_id), { status: 'ACTIVE' });
+    await graphPost(String(body.object_id), { status: 'ACTIVE' }, 'a ativacao solicitada');
     return NextResponse.json({ success: true, object_id: String(body.object_id), level, status: 'ACTIVE' });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel ativar o item na Meta.' }, { status: 502 });

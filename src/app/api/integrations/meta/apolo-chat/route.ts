@@ -11,6 +11,7 @@ import {
   resolveDriveFile,
 } from '@/lib/integrations/googleDrive';
 import { isDriveItemInsideFolder, resolveManagerDriveScope } from '@/lib/creatives/driveManagerScope';
+import { normalizeOptimizationDraft } from '@/lib/trafego/optimizationDraft';
 
 async function guard(request: Request) {
   const header = request.headers.get('Authorization');
@@ -89,11 +90,16 @@ Regras oficiais: ${JSON.stringify(TRAFFIC_RULES)}.
 O CPL deve usar somente leads CRM de origem Orion. Conta sem rastreio ativo nao pode gerar pausa por CPL.
 O gestor pode pedir pausa de anuncio, troca de criativo, ajuste de verba ou criacao de campanha/conjunto/anuncio.
 Nunca execute uma alteracao neste chat. Gere apenas um plano para revisao humana. Criacoes novas devem sair PAUSED.
+Se o gestor pedir para subir um criativo em uma campanha ou conjunto que ja existe na estrutura recebida, nao crie outra campanha nem outro conjunto. Localize o item exato na estrutura e use campaign.existing_id e adsets[].existing_id com os IDs reais recebidos no contexto. Nesse caso, apenas ads[] representa o item novo e deve sair PAUSED.
 O Google Drive esta disponivel para buscar arquivos quando estiver configurado no ambiente. Nunca diga que encontrou um arquivo sem receber a confirmacao do servidor; se a busca nao retornar exatamente um arquivo, explique isso ao gestor.
 Quando "criativo_drive_selecionado" estiver preenchido, o arquivo ja foi validado pelo servidor. Use obrigatoriamente esse criativo no plano solicitado e nunca diga que falta uma imagem ou referencia.
 O gestor tambem pode pedir a criacao de uma ou varias pastas/lotes de criativos. Quando houver dados suficientes, liste cada pedido em creative_requests com operadora, regiao, quantidade e briefing. Quantidade padrao 4 e maxima 20. Nao gere nem publique ainda: a interface perguntara se ele possui um modelo de referencia.
 Responda sempre em JSON valido neste formato: {"reply":"resposta curta e clara","draft":null,"creative_requests":[]}.
-Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ads, actions, missing_info e human_review_checklist. Nunca invente creative_id nem daily_budget.`,
+Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ads, actions, missing_info e human_review_checklist.
+campaign deve ser sempre um objeto, nunca texto: {"name":"...","objective":"...","buying_type":"AUCTION","special_ad_categories":[],"status":"PAUSED"}.
+adsets e ads devem ser arrays de objetos separados. Nunca coloque ads dentro do conjunto nem transforme um anuncio inteiro em texto.
+Toda campanha, conjunto e anuncio novo deve estar como PAUSED. Um item existente pode ser apenas o destino da criacao e nunca deve ser pausado ou alterado implicitamente.
+daily_budget deve ser informado em reais (exemplo: 50 para R$ 50,00). Nunca invente creative_id nem daily_budget.`,
       },
       { role: 'user', content: context },
     ];
@@ -194,7 +200,8 @@ Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ad
         parsed.draft = { ...parsed.draft, ads: ads.map((ad: any) => ({ ...ad, drive_file_id: file.id, drive_file_name: file.name, drive_mime_type: file.mimeType, drive_url: file.webViewLink || null })), drive_file: file };
       }
     }
-    return NextResponse.json({ success: true, reply: String(parsed.reply || 'Analise concluida.'), draft: parsed.draft || null, creative_requests: creativeRequests, drive_connected: drive.configured === true, drive });
+    const normalizedDraft = parsed.draft ? normalizeOptimizationDraft(parsed.draft) : null;
+    return NextResponse.json({ success: true, reply: String(parsed.reply || 'Analise concluida.'), draft: normalizedDraft, creative_requests: creativeRequests, drive_connected: drive.configured === true, drive });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao conversar com o Apolo.' }, { status: 500 });
   }
