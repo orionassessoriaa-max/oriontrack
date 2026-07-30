@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useCorretoresOptions } from '@/hooks/useCorretoresOptions';
 import { supabase } from '@/lib/supabase/client';
-import { Loader2, Upload } from 'lucide-react';
+import { Check, Loader2, Send, Upload } from 'lucide-react';
 
 type Asset = {
   id: string;
@@ -24,19 +24,21 @@ export default function DesignerOffersPage() {
   const [descricao, setDescricao] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
-  const fetchAssets = async () => {
+  const fetchAssets = useCallback(async () => {
     const { data } = await supabase
       .from('criativo_assets')
       .select('*, corretores:corretor_id(nome)')
       .order('created_at', { ascending: false });
 
     setAssets((data || []) as Asset[]);
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAssets();
-  }, []);
+    const timer = window.setTimeout(() => void fetchAssets(), 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchAssets]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -69,6 +71,24 @@ export default function DesignerOffersPage() {
     setDescricao('');
     setCorretorId('');
     setFile(null);
+    await fetchAssets();
+  };
+
+  const sendForApproval = async (asset: Asset) => {
+    setSendingId(asset.id);
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    const response = await fetch('/api/criativos/approval', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asset_id: asset.id }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    setSendingId(null);
+    if (!response.ok) {
+      alert(payload.error || 'Erro ao enviar para aprovação.');
+      return;
+    }
     await fetchAssets();
   };
 
@@ -110,7 +130,24 @@ export default function DesignerOffersPage() {
                   <p className="font-black text-slate-950">{asset.titulo}</p>
                   <p className="text-xs font-bold text-slate-500">{asset.corretores?.nome || 'Sem corretor'} • {asset.status}</p>
                 </div>
-                {asset.arquivo_url && <a href={asset.arquivo_url} target="_blank" className="text-xs font-black uppercase tracking-widest text-blue-600">Abrir</a>}
+                <div className="flex items-center gap-2">
+                  {asset.arquivo_url && <a href={asset.arquivo_url} target="_blank" className="text-xs font-black uppercase tracking-widest text-blue-600">Abrir</a>}
+                  {['rascunho', 'revisao'].includes(asset.status) ? (
+                    <button
+                      type="button"
+                      onClick={() => void sendForApproval(asset)}
+                      disabled={sendingId === asset.id}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-[10px] font-black uppercase tracking-wide text-white disabled:opacity-50"
+                    >
+                      {sendingId === asset.id ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
+                      Enviar para aprovação
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-emerald-600">
+                      <Check size={13} /> Enviado
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>

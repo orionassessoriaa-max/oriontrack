@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       descricao: descricao || null,
       arquivo_url: publicUrl.publicUrl,
       arquivo_path: path,
-      status: 'em_aprovacao',
+      status: 'rascunho',
       enviado_por_profile_id: guard.profile.id,
     }])
     .select('*')
@@ -115,13 +115,6 @@ export async function POST(request: Request) {
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
-  }
-
-  if (demandaId) {
-    await supabaseAdmin
-      .from('criativo_demandas')
-      .update({ status: 'entregue', updated_at: new Date().toISOString() })
-      .eq('id', demandaId);
   }
 
   return NextResponse.json({ ok: true, asset });

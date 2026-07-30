@@ -19,6 +19,7 @@ import {
   Paperclip,
   Plus,
   Search,
+  Send,
   Sparkles,
   Upload,
   X,
@@ -135,6 +136,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [queuing, setQueuing] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
+  const [sendingApprovalId, setSendingApprovalId] = useState<string | null>(null);
+  const [approvalFeedback, setApprovalFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchLibrary = useCallback(async (silent = false) => {
@@ -404,6 +407,31 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     }
   };
 
+  const sendForApproval = async (asset: LibraryAsset) => {
+    setSendingApprovalId(asset.id);
+    setApprovalFeedback(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const response = await fetch('/api/criativos/approval', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ asset_id: asset.id, gestor_id: gestorId }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel enviar para aprovacao.');
+      setApprovalFeedback({ tone: 'success', message: `"${asset.titulo}" foi enviado para Materiais para aprovação.` });
+      await fetchLibrary(true);
+    } catch (error: unknown) {
+      setApprovalFeedback({ tone: 'error', message: errorMessage(error, 'Erro ao enviar para aprovação.') });
+    } finally {
+      setSendingApprovalId(null);
+    }
+  };
+
   return (
     <>
       <div className="mx-auto max-w-[1500px]">
@@ -432,6 +460,19 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
             </button>
           </div>
         </header>
+
+        {approvalFeedback && (
+          <div
+            role={approvalFeedback.tone === 'error' ? 'alert' : 'status'}
+            className={`mb-6 rounded-2xl border p-4 text-sm font-bold ${
+              approvalFeedback.tone === 'error'
+                ? 'border-red-400/20 bg-red-500/10 text-red-200'
+                : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
+            }`}
+          >
+            {approvalFeedback.message}
+          </div>
+        )}
 
         {selectedFolder ? (
           <section>
@@ -597,19 +638,37 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                       )}
                       <div className="mt-2 flex items-center justify-between gap-3">
                         <p className="text-xs font-bold text-slate-500">{formatDate(asset.created_at)}</p>
-                        {asset.arquivo_url && (
-                          <a
-                            href={asset.arquivo_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            download
-                            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-black text-cyan-400 transition hover:bg-cyan-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                          >
-                            <Download size={15} />
-                            Baixar
-                          </a>
-                        )}
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          {asset.arquivo_url && (
+                            <a
+                              href={asset.arquivo_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download
+                              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-black text-cyan-400 transition hover:bg-cyan-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                            >
+                              <Download size={15} />
+                              Baixar
+                            </a>
+                          )}
+                        </div>
                       </div>
+                      {['rascunho', 'revisao'].includes(asset.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => void sendForApproval(asset)}
+                          disabled={sendingApprovalId === asset.id}
+                          className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wide text-emerald-950 transition hover:bg-emerald-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/25 disabled:opacity-50"
+                        >
+                          {sendingApprovalId === asset.id ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+                          {asset.status === 'revisao' ? 'Reenviar para aprovação' : 'Enviar para aprovação'}
+                        </button>
+                      ) : (
+                        <p className="mt-3 flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] text-xs font-black text-emerald-300">
+                          <Check size={15} />
+                          {asset.status === 'em_aprovacao' ? 'Aguardando aprovação' : asset.status === 'aprovado' ? 'Aprovado' : 'Enviado'}
+                        </p>
+                      )}
                     </div>
                   </article>
                 ))}

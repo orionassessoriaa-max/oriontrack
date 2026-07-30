@@ -246,7 +246,7 @@ export async function processCreativeGenerationJob(jobId: string) {
           descricao: job.briefing || `Gerado automaticamente para ${job.operadora}/${job.regiao}.`,
           arquivo_url: publicUrl,
           arquivo_path: storagePath,
-          status: 'em_aprovacao',
+          status: 'rascunho',
           enviado_por_profile_id: job.gestor_id,
           generation_job_id: job.id,
           operadora: job.operadora,

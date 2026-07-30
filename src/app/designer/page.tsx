@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, ChevronRight, Clock, Loader2, MessageSquare, Palette, Trash2, Upload } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Clock, Loader2, MessageSquare, Palette, Send, Trash2, Upload } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 type DemandStatus = 'pendente' | 'atrasado' | 'feito' | 'entregue' | 'aprovado' | 'revisao';
-type AssetStatus = 'em_aprovacao' | 'aprovado' | 'revisao' | 'rodando';
+type AssetStatus = 'rascunho' | 'em_aprovacao' | 'aprovado' | 'revisao' | 'rodando';
 type FilterKey = 'pendentes' | 'atrasadas' | 'entregues' | 'aprovados' | 'revisao' | 'arquivos';
 
 type Demand = {
@@ -70,8 +71,9 @@ export default function DesignerHomePage() {
   const [assets, setAssets] = useState<CreativeAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     const [{ data: demandRows }, { data: assetRows }] = await Promise.all([
       supabase
@@ -95,11 +97,12 @@ export default function DesignerHomePage() {
     setDemands(visibleDemands);
     setAssets(visibleAssets);
     setLoading(false);
-  }
+  }, [profile?.id, profile?.tipo_usuario]);
 
   useEffect(() => {
-    void load();
-  }, [profile?.id, profile?.tipo_usuario]);
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const stats = useMemo(() => {
     return {
@@ -150,6 +153,26 @@ export default function DesignerHomePage() {
       return;
     }
 
+    await load();
+  };
+
+  const sendForApproval = async (asset: CreativeAsset) => {
+    setSendingId(asset.id);
+    const { data } = await supabase.auth.getSession();
+    const response = await fetch('/api/criativos/approval', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${data.session?.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ asset_id: asset.id }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    setSendingId(null);
+    if (!response.ok) {
+      alert(payload.error || 'Erro ao enviar para aprovação.');
+      return;
+    }
     await load();
   };
 
@@ -242,11 +265,24 @@ export default function DesignerHomePage() {
                       <p className="mt-3 border-l-4 border-cyan-400 bg-cyan-950/20 p-3 rounded-r-xl text-xs font-semibold text-cyan-300">{asset.comentario_corretor}</p>
                     )}
                   </div>
-                  {asset.arquivo_url && (
-                    <a href={asset.arquivo_url} target="_blank" className="bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2.5 text-center text-xs font-black uppercase tracking-widest text-white rounded-xl transition-colors">
-                      Abrir
-                    </a>
-                  )}
+                  <div className="flex flex-col gap-2">
+                    {asset.arquivo_url && (
+                      <a href={asset.arquivo_url} target="_blank" className="bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2.5 text-center text-xs font-black uppercase tracking-widest text-white rounded-xl transition-colors">
+                        Abrir
+                      </a>
+                    )}
+                    {['rascunho', 'revisao'].includes(asset.status) && (
+                      <button
+                        type="button"
+                        onClick={() => void sendForApproval(asset)}
+                        disabled={sendingId === asset.id}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-emerald-950 disabled:opacity-50"
+                      >
+                        {sendingId === asset.id ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
+                        Enviar para aprovação
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -293,7 +329,7 @@ export default function DesignerHomePage() {
   );
 }
 
-function Counter({ icon: Icon, label, value, tone, active, onClick }: { icon: any; label: string; value: number; tone: string; active: boolean; onClick: () => void }) {
+function Counter({ icon: Icon, label, value, tone, active, onClick }: { icon: LucideIcon; label: string; value: number; tone: string; active: boolean; onClick: () => void }) {
   const tones: Record<string, string> = {
     blue: 'bg-blue-500/10 text-blue-400 border-blue-500/15 hover:border-blue-500/35 shadow-blue-500/5',
     red: 'bg-red-500/10 text-red-400 border-red-500/15 hover:border-red-500/35 shadow-red-500/5',

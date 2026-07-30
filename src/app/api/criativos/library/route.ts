@@ -363,7 +363,7 @@ export async function POST(request: Request) {
         descricao: prompt ? `Gerado por IA. Prompt: ${prompt}` : 'Gerado por IA no Orion Track.',
         arquivo_url: publicUrl,
         arquivo_path: path,
-        status: 'em_aprovacao',
+        status: 'rascunho',
         enviado_por_profile_id: guard.profile.id,
       }])
       .select('id, corretor_id, titulo, descricao, arquivo_url, status, created_at')

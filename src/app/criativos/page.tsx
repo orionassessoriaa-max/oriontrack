@@ -72,16 +72,7 @@ export default function BrokerCreativesPage() {
     setLoading(true);
     setActiveError(null);
     try {
-      const [assetsResult, sessionResult] = await Promise.all([
-        supabase
-          .from('criativo_assets')
-          .select('*')
-          .eq('corretor_id', profile.corretor_id)
-          .order('created_at', { ascending: false }),
-        supabase.auth.getSession(),
-      ]);
-
-      setAssets((assetsResult.data || []) as CreativeAsset[]);
+      const sessionResult = await supabase.auth.getSession();
       const token = sessionResult.data.session?.access_token;
       if (!token) {
         setActiveError('Sessão expirada. Entre novamente para consultar a Meta.');
@@ -93,19 +84,34 @@ export default function BrokerCreativesPage() {
       if (actualProfile?.tipo_usuario === 'admin' && profile.corretor_id) {
         params.set('corretor_id', profile.corretor_id);
       }
-      const response = await fetch(`/api/criativos/ativos-meta?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setActiveError(payload.error || 'Não foi possível consultar os criativos ativos.');
+      const [activeResponse, approvalResponse] = await Promise.all([
+        fetch(`/api/criativos/ativos-meta?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        }),
+        fetch(`/api/criativos/approval?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        }),
+      ]);
+      const [activePayload, approvalPayload] = await Promise.all([
+        activeResponse.json().catch(() => ({})),
+        approvalResponse.json().catch(() => ({})),
+      ]);
+      if (!approvalResponse.ok) {
+        setActiveError(approvalPayload.error || 'Não foi possível carregar os materiais para aprovação.');
+        setAssets([]);
+      } else {
+        setAssets((approvalPayload.assets || []) as CreativeAsset[]);
+      }
+      if (!activeResponse.ok) {
+        setActiveError(activePayload.error || 'Não foi possível consultar os criativos ativos.');
         setActiveCreatives([]);
         return;
       }
 
-      setConcessionariaName(payload.concessionaria || null);
-      setActiveCreatives((payload.creatives || []) as ActiveMetaCreative[]);
+      setConcessionariaName(activePayload.concessionaria || approvalPayload.concessionaria || null);
+      setActiveCreatives((activePayload.creatives || []) as ActiveMetaCreative[]);
     } finally {
       setLoading(false);
     }
@@ -117,34 +123,29 @@ export default function BrokerCreativesPage() {
   }, [fetchAssets]);
 
   const updateCreative = async (asset: CreativeAsset, status: CreativeAsset['status'], comentario?: string) => {
-    const { error } = await supabase
-      .from('criativo_assets')
-      .update({
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    const response = await fetch('/api/criativos/approval', {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        asset_id: asset.id,
+        corretor_id: actualProfile?.tipo_usuario === 'admin' ? profile?.corretor_id : null,
         status,
-        comentario_corretor: comentario || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', asset.id);
-
-    if (error) {
-      alert('Erro ao atualizar criativo: ' + error.message);
+        comentario: comentario || '',
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      alert(payload.error || 'Erro ao atualizar criativo.');
       return;
-    }
-
-    if (asset.demanda_id && (status === 'aprovado' || status === 'revisao')) {
-      await supabase
-        .from('criativo_demandas')
-        .update({
-          status,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', asset.demanda_id);
     }
 
     // Trigger designer notification on status change (approval or revision request)
     if (status === 'aprovado' || status === 'revisao') {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
       if (token) {
         await fetch('/api/criativos/notify', {
           method: 'POST',
