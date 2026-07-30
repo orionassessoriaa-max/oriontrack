@@ -38,6 +38,9 @@ type CreativeFolder = {
   key: string;
   name: string;
   corretor_ids: string[];
+  drive_folder_id: string;
+  drive_web_view_link: string | null;
+  drive_files_count: number;
   assets: LibraryAsset[];
 };
 
@@ -82,6 +85,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [folders, setFolders] = useState<CreativeFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [missingFolders, setMissingFolders] = useState<string[]>([]);
+  const [createdFolders, setCreatedFolders] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [selectedFolderKey, setSelectedFolderKey] = useState<string | null>(null);
   const [generatorOpen, setGeneratorOpen] = useState(false);
@@ -113,6 +118,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel carregar as pastas.');
       setFolders(payload.folders || []);
+      setMissingFolders(payload.missing_folders || []);
+      setCreatedFolders(payload.created_folders || []);
     } catch (error: unknown) {
       setLoadError(errorMessage(error, 'Erro ao carregar as pastas.'));
     } finally {
@@ -254,6 +261,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
         body: JSON.stringify({
           corretor_id: destinationId,
           gestor_id: gestorId,
+          drive_folder_id: folders.find((item) => item.id === destinationId)?.drive_folder_id,
           titulo: creativeName.trim(),
           prompt: prompt.trim(),
           image_data_url: generatedDataUrl,
@@ -262,7 +270,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel salvar o criativo.');
       const folder = folders.find((item) => item.id === destinationId);
-      setSuccessMessage(`Criativo salvo na pasta ${folder?.name || 'selecionada'}.`);
+      setSuccessMessage(`Criativo salvo no CRM e na pasta ${folder?.name || 'selecionada'} do Google Drive.`);
       await fetchLibrary();
     } catch (error: unknown) {
       setGenerationError(errorMessage(error, 'Erro ao salvar o criativo.'));
@@ -286,7 +294,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
               </h1>
               <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-300 sm:text-base">
                 {managerName ? `${managerName}, aqui aparecem somente as concessionarias atribuidas a voce.` : 'Organize e gere novas artes sem sair do CRM.'}
-                {' '}Gere com IA, revise o resultado e escolha a pasta somente depois.
+                {' '}Aqui aparecem somente pastas que existem de verdade no Google Drive.
               </p>
             </div>
             <button
@@ -412,10 +420,21 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                   {search ? 'Nenhuma pasta encontrada' : 'Nenhuma concessionaria atribuida'}
                 </h3>
                 <p className="mx-auto mt-2 max-w-lg text-sm font-semibold text-slate-500">
-                  {search ? 'Tente buscar por outro nome.' : 'Assim que uma concessionaria for atribuida ao gestor, a pasta aparecera aqui automaticamente.'}
+                  {search ? 'Tente buscar por outro nome.' : 'Nenhuma pasta fisica do Google Drive corresponde as concessionarias atribuidas a este gestor.'}
                 </p>
               </div>
             ) : (
+              <>
+              {createdFolders.length > 0 && !search ? (
+                <div className="mb-5 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 text-sm font-bold leading-6 text-cyan-100">
+                  {createdFolders.length} pasta(s) foram sincronizadas fisicamente com o Google Drive.
+                </div>
+              ) : null}
+              {missingFolders.length > 0 && !search ? (
+                <div className="mb-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm font-bold leading-6 text-amber-100">
+                  {missingFolders.length} concessionaria(s) atribuida(s) nao possuem pasta no Google Drive e nao foram exibidas.
+                </div>
+              ) : null}
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {visibleFolders.map((folder) => {
                   const cover = folder.assets.find((asset) => asset.arquivo_url)?.arquivo_url;
@@ -441,7 +460,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                         <div className="min-w-0">
                           <h3 className="truncate text-base font-black text-slate-100">{folder.name}</h3>
                           <p className="mt-1 text-xs font-bold text-slate-500">
-                            {folder.assets.length} {folder.assets.length === 1 ? 'criativo' : 'criativos'}
+                            {folder.drive_files_count} {folder.drive_files_count === 1 ? 'arquivo no Drive' : 'arquivos no Drive'}
                           </p>
                         </div>
                         <span className="text-xs font-black text-cyan-400 transition group-hover:translate-x-0.5">Abrir</span>
@@ -450,6 +469,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                   );
                 })}
               </div>
+              </>
             )}
           </section>
         )}

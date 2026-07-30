@@ -308,6 +308,86 @@ export async function downloadDriveFile(fileId: string) {
   return Buffer.from(await response.arrayBuffer());
 }
 
+export async function uploadDriveFile(options: {
+  folderId: string;
+  name: string;
+  mimeType: string;
+  bytes: Buffer | ArrayBuffer;
+}) {
+  const folderId = extractDriveId(options.folderId);
+  if (!folderId) throw new Error('Pasta de destino do Google Drive invalida.');
+
+  const token = await accessToken();
+  const uploadBytes = options.bytes instanceof ArrayBuffer
+    ? options.bytes
+    : Uint8Array.from(options.bytes).buffer as ArrayBuffer;
+  const form = new FormData();
+  form.append(
+    'metadata',
+    new Blob([JSON.stringify({
+      name: options.name,
+      parents: [folderId],
+    })], { type: 'application/json' })
+  );
+  form.append(
+    'file',
+    new Blob([uploadBytes], { type: options.mimeType || 'application/octet-stream' }),
+    options.name
+  );
+
+  const params = new URLSearchParams({
+    uploadType: 'multipart',
+    supportsAllDrives: 'true',
+    fields: 'id,name,mimeType,size,webViewLink,parents,modifiedTime,thumbnailLink',
+  });
+  const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files?${params.toString()}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.id) {
+    throw new Error(payload.error?.message || `Nao foi possivel salvar o criativo no Google Drive (${response.status}).`);
+  }
+  return payload as DriveFile;
+}
+
+export async function createDriveFolder(options: { parentId: string; name: string }) {
+  const parentId = extractDriveId(options.parentId);
+  const name = String(options.name || '').trim();
+  if (!parentId || !name) throw new Error('Nome ou pasta pai invalida para criar a pasta no Google Drive.');
+
+  const params = new URLSearchParams({
+    supportsAllDrives: 'true',
+    fields: 'id,name,mimeType,webViewLink,parents,modifiedTime',
+  });
+  return (await driveFetch(`files?${params.toString()}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      mimeType: DRIVE_FOLDER_MIME,
+      parents: [parentId],
+    }),
+  })) as DriveFolder;
+}
+
+export async function deleteDriveFile(fileId: string) {
+  const normalizedId = extractDriveId(fileId);
+  if (!normalizedId) return;
+  const token = await accessToken();
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(normalizedId)}?supportsAllDrives=true`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Nao foi possivel desfazer o envio ao Google Drive (${response.status}).`);
+  }
+}
+
 export async function resolveDriveFile(options: { fileId?: string | null; fileName?: string | null; folderId?: string | null }) {
   if (!isGoogleDriveConfigured()) return { configured: false, file: [] as DriveFile[] };
   if (options.fileId) return { configured: true, file: [await getDriveFile(options.fileId)] };
