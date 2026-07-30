@@ -231,8 +231,12 @@ export default function OtimizacoesPage() {
       if (!token) throw new Error('Sessao expirada.');
       const response = await fetch('/api/integrations/meta/drive-search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'browse', folder_id: folderId || null }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
+        body: JSON.stringify({ action: 'browse', folder_id: folderId || null, gestor_id: gestorIdParam }),
       });
       const payload = await response.json();
       if (accountContextRef.current !== contextAccountId) return;
@@ -258,9 +262,6 @@ export default function OtimizacoesPage() {
 
   function selectDriveFile(file: DriveEntry) {
     setSelectedDriveFile(file);
-    setOptimizePrompt((current) => current.includes(file.name)
-      ? current
-      : `${current}${current ? '\n' : ''}Use o criativo "${file.name}" selecionado na pasta do Google Drive.`);
     setDriveError(null);
   }
 
@@ -433,7 +434,11 @@ export default function OtimizacoesPage() {
 
     const response = await fetch('/api/integrations/meta/apolo-chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+      },
       body: JSON.stringify({
         selected_account_id: selectedSnapshot.meta_ad_account_id,
         selected_brokerage: selectedSnapshot.concessionaria,
@@ -441,6 +446,7 @@ export default function OtimizacoesPage() {
         metrics: metricsSnapshot,
         tree: treeSnapshot,
         messages: nextMessages,
+        gestor_id: gestorIdParam,
         drive_file_id: selectedDriveFile?.id || null,
         drive_file_name: selectedDriveFile?.name || null,
         drive_folder_id: selectedDriveFile?.parents?.[0] || driveFolderId || null,
@@ -891,6 +897,17 @@ export default function OtimizacoesPage() {
                         {apoloBusy ? <Loader2 className="animate-spin" size={15} style={{ color: 'var(--tf-accent-ink)' }} /> : null}
                       </div>
                       <div className="border-t p-2.5" style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface)' }}>
+                        {selectedDriveFile ? (
+                          <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border px-3 py-2" style={{ background: 'var(--tf-ok-soft)', borderColor: 'var(--tf-ok-border)' }}>
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ok)' }}>Criativo selecionado para o Apolo</p>
+                              <p className="truncate text-xs font-semibold" style={{ color: 'var(--tf-ink)' }}>{selectedDriveFile.name}</p>
+                            </div>
+                            <button type="button" onClick={() => setSelectedDriveFile(null)} className="shrink-0 rounded-md p-1" aria-label="Remover criativo selecionado" style={{ color: 'var(--tf-ink-mute)' }}>
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : null}
                         <div className="flex items-end gap-2">
                           <textarea
                             value={apoloInput}
@@ -941,7 +958,7 @@ export default function OtimizacoesPage() {
                                   className="shrink-0 font-semibold hover:underline"
                                   onClick={() => void browseDrive(folder.id, driveBreadcrumbs.slice(0, index + 1))}
                                 >
-                                  {index === 0 ? 'Criativos Orion' : folder.name}
+                                  {folder.name}
                                 </button>
                               </Fragment>
                             ))}

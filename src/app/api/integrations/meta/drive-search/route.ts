@@ -1,33 +1,38 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase/admin';
-import { rateLimit } from '@/lib/api/security';
+import { rateLimit, requireApiUser } from '@/lib/api/security';
 import { extractDriveId, getDriveFile, isGoogleDriveConfigured, listDriveChildren, searchDriveFiles } from '@/lib/integrations/googleDrive';
+import { isDriveItemInsideFolder, resolveManagerDriveScope } from '@/lib/creatives/driveManagerScope';
 
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'meta:drive-search', { limit: 30, windowMs: 5 * 60_000 });
     if (limited) return limited;
-    const header = request.headers.get('Authorization');
-    if (!header?.startsWith('Bearer ')) return NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 });
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(header.slice(7));
-    if (error || !user) return NextResponse.json({ error: 'Sessao expirada.' }, { status: 401 });
-    const { data: profile } = await supabaseAdmin.from('profiles').select('tipo_usuario').eq('id', user.id).maybeSingle();
-    if (!profile || !['admin', 'gestor_trafego'].includes(profile.tipo_usuario)) return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+    const guard = await requireApiUser(request, ['admin', 'gestor_trafego']);
+    if ('error' in guard) return guard.error;
     if (!isGoogleDriveConfigured()) return NextResponse.json({ configured: false, files: [], error: 'Google Drive ainda nao esta configurado no ambiente.' }, { status: 503 });
     const body = await request.json();
+    const requestedManagerId = request.headers.get('x-orion-view-profile-id') || String(body.gestor_id || '') || null;
+    const { manager, managerFolder } = await resolveManagerDriveScope(guard.profile, requestedManagerId);
     if (body.action === 'browse') {
-      const rootFolderId = extractDriveId(body.folder_id) || extractDriveId(process.env.GOOGLE_DRIVE_FOLDER_ID);
-      if (!rootFolderId) {
-        return NextResponse.json({
-          configured: true,
-          error: 'GOOGLE_DRIVE_FOLDER_ID nao configurado na VPS. Informe o ID da pasta raiz Criativos Orion no .env.production e publique novamente.',
-        }, { status: 503 });
+      const requestedFolderId = extractDriveId(body.folder_id);
+      const folderId = requestedFolderId || managerFolder.id;
+      if (!(await isDriveItemInsideFolder(folderId, managerFolder.id))) {
+        return NextResponse.json({ error: 'Esta pasta nao pertence ao gestor selecionado.' }, { status: 403 });
       }
-      const folderId = extractDriveId(body.folder_id) || rootFolderId;
       const [currentFolder, children] = await Promise.all([getDriveFile(folderId), listDriveChildren(folderId)]);
-      return NextResponse.json({ configured: true, rootFolderId, currentFolder, ...children });
+      return NextResponse.json({
+        configured: true,
+        rootFolderId: managerFolder.id,
+        manager: { id: manager.id, nome: manager.nome },
+        currentFolder,
+        ...children,
+      });
     }
-    const files = await searchDriveFiles({ query: String(body.query || ''), folderId: extractDriveId(body.folder || body.folder_id) });
+    const requestedFolderId = extractDriveId(body.folder || body.folder_id) || managerFolder.id;
+    if (!(await isDriveItemInsideFolder(requestedFolderId, managerFolder.id))) {
+      return NextResponse.json({ error: 'Esta pasta nao pertence ao gestor selecionado.' }, { status: 403 });
+    }
+    const files = await searchDriveFiles({ query: String(body.query || ''), folderId: requestedFolderId });
     return NextResponse.json({ configured: true, files });
   } catch (error: any) {
     const message = String(error?.message || 'Nao foi possivel pesquisar no Google Drive.');

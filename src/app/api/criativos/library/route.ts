@@ -10,6 +10,7 @@ import {
   createDriveFolder,
   deleteDriveFile,
   extractDriveId,
+  findOrCreateDriveFolder,
   isGoogleDriveConfigured,
   listDriveChildren,
   uploadDriveFile,
@@ -306,10 +307,12 @@ export async function POST(request: Request) {
     const driveFolderId = extractDriveId(String(body.drive_folder_id || ''));
     const titulo = String(body.titulo || '').trim().slice(0, 160);
     const prompt = String(body.prompt || '').trim().slice(0, 4000);
+    const operadora = String(body.operadora || '').trim().slice(0, 120);
+    const regiao = String(body.regiao || '').trim().slice(0, 120);
     const imageDataUrl = String(body.image_data_url || '');
 
-    if (!corretorId || !driveFolderId || !titulo || !imageDataUrl) {
-      return NextResponse.json({ error: 'Informe a pasta, o nome e a imagem gerada.' }, { status: 400 });
+    if (!corretorId || !driveFolderId || !titulo || !imageDataUrl || !operadora || !regiao) {
+      return NextResponse.json({ error: 'Informe a concessionaria, a regiao, a operadora, o nome e a imagem gerada.' }, { status: 400 });
     }
     if (!(await canUseCreativeFolder(guard.profile, corretorId, gestorId))) {
       return NextResponse.json({ error: 'Esta pasta nao pertence ao escopo deste gestor.' }, { status: 403 });
@@ -340,8 +343,16 @@ export async function POST(request: Request) {
     const extension = contentType === 'image/jpeg' ? 'jpg' : contentType.split('/')[1];
     const fileName = `${safeFileName(titulo)}.${extension}`;
     const path = `${corretorId}/gerados-por-ia/${Date.now()}-${fileName}`;
+    const regionFolder = await findOrCreateDriveFolder({
+      parentId: destination.drive_folder_id,
+      name: regiao,
+    });
+    const operatorFolder = await findOrCreateDriveFolder({
+      parentId: regionFolder.id,
+      name: operadora,
+    });
     const driveFile = await uploadDriveFile({
-      folderId: destination.drive_folder_id,
+      folderId: operatorFolder.id,
       name: fileName,
       mimeType: contentType,
       bytes,
@@ -365,6 +376,10 @@ export async function POST(request: Request) {
         arquivo_path: path,
         status: 'rascunho',
         enviado_por_profile_id: guard.profile.id,
+        operadora,
+        regiao,
+        drive_file_id: driveFile.id,
+        drive_folder_id: operatorFolder.id,
       }])
       .select('id, corretor_id, titulo, descricao, arquivo_url, status, created_at')
       .single();
@@ -380,7 +395,7 @@ export async function POST(request: Request) {
       entity_id: asset.id,
       metadata: {
         corretor_id: corretorId,
-        drive_folder_id: destination.drive_folder_id,
+        drive_folder_id: operatorFolder.id,
         drive_file_id: driveFile.id,
         model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
       },

@@ -370,8 +370,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   };
 
   const saveCreative = async () => {
-    if (!generatedDataUrl || !destinationId || !creativeName.trim()) {
-      setGenerationError('Escolha a pasta e informe o nome do criativo.');
+    if (!generatedDataUrl || !destinationId || !creativeName.trim() || !batchOperator.trim() || !batchRegion.trim()) {
+      setGenerationError('Escolha a concessionaria e informe regiao, operadora e nome do criativo.');
       return;
     }
 
@@ -392,6 +392,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
           drive_folder_id: folders.find((item) => item.id === destinationId)?.drive_folder_id,
           titulo: creativeName.trim(),
           prompt: prompt.trim(),
+          operadora: batchOperator.trim(),
+          regiao: batchRegion.trim(),
           image_data_url: generatedDataUrl,
         }),
       });
@@ -1001,7 +1003,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                     <button
                       type="button"
                       onClick={saveCreative}
-                      disabled={saving || !destinationId || !creativeName.trim()}
+                      disabled={saving || !destinationId || !creativeName.trim() || !batchOperator.trim() || !batchRegion.trim()}
                       className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400/30 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       {saving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}

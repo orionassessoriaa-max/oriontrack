@@ -3,14 +3,25 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { fetchWithTimeout } from '@/lib/meta/fetchWithTimeout';
 import { TRAFFIC_RULES } from '@/lib/trafego/rules';
-import { extractDriveId, isGoogleDriveConfigured, resolveDriveFile } from '@/lib/integrations/googleDrive';
+import {
+  downloadDriveFile,
+  extractDriveId,
+  getDriveFile,
+  isGoogleDriveConfigured,
+  resolveDriveFile,
+} from '@/lib/integrations/googleDrive';
+import { isDriveItemInsideFolder, resolveManagerDriveScope } from '@/lib/creatives/driveManagerScope';
 
 async function guard(request: Request) {
   const header = request.headers.get('Authorization');
   if (!header?.startsWith('Bearer ')) return { error: NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 }) };
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(header.slice(7));
   if (error || !user) return { error: NextResponse.json({ error: 'Sessao expirada.' }, { status: 401 }) };
-  const { data: profile } = await supabaseAdmin.from('profiles').select('id, tipo_usuario').eq('id', user.id).maybeSingle();
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('id,nome,email,email_real,tipo_usuario,corretor_id,status,is_admin_master')
+    .eq('id', user.id)
+    .maybeSingle();
   if (!profile || !['admin', 'gestor_trafego'].includes(profile.tipo_usuario)) {
     return { error: NextResponse.json({ error: 'Acesso negado.' }, { status: 403 }) };
   }
@@ -38,6 +49,17 @@ export async function POST(request: Request) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'OPENAI_API_KEY nao configurada.' }, { status: 503 });
 
+    let selectedDriveFile: Awaited<ReturnType<typeof getDriveFile>> | null = null;
+    const selectedDriveFileId = extractDriveId(body.drive_file_id);
+    if (selectedDriveFileId) {
+      const requestedManagerId = request.headers.get('x-orion-view-profile-id') || String(body.gestor_id || '') || null;
+      const { managerFolder } = await resolveManagerDriveScope(access.profile as any, requestedManagerId);
+      if (!(await isDriveItemInsideFolder(selectedDriveFileId, managerFolder.id))) {
+        return NextResponse.json({ error: 'O criativo selecionado nao pertence a pasta deste gestor.' }, { status: 403 });
+      }
+      selectedDriveFile = await getDriveFile(selectedDriveFileId);
+    }
+
     const context = JSON.stringify({
       conta_selecionada_id: body.selected_account_id || body.account?.meta_ad_account_id || null,
       corretora_selecionada: body.selected_brokerage || body.account?.concessionaria || null,
@@ -47,6 +69,13 @@ export async function POST(request: Request) {
       regras: TRAFFIC_RULES,
       conversa: messages,
       anexo: body.creative_attachment || null,
+      criativo_drive_selecionado: selectedDriveFile ? {
+        id: selectedDriveFile.id,
+        nome: selectedDriveFile.name,
+        tipo: selectedDriveFile.mimeType,
+        pasta_id: selectedDriveFile.parents?.[0] || null,
+        link: selectedDriveFile.webViewLink || null,
+      } : null,
     }).slice(0, 28000);
     const aiMessages: Array<{ role: 'system' | 'user'; content: string | Array<Record<string, unknown>> }> = [
       {
@@ -61,6 +90,7 @@ O CPL deve usar somente leads CRM de origem Orion. Conta sem rastreio ativo nao 
 O gestor pode pedir pausa de anuncio, troca de criativo, ajuste de verba ou criacao de campanha/conjunto/anuncio.
 Nunca execute uma alteracao neste chat. Gere apenas um plano para revisao humana. Criacoes novas devem sair PAUSED.
 O Google Drive esta disponivel para buscar arquivos quando estiver configurado no ambiente. Nunca diga que encontrou um arquivo sem receber a confirmacao do servidor; se a busca nao retornar exatamente um arquivo, explique isso ao gestor.
+Quando "criativo_drive_selecionado" estiver preenchido, o arquivo ja foi validado pelo servidor. Use obrigatoriamente esse criativo no plano solicitado e nunca diga que falta uma imagem ou referencia.
 O gestor tambem pode pedir a criacao de uma ou varias pastas/lotes de criativos. Quando houver dados suficientes, liste cada pedido em creative_requests com operadora, regiao, quantidade e briefing. Quantidade padrao 4 e maxima 20. Nao gere nem publique ainda: a interface perguntara se ele possui um modelo de referencia.
 Responda sempre em JSON valido neste formato: {"reply":"resposta curta e clara","draft":null,"creative_requests":[]}.
 Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ads, actions, missing_info e human_review_checklist. Nunca invente creative_id nem daily_budget.`,
@@ -76,6 +106,26 @@ Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ad
           { type: 'image_url', image_url: { url: attachmentUrl } },
         ],
       });
+    }
+    if (selectedDriveFile?.mimeType?.startsWith('image/')) {
+      const selectedBytes = await downloadDriveFile(selectedDriveFile.id);
+      if (selectedBytes.length <= 15 * 1024 * 1024) {
+        aiMessages.push({
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Este e o criativo "${selectedDriveFile.name}" selecionado e validado no Google Drive. Analise a imagem e use-a no plano solicitado pelo gestor.`,
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${selectedDriveFile.mimeType};base64,${selectedBytes.toString('base64')}`,
+              },
+            },
+          ],
+        });
+      }
     }
 
     const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
@@ -113,7 +163,23 @@ Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ad
     const fileUrl = prompt.match(/https?:\/\/drive\.google\.com\/file\/d\/[^\s)]+/i)?.[0] || null;
     const folderUrl = prompt.match(/https?:\/\/drive\.google\.com\/drive\/folders\/[^\s)]+/i)?.[0] || null;
     const fileHint = prompt.match(/(?:criativo|anuncio|ad)\s*(?:de|numero|n[ºo]?|#|-)?\s*([a-z0-9][a-z0-9 _-]{1,50})/i)?.[1]?.trim() || null;
-    if (fileUrl || folderUrl || fileHint) {
+    if (selectedDriveFile) {
+      drive = { configured: true, status: 'resolved', matches: [selectedDriveFile] };
+      if (parsed.draft) {
+        const ads = Array.isArray(parsed.draft.ads) && parsed.draft.ads.length ? parsed.draft.ads : [{}];
+        parsed.draft = {
+          ...parsed.draft,
+          ads: ads.map((ad: any) => ({
+            ...ad,
+            drive_file_id: selectedDriveFile!.id,
+            drive_file_name: selectedDriveFile!.name,
+            drive_mime_type: selectedDriveFile!.mimeType,
+            drive_url: selectedDriveFile!.webViewLink || null,
+          })),
+          drive_file: selectedDriveFile,
+        };
+      }
+    } else if (fileUrl || folderUrl || fileHint) {
       const resolution = await resolveDriveFile({
         fileId: fileUrl ? extractDriveId(fileUrl) : null,
         folderId: folderUrl ? extractDriveId(folderUrl) : null,

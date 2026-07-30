@@ -398,6 +398,33 @@ export async function deleteDriveFile(fileId: string) {
   }
 }
 
+export async function moveDriveFile(options: {
+  fileId: string;
+  destinationFolderId: string;
+  currentParentId?: string | null;
+}) {
+  const fileId = extractDriveId(options.fileId);
+  const destinationFolderId = extractDriveId(options.destinationFolderId);
+  if (!fileId || !destinationFolderId) {
+    throw new Error('Arquivo ou pasta de destino invalida para mover no Google Drive.');
+  }
+
+  const currentFile = options.currentParentId ? null : await getDriveFile(fileId);
+  const currentParentId = extractDriveId(options.currentParentId) || extractDriveId(currentFile?.parents?.[0]);
+  const params = new URLSearchParams({
+    addParents: destinationFolderId,
+    supportsAllDrives: 'true',
+    fields: 'id,name,mimeType,size,webViewLink,parents,modifiedTime,thumbnailLink',
+  });
+  if (currentParentId && currentParentId !== destinationFolderId) {
+    params.set('removeParents', currentParentId);
+  }
+
+  return (await driveFetch(`files/${encodeURIComponent(fileId)}?${params.toString()}`, {
+    method: 'PATCH',
+  })) as DriveFile;
+}
+
 export async function resolveDriveFile(options: { fileId?: string | null; fileName?: string | null; folderId?: string | null }) {
   if (!isGoogleDriveConfigured()) return { configured: false, file: [] as DriveFile[] };
   if (options.fileId) return { configured: true, file: [await getDriveFile(options.fileId)] };
