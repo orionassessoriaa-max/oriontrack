@@ -77,6 +77,7 @@ type DraftExecutionResult = {
 };
 
 type ApoloMessage = { role: 'user' | 'assistant'; content: string };
+type CreativeRequest = { operadora: string; regiao: string; quantidade: number; briefing: string };
 
 function initialApoloMessages(brokerage?: string | null): ApoloMessage[] {
   return [{
@@ -158,6 +159,8 @@ export default function OtimizacoesPage() {
   const [apoloMessages, setApoloMessages] = useState<ApoloMessage[]>(initialApoloMessages());
   const [apoloInput, setApoloInput] = useState('');
   const [apoloBusy, setApoloBusy] = useState(false);
+  const [pendingCreativeRequests, setPendingCreativeRequests] = useState<CreativeRequest[]>([]);
+  const [queuingCreatives, setQueuingCreatives] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +190,8 @@ export default function OtimizacoesPage() {
     setApoloMessages(initialApoloMessages(brokerage));
     setApoloInput('');
     setApoloBusy(false);
+    setPendingCreativeRequests([]);
+    setQueuingCreatives(false);
     setUploadingCreative(false);
     setGeneratingDraft(false);
     setCreatingDraft(false);
@@ -452,7 +457,55 @@ export default function OtimizacoesPage() {
       return;
     }
     setApoloMessages((current) => [...current, { role: 'assistant', content: payload.reply }]);
+    setPendingCreativeRequests(Array.isArray(payload.creative_requests) ? payload.creative_requests : []);
     if (payload.draft) setOptimizationDraft(payload.draft);
+  }
+
+  async function confirmApoloCreativeRequests(useReference: boolean) {
+    if (!selected || !pendingCreativeRequests.length || queuingCreatives) return;
+    if (useReference && !creativeUrl) {
+      setDraftError('Cole ou anexe primeiro a imagem de referencia e envie a mensagem ao Apolo.');
+      return;
+    }
+    setQueuingCreatives(true);
+    setDraftError(null);
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setQueuingCreatives(false);
+      return setDraftError('Sessao expirada.');
+    }
+    try {
+      const responses = await Promise.all(pendingCreativeRequests.map(async (request) => {
+        const response = await fetch('/api/criativos/jobs', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            corretor_id: selected.id,
+            gestor_id: gestorIdParam,
+            operadora: request.operadora,
+            regiao: request.regiao,
+            quantidade: request.quantidade,
+            briefing: request.briefing,
+            referencia_url: useReference ? creativeUrl : null,
+            origem: 'apolo',
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `Falha em ${request.operadora}/${request.regiao}.`);
+        return payload;
+      }));
+      const totalRequested = pendingCreativeRequests.reduce((sum, item) => sum + item.quantidade, 0);
+      setApoloMessages((current) => [...current, {
+        role: 'assistant',
+        content: `${totalRequested} criativos entraram na fila em ${responses.length} lote(s). Você pode continuar trabalhando; avisarei na dashboard quando estiverem prontos para revisão e aprovação.`,
+      }]);
+      setPendingCreativeRequests([]);
+    } catch (requestError: unknown) {
+      setDraftError(requestError instanceof Error ? requestError.message : 'Nao foi possivel iniciar os lotes.');
+    } finally {
+      setQueuingCreatives(false);
+    }
   }
 
   function handleApoloPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
@@ -805,6 +858,36 @@ export default function OtimizacoesPage() {
                             </p>
                           </div>
                         ))}
+                        {pendingCreativeRequests.length > 0 ? (
+                          <div className="rounded-xl border p-3" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-accent-border)' }}>
+                            <p className="text-xs font-black" style={{ color: 'var(--tf-ink)' }}>Modelo de referência</p>
+                            <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>
+                              A IA fará novas headlines e legendas em ângulos diferentes. Deseja usar a imagem que está anexada como referência?
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void confirmApoloCreativeRequests(true)}
+                                disabled={queuingCreatives || !creativeUrl}
+                                className="tf-no-lift inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-bold text-white disabled:opacity-40"
+                                style={{ background: 'var(--tf-accent)' }}
+                              >
+                                {queuingCreatives ? <Loader2 className="animate-spin" size={14} /> : <FileImage size={14} />}
+                                Sim, usar referência
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void confirmApoloCreativeRequests(false)}
+                                disabled={queuingCreatives}
+                                className="tf-no-lift inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-xs font-bold disabled:opacity-40"
+                                style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }}
+                              >
+                                Criar sem referência
+                              </button>
+                            </div>
+                            {!creativeUrl ? <p className="mt-2 text-[11px] font-semibold" style={{ color: 'var(--tf-warn)' }}>Para usar um modelo, cole a imagem com Ctrl+V e envie ao Apolo.</p> : null}
+                          </div>
+                        ) : null}
                         {apoloBusy ? <Loader2 className="animate-spin" size={15} style={{ color: 'var(--tf-accent-ink)' }} /> : null}
                       </div>
                       <div className="border-t p-2.5" style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface)' }}>

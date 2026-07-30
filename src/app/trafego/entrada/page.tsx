@@ -6,7 +6,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import { Corretor } from '@/types';
 import { getOnboardingStatus, OPERADORAS_ONBOARDING } from '@/lib/onboarding';
-import { CheckCircle2, Loader2, Save, Search, ShieldAlert, UserPlus } from 'lucide-react';
+import { CheckCircle2, Layers3, Loader2, Plus, Save, Search, ShieldAlert, Trash2, UserPlus } from 'lucide-react';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 type EntradaForm = {
@@ -29,8 +29,11 @@ const emptyForm: EntradaForm = {
   observacoes: ''
 };
 
+type StrategyEntry = { id: string; operadora: string; regiao: string };
+const REGION_OPTIONS = ['SP', 'DF', 'RJ', 'MG', 'PR', 'SC', 'RS', 'GO', 'BA', 'PE', 'CE', 'Outros'];
+
 export default function EntradaGestorPage() {
-  const { profile } = useAuth();
+  const { profile, actualProfile } = useAuth();
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
@@ -39,6 +42,11 @@ export default function EntradaGestorPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [strategies, setStrategies] = useState<StrategyEntry[]>([]);
+  const [operatorChoice, setOperatorChoice] = useState('');
+  const [operatorOther, setOperatorOther] = useState('');
+  const [regionChoice, setRegionChoice] = useState('');
+  const [regionOther, setRegionOther] = useState('');
 
   useEffect(() => {
     fetchCorretores();
@@ -85,7 +93,7 @@ export default function EntradaGestorPage() {
     }
   };
 
-  const selectCorretor = (corretor: Corretor) => {
+  const selectCorretor = async (corretor: Corretor) => {
     setSelectedId(corretor.id);
     setSaved(false);
     const selectedOperadoras = Array.isArray(corretor.operadoras_info?.selecionadas)
@@ -106,14 +114,51 @@ export default function EntradaGestorPage() {
       operadora_outros: customOperadora || '',
       observacoes: corretor.observacoes || ''
     });
+    setOperatorChoice('');
+    setOperatorOther('');
+    setRegionChoice('');
+    setRegionOther('');
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return setStrategies([]);
+    const params = new URLSearchParams({ corretor_id: corretor.id });
+    if (actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego') {
+      params.set('gestor_id', profile.id);
+    }
+    const response = await fetch(`/api/trafego/estrategias?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    setStrategies((payload.estrategias || []).map((item: StrategyEntry) => ({
+      id: item.id,
+      operadora: item.operadora,
+      regiao: item.regiao,
+    })));
   };
 
   const dataComplete = Boolean(
     formData.facebook_login.trim() &&
     formData.facebook_senha.trim() &&
-    formData.regioes_campanha.trim() &&
-    formData.operadoras.length > 0
+    strategies.length > 0
   );
+
+  const addStrategy = () => {
+    const operadora = operatorChoice === 'Outros' ? operatorOther.trim() : operatorChoice;
+    const regiao = regionChoice === 'Outros' ? regionOther.trim() : regionChoice;
+    if (!operadora || !regiao) return setError('Escolha ou informe a operadora e a regiao.');
+    if (strategies.some((item) =>
+      item.operadora.localeCompare(operadora, 'pt-BR', { sensitivity: 'base' }) === 0
+      && item.regiao.localeCompare(regiao, 'pt-BR', { sensitivity: 'base' }) === 0
+    )) {
+      return setError('Essa combinacao de operadora e regiao ja foi adicionada.');
+    }
+    setError(null);
+    setStrategies((current) => [...current, { id: `new-${crypto.randomUUID()}`, operadora, regiao }]);
+    setOperatorChoice('');
+    setOperatorOther('');
+    setRegionChoice('');
+    setRegionOther('');
+  };
 
   const saveEntrada = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,19 +172,19 @@ export default function EntradaGestorPage() {
         ? 'dados_completos'
         : 'pendente';
 
-    const operadoras = formData.operadoras.includes('Outros')
-      ? [
-          ...formData.operadoras.filter((item) => item !== 'Outros'),
-          formData.operadora_outros.trim() || 'Outros'
-        ]
-      : formData.operadoras;
+    if (!strategies.length) {
+      setSaving(false);
+      return setError('Adicione pelo menos uma combinacao de operadora e regiao.');
+    }
+    const operadoras = Array.from(new Set(strategies.map((item) => item.operadora)));
+    const regioes = Array.from(new Set(strategies.map((item) => item.regiao)));
 
     const { error: updateError } = await supabase
       .from('corretores')
       .update({
         facebook_login: formData.facebook_login || null,
         facebook_senha: formData.facebook_senha || null,
-        regioes_campanha: formData.regioes_campanha || null,
+        regioes_campanha: regioes.join(', ') || null,
         operadoras_info: { selecionadas: operadoras },
         campanhas_ativas: formData.campanhas_ativas,
         onboarding_status,
@@ -147,18 +192,39 @@ export default function EntradaGestorPage() {
       })
       .eq('id', selectedId);
 
-    setSaving(false);
     if (updateError) {
+      setSaving(false);
       alert('Erro ao salvar entrada: ' + updateError.message);
       return;
     }
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setSaving(false);
+      return setError('Sessao expirada ao sincronizar a estrategia.');
+    }
+    const strategyResponse = await fetch('/api/trafego/estrategias', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        corretor_id: selectedId,
+        gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
+          ? profile.id
+          : undefined,
+        estrategias: strategies.map(({ operadora, regiao }) => ({ operadora, regiao })),
+        briefing: formData.observacoes,
+      }),
+    });
+    const strategyPayload = await strategyResponse.json().catch(() => ({}));
+    setSaving(false);
+    if (!strategyResponse.ok) return setError(strategyPayload.error || 'Entrada salva, mas a estrategia nao foi sincronizada.');
     setSaved(true);
     setCorretores(prev => prev.map(c => c.id === selectedId ? {
       ...c,
       facebook_login: formData.facebook_login,
       facebook_senha: formData.facebook_senha,
-      regioes_campanha: formData.regioes_campanha,
+      regioes_campanha: regioes.join(', '),
       campanhas_ativas: formData.campanhas_ativas,
       operadoras_info: { selecionadas: operadoras },
       onboarding_status,
@@ -279,17 +345,6 @@ export default function EntradaGestorPage() {
               </div>
 
               <div className="mt-6 space-y-2">
-                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Regiões que vao rodar</label>
-                <textarea
-                  value={formData.regioes_campanha}
-                  onChange={(e) => setFormData({ ...formData, regioes_campanha: e.target.value })}
-                  rows={3}
-                  className="w-full resize-none rounded-2xl border-none bg-slate-50 p-5 text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ex: Sao Paulo capital, ABC, Guarulhos..."
-                />
-              </div>
-
-              <div className="mt-6 space-y-2">
                 <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Observações</label>
                 <textarea
                   value={formData.observacoes}
@@ -300,43 +355,67 @@ export default function EntradaGestorPage() {
                 />
               </div>
 
-              <div className="mt-8">
-                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-gray-900">Operadoras</h3>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                  {OPERADORAS_ONBOARDING.map(operadora => (
-                    <label
-                      key={operadora}
-                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-4 text-sm font-black transition-all ${
-                        formData.operadoras.includes(operadora)
-                          ? 'border-blue-200 bg-blue-50 text-blue-700'
-                          : 'border-slate-100 bg-slate-50 text-slate-600 hover:border-blue-100'
-                      }`}
+              <fieldset className="mt-8 rounded-3xl border border-blue-100 bg-blue-50/40 p-5">
+                <legend className="px-2 text-sm font-black uppercase tracking-widest text-gray-900">
+                  Estratégia de criativos
+                </legend>
+                <p className="mb-5 text-sm font-medium text-slate-500">
+                  Cada entrada cria a pasta Região / Operadora e coloca 4 criativos nela em segundo plano.
+                </p>
+                <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                  <div className="space-y-2">
+                    <label htmlFor="strategy-operator" className="text-[10px] font-black uppercase tracking-widest text-gray-500">Operadora</label>
+                    <select
+                      id="strategy-operator"
+                      value={operatorChoice}
+                      onChange={(event) => setOperatorChoice(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-bold focus:border-blue-500 focus:ring-blue-500"
                     >
-                      <input
-                        type="checkbox"
-                        checked={formData.operadoras.includes(operadora)}
-                        onChange={(e) => {
-                          const nextOperadoras = e.target.checked
-                            ? [...formData.operadoras, operadora]
-                            : formData.operadoras.filter(item => item !== operadora);
-
-                          setFormData({ ...formData, operadoras: nextOperadoras });
-                        }}
-                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      {operadora}
-                    </label>
+                      <option value="">Selecione...</option>
+                      {OPERADORAS_ONBOARDING.map((operadora) => <option key={operadora} value={operadora}>{operadora}</option>)}
+                    </select>
+                    {operatorChoice === 'Outros' && (
+                      <input value={operatorOther} onChange={(event) => setOperatorOther(event.target.value)} placeholder="Nome da operadora" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold focus:border-blue-500 focus:ring-blue-500" />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="strategy-region" className="text-[10px] font-black uppercase tracking-widest text-gray-500">Região</label>
+                    <select
+                      id="strategy-region"
+                      value={regionChoice}
+                      onChange={(event) => setRegionChoice(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-bold focus:border-blue-500 focus:ring-blue-500"
+                    >
+                      <option value="">Selecione...</option>
+                      {REGION_OPTIONS.map((regiao) => <option key={regiao} value={regiao}>{regiao}</option>)}
+                    </select>
+                    {regionChoice === 'Outros' && (
+                      <input value={regionOther} onChange={(event) => setRegionOther(event.target.value)} placeholder="Digite qualquer região" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold focus:border-blue-500 focus:ring-blue-500" />
+                    )}
+                  </div>
+                  <button type="button" onClick={addStrategy} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    <Plus size={17} /> Adicionar
+                  </button>
+                </div>
+                <div className="mt-5 space-y-2">
+                  {strategies.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-center text-sm font-bold text-slate-400">Nenhuma combinação adicionada.</p>
+                  ) : strategies.map((strategy, index) => (
+                    <div key={strategy.id || `${strategy.operadora}-${strategy.regiao}-${index}`} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="rounded-xl bg-blue-50 p-2 text-blue-600"><Layers3 size={18} /></span>
+                        <div>
+                          <p className="font-black text-slate-900">{strategy.regiao} / {strategy.operadora}</p>
+                          <p className="text-xs font-bold text-slate-400">4 criativos na criação desta entrada</p>
+                        </div>
+                      </div>
+                      <button type="button" aria-label={`Remover ${strategy.operadora} de ${strategy.regiao}`} onClick={() => setStrategies((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded-xl p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   ))}
                 </div>
-                {formData.operadoras.includes('Outros') && (
-                  <input
-                    value={formData.operadora_outros}
-                    onChange={(e) => setFormData({ ...formData, operadora_outros: e.target.value })}
-                    placeholder="Digite o nome da operadora"
-                    className="mt-3 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500"
-                  />
-                )}
-              </div>
+              </fieldset>
 
               <label className="mt-8 flex cursor-pointer items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
                 <input

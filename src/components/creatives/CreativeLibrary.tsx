@@ -54,6 +54,7 @@ const FORMATS = [
   { value: '1024x1536', label: 'Stories / Reels', detail: 'Vertical' },
   { value: '1536x1024', label: 'Paisagem', detail: 'Horizontal' },
 ] as const;
+const REGIONS = ['SP', 'RJ', 'DF', 'MG', 'PR', 'SC', 'RS', 'BA', 'GO', 'PE', 'CE', 'Outros'];
 
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -101,6 +102,10 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [destinationId, setDestinationId] = useState('');
   const [creativeName, setCreativeName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [batchOperator, setBatchOperator] = useState('');
+  const [batchRegion, setBatchRegion] = useState('');
+  const [batchQuantity, setBatchQuantity] = useState(4);
+  const [queuing, setQueuing] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -184,6 +189,9 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     setGenerationError(null);
     setDestinationId(selectedFolder?.id || '');
     setCreativeName('');
+    setBatchOperator('');
+    setBatchRegion('');
+    setBatchQuantity(4);
     setSuccessMessage(null);
   };
 
@@ -240,6 +248,48 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       setGenerationError(errorMessage(error, 'Erro ao gerar o criativo.'));
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const queueCreativeBatch = async () => {
+    if (!destinationId || !batchOperator.trim() || !batchRegion.trim()) {
+      setGenerationError('Escolha a concessionaria e informe operadora e regiao.');
+      return;
+    }
+    if (prompt.trim().length < 12) {
+      setGenerationError('Descreva melhor o lote de criativos antes de gerar.');
+      return;
+    }
+    setQueuing(true);
+    setGenerationError(null);
+    setSuccessMessage(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const response = await fetch('/api/criativos/jobs', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          corretor_id: destinationId,
+          gestor_id: gestorId,
+          operadora: batchOperator.trim(),
+          regiao: batchRegion.trim(),
+          quantidade: batchQuantity,
+          briefing: prompt.trim(),
+          reference_data_url: referenceDataUrl,
+          origem: 'criativos',
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel iniciar a geracao.');
+      setSuccessMessage(payload.message || 'Lote iniciado. Voce pode fechar esta janela e continuar trabalhando.');
+      setPrompt('');
+      setReferenceDataUrl(null);
+      setReferenceName('');
+    } catch (error: unknown) {
+      setGenerationError(errorMessage(error, 'Erro ao colocar os criativos na fila.'));
+    } finally {
+      setQueuing(false);
     }
   };
 
@@ -588,6 +638,45 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                   )}
                 </div>
 
+                <div className="rounded-3xl border border-cyan-400/20 bg-cyan-400/[0.04] p-5">
+                  <div className="flex items-center gap-2 text-cyan-400">
+                    <FolderOpen size={17} />
+                    <p className="text-xs font-black uppercase tracking-[0.18em]">Gerar lote em segundo plano</p>
+                  </div>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                    A IA cria imagem, headline e legenda em ângulos diferentes. Nada é publicado sem sua aprovação.
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="block sm:col-span-2">
+                      <span className="text-xs font-black text-slate-300">Concessionária</span>
+                      <select value={destinationId} onChange={(event) => setDestinationId(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10">
+                        <option value="">Selecione...</option>
+                        {folders.map((folder) => <option key={folder.key} value={folder.id}>{folder.name}</option>)}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-black text-slate-300">Operadora</span>
+                      <input value={batchOperator} onChange={(event) => setBatchOperator(event.target.value)} placeholder="Ex.: Amil" className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-black text-slate-300">Região</span>
+                      <input value={batchRegion} onChange={(event) => setBatchRegion(event.target.value)} list="creative-regions" placeholder="Ex.: RJ" className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
+                      <datalist id="creative-regions">{REGIONS.map((region) => <option key={region} value={region} />)}</datalist>
+                    </label>
+                    <label className="block sm:col-span-2">
+                      <span className="text-xs font-black text-slate-300">Quantidade</span>
+                      <input type="number" min={1} max={20} value={batchQuantity} onChange={(event) => setBatchQuantity(Math.min(20, Math.max(1, Number(event.target.value) || 1)))} className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
+                    </label>
+                  </div>
+                  <button type="button" onClick={queueCreativeBatch} disabled={queuing || prompt.trim().length < 12 || !destinationId || !batchOperator.trim() || !batchRegion.trim()} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-45">
+                    {queuing ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                    {queuing ? 'Colocando na fila...' : `Gerar ${batchQuantity} em segundo plano`}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs font-black uppercase tracking-widest text-slate-600">
+                  <span className="h-px flex-1 bg-slate-800" /> ou gerar uma prévia única <span className="h-px flex-1 bg-slate-800" />
+                </div>
                 <button
                   type="button"
                   onClick={generateCreative}

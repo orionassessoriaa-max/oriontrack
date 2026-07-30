@@ -21,6 +21,7 @@ import {
   Check,
   Ban,
   Maximize2,
+  Paperclip,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -94,6 +95,15 @@ type CreativeSwap = {
   adset_name: string;
 };
 
+type CreativeGenerationOffer = {
+  recommendation: Recomendacao;
+  corretor_id: string;
+  recommendation_id: string;
+  operadora: string;
+  regiao: string;
+  quantidade: number;
+};
+
 const TONE_VAR: Record<string, { fg: string; bg: string; border: string }> = {
   red: { fg: 'var(--tf-crit)', bg: 'var(--tf-crit-soft)', border: 'var(--tf-crit-border)' },
   amber: { fg: 'var(--tf-warn)', bg: 'var(--tf-warn-soft)', border: 'var(--tf-warn-border)' },
@@ -160,6 +170,9 @@ export default function GestorDashboardPage() {
 
   const [confirmando, setConfirmando] = useState<Recomendacao | null>(null);
   const [ativacaoPendente, setAtivacaoPendente] = useState<Recomendacao | null>(null);
+  const [generationOffer, setGenerationOffer] = useState<CreativeGenerationOffer | null>(null);
+  const [generationReference, setGenerationReference] = useState<string | null>(null);
+  const [queuingGeneration, setQueuingGeneration] = useState(false);
   const [decidindo, setDecidindo] = useState<string | null>(null);
   const [fullscreenCreative, setFullscreenCreative] = useState<ActiveCreative | null>(null);
 
@@ -303,6 +316,12 @@ export default function GestorDashboardPage() {
       const payload = await response.json();
 
       if (response.status === 428) {
+        if (payload.requires_creative_generation && payload.offer) {
+          setConfirmando(null);
+          setGenerationReference(null);
+          setGenerationOffer({ recommendation: recomendacao, ...payload.offer });
+          return;
+        }
         setConfirmando(recomendacao);
         return;
       }
@@ -333,6 +352,52 @@ export default function GestorDashboardPage() {
     } finally {
       setDecidindo(null);
     }
+  }
+
+  async function queueMissingCreatives() {
+    if (!generationOffer || queuingGeneration) return;
+    setQueuingGeneration(true);
+    setAviso(null);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Sessão expirada. Entre novamente.');
+      const response = await fetch('/api/criativos/jobs', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          corretor_id: generationOffer.corretor_id,
+          gestor_id: gestorIdParam,
+          recommendation_id: generationOffer.recommendation_id,
+          operadora: generationOffer.operadora,
+          regiao: generationOffer.regiao,
+          quantidade: generationOffer.quantidade,
+          briefing: `Criativos para substituir o anuncio ${generationOffer.recommendation.alvo_nome || ''}. Criar headline e legenda em novos angulos.`,
+          reference_data_url: generationReference,
+          origem: 'troca_criativo',
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível iniciar a criação.');
+      setGenerationOffer(null);
+      setGenerationReference(null);
+      setAviso({ tone: 'ok', texto: payload.message || 'Criativos em geração. Você pode continuar trabalhando.' });
+    } catch (queueError: unknown) {
+      setAviso({ tone: 'erro', texto: queueError instanceof Error ? queueError.message : 'Falha ao iniciar a geração.' });
+    } finally {
+      setQueuingGeneration(false);
+    }
+  }
+
+  function attachGenerationReference(file?: File | null) {
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setAviso({ tone: 'erro', texto: 'Use uma referência PNG, JPG ou WebP de até 10 MB.' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setGenerationReference(String(reader.result || ''));
+    reader.onerror = () => setAviso({ tone: 'erro', texto: 'Não foi possível ler a imagem de referência.' });
+    reader.readAsDataURL(file);
   }
 
   async function ativarTroca(recomendacao: Recomendacao) {
@@ -747,6 +812,42 @@ export default function GestorDashboardPage() {
             onCancelar={() => setConfirmando(null)}
             onConfirmar={() => decidir(confirmando, 'aprovar', true)}
           />
+        ) : null}
+
+        {generationOffer ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="missing-creatives-title">
+            <div className="w-full max-w-lg rounded-3xl border p-6 shadow-2xl" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--tf-warn)' }}>Pasta sem criativos</p>
+                  <h2 id="missing-creatives-title" className="mt-2 text-xl font-black">
+                    Não existem mais criativos de {generationOffer.operadora}/{generationOffer.regiao}.
+                  </h2>
+                  <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>
+                    Deseja que eu crie {generationOffer.quantidade} novos? Antes, você tem algum modelo de referência?
+                    A IA fará imagem, headline e legenda em outro ângulo. Nada será ativado sem sua aprovação.
+                  </p>
+                </div>
+                <button type="button" aria-label="Fechar" onClick={() => setGenerationOffer(null)} className="tf-no-lift rounded-xl p-2" style={{ color: 'var(--tf-ink-soft)' }}><X size={18} /></button>
+              </div>
+              <label className="mt-5 flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed p-4" style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface-2)' }}>
+                <span className="grid h-11 w-11 place-items-center rounded-xl" style={{ background: 'var(--tf-accent-soft)', color: 'var(--tf-accent-ink)' }}><Paperclip size={19} /></span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black">{generationReference ? 'Referência anexada' : 'Anexar modelo de referência (opcional)'}</span>
+                  <span className="block text-xs" style={{ color: 'var(--tf-ink-soft)' }}>PNG, JPG ou WebP de até 10 MB</span>
+                </span>
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => attachGenerationReference(event.target.files?.[0])} />
+              </label>
+              {generationReference ? <img src={generationReference} alt="Modelo de referência" className="mt-3 h-28 w-full rounded-2xl object-cover" /> : null}
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setGenerationOffer(null)} disabled={queuingGeneration} className="tf-no-lift min-h-11 rounded-xl border px-4 text-sm font-bold disabled:opacity-50" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }}>Agora não</button>
+                <button type="button" onClick={() => void queueMissingCreatives()} disabled={queuingGeneration} className="tf-no-lift inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-black text-white disabled:opacity-50" style={{ background: 'var(--tf-accent)' }}>
+                  {queuingGeneration ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                  {generationReference ? 'Sim, criar com referência' : 'Sim, criar sem referência'}
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {ativacaoPendente ? (

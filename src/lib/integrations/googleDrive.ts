@@ -372,6 +372,16 @@ export async function createDriveFolder(options: { parentId: string; name: strin
   })) as DriveFolder;
 }
 
+export async function findOrCreateDriveFolder(options: { parentId: string; name: string }) {
+  const normalized = normalizeDriveName(options.name);
+  const children = await listDriveChildren(options.parentId, 1000);
+  const matches = children.folders.filter((folder) => normalizeDriveName(folder.name) === normalized);
+  if (matches.length > 1) {
+    throw new Error(`Mais de uma pasta chamada "${options.name}" foi encontrada no Google Drive.`);
+  }
+  return matches[0] || createDriveFolder(options);
+}
+
 export async function deleteDriveFile(fileId: string) {
   const normalizedId = extractDriveId(fileId);
   if (!normalizedId) return;

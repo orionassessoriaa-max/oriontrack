@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateOrionEmail, generateStrongPassword } from '@/lib/users';
 import { PUBLIC_LOGIN_URL } from '@/lib/publicUrl';
 import { UserRole } from '@/types';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
+import { ensureConcessionariaDriveFolder } from '@/lib/creatives/automation';
 
 function isMasterAdmin(profile: { email?: string | null; email_real?: string | null; is_admin_master?: boolean | null }) {
   if (profile.is_admin_master) return true;
@@ -403,6 +404,16 @@ export async function POST(request: Request) {
         entity_id: authUser.user.id,
         metadata: { role: profileRole, requested_role: role, corretor_id: corretorId, email },
       });
+      if (corretorId) {
+        const createdCorretorId = corretorId;
+        after(async () => {
+          try {
+            await ensureConcessionariaDriveFolder(createdCorretorId);
+          } catch (folderError) {
+            console.error('Falha ao criar pasta da concessionaria no Drive:', folderError);
+          }
+        });
+      }
 
       return NextResponse.json({
         success: true,

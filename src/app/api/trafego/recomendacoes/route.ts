@@ -36,7 +36,21 @@ type CreativeLibraryAsset = {
   arquivo_path: string | null;
   status: string;
   created_at: string;
+  operadora: string | null;
+  regiao: string | null;
+  headline: string | null;
+  legenda: string | null;
 };
+
+class EmptyCreativeFolderError extends Error {
+  constructor(
+    message: string,
+    public readonly offer: { corretor_id: string; operadora: string; regiao: string; quantidade: number },
+  ) {
+    super(message);
+    this.name = 'EmptyCreativeFolderError';
+  }
+}
 
 type PreparedCreativeSwap = {
   old_ad_id: string;
@@ -260,25 +274,57 @@ async function resolveLibraryCreative(recommendation: TrafficRecommendationRow, 
         .map((item) => item.id),
     ].filter(Boolean)
   ));
+  const { data: strategies, error: strategyError } = await supabaseAdmin
+    .from('trafego_estrategias_criativos')
+    .select('operadora, regiao')
+    .eq('corretor_id', recommendation.corretor_id)
+    .eq('ativa', true);
+  if (strategyError) throw new Error(strategyError.message);
+  const adsetText = normalizeSearchText(adsetName);
+  const detectedRegion = regionFromAdsetName(adsetName);
+  const regionText = normalizeSearchText(detectedRegion);
+  const matchingStrategies = (strategies || []).filter((item) => {
+    const operatorMatches = adsetText.includes(normalizeSearchText(item.operadora));
+    const strategyRegion = normalizeSearchText(item.regiao);
+    const regionMatches = regionText ? strategyRegion === regionText : adsetText.includes(strategyRegion);
+    return operatorMatches && regionMatches;
+  });
+  const regionStrategies = (strategies || []).filter((item) => {
+    const strategyRegion = normalizeSearchText(item.regiao);
+    return regionText ? strategyRegion === regionText : adsetText.includes(strategyRegion);
+  });
+  const strategy = matchingStrategies[0]
+    || (regionStrategies.length === 1 ? regionStrategies[0] : null)
+    || ((strategies || []).length === 1 ? strategies![0] : null);
+  if (!strategy) {
+    throw new Error(`Nao foi possivel identificar com seguranca a operadora e a regiao do conjunto "${adsetName}". Cadastre essa combinacao na Entrada.`);
+  }
+
   const { data: assets, error: assetsError } = await supabaseAdmin
     .from('criativo_assets')
-    .select('id, corretor_id, titulo, descricao, arquivo_url, arquivo_path, status, created_at')
+    .select('id, corretor_id, titulo, descricao, arquivo_url, arquivo_path, status, created_at, operadora, regiao, headline, legenda')
     .in('corretor_id', corretorIds)
     .order('created_at', { ascending: false })
     .limit(500);
   if (assetsError) throw new Error(assetsError.message);
 
   const imageAssets = ((assets || []) as CreativeLibraryAsset[])
-    .filter((asset) => (asset.arquivo_path || asset.arquivo_url) && isImageAsset(asset));
+    .filter((asset) =>
+      (asset.arquivo_path || asset.arquivo_url)
+      && isImageAsset(asset)
+      && normalizeSearchText(asset.operadora) === normalizeSearchText(strategy.operadora)
+      && normalizeSearchText(asset.regiao) === normalizeSearchText(strategy.regiao)
+    );
   if (!imageAssets.length) {
-    throw new Error(`Pasta da concessionaria "${concessionaria}" nao encontrada ou sem criativo em imagem.`);
+    throw new EmptyCreativeFolderError(
+      `Não existem mais criativos de ${strategy.operadora}/${strategy.regiao}. Deseja que eu crie novos?`,
+      { corretor_id: recommendation.corretor_id, operadora: strategy.operadora, regiao: strategy.regiao, quantidade: 4 },
+    );
   }
 
-  const region = regionFromAdsetName(adsetName);
   const adsetWords = normalizeSearchText(adsetName)
     .split(/[^a-z0-9]+/)
     .filter((word) => word.length >= 3);
-  const regionText = normalizeSearchText(region);
   const scored = imageAssets.map((asset, index) => {
     const searchable = normalizeSearchText(
       `${asset.titulo} ${asset.descricao || ''} ${asset.arquivo_path || ''}`
@@ -289,7 +335,7 @@ async function resolveLibraryCreative(recommendation: TrafficRecommendationRow, 
   });
   scored.sort((a, b) => b.score - a.score);
 
-  return { asset: scored[0].asset, concessionaria, region };
+  return { asset: scored[0].asset, concessionaria, region: strategy.regiao, operadora: strategy.operadora };
 }
 
 async function downloadLibraryAsset(asset: CreativeLibraryAsset) {
@@ -361,6 +407,10 @@ async function prepareCreativeReplacement(recommendation: TrafficRecommendationR
   if (spec.link_data) spec.link_data.image_hash = imageHash;
   else if (spec.photo_data) spec.photo_data.image_hash = imageHash;
   else throw new Error('O formato atual do anuncio nao aceita substituicao automatica por imagem.');
+  if (spec.link_data) {
+    if (asset.headline) spec.link_data.name = asset.headline;
+    if (asset.legenda) spec.link_data.message = asset.legenda;
+  }
 
   const creative = await graphPost(`act_${accountId}/adcreatives`, {
     name: `${ad.name || recommendation.alvo_nome || 'Anuncio'} | ${asset.titulo} | Orion`,
@@ -733,6 +783,16 @@ export async function POST(request: Request) {
           mensagem: `Novo anuncio "${result.new_ad_name}" criado pausado. Revise e clique em Ativar.`,
         });
       } catch (executionError: unknown) {
+        if (executionError instanceof EmptyCreativeFolderError) {
+          return NextResponse.json({
+            error: executionError.message,
+            requires_creative_generation: true,
+            offer: {
+              ...executionError.offer,
+              recommendation_id: id,
+            },
+          }, { status: 428 });
+        }
         const message = executionError instanceof Error
           ? executionError.message
           : 'Falha ao executar a recomendacao.';

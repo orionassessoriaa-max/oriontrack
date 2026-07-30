@@ -61,7 +61,8 @@ O CPL deve usar somente leads CRM de origem Orion. Conta sem rastreio ativo nao 
 O gestor pode pedir pausa de anuncio, troca de criativo, ajuste de verba ou criacao de campanha/conjunto/anuncio.
 Nunca execute uma alteracao neste chat. Gere apenas um plano para revisao humana. Criacoes novas devem sair PAUSED.
 O Google Drive esta disponivel para buscar arquivos quando estiver configurado no ambiente. Nunca diga que encontrou um arquivo sem receber a confirmacao do servidor; se a busca nao retornar exatamente um arquivo, explique isso ao gestor.
-Responda sempre em JSON valido neste formato: {"reply":"resposta curta e clara","draft":null}.
+O gestor tambem pode pedir a criacao de uma ou varias pastas/lotes de criativos. Quando houver dados suficientes, liste cada pedido em creative_requests com operadora, regiao, quantidade e briefing. Quantidade padrao 4 e maxima 20. Nao gere nem publique ainda: a interface perguntara se ele possui um modelo de referencia.
+Responda sempre em JSON valido neste formato: {"reply":"resposta curta e clara","draft":null,"creative_requests":[]}.
 Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ads, actions, missing_info e human_review_checklist. Nunca invente creative_id nem daily_budget.`,
       },
       { role: 'user', content: context },
@@ -95,6 +96,18 @@ Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ad
     if (!content) return NextResponse.json({ error: 'Resposta vazia do Apolo.' }, { status: 502 });
     let parsed: any;
     try { parsed = JSON.parse(content); } catch { parsed = { reply: content, draft: null }; }
+    const creativeRequests = (Array.isArray(parsed.creative_requests) ? parsed.creative_requests : [])
+      .slice(0, 10)
+      .map((item: Record<string, unknown>) => ({
+        operadora: String(item.operadora || '').trim().slice(0, 120),
+        regiao: String(item.regiao || '').trim().slice(0, 120),
+        quantidade: Math.min(Math.max(Number(item.quantidade) || 4, 1), 20),
+        briefing: String(item.briefing || '').trim().slice(0, 3000),
+      }))
+      .filter((item: { operadora: string; regiao: string }) => item.operadora && item.regiao);
+    if (creativeRequests.length) {
+      parsed.reply = `${String(parsed.reply || 'Entendi os lotes solicitados.').trim()}\n\nVocê tem algum modelo de referência para esses criativos?`;
+    }
     let drive: any = { configured: isGoogleDriveConfigured(), status: 'not_requested' };
     const prompt = String(last.content || '');
     const fileUrl = prompt.match(/https?:\/\/drive\.google\.com\/file\/d\/[^\s)]+/i)?.[0] || null;
@@ -115,7 +128,7 @@ Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ad
         parsed.draft = { ...parsed.draft, ads: ads.map((ad: any) => ({ ...ad, drive_file_id: file.id, drive_file_name: file.name, drive_mime_type: file.mimeType, drive_url: file.webViewLink || null })), drive_file: file };
       }
     }
-    return NextResponse.json({ success: true, reply: String(parsed.reply || 'Analise concluida.'), draft: parsed.draft || null, drive_connected: drive.configured === true, drive });
+    return NextResponse.json({ success: true, reply: String(parsed.reply || 'Analise concluida.'), draft: parsed.draft || null, creative_requests: creativeRequests, drive_connected: drive.configured === true, drive });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao conversar com o Apolo.' }, { status: 500 });
   }
