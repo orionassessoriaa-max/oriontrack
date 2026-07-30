@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     });
   } catch (error: unknown) {
     return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Erro ao carregar atendimento e analise.',
+      error: error instanceof Error ? error.message : 'Erro ao carregar temperatura.',
     }, { status: 500 });
   }
 }

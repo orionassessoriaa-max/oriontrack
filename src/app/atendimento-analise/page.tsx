@@ -126,7 +126,7 @@ export default function AtendimentoAnalisePage() {
         <header className="mb-6 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-cyan-500">Operação Orion</p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-white sm:text-4xl">Atendimento e Análise</h1>
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-white sm:text-4xl">Temperatura</h1>
             <p className="mt-2 max-w-2xl text-sm font-medium text-slate-400">
               Visão compartilhada da saúde de todas as concessionárias. Novas contas entram automaticamente em Entrada.
             </p>
