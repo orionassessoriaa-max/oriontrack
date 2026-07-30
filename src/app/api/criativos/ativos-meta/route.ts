@@ -3,8 +3,39 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { fetchWithTimeout } from '@/lib/meta/fetchWithTimeout';
 
+type MetaAd = {
+  id?: string | number;
+  name?: string;
+  effective_status?: string;
+  creative?: {
+    name?: string;
+    title?: string;
+    body?: string;
+    image_url?: string;
+    thumbnail_url?: string;
+    object_story_spec?: {
+      link_data?: {
+        name?: string;
+        message?: string;
+      };
+    };
+  };
+};
+
+type MetaAdsResponse = {
+  data?: MetaAd[];
+  error?: { message?: string };
+};
+
 function normalizeAccountId(value?: string | null) {
   return String(value || '').replace(/^act_/, '').trim();
+}
+
+function validUuid(value?: string | null) {
+  const normalized = String(value || '').trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+    ? normalized
+    : null;
 }
 
 function graphUrl(path: string) {
@@ -33,17 +64,24 @@ export async function GET(request: Request) {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (!profile || !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario)) {
+    if (!profile || !['admin', 'corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario)) {
       return NextResponse.json({ error: 'Acesso restrito ao cliente.' }, { status: 403 });
     }
-    if (!profile.corretor_id) {
+    const requestedCorretorId = validUuid(new URL(request.url).searchParams.get('corretor_id'));
+    const corretorId = profile.tipo_usuario === 'admin'
+      ? requestedCorretorId
+      : profile.corretor_id;
+    if (profile.tipo_usuario === 'admin' && !corretorId) {
+      return NextResponse.json({ error: 'Selecione um corretor para visualizar os criativos ativos.' }, { status: 400 });
+    }
+    if (!corretorId) {
       return NextResponse.json({ success: true, concessionaria: null, creatives: [] });
     }
 
     const { data: currentBroker } = await supabaseAdmin
       .from('corretores')
       .select('id, nome, nome_empresa, meta_ad_account_id, meta_ad_account_name')
-      .eq('id', profile.corretor_id)
+      .eq('id', corretorId)
       .maybeSingle();
 
     if (!currentBroker) {
@@ -89,7 +127,7 @@ export async function GET(request: Request) {
     url.searchParams.set('access_token', accessToken);
 
     const response = await fetchWithTimeout(url.toString(), { next: { revalidate: 300 } });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await response.json().catch(() => ({})) as MetaAdsResponse;
     if (!response.ok || payload.error) {
       return NextResponse.json({
         error: payload.error?.message || 'Nao foi possivel consultar os criativos ativos na Meta.',
@@ -97,8 +135,8 @@ export async function GET(request: Request) {
     }
 
     const creatives = (payload.data || [])
-      .filter((ad: any) => String(ad.effective_status || '').toUpperCase() === 'ACTIVE')
-      .map((ad: any) => ({
+      .filter((ad) => String(ad.effective_status || '').toUpperCase() === 'ACTIVE')
+      .map((ad) => ({
         id: String(ad.id),
         ad_name: ad.name || 'Anuncio sem nome',
         creative_name: ad.creative?.name || null,
@@ -116,7 +154,9 @@ export async function GET(request: Request) {
       account_connected: true,
       creatives,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao carregar criativos ativos.' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Erro ao carregar criativos ativos.',
+    }, { status: 500 });
   }
 }

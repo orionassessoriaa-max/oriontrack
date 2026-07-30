@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import CreativeLibrary from '@/components/creatives/CreativeLibrary';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -63,7 +63,7 @@ export default function BrokerCreativesPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const fetchAssets = async () => {
+  const fetchAssets = useCallback(async () => {
     if (!profile?.corretor_id) {
       setLoading(false);
       return;
@@ -89,8 +89,13 @@ export default function BrokerCreativesPage() {
         return;
       }
 
-      const response = await fetch('/api/criativos/ativos-meta', {
+      const params = new URLSearchParams();
+      if (actualProfile?.tipo_usuario === 'admin' && profile.corretor_id) {
+        params.set('corretor_id', profile.corretor_id);
+      }
+      const response = await fetch(`/api/criativos/ativos-meta?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -104,11 +109,12 @@ export default function BrokerCreativesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [actualProfile?.tipo_usuario, profile?.corretor_id]);
 
   useEffect(() => {
-    fetchAssets();
-  }, [profile?.corretor_id]);
+    const timer = window.setTimeout(() => void fetchAssets(), 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchAssets]);
 
   const updateCreative = async (asset: CreativeAsset, status: CreativeAsset['status'], comentario?: string) => {
     const { error } = await supabase
