@@ -40,6 +40,48 @@ function readUazapiConnected(payload: any) {
   );
 }
 
+function asInstances(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.instances)) return payload.instances;
+  if (Array.isArray(payload?.response)) return payload.response;
+  return [];
+}
+
+function readInstanceName(instance: any) {
+  return String(
+    instance?.name ||
+    instance?.instanceName ||
+    instance?.instance ||
+    instance?.session ||
+    instance?.sessionkey ||
+    ''
+  );
+}
+
+async function fetchMasterState() {
+  try {
+    const statePayload = await uazapiFetch('/instance/status', { method: 'GET' }, { instanceName: MASTER_INSTANCE });
+    const state = normalizeUazapiState(
+      readUazapiStatus(statePayload),
+      readUazapiConnected(statePayload)
+    );
+    if (state === 'open' || state === 'connecting') return state;
+  } catch (error) {
+    console.warn('[Apolo master] Consulta direta falhou; confirmando na lista de instancias.', error);
+  }
+
+  const listPayload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
+  const master = asInstances(listPayload).find(
+    (instance) => readInstanceName(instance).toLowerCase() === MASTER_INSTANCE.toLowerCase()
+  );
+  if (!master) return 'close';
+  return normalizeUazapiState(
+    readUazapiStatus(master) || master?.status || master?.state,
+    readUazapiConnected(master) || master?.connected === true
+  );
+}
+
 function extractUazapiQrCode(payload: any): string | null {
   return (
     payload?.qrcode ||
@@ -65,11 +107,7 @@ export async function GET(request: Request) {
     if ('error' in guard) return guard.error;
 
     try {
-      const statePayload = await uazapiFetch('/instance/status', { method: 'GET' }, { instanceName: MASTER_INSTANCE });
-      const state = normalizeUazapiState(
-        readUazapiStatus(statePayload),
-        readUazapiConnected(statePayload)
-      );
+      const state = await fetchMasterState();
       return NextResponse.json({
         success: true,
         instance: MASTER_INSTANCE,

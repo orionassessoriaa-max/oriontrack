@@ -93,6 +93,46 @@ export default function AdminCentralPage() {
   }, []);
 
   useEffect(() => {
+    if (!profile?.id) return;
+    let cancelled = false;
+
+    async function refreshApoloStatus() {
+      try {
+        const sessionRes = await supabase.auth.getSession();
+        const token = sessionRes.data.session?.access_token;
+        if (!token || cancelled) return;
+        const response = await fetch('/api/admin/configuracoes/evolution', {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!response.ok) {
+          setApoloConnected(false);
+          setApoloStatus('indisponivel');
+          return;
+        }
+        setApoloConnected(Boolean(payload.connected));
+        setApoloStatus(String(payload.state || 'close'));
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Erro ao consultar WhatsApp master do Apolo:', error);
+          setApoloConnected(false);
+          setApoloStatus('indisponivel');
+        }
+      }
+    }
+
+    void refreshApoloStatus();
+    const interval = window.setInterval(refreshApoloStatus, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [profile?.id]);
+
+  useEffect(() => {
     fetchStats();
   }, []);
 
@@ -214,18 +254,6 @@ export default function AdminCentralPage() {
       const sessionRes = await supabase.auth.getSession();
       const token = sessionRes.data.session?.access_token;
       if (token) {
-        const evolutionResponse = await fetch('/api/admin/configuracoes/evolution', {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-        if (evolutionResponse.ok) {
-          const evolutionPayload = await evolutionResponse.json().catch(() => ({}));
-          setApoloConnected(Boolean(evolutionPayload.connected));
-          setApoloStatus(String(evolutionPayload.state || 'close'));
-        }
-
         const response = await fetch('/api/integrations/meta/alerts', {
           method: 'POST',
           headers: {
@@ -513,21 +541,27 @@ export default function AdminCentralPage() {
         className={`mb-8 flex flex-col gap-4 rounded-2xl border p-5 transition hover:-translate-y-0.5 sm:flex-row sm:items-center sm:justify-between ${
           apoloConnected
             ? 'border-emerald-400/20 bg-emerald-400/10 hover:border-emerald-300/40'
-            : 'border-amber-400/20 bg-amber-400/10 hover:border-amber-300/40'
+            : apoloStatus === 'checking'
+              ? 'border-cyan-400/20 bg-cyan-400/10'
+              : 'border-amber-400/20 bg-amber-400/10 hover:border-amber-300/40'
         }`}
       >
         <div className="flex items-center gap-4">
-          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${apoloConnected ? 'bg-emerald-400/15 text-emerald-300' : 'bg-amber-400/15 text-amber-300'}`}>
+          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${apoloConnected ? 'bg-emerald-400/15 text-emerald-300' : apoloStatus === 'checking' ? 'bg-cyan-400/15 text-cyan-300' : 'bg-amber-400/15 text-amber-300'}`}>
             <Bot size={24} />
           </div>
           <div>
-            <p className={`text-[10px] font-black uppercase tracking-widest ${apoloConnected ? 'text-emerald-300' : 'text-amber-300'}`}>
-              {apoloConnected ? 'Apolo conectado' : 'Apolo aguardando conexao'}
+            <p className={`text-[10px] font-black uppercase tracking-widest ${apoloConnected ? 'text-emerald-300' : apoloStatus === 'checking' ? 'text-cyan-300' : 'text-amber-300'}`}>
+              {apoloConnected ? 'Apolo conectado' : apoloStatus === 'checking' ? 'Verificando conexao do Apolo' : 'Apolo aguardando conexao'}
             </p>
             <p className="mt-1 text-sm font-bold text-slate-300">
               {apoloConnected
                 ? 'WhatsApp master ativo para notificacoes dos corretores, gestores e admins.'
-                : 'Conecte o QR Code do WhatsApp master para liberar as notificacoes automaticas.'}
+                : apoloStatus === 'checking'
+                  ? 'Consultando o estado atual do WhatsApp master.'
+                  : apoloStatus === 'indisponivel'
+                    ? 'Nao foi possivel consultar o provedor agora. A sessao nao foi desconectada.'
+                    : 'Conecte o QR Code do WhatsApp master para liberar as notificacoes automaticas.'}
             </p>
           </div>
         </div>
