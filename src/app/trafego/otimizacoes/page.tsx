@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { ArrowLeft, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileImage, FileVideo2, Folder, HardDrive, Loader2, Maximize2, Pencil, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
+import { ArrowLeft, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, ExternalLink, FileImage, FilePlus2, FileVideo2, Folder, HardDrive, Layers3, Loader2, Maximize2, Megaphone, Pencil, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
 import { TRAFFIC_RULES, formatBRL, formatPercent } from '@/lib/trafego/rules';
 import { normalizeOptimizationDraft, type NormalizedOptimizationDraft } from '@/lib/trafego/optimizationDraft';
 
@@ -35,6 +35,12 @@ type MetaStatus = {
   effective_status?: string;
 };
 
+type BudgetInfo = {
+  budget_type?: 'ABO' | 'CBO' | null;
+  budget_amount?: number | null;
+  budget_period?: 'daily' | 'lifetime' | null;
+};
+
 type CreativePreview = {
   id?: string | null;
   name?: string | null;
@@ -55,9 +61,9 @@ type DriveEntry = {
   thumbnailLink?: string;
 };
 
-type AdNode = MetaStatus & { id: string; name: string; level: 'ad'; metrics: Metrics; creative?: CreativePreview | null };
-type AdsetNode = MetaStatus & { id: string; name: string; level: 'adset'; metrics: Metrics; ads: AdNode[] };
-type CampaignNode = MetaStatus & { id: string; name: string; level: 'campaign'; metrics: Metrics; adsets: AdsetNode[] };
+type AdNode = MetaStatus & BudgetInfo & { id: string; name: string; level: 'ad'; metrics: Metrics; creative?: CreativePreview | null };
+type AdsetNode = MetaStatus & BudgetInfo & { id: string; name: string; level: 'adset'; metrics: Metrics; ads: AdNode[] };
+type CampaignNode = MetaStatus & BudgetInfo & { id: string; name: string; level: 'campaign'; metrics: Metrics; adsets: AdsetNode[] };
 
 type OptimizationDraft = NormalizedOptimizationDraft;
 
@@ -160,6 +166,16 @@ export default function OtimizacoesPage() {
   const optimizationRequestRef = useRef(0);
   const accountContextRef = useRef('');
   const creativeInputRef = useRef<HTMLInputElement | null>(null);
+  const apoloInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const budgetModes = useMemo(
+    () => Array.from(new Set(tree.map((campaign) => campaign.budget_type).filter((mode): mode is 'ABO' | 'CBO' => Boolean(mode)))),
+    [tree]
+  );
+
+  function chooseApoloAction(prompt: string) {
+    setApoloInput(prompt);
+    window.requestAnimationFrame(() => apoloInputRef.current?.focus());
+  }
 
   function resetAccountWorkspace(brokerage?: string | null) {
     setCreativeFile(null);
@@ -752,10 +768,17 @@ export default function OtimizacoesPage() {
                   className="mb-4 overflow-hidden rounded-2xl border"
                   style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
                 >
-                  <div className="flex items-center justify-between gap-3 px-5 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
                     <div className="flex items-center gap-2">
                       <BarChart3 size={16} style={{ color: 'var(--tf-accent-ink)' }} />
-                      <h3 className="text-base font-bold">Estrutura da conta</h3>
+                      <div>
+                        <h3 className="text-base font-bold">Estrutura da conta</h3>
+                        {budgetModes.length > 0 ? (
+                          <p className="mt-0.5 text-[11px] font-semibold" style={{ color: 'var(--tf-ink-mute)' }}>
+                            Orçamento da conta: {budgetModes.length > 1 ? 'misto (ABO + CBO)' : budgetModes[0]}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -768,10 +791,12 @@ export default function OtimizacoesPage() {
                   </div>
 
                   <div className="overflow-x-auto border-t" style={{ borderColor: 'var(--tf-border)' }}>
-                    <table className="w-full min-w-[980px] border-collapse text-left">
+                    <table className="w-full min-w-[1180px] border-collapse text-left">
                       <thead style={{ background: 'var(--tf-surface-2)' }}>
                         <tr className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>
                           <th className="py-3 pl-5 pr-4">Nome</th>
+                          <th className="px-3 py-3">Tipo</th>
+                          <th className="px-3 py-3 text-right">Orçamento</th>
                           <th className="px-3 py-3 text-right">Investimento</th>
                           <th className="px-3 py-3 text-right">Leads CRM</th>
                           <th className="px-3 py-3 text-right">CPL Orion</th>
@@ -784,7 +809,7 @@ export default function OtimizacoesPage() {
                       <tbody>
                         {tree.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="px-5 py-10 text-center text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
+                            <td colSpan={10} className="px-5 py-10 text-center text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
                               Nenhuma campanha com entrega no período.
                             </td>
                           </tr>
@@ -919,6 +944,47 @@ export default function OtimizacoesPage() {
                         {apoloBusy ? <Loader2 className="animate-spin" size={15} style={{ color: 'var(--tf-accent-ink)' }} /> : null}
                       </div>
                       <div className="border-t p-2.5" style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface)' }}>
+                        <div className="mb-2">
+                          <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--tf-ink-mute)' }}>
+                            Ações rápidas
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              {
+                                label: 'Criar campanha',
+                                icon: <Megaphone size={13} />,
+                                prompt: 'Quero criar uma nova campanha nesta conta. Monte o plano e me pergunte o objetivo, orçamento, público e os demais dados que faltarem.',
+                              },
+                              {
+                                label: 'Criar conjunto',
+                                icon: <Layers3 size={13} />,
+                                prompt: 'Quero criar um novo conjunto dentro de uma campanha existente. Pergunte qual campanha, público, região e orçamento antes de montar o plano.',
+                              },
+                              {
+                                label: 'Criar anúncio',
+                                icon: <FilePlus2 size={13} />,
+                                prompt: 'Quero criar um novo anúncio dentro de uma campanha e conjunto existentes. Pergunte o destino e use o criativo selecionado, se houver.',
+                              },
+                              {
+                                label: 'Alterar orçamento',
+                                icon: <CircleDollarSign size={13} />,
+                                prompt: 'Quero alterar o orçamento de uma campanha ou conjunto existente. Pergunte qual item e o novo valor antes de montar o plano.',
+                              },
+                            ].map((action) => (
+                              <button
+                                key={action.label}
+                                type="button"
+                                onClick={() => chooseApoloAction(action.prompt)}
+                                disabled={!selected || apoloBusy}
+                                className="tf-no-lift inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-bold transition disabled:opacity-40"
+                                style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}
+                              >
+                                <span style={{ color: 'var(--tf-accent-ink)' }}>{action.icon}</span>
+                                {action.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         {selectedDriveFile ? (
                           <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border px-3 py-2" style={{ background: 'var(--tf-ok-soft)', borderColor: 'var(--tf-ok-border)' }}>
                             <div className="min-w-0">
@@ -932,6 +998,7 @@ export default function OtimizacoesPage() {
                         ) : null}
                         <div className="flex items-end gap-2">
                           <textarea
+                            ref={apoloInputRef}
                             value={apoloInput}
                             onChange={(event) => setApoloInput(event.target.value)}
                             onPaste={handleApoloPaste}
@@ -1539,6 +1606,9 @@ function CampaignRows({
         level="Campanha"
         status={campaign.effective_status || campaign.status}
         metrics={campaign.metrics}
+        budgetType={campaign.budget_type}
+        budgetAmount={campaign.budget_amount}
+        budgetPeriod={campaign.budget_period}
         open={campaignOpen}
         hasChildren={campaign.adsets.length > 0}
         onToggle={() => setExpandedCampaigns((current) => ({ ...current, [campaign.id]: !current[campaign.id] }))}
@@ -1552,6 +1622,9 @@ function CampaignRows({
               level="Conjunto"
               status={adset.effective_status || adset.status}
               metrics={adset.metrics}
+              budgetType={adset.budget_type}
+              budgetAmount={adset.budget_amount}
+              budgetPeriod={adset.budget_period}
               indent="pl-10"
               open={adsetOpen}
               hasChildren={adset.ads.length > 0}
@@ -1567,6 +1640,9 @@ function CampaignRows({
                     level="Anúncio"
                     status={ad.effective_status || ad.status}
                     metrics={ad.metrics}
+                    budgetType={ad.budget_type}
+                    budgetAmount={ad.budget_amount}
+                    budgetPeriod={ad.budget_period}
                     indent="pl-16"
                     open={adOpen}
                     hasChildren={hasPreview}
@@ -1583,11 +1659,14 @@ function CampaignRows({
   );
 }
 
-function MetricRow({ name, level, status, metrics, indent = '', open = false, hasChildren = false, onToggle }: {
+function MetricRow({ name, level, status, metrics, budgetType, budgetAmount, budgetPeriod, indent = '', open = false, hasChildren = false, onToggle }: {
   name: string;
   level: string;
   status?: string;
   metrics: Metrics;
+  budgetType?: 'ABO' | 'CBO' | null;
+  budgetAmount?: number | null;
+  budgetPeriod?: 'daily' | 'lifetime' | null;
   indent?: string;
   open?: boolean;
   hasChildren?: boolean;
@@ -1611,6 +1690,31 @@ function MetricRow({ name, level, status, metrics, indent = '', open = false, ha
           </span>
         </button>
       </td>
+      <td className="px-3 py-3">
+        {budgetType ? (
+          <span
+            className="inline-flex rounded-md border px-2 py-1 text-[10px] font-black"
+            style={{
+              background: budgetType === 'CBO' ? 'var(--tf-accent-soft)' : 'var(--tf-warn-soft)',
+              borderColor: budgetType === 'CBO' ? 'var(--tf-accent-border)' : 'var(--tf-warn-border)',
+              color: budgetType === 'CBO' ? 'var(--tf-accent-ink)' : 'var(--tf-warn)',
+            }}
+          >
+            {budgetType}
+          </span>
+        ) : <span style={{ color: 'var(--tf-ink-mute)' }}>—</span>}
+      </td>
+      <DataCell
+        value={
+          Number(budgetAmount || 0) > 0
+            ? `${formatBRL(Number(budgetAmount), metrics.currency)}${budgetPeriod === 'daily' ? '/dia' : ' total'}`
+            : level === 'Campanha' && budgetType === 'ABO'
+              ? 'Nos conjuntos'
+              : level === 'Conjunto' && budgetType === 'CBO'
+                ? 'Na campanha'
+                : '—'
+        }
+      />
       <DataCell value={formatBRL(metrics.spend, metrics.currency)} />
       <DataCell value={String(metrics.leads_crm || 0)} />
       <DataCell value={formatBRL(metrics.cpl_crm, metrics.currency)} alert={Number(metrics.cpl_crm || 0) >= TRAFFIC_RULES.cplCritical} />
@@ -1627,7 +1731,7 @@ function CreativeRow({ ad, onOpenCreative }: { ad: AdNode; onOpenCreative: (ad: 
   const previewImage = bestCreativeImage(creative);
   return (
     <tr style={{ background: 'var(--tf-surface-2)' }}>
-      <td colSpan={8} className="px-5 py-4">
+      <td colSpan={10} className="px-5 py-4">
         <div className="grid gap-4 border-l-2 pl-4 sm:grid-cols-[130px_1fr]" style={{ borderColor: 'var(--tf-accent-border)' }}>
           {previewImage ? (
             <div className="relative h-24 w-32 overflow-hidden rounded-lg border" style={{ borderColor: 'var(--tf-border)' }}>

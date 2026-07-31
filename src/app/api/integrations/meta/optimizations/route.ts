@@ -332,6 +332,27 @@ function statusFromDetails(details?: any) {
   };
 }
 
+function budgetFromDetails(details?: Record<string, unknown>) {
+  const daily = Number(details?.daily_budget || 0);
+  if (daily > 0) {
+    return { budget_amount: daily / 100, budget_period: 'daily' as const };
+  }
+
+  const lifetime = Number(details?.lifetime_budget || 0);
+  if (lifetime > 0) {
+    return { budget_amount: lifetime / 100, budget_period: 'lifetime' as const };
+  }
+
+  return { budget_amount: null, budget_period: null };
+}
+
+function budgetTypeFromName(name?: string | null) {
+  const normalized = String(name || '').toUpperCase();
+  if (/\[\s*CBO\s*\]/.test(normalized)) return 'CBO' as const;
+  if (/\[\s*ABO\s*\]/.test(normalized)) return 'ABO' as const;
+  return null;
+}
+
 function buildTree(
   campaignRows: any[],
   adsetRows: any[],
@@ -358,24 +379,42 @@ function buildTree(
     const campaignKey = String(campaign.campaign_id || campaign.campaign_name || 'sem-campanha');
     const campaignName = campaign.campaign_name || 'Campanha sem nome';
     const campaignLeads = countLeadsForNode(leads, { level: 'campaign', campaignName });
-    const campaignMeta = statusFromDetails(campaignDetails.get(campaign.campaign_id));
+    const campaignDetail = campaignDetails.get(campaign.campaign_id);
+    const campaignMeta = statusFromDetails(campaignDetail);
+    const campaignBudget = budgetFromDetails(campaignDetail);
+    const campaignAdsets = adsetsByCampaign.get(campaignKey) || [];
+    const hasAdsetBudget = campaignAdsets.some((adset) => {
+      const budget = budgetFromDetails(adsetDetails.get(adset.adset_id));
+      return Number(budget.budget_amount || 0) > 0;
+    });
+    const budgetType = Number(campaignBudget.budget_amount || 0) > 0
+      ? 'CBO' as const
+      : hasAdsetBudget
+        ? 'ABO' as const
+        : budgetTypeFromName(campaignName);
 
     return {
       id: campaignKey,
       name: campaignName,
       level: 'campaign',
       ...campaignMeta,
+      ...campaignBudget,
+      budget_type: budgetType,
       metrics: metricRow(campaign, campaignLeads, currency),
-      adsets: (adsetsByCampaign.get(campaignKey) || []).map((adset) => {
+      adsets: campaignAdsets.map((adset) => {
         const adsetKey = String(adset.adset_id || adset.adset_name || 'sem-conjunto');
         const adsetName = adset.adset_name || 'Conjunto sem nome';
         const adsetLeads = countLeadsForNode(leads, { level: 'adset', campaignName, adsetName });
-        const adsetMeta = statusFromDetails(adsetDetails.get(adset.adset_id));
+        const adsetDetail = adsetDetails.get(adset.adset_id);
+        const adsetMeta = statusFromDetails(adsetDetail);
+        const adsetBudget = budgetFromDetails(adsetDetail);
         return {
           id: adsetKey,
           name: adsetName,
           level: 'adset',
           ...adsetMeta,
+          ...adsetBudget,
+          budget_type: budgetType,
           metrics: metricRow(adset, adsetLeads, currency),
           ads: (adsByAdset.get(adsetKey) || []).map((ad) => {
             const adName = ad.ad_name || 'Anuncio sem nome';
@@ -386,6 +425,9 @@ function buildTree(
               name: adName,
               level: 'ad',
               ...adMeta,
+              budget_type: budgetType,
+              budget_amount: null,
+              budget_period: null,
               creative: details?.creative ? {
                 id: details.creative.id || null,
                 name: details.creative.name || null,
@@ -480,8 +522,8 @@ export async function POST(request: Request) {
     ]);
 
     const [campaignDetails, adsetDetails, adDetails] = await Promise.all([
-      fetchObjectMap(campaignRows.map((row: any) => row.campaign_id), 'id,name,status,effective_status', token, graphVersion),
-      fetchObjectMap(adsetRows.map((row: any) => row.adset_id), 'id,name,status,effective_status', token, graphVersion),
+      fetchObjectMap(campaignRows.map((row: any) => row.campaign_id), 'id,name,status,effective_status,daily_budget,lifetime_budget', token, graphVersion),
+      fetchObjectMap(adsetRows.map((row: any) => row.adset_id), 'id,name,status,effective_status,daily_budget,lifetime_budget', token, graphVersion),
       fetchObjectMap(adRows.map((row: any) => row.ad_id), 'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,title,body,object_story_spec}', token, graphVersion),
     ]);
 
