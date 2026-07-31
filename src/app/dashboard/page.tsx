@@ -562,10 +562,13 @@ export default function DashboardPage() {
         setOriginOptions(availableOrigins.includes('Orion') ? availableOrigins : ['Orion', ...availableOrigins]);
 
         const originScopedAllLeads = allLeads.filter((lead) => matchesOriginFilter(lead, originFilter));
+        // Investimento e desempenho da Meta nunca podem ser comparados com leads
+        // manuais ou de parceiros. O filtro geral afeta apenas os indicadores do CRM.
+        const orionAllLeads = allLeads.filter(isOrionLead);
 
         // Calculate all-time summary (used for the 4 financial cards step 3)
         const allTimeSoldLeads = originScopedAllLeads.filter(isLeadSale);
-        const allTimeOrionCount = allLeads.filter(isOrionLead).length;
+        const allTimeOrionCount = orionAllLeads.length;
         const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
         
         if (!isCurrentRequest()) return;
@@ -586,7 +589,7 @@ export default function DashboardPage() {
         // Compute static 6-month performance timeline
         const months = getLastMonths();
         const monthMap = new Map(months.map((month) => [month.key, { ...month }]));
-        originScopedAllLeads.forEach((lead) => {
+        orionAllLeads.forEach((lead) => {
           if (!lead.data_entrada) return;
           if (dataFim && lead.data_entrada.slice(0, 10) > dataFim) return;
           const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
@@ -895,7 +898,9 @@ export default function DashboardPage() {
       : presetLabel === 'Mês passado'
         ? 'do mês passado'
         : `de ${presetLabel.toLowerCase()}`;
-  const displayPeriodCpl = stats.orionTotal > 0 ? periodCpl : null;
+  // O CPL e os alertas da Meta permanecem Orion mesmo quando a visualizacao
+  // comercial estiver filtrada por outra origem ou por todas as origens.
+  const displayPeriodCpl = allTimeOrionLeads > 0 ? periodCpl : null;
 
   const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
   const chartHeight = 176;
@@ -1025,7 +1030,7 @@ export default function DashboardPage() {
               className="min-h-11 min-w-[190px] cursor-pointer appearance-none rounded-2xl border border-white/10 bg-slate-950 py-3 pl-11 pr-10 text-xs font-black text-white outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10"
               aria-label="Origem considerada nos indicadores"
             >
-              <option value={ALL_ORIGINS}>Origem: Geral</option>
+              <option value={ALL_ORIGINS}>Origem: Todas (visao geral)</option>
               {originOptions.map((origin) => (
                 <option key={origin} value={origin}>Origem: {origin}</option>
               ))}
