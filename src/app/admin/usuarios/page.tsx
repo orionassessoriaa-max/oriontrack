@@ -690,40 +690,6 @@ export default function AdminUsuariosPage() {
                 </div>
 
                 <div>
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Operadoras da campanha</label>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {OPERADORAS_ONBOARDING.map((operadora) => {
-                      const selected = form.operadoras.includes(operadora);
-                      return (
-                        <button
-                          key={operadora}
-                          type="button"
-                          onClick={() => setForm((current) => ({
-                            ...current,
-                            operadoras: selected
-                              ? current.operadoras.filter((item) => item !== operadora)
-                              : [...current.operadoras, operadora]
-                          }))}
-                          className={`rounded-2xl border px-4 py-3 text-left text-xs font-black transition-all ${
-                            selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-100 bg-slate-50 text-slate-500 hover:bg-slate-100'
-                          }`}
-                        >
-                          {operadora}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {form.operadoras.includes('Outros') && (
-                    <input
-                      value={form.operadora_outros}
-                      onChange={(event) => setForm((current) => ({ ...current, operadora_outros: event.target.value }))}
-                      placeholder="Digite o nome da operadora"
-                      className="mt-3 w-full rounded-2xl border-none bg-slate-50 px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  )}
-                </div>
-
-                <div>
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</label>
                   <input
                     required
