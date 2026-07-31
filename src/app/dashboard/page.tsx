@@ -100,6 +100,10 @@ function matchesOriginFilter(lead: LeadMetricRow, originFilter: string) {
   return leadOriginLabel(lead).localeCompare(originFilter, 'pt-BR', { sensitivity: 'base' }) === 0;
 }
 
+function isOrionOriginFilter(originFilter: string) {
+  return originFilter.localeCompare('Orion', 'pt-BR', { sensitivity: 'base' }) === 0;
+}
+
 function monthKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -562,8 +566,8 @@ export default function DashboardPage() {
         setOriginOptions(availableOrigins.includes('Orion') ? availableOrigins : ['Orion', ...availableOrigins]);
 
         const originScopedAllLeads = allLeads.filter((lead) => matchesOriginFilter(lead, originFilter));
-        // Investimento e desempenho da Meta nunca podem ser comparados com leads
-        // manuais ou de parceiros. O filtro geral afeta apenas os indicadores do CRM.
+        // A origem selecionada controla os leads. Investimento Meta só existe
+        // quando a seleção é exclusivamente Orion.
         const orionAllLeads = allLeads.filter(isOrionLead);
 
         // Calculate all-time summary (used for the 4 financial cards step 3)
@@ -589,7 +593,7 @@ export default function DashboardPage() {
         // Compute static 6-month performance timeline
         const months = getLastMonths();
         const monthMap = new Map(months.map((month) => [month.key, { ...month }]));
-        orionAllLeads.forEach((lead) => {
+        originScopedAllLeads.forEach((lead) => {
           if (!lead.data_entrada) return;
           if (dataFim && lead.data_entrada.slice(0, 10) > dataFim) return;
           const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
@@ -625,7 +629,7 @@ export default function DashboardPage() {
         // Investment and CPL Orion are cumulative from the first Orion campaign.
         // The date picker continues to control the operational funnel below.
         let currentPeriodSpend = 0;
-        if (accessToken && profile.corretor_id && dataInicio && dataFim) {
+        if (isOrionOriginFilter(originFilter) && accessToken && profile.corretor_id && dataInicio && dataFim) {
           try {
             const metaRange = getMetaCompatibleRange(dataInicio, dataFim);
             const spendResponse = await fetch('/api/integrations/meta/spend', {
@@ -656,7 +660,7 @@ export default function DashboardPage() {
         setPeriodSpend(currentPeriodSpend);
 
         // Fetch monthly Meta spends (static 6-months)
-        if (accessToken) {
+        if (isOrionOriginFilter(originFilter) && accessToken) {
           const spendResults = await Promise.all(
             months.map(async (month) => {
               const range = monthRange(month.key);
@@ -898,9 +902,8 @@ export default function DashboardPage() {
       : presetLabel === 'Mês passado'
         ? 'do mês passado'
         : `de ${presetLabel.toLowerCase()}`;
-  // O CPL e os alertas da Meta permanecem Orion mesmo quando a visualizacao
-  // comercial estiver filtrada por outra origem ou por todas as origens.
-  const displayPeriodCpl = allTimeOrionLeads > 0 ? periodCpl : null;
+  // Geral e demais origens não possuem investimento conhecido: mostram apenas leads.
+  const displayPeriodCpl = isOrionOriginFilter(originFilter) && allTimeOrionLeads > 0 ? periodCpl : null;
 
   const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
   const chartHeight = 176;
