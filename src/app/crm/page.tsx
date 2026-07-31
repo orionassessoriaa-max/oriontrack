@@ -42,7 +42,6 @@ import {
   Trash2
 } from 'lucide-react';
 import OrionMark from '@/components/ui/OrionMark';
-import LeadWhatsAppHistory from '@/components/crm/LeadWhatsAppHistory';
 
 type WhatsAppConversa = {
   id: string;
@@ -2112,7 +2111,6 @@ export default function CrmPage() {
                   </div>
                 )}
 
-                <LeadWhatsAppHistory leadId={selectedLead.id} profileId={profile?.id} />
 
                 <form onSubmit={uploadAttachment} className="mb-5 rounded-[1.5rem] border border-blue-100 bg-blue-50 p-4">
                   <h3 className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-blue-950">

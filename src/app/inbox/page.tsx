@@ -110,6 +110,11 @@ type LeadTask = {
   created_at: string;
 };
 
+function isOpenLeadTask(task: Pick<LeadTask, 'status'>) {
+  const status = String(task.status || '').toLowerCase();
+  return status !== 'concluida' && status !== 'concluido' && status !== 'cancelada' && status !== 'cancelado';
+}
+
 function cleanInboxDisplayName(value?: string | null, fallback = 'Contato') {
   const text = String(value || '').trim();
   if (!text) return fallback;
@@ -2969,6 +2974,18 @@ export default function BrokerInboxPage() {
                         </div>
                         <div className="flex shrink-0 flex-col gap-1.5">
                           <button type="button" onClick={() => openTaskEditor(highlightedTask)} className="rounded-lg border border-cyan-500/20 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/10" title="Editar tarefa">Editar</button>
+                          {!highlightedTask.status && isOpenLeadTask(highlightedTask) && (
+                            <button
+                              type="button"
+                              onClick={() => void completeReminder(highlightedTask)}
+                              disabled={savingTask}
+                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                              title="Concluir tarefa"
+                            >
+                              {savingTask ? <Loader2 size={9} className="animate-spin" /> : <CheckCircle2 size={9} />}
+                              Concluir
+                            </button>
+                          )}
                           {highlightedTask.status && !['concluida', 'concluÃ­do', 'concluido', 'cancelada', 'cancelado'].includes(highlightedTask.status.toLowerCase()) && (
                             <button
                               type="button"
