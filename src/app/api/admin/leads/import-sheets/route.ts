@@ -5,6 +5,7 @@ import { buildLeadImportWarningNote } from '@/lib/leadWarnings';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
+import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 type CsvRow = Record<string, string>;
 type LeadInsert = {
@@ -34,7 +35,7 @@ type LeadInsert = {
 };
 
 async function requireImporter(request: Request) {
-  return requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro']);
+  return requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'gestor_trafego']);
 }
 
 function parseSheetLink(input: string) {
@@ -690,7 +691,7 @@ export async function POST(request: Request) {
 
     const { data: corretor } = await supabaseAdmin
       .from('corretores')
-      .select('id, nome, nome_empresa')
+      .select('id, nome, nome_empresa, gestor_trafego_id, time_operacional')
       .eq('id', corretorId)
       .maybeSingle();
 
@@ -698,7 +699,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
     }
 
-    if (guard.profile.tipo_usuario !== 'admin') {
+    if (guard.profile.tipo_usuario === 'gestor_trafego') {
+      if (!isGestorLinkedToConcessionariaCorretor(corretor, guard.profile)) {
+        return NextResponse.json({ error: 'Voce so pode importar leads para concessionarias atribuidas a voce.' }, { status: 403 });
+      }
+    } else if (guard.profile.tipo_usuario !== 'admin') {
       if (!guard.profile.corretor_id) {
         return NextResponse.json({ error: 'Perfil sem corretor vinculado.' }, { status: 403 });
       }
@@ -721,7 +726,7 @@ export async function POST(request: Request) {
     }
 
     let targetCorretorId = corretorId;
-    if (corretor.nome_empresa) {
+    if (corretor.nome_empresa && guard.profile.tipo_usuario !== 'gestor_trafego') {
       const { data: primaryBroker } = await supabaseAdmin
         .from('corretores')
         .select('id')

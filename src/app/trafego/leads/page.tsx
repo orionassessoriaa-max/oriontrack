@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { AlertCircle, Download, Loader2, RefreshCw, RotateCcw, Search } from 'lucide-react';
+import { AlertCircle, Download, Loader2, Plus, RefreshCw, RotateCcw, Search, Upload, X } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
@@ -21,6 +21,15 @@ type CorretorOption = {
   nome: string;
   nome_empresa?: string | null;
 };
+
+const EMPTY_MANUAL_LEAD = {
+  nome: '',
+  telefone: '',
+  cidade: '',
+  origem: 'Manual',
+};
+
+const IMPORT_ORIGINS = ['Orion', 'Manual', 'Base antiga', 'Indicacao', 'Organico', 'Outro'];
 
 function normalizeText(value?: string | null) {
   return String(value || '')
@@ -101,6 +110,15 @@ export default function TrafficLeadsPage() {
   const [operadoraFilter, setOperadoraFilter] = useState('todas');
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [dragSelecting, setDragSelecting] = useState(false);
+  const [showManualLeadModal, setShowManualLeadModal] = useState(false);
+  const [manualLeadForm, setManualLeadForm] = useState(EMPTY_MANUAL_LEAD);
+  const [creatingManualLead, setCreatingManualLead] = useState(false);
+  const [manualLeadError, setManualLeadError] = useState<string | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [sheetOrigin, setSheetOrigin] = useState('Manual');
+  const [importingSheet, setImportingSheet] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   async function fetchLeads() {
     if (!profile?.id) return;
@@ -164,6 +182,94 @@ export default function TrafficLeadsPage() {
   }, [corretores, leads]);
 
   const selectedGroup = concessionarias.find((item) => item.key === selectedConcessionaria) || null;
+
+  async function createManualLead(event: React.FormEvent) {
+    event.preventDefault();
+    const corretorId = selectedGroup?.brokerIds[0];
+    if (!corretorId) {
+      setManualLeadError('Selecione uma concessionaria.');
+      return;
+    }
+    if (!manualLeadForm.nome.trim() || !manualLeadForm.telefone.trim()) {
+      setManualLeadError('Informe nome e telefone do lead.');
+      return;
+    }
+
+    setCreatingManualLead(true);
+    setManualLeadError(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
+
+      const response = await fetch('/api/admin/leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          corretor_id: corretorId,
+          ...manualLeadForm,
+          status: 'Aguardando atendimento',
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Erro ao adicionar lead.');
+
+      setManualLeadForm(EMPTY_MANUAL_LEAD);
+      setShowManualLeadModal(false);
+      await fetchLeads();
+    } catch (err) {
+      setManualLeadError(err instanceof Error ? err.message : 'Erro ao adicionar lead.');
+    } finally {
+      setCreatingManualLead(false);
+    }
+  }
+
+  async function importSheet(event: React.FormEvent) {
+    event.preventDefault();
+    const corretorId = selectedGroup?.brokerIds[0];
+    if (!corretorId) {
+      setImportMessage('Selecione uma concessionaria.');
+      return;
+    }
+    if (!sheetUrl.trim()) {
+      setImportMessage('Cole o link da planilha.');
+      return;
+    }
+
+    setImportingSheet(true);
+    setImportMessage(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
+
+      const response = await fetch('/api/admin/leads/import-sheets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          corretor_id: corretorId,
+          sheet_url: sheetUrl,
+          origem: sheetOrigin,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Erro ao importar planilha.');
+
+      setImportMessage(`${payload.imported || 0} lead(s) importado(s). ${payload.duplicated || 0} duplicado(s) ignorado(s).`);
+      setSheetUrl('');
+      await fetchLeads();
+    } catch (err) {
+      setImportMessage(err instanceof Error ? err.message : 'Erro ao importar planilha.');
+    } finally {
+      setImportingSheet(false);
+    }
+  }
 
   const sheetTabs = useMemo(() => {
     const fromLeads = leads.map((lead) => sheetTabLabel(lead.operadora)).filter((item) => item !== 'Sem aba');
@@ -259,13 +365,38 @@ export default function TrafficLeadsPage() {
           <h1 className="text-3xl font-black text-white">Leads</h1>
           <p className="mt-1 text-sm font-semibold text-slate-400">Planilha por concessionária. Os leads só aparecem depois da seleção.</p>
         </div>
-        <button
-          onClick={exportToCsv}
-          disabled={!filteredLeads.length}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-xs font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-40"
-        >
-          <Download size={15} /> Exportar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setManualLeadError(null);
+              setShowManualLeadModal(true);
+            }}
+            disabled={!selectedGroup}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cyan-500 px-4 text-xs font-black uppercase tracking-widest text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus size={16} /> Adicionar lead
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setImportMessage(null);
+              setShowImportModal(true);
+            }}
+            disabled={!selectedGroup}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 text-xs font-black uppercase tracking-widest text-emerald-300 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Upload size={16} /> Importar planilha
+          </button>
+          <button
+            type="button"
+            onClick={exportToCsv}
+            disabled={!filteredLeads.length}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-black uppercase tracking-widest text-white transition hover:bg-white/10 disabled:opacity-40"
+          >
+            <Download size={15} /> Exportar
+          </button>
+        </div>
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
@@ -401,6 +532,92 @@ export default function TrafficLeadsPage() {
           </div>
         )}
       </div>
+
+      {showManualLeadModal ? (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="traffic-manual-lead-title">
+          <section className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/10 bg-[#0b1324] shadow-2xl">
+            <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Cadastro do gestor</p>
+                <h2 id="traffic-manual-lead-title" className="mt-1 text-xl font-black text-white">Adicionar lead</h2>
+                <p className="mt-1 text-xs font-semibold text-slate-400">{selectedGroup?.nome}</p>
+              </div>
+              <button type="button" onClick={() => setShowManualLeadModal(false)} className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Fechar cadastro">
+                <X size={18} />
+              </button>
+            </header>
+            <form onSubmit={createManualLead} className="space-y-4 p-5">
+              {manualLeadError ? <div role="alert" className="rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{manualLeadError}</div> : null}
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-black text-slate-300">Nome *</span>
+                <input value={manualLeadForm.nome} onChange={(event) => setManualLeadForm((current) => ({ ...current, nome: event.target.value }))} className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4 text-sm font-semibold text-white outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10" autoFocus />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-black text-slate-300">Telefone *</span>
+                <input type="tel" value={manualLeadForm.telefone} onChange={(event) => setManualLeadForm((current) => ({ ...current, telefone: event.target.value }))} className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4 text-sm font-semibold text-white outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10" />
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-300">Cidade</span>
+                  <input value={manualLeadForm.cidade} onChange={(event) => setManualLeadForm((current) => ({ ...current, cidade: event.target.value }))} className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4 text-sm font-semibold text-white outline-none focus:border-cyan-400" />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-300">Origem</span>
+                  <select value={manualLeadForm.origem} onChange={(event) => setManualLeadForm((current) => ({ ...current, origem: event.target.value }))} className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4 text-sm font-semibold text-white outline-none focus:border-cyan-400">
+                    {IMPORT_ORIGINS.map((origin) => <option key={origin} value={origin}>{origin}</option>)}
+                  </select>
+                </label>
+              </div>
+              <p className="text-xs font-semibold leading-5 text-slate-500">Leads manuais ficam salvos no CRM, mas não entram na conversão Orion enquanto a origem não for “Orion” ou o filtro da dashboard não estiver em “Geral”.</p>
+              <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+                <button type="button" onClick={() => setShowManualLeadModal(false)} className="min-h-11 rounded-xl px-4 text-xs font-black text-slate-400 hover:text-white">Cancelar</button>
+                <button disabled={creatingManualLead} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-500 px-5 text-xs font-black text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50">
+                  {creatingManualLead ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+                  Salvar lead
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {showImportModal ? (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="traffic-import-title">
+          <section className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/10 bg-[#0b1324] shadow-2xl">
+            <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Importação do gestor</p>
+                <h2 id="traffic-import-title" className="mt-1 text-xl font-black text-white">Importar planilha</h2>
+                <p className="mt-1 text-xs font-semibold text-slate-400">{selectedGroup?.nome}</p>
+              </div>
+              <button type="button" onClick={() => setShowImportModal(false)} className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Fechar importação">
+                <X size={18} />
+              </button>
+            </header>
+            <form onSubmit={importSheet} className="space-y-4 p-5">
+              {importMessage ? <div role="status" className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm font-bold text-slate-200">{importMessage}</div> : null}
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-black text-slate-300">Link do Google Sheets *</span>
+                <input type="url" value={sheetUrl} onChange={(event) => setSheetUrl(event.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4 text-sm font-semibold text-white outline-none placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10" autoFocus />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-black text-slate-300">Origem dos leads</span>
+                <select value={sheetOrigin} onChange={(event) => setSheetOrigin(event.target.value)} className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-4 text-sm font-semibold text-white outline-none focus:border-emerald-400">
+                  {IMPORT_ORIGINS.map((origin) => <option key={origin} value={origin}>{origin}</option>)}
+                </select>
+              </label>
+              <p className="text-xs font-semibold leading-5 text-slate-500">A planilha precisa estar acessível pelo link. Duplicados serão ignorados e os leads existentes não serão apagados.</p>
+              <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+                <button type="button" onClick={() => setShowImportModal(false)} className="min-h-11 rounded-xl px-4 text-xs font-black text-slate-400 hover:text-white">Cancelar</button>
+                <button disabled={importingSheet} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-400 px-5 text-xs font-black text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50">
+                  {importingSheet ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                  Importar leads
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </InternalLayout>
   );
 }

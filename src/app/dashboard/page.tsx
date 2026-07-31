@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ShieldAlert,
   CheckCircle2,
+  Filter,
   type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
@@ -36,7 +37,7 @@ import { useRouter } from 'next/navigation';
 import OrionFunnel from '@/components/ui/OrionFunnel';
 import { motion } from 'framer-motion';
 import { isLeadSale, normalizeLeadStatus } from '@/lib/leadStatus';
-import { isOrionLead } from '@/lib/leadOrigin';
+import { isOrionLead, resolveLeadOrigin } from '@/lib/leadOrigin';
 
 type CorretorDashboardData = {
   id: string;
@@ -78,6 +79,26 @@ type MonthlyPerformance = {
   leads: number;
   spend: number;
 };
+
+const ALL_ORIGINS = '__all__';
+
+function leadOriginLabel(lead: LeadMetricRow) {
+  return resolveLeadOrigin({
+    origem: lead.origem,
+    utm_source: lead.utm_source,
+    utm_medium: lead.utm_medium,
+    utm_campaign: lead.utm_campaign,
+    utm_term: lead.utm_term,
+    utm_content: lead.utm_content,
+    operadora: lead.operadora,
+    observacoes: lead.observacoes,
+  }) || 'Sem origem';
+}
+
+function matchesOriginFilter(lead: LeadMetricRow, originFilter: string) {
+  if (originFilter === ALL_ORIGINS) return true;
+  return leadOriginLabel(lead).localeCompare(originFilter, 'pt-BR', { sensitivity: 'base' }) === 0;
+}
 
 function monthKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -319,6 +340,8 @@ export default function DashboardPage() {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [oldestDate, setOldestDate] = useState('');
+  const [originFilter, setOriginFilter] = useState('Orion');
+  const [originOptions, setOriginOptions] = useState<string[]>(['Orion']);
 
   useEffect(() => {
     async function initializeDefaultDates() {
@@ -534,18 +557,24 @@ export default function DashboardPage() {
           }
         }
 
+        const availableOrigins = Array.from(new Set(allLeads.map(leadOriginLabel)))
+          .sort((a, b) => a === 'Orion' ? -1 : b === 'Orion' ? 1 : a.localeCompare(b, 'pt-BR'));
+        setOriginOptions(availableOrigins.includes('Orion') ? availableOrigins : ['Orion', ...availableOrigins]);
+
+        const originScopedAllLeads = allLeads.filter((lead) => matchesOriginFilter(lead, originFilter));
+
         // Calculate all-time summary (used for the 4 financial cards step 3)
-        const allTimeSoldLeads = allLeads.filter(isLeadSale);
+        const allTimeSoldLeads = originScopedAllLeads.filter(isLeadSale);
         const allTimeOrionCount = allLeads.filter(isOrionLead).length;
         const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
         
         if (!isCurrentRequest()) return;
 
         setAllTimeStats({
-          total: allLeads.length,
+          total: originScopedAllLeads.length,
           sold: allTimeSoldLeads.length,
           salesRealized: allTimeSoldLeads.reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0),
-          salesPotential: allLeads
+          salesPotential: originScopedAllLeads
             .filter((lead) => activeRevenueStatuses.includes(normalizeLeadStatus(lead.status)))
             .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
         });
@@ -557,7 +586,7 @@ export default function DashboardPage() {
         // Compute static 6-month performance timeline
         const months = getLastMonths();
         const monthMap = new Map(months.map((month) => [month.key, { ...month }]));
-        allLeads.filter(isOrionLead).forEach((lead) => {
+        originScopedAllLeads.forEach((lead) => {
           if (!lead.data_entrada) return;
           if (dataFim && lead.data_entrada.slice(0, 10) > dataFim) return;
           const current = monthMap.get(monthKey(new Date(lead.data_entrada)));
@@ -567,7 +596,7 @@ export default function DashboardPage() {
         // Compute static 7-day weekly leads rhythm
         const days = getLastDays();
         const dayMap = new Map(days.map((day) => [day.key, { ...day }]));
-        allLeads.forEach((lead) => {
+        originScopedAllLeads.forEach((lead) => {
           if (!lead.data_entrada) return;
           if (dataFim && lead.data_entrada.slice(0, 10) > dataFim) return;
           const current = dayMap.get(dayKey(new Date(lead.data_entrada)));
@@ -577,7 +606,7 @@ export default function DashboardPage() {
 
         // Compute static top cities ranking (with canonical normalization)
         const cityMap = new Map<string, number>();
-        allLeads.forEach((lead) => {
+        originScopedAllLeads.forEach((lead) => {
           const rawCity = String(lead.cidade || '').trim();
           const city = normalizeCityName(rawCity);
           if (!city) return;
@@ -670,9 +699,9 @@ export default function DashboardPage() {
         setMonthlyPerformance(Array.from(monthMap.values()));
 
         // Filter leads in memory for active date filter (used for status, pizza, funnel)
-        let statsRes = allLeads;
+        let statsRes = originScopedAllLeads;
         if (dataInicio || dataFim) {
-          statsRes = allLeads.filter(lead => {
+          statsRes = originScopedAllLeads.filter(lead => {
             if (!lead.data_entrada) return false;
             const entryTime = new Date(lead.data_entrada).getTime();
             if (dataInicio) {
@@ -813,7 +842,7 @@ export default function DashboardPage() {
     }
 
     fetchCorretorData();
-  }, [profile, dataInicio, dataFim]);
+  }, [profile, dataInicio, dataFim, originFilter]);
 
   const firstName = profile?.nome ? profile.nome.split(' ')[0] : '';
   const isDataLoading = authLoading || loadingData;
@@ -857,7 +886,7 @@ export default function DashboardPage() {
 
 
   const periodCpl = allTimeOrionLeads > 0 ? periodSpend / allTimeOrionLeads : 0;
-  const periodConversion = stats.orionTotal > 0 ? (stats.sold / stats.orionTotal) * 100 : 0;
+  const periodConversion = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
 
   const periodLabelText = presetLabel === 'Todo o período'
     ? 'no período'
@@ -868,7 +897,7 @@ export default function DashboardPage() {
         : `de ${presetLabel.toLowerCase()}`;
   const displayPeriodCpl = stats.orionTotal > 0 ? periodCpl : null;
 
-  const salesConversionRate = stats.orionTotal > 0 ? (stats.sold / stats.orionTotal) * 100 : 0;
+  const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
   const chartHeight = 176;
   const maxWeeklyLeads = Math.max(...weeklyLeads.map((day) => day.leads), 1);
   const weeklyTotal = weeklyLeads.reduce((sum, day) => sum + day.leads, 0);
@@ -987,6 +1016,22 @@ export default function DashboardPage() {
           <p className="text-base font-bold text-blue-600 sm:text-lg">Painel de crescimento comercial e aceleração de vendas</p>
         </div>
         <div className="relative flex flex-wrap items-center gap-3 shrink-0">
+          <label className="relative">
+            <span className="sr-only">Filtrar indicadores por origem</span>
+            <Filter className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400" size={16} />
+            <select
+              value={originFilter}
+              onChange={(event) => setOriginFilter(event.target.value)}
+              className="min-h-11 min-w-[190px] cursor-pointer appearance-none rounded-2xl border border-white/10 bg-slate-950 py-3 pl-11 pr-10 text-xs font-black text-white outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10"
+              aria-label="Origem considerada nos indicadores"
+            >
+              <option value={ALL_ORIGINS}>Origem: Geral</option>
+              {originOptions.map((origin) => (
+                <option key={origin} value={origin}>Origem: {origin}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+          </label>
           
           {/* Custom Date Range Popover Button (Meta style) */}
           <div className="relative">

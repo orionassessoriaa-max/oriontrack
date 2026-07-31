@@ -5,6 +5,7 @@ import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
+import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
 const LEAD_CREATOR_PROFILE_TYPES = [
@@ -14,6 +15,7 @@ const LEAD_CREATOR_PROFILE_TYPES = [
   'corretor_membro',
   'corretor_integrante',
   'corretor_parceiro',
+  'gestor_trafego',
 ];
 const ASSIGNABLE_PROFILE_TYPES = [
   'corretor',
@@ -97,6 +99,33 @@ async function getCorretorScopeForProfile(profile: any, requestedCorretorId: str
   if (profile.tipo_usuario === 'admin') {
     if (!requestedCorretorId) return { error: 'Selecione um corretor.' };
     return { corretorId: requestedCorretorId, corretorIds: [requestedCorretorId] };
+  }
+
+  if (profile.tipo_usuario === 'gestor_trafego') {
+    if (!requestedCorretorId) return { error: 'Selecione uma concessionaria.' };
+
+    const { data: requestedCorretor } = await supabaseAdmin
+      .from('corretores')
+      .select('id, nome, nome_empresa, gestor_trafego_id, time_operacional')
+      .eq('id', requestedCorretorId)
+      .maybeSingle();
+
+    if (!requestedCorretor || !isGestorLinkedToConcessionariaCorretor(requestedCorretor, profile)) {
+      return { error: 'Voce so pode criar leads para concessionarias atribuidas a voce.' };
+    }
+
+    let corretorIds = [requestedCorretor.id];
+    if (requestedCorretor.nome_empresa) {
+      const { data: siblings } = await supabaseAdmin
+        .from('corretores')
+        .select('id, nome, nome_empresa, gestor_trafego_id, time_operacional')
+        .eq('nome_empresa', requestedCorretor.nome_empresa);
+      corretorIds = (siblings || [])
+        .filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, profile))
+        .map((corretor) => corretor.id);
+    }
+
+    return { corretorId: requestedCorretor.id, corretorIds };
   }
 
   const ownCorretorId = await resolveProfileCorretorId(profile);
@@ -263,7 +292,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
     }
 
-    const responsibleResult = await resolveResponsibleMember(corretorId, scope.corretorIds, String(body.responsavel_membro_id || ''));
+    const rawResponsibleId = String(body.responsavel_membro_id || '');
+    const selfAssignedProfileTypes = ['corretor_membro', 'corretor_integrante', 'corretor_parceiro'];
+    const responsibleId = selfAssignedProfileTypes.includes(guard.profile.tipo_usuario)
+      && (!rawResponsibleId || rawResponsibleId === 'unassigned')
+        ? `profile:${guard.profile.id}`
+        : rawResponsibleId;
+    const responsibleResult = await resolveResponsibleMember(corretorId, scope.corretorIds, responsibleId);
     if ('error' in responsibleResult) return NextResponse.json({ error: responsibleResult.error }, { status: 400 });
     const responsibleMember = responsibleResult.member;
 
