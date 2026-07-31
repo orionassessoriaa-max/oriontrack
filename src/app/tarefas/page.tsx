@@ -5,8 +5,9 @@ import Link from 'next/link';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
+import { getLeadStatusStyle } from '@/lib/leadStatus';
 import { LeadTarefa } from '@/types';
-import { ArrowLeft, CalendarDays, CheckCircle2, Clock, Loader2, RefreshCw, Search, UserRound } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, Clock, Loader2, Pencil, RefreshCw, Save, Search, UserRound, X } from 'lucide-react';
 
 type TaskLead = {
   id: string;
@@ -55,6 +56,14 @@ function dayKey(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function toDateTimeLocal(value?: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 function getTaskBadge(task: LeadTarefa) {
   if (task.status === 'concluida') return { label: 'Concluida', className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' };
   if (task.status === 'cancelada') return { label: 'Cancelada', className: 'bg-slate-500/15 text-slate-300 border-slate-500/25' };
@@ -96,6 +105,8 @@ export default function TarefasPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<TaskFilter>('pendentes');
   const [responsibleFilter, setResponsibleFilter] = useState<ResponsibleFilter>('todos');
+  const [editingTask, setEditingTask] = useState<LeadTarefa | null>(null);
+  const [editForm, setEditForm] = useState({ titulo: '', descricao: '', vencimento: '', responsavel_profile_id: '' });
   const canManageTaskResponsible = ['admin', 'dev', 'corretor_admin'].includes(profile?.tipo_usuario || '');
 
   async function resolveBrokerScope() {
@@ -290,6 +301,42 @@ export default function TarefasPage() {
     await fetchTasks();
   }
 
+  function openTaskEditor(task: LeadTarefa) {
+    const lead = leadsById[task.lead_id];
+    setEditingTask(task);
+    setEditForm({
+      titulo: task.titulo,
+      descricao: task.descricao || '',
+      vencimento: toDateTimeLocal(task.vencimento),
+      responsavel_profile_id: task.responsavel_profile_id || lead?.responsavel_profile_id || '',
+    });
+  }
+
+  async function saveTaskEdit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingTask || !editForm.titulo.trim()) return;
+    setSavingId(editingTask.id);
+    const dueDate = editForm.vencimento ? new Date(editForm.vencimento) : null;
+    const { error: updateError } = await supabase
+      .from('lead_tarefas')
+      .update({
+        titulo: editForm.titulo.trim(),
+        descricao: editForm.descricao.trim() || null,
+        vencimento: dueDate && Number.isFinite(dueDate.getTime()) ? dueDate.toISOString() : null,
+        responsavel_profile_id: editForm.responsavel_profile_id || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', editingTask.id);
+    setSavingId(null);
+
+    if (updateError) {
+      alert('Erro ao editar tarefa: ' + updateError.message);
+      return;
+    }
+    setEditingTask(null);
+    await fetchTasks();
+  }
+
   function getTaskResponsibleId(task: LeadTarefa) {
     const lead = leadsById[task.lead_id];
     return task.responsavel_profile_id || lead?.responsavel_profile_id || null;
@@ -453,6 +500,7 @@ export default function TarefasPage() {
               const responsibleId = getTaskResponsibleId(task);
               const responsible = responsibleId ? profilesById[responsibleId] : null;
               const badge = getTaskBadge(task);
+              const leadStage = getLeadStatusStyle(lead?.status);
 
               return (
                 <div
@@ -506,8 +554,22 @@ export default function TarefasPage() {
                   <div className="min-w-0">
                     <p className="truncate font-black text-cyan-300">{lead?.nome || 'Lead nao encontrado'}</p>
                     <p className="mt-1 truncate text-xs font-bold text-slate-500">{lead?.telefone || lead?.cidade || '-'}</p>
+                    <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-300">
+                      <span className={`h-1.5 w-1.5 rounded-full ${leadStage.dot}`} />
+                      Etapa: {leadStage.label}
+                    </span>
                   </div>
-                  <div>
+                  <div className="flex flex-col items-start gap-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openTaskEditor(task);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-cyan-300 transition hover:bg-cyan-500/20"
+                    >
+                      <Pencil size={12} /> Editar
+                    </button>
                     {task.status === 'pendente' ? (
                       <button
                         type="button"
@@ -531,6 +593,51 @@ export default function TarefasPage() {
           </div>
         )}
       </div>
+
+      {editingTask && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="edit-task-title">
+          <form onSubmit={saveTaskEdit} className="w-full max-w-lg rounded-[1.75rem] border border-cyan-500/20 bg-slate-950 p-6 shadow-2xl shadow-cyan-950/40">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Tarefas</p>
+                <h2 id="edit-task-title" className="mt-1 text-xl font-black text-white">Editar lembrete</h2>
+              </div>
+              <button type="button" onClick={() => setEditingTask(null)} className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 text-slate-300 transition hover:bg-white/10" aria-label="Fechar editor">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">
+                Titulo
+                <input required value={editForm.titulo} onChange={(event) => setEditForm((current) => ({ ...current, titulo: event.target.value }))} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-cyan-400/70" />
+              </label>
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">
+                Descricao
+                <textarea value={editForm.descricao} onChange={(event) => setEditForm((current) => ({ ...current, descricao: event.target.value }))} rows={3} className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-cyan-400/70" />
+              </label>
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">
+                Data e hora
+                <input type="datetime-local" value={editForm.vencimento} onChange={(event) => setEditForm((current) => ({ ...current, vencimento: event.target.value }))} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-cyan-400/70" />
+              </label>
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">
+                Responsavel
+                <select value={editForm.responsavel_profile_id} onChange={(event) => setEditForm((current) => ({ ...current, responsavel_profile_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-cyan-400/70">
+                  <option value="">Sem responsavel</option>
+                  {availableProfiles.map((person) => <option key={person.id} value={person.id}>{person.nome || person.email || 'Sem nome'}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setEditingTask(null)} className="min-h-11 rounded-xl border border-white/10 px-4 text-xs font-black uppercase tracking-wider text-slate-300 transition hover:bg-white/10">Cancelar</button>
+              <button type="submit" disabled={savingId === editingTask.id || !editForm.titulo.trim()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-500 px-5 text-xs font-black uppercase tracking-wider text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50">
+                {savingId === editingTask.id ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />} Salvar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </InternalLayout>
   );
 }

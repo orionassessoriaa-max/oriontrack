@@ -69,6 +69,7 @@ type Conversation = {
   ultima_mensagem_at: string | null;
   agentName?: string;
   responsibleProfileId?: string | null;
+  leadStatus?: string | null;
   expirationTime?: string;
   protocolNumber?: string;
   tags?: string[];
@@ -273,6 +274,7 @@ export default function BrokerInboxPage() {
   const [activeFilter, setActiveFilter] = useState<'chatting' | 'waiting' | 'closed' | 'alerts'>('chatting');
   const [searchTerm, setSearchTerm] = useState('');
   const [responsibleFilter, setResponsibleFilter] = useState('todos');
+  const [stageFilter, setStageFilter] = useState('todos');
 
   // Audio Recording States
   const [isRecording, setIsRecording] = useState(false);
@@ -488,7 +490,7 @@ export default function BrokerInboxPage() {
 
     let conversationsQuery = supabase
       .from('whatsapp_conversas')
-      .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
+      .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, status, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
       .in('corretor_id', idsToFetch)
       .order('ultima_mensagem_at', { ascending: false })
       .limit(80);
@@ -515,6 +517,7 @@ export default function BrokerInboxPage() {
         status: row.status === 'aguardando' ? 'espera' : row.status === 'resolvida' ? 'fechada' : row.status,
         agentName: lead?.responsavel_membro?.nome || member?.nome || (responsibleProfileId && responsibleProfileId === profile?.id ? profile?.nome : null) || 'Fila Geral',
         responsibleProfileId,
+        leadStatus: lead?.status || null,
         expirationTime: '03/06 às 23:07',
         protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
         tags: row.tags || ['Lead Frio'],
@@ -539,7 +542,7 @@ export default function BrokerInboxPage() {
         const targetLast8 = targetDigits.length >= 8 ? targetDigits.slice(-8) : targetDigits;
         let savedConversationQuery = supabase
           .from('whatsapp_conversas')
-          .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
+          .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, status, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
           .in('corretor_id', idsToFetch)
           .or(`telefone.eq.${targetPhone},telefone.ilike.%${targetLast8}`)
           .order('ultima_mensagem_at', { ascending: false })
@@ -566,6 +569,7 @@ export default function BrokerInboxPage() {
             status: savedRow.status === 'aguardando' ? 'espera' : savedRow.status === 'resolvida' ? 'fechada' : savedRow.status,
             agentName: savedLead?.responsavel_membro?.nome || savedMember?.nome || (savedResponsibleProfileId && savedResponsibleProfileId === profile?.id ? profile?.nome : null) || 'Fila Geral',
             responsibleProfileId: savedResponsibleProfileId,
+            leadStatus: savedLead?.status || null,
             expirationTime: '03/06 Ã s 23:07',
             protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
             tags: savedRow.tags || ['Lead Frio'],
@@ -1626,6 +1630,30 @@ export default function BrokerInboxPage() {
     setShowTaskModal(true);
   };
 
+  const completeReminder = async (task: LeadTask) => {
+    if (!selectedConversation?.lead_id) return;
+    setSavingTask(true);
+    try {
+      const { error } = await supabase
+        .from('lead_tarefas')
+        .update({ status: 'concluida', updated_at: new Date().toISOString() })
+        .eq('id', task.id);
+      if (error) throw error;
+
+      await logLeadActivity({
+        tipo: 'tarefa',
+        titulo: 'Lembrete concluido',
+        descricao: task.titulo,
+      });
+      await fetchLeadDetails(selectedConversation.lead_id);
+    } catch (err: any) {
+      console.error('Erro ao concluir lembrete:', err);
+      alert('Erro ao concluir lembrete: ' + err.message);
+    } finally {
+      setSavingTask(false);
+    }
+  };
+
   const loadHistory = async () => {
     if (!selectedConversation) return;
     setLoadingHistory(true);
@@ -1919,6 +1947,8 @@ export default function BrokerInboxPage() {
       if (!matchName && !matchPhone) return false;
     }
 
+    if (stageFilter !== 'todos' && normalizeLeadStatus(c.leadStatus) !== stageFilter) return false;
+
     // Tab filter
     if (activeFilter === 'chatting') return c.status === 'aberta' || c.status === 'pausada';
     if (activeFilter === 'waiting') return c.status === 'espera';
@@ -2193,6 +2223,18 @@ export default function BrokerInboxPage() {
                 </select>
               )}
 
+              <select
+                value={stageFilter}
+                onChange={(event) => setStageFilter(event.target.value)}
+                aria-label="Filtrar conversas por etapa do funil"
+                className="w-full rounded-xl border border-white/5 bg-slate-950 px-3 py-2 text-2xs font-black text-white outline-none focus:border-cyan-500/50"
+              >
+                <option value="todos">Todas as etapas do funil</option>
+                {kanbanStages.map((stage) => (
+                  <option key={stage.id} value={stage.id}>{stage.label}</option>
+                ))}
+              </select>
+
               {/* Search Box */}
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 text-slate-500" size={13} />
@@ -2248,6 +2290,11 @@ export default function BrokerInboxPage() {
                         <div className="flex items-center gap-1.5 mt-2">
                           <img src="/orion-empty-logo.png" alt="Orion" className="h-3 w-3 object-contain opacity-60" />
                           <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">{c.agentName}</span>
+                          {c.leadStatus && (
+                            <span className="ml-auto max-w-[110px] truncate rounded-md border border-cyan-500/15 bg-cyan-500/10 px-1.5 py-0.5 text-[8px] font-black text-cyan-300">
+                              {getKanbanStageLabel(kanbanStages, normalizeLeadStatus(c.leadStatus))}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </button>
@@ -2920,7 +2967,21 @@ export default function BrokerInboxPage() {
                             {highlightedTask.prioridade ? ` · ${highlightedTask.prioridade}` : ''}
                           </p>
                         </div>
-                        <button type="button" onClick={() => openTaskEditor(highlightedTask)} className="shrink-0 rounded-lg border border-cyan-500/20 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/10" title="Editar tarefa">Editar</button>
+                        <div className="flex shrink-0 flex-col gap-1.5">
+                          <button type="button" onClick={() => openTaskEditor(highlightedTask)} className="rounded-lg border border-cyan-500/20 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/10" title="Editar tarefa">Editar</button>
+                          {highlightedTask.status && !['concluida', 'concluÃ­do', 'concluido', 'cancelada', 'cancelado'].includes(highlightedTask.status.toLowerCase()) && (
+                            <button
+                              type="button"
+                              onClick={() => void completeReminder(highlightedTask)}
+                              disabled={savingTask}
+                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                              title="Concluir lembrete"
+                            >
+                              {savingTask ? <Loader2 size={9} className="animate-spin" /> : <CheckCircle2 size={9} />}
+                              Concluir lembrete
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <p className="text-[10px] font-bold text-slate-500">Nenhuma tarefa registrada para este lead.</p>
