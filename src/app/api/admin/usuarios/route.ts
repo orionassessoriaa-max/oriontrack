@@ -559,10 +559,21 @@ export async function PATCH(request: Request) {
         }
 
         if (profileWithCorretor?.corretor_id) {
-          await supabaseAdmin
+          const { error: corretorUpdateError } = await supabaseAdmin
             .from('corretores')
             .update(corretorUpdatePayload)
             .eq('id', profileWithCorretor.corretor_id);
+          if (corretorUpdateError) {
+            return NextResponse.json({ error: corretorUpdateError.message }, { status: 500 });
+          }
+          const updatedCorretorId = profileWithCorretor.corretor_id;
+          after(async () => {
+            try {
+              await ensureConcessionariaDriveFolder(updatedCorretorId, gestorTrafegoId);
+            } catch (folderError) {
+              console.error('Falha ao sincronizar pasta da concessionaria no Drive:', folderError);
+            }
+          });
         } else {
           const { data: existingCorretor } = await supabaseAdmin
             .from('corretores')
@@ -593,6 +604,13 @@ export async function PATCH(request: Request) {
               .from('profiles')
               .update({ corretor_id: finalCorretorId })
               .eq('id', id);
+            after(async () => {
+              try {
+                await ensureConcessionariaDriveFolder(finalCorretorId, gestorTrafegoId);
+              } catch (folderError) {
+                console.error('Falha ao sincronizar pasta da concessionaria no Drive:', folderError);
+              }
+            });
           }
         }
       }

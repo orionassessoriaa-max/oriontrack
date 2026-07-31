@@ -182,13 +182,30 @@ export async function ensureConcessionariaDriveFolder(corretorId: string, gestor
   if (!rootId) throw new Error('GOOGLE_DRIVE_FOLDER_ID nao configurado.');
   const { data: corretor, error: corretorError } = await supabaseAdmin
     .from('corretores')
-    .select('id, nome, nome_empresa, gestor_trafego_id')
+    .select('id, nome, nome_empresa, gestor_trafego_id, time_operacional')
     .eq('id', corretorId)
     .maybeSingle();
   if (corretorError) throw corretorError;
   if (!corretor) throw new Error('Concessionaria nao encontrada.');
-  const resolvedGestorId = gestorId || corretor.gestor_trafego_id;
+  const teamManager = Array.isArray(corretor.time_operacional)
+    ? corretor.time_operacional.find((member: any) => {
+        const role = String(member?.tipo_usuario || '').trim().toLowerCase();
+        const position = String(member?.cargo || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim()
+          .toLowerCase();
+        return role === 'gestor_trafego' || position.includes('gestor de trafego');
+      })
+    : null;
+  const resolvedGestorId = gestorId || corretor.gestor_trafego_id || String(teamManager?.profile_id || '').trim() || null;
   if (!resolvedGestorId) return null;
+  if (!corretor.gestor_trafego_id) {
+    await supabaseAdmin
+      .from('corretores')
+      .update({ gestor_trafego_id: resolvedGestorId })
+      .eq('id', corretor.id);
+  }
   const { data: gestor, error: gestorError } = await supabaseAdmin
     .from('profiles')
     .select('id, nome')
