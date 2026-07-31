@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { ArrowLeft, BarChart3, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileImage, FileVideo2, Folder, HardDrive, Loader2, Maximize2, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
+import { ArrowLeft, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileImage, FileVideo2, Folder, HardDrive, Loader2, Maximize2, Pencil, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
 import { TRAFFIC_RULES, formatBRL, formatPercent } from '@/lib/trafego/rules';
 import { normalizeOptimizationDraft, type NormalizedOptimizationDraft } from '@/lib/trafego/optimizationDraft';
 
@@ -865,6 +865,11 @@ export default function OtimizacoesPage() {
                         {optimizationDraft ? (
                           <DraftView
                             draft={optimizationDraft}
+                            onDraftChange={(nextDraft) => {
+                              setOptimizationDraft(nextDraft);
+                              setDraftExecution(null);
+                              setDraftError(null);
+                            }}
                             error={draftError}
                             onCreate={createOptimizationDraft}
                             creating={creatingDraft}
@@ -1287,6 +1292,7 @@ function DraftCard({ title, children }: { title: string; children: React.ReactNo
 
 function DraftView({
   draft,
+  onDraftChange,
   error,
   onCreate,
   creating,
@@ -1295,6 +1301,7 @@ function DraftView({
   activationBusy,
 }: {
   draft: OptimizationDraft;
+  onDraftChange: (draft: OptimizationDraft) => void;
   error: string | null;
   onCreate: () => void;
   creating: boolean;
@@ -1302,6 +1309,7 @@ function DraftView({
   onActivate: (item: DraftExecutionItem) => void;
   activationBusy: string | null;
 }) {
+  const [editing, setEditing] = useState(false);
   const campaign = draft.campaign || {};
   const conjuntos = draft.adsets || [];
   const anuncios = draft.ads || [];
@@ -1311,6 +1319,14 @@ function DraftView({
   const actionLabel = usesExistingStructure && anuncios.length
     ? `Criar ${anuncios.length > 1 ? `${anuncios.length} anúncios` : 'anúncio'} pausado${anuncios.length > 1 ? 's' : ''}`
     : 'Criar estrutura pausada';
+  const updateAd = (index: number, field: string, value: string) => {
+    onDraftChange(normalizeOptimizationDraft({
+      ...draft,
+      ads: anuncios.map((anuncio, itemIndex) => (
+        itemIndex === index ? { ...anuncio, [field]: value } : anuncio
+      )),
+    }));
+  };
 
   return (
     <div
@@ -1329,12 +1345,23 @@ function DraftView({
             </h4>
           </div>
         </div>
-        <span
-          className="shrink-0 rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wide"
-          style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)', color: 'var(--tf-warn)' }}
-        >
-          Revisar
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span
+            className="rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wide"
+            style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)', color: 'var(--tf-warn)' }}
+          >
+            Revisar
+          </span>
+          <button
+            type="button"
+            onClick={() => setEditing((current) => !current)}
+            className="tf-no-lift inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-black transition"
+            style={{ borderColor: 'var(--tf-accent-border)', color: 'var(--tf-accent-ink)', background: 'var(--tf-surface)' }}
+          >
+            {editing ? <Check size={14} /> : <Pencil size={14} />}
+            {editing ? 'Concluir edição' : 'Editar anúncio'}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3 p-4">
@@ -1366,11 +1393,51 @@ function DraftView({
             <div key={`ad-${index}`} className="ml-6 rounded-lg border px-3 py-2" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)' }}>
               <div className="flex items-start gap-2">
                 <FileImage size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-accent-ink)' }} />
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-bold" style={{ color: 'var(--tf-ink)' }}>{String(anuncio.name || `Anúncio ${index + 1}`)}</p>
-                  {anuncio.drive_file_name ? <p className="truncate text-[10px]" style={{ color: 'var(--tf-ok)' }}>{String(anuncio.drive_file_name)}</p> : null}
-                  {anuncio.headline ? <p className="mt-1 text-[11px] font-semibold" style={{ color: 'var(--tf-ink)' }}>{String(anuncio.headline)}</p> : null}
-                  {anuncio.primary_text ? <p className="mt-1 line-clamp-3 text-[11px] leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{String(anuncio.primary_text)}</p> : null}
+                <div className="min-w-0 flex-1">
+                  {editing ? (
+                    <div className="grid gap-3">
+                      <label className="grid gap-1">
+                        <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Nome do anúncio</span>
+                        <input value={String(anuncio.name || '')} onChange={(event) => updateAd(index, 'name', event.target.value)} className="min-h-11 rounded-lg border bg-transparent px-3 text-xs font-semibold outline-none focus:ring-2" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }} />
+                      </label>
+                      <label className="grid gap-1">
+                        <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Título</span>
+                        <input value={String(anuncio.headline || '')} onChange={(event) => updateAd(index, 'headline', event.target.value)} maxLength={255} className="min-h-11 rounded-lg border bg-transparent px-3 text-xs font-semibold outline-none focus:ring-2" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }} />
+                      </label>
+                      <label className="grid gap-1">
+                        <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Legenda</span>
+                        <textarea value={String(anuncio.primary_text || '')} onChange={(event) => updateAd(index, 'primary_text', event.target.value)} rows={4} maxLength={2200} className="rounded-lg border bg-transparent px-3 py-2 text-xs font-semibold leading-relaxed outline-none focus:ring-2" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }} />
+                      </label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="grid gap-1">
+                          <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Descrição</span>
+                          <input value={String(anuncio.description || '')} onChange={(event) => updateAd(index, 'description', event.target.value)} maxLength={255} className="min-h-11 rounded-lg border bg-transparent px-3 text-xs font-semibold outline-none focus:ring-2" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }} />
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Botão</span>
+                          <select value={String(anuncio.call_to_action || 'LEARN_MORE')} onChange={(event) => updateAd(index, 'call_to_action', event.target.value)} className="min-h-11 rounded-lg border bg-transparent px-3 text-xs font-semibold outline-none focus:ring-2" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }}>
+                            <option value="LEARN_MORE">Saiba mais</option>
+                            <option value="CONTACT_US">Fale conosco</option>
+                            <option value="GET_QUOTE">Solicitar cotação</option>
+                            <option value="SIGN_UP">Cadastre-se</option>
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="truncate text-xs font-bold" style={{ color: 'var(--tf-ink)' }}>{String(anuncio.name || `Anúncio ${index + 1}`)}</p>
+                      {anuncio.drive_file_name ? <p className="truncate text-[10px]" style={{ color: 'var(--tf-ok)' }}>{String(anuncio.drive_file_name)}</p> : null}
+                      <div className="mt-2 grid gap-2">
+                        <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Título</p>
+                        <p className="text-[11px] font-semibold" style={{ color: 'var(--tf-ink)' }}>{String(anuncio.headline || 'Não informado')}</p>
+                        <p className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Legenda</p>
+                        <p className="whitespace-pre-wrap text-[11px] leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{String(anuncio.primary_text || 'Não informada')}</p>
+                        {anuncio.description ? <p className="text-[11px]" style={{ color: 'var(--tf-ink-soft)' }}>Descrição: {String(anuncio.description)}</p> : null}
+                        <p className="text-[10px] font-bold" style={{ color: 'var(--tf-accent-ink)' }}>Botão: {String(anuncio.call_to_action || 'LEARN_MORE')}</p>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <span className="ml-auto shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-black" style={{ background: 'var(--tf-warn-soft)', color: 'var(--tf-warn)' }}>PAUSADO</span>
               </div>

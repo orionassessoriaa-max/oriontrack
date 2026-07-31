@@ -94,6 +94,53 @@ async function graphPostForm(path: string, form: FormData, operation = 'o upload
   return json;
 }
 
+async function graphGet(path: string, params: Record<string, string> = {}) {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN nao configurado no ambiente da aplicacao.');
+  const url = new URL(graphUrl(path));
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+  url.searchParams.set('access_token', token);
+  const response = await fetch(url.toString(), { cache: 'no-store' });
+  const json = await response.json();
+  if (!response.ok || json.error) {
+    throw new Error(`A Meta recusou a leitura da estrutura existente. ${metaErrorMessage(json, `Erro HTTP ${response.status}.`)}`);
+  }
+  return json;
+}
+
+async function existingAdsetCreativeConfig(adsetId: string) {
+  const payload = await graphGet(`${adsetId}/ads`, {
+    fields: 'creative{object_story_spec}',
+    limit: '25',
+  });
+  for (const item of Array.isArray(payload.data) ? payload.data : []) {
+    const spec = item?.creative?.object_story_spec || {};
+    const linkData = spec.link_data || {};
+    const link = String(
+      linkData.link
+      || linkData.call_to_action?.value?.link
+      || ''
+    ).trim();
+    const pageId = String(spec.page_id || '').trim();
+    if (pageId && link) return { pageId, link };
+  }
+  return { pageId: '', link: '' };
+}
+
+function normalizeCallToAction(value: unknown) {
+  const normalized = String(value || '').trim().toUpperCase().replace(/\s+/g, '_');
+  const aliases: Record<string, string> = {
+    SAIBA_MAIS: 'LEARN_MORE',
+    FALE_CONOSCO: 'CONTACT_US',
+    SOLICITAR_COTACAO: 'GET_QUOTE',
+    CADASTRE_SE: 'SIGN_UP',
+  };
+  const resolved = aliases[normalized] || normalized;
+  return ['LEARN_MORE', 'CONTACT_US', 'GET_QUOTE', 'SIGN_UP'].includes(resolved)
+    ? resolved
+    : 'LEARN_MORE';
+}
+
 function moneyToCents(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value * 100);
   const raw = String(value ?? '').replace(/[^0-9,.-]/g, '').replace(/\.(?=.*\.)/g, '').replace(',', '.');
@@ -187,10 +234,15 @@ async function createPaused(accountId: string, draft: any) {
         skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'A Meta nao retornou o hash da imagem enviada.' });
         continue;
       }
-      const pageId = String(ad.page_id || normalizedDraft.page_id || process.env.META_DEFAULT_PAGE_ID || '').trim();
-      const link = String(ad.link_url || normalizedDraft.link_url || process.env.META_DEFAULT_LEAD_LINK || '').trim();
+      let pageId = String(ad.page_id || normalizedDraft.page_id || process.env.META_DEFAULT_PAGE_ID || '').trim();
+      let link = String(ad.link_url || normalizedDraft.link_url || process.env.META_DEFAULT_LEAD_LINK || '').trim();
+      if ((!pageId || !link) && adsetId) {
+        const existingConfig = await existingAdsetCreativeConfig(adsetId);
+        pageId ||= existingConfig.pageId;
+        link ||= existingConfig.link;
+      }
       if (!pageId || !link) {
-        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'Informe page_id e link_url no rascunho ou META_DEFAULT_PAGE_ID/META_DEFAULT_LEAD_LINK para montar o criativo da Meta.' });
+        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'Nao foi possivel reaproveitar a Pagina da Meta e o link de destino dos anuncios do conjunto. Configure esses dados na concessionaria.' });
         continue;
       }
       const creativeResult = await graphPost(`${accountPath}/adcreatives`, {
@@ -202,6 +254,11 @@ async function createPaused(accountId: string, draft: any) {
             link,
             message: String(ad.primary_text || normalizedDraft.primary_text || 'Conheca nossas solucoes.'),
             name: String(ad.headline || normalizedDraft.headline || driveFile.name),
+            description: String(ad.description || ''),
+            call_to_action: {
+              type: normalizeCallToAction(ad.call_to_action),
+              value: { link },
+            },
           },
         }),
       }, `a criacao do criativo "${String(ad.name || driveFile.name)}"`);
@@ -240,17 +297,6 @@ export async function POST(request: Request) {
     }
     if (normalizedDraft.ads.length && !normalizedDraft.adsets.length) {
       return NextResponse.json({ error: 'O plano precisa indicar o conjunto de destino do novo anuncio.' }, { status: 400 });
-    }
-    const driveAdsWithoutCreativeConfig = normalizedDraft.ads.filter((ad) => {
-      if (!ad.drive_file_id || ad.creative_id || ad.meta_creative_id) return false;
-      const pageId = String(ad.page_id || normalizedDraft.page_id || process.env.META_DEFAULT_PAGE_ID || '').trim();
-      const link = String(ad.link_url || normalizedDraft.link_url || process.env.META_DEFAULT_LEAD_LINK || '').trim();
-      return !pageId || !link;
-    });
-    if (driveAdsWithoutCreativeConfig.length) {
-      return NextResponse.json({
-        error: 'Para enviar a imagem do Drive, configure a Pagina da Meta e o link de destino da concessionaria antes de criar.',
-      }, { status: 400 });
     }
     const result = await createPaused(accountId, normalizedDraft);
     return NextResponse.json({ success: true, account: account.nome_empresa || account.nome, ...result, activate_available: result.created.length > 0 });
