@@ -43,6 +43,26 @@ function graphUrl(path: string) {
   return `https://graph.facebook.com/${version}/${path.replace(/^\//, '')}`;
 }
 
+async function resolveCorretorId(profile: {
+  corretor_id?: string | null;
+  email?: string | null;
+  email_real?: string | null;
+}) {
+  if (profile.corretor_id) return profile.corretor_id;
+  const emails = [profile.email_real, profile.email]
+    .map((email) => String(email || '').trim().toLowerCase())
+    .filter(Boolean);
+  if (!emails.length) return null;
+
+  const { data } = await supabaseAdmin
+    .from('corretores')
+    .select('id')
+    .in('email', emails)
+    .limit(1)
+    .maybeSingle();
+  return data?.id || null;
+}
+
 export async function GET(request: Request) {
   try {
     const limited = rateLimit(request, 'criativos:ativos-meta', { limit: 30, windowMs: 5 * 60_000 });
@@ -60,7 +80,7 @@ export async function GET(request: Request) {
 
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('id, tipo_usuario, corretor_id')
+      .select('id, tipo_usuario, corretor_id, email, email_real')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -70,12 +90,17 @@ export async function GET(request: Request) {
     const requestedCorretorId = validUuid(new URL(request.url).searchParams.get('corretor_id'));
     const corretorId = profile.tipo_usuario === 'admin'
       ? requestedCorretorId
-      : profile.corretor_id;
+      : await resolveCorretorId(profile);
     if (profile.tipo_usuario === 'admin' && !corretorId) {
       return NextResponse.json({ error: 'Selecione um corretor para visualizar os criativos ativos.' }, { status: 400 });
     }
     if (!corretorId) {
-      return NextResponse.json({ success: true, concessionaria: null, creatives: [] });
+      return NextResponse.json({
+        success: true,
+        concessionaria: null,
+        account_connected: false,
+        creatives: [],
+      });
     }
 
     const { data: currentBroker } = await supabaseAdmin

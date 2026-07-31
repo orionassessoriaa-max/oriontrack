@@ -17,6 +17,7 @@ import {
   MapPin,
   Maximize2,
   Paperclip,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -64,6 +65,8 @@ type Props = {
   managerName?: string | null;
   gestorId?: string | null;
 };
+
+type SavedGeneratedAsset = Pick<LibraryAsset, 'id' | 'titulo' | 'status'>;
 
 const FORMATS = [
   { value: '1024x1024', label: 'Feed quadrado', detail: '1:1' },
@@ -125,6 +128,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [referenceDataUrl, setReferenceDataUrl] = useState<string | null>(null);
   const [referenceName, setReferenceName] = useState('');
   const [generatedDataUrl, setGeneratedDataUrl] = useState<string | null>(null);
+  const [savedGeneratedAsset, setSavedGeneratedAsset] = useState<SavedGeneratedAsset | null>(null);
+  const [generatedAction, setGeneratedAction] = useState<'save' | 'approval' | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [destinationId, setDestinationId] = useState('');
@@ -139,6 +144,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [sendingApprovalId, setSendingApprovalId] = useState<string | null>(null);
   const [approvalFeedback, setApprovalFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchLibrary = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -261,6 +267,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     setReferenceDataUrl(null);
     setReferenceName('');
     setGeneratedDataUrl(null);
+    setSavedGeneratedAsset(null);
+    setGeneratedAction(null);
     setGenerationError(null);
     setDestinationId(selectedFolder?.id || '');
     setCreativeName('');
@@ -317,6 +325,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel gerar o criativo.');
       setGeneratedDataUrl(payload.image_data_url);
+      setSavedGeneratedAsset(null);
       setCreativeName(prompt.trim().split(/[.!?\n]/)[0].slice(0, 80) || 'Criativo gerado por IA');
       setDestinationId(selectedFolder?.id || '');
     } catch (error: unknown) {
@@ -369,13 +378,26 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     }
   };
 
-  const saveCreative = async () => {
+  const saveCreative = async (sendToApproval = false): Promise<SavedGeneratedAsset | null> => {
     if (!generatedDataUrl || !destinationId || !creativeName.trim() || !batchOperator.trim() || !batchRegion.trim()) {
       setGenerationError('Escolha a concessionaria e informe regiao, operadora e nome do criativo.');
-      return;
+      return null;
+    }
+
+    if (savedGeneratedAsset) {
+      if (sendToApproval && savedGeneratedAsset.status !== 'em_aprovacao') {
+        const sent = await sendForApproval(savedGeneratedAsset);
+        if (!sent) return null;
+        const approvedAsset = { ...savedGeneratedAsset, status: 'em_aprovacao' };
+        setSavedGeneratedAsset(approvedAsset);
+        setSuccessMessage('Criativo salvo na pasta e enviado para aprovacao.');
+        return approvedAsset;
+      }
+      return savedGeneratedAsset;
     }
 
     setSaving(true);
+    setGeneratedAction(sendToApproval ? 'approval' : 'save');
     setGenerationError(null);
     try {
       const token = await getAuthToken();
@@ -395,21 +417,33 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
           operadora: batchOperator.trim(),
           regiao: batchRegion.trim(),
           image_data_url: generatedDataUrl,
+          send_for_approval: sendToApproval,
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel salvar o criativo.');
       const folder = folders.find((item) => item.id === destinationId);
-      setSuccessMessage(`Criativo salvo no CRM e na pasta ${folder?.name || 'selecionada'} do Google Drive.`);
+      const saved = {
+        id: String(payload.asset.id),
+        titulo: String(payload.asset.titulo || creativeName.trim()),
+        status: String(payload.asset.status || (sendToApproval ? 'em_aprovacao' : 'rascunho')),
+      } as SavedGeneratedAsset;
+      setSavedGeneratedAsset(saved);
+      setSuccessMessage(sendToApproval
+        ? `Criativo salvo na pasta ${folder?.name || 'selecionada'} e enviado para aprovacao.`
+        : `Criativo salvo no CRM e na pasta ${folder?.name || 'selecionada'} do Google Drive.`);
       await fetchLibrary();
+      return saved;
     } catch (error: unknown) {
       setGenerationError(errorMessage(error, 'Erro ao salvar o criativo.'));
+      return null;
     } finally {
       setSaving(false);
+      setGeneratedAction(null);
     }
   };
 
-  const sendForApproval = async (asset: LibraryAsset) => {
+  const sendForApproval = async (asset: Pick<LibraryAsset, 'id' | 'titulo'>): Promise<boolean> => {
     setSendingApprovalId(asset.id);
     setApprovalFeedback(null);
     try {
@@ -427,11 +461,19 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel enviar para aprovacao.');
       setApprovalFeedback({ tone: 'success', message: `"${asset.titulo}" foi enviado para Materiais para aprovação.` });
       await fetchLibrary(true);
+      return true;
     } catch (error: unknown) {
       setApprovalFeedback({ tone: 'error', message: errorMessage(error, 'Erro ao enviar para aprovação.') });
+      return false;
     } finally {
       setSendingApprovalId(null);
     }
+  };
+
+  const editGeneratedCreative = () => {
+    setSuccessMessage('Ajuste o briefing e clique em "Gerar outra versao" para aplicar a edicao.');
+    promptInputRef.current?.focus();
+    promptInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   return (
@@ -804,9 +846,10 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                   <label htmlFor="creative-prompt" className="text-sm font-black text-slate-200">O que voce quer criar?</label>
                   <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Informe oferta, publico, estilo, cores e os textos exatos que precisam aparecer. A IA nao deve inventar informacoes.</p>
                   <textarea
+                    ref={promptInputRef}
                     id="creative-prompt"
                     value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
+                    onChange={(event) => { setPrompt(event.target.value); setSavedGeneratedAsset(null); }}
                     placeholder="Ex.: Criativo moderno para plano de saude PME, fundo azul, familia sorrindo, destaque para atendimento nacional..."
                     className="mt-3 min-h-40 w-full resize-y rounded-2xl border border-slate-700 bg-slate-950/60 p-4 text-base font-semibold leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
                     maxLength={3000}
@@ -899,11 +942,11 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                     </label>
                     <label className="block">
                       <span className="text-xs font-black text-slate-300">Operadora</span>
-                      <input value={batchOperator} onChange={(event) => setBatchOperator(event.target.value)} placeholder="Ex.: Amil" className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
+                      <input value={batchOperator} onChange={(event) => { setBatchOperator(event.target.value); setSavedGeneratedAsset(null); }} placeholder="Ex.: Amil" className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
                     </label>
                     <label className="block">
                       <span className="text-xs font-black text-slate-300">Região</span>
-                      <input value={batchRegion} onChange={(event) => setBatchRegion(event.target.value)} list="creative-regions" placeholder="Ex.: RJ" className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
+                      <input value={batchRegion} onChange={(event) => { setBatchRegion(event.target.value); setSavedGeneratedAsset(null); }} list="creative-regions" placeholder="Ex.: RJ" className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
                       <datalist id="creative-regions">{REGIONS.map((region) => <option key={region} value={region} />)}</datalist>
                     </label>
                     <label className="block sm:col-span-2">
@@ -976,14 +1019,17 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                   <div className="mt-5 rounded-3xl border border-cyan-400/20 bg-cyan-400/[0.04] p-5">
                     <div className="flex items-center gap-2 text-cyan-400">
                       <FolderOpen size={17} />
-                      <p className="text-xs font-black uppercase tracking-[0.18em]">Agora atribua a uma pasta</p>
+                      <p className="text-xs font-black uppercase tracking-[0.18em]">O que deseja fazer?</p>
                     </div>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
+                      Revise a arte, escolha a pasta correta e decida se quer editar, apenas salvar ou enviar ao corretor para aprovação.
+                    </p>
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <label className="block">
                         <span className="text-xs font-black text-slate-300">Pasta da concessionaria</span>
                         <select
                           value={destinationId}
-                          onChange={(event) => setDestinationId(event.target.value)}
+                          onChange={(event) => { setDestinationId(event.target.value); setSavedGeneratedAsset(null); }}
                           className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
                         >
                           <option value="">Selecione...</option>
@@ -994,21 +1040,44 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                         <span className="text-xs font-black text-slate-300">Nome do criativo</span>
                         <input
                           value={creativeName}
-                          onChange={(event) => setCreativeName(event.target.value)}
+                          onChange={(event) => { setCreativeName(event.target.value); setSavedGeneratedAsset(null); }}
                           maxLength={160}
                           className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
                         />
                       </label>
                     </div>
-                    <button
-                      type="button"
-                      onClick={saveCreative}
-                      disabled={saving || !destinationId || !creativeName.trim() || !batchOperator.trim() || !batchRegion.trim()}
-                      className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400/30 disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      {saving ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
-                      {saving ? 'Salvando na pasta...' : 'Salvar na pasta'}
-                    </button>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      <button
+                        type="button"
+                        onClick={editGeneratedCreative}
+                        disabled={saving}
+                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-600 bg-slate-900 px-4 py-3 text-sm font-black text-slate-200 transition hover:border-cyan-400 hover:text-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400/20 disabled:opacity-45"
+                      >
+                        <Pencil size={17} />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void saveCreative(false)}
+                        disabled={saving || !destinationId || !creativeName.trim() || !batchOperator.trim() || !batchRegion.trim()}
+                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-blue-400/40 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-200 transition hover:bg-blue-500/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400/20 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {saving && generatedAction === 'save' ? <Loader2 className="animate-spin" size={17} /> : <Upload size={17} />}
+                        {savedGeneratedAsset ? 'Salvo na pasta' : 'Salvar na pasta'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void saveCreative(true)}
+                        disabled={saving || Boolean(savedGeneratedAsset && sendingApprovalId === savedGeneratedAsset.id) || !destinationId || !creativeName.trim() || !batchOperator.trim() || !batchRegion.trim() || savedGeneratedAsset?.status === 'em_aprovacao'}
+                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/15 transition hover:bg-emerald-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/25 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {(saving && generatedAction === 'approval') || (savedGeneratedAsset && sendingApprovalId === savedGeneratedAsset.id) ? <Loader2 className="animate-spin" size={17} /> : savedGeneratedAsset?.status === 'em_aprovacao' ? <Check size={17} /> : <Send size={17} />}
+                        {savedGeneratedAsset?.status === 'em_aprovacao' ? 'Enviado para aprovação' : 'Enviar para aprovação'}
+                      </button>
+                    </div>
+                    <p className="mt-3 text-center text-[11px] font-semibold text-slate-500">
+                      Enviar para aprovação também salva automaticamente no CRM e em Região / Operadora no Google Drive.
+                    </p>
                   </div>
                 )}
               </div>

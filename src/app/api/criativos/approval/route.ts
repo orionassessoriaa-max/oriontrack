@@ -40,6 +40,21 @@ async function companyScope(corretorId: string) {
   return { base, ids };
 }
 
+async function resolveCorretorId(profile: ApiProfile) {
+  if (profile.corretor_id) return profile.corretor_id;
+  const emails = [profile.email_real, profile.email]
+    .map((email) => clean(email, 200).toLowerCase())
+    .filter(Boolean);
+  if (!emails.length) return null;
+  const { data } = await supabaseAdmin
+    .from('corretores')
+    .select('id')
+    .in('email', emails)
+    .limit(1)
+    .maybeSingle();
+  return data?.id || null;
+}
+
 async function designerCanUseCorretor(profile: ApiProfile, corretorId: string) {
   const { data, error } = await supabaseAdmin
     .from('corretores')
@@ -62,7 +77,7 @@ export async function GET(request: Request) {
     const requested = validUuid(new URL(request.url).searchParams.get('corretor_id'));
     const corretorId = guard.profile.tipo_usuario === 'admin'
       ? requested
-      : guard.profile.corretor_id;
+      : await resolveCorretorId(guard.profile);
     if (!corretorId) {
       return NextResponse.json({ error: 'Corretor nao identificado.' }, { status: 400 });
     }

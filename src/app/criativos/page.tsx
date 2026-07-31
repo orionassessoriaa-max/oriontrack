@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import CreativeLibrary from '@/components/creatives/CreativeLibrary';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { CheckCircle2, Loader2, MessageSquare, Palette, XCircle, Download, Radio, ImageIcon } from 'lucide-react';
+import { CheckCircle2, Loader2, MessageSquare, Palette, XCircle, Download, Radio, ImageIcon, RefreshCw, Maximize2 } from 'lucide-react';
 
 type CreativeAsset = {
   id: string;
@@ -27,6 +27,7 @@ type ActiveMetaCreative = {
   image_url: string | null;
   thumbnail_url: string | null;
   status: 'ACTIVE';
+  source?: 'meta' | 'crm';
 };
 
 function bestMetaImage(creative: ActiveMetaCreative) {
@@ -35,6 +36,27 @@ function bestMetaImage(creative: ActiveMetaCreative) {
     .replace(/\/p\d+x\d+\//g, '/p1080x1080/')
     .replace(/s\d+x\d+/, 's1080x1080')
     .replace(/\/\d+x\d+\//g, '/1080x1080/');
+}
+
+function normalizeCreativeName(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function activeCreativeImage(creative: ActiveMetaCreative, assets: CreativeAsset[]) {
+  const metaImage = bestMetaImage(creative);
+  if (metaImage) return metaImage;
+  const names = [creative.ad_name, creative.creative_name, creative.title]
+    .map(normalizeCreativeName)
+    .filter(Boolean);
+  return assets.find((asset) => {
+    const assetName = normalizeCreativeName(asset.titulo);
+    return asset.arquivo_url && names.some((name) => name.includes(assetName) || assetName.includes(name));
+  })?.arquivo_url || '';
 }
 
 function statusLabel(status: CreativeAsset['status']) {
@@ -49,8 +71,10 @@ export default function BrokerCreativesPage() {
   const [assets, setAssets] = useState<CreativeAsset[]>([]);
   const [activeCreatives, setActiveCreatives] = useState<ActiveMetaCreative[]>([]);
   const [activeError, setActiveError] = useState<string | null>(null);
+  const [accountConnected, setAccountConnected] = useState<boolean | null>(null);
   const [concessionariaName, setConcessionariaName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [comment, setComment] = useState('');
   const [expandedAssetUrl, setExpandedAssetUrl] = useState<string | null>(null);
@@ -63,13 +87,14 @@ export default function BrokerCreativesPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const fetchAssets = useCallback(async () => {
-    if (!profile?.corretor_id) {
+  const fetchAssets = useCallback(async (silent = false) => {
+    if (!profile) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (silent) setRefreshing(true);
+    else setLoading(true);
     setActiveError(null);
     try {
       const sessionResult = await supabase.auth.getSession();
@@ -77,6 +102,7 @@ export default function BrokerCreativesPage() {
       if (!token) {
         setActiveError('Sessão expirada. Entre novamente para consultar a Meta.');
         setActiveCreatives([]);
+        setAccountConnected(null);
         return;
       }
 
@@ -107,13 +133,16 @@ export default function BrokerCreativesPage() {
       if (!activeResponse.ok) {
         setActiveError(activePayload.error || 'Não foi possível consultar os criativos ativos.');
         setActiveCreatives([]);
+        setAccountConnected(null);
         return;
       }
 
       setConcessionariaName(activePayload.concessionaria || approvalPayload.concessionaria || null);
+      setAccountConnected(activePayload.account_connected !== false);
       setActiveCreatives((activePayload.creatives || []) as ActiveMetaCreative[]);
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
     }
   }, [actualProfile?.tipo_usuario, profile?.corretor_id]);
 
@@ -176,80 +205,130 @@ export default function BrokerCreativesPage() {
     );
   }
 
+  const crmActiveCreatives: ActiveMetaCreative[] = assets
+    .filter((asset) => asset.status === 'rodando')
+    .map((asset) => ({
+      id: `crm-${asset.id}`,
+      ad_name: asset.titulo,
+      creative_name: asset.titulo,
+      title: asset.descricao,
+      body: null,
+      image_url: asset.arquivo_url,
+      thumbnail_url: null,
+      status: 'ACTIVE',
+      source: 'crm',
+    }));
+  const visibleActiveCreatives = activeCreatives.length > 0 ? activeCreatives : crmActiveCreatives;
+  const usingCrmFallback = activeCreatives.length === 0 && crmActiveCreatives.length > 0;
+
   return (
     <InternalLayout>
-      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+      <div className="mb-8 overflow-hidden rounded-[28px] border border-cyan-400/15 bg-[radial-gradient(circle_at_top_right,rgba(6,182,212,0.16),transparent_42%),linear-gradient(135deg,#071521,#0b172b_58%,#07111f)] p-6 shadow-2xl shadow-cyan-950/20 sm:p-8">
         <div>
-          <p className="text-xs font-black uppercase tracking-widest text-blue-600">Corretor</p>
-          <h1 className="text-3xl font-black text-slate-950">Criativos para aprovar</h1>
-          <p className="mt-2 max-w-3xl text-sm font-bold text-slate-500">
+          <p className="text-[11px] font-black uppercase tracking-[0.22em] text-cyan-400">Central do cliente</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Seus criativos</h1>
+          <p className="mt-3 max-w-3xl text-sm font-semibold leading-relaxed text-slate-300">
             Aqui ficam as artes/ofertas entregues pela equipe. Aprove para liberar como criativo rodando ou envie uma revisão com comentário.
           </p>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex h-64 items-center justify-center bg-white">
-          <Loader2 className="animate-spin text-blue-600" size={34} />
+        <div className="flex h-64 items-center justify-center rounded-[28px] border border-slate-800 bg-slate-950/40">
+          <Loader2 className="animate-spin text-cyan-400" size={34} />
         </div>
       ) : (
         <>
-          <section className="mb-10">
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <section className="mb-10 overflow-hidden rounded-[28px] border border-emerald-400/15 bg-[#07111f] p-5 shadow-xl shadow-slate-950/20 sm:p-7">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <Radio size={16} />
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em]">Ativos na Meta</p>
+                <div className="flex items-center gap-2 text-emerald-400">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                  </span>
+                  <Radio size={15} />
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em]">Rodando agora</p>
                 </div>
-                <h2 className="mt-1 text-xl font-black text-slate-950">Criativos rodando agora</h2>
-                <p className="mt-1 text-sm font-bold text-slate-500">
+                <h2 className="mt-2 text-2xl font-black text-white">Criativos ativos na Meta</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-400">
                   {concessionariaName ? `Anúncios ativos de ${concessionariaName}.` : 'Anúncios ativos da sua concessionária.'}
                 </p>
               </div>
-              {activeCreatives.length > 0 && (
-                <span className="w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-                  {activeCreatives.length} ativo(s)
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {visibleActiveCreatives.length > 0 && (
+                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-300">
+                    {visibleActiveCreatives.length} ativo{visibleActiveCreatives.length === 1 ? '' : 's'}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void fetchAssets(true)}
+                  disabled={refreshing}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 text-xs font-black text-slate-200 transition hover:border-cyan-400/40 hover:text-cyan-300 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+                  Atualizar
+                </button>
+              </div>
             </div>
 
-            {activeError ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-bold text-amber-800">
+            {activeError && visibleActiveCreatives.length === 0 ? (
+              <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5 text-sm font-bold text-amber-200">
                 {activeError}
               </div>
-            ) : activeCreatives.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center">
-                <ImageIcon className="mx-auto text-slate-300" size={38} />
+            ) : accountConnected === false && visibleActiveCreatives.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-amber-400/25 bg-amber-400/5 p-9 text-center">
+                <ImageIcon className="mx-auto text-amber-300" size={38} />
+                <p className="mt-3 text-base font-black text-white">Conta Meta ainda não vinculada</p>
+                <p className="mx-auto mt-2 max-w-lg text-sm font-semibold text-slate-400">
+                  Assim que a conta de anúncios for vinculada à sua concessionária, os criativos ativos aparecerão aqui automaticamente.
+                </p>
+              </div>
+            ) : visibleActiveCreatives.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-900/50 p-10 text-center">
+                <ImageIcon className="mx-auto text-slate-600" size={38} />
                 <p className="mt-3 text-sm font-black text-slate-500">Nenhum criativo ativo encontrado na Meta.</p>
               </div>
             ) : (
-              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                {activeCreatives.map((creative) => {
-                  const imageUrl = bestMetaImage(creative);
+              <>
+                {usingCrmFallback && (
+                  <div className="mb-5 rounded-2xl border border-cyan-400/15 bg-cyan-400/5 px-4 py-3 text-xs font-semibold text-cyan-100">
+                    Exibindo o criativo marcado como rodando no CRM enquanto a consulta da Meta não está disponível.
+                  </div>
+                )}
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {visibleActiveCreatives.map((creative) => {
+                  const imageUrl = activeCreativeImage(creative, assets);
                   return (
-                    <article key={creative.id} className="group overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
+                    <article key={creative.id} className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-lg transition duration-200 hover:-translate-y-1 hover:border-emerald-400/30 hover:shadow-emerald-950/30">
                       <button
                         type="button"
                         disabled={!imageUrl}
                         onClick={() => imageUrl && setExpandedAssetUrl(imageUrl)}
-                        className="relative block aspect-[4/3] w-full overflow-hidden bg-slate-100 text-left disabled:cursor-default"
+                        className="relative block aspect-[4/5] w-full overflow-hidden bg-slate-950 text-left disabled:cursor-default"
                         aria-label={imageUrl ? `Ampliar criativo ${creative.ad_name}` : 'Imagem indisponível'}
                       >
                         {imageUrl ? (
-                          <img src={imageUrl} alt={creative.ad_name} className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.02]" />
+                          <img src={imageUrl} alt={creative.ad_name} className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.025]" />
                         ) : (
                           <span className="flex h-full items-center justify-center text-xs font-black uppercase tracking-widest text-slate-300">
                             Imagem indisponível
                           </span>
                         )}
-                        <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white shadow-lg">
-                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                          Ativo
+                        <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-emerald-500/95 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-white shadow-lg backdrop-blur">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                          {creative.source === 'crm' ? 'Rodando no CRM' : 'Rodando na Meta'}
                         </span>
+                        {imageUrl && (
+                          <span className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-slate-950/75 text-white opacity-0 shadow-lg backdrop-blur transition group-hover:opacity-100">
+                            <Maximize2 size={17} />
+                          </span>
+                        )}
                       </button>
                       <div className="p-5">
-                        <p className="truncate text-base font-black text-slate-950">{creative.ad_name}</p>
-                        <p className="mt-1 line-clamp-2 text-xs font-bold leading-relaxed text-slate-500">
+                        <p className="truncate text-base font-black text-white">{creative.ad_name}</p>
+                        <p className="mt-2 line-clamp-3 text-xs font-semibold leading-relaxed text-slate-400">
                           {creative.title || creative.body || creative.creative_name || 'Criativo ativo na conta Meta'}
                         </p>
                       </div>
@@ -257,6 +336,7 @@ export default function BrokerCreativesPage() {
                   );
                 })}
               </div>
+              </>
             )}
           </section>
 

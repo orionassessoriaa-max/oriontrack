@@ -310,6 +310,7 @@ export async function POST(request: Request) {
     const operadora = String(body.operadora || '').trim().slice(0, 120);
     const regiao = String(body.regiao || '').trim().slice(0, 120);
     const imageDataUrl = String(body.image_data_url || '');
+    const sendForApproval = body.send_for_approval === true;
 
     if (!corretorId || !driveFolderId || !titulo || !imageDataUrl || !operadora || !regiao) {
       return NextResponse.json({ error: 'Informe a concessionaria, a regiao, a operadora, o nome e a imagem gerada.' }, { status: 400 });
@@ -374,7 +375,7 @@ export async function POST(request: Request) {
         descricao: prompt ? `Gerado por IA. Prompt: ${prompt}` : 'Gerado por IA no Orion Track.',
         arquivo_url: publicUrl,
         arquivo_path: path,
-        status: 'rascunho',
+        status: sendForApproval ? 'em_aprovacao' : 'rascunho',
         enviado_por_profile_id: guard.profile.id,
         operadora,
         regiao,
@@ -390,7 +391,7 @@ export async function POST(request: Request) {
     }
 
     await writeAuditLog(request, guard.profile, {
-      action: 'creative.ai.save',
+      action: sendForApproval ? 'creative.ai.save_and_send_for_approval' : 'creative.ai.save',
       entity_type: 'criativo_asset',
       entity_id: asset.id,
       metadata: {
@@ -398,6 +399,7 @@ export async function POST(request: Request) {
         drive_folder_id: operatorFolder.id,
         drive_file_id: driveFile.id,
         model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
+        sent_for_approval: sendForApproval,
       },
     });
 

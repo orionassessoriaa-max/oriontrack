@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { Corretor } from '@/types';
+import { Corretor, MetaAdAccount } from '@/types';
 import { getOnboardingStatus, OPERADORAS_ONBOARDING } from '@/lib/onboarding';
-import { CheckCircle2, Layers3, Loader2, Plus, Save, Search, ShieldAlert, Trash2, UserPlus } from 'lucide-react';
+import { Building2, CheckCircle2, Layers3, Link2, Loader2, Plus, Save, Search, ShieldAlert, Trash2, Unlink, UserPlus } from 'lucide-react';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
 type EntradaForm = {
@@ -35,6 +35,7 @@ const REGION_OPTIONS = ['SP', 'DF', 'RJ', 'MG', 'PR', 'SC', 'RS', 'GO', 'BA', 'P
 export default function EntradaGestorPage() {
   const { profile, actualProfile } = useAuth();
   const [corretores, setCorretores] = useState<Corretor[]>([]);
+  const [metaAccounts, setMetaAccounts] = useState<MetaAdAccount[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
   const [formData, setFormData] = useState<EntradaForm>(emptyForm);
@@ -47,55 +48,100 @@ export default function EntradaGestorPage() {
   const [operatorOther, setOperatorOther] = useState('');
   const [regionChoice, setRegionChoice] = useState('');
   const [regionOther, setRegionOther] = useState('');
+  const [metaAccountId, setMetaAccountId] = useState('');
+  const [linkingMeta, setLinkingMeta] = useState(false);
+  const [metaFeedback, setMetaFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
-    fetchCorretores();
+    void fetchCorretores();
+    const refresh = () => void fetchCorretores(true);
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+    };
   }, [profile?.id]);
 
   const selectedCorretor = corretores.find(c => c.id === selectedId) || null;
   const selectedStatus = selectedCorretor ? getOnboardingStatus(selectedCorretor) : null;
 
+  const concessionarias = useMemo(() => {
+    const byName = new Map<string, Corretor>();
+    corretores.forEach((corretor) => {
+      const name = String(corretor.nome_empresa || '').trim();
+      if (!name) return;
+      const key = name.toLocaleLowerCase('pt-BR');
+      const existing = byName.get(key);
+      if (!existing || (!existing.meta_ad_account_id && corretor.meta_ad_account_id)) {
+        byName.set(key, corretor);
+      }
+    });
+    return Array.from(byName.values()).sort((a, b) => {
+      const accountOrder = Number(Boolean(a.meta_ad_account_id)) - Number(Boolean(b.meta_ad_account_id));
+      if (accountOrder !== 0) return accountOrder;
+      return String(a.nome_empresa).localeCompare(String(b.nome_empresa), 'pt-BR');
+    });
+  }, [corretores]);
+
   const filteredCorretores = useMemo(() => {
-    return corretores.filter(c =>
+    return concessionarias.filter(c =>
+      (c.nome_empresa || '').toLowerCase().includes(search.toLowerCase()) ||
       (c.nome || '').toLowerCase().includes(search.toLowerCase()) ||
       (c.email || '').toLowerCase().includes(search.toLowerCase())
     );
-  }, [corretores, search]);
+  }, [concessionarias, search]);
 
-  const fetchCorretores = async () => {
+  const fetchCorretores = async (silent = false) => {
     if (!profile?.id) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
-        .from('corretores')
-        .select('*')
-        .in('status', ['active', 'ativo', 'Ativo'])
-        .order('nome', { ascending: true });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
+      const [corretoresResponse, accountsResponse] = await Promise.all([
+        fetch('/api/corretores/options', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        }),
+        fetch('/api/integrations/meta/accounts', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        }),
+      ]);
+      const [corretoresPayload, accountsPayload] = await Promise.all([
+        corretoresResponse.json().catch(() => ({})),
+        accountsResponse.json().catch(() => ({})),
+      ]);
+      if (!corretoresResponse.ok) throw new Error(corretoresPayload.error || 'Erro ao carregar concessionarias.');
+      if (!accountsResponse.ok) throw new Error(accountsPayload.error || 'Erro ao carregar contas Meta.');
 
-      if (fetchError) throw fetchError;
-
-      let filtered = data || [];
+      let filtered = (corretoresPayload.corretores || []) as Corretor[];
+      filtered = filtered.filter((item) => ['active', 'ativo', 'Ativo'].includes(item.status));
       if (profile.tipo_usuario === 'gestor_trafego') {
         filtered = filtered.filter(c => isGestorLinkedToConcessionariaCorretor(c, profile));
       }
 
       setCorretores(filtered);
-    } catch (err: any) {
+      setMetaAccounts((accountsPayload.accounts || []) as MetaAdAccount[]);
+    } catch (err: unknown) {
       console.error('Erro ao carregar entrada:', err);
-      setError('Nao foi possivel carregar os corretores vinculados.');
+      setError(err instanceof Error ? err.message : 'Nao foi possivel carregar as concessionarias vinculadas.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   const selectCorretor = async (corretor: Corretor) => {
     setSelectedId(corretor.id);
     setSaved(false);
+    setMetaFeedback(null);
+    setMetaAccountId(corretor.meta_ad_account_id || '');
     const selectedOperadoras = Array.isArray(corretor.operadoras_info?.selecionadas)
       ? corretor.operadoras_info.selecionadas
       : Object.entries(corretor.operadoras_info || {})
@@ -134,6 +180,54 @@ export default function EntradaGestorPage() {
       operadora: item.operadora,
       regiao: item.regiao,
     })));
+  };
+
+  const bindMetaAccount = async () => {
+    if (!selectedCorretor) return;
+    setLinkingMeta(true);
+    setMetaFeedback(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const response = await fetch('/api/integrations/meta/accounts', {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          corretor_id: selectedCorretor.id,
+          meta_account_id: metaAccountId || null,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel vincular a conta.');
+
+      const companyName = String(selectedCorretor.nome_empresa || '').trim().toLocaleLowerCase('pt-BR');
+      setCorretores((current) => current.map((item) => (
+        String(item.nome_empresa || '').trim().toLocaleLowerCase('pt-BR') === companyName
+          ? {
+              ...item,
+              meta_ad_account_id: payload.meta_ad_account_id,
+              meta_ad_account_name: payload.meta_ad_account_name,
+            }
+          : item
+      )));
+      setMetaFeedback({
+        tone: 'success',
+        message: payload.meta_ad_account_id
+          ? `Conta ${payload.meta_ad_account_name} vinculada com sucesso.`
+          : 'Conta de anuncios removida desta concessionaria.',
+      });
+    } catch (bindError: unknown) {
+      setMetaFeedback({
+        tone: 'error',
+        message: bindError instanceof Error ? bindError.message : 'Erro ao vincular conta de anuncios.',
+      });
+    } finally {
+      setLinkingMeta(false);
+    }
   };
 
   const dataComplete = Boolean(
@@ -234,13 +328,15 @@ export default function EntradaGestorPage() {
 
   return (
     <InternalLayout>
-      <div className="mb-10">
-        <div className="mb-2 flex items-center gap-2 text-blue-600">
-          <UserPlus size={18} />
-          <span className="text-[10px] font-black uppercase tracking-widest">Onboarding operacional</span>
+      <div className="mb-10 overflow-hidden rounded-[28px] border border-cyan-400/15 bg-[radial-gradient(circle_at_top_right,rgba(6,182,212,0.16),transparent_38%),linear-gradient(135deg,#071521,#0b172b_58%,#07111f)] p-6 shadow-xl shadow-slate-950/20 sm:p-8">
+        <div className="mb-3 flex items-center gap-2 text-cyan-400">
+          <Building2 size={18} />
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Fila de onboarding</span>
         </div>
-        <h1 className="text-3xl font-black tracking-tight text-gray-900">Entrada de Corretor</h1>
-        <p className="text-lg font-medium text-gray-500">Registre acessos, operadoras, regioes e libere campanhas ativas.</p>
+        <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Entrada das concessionárias</h1>
+        <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-300 sm:text-base">
+          Toda concessionária atribuída pelo admin chega automaticamente aqui. Vincule a conta de anúncios e conclua a entrada operacional.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-8 xl:grid-cols-3">
@@ -250,7 +346,7 @@ export default function EntradaGestorPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar corretor..."
+              placeholder="Buscar concessionária..."
               className="w-full rounded-2xl border-none bg-slate-50 py-4 pl-12 pr-4 text-sm font-bold focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -265,7 +361,7 @@ export default function EntradaGestorPage() {
               {error}
             </div>
           ) : filteredCorretores.length === 0 ? (
-            <div className="py-16 text-center font-bold text-gray-400">Nenhum corretor vinculado.</div>
+            <div className="py-16 text-center font-bold text-gray-400">Nenhuma concessionária atribuída a este gestor.</div>
           ) : (
             <div className="space-y-3">
               {filteredCorretores.map(corretor => {
@@ -280,13 +376,21 @@ export default function EntradaGestorPage() {
                   >
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-black text-gray-900">{corretor.nome}</p>
-                        <p className="text-xs font-bold text-gray-400">{corretor.email}</p>
+                        <p className="font-black text-gray-900">{corretor.nome_empresa || corretor.nome}</p>
+                        <p className="text-xs font-bold text-gray-400">{corretor.meta_ad_account_name || 'Conta de anúncios pendente'}</p>
                       </div>
                       <span className={`mt-1 h-2.5 w-2.5 rounded-full ${status.dot}`} />
                     </div>
                     <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${status.className}`}>
                       {status.label}
+                    </span>
+                    <span className={`ml-2 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
+                      corretor.meta_ad_account_id
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border-amber-200 bg-amber-50 text-amber-700'
+                    }`}>
+                      {corretor.meta_ad_account_id ? <Link2 size={11} /> : <Unlink size={11} />}
+                      {corretor.meta_ad_account_id ? 'Meta conectada' : 'Conectar Meta'}
                     </span>
                   </button>
                 );
@@ -300,15 +404,15 @@ export default function EntradaGestorPage() {
             <div className="flex min-h-[480px] items-center justify-center rounded-[2.5rem] border border-dashed border-slate-200 bg-slate-50 text-center">
               <div>
                 <UserPlus className="mx-auto mb-4 text-slate-300" size={42} />
-                <p className="font-black text-slate-400">Selecione um corretor para iniciar a entrada.</p>
+                <p className="font-black text-slate-400">Selecione uma concessionária para iniciar a entrada.</p>
               </div>
             </div>
           ) : (
             <form onSubmit={saveEntrada} className="rounded-[2.5rem] border border-gray-100 bg-white p-8 shadow-sm">
               <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-start">
                 <div>
-                  <h2 className="text-2xl font-black text-gray-900">{selectedCorretor.nome}</h2>
-                  <p className="font-medium text-gray-500">{selectedCorretor.email}</p>
+                  <h2 className="text-2xl font-black text-gray-900">{selectedCorretor.nome_empresa || selectedCorretor.nome}</h2>
+                  <p className="font-medium text-gray-500">Responsável cadastrado: {selectedCorretor.nome}</p>
                 </div>
                 {selectedStatus && (
                   <span className={`rounded-full border px-4 py-2 text-[10px] font-black uppercase tracking-widest ${selectedStatus.className}`}>
@@ -322,6 +426,67 @@ export default function EntradaGestorPage() {
                   <CheckCircle2 size={18} /> Entrada salva com sucesso.
                 </div>
               )}
+
+              <section className="mb-8 rounded-3xl border border-cyan-100 bg-cyan-50/60 p-5 sm:p-6">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="max-w-xl">
+                    <div className="flex items-center gap-2 text-cyan-700">
+                      <Link2 size={18} />
+                      <h3 className="text-base font-black">Conta de anúncios da concessionária</h3>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                      Escolha a conta Meta correta. O vínculo será aplicado a toda a concessionária e ficará visível também para o admin em Meta Ads.
+                    </p>
+                  </div>
+                  {selectedCorretor.meta_ad_account_name && (
+                    <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-black text-emerald-700">
+                      <CheckCircle2 size={15} />
+                      {selectedCorretor.meta_ad_account_name}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
+                  <label className="block">
+                    <span className="sr-only">Conta de anúncios Meta</span>
+                    <select
+                      value={metaAccountId}
+                      onChange={(event) => {
+                        setMetaAccountId(event.target.value);
+                        setMetaFeedback(null);
+                      }}
+                      className="min-h-12 w-full rounded-2xl border border-cyan-200 bg-white px-4 text-base font-bold text-slate-800 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
+                    >
+                      <option value="">Sem conta vinculada</option>
+                      {metaAccounts.map((account) => (
+                        <option key={account.id} value={account.meta_account_id}>
+                          {account.nome} · act_{account.meta_account_id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={bindMetaAccount}
+                    disabled={linkingMeta || metaAccountId === (selectedCorretor.meta_ad_account_id || '')}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-cyan-600/20 transition duration-200 hover:bg-cyan-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400/30 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {linkingMeta ? <Loader2 className="animate-spin" size={18} /> : <Link2 size={18} />}
+                    {linkingMeta ? 'Vinculando...' : metaAccountId ? 'Vincular conta' : 'Remover vínculo'}
+                  </button>
+                </div>
+                {metaFeedback && (
+                  <div
+                    role={metaFeedback.tone === 'error' ? 'alert' : 'status'}
+                    className={`mt-4 rounded-2xl border p-4 text-sm font-bold ${
+                      metaFeedback.tone === 'success'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border-red-200 bg-red-50 text-red-700'
+                    }`}
+                  >
+                    {metaFeedback.message}
+                  </div>
+                )}
+              </section>
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div className="space-y-2">
