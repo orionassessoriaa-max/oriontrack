@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeLeadStatus } from '@/lib/leadStatus';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
-import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
+import { buildLeadContactKey, buildLeadDuplicateKey, buildLeadIdentityKey } from '@/lib/leadDuplicate';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
@@ -90,34 +90,6 @@ function parseCurrencyValue(value: unknown) {
     .replace(',', '.');
   const parsed = Number(numeric);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeDateKey(value: string | null) {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
-  return parsed.toISOString().slice(0, 10);
-}
-
-function normalizePhoneKey(value: string | null) {
-  return String(value || '').replace(/\D/g, '');
-}
-
-function buildLeadIdentityKey(lead: Pick<any, 'corretor_id' | 'data_entrada' | 'nome' | 'telefone'>) {
-  const phone = normalizePhoneKey(lead.telefone || '');
-  if (phone.length >= 8) {
-    return [
-      lead.corretor_id || '',
-      phone.slice(-11),
-    ].join('|');
-  }
-
-  return [
-    lead.corretor_id || '',
-    normalizeDateKey(lead.data_entrada),
-    normalizeKey(lead.nome || ''),
-    normalizePhoneKey(lead.telefone || ''),
-  ].join('|');
 }
 
 function parseLeadDate(value: unknown) {
@@ -370,13 +342,13 @@ async function resolveCorretorId(body: any) {
 async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
   const { data: currentLead } = await supabaseAdmin
     .from('leads')
-    .select('responsavel_membro_id')
+    .select('responsavel_membro_id, responsavel_profile_id')
     .eq('id', leadId)
     .eq('corretor_id', corretorId)
     .maybeSingle();
 
-  if (currentLead?.responsavel_membro_id) {
-    return currentLead.responsavel_membro_id;
+  if (currentLead?.responsavel_membro_id || currentLead?.responsavel_profile_id) {
+    return currentLead.responsavel_membro_id || null;
   }
 
   const { data: broker } = await supabaseAdmin
@@ -527,18 +499,38 @@ export async function POST(request: Request) {
     let existingPage = 0;
     const existingLimit = 1000;
     let fetchExisting = true;
+    let previousOwner: {
+      responsavel_membro_id: string | null;
+      responsavel_profile_id: string | null;
+      data_entrada: string | null;
+    } | null = null;
+    const incomingContactKey = buildLeadContactKey(leadPayloadWithOrigin);
 
     while (fetchExisting) {
       const from = existingPage * existingLimit;
       const to = from + existingLimit - 1;
       const { data: existingLeads, error: existingError } = await supabaseAdmin
         .from('leads')
-        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status')
+        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, status, responsavel_membro_id, responsavel_profile_id')
         .eq('corretor_id', corretorId)
         .range(from, to);
 
       if (existingError) {
         return NextResponse.json({ error: existingError.message }, { status: 500 });
+      }
+
+      for (const existingLead of existingLeads || []) {
+        if (
+          buildLeadContactKey(existingLead) === incomingContactKey &&
+          (existingLead.responsavel_membro_id || existingLead.responsavel_profile_id) &&
+          (!previousOwner || new Date(existingLead.data_entrada || 0).getTime() > new Date(previousOwner.data_entrada || 0).getTime())
+        ) {
+          previousOwner = {
+            responsavel_membro_id: existingLead.responsavel_membro_id || null,
+            responsavel_profile_id: existingLead.responsavel_profile_id || null,
+            data_entrada: existingLead.data_entrada || null,
+          };
+        }
       }
 
       const existingIdentity = (existingLeads || []).find((lead) => buildLeadIdentityKey(lead) === buildLeadIdentityKey(leadPayloadWithOrigin));
@@ -607,14 +599,22 @@ export async function POST(request: Request) {
       }
     }
 
+    const payloadToInsert = previousOwner
+      ? {
+          ...leadPayloadWithOrigin,
+          responsavel_membro_id: previousOwner.responsavel_membro_id,
+          responsavel_profile_id: previousOwner.responsavel_profile_id,
+        }
+      : leadPayloadWithOrigin;
+
     let { data, error } = await supabaseAdmin
       .from('leads')
-      .insert([leadPayloadWithOrigin])
+      .insert([payloadToInsert])
       .select('id, corretor_id, nome, telefone, status')
       .single();
 
     if (error && isMissingLeadOriginColumn(error)) {
-      const { origem: _origem, ...fallbackPayload } = leadPayloadWithOrigin;
+      const { origem: _origem, ...fallbackPayload } = payloadToInsert;
       const retry = await supabaseAdmin
         .from('leads')
         .insert([fallbackPayload])

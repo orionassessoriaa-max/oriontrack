@@ -28,17 +28,6 @@ export function isAiOutbound(phone: string, text: string) {
   return recentAiOutboundMessages.has(signature);
 }
 
-function sessionContextStart(session: any) {
-  return (
-    session?.created_at ||
-    session?.started_at ||
-    session?.last_customer_message_at ||
-    session?.last_ai_message_at ||
-    session?.updated_at ||
-    null
-  );
-}
-
 const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
@@ -69,6 +58,9 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
 - Não use internetês, texto truncado ou frases coladas. A mensagem precisa parecer revisada por uma pessoa.
 - Nao diga que voce e IA, bot, automacao, assistente virtual ou sistema.
 - Nao use prefixo de atendente, assinatura ou formato "Aline:" nas mensagens.
+- Mensagens antigas de saida podem ter sido enviadas por um especialista humano. Respeite sempre o nome do remetente informado no historico.
+- Nunca diga que voce enviou, montou ou passou uma cotacao que foi enviada anteriormente por outra pessoa. Diga que o especialista responsavel enviou a cotacao; se o nome estiver no historico, pode dizer "o especialista Henrique", por exemplo.
+- Quando a cotacao anterior estiver ligada ao CNPJ informado, deixe claro que ela foi enviada pelo especialista e que era referente ao CNPJ. Nao assuma a autoria da cotacao.
 - Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
 - Nao chame o cliente pelo nome em toda mensagem. Depois da primeira abordagem, use o nome so raramente.
 - Os "Dados ja conhecidos do lead" vieram do formulario. Trate esses dados como respostas ja dadas pelo cliente.
@@ -85,6 +77,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
 - Quando o cliente responder com dia e horario, responda apenas que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradeca pelo atendimento, defina handoff true e nao faca mais nenhuma pergunta.
 - Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o encaminhamento de forma curta e natural.
 - Se o cliente recusar a ligacao ou reuniao, aceite sem insistir. Nao peca outro horario, nao repita o convite e nao tente convencer o cliente. Responda de forma acolhedora que esta tudo bem continuar por ali e que um especialista da equipe entrara em contato por outro numero para prosseguir com o atendimento; defina handoff true.
+- Se, depois do convite para ligacao, o cliente pedir para receber primeiro a cotacao, proposta, valores ou rede credenciada, considere isso uma preferencia por atendimento por mensagem e uma recusa da ligacao naquele momento. Nao explique que a ligacao e obrigatoria e nao insista. Avise uma unica vez que um especialista entrara em contato por outro numero, encerre a IA e encaminhe o lead ao responsavel.
 - Nunca diga "pode mandar audio" depois que o cliente ja enviou audio ou quando a mensagem atual vier como "Audio transcrito do cliente". Se a mensagem disser que o audio nao foi transcrito, responda curto pedindo para o cliente enviar a informacao por texto.
 - Priorize respostas humanas, curtas e diretas, sem cara de script.`;
 
@@ -93,7 +86,7 @@ Sua identidade operacional interna e {persona}, mas NAO fale que e IA, bot, assi
 Nao assine mensagens, nao coloque prefixo de atendente e nunca comece a resposta com "{persona}:".
 Nao repita seu nome em toda resposta. Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
 Fale em portugues do Brasil, como uma pessoa real no WhatsApp: humana, simpatica, simples, objetiva, sem cara de script.
-Sua missao e confirmar o interesse, coletar as informacoes essenciais pendentes e agendar uma ligacao rapida de 15 minutos.
+Sua missao e confirmar o interesse, coletar as informacoes essenciais pendentes e oferecer uma ligacao rapida de 15 minutos somente se o cliente aceitar. A ligacao nunca e obrigatoria.
 
 Dados ja conhecidos do lead:
 {lead_facts}
@@ -147,6 +140,7 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 - Ao pedir dia e horario, nao escreva "funciona melhor". Escreva de forma humana: "Que dia e horario voce esta mais confortavel pra voce?"
 - Ao cliente responder dia e horario: preencha *Agendado* no summary, defina "handoff": true e responda somente que um especialista vai entrar em contato por outro numero para confirmar o agendamento, agradecendo pelo atendimento. Depois disso nao pergunte mais nada.
 - Se o cliente disser que nao quer ligacao/reuniao, que prefere nao falar por telefone ou pedir para continuar por mensagem: nao insista e nao faca nova pergunta. Responda: "Sem problema, [primeiro nome]. Podemos continuar por aqui. Um especialista da nossa equipe vai entrar em contato por outro numero para prosseguir com seu atendimento." Defina "handoff": true.
+- Se o cliente pedir cotacao, proposta ou rede credenciada antes de aceitar a ligacao, nao tente convence-lo a ligar. Diga apenas que um especialista continuara por outro numero, defina "handoff": true e encerre.
 - Handoff silencioso ("handoff": true, "reply": "") se: cliente pedir detalhes tecnicos de operadora, reclamar, pedir para falar com humano, ou enviar exatamente "alvorada" como mensagem isolada. Para pedido de valor/preco, responda de forma gentil oferecendo chamar um especialista e defina handoff true. Nao use essa regra quando Alvorada for hospital, clinica, bairro ou regiao.
 - Se o cliente pedir esclarecimento ("como assim?", "nao entendi", "pq?"): reexplique de forma simples e natural — NAO faca handoff.
 
@@ -440,7 +434,7 @@ function isValueRequest(text?: string | null) {
   );
 }
 
-function isCallRefusal(text?: string | null) {
+function isCallRefusal(text?: string | null, previousOutboundText?: string | null) {
   const normalized = normalizeAiText(text)
     .replace(/[!?.,;:]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -448,16 +442,25 @@ function isCallRefusal(text?: string | null) {
 
   if (!normalized) return false;
 
-  return (
+  const directRefusal = (
     /\b(nao|nunca|sem)\b.{0,24}\b(ligacao|ligar|telefone|reuniao|reuniao|chamada|call)\b/.test(normalized) ||
     /\b(prefiro|quero|gostaria)\b.{0,24}\b(por mensagem|por aqui|sem ligacao|sem reuniao)\b/.test(normalized) ||
     /\b(ligacao|reuniao|chamada|call)\b.{0,24}\b(nao|nunca)\b/.test(normalized)
   );
+  if (directRefusal) return true;
+
+  if (!isSchedulePrompt(previousOutboundText)) return false;
+
+  const asksForMaterialFirst =
+    /\b(me envie|envie|manda|mande|quero receber|quero ver|ver primeiro|receber primeiro|primeiro)\b.{0,80}\b(cotacao|proposta|valor|valores|rede|rede credenciada|hospitais|tabela)\b/.test(normalized) ||
+    /\b(cotacao|proposta|valor|valores|rede|rede credenciada|hospitais|tabela)\b.{0,80}\b(primeiro|antes|por mensagem|por aqui)\b/.test(normalized);
+
+  return asksForMaterialFirst || /^(nao precisa|deixa pra la|deixa assim|prefiro por aqui|por mensagem)$/.test(normalized);
 }
 
 function callRefusalHandoffReply(lead: LeadRow) {
   return polishAiReply(
-    `Sem problema, ${leadFirstName(lead)}. Podemos continuar por aqui. Um especialista da nossa equipe vai entrar em contato por outro numero para prosseguir com seu atendimento.`
+    `Sem problema, ${leadFirstName(lead)}. Um especialista da nossa equipe vai entrar em contato por outro numero para enviar a cotacao e continuar seu atendimento por mensagem. Obrigada!`
   );
 }
 
@@ -783,6 +786,32 @@ async function getOrCreateConversation(lead: LeadRow) {
     .maybeSingle();
 
   if (existing) return existing;
+
+  const { data: previousConversation } = await supabaseAdmin
+    .from('whatsapp_conversas')
+    .select('*')
+    .eq('corretor_id', lead.corretor_id)
+    .eq('telefone', phone)
+    .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (previousConversation) {
+    const { data: reusedConversation, error: reuseError } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .update({
+        lead_id: lead.id,
+        nome_contato: lead.nome || previousConversation.nome_contato || phone,
+        status: 'aberta',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', previousConversation.id)
+      .select('*')
+      .single();
+
+    if (reuseError) throw reuseError;
+    return reusedConversation;
+  }
 
   const { data, error } = await supabaseAdmin
     .from('whatsapp_conversas')
@@ -1164,6 +1193,11 @@ async function askAline(
       content = item.metadata?.audio_transcript || item.metadata?.ai_customer_message?.replace(/^Audio transcrito do cliente:\s*/i, '') || item.mensagem;
     } else {
       content = item.metadata?.ai_text || item.mensagem;
+      const sender = String(item.remetente || '').trim();
+      const sentByCurrentAi = normalizeAiText(sender) === normalizeAiText(aiConfig.persona);
+      if (sender && !sentByCurrentAi) {
+        content = `[Mensagem anterior enviada pelo especialista ${sender}; nao foi enviada por ${aiConfig.persona}]\n${content}`;
+      }
     }
     return {
       role: item.direction === 'inbound' ? 'user' : 'assistant',
@@ -1398,19 +1432,13 @@ export async function continueLeadAiFromIncoming(options: {
   const adminProfile = await findAiAdmin(lead.corretor_id, session.admin_profile_id || aiConfig.sender_profile_id || lead.responsavel_profile_id);
   if (!adminProfile) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Admin IA da concessionaria nao encontrado.' }; }
 
-  let historyQuery = supabaseAdmin
+  const { data: recentHistory } = await supabaseAdmin
     .from('whatsapp_mensagens')
     .select('direction, remetente, mensagem, metadata, created_at')
     .eq('conversa_id', options.conversationId)
-    .order('created_at', { ascending: true });
-
-  const contextStart = sessionContextStart(session);
-  if (contextStart) {
-    historyQuery = historyQuery.gte('created_at', contextStart);
-  }
-
-  const { data: history } = await historyQuery
+    .order('created_at', { ascending: false })
     .limit(40);
+  const history = [...(recentHistory || [])].reverse();
 
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
 
@@ -1554,7 +1582,7 @@ export async function continueLeadAiFromIncoming(options: {
   }
 
   let ai: any;
-  if (isCallRefusal(options.customerMessage)) {
+  if (isCallRefusal(options.customerMessage, previousOutboundText)) {
     ai = {
       handoff: true,
       reply: callRefusalHandoffReply(lead),

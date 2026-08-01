@@ -6,6 +6,7 @@ import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { buildLeadContactKey, buildLeadIdentityKey } from '@/lib/leadDuplicate';
 
 const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
 const LEAD_CREATOR_PROFILE_TYPES = [
@@ -262,6 +263,57 @@ function buildManualLeadMessage(lead: any, responsibleName?: string | null) {
   return lines.join('\n');
 }
 
+async function findPreviousLeadAssignment(
+  corretorId: string,
+  nome: string,
+  telefone: string,
+  dataEntrada: string,
+) {
+  const incoming = { corretor_id: corretorId, nome, telefone, data_entrada: dataEntrada };
+  const contactKey = buildLeadContactKey(incoming);
+  const identityKey = buildLeadIdentityKey(incoming);
+  let page = 0;
+  const limit = 1000;
+  let previousOwner: {
+    responsavel_membro_id: string | null;
+    responsavel_profile_id: string | null;
+    data_entrada: string | null;
+  } | null = null;
+
+  while (true) {
+    const from = page * limit;
+    const { data: leads, error } = await supabaseAdmin
+      .from('leads')
+      .select('id, corretor_id, nome, telefone, data_entrada, responsavel_membro_id, responsavel_profile_id')
+      .eq('corretor_id', corretorId)
+      .range(from, from + limit - 1);
+
+    if (error) throw error;
+
+    for (const lead of leads || []) {
+      if (buildLeadIdentityKey(lead) === identityKey) {
+        return { sameDateLeadId: lead.id, previousOwner };
+      }
+      if (
+        buildLeadContactKey(lead) === contactKey &&
+        (lead.responsavel_membro_id || lead.responsavel_profile_id) &&
+        (!previousOwner || new Date(lead.data_entrada || 0).getTime() > new Date(previousOwner.data_entrada || 0).getTime())
+      ) {
+        previousOwner = {
+          responsavel_membro_id: lead.responsavel_membro_id || null,
+          responsavel_profile_id: lead.responsavel_profile_id || null,
+          data_entrada: lead.data_entrada || null,
+        };
+      }
+    }
+
+    if (!leads || leads.length < limit) break;
+    page += 1;
+  }
+
+  return { sameDateLeadId: null, previousOwner };
+}
+
 export async function POST(request: Request) {
   const limited = rateLimit(request, 'admin:leads:create', { limit: 30, windowMs: 60_000 });
   if (limited) return limited;
@@ -294,10 +346,25 @@ export async function POST(request: Request) {
 
     const rawResponsibleId = String(body.responsavel_membro_id || '');
     const selfAssignedProfileTypes = ['corretor_membro', 'corretor_integrante', 'corretor_parceiro'];
-    const responsibleId = selfAssignedProfileTypes.includes(guard.profile.tipo_usuario)
+    let responsibleId = selfAssignedProfileTypes.includes(guard.profile.tipo_usuario)
       && (!rawResponsibleId || rawResponsibleId === 'unassigned')
         ? `profile:${guard.profile.id}`
         : rawResponsibleId;
+    const dataEntrada = body.data_entrada ? new Date(body.data_entrada).toISOString() : new Date().toISOString();
+    const previous = await findPreviousLeadAssignment(corretorId, nome, telefone, dataEntrada);
+
+    if (previous.sameDateLeadId) {
+      return NextResponse.json({
+        error: 'Este lead ja foi cadastrado nesta mesma data.',
+        duplicate: true,
+        lead_id: previous.sameDateLeadId,
+      }, { status: 409 });
+    }
+
+    if ((!responsibleId || responsibleId === 'unassigned') && previous.previousOwner) {
+      responsibleId = previous.previousOwner.responsavel_membro_id
+        || (previous.previousOwner.responsavel_profile_id ? `profile:${previous.previousOwner.responsavel_profile_id}` : '');
+    }
     const responsibleResult = await resolveResponsibleMember(corretorId, scope.corretorIds, responsibleId);
     if ('error' in responsibleResult) return NextResponse.json({ error: responsibleResult.error }, { status: 400 });
     const responsibleMember = responsibleResult.member;
@@ -332,7 +399,7 @@ export async function POST(request: Request) {
       responsavel_membro_id: responsibleMember?.id || null,
       responsavel_profile_id: responsibleMember?.profile_id || null,
       status: normalizeLeadStatus(body.status || 'Aguardando atendimento'),
-      data_entrada: body.data_entrada ? new Date(body.data_entrada).toISOString() : new Date().toISOString(),
+      data_entrada: dataEntrada,
     };
 
     let { data, error } = await supabaseAdmin

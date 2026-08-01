@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { LEAD_STATUSES, normalizeLeadStatus } from '@/lib/leadStatus';
 import { buildLeadImportWarningNote } from '@/lib/leadWarnings';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { buildLeadDuplicateKey } from '@/lib/leadDuplicate';
+import { buildLeadContactKey, buildLeadDuplicateKey, buildLeadIdentityKey } from '@/lib/leadDuplicate';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 
@@ -32,6 +32,8 @@ type LeadInsert = {
   operadora_negociacao?: string | null;
   status: string;
   observacoes: string;
+  responsavel_membro_id?: string | null;
+  responsavel_profile_id?: string | null;
 };
 
 async function requireImporter(request: Request) {
@@ -229,34 +231,6 @@ function extractCnpjValue(value: string) {
   const digits = text.replace(/\D/g, '');
   if (digits.length >= 11) return text;
   return '';
-}
-
-function normalizePhoneKey(value: string) {
-  return String(value || '').replace(/\D/g, '');
-}
-
-function normalizeDateKey(value: string | null) {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
-  return parsed.toISOString().slice(0, 10);
-}
-
-function buildLeadIdentityKey(lead: Pick<LeadInsert, 'corretor_id' | 'data_entrada' | 'nome' | 'telefone'>) {
-  const phone = normalizePhoneKey(lead.telefone || '');
-  if (phone.length >= 8) {
-    return [
-      lead.corretor_id || '',
-      phone.slice(-11),
-    ].join('|');
-  }
-
-  return [
-    lead.corretor_id || '',
-    normalizeDateKey(lead.data_entrada),
-    normalizeHeader(lead.nome || ''),
-    phone,
-  ].join('|');
 }
 
 function isBlankStored(value: unknown) {
@@ -849,6 +823,7 @@ export async function POST(request: Request) {
 
     const existingKeys = new Set<string>();
     const existingIdentity = new Map<string, any>();
+    const previousOwnerByContact = new Map<string, any>();
     let existingPage = 0;
     const existingLimit = 1000;
     let fetchExisting = true;
@@ -858,7 +833,7 @@ export async function POST(request: Request) {
       const to = from + existingLimit - 1;
       const { data: existingLeads, error: existingError } = await supabaseAdmin
         .from('leads')
-        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, valor_negociacao, operadora_negociacao, status')
+        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, valor_negociacao, operadora_negociacao, status, responsavel_membro_id, responsavel_profile_id')
         .eq('corretor_id', targetCorretorId)
         .range(from, to);
 
@@ -869,6 +844,13 @@ export async function POST(request: Request) {
       (existingLeads || []).forEach((lead) => {
         existingKeys.add(buildLeadDuplicateKey(lead));
         existingIdentity.set(buildLeadIdentityKey(lead), lead);
+        if (lead.responsavel_membro_id || lead.responsavel_profile_id) {
+          const contactKey = buildLeadContactKey(lead);
+          const current = previousOwnerByContact.get(contactKey);
+          if (!current || new Date(lead.data_entrada || 0).getTime() > new Date(current.data_entrada || 0).getTime()) {
+            previousOwnerByContact.set(contactKey, lead);
+          }
+        }
       });
       if (!existingLeads || existingLeads.length < existingLimit) {
         fetchExisting = false;
@@ -892,6 +874,11 @@ export async function POST(request: Request) {
         }
         duplicated += 1;
         return false;
+      }
+      const previousOwner = previousOwnerByContact.get(buildLeadContactKey(lead));
+      if (previousOwner) {
+        lead.responsavel_membro_id = previousOwner.responsavel_membro_id || null;
+        lead.responsavel_profile_id = previousOwner.responsavel_profile_id || null;
       }
       existingKeys.add(key);
       existingIdentity.set(identityKey, lead);

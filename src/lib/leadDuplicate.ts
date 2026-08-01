@@ -18,39 +18,63 @@ export type LeadDuplicateInput = {
   utm_content?: string | null;
 };
 
-function normalizeTextKey(value?: string | null) {
-  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+export function normalizeLeadTextKey(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
 }
 
-function normalizePhoneKey(value?: string | null) {
+export function normalizeLeadPhoneKey(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
 }
 
-function normalizeDateKey(value?: string | null) {
+export function normalizeLeadDateKey(value?: string | null) {
   if (!value) return '';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
   return parsed.toISOString().slice(0, 10);
 }
 
+export function buildLeadIdentityKey(lead: LeadDuplicateInput) {
+  const phone = normalizeLeadPhoneKey(lead.telefone);
+  return [
+    lead.corretor_id || '',
+    normalizeLeadDateKey(lead.data_entrada),
+    normalizeLeadTextKey(lead.nome),
+    phone.length >= 8 ? phone.slice(-11) : phone,
+  ].join('|');
+}
+
+export function buildLeadContactKey(lead: LeadDuplicateInput) {
+  const phone = normalizeLeadPhoneKey(lead.telefone);
+  return [
+    lead.corretor_id || '',
+    normalizeLeadTextKey(lead.nome),
+    phone.length >= 8 ? phone.slice(-11) : phone,
+  ].join('|');
+}
+
 export function buildLeadDuplicateKey(lead: LeadDuplicateInput) {
   return [
     lead.corretor_id || '',
-    normalizeDateKey(lead.data_entrada),
-    normalizeTextKey(lead.nome),
-    normalizePhoneKey(lead.telefone),
-    normalizeTextKey(lead.idades),
-    normalizeTextKey(lead.possui_cnpj),
-    normalizeTextKey(lead.tem_plano_ativo),
-    normalizeTextKey(lead.plano_atual),
-    normalizeTextKey(lead.custo_plano_atual),
-    normalizeTextKey(lead.investimento),
-    normalizeTextKey(lead.cidade),
-    normalizeTextKey(lead.operadora),
-    normalizeTextKey(lead.utm_source),
-    normalizeTextKey(lead.utm_medium),
-    normalizeTextKey(lead.utm_campaign),
-    normalizeTextKey(lead.utm_term),
-    normalizeTextKey(lead.utm_content),
+    normalizeLeadDateKey(lead.data_entrada),
+    normalizeLeadTextKey(lead.nome),
+    normalizeLeadPhoneKey(lead.telefone),
+    normalizeLeadTextKey(lead.idades),
+    normalizeLeadTextKey(lead.possui_cnpj),
+    normalizeLeadTextKey(lead.tem_plano_ativo),
+    normalizeLeadTextKey(lead.plano_atual),
+    normalizeLeadTextKey(lead.custo_plano_atual),
+    normalizeLeadTextKey(lead.investimento),
+    normalizeLeadTextKey(lead.cidade),
+    normalizeLeadTextKey(lead.operadora),
+    normalizeLeadTextKey(lead.utm_source),
+    normalizeLeadTextKey(lead.utm_medium),
+    normalizeLeadTextKey(lead.utm_campaign),
+    normalizeLeadTextKey(lead.utm_term),
+    normalizeLeadTextKey(lead.utm_content),
   ].join('|');
 }
