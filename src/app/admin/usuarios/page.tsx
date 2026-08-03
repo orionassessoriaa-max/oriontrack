@@ -366,11 +366,27 @@ export default function AdminUsuariosPage() {
     router.replace(`/admin/usuarios?edit=${profile.id}`);
   }
 
+  const normalizedSearch = search.trim().toLowerCase();
   const filteredProfiles = profiles.filter((profile) => {
     const corretor = corretores.find((item) => item.id === profile.corretor_id);
     const brokerName = corretor?.nome_empresa || profile.nome_empresa || '';
-    const target = `${profile.nome} ${brokerName} ${profile.email} ${profile.email_real || ''} ${profile.tipo_usuario}`.toLowerCase();
-    return target.includes(search.toLowerCase());
+    const integrationId = getUserIntegrationId(profile, corretor);
+    const target = [
+      profile.id,
+      profile.corretor_id,
+      corretor?.id,
+      integrationId,
+      profile.nome,
+      brokerName,
+      profile.email,
+      profile.email_real,
+      profile.tipo_usuario,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return target.includes(normalizedSearch);
   });
 
   function copyCredentials() {
@@ -759,7 +775,7 @@ export default function AdminUsuariosPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar por nome, email ou perfil..."
+                placeholder="Buscar por nome, email, perfil ou ID..."
                 className="w-full rounded-2xl border-none bg-slate-50 py-4 pl-12 pr-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
