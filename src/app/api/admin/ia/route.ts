@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
+import {
+  DEFAULT_LEAD_AI_PERSONA,
+  DEFAULT_LEAD_AI_SYSTEM_PROMPT,
+} from '@/lib/defaultLeadAiPrompt';
 
 const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
 const AI_SENDER_PROFILE_TYPES = ['corretor_admin', 'corretor'];
@@ -91,11 +95,19 @@ export async function POST(request: Request) {
     if (limited) return limited;
     
     const body = await request.json().catch(() => ({}));
-    const { corretora_id, persona, system_prompt, status } = body;
+    const corretora_id = String(body.corretora_id || '').trim();
+    const requestedPersona = String(body.persona || '').trim();
+    const requestedPrompt = String(body.system_prompt || '').trim();
+    const useDaniloDefault = body.use_default_model === true || !requestedPrompt;
+    const persona = requestedPersona || DEFAULT_LEAD_AI_PERSONA;
+    const system_prompt = useDaniloDefault
+      ? DEFAULT_LEAD_AI_SYSTEM_PROMPT
+      : requestedPrompt;
+    const status = String(body.status || 'ativo').trim() || 'ativo';
     const sender_profile_id = body.sender_profile_id ? String(body.sender_profile_id) : null;
     
-    if (!corretora_id || !persona || !system_prompt) {
-      return NextResponse.json({ error: 'Campos obrigatorios faltando.' }, { status: 400 });
+    if (!corretora_id) {
+      return NextResponse.json({ error: 'Concessionaria nao informada.' }, { status: 400 });
     }
     
     const { data, error } = await supabaseAdmin
@@ -105,7 +117,7 @@ export async function POST(request: Request) {
         persona,
         system_prompt,
         sender_profile_id,
-        status: status || 'ativo',
+        status,
         updated_at: new Date().toISOString()
       }, { onConflict: 'corretora_id' })
       .select('*')
@@ -117,7 +129,13 @@ export async function POST(request: Request) {
       action: 'save_ai_config',
       entity_type: 'corretora_ai_configs',
       entity_id: data.id,
-      metadata: { corretora_id, persona, status, sender_profile_id }
+      metadata: {
+        corretora_id,
+        persona,
+        status,
+        sender_profile_id,
+        prompt_model: useDaniloDefault ? 'danilo_default' : 'custom',
+      }
     });
     
     return NextResponse.json({ ok: true, config: data });

@@ -211,11 +211,11 @@ const normalizePrompt = (value = '') => value.trim().replace(/\r\n/g, '\n');
 
 const BUILTIN_PROMPT_MODELS: PromptModel[] = [
   {
-    id: 'builtin-padrao',
-    nome: 'Padrão',
-    categoria: 'Atendimento geral',
+    id: 'builtin-danilo',
+    nome: 'Padrão Danilo (Aline)',
+    categoria: 'Modelo padrão de atendimento',
     system_prompt: DEFAULT_SYSTEM_PROMPT_TEMPLATE,
-    base_model: 'padrao',
+    base_model: 'danilo_default',
     builtin: true,
   },
 ];
@@ -242,7 +242,7 @@ export default function AdminIaPage() {
   const [senderProfilesByCorretora, setSenderProfilesByCorretora] = useState<Record<string, SenderProfile[]>>({});
   const [selectedSenderProfileId, setSelectedSenderProfileId] = useState('');
   const [customPromptModels, setCustomPromptModels] = useState<PromptModel[]>([]);
-  const [selectedPromptModelId, setSelectedPromptModelId] = useState('builtin-padrao');
+  const [selectedPromptModelId, setSelectedPromptModelId] = useState('builtin-danilo');
   const [saveModelOpen, setSaveModelOpen] = useState(false);
   const [modelName, setModelName] = useState('');
   const [modelCategory, setModelCategory] = useState('Atendimento');
@@ -358,7 +358,7 @@ export default function AdminIaPage() {
     setPersona(DEFAULT_LEAD_AI_PERSONA);
     setSystemPrompt(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
     setSelectedSenderProfileId('');
-    setSelectedPromptModelId('builtin-padrao');
+    setSelectedPromptModelId('builtin-danilo');
     setError(null);
     setSuccess(null);
   };
@@ -455,6 +455,7 @@ export default function AdminIaPage() {
           corretora_id: selectedCorretoraId,
           persona: persona.trim(),
           system_prompt: systemPrompt.trim(),
+          use_default_model: isAddingNew && selectedPromptModelId === 'builtin-danilo',
           sender_profile_id: selectedSenderProfileId || null,
           status: 'ativo'
         })
