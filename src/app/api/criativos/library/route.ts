@@ -34,6 +34,8 @@ type LibraryAsset = {
   headline: string | null;
   legenda: string | null;
   created_at: string;
+  drive_file_id?: string | null;
+  drive_web_view_link?: string | null;
 };
 
 type LibraryStrategy = {
@@ -74,6 +76,57 @@ function normalizeFolderName(value?: string | null) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+function isCreativeMedia(mimeType?: string | null) {
+  return String(mimeType || '').startsWith('image/') || String(mimeType || '').startsWith('video/');
+}
+
+function driveThumbnailUrl(value?: string | null) {
+  return String(value || '')
+    .replace(/=s\d+(?:-[^&]*)?$/, '=s1200')
+    .replace(/=w\d+-h\d+$/, '=s1200');
+}
+
+async function readDriveAssets(folder: ScopedDriveFolder): Promise<LibraryAsset[]> {
+  const result: LibraryAsset[] = [];
+  const brokerageChildren = await listDriveChildren(folder.drive_folder_id, 1000);
+
+  const appendFiles = (
+    files: Awaited<ReturnType<typeof listDriveChildren>>['files'],
+    regiao: string,
+    operadora: string
+  ) => {
+    files.filter((file) => isCreativeMedia(file.mimeType)).forEach((file) => {
+      result.push({
+        id: `drive:${file.id}`,
+        corretor_id: folder.id,
+        titulo: file.name.replace(/\.[^.]+$/, ''),
+        descricao: 'Criativo sincronizado diretamente do Google Drive.',
+        arquivo_url: driveThumbnailUrl(file.thumbnailLink) || file.webViewLink || null,
+        status: 'drive',
+        operadora,
+        regiao,
+        headline: null,
+        legenda: null,
+        created_at: file.modifiedTime || new Date(0).toISOString(),
+        drive_file_id: file.id,
+        drive_web_view_link: file.webViewLink || null,
+      });
+    });
+  };
+
+  appendFiles(brokerageChildren.files, 'Sem região definida', 'Geral');
+  await Promise.all(brokerageChildren.folders.map(async (regionFolder) => {
+    const regionChildren = await listDriveChildren(regionFolder.id, 1000);
+    appendFiles(regionChildren.files, regionFolder.name, 'Geral');
+    await Promise.all(regionChildren.folders.map(async (operatorFolder) => {
+      const operatorChildren = await listDriveChildren(operatorFolder.id, 1000);
+      appendFiles(operatorChildren.files, regionFolder.name, operatorFolder.name);
+    }));
+  }));
+
+  return result;
 }
 
 function companyFolderKey(value?: string | null) {
@@ -260,7 +313,7 @@ export async function GET(request: Request) {
       const [assetsResult, strategiesResult] = await Promise.all([
         supabaseAdmin
           .from('criativo_assets')
-          .select('id, corretor_id, titulo, descricao, arquivo_url, status, operadora, regiao, headline, legenda, created_at')
+          .select('id, corretor_id, titulo, descricao, arquivo_url, status, operadora, regiao, headline, legenda, created_at, drive_file_id')
           .in('corretor_id', corretorIds)
           .order('created_at', { ascending: false })
           .limit(1000),
@@ -277,10 +330,29 @@ export async function GET(request: Request) {
       strategies = strategiesResult.data || [];
     }
 
+    const driveAssetsByFolder = new Map<string, LibraryAsset[]>();
+    await Promise.all(folders.map(async (folder) => {
+      const driveAssets = await readDriveAssets(folder);
+      const storedDriveIds = new Set(
+        assets
+          .filter((asset) => folder.corretor_ids.includes(asset.corretor_id))
+          .map((asset) => asset.drive_file_id)
+          .filter(Boolean)
+      );
+      driveAssetsByFolder.set(
+        folder.key,
+        driveAssets.filter((asset) => !storedDriveIds.has(asset.drive_file_id))
+      );
+      folder.drive_files_count = driveAssets.length;
+    }));
+
     return NextResponse.json({
       folders: folders.map((folder) => ({
         ...folder,
-        assets: assets.filter((asset) => folder.corretor_ids.includes(asset.corretor_id)),
+        assets: [
+          ...assets.filter((asset) => folder.corretor_ids.includes(asset.corretor_id)),
+          ...(driveAssetsByFolder.get(folder.key) || []),
+        ],
         strategies: strategies.filter((strategy) => folder.corretor_ids.includes(strategy.corretor_id)),
       })),
       missing_folders: driveScope.missingFolders,

@@ -41,6 +41,8 @@ type LibraryAsset = {
   headline: string | null;
   legenda: string | null;
   created_at: string;
+  drive_file_id?: string | null;
+  drive_web_view_link?: string | null;
 };
 
 type CreativeStrategy = {
@@ -733,16 +735,15 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                       <div className="mt-2 flex items-center justify-between gap-3">
                         <p className="text-xs font-bold text-slate-500">{formatDate(asset.created_at)}</p>
                         <div className="flex flex-wrap items-center justify-end gap-1">
-                          {asset.arquivo_url && (
+                          {(asset.drive_web_view_link || asset.arquivo_url) && (
                             <a
-                              href={asset.arquivo_url}
+                              href={asset.drive_web_view_link || asset.arquivo_url || '#'}
                               target="_blank"
                               rel="noreferrer"
-                              download
                               className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-black text-cyan-400 transition hover:bg-cyan-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
                             >
                               <Download size={15} />
-                              Baixar
+                              {asset.drive_web_view_link ? 'Abrir no Drive' : 'Baixar'}
                             </a>
                           )}
                         </div>
@@ -760,7 +761,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                       ) : (
                         <p className="mt-3 flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] text-xs font-black text-emerald-300">
                           <Check size={15} />
-                          {asset.status === 'em_aprovacao' ? 'Aguardando aprovação' : asset.status === 'aprovado' ? 'Aprovado' : 'Enviado'}
+                          {asset.status === 'em_aprovacao' ? 'Aguardando aprovação' : asset.status === 'aprovado' ? 'Aprovado' : asset.status === 'drive' ? 'Sincronizado do Drive' : 'Enviado'}
                         </p>
                       )}
                     </div>
