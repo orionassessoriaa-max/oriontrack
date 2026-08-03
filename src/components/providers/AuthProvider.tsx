@@ -263,7 +263,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           window.sessionStorage.removeItem('orion:selected_team');
 
           const currentPath = window.location.pathname;
-          const publicPaths = ['/login', '/primeiro-acesso', '/resetar-senha'];
+          const publicPaths = [
+            '/login',
+            '/primeiro-acesso',
+            '/resetar-senha',
+            '/privacidade',
+            '/termos',
+            '/exclusao-de-dados',
+          ];
           if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/c/')) {
             router.push('/login');
           }
