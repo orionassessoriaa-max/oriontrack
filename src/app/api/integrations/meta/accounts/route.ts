@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { metaCachedFetch } from '@/lib/meta/cachedFetch';
 
 type MetaAccount = {
   id: string;
@@ -30,7 +31,10 @@ async function fetchMetaAccounts(path: string, accessToken: string) {
   url.searchParams.set('limit', '100');
   url.searchParams.set('access_token', accessToken);
 
-  const response = await fetch(url.toString(), { next: { revalidate: 300 } });
+  const response = await metaCachedFetch(url.toString(), {
+    ttlSeconds: 3600,
+    resourceKind: 'account-list',
+  });
   const payload = await response.json();
 
   if (!response.ok || payload.error) {

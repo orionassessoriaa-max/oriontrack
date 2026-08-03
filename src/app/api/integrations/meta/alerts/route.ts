@@ -5,6 +5,7 @@ import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 import { fetchOrionCumulativeSpend } from '@/lib/meta/orionSpend';
 import { fetchWithTimeout } from '@/lib/meta/fetchWithTimeout';
+import { getMetaUsageSnapshot, metaCachedFetch } from '@/lib/meta/cachedFetch';
 import {
   TRAFFIC_RULES,
   buildRecommendations,
@@ -203,7 +204,7 @@ function countCreativeLeads(leads: any[], adName?: string | null) {
   return leads.filter((lead) => normalizeKey(lead.utm_content) === target).length;
 }
 
-async function fetchObjectMap(ids: string[], fields: string, accessToken: string, graphVersion: string) {
+async function fetchObjectMap(ids: string[], fields: string, accessToken: string, graphVersion: string, cacheOnly = false) {
   const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
   const result = new Map<string, any>();
 
@@ -214,7 +215,11 @@ async function fetchObjectMap(ids: string[], fields: string, accessToken: string
     url.searchParams.set('fields', fields);
     url.searchParams.set('access_token', accessToken);
 
-    const response = await fetchWithTimeout(url.toString(), { next: { revalidate: 600 } });
+    const response = await metaCachedFetch(url.toString(), {
+      ttlSeconds: 3600,
+      resourceKind: 'creative-details',
+      cacheOnly,
+    });
     const payload = await response.json();
     if (!response.ok || payload.error) continue;
     Object.entries(payload || {}).forEach(([id, value]) => result.set(id, value));
@@ -229,7 +234,8 @@ async function fetchActiveCreatives(
   until: string,
   accessToken: string,
   graphVersion: string,
-  leads: any[]
+  leads: any[],
+  cacheOnly = false
 ) {
   const accountId = normalizeAccountId(String(corretor.meta_ad_account_id));
   const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
@@ -239,7 +245,11 @@ async function fetchActiveCreatives(
   insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
   insightsUrl.searchParams.set('access_token', accessToken);
 
-  const insightsResponse = await fetchWithTimeout(insightsUrl.toString(), { next: { revalidate: 600 } });
+  const insightsResponse = await metaCachedFetch(insightsUrl.toString(), {
+    ttlSeconds: 3600,
+    resourceKind: 'active-creatives',
+    cacheOnly,
+  });
   const insightsPayload = await insightsResponse.json();
   if (!insightsResponse.ok || insightsPayload.error) throw new Error(describeMetaError(insightsPayload.error, accountId));
 
@@ -248,7 +258,8 @@ async function fetchActiveCreatives(
     rows.map((row: any) => row.ad_id),
     'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,title,body,object_story_spec}',
     accessToken,
-    graphVersion
+    graphVersion,
+    cacheOnly
   );
 
   return rows
@@ -276,6 +287,19 @@ async function fetchActiveCreatives(
     .filter((creative: any) => creative.status === 'ACTIVE')
     .sort((a: any, b: any) => Number(b.spend || 0) - Number(a.spend || 0))
     .slice(0, 10);
+}
+
+async function settleInBatches<T, R>(
+  items: T[],
+  worker: (item: T) => Promise<R>,
+  batchSize = 6
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = [];
+  for (let index = 0; index < items.length; index += batchSize) {
+    const batch = items.slice(index, index + batchSize);
+    results.push(...await Promise.allSettled(batch.map(worker)));
+  }
+  return results;
 }
 
 function localPortfolioReview(accounts: any[], activeCreatives: any[], recommendations: Recommendation[]) {
@@ -381,8 +405,14 @@ async function fetchAccountMetrics(
   accountUrl.searchParams.set('access_token', accessToken);
 
   const [insightsResponse, accountResponse] = await Promise.all([
-    fetchWithTimeout(insightsUrl.toString(), { next: { revalidate: 900 } }),
-    fetchWithTimeout(accountUrl.toString(), { next: { revalidate: 900 } }),
+    metaCachedFetch(insightsUrl.toString(), {
+      ttlSeconds: 3600,
+      resourceKind: 'account-insights',
+    }),
+    metaCachedFetch(accountUrl.toString(), {
+      ttlSeconds: 3600,
+      resourceKind: 'account-billing',
+    }),
   ]);
 
   const [insightsPayload, accountPayload] = await Promise.all([
@@ -488,7 +518,13 @@ function targetKey(accountId: unknown, alvoId: unknown, acao: unknown) {
   return `${accountId || ''}::${alvoId || ''}::${acao}`;
 }
 
-async function persistRecommendations(recommendations: Recommendation[], since: string, until: string, accountIds: string[]) {
+async function persistRecommendations(
+  recommendations: Recommendation[],
+  since: string,
+  until: string,
+  accountIds: string[],
+  preserveAdRecommendations = false
+) {
   const uniqueAccountIds = Array.from(new Set(accountIds.filter(Boolean)));
   if (uniqueAccountIds.length === 0) return [] as any[];
 
@@ -507,11 +543,16 @@ async function persistRecommendations(recommendations: Recommendation[], since: 
   // A fila pendente e sempre regenerada a partir das metricas do momento, entao
   // pendencia que a regra deixou de emitir some sozinha. Decisoes ja tomadas
   // ficam preservadas porque so as pendentes sao apagadas.
-  const { error: deleteError } = await supabaseAdmin
+  let pendingDelete = supabaseAdmin
     .from('trafego_recomendacoes')
     .delete()
     .eq('status', 'pendente')
     .in('meta_ad_account_id', uniqueAccountIds);
+
+  // Na atualizacao automatica os criativos vem somente do cache. Se ainda nao
+  // houver cache, preservamos as decisoes de anuncio da ultima analise completa.
+  if (preserveAdRecommendations) pendingDelete = pendingDelete.neq('nivel', 'anuncio');
+  const { error: deleteError } = await pendingDelete;
 
   if (deleteError) {
     console.error('Erro ao limpar fila de recomendacoes:', deleteError.message);
@@ -733,9 +774,17 @@ export async function POST(request: Request) {
     const allGroupIds = Array.from(new Set(filtered.flatMap((corretor) => corretor.scoped_corretor_ids || [corretor.id])));
     const historicoOrion = await fetchCorretoresComHistoricoOrion(allGroupIds);
 
-    const settled = await Promise.allSettled(
-      filtered.map((corretor) =>
-        fetchAccountMetrics(corretor, since, until, accessToken, graphVersion, leadsByCorretor.get(corretor.id) || [])
+    // Lotes pequenos permitem ler o consumo retornado pela Meta entre uma leva
+    // e outra. Assim a protecao de 90% consegue agir antes da proxima rajada.
+    const settled = await settleInBatches(
+      filtered,
+      (corretor) => fetchAccountMetrics(
+        corretor,
+        since,
+        until,
+        accessToken,
+        graphVersion,
+        leadsByCorretor.get(corretor.id) || []
       )
     );
 
@@ -808,9 +857,19 @@ export async function POST(request: Request) {
       })
       .sort((a, b) => Number(b.alerta_cpl_alto) - Number(a.alerta_cpl_alto));
 
-    const creativeSettled = await Promise.allSettled(
-      filtered.map((corretor) =>
-        fetchActiveCreatives(corretor, since, until, accessToken, graphVersion, leadsByCorretor.get(corretor.id) || [])
+    // A abertura normal usa apenas criativos ja em cache. A leitura completa
+    // acontece no comando explicito de analise, economizando duas chamadas por
+    // conta em cada atualizacao automatica da carteira.
+    const creativeSettled = await settleInBatches(
+      filtered,
+      (corretor) => fetchActiveCreatives(
+        corretor,
+        since,
+        until,
+        accessToken,
+        graphVersion,
+        leadsByCorretor.get(corretor.id) || [],
+        !shouldAnalyze
       )
     );
     const activeCreatives = creativeSettled
@@ -823,7 +882,7 @@ export async function POST(request: Request) {
     });
 
     const accountIds = filtered.map((corretor) => String(corretor.meta_ad_account_id || '')).filter(Boolean);
-    const persisted = await persistRecommendations(recommendations, since, until, accountIds);
+    const persisted = await persistRecommendations(recommendations, since, until, accountIds, !shouldAnalyze);
 
     const portfolioAiReview = shouldAnalyze
       ? await generatePortfolioAiReview(accounts, activeCreatives, recommendations, since, until)
@@ -854,10 +913,17 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle();
 
+    const metaUsage = await getMetaUsageSnapshot();
+
     return NextResponse.json({
       success: true,
       data_inicio: since,
       data_fim: until,
+      meta_api: metaUsage ? {
+        usage_percent: Number(metaUsage.max_usage_percent || 0),
+        updated_at: metaUsage.updated_at,
+        protected: Number(metaUsage.max_usage_percent || 0) >= 90,
+      } : null,
       refreshed_at: new Date().toISOString(),
       threshold_cpl: TRAFFIC_RULES.cplCritical,
       rules: TRAFFIC_RULES,

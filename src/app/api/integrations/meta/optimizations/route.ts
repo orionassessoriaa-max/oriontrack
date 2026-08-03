@@ -4,6 +4,7 @@ import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 import { TRAFFIC_RULES } from '@/lib/trafego/rules';
+import { metaCachedFetch } from '@/lib/meta/cachedFetch';
 
 type CorretorMeta = {
   id: string;
@@ -292,7 +293,10 @@ async function fetchInsights(accountId: string, level: 'account' | 'campaign' | 
   url.searchParams.set('time_range', JSON.stringify({ since, until }));
   url.searchParams.set('access_token', token);
 
-  const response = await fetch(url.toString(), { next: { revalidate: 300 } });
+  const response = await metaCachedFetch(url.toString(), {
+    ttlSeconds: 1800,
+    resourceKind: `optimization-${level}`,
+  });
   const payload = await response.json();
   if (!response.ok || payload.error) throw new Error(describeMetaError(payload.error, accountId));
   return payload.data || [];
@@ -309,7 +313,10 @@ async function fetchObjectMap(ids: string[], fields: string, token: string, grap
     url.searchParams.set('fields', fields);
     url.searchParams.set('access_token', token);
 
-    const response = await fetch(url.toString(), { next: { revalidate: 300 } });
+    const response = await metaCachedFetch(url.toString(), {
+      ttlSeconds: 1800,
+      resourceKind: 'optimization-details',
+    });
     const payload = await response.json();
     if (!response.ok || payload.error) continue;
 

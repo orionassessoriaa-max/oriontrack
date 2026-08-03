@@ -1,6 +1,6 @@
 type MetaPage<T> = { data?: T[]; paging?: { next?: string } };
 
-import { fetchWithTimeout } from './fetchWithTimeout';
+import { metaCachedFetch } from './cachedFetch';
 
 function normalizeAccountId(value: string) {
   return value.replace(/^act_/, '');
@@ -10,12 +10,15 @@ function isOrionCampaign(name: unknown) {
   return /\borion\b/i.test(String(name || ''));
 }
 
-async function fetchAll<T>(url: URL, maxPages = 20): Promise<T[]> {
+async function fetchAll<T>(url: URL, ttlSeconds: number, resourceKind: string, maxPages = 20): Promise<T[]> {
   const rows: T[] = [];
   let next = url.toString();
 
   for (let page = 0; page < maxPages && next; page += 1) {
-    const response = await fetchWithTimeout(next, { next: { revalidate: 300 } });
+    const response = await metaCachedFetch(next, {
+      ttlSeconds,
+      resourceKind,
+    });
     const payload = await response.json() as MetaPage<T> & { error?: any };
     if (!response.ok || payload.error) {
       throw new Error(payload.error?.message || 'Falha ao consultar campanhas Orion na Meta.');
@@ -39,7 +42,11 @@ export async function fetchOrionCumulativeSpend(
   campaignsUrl.searchParams.set('limit', '500');
   campaignsUrl.searchParams.set('access_token', accessToken);
 
-  const campaigns = (await fetchAll<{ id: string; name?: string; created_time?: string }>(campaignsUrl))
+  const campaigns = (await fetchAll<{ id: string; name?: string; created_time?: string }>(
+    campaignsUrl,
+    21600,
+    'orion-campaign-list'
+  ))
     .filter((campaign) => isOrionCampaign(campaign.name));
 
   if (campaigns.length === 0) return { spend: null, since: null };
@@ -57,7 +64,11 @@ export async function fetchOrionCumulativeSpend(
   insightsUrl.searchParams.set('limit', '500');
   insightsUrl.searchParams.set('access_token', accessToken);
 
-  const rows = await fetchAll<{ campaign_id?: string; campaign_name?: string; spend?: string }>(insightsUrl);
+  const rows = await fetchAll<{ campaign_id?: string; campaign_name?: string; spend?: string }>(
+    insightsUrl,
+    3600,
+    'orion-cumulative-spend'
+  );
   const campaignIds = new Set(campaigns.map((campaign) => String(campaign.id)));
   const spend = rows.reduce((total, row) => {
     const belongsToOrion = (row.campaign_id && campaignIds.has(String(row.campaign_id))) || isOrionCampaign(row.campaign_name);

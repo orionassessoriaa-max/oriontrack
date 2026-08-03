@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { fetchOrionCumulativeSpend } from '@/lib/meta/orionSpend';
+import { metaCachedFetch } from '@/lib/meta/cachedFetch';
 
 async function requireTrafficAccess(request: Request) {
   const authHeader = request.headers.get('Authorization');
@@ -179,7 +180,12 @@ export async function POST(request: Request) {
     url.searchParams.set('time_range', JSON.stringify({ since: metaRange.since, until: metaRange.until }));
     url.searchParams.set('access_token', accessToken);
 
-    const response = await fetch(url.toString(), { next: { revalidate: 300 } });
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const isCurrentPeriod = metaRange.until === today;
+    const response = await metaCachedFetch(url.toString(), {
+      ttlSeconds: isCurrentPeriod ? 1800 : 21600,
+      resourceKind: isCurrentPeriod ? 'current-spend' : 'historical-spend',
+    });
     const payload = await response.json();
 
     if (!response.ok || payload.error) {
