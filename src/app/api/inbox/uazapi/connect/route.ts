@@ -5,6 +5,7 @@ import { configureUazapiWebhook, uazapiFetch, uazapiInstanceName } from '@/lib/u
 
 const WHATSAPP_TARGET_ROLES = ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const CAN_VIEW_AS_ROLES = ['admin', 'gestor_trafego', 'account_manager'] as const;
+const RECENT_INSTANCE_ACTIVITY_WINDOW_MS = 15 * 60_000;
 
 type WhatsappTargetProfile = ApiProfile & {
   nome_empresa?: string | null;
@@ -196,6 +197,27 @@ async function fetchUazapiInstanceState(instance: string) {
   }
 }
 
+async function hasRecentConfirmedInstanceActivity(instance: string) {
+  const cutoff = new Date(Date.now() - RECENT_INSTANCE_ACTIVITY_WINDOW_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('direction, provider_message_id, created_at')
+    .eq('metadata->>instance', instance)
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.warn(`[GET /api/inbox/uazapi/connect] recent activity check failed for ${instance}.`, error);
+    return false;
+  }
+
+  return (data || []).some((message) => (
+    message.direction === 'inbound' ||
+    (message.direction === 'outbound' && Boolean(message.provider_message_id))
+  ));
+}
+
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'inbox:uazapi:connect', { limit: 12, windowMs: 10 * 60_000 });
@@ -316,12 +338,18 @@ export async function GET(request: Request) {
     const instance = uazapiInstanceName(targetProfile.id);
 
     try {
-      const state = await fetchUazapiInstanceState(instance);
+      const providerState = await fetchUazapiInstanceState(instance);
+      const recentActivity = providerState === 'close'
+        ? await hasRecentConfirmedInstanceActivity(instance)
+        : false;
+      const state = recentActivity ? 'open' : providerState;
       return NextResponse.json({
         success: true,
         instance,
         state, // 'open', 'connecting', 'close'
         connected: state === 'open',
+        statusSource: recentActivity ? 'recent_confirmed_activity' : 'provider',
+        providerState,
         targetProfile: targetPayload(targetProfile),
       });
     } catch (error: any) {
