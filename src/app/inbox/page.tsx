@@ -413,6 +413,7 @@ export default function BrokerInboxPage() {
     try {
       const response = await fetch('/api/inbox/uazapi/connect', {
         method: 'GET',
+        cache: 'no-store',
         headers: {
           Authorization: `Bearer ${token}`,
           ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
@@ -507,7 +508,7 @@ export default function BrokerInboxPage() {
     }
 
     if (isTeamMember) {
-      conversationsQuery = conversationsQuery.eq('leads.responsavel_profile_id', profile.id);
+      conversationsQuery = conversationsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
     }
 
     const { data } = await conversationsQuery;
@@ -560,7 +561,7 @@ export default function BrokerInboxPage() {
         }
 
         if (isTeamMember) {
-          savedConversationQuery = savedConversationQuery.eq('leads.responsavel_profile_id', profile.id);
+          savedConversationQuery = savedConversationQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
         }
 
         const { data: savedConversations } = await savedConversationQuery;
@@ -596,7 +597,7 @@ export default function BrokerInboxPage() {
             .select('nome,responsavel_profile_id')
             .eq('id', leadId)
             .maybeSingle();
-          if (isTeamMember && leadData?.responsavel_profile_id !== profile.id) {
+          if (isTeamMember && leadData?.responsavel_profile_id && leadData.responsavel_profile_id !== profile.id) {
             setConversations(rows);
             setSelectedConversation(rows[0] || null);
             setLoading(false);
@@ -632,14 +633,15 @@ export default function BrokerInboxPage() {
     }
 
     setConversations(rows);
-    setSelectedConversation(prev => {
-      if (prev) {
-        const updated = rows.find(r => r.id === prev.id);
-        return updated || prev;
-      }
-      return matchedConv || rows[0] || null;
-    });
+    const previousSelection = selectedConversationRef.current;
+    const nextSelection = previousSelection
+      ? rows.find((row) => row.id === previousSelection.id) || previousSelection
+      : matchedConv || rows[0] || null;
+    setSelectedConversation(nextSelection);
     setLoading(false);
+    if (!isSilent && nextSelection?.id && !nextSelection.id.startsWith('new-')) {
+      void fetchMessages(nextSelection.id);
+    }
     void fetchConnectionStatus();
   }
 
@@ -651,11 +653,7 @@ export default function BrokerInboxPage() {
   }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
   useEffect(() => {
-    if (!isWhatsAppConnected && !qrCode && whatsappStatus !== 'connecting') {
-      return;
-    }
-
-    const intervalTime = isWhatsAppConnected ? 30000 : 5000;
+    const intervalTime = isWhatsAppConnected ? 30000 : 10000;
     const interval = setInterval(() => {
       void fetchConnectionStatus();
     }, intervalTime);

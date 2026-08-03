@@ -5,7 +5,6 @@ import { configureUazapiWebhook, uazapiFetch, uazapiInstanceName } from '@/lib/u
 
 const WHATSAPP_TARGET_ROLES = ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const CAN_VIEW_AS_ROLES = ['admin', 'gestor_trafego', 'account_manager'] as const;
-const RECENT_INSTANCE_ACTIVITY_WINDOW_MS = 15 * 60_000;
 
 type WhatsappTargetProfile = ApiProfile & {
   nome_empresa?: string | null;
@@ -197,27 +196,6 @@ async function fetchUazapiInstanceState(instance: string) {
   }
 }
 
-async function hasRecentConfirmedInstanceActivity(instance: string) {
-  const cutoff = new Date(Date.now() - RECENT_INSTANCE_ACTIVITY_WINDOW_MS).toISOString();
-  const { data, error } = await supabaseAdmin
-    .from('whatsapp_mensagens')
-    .select('direction, provider_message_id, created_at')
-    .eq('metadata->>instance', instance)
-    .gte('created_at', cutoff)
-    .order('created_at', { ascending: false })
-    .limit(20);
-
-  if (error) {
-    console.warn(`[GET /api/inbox/uazapi/connect] recent activity check failed for ${instance}.`, error);
-    return false;
-  }
-
-  return (data || []).some((message) => (
-    message.direction === 'inbound' ||
-    (message.direction === 'outbound' && Boolean(message.provider_message_id))
-  ));
-}
-
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'inbox:uazapi:connect', { limit: 12, windowMs: 10 * 60_000 });
@@ -261,32 +239,11 @@ export async function POST(request: Request) {
       const message = String(error.message || '').toLowerCase();
       const isAlreadyExists = error.message === 'Instance already exists' || message.includes('already') || message.includes('existe');
       if (isAlreadyExists) {
-        console.log(`[POST /api/inbox/uazapi/connect] Instance ${instance} already exists. Deleting it for self-healing...`);
-        try {
-          await uazapiFetch('/instance/logout', { method: 'POST' }, { instanceName: instance });
-        } catch (e) {
-          try {
-            await uazapiFetch('/instance/logout', { method: 'DELETE' }, { instanceName: instance });
-          } catch (e2) {
-            console.warn(`[POST /api/inbox/uazapi/connect] Logout failed during self-healing:`, e2);
-          }
-        }
-        try {
-          await uazapiFetch('/instance/delete', { method: 'DELETE' }, { useAdminAuth: true, instanceName: instance });
-        } catch (e) {
-          console.warn(`[POST /api/inbox/uazapi/connect] Delete failed during self-healing:`, e);
-        }
-        
-        // Retry creating instance
-        console.log(`[POST /api/inbox/uazapi/connect] Re-creating instance ${instance}...`);
-        createPayload = await uazapiFetch('/instance/init', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: instance,
-            instance: instance,
-            instanceName: instance,
-          }),
-        }, { useAdminAuth: true });
+        // Nunca apagar uma instancia existente: isso invalida a sessao e o
+        // QR do usuario. Reutilizamos o token atual e apenas solicitamos a
+        // reconexao abaixo.
+        console.log(`[POST /api/inbox/uazapi/connect] Reusing existing instance ${instance}.`);
+        createPayload = { existing: true };
       } else {
         throw error;
       }
@@ -338,20 +295,15 @@ export async function GET(request: Request) {
     const instance = uazapiInstanceName(targetProfile.id);
 
     try {
-      const providerState = await fetchUazapiInstanceState(instance);
-      const recentActivity = providerState === 'close'
-        ? await hasRecentConfirmedInstanceActivity(instance)
-        : false;
-      const state = recentActivity ? 'open' : providerState;
+      const state = await fetchUazapiInstanceState(instance);
       return NextResponse.json({
         success: true,
         instance,
         state, // 'open', 'connecting', 'close'
         connected: state === 'open',
-        statusSource: recentActivity ? 'recent_confirmed_activity' : 'provider',
-        providerState,
+        statusSource: 'provider',
         targetProfile: targetPayload(targetProfile),
-      });
+      }, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } });
     } catch (error: any) {
       return NextResponse.json({
         success: true,
