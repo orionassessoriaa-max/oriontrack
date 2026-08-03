@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile, TipoCampanha, UserRole } from '@/types';
 import { generateOrionEmail, getRoleLabel } from '@/lib/users';
 import { OPERADORAS_ONBOARDING } from '@/lib/onboarding';
-import { buildOperationalTeamMembers, getTeamMemberAvatar, getTeamMemberPhoto, isTrafficManagerMember, OrionTeamMember } from '@/lib/orionTeam';
+import { getTeamMemberPhoto, OrionTeamMember } from '@/lib/orionTeam';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
 import { Camera, CheckCircle2, Copy, Edit2, KeyRound, Loader2, Mail, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
@@ -73,7 +73,6 @@ export default function AdminUsuariosPage() {
   const [editingProfile, setEditingProfile] = useState<AdminProfile | null>(null);
 
   const accessEmail = useMemo(() => editingProfile?.email || generateOrionEmail(form.nome), [editingProfile?.email, form.nome]);
-  const teamMembers = useMemo(() => buildOperationalTeamMembers(profiles), [profiles]);
   const brokerageOptions = useMemo(() => {
     const names = new Map<string, string>();
     corretoras.forEach((corretora) => {
@@ -212,8 +211,6 @@ export default function AdminUsuariosPage() {
       return;
     }
 
-    const gestorTrafegoId = form.time_operacional.find(isTrafficManagerMember)?.profile_id || null;
-
     const operadoras = form.operadoras.includes('Outros')
       ? [
           ...form.operadoras.filter((item) => item !== 'Outros'),
@@ -225,7 +222,7 @@ export default function AdminUsuariosPage() {
     const userPayload = {
       ...form,
       operadoras,
-      gestor_trafego_id: gestorTrafegoId,
+      gestor_trafego_id: null,
     };
     delete (userPayload as Partial<typeof form>).rodizio_ativo;
 
@@ -665,46 +662,6 @@ export default function AdminUsuariosPage() {
 
                 {form.tipo_usuario === 'corretor' && (
                   <>
-                <div>
-                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Time Orion</label>
-                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {teamMembers.map((member) => {
-                      const selected = form.time_operacional.some((item) => item.nome === member.nome);
-                      const avatar = getTeamMemberAvatar(member);
-                      return (
-                        <button
-                          key={member.profile_id || member.nome}
-                          type="button"
-                          onClick={() => setForm((current) => ({
-                            ...current,
-                            time_operacional: selected
-                              ? current.time_operacional.filter((item) => item.nome !== member.nome)
-                              : [
-                                  ...current.time_operacional.filter((item) =>
-                                    isTrafficManagerMember(member) ? !isTrafficManagerMember(item) : true
-                                  ),
-                                  member
-                                ]
-                          }))}
-                          className={`rounded-2xl border px-4 py-3 text-left transition-all ${
-                            selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-100 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl ${selected ? 'bg-white/20 text-white' : 'bg-white text-blue-600'}`}>
-                              {avatar ? <img src={avatar} alt={member.nome} className="h-full w-full object-cover object-top" /> : member.nome[0]}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-xs font-black">{member.nome}</p>
-                              <p className={`mt-1 text-[10px] font-bold ${selected ? 'text-blue-100' : 'text-slate-400'}`}>{member.cargo}</p>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div>
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</label>
                   <input

@@ -231,11 +231,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Nome e tipo de usuário são obrigatórios.' }, { status: 400 });
     }
 
-    if (['corretor', 'corretor_membro'].includes(role) && !telefone) {
+    if (['corretor', 'corretor_admin', 'corretor_membro'].includes(role) && !telefone) {
       return NextResponse.json({ error: 'Telefone é obrigatório para corretor.' }, { status: 400 });
     }
 
-    if (role === 'corretor_membro' && !String(body.nome_empresa || '').trim()) {
+    if (['corretor_admin', 'corretor_membro'].includes(role) && !String(body.nome_empresa || '').trim()) {
       return NextResponse.json({ error: 'Selecione a concessionaria do corretor integrante.' }, { status: 400 });
     }
 
@@ -263,10 +263,25 @@ export async function POST(request: Request) {
 
     try {
       if (role === 'corretor') {
-        const timeOperacional = Array.isArray(body.time_operacional)
+        let timeOperacional = Array.isArray(body.time_operacional)
           ? body.time_operacional.filter((member: any) => member?.nome && member?.cargo)
           : [];
-        const gestorTrafegoId = await resolveGestorTrafegoId(body.gestor_trafego_id, timeOperacional);
+        let brokerageGestorId: string | null = null;
+        if (String(body.nome_empresa || '').trim() && timeOperacional.length === 0) {
+          const { data: brokerageConfig } = await supabaseAdmin
+            .from('corretoras')
+            .select('time_operacional, gestor_trafego_id')
+            .ilike('nome', String(body.nome_empresa).trim())
+            .maybeSingle();
+          if (Array.isArray(brokerageConfig?.time_operacional)) {
+            timeOperacional = brokerageConfig.time_operacional;
+          }
+          brokerageGestorId = brokerageConfig?.gestor_trafego_id || null;
+        }
+        const gestorTrafegoId = await resolveGestorTrafegoId(
+          body.gestor_trafego_id || brokerageGestorId,
+          timeOperacional
+        );
 
         const { data: corretor, error: corretorError } = await supabaseAdmin
           .from('corretores')
@@ -290,9 +305,12 @@ export async function POST(request: Request) {
         corretorId = corretor.id;
       }
 
-      if (role === 'corretor_membro') {
+      if (role === 'corretor_membro' || role === 'corretor_admin') {
         const primaryCorretor = await resolvePrimaryCorretorByBrokerage(body.nome_empresa);
         if (!primaryCorretor?.id) {
+          if (role === 'corretor_admin') {
+            throw new Error('Crie primeiro o administrador principal da concessionaria.');
+          }
           const brokerage = await resolveBrokerageRecord(body.nome_empresa);
           if (!brokerage?.nome) {
             throw new Error('Concessionaria nao encontrada. Crie a concessionaria ou um Corretor Admin primeiro.');
@@ -341,7 +359,7 @@ export async function POST(request: Request) {
           precisa_trocar_senha: true,
           // Integrantes do Kripto tambem precisam carregar a operacao no perfil.
           // Corretor dono continua sem equipe: a equipe dele vem da concessionaria.
-          equipe_orion: profileRole === 'corretor' ? null : equipeOrion,
+          equipe_orion: ['corretor', 'corretor_admin', 'corretor_membro'].includes(profileRole) ? null : equipeOrion,
         };
 
       let { error: profileError } = await supabaseAdmin
@@ -372,7 +390,7 @@ export async function POST(request: Request) {
         });
       }
 
-      if (profileRole === 'corretor_membro' && corretorId && memberTeamId) {
+      if (['corretor_membro', 'corretor_admin'].includes(profileRole) && corretorId && memberTeamId) {
         const { data: lastMember } = await supabaseAdmin
           .from('corretor_time_membros')
           .select('ordem')

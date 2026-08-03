@@ -21,7 +21,9 @@ import {
   Edit2,
   Plus,
   Trash2,
-  X
+  X,
+  CheckCircle2,
+  KeyRound
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile } from '@/types';
@@ -29,6 +31,8 @@ import Link from 'next/link';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
 import { getGestorConcessionariaNames, isGestorLinkedToConcessionariaCorretor, isGestorLinkedToCorretor, normalizeAccessText } from '@/lib/gestorAccess';
+import { buildOperationalTeamMembers, getTeamMemberAvatar, isTrafficManagerMember, OrionTeamMember } from '@/lib/orionTeam';
+import { generateOrionEmail } from '@/lib/users';
 
 interface CorretoraGroup {
   id: string; // ID of the first corretor/profile in the group
@@ -52,7 +56,47 @@ interface CorretoraRecord {
   meta_ad_account_id?: string | null;
   meta_ad_account_name?: string | null;
   modo_operacao?: OperationMode | null;
+  time_operacional?: OrionTeamMember[] | null;
+  gestor_trafego_id?: string | null;
 }
+
+type BatchPersonRole = 'corretor_admin' | 'corretor_membro';
+
+type BatchPerson = {
+  id: string;
+  nome: string;
+  telefone: string;
+  tipo_usuario: BatchPersonRole;
+};
+
+type CreatedCredential = {
+  nome: string;
+  tipo_usuario: string;
+  email: string;
+  senha_provisoria: string;
+  link_login: string;
+};
+
+const createBatchPerson = (tipo_usuario: BatchPersonRole = 'corretor_admin'): BatchPerson => ({
+  id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+  nome: '',
+  telefone: '',
+  tipo_usuario,
+});
+
+const emptyBrokerageForm = () => ({
+  nome: '',
+  descricao: '',
+  time_operacional: [] as OrionTeamMember[],
+  pessoas: [createBatchPerson()] as BatchPerson[],
+});
+
+const formatPhone = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits ? `(${digits}` : '';
+  if (digits.length <= 7) return `(${digits.slice(0, 2)})${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)})${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
 
 type OperationMode = 'individual' | 'grupo_rodizio' | 'grupo_rodizio_admin';
 
@@ -237,6 +281,7 @@ function CorretorasContent() {
   const [corretores, setCorretores] = useState<Corretor[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [gestores, setGestores] = useState<Profile[]>([]);
+  const [orionTeamProfiles, setOrionTeamProfiles] = useState<Profile[]>([]);
   const [corretorasCadastradas, setCorretorasCadastradas] = useState<CorretoraRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -246,8 +291,9 @@ function CorretorasContent() {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [creatingBrokerage, setCreatingBrokerage] = useState(false);
-  const [newBrokerage, setNewBrokerage] = useState({ nome: '', descricao: '' });
+  const [newBrokerage, setNewBrokerage] = useState(emptyBrokerageForm);
   const [createBrokerageError, setCreateBrokerageError] = useState<string | null>(null);
+  const [createdCredentials, setCreatedCredentials] = useState<CreatedCredential[]>([]);
   const [migrationPending, setMigrationPending] = useState(false);
   const [savingOperationMode, setSavingOperationMode] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -265,7 +311,7 @@ function CorretorasContent() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
-      const [corretoresRes, profilesRes, gestoresRes, corretorasRes] = await Promise.all([
+      const [corretoresRes, profilesRes, gestoresRes, orionTeamRes, corretorasRes] = await Promise.all([
         supabase
           .from('corretores')
           .select('*')
@@ -281,6 +327,12 @@ function CorretorasContent() {
           .eq('tipo_usuario', 'gestor_trafego')
           .in('status', ['active', 'ativo', 'Ativo'])
           .order('nome'),
+        supabase
+          .from('profiles')
+          .select('*')
+          .in('tipo_usuario', ['gestor_trafego', 'account_manager', 'designer', 'admin'])
+          .in('status', ['active', 'ativo', 'Ativo'])
+          .order('nome'),
         token ? fetch('/api/admin/corretoras', {
           headers: { Authorization: `Bearer ${token}` }
         }) : Promise.resolve(null)
@@ -289,6 +341,7 @@ function CorretorasContent() {
       if (corretoresRes.error) throw corretoresRes.error;
       if (profilesRes.error) throw profilesRes.error;
       if (gestoresRes.error) throw gestoresRes.error;
+      if (orionTeamRes.error) throw orionTeamRes.error;
 
       let loadedCorretoras: CorretoraRecord[] = [];
       if (corretorasRes) {
@@ -364,6 +417,7 @@ function CorretorasContent() {
       setCorretores(loadedCorretores);
       setProfiles(loadedProfiles);
       setGestores(loadedGestores);
+      setOrionTeamProfiles(orionTeamRes.data || []);
     } catch (err: unknown) {
       console.error('Error fetching data:', err);
       setError("Erro ao carregar dados do banco de dados.");
@@ -384,6 +438,11 @@ function CorretorasContent() {
   const corretoras = useMemo(() => {
     return groupData(corretores, profiles, corretorasCadastradas);
   }, [corretores, profiles, corretorasCadastradas]);
+
+  const orionTeamMembers = useMemo(
+    () => buildOperationalTeamMembers(orionTeamProfiles),
+    [orionTeamProfiles]
+  );
 
   const filteredCorretoras = useMemo(() => {
     return corretoras.filter((c) => {
@@ -466,6 +525,15 @@ function CorretorasContent() {
       const nome = newBrokerage.nome.trim().replace(/\s+/g, ' ');
       const descricao = newBrokerage.descricao.trim() || null;
       if (!nome) throw new Error('Informe o nome da concessionaria.');
+      if (newBrokerage.pessoas.length === 0) throw new Error('Adicione pelo menos uma pessoa.');
+      const invalidPerson = newBrokerage.pessoas.find((person) =>
+        !person.nome.trim() || person.telefone.replace(/\D/g, '').length !== 11
+      );
+      if (invalidPerson) throw new Error('Preencha nome e telefone completo de todas as pessoas.');
+      const administrators = newBrokerage.pessoas.filter((person) => person.tipo_usuario === 'corretor_admin');
+      if (administrators.length === 0) {
+        throw new Error('Defina pelo menos uma pessoa como Administrador da concessionaria.');
+      }
 
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
@@ -477,33 +545,24 @@ function CorretorasContent() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ nome, descricao, modo_operacao: 'individual' }),
+        body: JSON.stringify({
+          nome,
+          descricao,
+          modo_operacao: 'individual',
+          time_operacional: newBrokerage.time_operacional,
+          gestor_trafego_id: newBrokerage.time_operacional.find(isTrafficManagerMember)?.profile_id || null,
+        }),
       });
       const payload = await response.json().catch(() => ({}));
-      let createdCorretora: CorretoraRecord | null = response.ok ? payload.corretora : null;
       if (!response.ok) {
         if (payload.migration_pending) setMigrationPending(true);
-
-        const { data: existing } = await supabase
-          .from('corretoras')
-          .select('*')
-          .ilike('nome', nome)
-          .maybeSingle();
-
-        if (existing) {
-          createdCorretora = existing;
-        } else {
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .from('corretoras')
-            .insert([{ nome, descricao, status: 'ativo', modo_operacao: 'individual' }])
-            .select('*')
-            .single();
-
-          if (fallbackError) throw new Error(payload.error || fallbackError.message || 'Erro ao criar concessionaria.');
-          createdCorretora = fallbackData;
-        }
+        throw new Error(payload.error || 'Erro ao criar concessionaria.');
+      }
+      if (payload.already_exists) {
+        throw new Error('Esta concessionaria ja existe. Abra o cadastro existente para adicionar novos corretores.');
       }
 
+      const createdCorretora: CorretoraRecord | null = payload.corretora || null;
       if (createdCorretora) {
         setCorretorasCadastradas((current) => {
           const withoutDuplicate = current.filter((item) => item.nome.trim().toLowerCase() !== createdCorretora!.nome.trim().toLowerCase());
@@ -511,7 +570,50 @@ function CorretorasContent() {
         });
       }
 
-      setNewBrokerage({ nome: '', descricao: '' });
+      const orderedPeople = [
+        administrators[0],
+        ...newBrokerage.pessoas.filter((person) => person.id !== administrators[0].id),
+      ];
+      const credentials: CreatedCredential[] = [];
+      for (let index = 0; index < orderedPeople.length; index += 1) {
+        const person = orderedPeople[index];
+        const isPrimaryAdministrator = index === 0;
+        const userResponse = await fetch('/api/admin/usuarios', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            nome: person.nome.trim(),
+            telefone: person.telefone,
+            tipo_usuario: isPrimaryAdministrator ? 'corretor' : person.tipo_usuario,
+            nome_empresa: nome,
+            email: generateOrionEmail(person.nome),
+            tipo_campanha: 'ambos',
+            participa_rodizio: person.tipo_usuario === 'corretor_membro',
+            time_operacional: isPrimaryAdministrator ? newBrokerage.time_operacional : undefined,
+            gestor_trafego_id: isPrimaryAdministrator
+              ? newBrokerage.time_operacional.find(isTrafficManagerMember)?.profile_id || null
+              : undefined,
+          }),
+        });
+        const userPayload = await userResponse.json().catch(() => ({}));
+        if (!userResponse.ok) {
+          throw new Error(
+            `A concessionaria foi criada, mas o acesso de ${person.nome} falhou: ${userPayload.error || 'erro desconhecido'}`
+          );
+        }
+        credentials.push({
+          nome: person.nome.trim(),
+          tipo_usuario: isPrimaryAdministrator ? 'corretor' : person.tipo_usuario,
+          ...userPayload.credentials,
+        });
+        setCreatedCredentials([...credentials]);
+      }
+
+      setCreatedCredentials(credentials);
+      setNewBrokerage(emptyBrokerageForm());
       setCreateModalOpen(false);
       await fetchData();
     } catch (err: any) {
@@ -519,6 +621,32 @@ function CorretorasContent() {
     } finally {
       setCreatingBrokerage(false);
     }
+  };
+
+  const updateBatchPerson = (id: string, updates: Partial<BatchPerson>) => {
+    setNewBrokerage((current) => ({
+      ...current,
+      pessoas: current.pessoas.map((person) => person.id === id ? { ...person, ...updates } : person),
+    }));
+  };
+
+  const removeBatchPerson = (id: string) => {
+    setNewBrokerage((current) => ({
+      ...current,
+      pessoas: current.pessoas.filter((person) => person.id !== id),
+    }));
+  };
+
+  const copyCreatedCredentials = async () => {
+    if (createdCredentials.length === 0) return;
+    const text = createdCredentials.map((credential) => [
+      credential.nome,
+      `Perfil: ${credential.tipo_usuario === 'corretor_membro' ? 'Corretor integrante' : 'Administrador'}`,
+      `Login: ${credential.email}`,
+      `Senha provisoria: ${credential.senha_provisoria}`,
+      `Acesse: ${credential.link_login}`,
+    ].join('\n')).join('\n\n');
+    await navigator.clipboard.writeText(text);
   };
 
   const deleteBrokerage = async (group: CorretoraGroup) => {
@@ -606,6 +734,42 @@ function CorretorasContent() {
         </div>
       )}
 
+      {createdCredentials.length > 0 && (
+        <section aria-live="polite" className="mb-6 rounded-[2rem] border border-emerald-400/30 bg-emerald-500/10 p-5 shadow-lg shadow-emerald-950/10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300">
+                <CheckCircle2 size={22} />
+              </div>
+              <div>
+                <p className="text-sm font-black text-emerald-200">{createdCredentials.length} acesso(s) criado(s)</p>
+                <p className="mt-1 text-xs font-bold text-emerald-100/70">Copie todos os logins e senhas provisórias em um único bloco.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={copyCreatedCredentials} className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-emerald-400 px-5 py-3 text-xs font-black text-emerald-950 transition hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                <Copy size={16} /> Copiar todos os acessos
+              </button>
+              <button type="button" onClick={() => setCreatedCredentials([])} className="min-h-11 rounded-2xl border border-emerald-300/20 px-4 py-3 text-xs font-black text-emerald-100 transition hover:bg-white/5">
+                Fechar
+              </button>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {createdCredentials.map((credential) => (
+              <div key={credential.email} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <p className="truncate text-sm font-black text-white">{credential.nome}</p>
+                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-emerald-300">
+                  {credential.tipo_usuario === 'corretor_membro' ? 'Corretor integrante' : 'Administrador'}
+                </p>
+                <p className="mt-3 break-all text-xs font-bold text-slate-300">{credential.email}</p>
+                <p className="mt-2 flex items-center gap-2 text-sm font-black text-white"><KeyRound size={14} /> {credential.senha_provisoria}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {isAdmin && initialGestorId && (
         <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -624,12 +788,12 @@ function CorretorasContent() {
 
       {isAdmin && mounted && createModalOpen && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-[#020617]/95 px-4 pb-8 pt-24 backdrop-blur-md sm:items-center sm:py-8">
-          <form onSubmit={createBrokerage} className="w-full max-w-xl max-h-[calc(100vh-7rem)] overflow-y-auto rounded-[2rem] border border-cyan-400/20 bg-[#090e1a] p-6 shadow-2xl shadow-cyan-950/50">
+          <form onSubmit={createBrokerage} className="w-full max-w-5xl max-h-[calc(100vh-7rem)] overflow-y-auto rounded-[2rem] border border-cyan-400/20 bg-[#090e1a] p-6 shadow-2xl shadow-cyan-950/50">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Cadastro de concessionaria</p>
                 <h2 className="mt-1 text-2xl font-black text-white">Nova concessionaria</h2>
-                <p className="mt-1 text-xs font-bold text-slate-400">Crie a concessionaria primeiro e depois adicione corretores dentro dela.</p>
+                <p className="mt-1 text-xs font-bold text-slate-400">Defina o time responsável e crie todos os acessos da concessionária de uma vez.</p>
               </div>
               <button type="button" onClick={() => setCreateModalOpen(false)} className="rounded-xl bg-white/5 p-2 text-slate-400 hover:text-white">
                 <X size={18} />
@@ -661,13 +825,90 @@ function CorretorasContent() {
                   className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-5 py-4 text-sm font-bold text-white outline-none focus:border-cyan-400"
                 />
               </div>
+              <fieldset className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+                <legend className="px-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">Time Orion responsável</legend>
+                <p className="mb-4 text-xs font-bold text-slate-400">Este time será aplicado à concessionária e usado por todos os acessos vinculados.</p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {orionTeamMembers.map((member) => {
+                    const selected = newBrokerage.time_operacional.some((item) => item.profile_id === member.profile_id || item.nome === member.nome);
+                    const avatar = getTeamMemberAvatar(member);
+                    return (
+                      <button
+                        key={member.profile_id || member.nome}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setNewBrokerage((current) => ({
+                          ...current,
+                          time_operacional: selected
+                            ? current.time_operacional.filter((item) => (item.profile_id || item.nome) !== (member.profile_id || member.nome))
+                            : [
+                                ...current.time_operacional.filter((item) => isTrafficManagerMember(member) ? !isTrafficManagerMember(item) : true),
+                                member,
+                              ],
+                        }))}
+                        className={`min-h-14 rounded-2xl border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-cyan-300 ${selected ? 'border-cyan-300 bg-cyan-400 text-slate-950' : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'}`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl ${selected ? 'bg-slate-950/15' : 'bg-black/30'}`}>
+                            {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover object-top" /> : member.nome.slice(0, 1)}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-black">{member.nome}</span>
+                            <span className={`mt-1 block truncate text-[10px] font-bold ${selected ? 'text-slate-800' : 'text-slate-400'}`}>{member.cargo}</span>
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              <fieldset className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+                <legend className="px-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">Acessos da concessionária</legend>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400">Informe nome, telefone e o nível de acesso de cada pessoa.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewBrokerage((current) => ({ ...current, pessoas: [...current.pessoas, createBatchPerson('corretor_membro')] }))}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-xs font-black text-cyan-300 transition hover:bg-cyan-400/20 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                  >
+                    <UserPlus size={16} /> Adicionar pessoa
+                  </button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {newBrokerage.pessoas.map((person, index) => (
+                    <div key={person.id} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_190px_210px_48px] md:items-end">
+                      <div>
+                        <label htmlFor={`batch-name-${person.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome completo</label>
+                        <input id={`batch-name-${person.id}`} required value={person.nome} onChange={(event) => updateBatchPerson(person.id, { nome: event.target.value })} placeholder={`Pessoa ${index + 1}`} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-400" />
+                      </div>
+                      <div>
+                        <label htmlFor={`batch-phone-${person.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Telefone</label>
+                        <input id={`batch-phone-${person.id}`} required inputMode="tel" value={person.telefone} onChange={(event) => updateBatchPerson(person.id, { telefone: formatPhone(event.target.value) })} placeholder="(61)99999-9999" maxLength={14} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-400" />
+                      </div>
+                      <div>
+                        <label htmlFor={`batch-role-${person.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Tipo de usuário</label>
+                        <select id={`batch-role-${person.id}`} value={person.tipo_usuario} onChange={(event) => updateBatchPerson(person.id, { tipo_usuario: event.target.value as BatchPersonRole })} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-sm font-black text-white outline-none focus:border-cyan-400">
+                          <option value="corretor_admin">Administrador</option>
+                          <option value="corretor_membro">Corretor integrante</option>
+                        </select>
+                      </div>
+                      <button type="button" aria-label={`Remover ${person.nome || `pessoa ${index + 1}`}`} disabled={newBrokerage.pessoas.length === 1} onClick={() => removeBatchPerson(person.id)} className="flex min-h-11 items-center justify-center rounded-xl border border-rose-400/20 text-rose-300 transition hover:bg-rose-500/10 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-30">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </fieldset>
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setCreateModalOpen(false)} className="rounded-2xl border border-white/10 px-6 py-3 text-xs font-black text-slate-300">
                 Cancelar
               </button>
               <button type="submit" disabled={creatingBrokerage} className="flex items-center gap-2 rounded-2xl bg-cyan-500 px-6 py-3 text-xs font-black text-slate-950 disabled:opacity-60">
-                {creatingBrokerage ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Criar concessionaria
+                {creatingBrokerage ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Criar concessionaria e acessos
               </button>
             </div>
           </form>

@@ -14,6 +14,32 @@ function normalizeOperationMode(value: unknown) {
     : 'individual';
 }
 
+function normalizeOperationalTeam(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((member) => ({
+      nome: normalizeName(member?.nome),
+      cargo: normalizeName(member?.cargo),
+      profile_id: normalizeName(member?.profile_id) || undefined,
+      foto_url: normalizeName(member?.foto_url) || null,
+      tipo_usuario: normalizeName(member?.tipo_usuario) || undefined,
+      email: normalizeName(member?.email) || null,
+      email_real: normalizeName(member?.email_real) || null,
+      is_admin_master: Boolean(member?.is_admin_master),
+    }))
+    .filter((member) => member.nome && member.cargo);
+}
+
+function resolveTrafficManagerId(explicitId: unknown, team: ReturnType<typeof normalizeOperationalTeam>) {
+  const directId = normalizeName(explicitId);
+  if (directId) return directId;
+  const manager = team.find((member) =>
+    member.tipo_usuario === 'gestor_trafego' ||
+    member.cargo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('trafego')
+  );
+  return manager?.profile_id || null;
+}
+
 function isMissingCorretorasTable(error?: { message?: string | null } | null) {
   return /corretoras|schema cache|does not exist|could not find/i.test(String(error?.message || ''));
 }
@@ -76,9 +102,25 @@ export async function POST(request: Request) {
     const nome = normalizeName(body.nome);
     const descricao = normalizeName(body.descricao) || null;
     const modo_operacao = normalizeOperationMode(body.modo_operacao);
+    const time_operacional = normalizeOperationalTeam(body.time_operacional);
+    const gestor_trafego_id = resolveTrafficManagerId(body.gestor_trafego_id, time_operacional);
 
     if (!nome) {
       return NextResponse.json({ error: 'Informe o nome da concessionaria.' }, { status: 400 });
+    }
+
+    if (gestor_trafego_id) {
+      const { data: gestor, error: gestorError } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('id', gestor_trafego_id)
+        .eq('tipo_usuario', 'gestor_trafego')
+        .in('status', ['active', 'ativo', 'Ativo'])
+        .maybeSingle();
+      if (gestorError) throw gestorError;
+      if (!gestor) {
+        return NextResponse.json({ error: 'O gestor de trafego selecionado nao esta ativo.' }, { status: 400 });
+      }
     }
 
     const { data: existing } = await supabaseAdmin
@@ -98,6 +140,8 @@ export async function POST(request: Request) {
         descricao,
         status: 'ativo',
         modo_operacao,
+        time_operacional,
+        gestor_trafego_id,
         created_by: guard.profile.id,
       }])
       .select('*')
@@ -117,7 +161,7 @@ export async function POST(request: Request) {
       action: 'corretora.create',
       entity_type: 'corretoras',
       entity_id: data.id,
-      metadata: { nome },
+      metadata: { nome, gestor_trafego_id, time_operacional },
     });
 
     return NextResponse.json({ success: true, corretora: data });
