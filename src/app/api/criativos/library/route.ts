@@ -13,6 +13,7 @@ import {
   findOrCreateDriveFolder,
   isGoogleDriveConfigured,
   listDriveChildren,
+  trashDriveFile,
   uploadDriveFile,
   type DriveFolder,
 } from '@/lib/integrations/googleDrive';
@@ -145,7 +146,14 @@ async function resolveDriveLibraryScope(
   let writePermissionMissing = false;
   if (!managerFolder) {
     if (!options.createMissing) {
-      throw new Error(`Pasta do gestor "${manager.nome}" nao encontrada no Google Drive.`);
+      return {
+        corretores,
+        folders: [] as ScopedDriveFolder[],
+        missingFolders: assignedFolders.map((folder) => folder.name),
+        createdFolders,
+        writePermissionMissing,
+        managerFolder: null,
+      };
     }
     try {
       managerFolder = await createDriveFolder({
@@ -242,7 +250,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const gestorId = url.searchParams.get('gestor_id');
-    const driveScope = await resolveDriveLibraryScope(guard.profile, gestorId, { createMissing: true });
+    const driveScope = await resolveDriveLibraryScope(guard.profile, gestorId);
     const { corretores, folders } = driveScope;
     const corretorIds = corretores.map((corretor) => corretor.id);
 
@@ -278,11 +286,11 @@ export async function GET(request: Request) {
       missing_folders: driveScope.missingFolders,
       created_folders: driveScope.createdFolders,
       drive_write_permission_missing: driveScope.writePermissionMissing,
-      manager_drive_folder: {
+      manager_drive_folder: driveScope.managerFolder ? {
         id: driveScope.managerFolder.id,
         name: driveScope.managerFolder.name,
         web_view_link: driveScope.managerFolder.webViewLink || null,
-      },
+      } : null,
     });
   } catch (error: unknown) {
     return NextResponse.json({ error: errorMessage(error, 'Erro ao carregar as pastas de criativos.') }, { status: 500 });
@@ -406,5 +414,49 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, asset, drive_file: driveFile });
   } catch (error: unknown) {
     return NextResponse.json({ error: errorMessage(error, 'Erro ao salvar o criativo na pasta.') }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const guard = await requireApiUser(request, [...STAFF_ROLES]);
+  if ('error' in guard) return guard.error;
+
+  const limited = rateLimit(request, 'criativos:library:delete-folder', {
+    limit: 10,
+    windowMs: 10 * 60_000,
+    key: guard.profile.id,
+  });
+  if (limited) return limited;
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const corretorId = String(body.corretor_id || '').trim();
+    const gestorId = String(body.gestor_id || '').trim() || null;
+    const driveFolderId = extractDriveId(String(body.drive_folder_id || ''));
+    if (!corretorId || !driveFolderId) {
+      return NextResponse.json({ error: 'Informe a concessionaria e a pasta do Google Drive.' }, { status: 400 });
+    }
+    if (!(await canUseCreativeFolder(guard.profile, corretorId, gestorId))) {
+      return NextResponse.json({ error: 'Esta pasta nao pertence ao escopo deste gestor.' }, { status: 403 });
+    }
+
+    const driveScope = await resolveDriveLibraryScope(guard.profile, gestorId);
+    const destination = driveScope.folders.find((folder) => (
+      folder.drive_folder_id === driveFolderId && folder.corretor_ids.includes(corretorId)
+    ));
+    if (!destination) {
+      return NextResponse.json({ error: 'A pasta ja foi removida ou nao pertence a esta concessionaria.' }, { status: 404 });
+    }
+
+    await trashDriveFile(driveFolderId);
+    await writeAuditLog(request, guard.profile, {
+      action: 'creative.folder.trash',
+      entity_type: 'google_drive_folder',
+      entity_id: driveFolderId,
+      metadata: { corretor_id: corretorId, gestor_id: gestorId, folder_name: destination.name },
+    });
+    return NextResponse.json({ ok: true, folder: destination.name });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: errorMessage(error, 'Erro ao excluir a pasta de criativos.') }, { status: 500 });
   }
 }

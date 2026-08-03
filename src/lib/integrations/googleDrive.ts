@@ -398,6 +398,16 @@ export async function deleteDriveFile(fileId: string) {
   }
 }
 
+export async function trashDriveFile(fileId: string) {
+  const normalizedId = extractDriveId(fileId);
+  if (!normalizedId) throw new Error('Arquivo ou pasta do Google Drive invalida.');
+  await driveFetch(`files/${encodeURIComponent(normalizedId)}?supportsAllDrives=true&fields=id,trashed`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  });
+}
+
 export async function moveDriveFile(options: {
   fileId: string;
   destinationFolderId: string;

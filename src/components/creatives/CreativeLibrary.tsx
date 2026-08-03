@@ -22,6 +22,7 @@ import {
   Search,
   Send,
   Sparkles,
+  Trash2,
   Upload,
   X,
 } from 'lucide-react';
@@ -142,6 +143,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [sendingApprovalId, setSendingApprovalId] = useState<string | null>(null);
+  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
   const [approvalFeedback, setApprovalFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
@@ -174,6 +176,16 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   useEffect(() => {
     const timer = window.setTimeout(() => void fetchLibrary(), 0);
     return () => window.clearTimeout(timer);
+  }, [fetchLibrary]);
+
+  useEffect(() => {
+    const sync = () => void fetchLibrary(true);
+    const interval = window.setInterval(sync, 30_000);
+    window.addEventListener('focus', sync);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', sync);
+    };
   }, [fetchLibrary]);
 
   const jobsVersionRef = useRef(jobsVersion);
@@ -467,6 +479,44 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       return false;
     } finally {
       setSendingApprovalId(null);
+    }
+  };
+
+  const deleteFolder = async (folder: CreativeFolder) => {
+    const confirmed = window.confirm(
+      `Mover a pasta "${folder.name}" para a lixeira do Google Drive? Ela tambem deixara de aparecer no CRM.`
+    );
+    if (!confirmed) return;
+    setDeletingFolderId(folder.drive_folder_id);
+    setApprovalFeedback(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const response = await fetch('/api/criativos/library', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          corretor_id: folder.id,
+          gestor_id: gestorId,
+          drive_folder_id: folder.drive_folder_id,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel excluir a pasta.');
+      setFolders((current) => current.filter((item) => item.drive_folder_id !== folder.drive_folder_id));
+      if (selectedFolderKey === folder.key) {
+        setSelectedFolderKey(null);
+        setSelectedRegionKey(null);
+        setSelectedOperatorKey(null);
+      }
+      setApprovalFeedback({
+        tone: 'success',
+        message: `A pasta "${folder.name}" foi movida para a lixeira do Google Drive e removida do CRM.`,
+      });
+    } catch (error: unknown) {
+      setApprovalFeedback({ tone: 'error', message: errorMessage(error, 'Erro ao excluir a pasta.') });
+    } finally {
+      setDeletingFolderId(null);
     }
   };
 
@@ -777,37 +827,51 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                 {visibleFolders.map((folder) => {
                   const cover = folder.assets.find((asset) => asset.arquivo_url)?.arquivo_url;
                   return (
-                    <button
+                    <article
                       key={folder.key}
-                      type="button"
-                      onClick={() => {
-                        setSelectedFolderKey(folder.key);
-                        setSelectedRegionKey(null);
-                        setSelectedOperatorKey(null);
-                      }}
-                      className="group min-h-52 overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/70 text-left shadow-xl shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/50 hover:shadow-cyan-950/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400/25"
+                      className="group relative min-h-52 overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/70 text-left shadow-xl shadow-slate-950/10 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/50 hover:shadow-cyan-950/20"
                     >
-                      <div className="relative h-28 overflow-hidden bg-gradient-to-br from-slate-800 to-slate-950">
-                        {cover ? (
-                          <img src={cover} alt="" className="h-full w-full object-cover opacity-45 transition duration-300 group-hover:scale-105 group-hover:opacity-60" loading="lazy" />
-                        ) : (
-                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.2),transparent_50%)]" />
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent" />
-                        <span className="absolute bottom-3 left-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/15 text-cyan-300 backdrop-blur">
-                          <FolderOpen size={24} />
-                        </span>
-                      </div>
-                      <div className="flex items-end justify-between gap-4 p-5">
-                        <div className="min-w-0">
-                          <h3 className="truncate text-base font-black text-slate-100">{folder.name}</h3>
-                          <p className="mt-1 text-xs font-bold text-slate-500">
-                            {folder.assets.length} {folder.assets.length === 1 ? 'criativo' : 'criativos'}
-                          </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFolderKey(folder.key);
+                          setSelectedRegionKey(null);
+                          setSelectedOperatorKey(null);
+                        }}
+                        className="block w-full text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-cyan-400/25"
+                      >
+                        <div className="relative h-28 overflow-hidden bg-gradient-to-br from-slate-800 to-slate-950">
+                          {cover ? (
+                            <img src={cover} alt="" className="h-full w-full object-cover opacity-45 transition duration-300 group-hover:scale-105 group-hover:opacity-60" loading="lazy" />
+                          ) : (
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.2),transparent_50%)]" />
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent" />
+                          <span className="absolute bottom-3 left-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/15 text-cyan-300 backdrop-blur">
+                            <FolderOpen size={24} />
+                          </span>
                         </div>
-                        <span className="text-xs font-black text-cyan-400 transition group-hover:translate-x-0.5">Abrir</span>
-                      </div>
-                    </button>
+                        <div className="flex items-end justify-between gap-4 p-5 pr-16">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-base font-black text-slate-100">{folder.name}</h3>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {folder.assets.length} {folder.assets.length === 1 ? 'criativo' : 'criativos'}
+                            </p>
+                          </div>
+                          <span className="text-xs font-black text-cyan-400 transition group-hover:translate-x-0.5">Abrir</span>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteFolder(folder)}
+                        disabled={deletingFolderId === folder.drive_folder_id}
+                        className="absolute bottom-4 right-4 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-400/20 bg-red-500/10 text-red-300 transition hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-50"
+                        aria-label={`Excluir pasta ${folder.name}`}
+                        title="Mover pasta para a lixeira"
+                      >
+                        {deletingFolderId === folder.drive_folder_id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                      </button>
+                    </article>
                   );
                 })}
               </div>

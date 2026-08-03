@@ -11,6 +11,14 @@ set -a
 . ./.env.production
 set +a
 
+for required_var in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY; do
+  eval "required_value=\${$required_var:-}"
+  if [ -z "$required_value" ]; then
+    echo "A variavel obrigatoria $required_var esta vazia em .env.production. Deploy cancelado."
+    exit 1
+  fi
+done
+
 docker build \
   --build-arg NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" \
   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
