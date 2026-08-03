@@ -201,9 +201,9 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const adminMenu = [
     { icon: Home, label: 'Visao Geral', href: '/admin' },
-    { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
-    { icon: Shield, label: 'Usuarios', href: '/admin/usuarios' },
     { icon: Building2, label: 'Concessionarias', href: '/admin/corretoras' },
+    { icon: Shield, label: 'Usuarios', href: '/admin/usuarios' },
+    { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: Cpu, label: 'IA', href: '/admin/ia' },
     { icon: GitBranch, label: 'Bot', href: '/admin/bot' },
     { icon: Sparkles, label: 'Ferramentas', href: '/admin/ferramentas' },
