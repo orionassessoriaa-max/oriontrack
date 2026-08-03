@@ -36,3 +36,29 @@ export async function PUT(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ stages });
 }
+
+export async function PATCH(request: Request) {
+  const guard = await requireCommercialUser(request, true);
+  if ('error' in guard) return guard.error;
+  const body = await request.json();
+  const oldId = String(body.old_id || '').trim();
+  const label = String(body.label || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!oldId || !label) return NextResponse.json({ error: 'Informe a etapa e o novo nome.' }, { status: 400 });
+
+  const { data: config, error: configError } = await supabaseAdmin.from('comercial_config').select('etapas').eq('id', 1).maybeSingle();
+  if (configError) return NextResponse.json({ error: configError.message }, { status: 500 });
+  const current = normalizeStages(config?.etapas?.length ? config.etapas : COMMERCIAL_STAGES);
+  const target = current.find((stage) => stage.id === oldId);
+  if (!target) return NextResponse.json({ error: 'Etapa nao encontrada.' }, { status: 404 });
+  if (target.protected) return NextResponse.json({ error: 'Esta etapa e fixa e nao pode ser renomeada.' }, { status: 400 });
+  if (current.some((stage) => stage.id !== oldId && stage.label.toLowerCase() === label.toLowerCase())) {
+    return NextResponse.json({ error: 'Ja existe uma etapa com este nome.' }, { status: 409 });
+  }
+
+  const next = current.map((stage) => stage.id === oldId ? { ...stage, id: label, label } : stage);
+  const { error: leadError } = await supabaseAdmin.from('comercial_leads').update({ status: label, updated_at: new Date().toISOString() }).eq('status', oldId);
+  if (leadError) return NextResponse.json({ error: leadError.message }, { status: 500 });
+  const { error: saveError } = await supabaseAdmin.from('comercial_config').upsert({ id: 1, etapas: next, updated_at: new Date().toISOString() });
+  if (saveError) return NextResponse.json({ error: saveError.message }, { status: 500 });
+  return NextResponse.json({ stages: next });
+}

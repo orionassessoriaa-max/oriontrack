@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarDays, CalendarPlus, ChevronDown, ChevronUp, GripVertical, MessageSquare, Paperclip, Phone, Plus, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
+import { CalendarDays, CalendarPlus, ChevronDown, ChevronUp, GripVertical, MessageSquare, Paperclip, Pencil, Phone, Plus, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import CommercialLeadModal from '@/components/commercial/CommercialLeadModal';
 import CommercialLeadDetailsModal from '@/components/commercial/CommercialLeadDetailsModal';
 import { COMMERCIAL_STAGES, currency, type CommercialLead, type CommercialStage } from '@/lib/comercial';
 
 type DatePreset = 'todos' | 'hoje' | 'ontem' | '7dias' | '30dias' | 'mes' | 'personalizado';
-type LeadInteraction = { id: string; comentario: string | null; anexo_url: string | null; anexo_nome: string | null; autor_nome: string; created_at: string };
+type LeadInteraction = { id: string; comentario: string | null; anexo_url: string | null; anexo_nome: string | null; autor_nome: string; tipo?: string; metadata?: Record<string, unknown>; created_at: string };
 
 function localDateValue(date: Date) {
   const year = date.getFullYear();
@@ -91,6 +91,8 @@ export default function CommercialKanbanPage() {
   const [stageDragging, setStageDragging] = useState<string | null>(null);
   const [newStageOpen, setNewStageOpen] = useState(false);
   const [newStageName, setNewStageName] = useState('');
+  const [editingStage, setEditingStage] = useState<CommercialStage | null>(null);
+  const [editingStageName, setEditingStageName] = useState('');
   const [stageError, setStageError] = useState<string | null>(null);
   const [stageSaving, setStageSaving] = useState(false);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
@@ -143,7 +145,14 @@ export default function CommercialKanbanPage() {
     }
     setMovingId(id);
     setLeads((current) => current.map((lead) => lead.id === id ? { ...lead, status } : lead));
-    try { await api('/api/comercial/leads', { method: 'PATCH', body: JSON.stringify({ id, status }) }); } catch { await load(); } finally { setMovingId(null); }
+    try {
+      const payload = await api('/api/comercial/leads', { method: 'PATCH', body: JSON.stringify({ id, status }) });
+      if (payload.lead) setLeads((current) => current.map((lead) => lead.id === id ? payload.lead : lead));
+      if (expandedLeadId === id) {
+        const timeline = await api(`/api/comercial/leads/${id}/interactions`);
+        setInteractionsByLead((current) => ({ ...current, [id]: timeline.interactions || [] }));
+      }
+    } catch { await load(); } finally { setMovingId(null); }
   }
   async function confirmMeetingMove(event: React.FormEvent) {
     event.preventDefault();
@@ -184,6 +193,21 @@ export default function CommercialKanbanPage() {
     if (stage.protected) return;
     if (grouped[stage.id]?.length) { setStageError('Mova os leads desta etapa antes de remove-la.'); return; }
     await saveStages(stages.filter((item) => item.id !== stage.id));
+  }
+  async function renameStage(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingStage) return;
+    const label = editingStageName.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
+    if (!label || label === editingStage.label) { setEditingStage(null); return; }
+    setStageSaving(true); setStageError(null);
+    try {
+      const payload = await api('/api/comercial/stages', { method: 'PATCH', body: JSON.stringify({ old_id: editingStage.id, label }) });
+      setStages(payload.stages || stages);
+      await load();
+      setEditingStage(null);
+    } catch (error) {
+      setStageError(error instanceof Error ? error.message : 'Nao foi possivel renomear a etapa.');
+    } finally { setStageSaving(false); }
   }
   function openLeadInbox(event: React.MouseEvent, lead: CommercialLead) {
     event.stopPropagation();
@@ -281,12 +305,13 @@ export default function CommercialKanbanPage() {
       {stageError && <div className="kh-inline-error kh-stage-error">{stageError}<button type="button" aria-label="Fechar aviso" onClick={() => setStageError(null)}><X size={15} /></button></div>}
       {role === 'coordenador' && <div className="kh-kanban-toolbar"><span>Arraste uma coluna para reorganizar o funil.</span><button type="button" className="kh-button" onClick={() => setNewStageOpen(true)} disabled={stageSaving}>{stageSaving ? <RefreshCw size={16} className="kh-spin" /> : <Plus size={16} />} {stageSaving ? 'Salvando...' : 'Adicionar etapa'}</button></div>}
       {role === 'coordenador' && newStageOpen && <form className="kh-stage-add" onSubmit={addStage}><input autoFocus className="kh-input" value={newStageName} onChange={(event) => setNewStageName(event.target.value)} placeholder="Nome da nova etapa" maxLength={60} required /><button className="kh-button primary">Criar etapa</button><button type="button" className="kh-button" onClick={() => setNewStageOpen(false)}>Cancelar</button></form>}
+      {role === 'coordenador' && editingStage && <form className="kh-stage-add" onSubmit={renameStage}><input autoFocus className="kh-input" value={editingStageName} onChange={(event) => setEditingStageName(event.target.value)} placeholder="Novo nome da etapa" maxLength={60} required /><button className="kh-button primary" disabled={stageSaving}>Salvar nome</button><button type="button" className="kh-button" onClick={() => setEditingStage(null)}>Cancelar</button></form>}
       <div className="kh-kanban" aria-label="Pipeline comercial">
         {stages.map((stage, index) => {
           const statusLeads = grouped[stage.id] || [];
           const total = statusLeads.reduce((sum, lead) => sum + Number(lead.valor_negociacao || 0), 0);
           return <section key={stage.id} className={`kh-kanban-column ${dropStage === stage.id ? 'drop-target' : ''} ${stageDragging === stage.id ? 'stage-dragging' : ''}`} draggable={role === 'coordenador'} onDragStart={(event) => { event.stopPropagation(); if (role === 'coordenador') setStageDragging(stage.id); }} onDragEnd={() => setStageDragging(null)} onDragOver={(event) => { event.preventDefault(); if (dragging) setDropStage(stage.id); }} onDragEnter={() => dragging && setDropStage(stage.id)} onDragLeave={() => setDropStage(null)} onDrop={(event) => { event.stopPropagation(); if (stageDragging && role === 'coordenador') reorderStages(stage.id); else if (dragging) void moveLead(dragging, stage.id); setDragging(null); setStageDragging(null); setDropStage(null); }}>
-            <header style={{ '--stage-hue': `${205 + (index * 7) % 105}` } as React.CSSProperties}><div><GripVertical size={14} className="kh-stage-grip" /><strong>{stage.label}</strong><b>{statusLeads.length}</b></div>{canViewCommercialFinancials && <small>{currency(total)}</small>}{role === 'coordenador' && stage.protected && <div className="kh-stage-actions"><em>fixa</em></div>}</header>
+            <header style={{ '--stage-hue': `${205 + (index * 7) % 105}` } as React.CSSProperties}><div><GripVertical size={14} className="kh-stage-grip" /><strong>{stage.label}</strong><b>{statusLeads.length}</b></div>{canViewCommercialFinancials && <small>{currency(total)}</small>}{role === 'coordenador' && <div className="kh-stage-actions">{stage.protected ? <em>fixa</em> : <><button type="button" title="Renomear etapa" aria-label={`Renomear ${stage.label}`} onClick={(event) => { event.stopPropagation(); setEditingStage(stage); setEditingStageName(stage.label); }}><Pencil size={12} /></button><button type="button" title="Excluir etapa" aria-label={`Excluir ${stage.label}`} onClick={(event) => { event.stopPropagation(); if (window.confirm(`Excluir a etapa \"${stage.label}\"?`)) void removeStage(stage); }}><Trash2 size={12} /></button></>}</div>}</header>
             <div className="kh-kanban-cards"><div className="kh-kanban-list">{statusLeads.map((lead) => { const assignedSdr = lead.sdr_id ? memberMap.get(lead.sdr_id) : null; const selectedSdr = lead.sdr_id || assignmentChoice[lead.id] || sdrMembers[0]?.profile_id || ''; return <article key={lead.id} draggable onDragStart={(event) => { event.stopPropagation(); setDragging(lead.id); }} onDragEnd={() => { setDragging(null); setDropStage(null); }} onClick={() => toggleLeadDetails(lead)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleLeadDetails(lead); } }} tabIndex={0} role="button" className={`kh-danilo-card ${dragging === lead.id ? 'dragging' : ''}`}><div className="kh-card-top"><span className={`kh-dot ${lead.lead_qualificado ? 'qualified' : ''}`} /><small>Lead</small><span className="kh-card-expand"><ChevronDown size={14} /></span></div><h3>{lead.nome}</h3><div className="kh-card-phone"><Phone size={12} /><span>{lead.telefone || 'Telefone nao informado'}</span></div><span className="kh-card-cnpj">{formatDaniloCnpj(lead)}</span><div className="kh-card-cadence">{formatDaniloCadence(lead.status_started_at || lead.data_entrada)}</div><div className="kh-card-entry"><CalendarDays size={12} /><span>{formatDaniloEntry(lead.data_entrada)}</span></div><div className="kh-card-actions"><button type="button" className="kh-card-inbox" onClick={(event) => openLeadInbox(event, lead)}><MessageSquare size={13} /> Abrir no Inbox</button>{canAssignSdr && <select aria-label={`Responsavel SDR de ${lead.nome}`} className="kh-card-owner-select" value={selectedSdr} onClick={(event) => event.stopPropagation()} onChange={(event) => void changeLeadSdr(event, lead)} disabled={startingId === lead.id}><option value="">Sem responsavel</option>{sdrMembers.map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome.split(' ')[0]}</option>)}</select>}{!assignedSdr && (role === 'sdr' || canAssignSdr) && <button type="button" className="kh-card-start" disabled={startingId === lead.id || (canAssignSdr && !selectedSdr)} onClick={(event) => void startLead(event, lead)}>{startingId === lead.id ? 'Iniciando...' : 'Start'}</button>}{!canAssignSdr && role === 'sdr' && assignedSdr && <span className="kh-card-owner">SDR: {assignedSdr.nome.split(' ')[0]}</span>}</div></article>; })}{!statusLeads.length && <div className="kh-column-empty"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-empty-logo" /><span>Sem leads</span></div>}</div><button type="button" className="kh-add-lead-column" onClick={() => { setInitialStatus(stage.id); setModalOpen(true); }}><Plus size={16} /> Adicionar lead</button>{role === 'coordenador' && !stage.protected && <button type="button" className="kh-remove-stage" onClick={() => { if (window.confirm(`Excluir a etapa \"${stage.label}\"?`)) void removeStage(stage); }}><Trash2 size={13} /> Excluir etapa</button>}</div>
           </section>;
         })}

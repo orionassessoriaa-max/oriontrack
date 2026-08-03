@@ -156,7 +156,7 @@ export async function GET(request: Request) {
   const realized = leads.filter((lead) => lead.reuniao_realizada_at).length;
   const qualifiedMeetings = leads.filter((lead) => lead.reuniao_realizada_at && lead.reuniao_qualificada === true).length;
   const disqualifiedMeetings = leads.filter((lead) => lead.reuniao_realizada_at && lead.reuniao_qualificada === false).length;
-  const noShow = leads.filter((lead) => lead.no_show || lead.status === 'No-show').length;
+  const noShow = leads.reduce((total, lead) => total + Number(lead.no_show_count || (lead.no_show || lead.status === 'No-show' ? 1 : 0)), 0);
   const closed = leads.filter((lead) => lead.status === 'Negócio fechado' || Number(lead.valor_fechado || 0) > 0);
   const revenue = closed.reduce((sum, lead) => sum + Number(lead.valor_fechado || 0), 0);
   const negotiation = leads

@@ -4,6 +4,21 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
 import { startCommercialBotIfEligible } from '@/lib/commercialBot';
 import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
+import { isCommercialMql } from '@/lib/commercialQualification';
+import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
+
+function normalizeStage(value: unknown) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function isScheduledMeetingStage(value: unknown) {
+  const normalized = normalizeStage(value);
+  return normalized.includes('reunio') && normalized.includes('agend');
+}
+
+function isNoShowStage(value: unknown) {
+  return normalizeStage(value).replace(/[-_]/g, ' ').includes('no show');
+}
 
 function redactFinancialFields<T extends Record<string, any>>(lead: T, canView: boolean) {
   if (canView) return lead;
@@ -66,7 +81,7 @@ export async function POST(request: Request) {
     status,
     sdr_id: assignedSdrId || null,
     closer_id: guard.commercialRole === 'closer' ? guard.profile.id : body.closer_id || null,
-    lead_qualificado: Boolean(body.lead_qualificado),
+    lead_qualificado: guard.canViewCommercialFinancials && isCommercialMql(body.faturamento_mensal, body.investimento),
     valor_negociacao: guard.canViewCommercialFinancials ? Number(body.valor_negociacao || 0) : 0,
     observacoes: String(body.observacoes || '').trim() || null,
     created_by: guard.profile.id,
@@ -81,6 +96,13 @@ export async function POST(request: Request) {
     console.error('commercial_bot_first_message_failed', botError);
   }
   await writeAuditLog(request, guard.profile, { action: 'commercial.lead.create', entity_type: 'commercial_lead', entity_id: data.id });
+  await recordCommercialTimelineEvent({
+    leadId: data.id,
+    actorId: guard.profile.id,
+    type: 'lead_created',
+    description: `Lead criado por ${guard.profile.nome || 'Equipe comercial'}.`,
+    metadata: { status: data.status, sdr_id: data.sdr_id, closer_id: data.closer_id },
+  });
   return NextResponse.json({ lead: redactFinancialFields(data, guard.canViewCommercialFinancials) }, { status: 201 });
 }
 
@@ -91,14 +113,13 @@ export async function PATCH(request: Request) {
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'Lead obrigatorio.' }, { status: 400 });
 
-  let check = supabaseAdmin.from('comercial_leads').select('id,sdr_id,closer_id,status').eq('id', id);
+  let check = supabaseAdmin.from('comercial_leads').select('id,sdr_id,closer_id,status,reuniao_agendada_at,reuniao_realizada_at,no_show,no_show_count,faturamento_mensal,investimento,lead_qualificado').eq('id', id);
   check = applyCommercialLeadScope(check, guard.commercialRole, guard.profile.id);
   const { data: allowed } = await check.maybeSingle();
   if (!allowed) return NextResponse.json({ error: 'Lead nao encontrado ou sem permissao.' }, { status: 404 });
 
   const targetStatus = String(body.status || '').trim();
-  const normalizedStatus = targetStatus.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const isScheduledStage = normalizedStatus.includes('reunio') && normalizedStatus.includes('agend');
+  const isScheduledStage = isScheduledMeetingStage(targetStatus);
   const scheduledAt = body.reuniao_agendada_at ? new Date(String(body.reuniao_agendada_at)) : null;
   if (isScheduledStage && (!scheduledAt || Number.isNaN(scheduledAt.getTime()))) {
     return NextResponse.json({ error: 'Informe a data e o horario da reuniao antes de mover o lead.' }, { status: 400 });
@@ -117,6 +138,22 @@ export async function PATCH(request: Request) {
     if (guard.commercialRole === 'sdr' && ['sdr_id', 'closer_id'].includes(field)) continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
   }
+  const statusChanged = Boolean(targetStatus) && targetStatus !== allowed.status;
+  if (statusChanged && isNoShowStage(targetStatus) && !isNoShowStage(allowed.status)) {
+    update.no_show = true;
+    update.no_show_count = Number(allowed.no_show_count || 0) + 1;
+  } else if (statusChanged && isScheduledStage) {
+    update.no_show = false;
+  } else if (statusChanged && isScheduledMeetingStage(allowed.status) && !isNoShowStage(targetStatus)) {
+    update.reuniao_realizada_at = body.reuniao_realizada_at || new Date().toISOString();
+    update.no_show = false;
+  }
+  if (guard.canViewCommercialFinancials && (Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') || Object.prototype.hasOwnProperty.call(body, 'investimento'))) {
+    update.lead_qualificado = isCommercialMql(
+      Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') ? body.faturamento_mensal : allowed.faturamento_mensal,
+      Object.prototype.hasOwnProperty.call(body, 'investimento') ? body.investimento : allowed.investimento,
+    );
+  }
   if (update.status === 'Negócio fechado' && !Object.prototype.hasOwnProperty.call(body, 'fechado_at')) {
     update.fechado_at = new Date().toISOString();
   }
@@ -125,6 +162,21 @@ export async function PATCH(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await writeAuditLog(request, guard.profile, {
     action: 'commercial.lead.update', entity_type: 'commercial_lead', entity_id: id, metadata: { fields: Object.keys(update) },
+  });
+  const changedFields = Object.keys(update).filter((field) => field !== 'updated_at');
+  const timelineDescription = statusChanged
+    ? isNoShowStage(targetStatus)
+      ? `Moveu o lead de ${allowed.status} para ${targetStatus}. No-show ${Number(data.no_show_count || 0)} registrado.`
+      : isScheduledMeetingStage(allowed.status) && !isScheduledMeetingStage(targetStatus)
+        ? `Moveu o lead de ${allowed.status} para ${targetStatus}. A reuniao foi marcada automaticamente como realizada.`
+        : `Moveu o lead de ${allowed.status} para ${targetStatus}.`
+    : `Atualizou ${changedFields.length} campo(s) do lead.`;
+  await recordCommercialTimelineEvent({
+    leadId: id,
+    actorId: guard.profile.id,
+    type: statusChanged ? (isNoShowStage(targetStatus) ? 'meeting_no_show' : 'stage_changed') : 'lead_updated',
+    description: timelineDescription,
+    metadata: { from_status: allowed.status, to_status: targetStatus || allowed.status, fields: changedFields },
   });
   return NextResponse.json({ lead: redactFinancialFields(data, guard.canViewCommercialFinancials) });
 }

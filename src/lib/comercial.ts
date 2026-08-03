@@ -67,6 +67,7 @@ export type CommercialLead = {
   reuniao_realizada_at: string | null;
   reuniao_qualificada: boolean | null;
   no_show: boolean;
+  no_show_count: number;
   observacoes: string | null;
   ultimo_contato_at: string | null;
   fechado_at: string | null;

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
+import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request);
@@ -41,6 +42,18 @@ export async function POST(request: Request) {
       action: requestedSdrId ? 'commercial.lead.assign_sdr' : 'commercial.lead.unassign_sdr',
       entity_type: 'commercial_lead',
       entity_id: id,
+      metadata: { sdr_id: requestedSdrId },
+    });
+    const { data: assignedProfile } = requestedSdrId
+      ? await supabaseAdmin.from('profiles').select('nome').eq('id', requestedSdrId).maybeSingle()
+      : { data: null };
+    await recordCommercialTimelineEvent({
+      leadId: id,
+      actorId: guard.profile.id,
+      type: requestedSdrId ? 'sdr_assigned' : 'sdr_unassigned',
+      description: requestedSdrId
+        ? `${guard.profile.nome || 'Equipe comercial'} atribuiu o SDR ${assignedProfile?.nome || 'selecionado'}.`
+        : `${guard.profile.nome || 'Equipe comercial'} removeu o SDR responsavel.`,
       metadata: { sdr_id: requestedSdrId },
     });
     return NextResponse.json({ lead: data, sdr_id: requestedSdrId });

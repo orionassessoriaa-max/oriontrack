@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { COMMERCIAL_STAGES, type CommercialLead, type CommercialMember, type CommercialStage } from '@/lib/comercial';
+import { isCommercialMql } from '@/lib/commercialQualification';
 
 type Props = {
   open: boolean;
@@ -43,6 +44,7 @@ export default function CommercialLeadModal({ open, members, canViewFinancials, 
   }
   const sdrs = members.filter((member) => member.papel === 'sdr' && member.ativo);
   const closers = members.filter((member) => member.papel === 'closer' && member.ativo);
+  const detectedMql = isCommercialMql(form.faturamento_mensal, form.investimento);
   return (
     <div className="kh-modal" role="dialog" aria-modal="true" aria-labelledby="kh-lead-modal-title">
       <button className="kh-modal-scrim" aria-label="Fechar" onClick={onClose} />
@@ -66,7 +68,7 @@ export default function CommercialLeadModal({ open, members, canViewFinancials, 
           <label><span>SDR</span><select className="kh-select" value={form.sdr_id} onChange={(event) => set('sdr_id', event.target.value)}><option value="">Sem SDR</option>{sdrs.map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
           <label><span>Closer</span><select className="kh-select" value={form.closer_id} onChange={(event) => set('closer_id', event.target.value)}><option value="">Sem closer</option>{closers.map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
           {canViewFinancials && <label><span>Valor em negociaÃ§Ã£o</span><input className="kh-input" type="number" min="0" step="0.01" value={form.valor_negociacao} onChange={(event) => set('valor_negociacao', event.target.value)} /></label>}
-          <label className="kh-check"><input type="checkbox" checked={form.lead_qualificado} onChange={(event) => set('lead_qualificado', event.target.checked)} /><span>Lead qualificado (MQL)</span></label>
+          {canViewFinancials && <div className={`kh-mql-detection ${detectedMql ? 'qualified' : ''}`}><strong>{detectedMql ? 'Dentro do MQL' : 'Fora do MQL'}</strong><span>Deteccao automatica: faturamento acima de R$ 20 mil e investimento minimo de R$ 1.500.</span></div>}
           <label className="wide"><span>ObservaÃ§Ãµes</span><textarea className="kh-textarea" value={form.observacoes} onChange={(event) => set('observacoes', event.target.value)} /></label>
           <div className="wide kh-form-section"><span>UTMs</span><div className="kh-form-grid"><label><span>utm_source</span><input className="kh-input" value={form.utm_source} onChange={(event) => set('utm_source', event.target.value)} /></label><label><span>utm_medium</span><input className="kh-input" value={form.utm_medium} onChange={(event) => set('utm_medium', event.target.value)} /></label><label><span>utm_campaign</span><input className="kh-input" value={form.utm_campaign} onChange={(event) => set('utm_campaign', event.target.value)} /></label><label><span>utm_term</span><input className="kh-input" value={form.utm_term} onChange={(event) => set('utm_term', event.target.value)} /></label><label><span>utm_content</span><input className="kh-input" value={form.utm_content} onChange={(event) => set('utm_content', event.target.value)} /></label></div></div>
         </div>

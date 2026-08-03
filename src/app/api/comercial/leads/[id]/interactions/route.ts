@@ -15,7 +15,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if ('error' in guard) return guard.error;
   const { id } = await context.params;
   if (!await allowedLead(id, guard)) return NextResponse.json({ error: 'Lead sem permissao.' }, { status: 403 });
-  const { data, error } = await supabaseAdmin.from('comercial_lead_interacoes').select('id,lead_id,autor_id,comentario,anexo_url,anexo_nome,created_at').eq('lead_id', id).order('created_at', { ascending: false });
+  const { data, error } = await supabaseAdmin.from('comercial_lead_interacoes').select('id,lead_id,autor_id,comentario,anexo_url,anexo_nome,tipo,metadata,created_at').eq('lead_id', id).order('created_at', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const authorIds = Array.from(new Set((data || []).map((item) => item.autor_id).filter(Boolean)));
   const { data: authors } = authorIds.length ? await supabaseAdmin.from('profiles').select('id,nome').in('id', authorIds) : { data: [] };
@@ -44,7 +44,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     anexoNome = file.name;
   }
   if (!comentario && !anexoUrl) return NextResponse.json({ error: 'Adicione um comentario ou uma imagem.' }, { status: 400 });
-  const { data, error } = await supabaseAdmin.from('comercial_lead_interacoes').insert({ lead_id: id, autor_id: guard.profile.id, comentario, anexo_url: anexoUrl, anexo_nome: anexoNome }).select('*').single();
+  const { data, error } = await supabaseAdmin.from('comercial_lead_interacoes').insert({ lead_id: id, autor_id: guard.profile.id, comentario, anexo_url: anexoUrl, anexo_nome: anexoNome, tipo: 'comentario', metadata: {} }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ interaction: { ...data, autor_nome: guard.profile.nome || 'Equipe comercial' } }, { status: 201 });
 }
