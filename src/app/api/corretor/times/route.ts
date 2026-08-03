@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { normalizeLeadDistributionAudience, normalizeLeadDistributionModel } from '@/lib/leadDistribution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateStrongPassword } from '@/lib/users';
 import { PUBLIC_LOGIN_URL } from '@/lib/publicUrl';
@@ -221,6 +222,13 @@ export async function GET(request: Request) {
 
     const { data: team, error: teamError } = teamRes;
     const brokerageName = scope.brokerageName;
+    const { data: brokerageDistribution } = brokerageName
+      ? await supabaseAdmin
+          .from('corretoras')
+          .select('id, distribuicao_modelo, distribuicao_publico, distribuicao_regras')
+          .ilike('nome', brokerageName)
+          .maybeSingle()
+      : { data: null };
 
     if (teamError) throw teamError;
 
@@ -258,6 +266,11 @@ export async function GET(request: Request) {
           owner_profile: ownerProfiles[0] || null,
           rodizio_ativo: corretorIdentity?.rodizio_ativo !== false,
           notificacao_novo_lead_modo: DEFAULT_LEAD_NOTIFICATION_MODE,
+          distribuicao_modelo: normalizeLeadDistributionModel(brokerageDistribution?.distribuicao_modelo),
+          distribuicao_publico: normalizeLeadDistributionAudience(brokerageDistribution?.distribuicao_publico),
+          distribuicao_regras: Array.isArray(brokerageDistribution?.distribuicao_regras) ? brokerageDistribution.distribuicao_regras : [],
+          configured_by_brokerage: Boolean(brokerageDistribution?.id),
+          current_profile_in_distribution: false,
         },
       });
     }
@@ -333,6 +346,11 @@ export async function GET(request: Request) {
         owner_profile: ownerProfiles[0] || null,
         rodizio_ativo: corretorIdentity?.rodizio_ativo !== false,
         notificacao_novo_lead_modo: normalizeLeadNotificationMode(team.notificacao_novo_lead_modo),
+        distribuicao_modelo: normalizeLeadDistributionModel(brokerageDistribution?.distribuicao_modelo),
+        distribuicao_publico: normalizeLeadDistributionAudience(brokerageDistribution?.distribuicao_publico),
+        distribuicao_regras: Array.isArray(brokerageDistribution?.distribuicao_regras) ? brokerageDistribution.distribuicao_regras : [],
+        configured_by_brokerage: Boolean(brokerageDistribution?.id),
+        current_profile_in_distribution: membrosWithPhoto.some((member: any) => member.profile_id === guard.profile.id && member.participa_rodizio !== false),
       },
     });
   } catch (error: any) {
@@ -538,6 +556,54 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, team: data, settings: { notificacao_novo_lead_modo: mode } });
     }
 
+    if (action === 'update_distribution_routes') {
+      const rules = Array.isArray(body.rules) ? body.rules : [];
+      if (rules.length > 12) {
+        return NextResponse.json({ error: 'Use no maximo 12 regras de distribuicao.' }, { status: 400 });
+      }
+
+      const allowedProfiles = await getAssignableProfiles(scope.corretorIds);
+      const allowedProfileIds = new Set(allowedProfiles.map((profile: any) => profile.id));
+      const normalizedRules = rules.map((rule: any, index: number) => ({
+        id: String(rule?.id || `regra-${index + 1}`).trim().slice(0, 60),
+        nome: String(rule?.nome || `Regra ${index + 1}`).trim().slice(0, 80),
+        termos: Array.from(new Set((Array.isArray(rule?.termos) ? rule.termos : [])
+          .map((term: unknown) => String(term || '').trim().toLowerCase())
+          .filter(Boolean))).slice(0, 30),
+        fallback: rule?.fallback === true,
+        ativo: rule?.ativo !== false,
+        prioridade: Number.isFinite(Number(rule?.prioridade)) ? Number(rule.prioridade) : index + 1,
+        membros: (Array.isArray(rule?.membros) ? rule.membros : [])
+          .filter((member: any) => allowedProfileIds.has(String(member?.profile_id || '')))
+          .map((member: any) => ({
+            profile_id: String(member.profile_id),
+            peso: Math.max(1, Math.min(10, Math.round(Number(member?.peso) || 1))),
+          })),
+      }));
+
+      if (normalizedRules.filter((rule: any) => rule.fallback).length > 1) {
+        return NextResponse.json({ error: 'Defina somente uma regra como alternativa para os demais leads.' }, { status: 400 });
+      }
+
+      const brokerageName = String(scope.brokerageName || corretor.nome_empresa || '').trim();
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from('corretoras')
+        .update({ distribuicao_regras: normalizedRules, updated_at: new Date().toISOString() })
+        .ilike('nome', brokerageName)
+        .select('id, distribuicao_regras')
+        .maybeSingle();
+      if (updateError) throw updateError;
+      if (!updated) return NextResponse.json({ error: 'Concessionaria nao encontrada.' }, { status: 404 });
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'team.distribution_routes.update',
+        entity_type: 'corretora',
+        entity_id: updated.id,
+        metadata: { corretor_id: corretorId, rules: normalizedRules },
+      });
+      return NextResponse.json({ success: true, rules: normalizedRules });
+    }
+
     if (action === 'toggle_owner_member') {
       if (!['admin', 'corretor'].includes(guard.profile.tipo_usuario)) {
         return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
@@ -707,11 +773,32 @@ export async function POST(request: Request) {
         .from('corretor_time_membros')
         .update({ participa_rodizio: participaRodizio })
         .eq('id', memberId)
-        .eq('corretor_id', corretorId)
+        .eq('time_id', team.id)
         .select('*')
         .single();
 
       if (error) throw error;
+
+      const { data: distributionBroker } = await supabaseAdmin
+        .from('corretores')
+        .select('nome_empresa')
+        .eq('id', corretorId)
+        .maybeSingle();
+      if (distributionBroker?.nome_empresa) {
+        await supabaseAdmin.from('corretoras')
+          .update({ distribuicao_publico: 'personalizado' })
+          .ilike('nome', distributionBroker.nome_empresa);
+      }
+      if (data.profile_id) {
+        const { data: preference } = await supabaseAdmin.from('notificacao_preferencias')
+          .select('tipos, whatsapp_enabled').eq('profile_id', data.profile_id).maybeSingle();
+        await supabaseAdmin.from('notificacao_preferencias').upsert({
+          profile_id: data.profile_id,
+          whatsapp_enabled: participaRodizio ? true : Boolean(preference?.whatsapp_enabled),
+          tipos: { ...(preference?.tipos || {}), novo_lead: participaRodizio },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'profile_id' });
+      }
 
       await writeAuditLog(request, guard.profile, {
         action: 'team.member.rotation.toggle',

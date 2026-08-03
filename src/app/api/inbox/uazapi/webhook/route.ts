@@ -824,6 +824,36 @@ async function findProfileFromWebhook(body: any, instance: string) {
     if (data?.corretor_id) return data;
   }
 
+  // Instancias exclusivas da IA nao pertencem a um perfil. Resolva a
+  // concessionaria pela configuracao e use um admin apenas como contexto de
+  // permissao/notificacao, sem misturar a sessao com o Inbox pessoal dele.
+  if (String(instance || '').includes('_ai_')) {
+    const { data: aiConfig } = await supabaseAdmin
+      .from('corretora_ai_configs')
+      .select('corretora_id, corretoras(nome)')
+      .eq('dedicated_instance_name', instance)
+      .eq('sender_mode', 'dedicated')
+      .maybeSingle();
+    const joinedCorretora = Array.isArray(aiConfig?.corretoras) ? aiConfig.corretoras[0] : aiConfig?.corretoras;
+    const brokerageName = String((joinedCorretora as any)?.nome || '').trim();
+    if (brokerageName) {
+      const { data: brokers } = await supabaseAdmin.from('corretores').select('id').eq('nome_empresa', brokerageName);
+      const brokerIds = (brokers || []).map((row) => row.id);
+      if (brokerIds.length) {
+        const { data: admin } = await supabaseAdmin
+          .from('profiles')
+          .select('id, nome, email, email_real, tipo_usuario, corretor_id, nome_empresa, telefone')
+          .in('corretor_id', brokerIds)
+          .in('tipo_usuario', ['corretor_admin', 'corretor'])
+          .in('status', ['active', 'ativo', 'Ativo'])
+          .order('tipo_usuario', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (admin?.corretor_id) return admin;
+      }
+    }
+  }
+
   const ownerPhone = normalizePhone(readOwnerJid(body).split('@')[0]);
   if (!ownerPhone || ownerPhone.length < 8) return null;
 

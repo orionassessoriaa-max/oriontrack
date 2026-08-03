@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { configureUazapiWebhook, uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
+import { configureUazapiWebhook, uazapiFetch, uazapiAiInstanceName, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
@@ -172,7 +172,12 @@ type ProfileRow = {
   corretor_id?: string | null;
   nome_empresa?: string | null;
   telefone?: string | null;
+  ai_instance_name?: string | null;
 };
+
+function aiInstanceName(profile: ProfileRow) {
+  return profile.ai_instance_name || uazapiInstanceName(profile.id);
+}
 
 type LeadRow = {
   id: string;
@@ -257,6 +262,7 @@ function adName(lead: LeadRow) {
 
 function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow): HandoffContactMode {
   if (!lead.responsavel_profile_id) return 'unassigned';
+  if (adminProfile.ai_instance_name) return 'different_responsible';
   return lead.responsavel_profile_id === adminProfile.id
     ? 'same_whatsapp'
     : 'different_responsible';
@@ -639,7 +645,7 @@ async function finalizeScheduledHandoff(params: {
       const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', reply);
       await insertMessage(conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
         ...(payload || {}),
-        instance: uazapiInstanceName(adminProfile.id),
+        instance: aiInstanceName(adminProfile),
         provider_message_id: providerMessageId(payload),
         ai_agent: aiConfig.persona,
         ai_text: reply,
@@ -655,7 +661,7 @@ async function finalizeScheduledHandoff(params: {
       const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
       await insertMessage(conversationId, 'outbound', aiConfig.persona, reply, {
         ...(payload || {}),
-        instance: uazapiInstanceName(adminProfile.id),
+        instance: aiInstanceName(adminProfile),
         ai_agent: aiConfig.persona,
       });
     }
@@ -664,7 +670,7 @@ async function finalizeScheduledHandoff(params: {
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
     await insertMessage(conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
-      instance: uazapiInstanceName(adminProfile.id),
+      instance: aiInstanceName(adminProfile),
       ai_agent: aiConfig.persona,
     });
   }
@@ -898,7 +904,7 @@ async function insertMessage(conversaId: string, direction: 'inbound' | 'outboun
 }
 
 async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: string) {
-  const instance = uazapiInstanceName(adminProfile.id);
+  const instance = aiInstanceName(adminProfile);
   return uazapiFetch('/send/text', {
     method: 'POST',
     body: JSON.stringify({ number: normalizePhone(phone), text }),
@@ -1068,7 +1074,7 @@ async function textToSpeechBase64(text: string) {
 }
 
 async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: string) {
-  const instance = uazapiInstanceName(adminProfile.id);
+  const instance = aiInstanceName(adminProfile);
   const { audio, provider, speechText } = await textToSpeechBase64(text);
   const cleanAudioBase64 = audio.includes(';base64,') ? audio.split(';base64,')[1] : audio;
 
@@ -1355,6 +1361,9 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   const adminProfile = await findAiAdmin(lead.corretor_id, aiConfig.sender_profile_id || lead.responsavel_profile_id);
   if (!adminProfile) return { started: false, eligible: true, reason: 'Admin IA da concessionaria nao encontrado.' };
+  if (aiConfig.sender_mode === 'dedicated') {
+    adminProfile.ai_instance_name = aiConfig.dedicated_instance_name || uazapiAiInstanceName(corretora.id);
+  }
 
   const phone = normalizePhone(lead.telefone);
   if (!phone) return { started: false, eligible: true, reason: 'Lead sem telefone.' };
@@ -1399,12 +1408,12 @@ export async function startLeadAiIfEligible(leadId: string) {
     }], { onConflict: 'lead_id' });
 
   try {
-    await configureUazapiWebhook(uazapiInstanceName(adminProfile.id));
+    await configureUazapiWebhook(aiInstanceName(adminProfile));
     registerAiOutbound(phone, intro);
     const payload = await sendAiAdminText(adminProfile, phone, intro);
     await insertMessage(conversation.id, 'outbound', aiConfig.persona, intro, {
       ...(payload || {}),
-      instance: uazapiInstanceName(adminProfile.id),
+      instance: aiInstanceName(adminProfile),
       ai_agent: aiConfig.persona,
     });
   } catch (error: any) {
@@ -1478,6 +1487,9 @@ export async function continueLeadAiFromIncoming(options: {
 
   const adminProfile = await findAiAdmin(lead.corretor_id, session.admin_profile_id || aiConfig.sender_profile_id || lead.responsavel_profile_id);
   if (!adminProfile) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Admin IA da concessionaria nao encontrado.' }; }
+  if (aiConfig.sender_mode === 'dedicated') {
+    adminProfile.ai_instance_name = aiConfig.dedicated_instance_name || uazapiAiInstanceName(corretora.id);
+  }
   const contactMode = handoffContactMode(lead, adminProfile);
 
   const { data: recentHistory } = await supabaseAdmin
@@ -1514,7 +1526,7 @@ export async function continueLeadAiFromIncoming(options: {
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
-      instance: uazapiInstanceName(adminProfile.id),
+      instance: aiInstanceName(adminProfile),
       ai_agent: aiConfig.persona,
     });
 
@@ -1547,7 +1559,7 @@ export async function continueLeadAiFromIncoming(options: {
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
-      instance: uazapiInstanceName(adminProfile.id),
+      instance: aiInstanceName(adminProfile),
       ai_agent: aiConfig.persona,
     });
 
@@ -1574,7 +1586,7 @@ export async function continueLeadAiFromIncoming(options: {
         const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', reply);
         await insertMessage(options.conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
           ...(payload || {}),
-          instance: uazapiInstanceName(adminProfile.id),
+          instance: aiInstanceName(adminProfile),
           provider_message_id: providerMessageId(payload),
           ai_agent: aiConfig.persona,
           ai_text: reply,
@@ -1590,7 +1602,7 @@ export async function continueLeadAiFromIncoming(options: {
         const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
         await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
           ...(payload || {}),
-          instance: uazapiInstanceName(adminProfile.id),
+          instance: aiInstanceName(adminProfile),
           ai_agent: aiConfig.persona,
         });
       }
@@ -1599,7 +1611,7 @@ export async function continueLeadAiFromIncoming(options: {
       const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
       await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
         ...(payload || {}),
-        instance: uazapiInstanceName(adminProfile.id),
+        instance: aiInstanceName(adminProfile),
         ai_agent: aiConfig.persona,
       });
     }
@@ -1686,7 +1698,7 @@ export async function continueLeadAiFromIncoming(options: {
         const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', part);
         await insertMessage(options.conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
           ...(payload || {}),
-          instance: uazapiInstanceName(adminProfile.id),
+          instance: aiInstanceName(adminProfile),
           provider_message_id: providerMessageId(payload),
           ai_agent: aiConfig.persona,
           ai_text: part,
@@ -1706,7 +1718,7 @@ export async function continueLeadAiFromIncoming(options: {
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, part, {
       ...(payload || {}),
-      instance: uazapiInstanceName(adminProfile.id),
+      instance: aiInstanceName(adminProfile),
       ai_agent: aiConfig.persona,
     });
   }

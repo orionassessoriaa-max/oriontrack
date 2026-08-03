@@ -5,6 +5,7 @@ import {
   DEFAULT_LEAD_AI_PERSONA,
   DEFAULT_LEAD_AI_SYSTEM_PROMPT,
 } from '@/lib/defaultLeadAiPrompt';
+import { uazapiAiInstanceName } from '@/lib/uazapi';
 
 const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
 const AI_SENDER_PROFILE_TYPES = ['corretor_admin', 'corretor'];
@@ -103,8 +104,10 @@ export async function POST(request: Request) {
     const system_prompt = useDaniloDefault
       ? DEFAULT_LEAD_AI_SYSTEM_PROMPT
       : requestedPrompt;
-    const status = String(body.status || 'ativo').trim() || 'ativo';
+    const requestedStatus = String(body.status || 'ativo').trim() || 'ativo';
     const sender_profile_id = body.sender_profile_id ? String(body.sender_profile_id) : null;
+    const sender_mode = body.sender_mode === 'dedicated' ? 'dedicated' : 'profile';
+    const status = sender_mode === 'dedicated' && requestedStatus === 'ativo' ? 'aguardando_conexao' : requestedStatus;
     
     if (!corretora_id) {
       return NextResponse.json({ error: 'Concessionaria nao informada.' }, { status: 400 });
@@ -117,6 +120,8 @@ export async function POST(request: Request) {
         persona,
         system_prompt,
         sender_profile_id,
+        sender_mode,
+        dedicated_instance_name: sender_mode === 'dedicated' ? uazapiAiInstanceName(corretora_id) : null,
         status,
         updated_at: new Date().toISOString()
       }, { onConflict: 'corretora_id' })
@@ -134,6 +139,7 @@ export async function POST(request: Request) {
         persona,
         status,
         sender_profile_id,
+        sender_mode,
         prompt_model: useDaniloDefault ? 'danilo_default' : 'custom',
       }
     });

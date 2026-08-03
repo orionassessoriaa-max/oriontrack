@@ -568,7 +568,7 @@ export default function CrmPage() {
           query = query.in('corretor_id', corretorIds);
         }
         if (profile.tipo_usuario === 'corretor_membro') {
-          query = query.eq('responsavel_profile_id', profile.id);
+          query = query.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
         }
 
         const queryRes = await query;
@@ -642,6 +642,7 @@ export default function CrmPage() {
     const payload = await response.json().catch(() => ({}));
     if (response.ok) {
       setTeamMembers(payload.membros || []);
+      setCrmScopeView(payload.settings?.current_profile_in_distribution ? 'meus' : 'todos_concessionaria');
     }
   }
 
@@ -940,8 +941,7 @@ export default function CrmPage() {
         return lead.corretor_id === brokerId;
       }
 
-      const assignedToMe = (!!currentProfileId && lead.responsavel_profile_id === currentProfileId)
-        || (!!currentCorretorId && lead.corretor_id === currentCorretorId && !lead.responsavel_membro_id && !lead.responsavel_profile_id);
+      const assignedToMe = !!currentProfileId && lead.responsavel_profile_id === currentProfileId;
       return assignedToMe;
     });
   }, [leads, crmScopeView, canUseDealershipViews, teamMembers, profile?.id, profile?.corretor_id, simulatedCorretorId]);

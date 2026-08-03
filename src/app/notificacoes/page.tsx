@@ -377,9 +377,10 @@ export default function NotificacoesPage() {
               ].map(([key, label]) => (
                 <label key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${
                   isDark ? 'border-white/5 bg-white/[0.02] text-slate-300' : 'border-gray-100 bg-slate-50 text-gray-600'
-                }`}>
+                } ${key === 'novo_lead' ? 'cursor-not-allowed opacity-70' : ''}`} title={key === 'novo_lead' ? 'Configurado automaticamente pela concessionária' : undefined}>
                   <input
                     type="checkbox"
+                    disabled={key === 'novo_lead'}
                     checked={Boolean(preferences.tipos[key])}
                     onChange={(event) => setPreferences((current) => ({
                       ...current,
@@ -387,7 +388,7 @@ export default function NotificacoesPage() {
                     }))}
                     className="h-3.5 w-3.5 rounded border-slate-400 text-blue-600 focus:ring-blue-500"
                   />
-                  {label}
+                  {label}{key === 'novo_lead' ? ' · concessionária' : ''}
                 </label>
               ))}
             </div>

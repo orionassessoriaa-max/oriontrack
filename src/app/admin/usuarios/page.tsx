@@ -628,19 +628,9 @@ export default function AdminUsuariosPage() {
 
                 {form.tipo_usuario === 'corretor_membro' && (
                   <>
-                    <label className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-5 py-4">
-                      <div>
-                        <p className="text-sm font-black text-slate-700">Participa do rodizio</p>
-                        <p className="mt-1 text-[10px] font-bold text-slate-400">Quando ativo, este integrante pode receber leads automaticamente.</p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={form.participa_rodizio}
-                        onChange={(event) => setForm((current) => ({ ...current, participa_rodizio: event.target.checked }))}
-                        className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </label>
-
+                    <div className="rounded-2xl border border-cyan-100 bg-cyan-50 px-5 py-4 text-xs font-bold text-cyan-800">
+                      O recebimento de novos leads é configurado na concessionária. Depois, um administrador pode ajustar os participantes em Meu Time.
+                    </div>
                     <div>
                       <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Telefone</label>
                       <input

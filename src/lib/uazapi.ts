@@ -64,6 +64,11 @@ export function uazapiInstanceName(profileId: string) {
   return `${prefix}_${profileId.replace(/-/g, '')}`;
 }
 
+export function uazapiAiInstanceName(corretoraId: string) {
+  const prefix = process.env.UAZAPI_INSTANCE_PREFIX || 'orion';
+  return `${prefix}_ai_${String(corretoraId || '').replace(/[^a-z0-9]/gi, '').toLowerCase()}`;
+}
+
 // A IA comercial usa o WhatsApp proprio da Orion, nunca a instancia de uma corretora.
 // O fallback corresponde a instancia oficial provisionada no UAZAPI.
 const ORION_COMMERCIAL_INSTANCE = 'orion_7091766bbc444ad7b6c4caa2461bf26b';

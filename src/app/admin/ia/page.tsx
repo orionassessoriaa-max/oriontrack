@@ -36,6 +36,8 @@ interface AiConfig {
   persona: string;
   system_prompt: string;
   sender_profile_id?: string | null;
+  sender_mode?: 'profile' | 'dedicated';
+  dedicated_instance_name?: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -341,7 +343,7 @@ export default function AdminIaPage() {
     setSelectedCorretoraId(config.corretora_id);
     setPersona(config.persona);
     setSystemPrompt(config.system_prompt);
-    setSelectedSenderProfileId(config.sender_profile_id || '');
+    setSelectedSenderProfileId(config.sender_mode === 'dedicated' ? '__dedicated__' : (config.sender_profile_id || ''));
     setSelectedPromptModelId(findPromptModelId(config.system_prompt, promptModels));
     setError(null);
     setSuccess(null);
@@ -456,7 +458,8 @@ export default function AdminIaPage() {
           persona: persona.trim(),
           system_prompt: systemPrompt.trim(),
           use_default_model: isAddingNew && selectedPromptModelId === 'builtin-danilo',
-          sender_profile_id: selectedSenderProfileId || null,
+          sender_profile_id: selectedSenderProfileId && selectedSenderProfileId !== '__dedicated__' ? selectedSenderProfileId : null,
+          sender_mode: selectedSenderProfileId === '__dedicated__' ? 'dedicated' : 'profile',
           status: 'ativo'
         })
       });
@@ -826,6 +829,7 @@ export default function AdminIaPage() {
                       className="w-full px-3 py-3 rounded-xl border border-slate-800 bg-slate-900/60 text-xs font-bold text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
                     >
                       <option value="">Automatico: admin/corretor conectado</option>
+                      <option value="__dedicated__">Numero exclusivo da IA (conectar na pagina IA)</option>
                       {availableSenderProfiles.map((sender) => (
                         <option key={sender.id} value={sender.id}>
                           {sender.nome} {sender.telefone ? `- ${sender.telefone}` : ''} {sender.tipo_usuario === 'corretor_admin' ? '(admin)' : ''}
@@ -833,7 +837,7 @@ export default function AdminIaPage() {
                       ))}
                     </select>
                     <p className="text-[9px] font-bold leading-relaxed text-slate-500">
-                      Essa e a instancia de WhatsApp que envia as mensagens da IA. Se deixar automatico, o sistema usa o admin/corretor ativo da concessionaria.
+                      Essa e a instancia de WhatsApp que envia as mensagens da IA. O numero exclusivo nao pertence a um usuario e sera conectado pelo painel da concessionaria. O fluxo atual do Danilo permanece inalterado.
                     </p>
                     {availableSenderProfiles.length === 0 && (
                       <p className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-[10px] font-bold text-amber-300">

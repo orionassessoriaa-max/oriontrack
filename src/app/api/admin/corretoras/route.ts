@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { getGestorConcessionariaNames, isGestorLinkedToConcessionariaCorretor, normalizeAccessText } from '@/lib/gestorAccess';
+import {
+  normalizeLeadDistributionAudience,
+  normalizeLeadDistributionModel,
+} from '@/lib/leadDistribution';
 
 function normalizeName(value: unknown) {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -42,6 +46,112 @@ function resolveTrafficManagerId(explicitId: unknown, team: ReturnType<typeof no
 
 function isMissingCorretorasTable(error?: { message?: string | null } | null) {
   return /corretoras|schema cache|does not exist|could not find/i.test(String(error?.message || ''));
+}
+
+async function syncBrokerageDistribution(
+  brokerageName: string,
+  participantProfileIds: string[],
+) {
+  const normalizedName = normalizeName(brokerageName);
+  if (!normalizedName) return;
+
+  const { data: brokers, error: brokersError } = await supabaseAdmin
+    .from('corretores')
+    .select('id, created_at')
+    .ilike('nome_empresa', normalizedName)
+    .order('created_at', { ascending: true });
+  if (brokersError) throw brokersError;
+  if (!brokers?.length) return;
+
+  const brokerIds = brokers.map((broker) => broker.id);
+  const primaryBrokerId = brokerIds[0];
+  await supabaseAdmin.from('corretores').update({ rodizio_ativo: true }).in('id', brokerIds);
+
+  const { data: existingTeam, error: teamLookupError } = await supabaseAdmin
+    .from('corretor_times')
+    .select('id')
+    .in('corretor_id', brokerIds)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (teamLookupError) throw teamLookupError;
+
+  let teamId = existingTeam?.id || null;
+  if (!teamId) {
+    const { data: createdTeam, error: createTeamError } = await supabaseAdmin
+      .from('corretor_times')
+      .insert({
+        corretor_id: primaryBrokerId,
+        nome: normalizedName,
+        ativo: true,
+        notificacao_novo_lead_modo: 'responsavel_e_admins',
+      })
+      .select('id')
+      .single();
+    if (createTeamError) throw createTeamError;
+    teamId = createdTeam.id;
+  } else {
+    await supabaseAdmin
+      .from('corretor_times')
+      .update({ ativo: true, notificacao_novo_lead_modo: 'responsavel_e_admins' })
+      .eq('id', teamId);
+  }
+
+  const { data: brokerageProfiles, error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome, email, email_real, corretor_id, tipo_usuario')
+    .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
+    .or(`corretor_id.in.(${brokerIds.join(',')}),nome_empresa.ilike.${normalizedName}`)
+    .in('status', ['active', 'ativo', 'Ativo']);
+  if (profileError) throw profileError;
+
+  const participantSet = new Set(participantProfileIds.filter(Boolean));
+  const { data: currentMembers, error: memberLookupError } = await supabaseAdmin
+    .from('corretor_time_membros')
+    .select('id, profile_id, ordem')
+    .eq('time_id', teamId);
+  if (memberLookupError) throw memberLookupError;
+  const byProfile = new Map((currentMembers || []).map((member) => [member.profile_id, member]));
+  let nextOrder = Math.max(0, ...(currentMembers || []).map((member) => Number(member.ordem || 0))) + 1;
+
+  for (const profile of brokerageProfiles || []) {
+    const participates = participantSet.has(profile.id);
+    const existing = byProfile.get(profile.id);
+    if (existing) {
+      const { error } = await supabaseAdmin.from('corretor_time_membros').update({
+        participa_rodizio: participates,
+        status: 'ativo',
+        nome: profile.nome,
+        email: profile.email_real || profile.email,
+      }).eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabaseAdmin.from('corretor_time_membros').insert({
+        time_id: teamId,
+        corretor_id: profile.corretor_id || primaryBrokerId,
+        profile_id: profile.id,
+        nome: profile.nome,
+        email: profile.email_real || profile.email,
+        status: 'ativo',
+        ordem: nextOrder++,
+        participa_rodizio: participates,
+      });
+      if (error) throw error;
+    }
+
+    const { data: preference } = await supabaseAdmin
+      .from('notificacao_preferencias')
+      .select('tipos, whatsapp_enabled, telefone')
+      .eq('profile_id', profile.id)
+      .maybeSingle();
+    await supabaseAdmin.from('notificacao_preferencias').upsert({
+      profile_id: profile.id,
+      whatsapp_enabled: participates ? true : Boolean(preference?.whatsapp_enabled),
+      telefone: preference?.telefone || null,
+      tipos: { ...(preference?.tipos || {}), novo_lead: participates },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'profile_id' });
+  }
 }
 
 export async function GET(request: Request) {
@@ -102,6 +212,8 @@ export async function POST(request: Request) {
     const nome = normalizeName(body.nome);
     const descricao = normalizeName(body.descricao) || null;
     const modo_operacao = normalizeOperationMode(body.modo_operacao);
+    const distribuicao_modelo = normalizeLeadDistributionModel(body.distribuicao_modelo);
+    const distribuicao_publico = normalizeLeadDistributionAudience(body.distribuicao_publico);
     const time_operacional = normalizeOperationalTeam(body.time_operacional);
     const gestor_trafego_id = resolveTrafficManagerId(body.gestor_trafego_id, time_operacional);
 
@@ -140,6 +252,8 @@ export async function POST(request: Request) {
         descricao,
         status: 'ativo',
         modo_operacao,
+        distribuicao_modelo,
+        distribuicao_publico,
         time_operacional,
         gestor_trafego_id,
         created_by: guard.profile.id,
@@ -181,6 +295,11 @@ export async function PATCH(request: Request) {
     const body = await request.json().catch(() => ({}));
     const id = normalizeName(body.id);
     const modo_operacao = normalizeOperationMode(body.modo_operacao);
+    const distribuicao_modelo = normalizeLeadDistributionModel(body.distribuicao_modelo);
+    const distribuicao_publico = normalizeLeadDistributionAudience(body.distribuicao_publico);
+    const participantes = Array.isArray(body.participantes_profile_ids)
+      ? body.participantes_profile_ids.map(normalizeName).filter(Boolean)
+      : null;
 
     if (!id) {
       return NextResponse.json({ error: 'Informe a concessionaria.' }, { status: 400 });
@@ -188,7 +307,7 @@ export async function PATCH(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from('corretoras')
-      .update({ modo_operacao })
+      .update({ modo_operacao, distribuicao_modelo, distribuicao_publico })
       .eq('id', id)
       .select('*')
       .single();
@@ -203,11 +322,20 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    await supabaseAdmin
+      .from('corretores')
+      .update({ rodizio_ativo: true })
+      .ilike('nome_empresa', data.nome);
+
+    if (participantes) {
+      await syncBrokerageDistribution(data.nome, participantes);
+    }
+
     await writeAuditLog(request, guard.profile, {
-      action: 'corretora.operation_mode.update',
+      action: 'corretora.distribution.update',
       entity_type: 'corretoras',
       entity_id: data.id,
-      metadata: { nome: data.nome, modo_operacao },
+      metadata: { nome: data.nome, modo_operacao, distribuicao_modelo, distribuicao_publico, participantes },
     });
 
     return NextResponse.json({ success: true, corretora: data });

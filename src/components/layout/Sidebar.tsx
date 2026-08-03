@@ -288,6 +288,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
+    { icon: Bot, label: 'IA', href: '/ia' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
     ...(canSeeFerramentas ? [{ icon: Sparkles, label: 'Ferramentas', href: '/ferramentas' }] : []),
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },

@@ -94,7 +94,7 @@ function isMissingTeamColumn(error?: { message?: string | null } | null) {
   return String(error?.message || '').includes('equipe_orion');
 }
 
-async function upsertNotificationPhone(profileId: string, telefone: string) {
+async function upsertNotificationPhone(profileId: string, telefone: string, receivesLeads?: boolean) {
   if (!profileId || !telefone) return;
 
   const { data: current } = await supabaseAdmin
@@ -108,8 +108,8 @@ async function upsertNotificationPhone(profileId: string, telefone: string) {
     .upsert({
       profile_id: profileId,
       telefone,
-      whatsapp_enabled: Boolean(current?.whatsapp_enabled),
-      tipos: current?.tipos || {},
+      whatsapp_enabled: receivesLeads ? true : Boolean(current?.whatsapp_enabled),
+      tipos: { ...(current?.tipos || {}), ...(typeof receivesLeads === 'boolean' ? { novo_lead: receivesLeads } : {}) },
       updated_at: new Date().toISOString(),
     }, { onConflict: 'profile_id' });
 }
@@ -375,7 +375,8 @@ export async function POST(request: Request) {
       }
 
       if (profileError) throw profileError;
-      await upsertNotificationPhone(authUser.user.id, telefone);
+      const receivesLeads = body.participa_rodizio !== false;
+      await upsertNotificationPhone(authUser.user.id, telefone, receivesLeads);
 
       if (profileRole === 'corretor_membro' && equipeOrion === 'kripto_hunters') {
         const { error: commercialMemberError } = await supabaseAdmin
@@ -390,7 +391,8 @@ export async function POST(request: Request) {
         });
       }
 
-      if (['corretor_membro', 'corretor_admin'].includes(profileRole) && corretorId && memberTeamId) {
+      if (['corretor', 'corretor_membro', 'corretor_admin'].includes(profileRole) && corretorId) {
+        memberTeamId = memberTeamId || await ensureCorretorTeam(corretorId, memberBrokerageName || body.nome_empresa);
         const { data: lastMember } = await supabaseAdmin
           .from('corretor_time_membros')
           .select('ordem')
@@ -400,9 +402,13 @@ export async function POST(request: Request) {
           .maybeSingle();
 
         const ordem = Number(lastMember?.ordem || 0) + 1;
-        const { error: memberError } = await supabaseAdmin
+        const { data: existingMember } = await supabaseAdmin
           .from('corretor_time_membros')
-          .insert([{
+          .select('id')
+          .eq('time_id', memberTeamId)
+          .eq('profile_id', authUser.user.id)
+          .maybeSingle();
+        const memberPayload = {
             time_id: memberTeamId,
             corretor_id: corretorId,
             profile_id: authUser.user.id,
@@ -410,8 +416,11 @@ export async function POST(request: Request) {
             email,
             status: 'ativo',
             ordem,
-            participa_rodizio: body.participa_rodizio !== false,
-          }]);
+            participa_rodizio: receivesLeads,
+        };
+        const { error: memberError } = existingMember
+          ? await supabaseAdmin.from('corretor_time_membros').update(memberPayload).eq('id', existingMember.id)
+          : await supabaseAdmin.from('corretor_time_membros').insert([memberPayload]);
 
         if (memberError) throw memberError;
       }

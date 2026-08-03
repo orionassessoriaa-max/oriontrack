@@ -42,6 +42,10 @@ type TeamSettings = {
   owner_in_distribution: boolean;
   rodizio_ativo: boolean;
   notificacao_novo_lead_modo: 'responsavel_apenas' | 'responsavel_e_admin_se_integrante' | 'responsavel_e_admins';
+  distribuicao_modelo?: 'rodizio' | 'fila_compartilhada';
+  distribuicao_publico?: 'todos' | 'admins' | 'integrantes' | 'personalizado';
+  configured_by_brokerage?: boolean;
+  distribuicao_regras?: DistributionRoute[];
   owner_profile: {
     id: string;
     nome: string;
@@ -54,6 +58,17 @@ type TeamSettings = {
     email: string;
     email_real?: string | null;
   }[];
+};
+
+type DistributionRouteMember = { profile_id: string; peso: number };
+type DistributionRoute = {
+  id: string;
+  nome: string;
+  termos: string[];
+  fallback?: boolean;
+  ativo?: boolean;
+  prioridade?: number;
+  membros: DistributionRouteMember[];
 };
 
 type AssignableLead = {
@@ -147,6 +162,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     notificacao_novo_lead_modo: 'responsavel_e_admin_se_integrante',
     owner_profile: null,
     owner_profiles: [],
+    distribuicao_regras: [],
   });
   const [error, setError] = useState<string | null>(null);
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
@@ -276,6 +292,10 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       owner_in_distribution: Boolean(payload.settings?.owner_in_distribution),
       rodizio_ativo: payload.settings?.rodizio_ativo !== false,
       notificacao_novo_lead_modo: payload.settings?.notificacao_novo_lead_modo || 'responsavel_e_admin_se_integrante',
+      distribuicao_modelo: payload.settings?.distribuicao_modelo || 'rodizio',
+      distribuicao_publico: payload.settings?.distribuicao_publico || 'todos',
+      distribuicao_regras: Array.isArray(payload.settings?.distribuicao_regras) ? payload.settings.distribuicao_regras : [],
+      configured_by_brokerage: Boolean(payload.settings?.configured_by_brokerage),
       owner_profile: payload.settings?.owner_profile || null,
       owner_profiles: payload.settings?.owner_profiles || [],
     });
@@ -468,6 +488,39 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
     } finally {
       setSettingsSaving(false);
     }
+  }
+
+  async function saveDistributionRoutes(rules: DistributionRoute[]) {
+    setSettingsSaving(true);
+    setError(null);
+    try {
+      await postTeam({ action: 'update_distribution_routes', rules });
+      setSettings((current) => ({ ...current, distribuicao_regras: rules }));
+      await fetchTeam();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
+  function updateDistributionRoute(routeId: string, update: (route: DistributionRoute) => DistributionRoute) {
+    setSettings((current) => ({
+      ...current,
+      distribuicao_regras: (current.distribuicao_regras || []).map((route) => route.id === routeId ? update(route) : route),
+    }));
+  }
+
+  function ensureSegmentedRoutes() {
+    const current = settings.distribuicao_regras || [];
+    if (current.length) return;
+    setSettings((state) => ({
+      ...state,
+      distribuicao_regras: [
+        { id: 'individual', nome: 'Individual / PF', termos: ['medsenior', 'bestsenior'], fallback: false, ativo: true, prioridade: 1, membros: [] },
+        { id: 'pme', nome: 'PME / PJ', termos: [], fallback: true, ativo: true, prioridade: 2, membros: [] },
+      ],
+    }));
   }
 
   async function setNextMember(member: Membro) {
@@ -1041,6 +1094,14 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
               {settingsOpen && (
                 <div className="mt-4 rounded-2xl border border-blue-500/15 bg-blue-500/5 p-5 animate-in fade-in slide-in-from-top-2 duration-300 space-y-5">
 
+                  <div className="rounded-2xl border border-cyan-400/20 bg-[#070b13] p-4">
+                    <p className="text-sm font-black text-white">Configurado pela concessionária</p>
+                    <p className="mt-1 text-[11px] font-bold text-slate-400">
+                      {settings.distribuicao_modelo === 'fila_compartilhada' ? 'Fila compartilhada — primeiro atendimento' : 'Rodízio automático'} · {settings.distribuicao_publico === 'admins' ? 'Somente administradores' : settings.distribuicao_publico === 'integrantes' ? 'Somente integrantes' : settings.distribuicao_publico === 'personalizado' ? 'Público personalizado' : 'Todos recebem'}.
+                    </p>
+                    <p className="mt-2 text-[10px] font-bold text-cyan-300">Os controles gerais abaixo são apenas consulta. O administrador continua podendo ajustar individualmente quem recebe novos leads.</p>
+                  </div>
+
                   {/* Distribution Toggle Option 1: Owner Participation */}
                   <div className="flex items-start gap-4">
                     <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#070b13] text-cyan-400 border border-white/5">
@@ -1066,7 +1127,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                         type="checkbox"
                         className="peer sr-only"
                         checked={settings.owner_in_distribution}
-                        disabled={settingsSaving}
+                        disabled
                         onChange={(event) => toggleOwnerDistribution(event.target.checked)}
                       />
                       <span className="h-6 w-11 rounded-full bg-white/10 transition peer-checked:bg-cyan-500 peer-disabled:opacity-50" />
@@ -1087,7 +1148,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                       </p>
                       <select
                         value={settings.notificacao_novo_lead_modo}
-                        disabled={settingsSaving}
+                        disabled
                         onChange={(event) => updateLeadNotificationMode(event.target.value as TeamSettings['notificacao_novo_lead_modo'])}
                         className="mt-3 w-full rounded-2xl border border-white/5 bg-[#070b13] px-4 py-3 text-xs font-black text-white outline-none transition focus:border-cyan-500/40 disabled:opacity-50"
                       >
@@ -1115,12 +1176,57 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                         type="checkbox"
                         className="peer sr-only"
                         checked={settings.rodizio_ativo}
-                        disabled={settingsSaving}
+                        disabled
                         onChange={(event) => toggleTeamDistribution(event.target.checked)}
                       />
                       <span className="h-6 w-11 rounded-full bg-white/10 transition peer-checked:bg-cyan-500 peer-disabled:opacity-50" />
                       <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
                     </label>
+                  </div>
+
+                  <div className="h-px bg-white/5" />
+
+                  <div className="space-y-3 rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-black text-white text-sm">Rotas por campanha ou conjunto</p>
+                        <p className="mt-1 text-[11px] font-bold text-slate-400">Separe Individual e PME pelos nomes recebidos da Meta e defina o peso de cada pessoa.</p>
+                      </div>
+                      {(settings.distribuicao_regras || []).length === 0 && (
+                        <button type="button" onClick={ensureSegmentedRoutes} className="rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-[10px] font-black uppercase text-violet-200">
+                          Criar regras
+                        </button>
+                      )}
+                    </div>
+                    {(settings.distribuicao_regras || []).map((route) => (
+                      <div key={route.id} className="rounded-2xl border border-white/5 bg-[#070b13] p-4 space-y-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Nome da rota
+                            <input value={route.nome} onChange={(event) => updateDistributionRoute(route.id, (item) => ({ ...item, nome: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs normal-case text-white outline-none focus:border-violet-400/50" />
+                          </label>
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Termos da campanha/conjunto
+                            <input disabled={route.fallback} value={(route.termos || []).join(', ')} onChange={(event) => updateDistributionRoute(route.id, (item) => ({ ...item, termos: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) }))} placeholder={route.fallback ? 'Todos os demais leads' : 'medsenior, bestsenior'} className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs normal-case text-white outline-none focus:border-violet-400/50 disabled:opacity-50" />
+                          </label>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {memberStats.filter((member) => member.profile_id).map((member) => {
+                            const selected = route.membros?.find((item) => item.profile_id === member.profile_id);
+                            return <div key={member.id} className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2">
+                              <input type="checkbox" checked={Boolean(selected)} onChange={(event) => updateDistributionRoute(route.id, (item) => ({ ...item, membros: event.target.checked ? [...(item.membros || []), { profile_id: member.profile_id!, peso: 1 }] : (item.membros || []).filter((entry) => entry.profile_id !== member.profile_id) }))} />
+                              <span className="min-w-0 flex-1 truncate text-[11px] font-black text-white">{member.nome}</span>
+                              {selected && <label className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-500">Peso
+                                <input type="number" min={1} max={10} value={selected.peso} onChange={(event) => updateDistributionRoute(route.id, (item) => ({ ...item, membros: item.membros.map((entry) => entry.profile_id === member.profile_id ? { ...entry, peso: Math.max(1, Number(event.target.value) || 1) } : entry) }))} className="w-12 rounded-lg border border-white/10 bg-slate-950 px-2 py-1 text-center text-xs text-white" />
+                              </label>}
+                            </div>;
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    {(settings.distribuicao_regras || []).length > 0 && (
+                      <button type="button" disabled={settingsSaving} onClick={() => void saveDistributionRoutes(settings.distribuicao_regras || [])} className="w-full rounded-xl bg-violet-500 px-4 py-3 text-xs font-black text-white disabled:opacity-50">
+                        {settingsSaving ? 'Salvando...' : 'Salvar rotas e pesos'}
+                      </button>
+                    )}
                   </div>
 
                   <div className="h-px bg-white/5" />

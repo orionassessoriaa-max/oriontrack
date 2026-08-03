@@ -353,11 +353,20 @@ async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
 
   const { data: broker } = await supabaseAdmin
     .from('corretores')
-    .select('rodizio_ativo')
+    .select('rodizio_ativo, nome_empresa')
     .eq('id', corretorId)
     .maybeSingle();
 
   if (broker?.rodizio_ativo === false) return null;
+
+  if (broker?.nome_empresa) {
+    const { data: distribution } = await supabaseAdmin
+      .from('corretoras')
+      .select('distribuicao_modelo')
+      .ilike('nome', broker.nome_empresa)
+      .maybeSingle();
+    if (distribution?.distribuicao_modelo === 'fila_compartilhada') return null;
+  }
 
   const { data: team } = await supabaseAdmin
     .from('corretor_times')
@@ -644,6 +653,16 @@ export async function POST(request: Request) {
     const assignedMembroObj = Array.isArray(assignedMembroRaw) ? assignedMembroRaw[0] : (assignedMembroRaw as any);
     const assignedMemberName = assignedMembroObj?.nome || null;
     let memberProfile: any = null;
+    const { data: leadBrokerDistribution } = await supabaseAdmin
+      .from('corretores')
+      .select('nome_empresa')
+      .eq('id', corretorId)
+      .maybeSingle();
+    const { data: distributionConfig } = leadBrokerDistribution?.nome_empresa
+      ? await supabaseAdmin.from('corretoras').select('distribuicao_modelo')
+          .ilike('nome', leadBrokerDistribution.nome_empresa).maybeSingle()
+      : { data: null };
+    const isSharedQueue = distributionConfig?.distribuicao_modelo === 'fila_compartilhada';
 
     if (finalLead?.responsavel_profile_id) {
       const { data: prof } = await supabaseAdmin
@@ -657,7 +676,7 @@ export async function POST(request: Request) {
     const aiStart = await tryStartLeadAiForWebhook(data.id);
     const aiStartError = aiStart && 'error' in aiStart ? aiStart : null;
     const botStart = aiStart?.eligible || aiStartError ? null : await tryStartLeadBotForWebhook(data.id);
-    const suppressStandardLeadNotifications = Boolean(aiStart?.eligible);
+    let suppressStandardLeadNotifications = Boolean(aiStart?.eligible) && !isSharedQueue;
     const aiFailureNote = aiStartError?.reason
       ? `IA nao chamou automaticamente: ${aiStartError.reason}`
       : null;
@@ -674,6 +693,37 @@ export async function POST(request: Request) {
           ? `${aiFailureNote} Notificacao padrao de novo lead enviada.`
         : 'IA nao assumiu: notificacoes padrao de novo lead podem ser enviadas agora.',
     };
+
+    if (finalLead && isSharedQueue) {
+      const { data: participants } = await supabaseAdmin
+        .from('corretor_time_membros')
+        .select('profile_id, profiles:profile_id(id,nome,email,tipo_usuario,telefone), time:time_id!inner(ativo, corretor:corretor_id!inner(nome_empresa))')
+        .in('status', ['active', 'ativo', 'Ativo'])
+        .neq('participa_rodizio', false);
+      const recipients = (participants || []).flatMap((item: any) => {
+        const team = Array.isArray(item.time) ? item.time[0] : item.time;
+        const owner = Array.isArray(team?.corretor) ? team.corretor[0] : team?.corretor;
+        const recipient = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
+        return team?.ativo !== false
+          && String(owner?.nome_empresa || '').trim().toLowerCase() === String(leadBrokerDistribution?.nome_empresa || '').trim().toLowerCase()
+          && recipient ? [recipient] : [];
+      }).filter((recipient: any, index: number, all: any[]) => all.findIndex((item) => item.id === recipient.id) === index);
+      const sharedMessage = buildLeadDetailsMessage(finalLead, 'Novo lead disponível na fila compartilhada. O primeiro atendimento humano assumirá o lead.');
+      for (const recipient of recipients) {
+        await supabaseAdmin.from('notificacoes').insert({
+          titulo: 'Novo lead disponível',
+          mensagem: sharedMessage,
+          destinatario_profile_id: recipient.id,
+          lida: false,
+        });
+      }
+      if (recipients.length > 0) {
+        await sendApoloWhatsApp({ type: 'novo_lead', title: 'Novo lead disponível', message: sharedMessage, profiles: recipients });
+      }
+      notificationReport.owner_profiles_notified = recipients.map((recipient: any) => ({ id: recipient.id, nome: recipient.nome || null, tipo_usuario: recipient.tipo_usuario || null }));
+      notificationReport.note = 'Fila compartilhada: todos os participantes foram avisados; a IA não assume a posse.';
+      suppressStandardLeadNotifications = true;
+    }
 
     if (finalLead && !suppressStandardLeadNotifications) {
       const { data: leadBroker } = await supabaseAdmin

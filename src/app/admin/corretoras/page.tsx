@@ -33,6 +33,15 @@ import { useDialog } from '@/components/providers/DialogProvider';
 import { getGestorConcessionariaNames, isGestorLinkedToConcessionariaCorretor, isGestorLinkedToCorretor, normalizeAccessText } from '@/lib/gestorAccess';
 import { buildOperationalTeamMembers, getTeamMemberAvatar, isTrafficManagerMember, OrionTeamMember } from '@/lib/orionTeam';
 import { generateOrionEmail } from '@/lib/users';
+import {
+  audienceIncludesRole,
+  leadDistributionAudienceLabels,
+  leadDistributionModelLabels,
+  normalizeLeadDistributionAudience,
+  normalizeLeadDistributionModel,
+  type LeadDistributionAudience,
+  type LeadDistributionModel,
+} from '@/lib/leadDistribution';
 
 interface CorretoraGroup {
   id: string; // ID of the first corretor/profile in the group
@@ -46,6 +55,8 @@ interface CorretoraGroup {
   empty?: boolean;
   corretora_id?: string | null;
   modo_operacao?: OperationMode;
+  distribuicao_modelo?: LeadDistributionModel;
+  distribuicao_publico?: LeadDistributionAudience;
 }
 
 interface CorretoraRecord {
@@ -58,6 +69,8 @@ interface CorretoraRecord {
   modo_operacao?: OperationMode | null;
   time_operacional?: OrionTeamMember[] | null;
   gestor_trafego_id?: string | null;
+  distribuicao_modelo?: LeadDistributionModel | null;
+  distribuicao_publico?: LeadDistributionAudience | null;
 }
 
 type BatchPersonRole = 'corretor_admin' | 'corretor_membro';
@@ -67,6 +80,7 @@ type BatchPerson = {
   nome: string;
   telefone: string;
   tipo_usuario: BatchPersonRole;
+  recebe_leads: boolean;
 };
 
 type CreatedCredential = {
@@ -82,6 +96,7 @@ const createBatchPerson = (tipo_usuario: BatchPersonRole = 'corretor_admin'): Ba
   nome: '',
   telefone: '',
   tipo_usuario,
+  recebe_leads: true,
 });
 
 const emptyBrokerageForm = () => ({
@@ -89,6 +104,8 @@ const emptyBrokerageForm = () => ({
   descricao: '',
   time_operacional: [] as OrionTeamMember[],
   pessoas: [createBatchPerson()] as BatchPerson[],
+  distribuicao_modelo: 'rodizio' as LeadDistributionModel,
+  distribuicao_publico: 'todos' as LeadDistributionAudience,
 });
 
 const formatPhone = (value: string) => {
@@ -196,6 +213,8 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
       empty: true,
       corretora_id: corretora.id,
       modo_operacao: normalizeOperationMode(corretora.modo_operacao),
+      distribuicao_modelo: normalizeLeadDistributionModel(corretora.distribuicao_modelo),
+      distribuicao_publico: normalizeLeadDistributionAudience(corretora.distribuicao_publico),
     };
   });
 
@@ -217,6 +236,8 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
         empty: false,
         corretora_id: null,
         modo_operacao: 'individual',
+        distribuicao_modelo: 'rodizio',
+        distribuicao_publico: 'todos',
       };
     }
 
@@ -258,6 +279,8 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
         empty: false,
         corretora_id: null,
         modo_operacao: 'individual',
+        distribuicao_modelo: 'rodizio',
+        distribuicao_publico: 'todos',
       };
     }
 
@@ -295,7 +318,7 @@ function CorretorasContent() {
   const [createBrokerageError, setCreateBrokerageError] = useState<string | null>(null);
   const [createdCredentials, setCreatedCredentials] = useState<CreatedCredential[]>([]);
   const [migrationPending, setMigrationPending] = useState(false);
-  const [savingOperationMode, setSavingOperationMode] = useState<string | null>(null);
+  const [savingDistribution, setSavingDistribution] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [deletingBrokerageId, setDeletingBrokerageId] = useState<string | null>(null);
   const isAdmin = profile?.tipo_usuario === 'admin';
@@ -477,43 +500,36 @@ function CorretorasContent() {
     }));
   };
 
-  const copyId = (id: string) => {
-    navigator.clipboard.writeText(id);
-    alert('ID copiado para usar no n8n.');
-  };
-
-  const updateOperationMode = async (group: CorretoraGroup, modoOperacao: OperationMode) => {
+  const updateDistributionModel = async (group: CorretoraGroup, model: LeadDistributionModel) => {
     const corretoraId = group.corretora_id || (group.empty ? group.id : null);
-    if (!corretoraId) {
-      alert('Crie a concessionaria no cadastro antes de alterar o modo de operacao.');
-      return;
-    }
-
-    setSavingOperationMode(group.id);
+    if (!corretoraId) return alert('Cadastre a concessionária antes de alterar a distribuição.');
+    setSavingDistribution(group.id);
     try {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
-      if (!token) throw new Error('Sessao expirada.');
-
+      if (!token) throw new Error('Sessão expirada.');
       const response = await fetch('/api/admin/corretoras', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ id: corretoraId, modo_operacao: modoOperacao }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: corretoraId,
+          distribuicao_modelo: model,
+          distribuicao_publico: normalizeLeadDistributionAudience(group.distribuicao_publico),
+        }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Erro ao atualizar modo de operacao.');
-
-      setCorretorasCadastradas((current) => current.map((item) =>
-        item.id === corretoraId ? { ...item, modo_operacao: modoOperacao } : item
-      ));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível atualizar a distribuição.');
+      setCorretorasCadastradas((current) => current.map((item) => item.id === corretoraId ? { ...item, distribuicao_modelo: model } : item));
     } catch (err: any) {
-      alert(err.message || 'Erro ao atualizar modo de operacao.');
+      alert(err.message || 'Não foi possível atualizar a distribuição.');
     } finally {
-      setSavingOperationMode(null);
+      setSavingDistribution(null);
     }
+  };
+
+  const copyId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    alert('ID copiado para usar no n8n.');
   };
 
   const createBrokerage = async (event: React.FormEvent) => {
@@ -549,6 +565,8 @@ function CorretorasContent() {
           nome,
           descricao,
           modo_operacao: 'individual',
+          distribuicao_modelo: newBrokerage.distribuicao_modelo,
+          distribuicao_publico: newBrokerage.distribuicao_publico,
           time_operacional: newBrokerage.time_operacional,
           gestor_trafego_id: newBrokerage.time_operacional.find(isTrafficManagerMember)?.profile_id || null,
         }),
@@ -575,6 +593,7 @@ function CorretorasContent() {
         ...newBrokerage.pessoas.filter((person) => person.id !== administrators[0].id),
       ];
       const credentials: CreatedCredential[] = [];
+      const participantProfileIds: string[] = [];
       for (let index = 0; index < orderedPeople.length; index += 1) {
         const person = orderedPeople[index];
         const isPrimaryAdministrator = index === 0;
@@ -591,7 +610,7 @@ function CorretorasContent() {
             nome_empresa: nome,
             email: generateOrionEmail(person.nome),
             tipo_campanha: 'ambos',
-            participa_rodizio: person.tipo_usuario === 'corretor_membro',
+            participa_rodizio: person.recebe_leads,
             time_operacional: isPrimaryAdministrator ? newBrokerage.time_operacional : undefined,
             gestor_trafego_id: isPrimaryAdministrator
               ? newBrokerage.time_operacional.find(isTrafficManagerMember)?.profile_id || null
@@ -609,7 +628,23 @@ function CorretorasContent() {
           tipo_usuario: isPrimaryAdministrator ? 'corretor' : person.tipo_usuario,
           ...userPayload.credentials,
         });
+        if (person.recebe_leads && userPayload.user?.id) participantProfileIds.push(userPayload.user.id);
         setCreatedCredentials([...credentials]);
+      }
+
+      if (createdCorretora?.id) {
+        const distributionResponse = await fetch('/api/admin/corretoras', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            id: createdCorretora.id,
+            distribuicao_modelo: newBrokerage.distribuicao_modelo,
+            distribuicao_publico: newBrokerage.distribuicao_publico,
+            participantes_profile_ids: participantProfileIds,
+          }),
+        });
+        const distributionPayload = await distributionResponse.json().catch(() => ({}));
+        if (!distributionResponse.ok) throw new Error(distributionPayload.error || 'Os acessos foram criados, mas a distribuição não foi sincronizada.');
       }
 
       setCreatedCredentials(credentials);
@@ -627,6 +662,17 @@ function CorretorasContent() {
     setNewBrokerage((current) => ({
       ...current,
       pessoas: current.pessoas.map((person) => person.id === id ? { ...person, ...updates } : person),
+    }));
+  };
+
+  const selectDistributionAudience = (audience: LeadDistributionAudience) => {
+    setNewBrokerage((current) => ({
+      ...current,
+      distribuicao_publico: audience,
+      pessoas: current.pessoas.map((person) => ({
+        ...person,
+        recebe_leads: audience === 'personalizado' ? person.recebe_leads : audienceIncludesRole(audience, person.tipo_usuario),
+      })),
     }));
   };
 
@@ -863,6 +909,30 @@ function CorretorasContent() {
                 </div>
               </fieldset>
 
+              <fieldset className="rounded-[1.5rem] border border-cyan-400/20 bg-cyan-500/[0.04] p-4">
+                <legend className="px-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">Distribuição de novos leads</legend>
+                <p className="mb-4 text-xs font-bold text-slate-400">Esta é a configuração principal. Notificações e Meu Time serão preenchidos automaticamente.</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(Object.entries(leadDistributionModelLabels) as [LeadDistributionModel, string][]).map(([value, label]) => {
+                    const selected = newBrokerage.distribuicao_modelo === value;
+                    return (
+                      <button key={value} type="button" aria-pressed={selected} onClick={() => setNewBrokerage((current) => ({ ...current, distribuicao_modelo: value }))} className={`min-h-20 rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-cyan-300 ${selected ? 'border-cyan-300 bg-cyan-400 text-slate-950' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}>
+                        <span className="block text-sm font-black">{label}</span>
+                        <span className={`mt-1 block text-[11px] font-bold ${selected ? 'text-slate-800' : 'text-slate-400'}`}>{value === 'rodizio' ? 'O sistema entrega cada lead ao próximo participante.' : 'Todos veem o lead; a primeira resposta humana assume o atendimento.'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mb-2 mt-5 text-[10px] font-black uppercase tracking-widest text-slate-500">Quem recebe novos leads</p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {(Object.entries(leadDistributionAudienceLabels) as [LeadDistributionAudience, string][]).map(([value, label]) => (
+                    <button key={value} type="button" aria-pressed={newBrokerage.distribuicao_publico === value} onClick={() => selectDistributionAudience(value)} className={`min-h-11 rounded-xl border px-3 py-3 text-xs font-black transition focus:outline-none focus:ring-2 focus:ring-cyan-300 ${newBrokerage.distribuicao_publico === value ? 'border-cyan-300 bg-cyan-400/20 text-cyan-200' : 'border-white/10 bg-black/20 text-slate-300 hover:bg-white/10'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
               <fieldset className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
                 <legend className="px-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">Acessos da concessionária</legend>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -879,7 +949,7 @@ function CorretorasContent() {
                 </div>
                 <div className="mt-4 space-y-3">
                   {newBrokerage.pessoas.map((person, index) => (
-                    <div key={person.id} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_190px_210px_48px] md:items-end">
+                    <div key={person.id} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_180px_190px_155px_48px] md:items-end">
                       <div>
                         <label htmlFor={`batch-name-${person.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome completo</label>
                         <input id={`batch-name-${person.id}`} required value={person.nome} onChange={(event) => updateBatchPerson(person.id, { nome: event.target.value })} placeholder={`Pessoa ${index + 1}`} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-400" />
@@ -890,11 +960,27 @@ function CorretorasContent() {
                       </div>
                       <div>
                         <label htmlFor={`batch-role-${person.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Tipo de usuário</label>
-                        <select id={`batch-role-${person.id}`} value={person.tipo_usuario} onChange={(event) => updateBatchPerson(person.id, { tipo_usuario: event.target.value as BatchPersonRole })} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-sm font-black text-white outline-none focus:border-cyan-400">
+                        <select id={`batch-role-${person.id}`} value={person.tipo_usuario} onChange={(event) => {
+                          const role = event.target.value as BatchPersonRole;
+                          updateBatchPerson(person.id, {
+                            tipo_usuario: role,
+                            recebe_leads: newBrokerage.distribuicao_publico === 'personalizado' ? person.recebe_leads : audienceIncludesRole(newBrokerage.distribuicao_publico, role),
+                          });
+                        }} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-sm font-black text-white outline-none focus:border-cyan-400">
                           <option value="corretor_admin">Administrador</option>
                           <option value="corretor_membro">Corretor integrante</option>
                         </select>
                       </div>
+                      <label className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-[11px] font-black text-slate-200">
+                        Recebe leads
+                        <input type="checkbox" checked={person.recebe_leads} onChange={(event) => {
+                          setNewBrokerage((current) => ({
+                            ...current,
+                            distribuicao_publico: 'personalizado',
+                            pessoas: current.pessoas.map((item) => item.id === person.id ? { ...item, recebe_leads: event.target.checked } : item),
+                          }));
+                        }} className="h-5 w-5 rounded border-slate-500 text-cyan-500 focus:ring-cyan-400" />
+                      </label>
                       <button type="button" aria-label={`Remover ${person.nome || `pessoa ${index + 1}`}`} disabled={newBrokerage.pessoas.length === 1} onClick={() => removeBatchPerson(person.id)} className="flex min-h-11 items-center justify-center rounded-xl border border-rose-400/20 text-rose-300 transition hover:bg-rose-500/10 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-30">
                         <Trash2 size={16} />
                       </button>
@@ -1040,23 +1126,15 @@ function CorretorasContent() {
                       onClick={(event) => event.stopPropagation()}
                       className="flex min-w-[230px] flex-col gap-1"
                     >
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Modo de operacao</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Distribuição definida na concessionária</span>
                       {isAdmin ? (
-                        <select
-                          value={normalizeOperationMode(c.modo_operacao)}
-                          disabled={savingOperationMode === c.id || !c.corretora_id}
-                          onChange={(event) => updateOperationMode(c, event.target.value as OperationMode)}
-                          className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-700 outline-none transition focus:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300"
-                        >
-                          {Object.entries(operationModeLabels).map(([value, label]) => (
-                            <option key={value} value={value}>{label}</option>
-                          ))}
+                        <select value={normalizeLeadDistributionModel(c.distribuicao_modelo)} disabled={savingDistribution === c.id} onChange={(event) => void updateDistributionModel(c, event.target.value as LeadDistributionModel)} className="min-h-10 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 text-[11px] font-black uppercase tracking-widest text-cyan-700 outline-none focus:ring-2 focus:ring-cyan-400 dark:bg-[#111827] dark:text-cyan-300">
+                          {(Object.entries(leadDistributionModelLabels) as [LeadDistributionModel, string][]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                         </select>
                       ) : (
-                        <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-300">
-                          {operationModeLabels[normalizeOperationMode(c.modo_operacao)]}
-                        </span>
+                        <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-700 dark:text-cyan-300">{leadDistributionModelLabels[normalizeLeadDistributionModel(c.distribuicao_modelo)]}</span>
                       )}
+                      <span className="text-[10px] font-bold text-slate-400">{leadDistributionAudienceLabels[normalizeLeadDistributionAudience(c.distribuicao_publico)]}</span>
                     </div>
 
                     {isAdmin && (
