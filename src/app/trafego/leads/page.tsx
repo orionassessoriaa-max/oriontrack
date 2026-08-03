@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
-import { AlertCircle, Download, Loader2, Plus, RefreshCw, RotateCcw, Search, Upload, X } from 'lucide-react';
+import { AlertCircle, Download, Loader2, Plus, RefreshCw, RotateCcw, Search, Trash2, Upload, X } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Lead } from '@/types';
 import { getLeadStatusStyle, LEAD_STATUSES } from '@/lib/leadStatus';
+import { useDialog } from '@/components/providers/DialogProvider';
 
 type TrafficLead = Lead & {
   corretores?: {
@@ -96,6 +97,7 @@ function formatDate(value?: string | null) {
 
 export default function TrafficLeadsPage() {
   const { profile } = useAuth();
+  const { confirmDialog } = useDialog();
   const router = useRouter();
   const [leads, setLeads] = useState<TrafficLead[]>([]);
   const [corretores, setCorretores] = useState<CorretorOption[]>([]);
@@ -119,6 +121,7 @@ export default function TrafficLeadsPage() {
   const [sheetOrigin, setSheetOrigin] = useState('Manual');
   const [importingSheet, setImportingSheet] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [deletingLeads, setDeletingLeads] = useState(false);
 
   async function fetchLeads() {
     if (!profile?.id) return;
@@ -330,6 +333,39 @@ export default function TrafficLeadsPage() {
     });
   }
 
+  async function deleteSelectedLeads() {
+    if (selectedLeadIds.size === 0 || deletingLeads) return;
+    const total = selectedLeadIds.size;
+    const confirmed = await confirmDialog(
+      `Excluir ${total} lead${total > 1 ? 's' : ''} selecionado${total > 1 ? 's' : ''}? Esta ação não pode ser desfeita.`,
+      { title: 'Excluir leads da planilha', confirmLabel: 'Excluir definitivamente', variant: 'danger' }
+    );
+    if (!confirmed) return;
+
+    setDeletingLeads(true);
+    setError(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessão expirada.');
+      const ids = Array.from(selectedLeadIds);
+      const response = await fetch('/api/trafego/leads', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível excluir os leads.');
+      const removed = new Set<string>(payload.ids || ids);
+      setLeads((current) => current.filter((lead) => !removed.has(lead.id)));
+      setSelectedLeadIds(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível excluir os leads.');
+    } finally {
+      setDeletingLeads(false);
+    }
+  }
+
   function exportToCsv() {
     if (!filteredLeads.length) return alert('Nenhum lead para exportar.');
     const headers = ['Data', 'Nome', 'Telefone', 'Idades', 'Possui CNPJ', 'Cidade', 'Investimento', 'Status', 'Pagina', 'Campanha', 'Conjunto', 'Anuncio'];
@@ -528,6 +564,9 @@ export default function TrafficLeadsPage() {
         {selectedLeadIds.size > 0 && (
           <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full bg-slate-950 px-5 py-3 text-xs font-black text-white shadow-2xl">
             {selectedLeadIds.size} lead(s) selecionado(s)
+            <button type="button" onClick={() => void deleteSelectedLeads()} disabled={deletingLeads} className="inline-flex min-h-9 items-center gap-2 rounded-full bg-red-600 px-4 text-[10px] uppercase tracking-widest transition hover:bg-red-500 disabled:opacity-50">
+              {deletingLeads ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} Excluir
+            </button>
             <button onClick={() => setSelectedLeadIds(new Set())} className="rounded-full bg-white/10 px-3 py-1 text-[10px] uppercase tracking-widest hover:bg-white/20">Limpar</button>
           </div>
         )}
