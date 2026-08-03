@@ -493,7 +493,7 @@ export default function TrafficLeadsPage() {
         {selectedGroup && <span className="rounded bg-cyan-400/10 px-2 py-1 text-cyan-300">{selectedGroup.nome}</span>}
       </div>
 
-      <div className="relative overflow-hidden border border-white/10 bg-white">
+      <div className="relative overflow-hidden border border-slate-700 bg-slate-950">
         {!selectedGroup ? (
           <div className="flex h-[520px] flex-col items-center justify-center text-center">
             <AlertCircle className="mb-3 text-slate-300" size={36} />
@@ -507,9 +507,9 @@ export default function TrafficLeadsPage() {
             onMouseUp={() => setDragSelecting(false)}
             onMouseLeave={() => setDragSelecting(false)}
           >
-            <table className="w-full min-w-[1480px] border-collapse text-[12px] text-black">
+            <table className="w-full min-w-[1480px] border-collapse text-[12px] text-slate-100">
               <thead className="sticky top-0 z-10">
-                <tr className="bg-[#1e88e5] text-white">
+                <tr className="!bg-[#1e88e5] !text-white">
                   <SheetHead className="w-10 text-center">#</SheetHead>
                   <SheetHead>DATA</SheetHead>
                   <SheetHead>NOME</SheetHead>
@@ -538,9 +538,9 @@ export default function TrafficLeadsPage() {
                         toggleSelection(lead.id);
                       }}
                       onMouseEnter={() => selectWhileDragging(lead.id)}
-                      className={`h-6 cursor-cell select-none ${selected ? 'bg-blue-100 outline outline-1 outline-blue-500' : index % 2 ? 'bg-white' : 'bg-slate-50'} hover:bg-blue-50`}
+                      className={`h-6 cursor-cell select-none text-slate-100 transition-colors ${selected ? '!bg-blue-800 !text-white outline outline-1 outline-cyan-300' : index % 2 ? '!bg-slate-950' : '!bg-slate-900'} hover:!bg-slate-800`}
                     >
-                      <SheetCell className="bg-slate-100 text-center text-slate-600">{index + 1}</SheetCell>
+                      <SheetCell className="!bg-slate-800 text-center !text-slate-200">{index + 1}</SheetCell>
                       <SheetCell>{formatDate(lead.data_entrada)}</SheetCell>
                       <SheetCell strong>{lead.nome || '-'}</SheetCell>
                       <SheetCell>{lead.telefone || '-'}</SheetCell>
@@ -662,9 +662,9 @@ export default function TrafficLeadsPage() {
 }
 
 function SheetHead({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <th className={`border border-[#8bbbe8] px-2 py-0.5 text-left text-[14px] font-black leading-5 ${className}`}>{children}</th>;
+  return <th className={`border border-blue-300/70 px-2 py-0.5 text-left text-[14px] font-black leading-5 !text-white ${className}`}>{children}</th>;
 }
 
 function SheetCell({ children, strong = false, className = '' }: { children: ReactNode; strong?: boolean; className?: string }) {
-  return <td className={`max-w-[220px] truncate border border-slate-300 px-2 py-0.5 leading-5 ${strong ? 'font-bold' : 'font-semibold'} ${className}`}>{children}</td>;
+  return <td className={`max-w-[220px] truncate border border-slate-700 px-2 py-0.5 leading-5 !text-slate-100 ${strong ? 'font-bold' : 'font-semibold'} ${className}`}>{children}</td>;
 }
