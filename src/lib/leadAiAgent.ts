@@ -74,10 +74,10 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
 - So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar exatamente a palavra "alvorada" sozinha. Quando for pedido de valor, pode responder ao cliente antes do handoff, sem dizer que e proibido enviar pelo WhatsApp. Nao faca handoff se "Alvorada" for parte de nome de hospital, clinica, bairro ou regiao.
 - Em handoff por duvida ou confusao real, nunca mande mensagem para o cliente. O Orion Track vai chamar o humano internamente.
 - Quando for pedir o agendamento, nunca use "funciona melhor". Pergunte: "Que dia e horario voce esta mais confortavel pra voce?"
-- Quando o cliente responder com dia e horario, responda apenas que um especialista vai entrar em contato para confirmar o agendamento, agradeca pelo atendimento, defina handoff true e nao faca mais nenhuma pergunta. Nunca diga que sera por outro numero.
+- Quando o cliente responder com dia e horario, confirme o encaminhamento conforme a regra contextual de encerramento deste lead, agradeca pelo atendimento, defina handoff true e nao faca mais nenhuma pergunta.
 - Em handoff por agendamento confirmado com dia e horario especificos, voce pode responder ao cliente confirmando o encaminhamento de forma curta e natural.
-- Se o cliente recusar a ligacao ou reuniao, aceite sem insistir. Nao peca outro horario, nao repita o convite e nao tente convencer o cliente. Responda de forma acolhedora que um especialista da equipe entrara em contato para prosseguir com o atendimento; defina handoff true. Nao prometa que o contato sera por outro numero e nao diga que voce continuara o atendimento por aqui.
-- Se, depois do convite para ligacao, o cliente pedir para receber primeiro a cotacao, proposta, valores ou rede credenciada, considere isso uma preferencia por atendimento por mensagem e uma recusa da ligacao naquele momento. Nao explique que a ligacao e obrigatoria e nao insista. Avise uma unica vez que um especialista entrara em contato, encerre a IA e encaminhe o lead ao responsavel. Nunca mencione outro numero.
+- Se o cliente recusar a ligacao ou reuniao, aceite sem insistir. Nao peca outro horario, nao repita o convite e nao tente convencer o cliente. Responda conforme a regra contextual de encerramento deste lead e defina handoff true.
+- Se, depois do convite para ligacao, o cliente pedir para receber primeiro a cotacao, proposta, valores ou rede credenciada, considere isso uma preferencia por atendimento por mensagem e uma recusa da ligacao naquele momento. Nao explique que a ligacao e obrigatoria e nao insista. Responda conforme a regra contextual de encerramento, encerre a IA e encaminhe o lead ao responsavel.
 - Nunca diga "pode mandar audio" depois que o cliente ja enviou audio ou quando a mensagem atual vier como "Audio transcrito do cliente". Se a mensagem disser que o audio nao foi transcrito, responda curto pedindo para o cliente enviar a informacao por texto.
 - Priorize respostas humanas, curtas e diretas, sem cara de script.`;
 
@@ -138,9 +138,9 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 - Agendamento so e concluido com DIA e HORARIO ESPECIFICOS (ex: "amanha as 14h", "quinta as 10h").
 - Se o cliente disser "sim", "posso" ou algo vago: pergunte qual dia e horario especificos.
 - Ao pedir dia e horario, nao escreva "funciona melhor". Escreva de forma humana: "Que dia e horario voce esta mais confortavel pra voce?"
-- Ao cliente responder dia e horario: preencha *Agendado* no summary, defina "handoff": true e responda somente que um especialista vai entrar em contato para confirmar o agendamento, agradecendo pelo atendimento. Depois disso nao pergunte mais nada e nao mencione outro numero.
-- Se o cliente disser que nao quer ligacao/reuniao, que prefere nao falar por telefone ou pedir para continuar por mensagem: nao insista e nao faca nova pergunta. Responda: "Sem problema, [primeiro nome]. Um especialista da nossa equipe vai entrar em contato para prosseguir com seu atendimento. Obrigada!" Defina "handoff": true. Nao diga que voce continuara por aqui e nao mencione outro numero.
-- Se o cliente pedir cotacao, proposta ou rede credenciada antes de aceitar a ligacao, nao tente convence-lo a ligar. Diga apenas que um especialista entrara em contato, defina "handoff": true e encerre. Nunca mencione outro numero.
+- Ao cliente responder dia e horario: preencha *Agendado* no summary, defina "handoff": true e responda conforme a regra contextual de encerramento deste lead, confirmando o agendamento e agradecendo. Depois disso nao pergunte mais nada.
+- Se o cliente disser que nao quer ligacao/reuniao, que prefere nao falar por telefone ou pedir para continuar por mensagem: nao insista e nao faca nova pergunta. Responda conforme a regra contextual de encerramento deste lead e defina "handoff": true.
+- Se o cliente pedir cotacao, proposta ou rede credenciada antes de aceitar a ligacao, nao tente convence-lo a ligar. Responda conforme a regra contextual de encerramento deste lead, defina "handoff": true e encerre.
 - Handoff silencioso ("handoff": true, "reply": "") se: cliente pedir detalhes tecnicos de operadora, reclamar, pedir para falar com humano, ou enviar exatamente "alvorada" como mensagem isolada. Para pedido de valor/preco, responda de forma gentil oferecendo chamar um especialista e defina handoff true. Nao use essa regra quando Alvorada for hospital, clinica, bairro ou regiao.
 - Se o cliente pedir esclarecimento ("como assim?", "nao entendi", "pq?"): reexplique de forma simples e natural — NAO faca handoff.
 
@@ -197,6 +197,8 @@ type LeadRow = {
   responsavel_profile_id?: string | null;
 };
 
+type HandoffContactMode = 'same_whatsapp' | 'different_responsible' | 'unassigned';
+
 function sameBrokerage(value?: string | null) {
   return String(value || '').trim().toUpperCase() === AI_TEST_BROKERAGE;
 }
@@ -251,6 +253,37 @@ function hasKnownValue(value?: unknown) {
 
 function adName(lead: LeadRow) {
   return plain(lead.utm_content || lead.utm_term || lead.utm_campaign || lead.utm_medium || lead.utm_source);
+}
+
+function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow): HandoffContactMode {
+  if (!lead.responsavel_profile_id) return 'unassigned';
+  return lead.responsavel_profile_id === adminProfile.id
+    ? 'same_whatsapp'
+    : 'different_responsible';
+}
+
+function handoffContactRule(mode: HandoffContactMode) {
+  if (mode === 'same_whatsapp') {
+    return [
+      'Regra obrigatoria para o encerramento deste lead:',
+      '- A IA esta no mesmo WhatsApp do responsavel que recebera o lead.',
+      '- Diga que um especialista da equipe vai entrar em contato para prosseguir com o atendimento.',
+      '- Nao diga "por outro numero" e nao diga "vou continuar por aqui".',
+    ].join('\n');
+  }
+  if (mode === 'different_responsible') {
+    return [
+      'Regra obrigatoria para o encerramento deste lead:',
+      '- O responsavel pelo lead usa outro WhatsApp.',
+      '- Avise que um especialista da equipe vai entrar em contato por outro numero para prosseguir com o atendimento.',
+    ].join('\n');
+  }
+  return [
+    'Regra obrigatoria para o encerramento deste lead:',
+    '- O lead ainda nao possui um responsavel definido.',
+    '- Use uma mensagem neutra: "Nossa equipe continuara seu atendimento em breve."',
+    '- Nao prometa nome nem numero de contato.',
+  ].join('\n');
 }
 
 function leadFacts(lead: LeadRow) {
@@ -458,10 +491,14 @@ function isCallRefusal(text?: string | null, previousOutboundText?: string | nul
   return asksForMaterialFirst || /^(nao precisa|deixa pra la|deixa assim|prefiro por aqui|por mensagem)$/.test(normalized);
 }
 
-function callRefusalHandoffReply(lead: LeadRow) {
-  return polishAiReply(
-    `Sem problema, ${leadFirstName(lead)}. Um especialista da nossa equipe vai entrar em contato para enviar a cotacao e prosseguir com seu atendimento. Obrigada!`
-  );
+function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode) {
+  if (mode === 'different_responsible') {
+    return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Um especialista da nossa equipe vai entrar em contato por outro numero para enviar a cotacao e prosseguir com seu atendimento. Obrigada!`);
+  }
+  if (mode === 'unassigned') {
+    return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Nossa equipe continuara seu atendimento em breve. Obrigada!`);
+  }
+  return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Um especialista da nossa equipe vai entrar em contato para enviar a cotacao e prosseguir com seu atendimento. Obrigada!`);
 }
 
 function isSensitivePersonalSituation(text?: string | null) {
@@ -567,7 +604,13 @@ function looksLikeScheduleAnswer(text?: string | null) {
   return hasDay && hasTime;
 }
 
-function handoffScheduleReply(lead: LeadRow) {
+function handoffScheduleReply(lead: LeadRow, mode: HandoffContactMode) {
+  if (mode === 'different_responsible') {
+    return polishAiReply(`Perfeito, ${leadFirstName(lead)}. Um especialista vai entrar em contato por outro numero para confirmar esse agendamento. Obrigada pelo atendimento.`);
+  }
+  if (mode === 'unassigned') {
+    return polishAiReply(`Perfeito, ${leadFirstName(lead)}. Nossa equipe entrara em contato em breve para confirmar esse agendamento. Obrigada pelo atendimento.`);
+  }
   return polishAiReply(`Perfeito, ${leadFirstName(lead)}. Um especialista vai entrar em contato para confirmar esse agendamento. Obrigada pelo atendimento.`);
 }
 
@@ -588,7 +631,7 @@ async function finalizeScheduledHandoff(params: {
   const { session, lead, conversationId, adminProfile, aiConfig, customerMessage, incomingWasAudio } = params;
   let summary = appendSummaryLine(session.summary || leadFacts(lead), `*Agendado*: ${customerMessage.trim()}`);
   summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
-  const reply = handoffScheduleReply(lead);
+  const reply = handoffScheduleReply(lead, handoffContactMode(lead, adminProfile));
 
   if (incomingWasAudio) {
     try {
@@ -1185,7 +1228,8 @@ async function askAline(
   history: Array<{ direction: string; remetente?: string | null; mensagem: string; metadata?: any }>, 
   customerMessage: string,
   aiConfig: { persona: string; system_prompt: string },
-  corretoraNome: string
+  corretoraNome: string,
+  contactMode: HandoffContactMode
 ) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
@@ -1230,7 +1274,7 @@ async function askAline(
     '- Nunca use nome completo falando com o cliente.',
     '- O nome completo so deve aparecer em resumo interno, banco de dados ou notificacao para o responsavel.',
   ].join('\n');
-  const system = `${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}\n\n${nameRule}`;
+  const system = `${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}\n\n${nameRule}\n\n${handoffContactRule(contactMode)}`;
   const lastMessage = messages[messages.length - 1];
   const alreadyHasCustomerMessage =
     lastMessage?.role === 'user' &&
@@ -1434,6 +1478,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   const adminProfile = await findAiAdmin(lead.corretor_id, session.admin_profile_id || aiConfig.sender_profile_id || lead.responsavel_profile_id);
   if (!adminProfile) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Admin IA da concessionaria nao encontrado.' }; }
+  const contactMode = handoffContactMode(lead, adminProfile);
 
   const { data: recentHistory } = await supabaseAdmin
     .from('whatsapp_mensagens')
@@ -1588,7 +1633,7 @@ export async function continueLeadAiFromIncoming(options: {
   if (isCallRefusal(options.customerMessage, previousOutboundText)) {
     ai = {
       handoff: true,
-      reply: callRefusalHandoffReply(lead),
+      reply: callRefusalHandoffReply(lead, contactMode),
       summary: appendSummaryLine(
         session.summary || leadFacts(lead),
         'IA encerrada: cliente recusou ligacao/reuniao e pediu continuidade sem chamada. Especialista deve assumir o atendimento.'
@@ -1608,7 +1653,7 @@ export async function continueLeadAiFromIncoming(options: {
     };
   } else {
     try {
-      ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName);
+      ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName, contactMode);
     } catch (error) {
       console.error('[lead_ai_agent] IA falhou ao continuar atendimento. Fazendo handoff:', error);
       return await handoffAiFailure({
@@ -1625,7 +1670,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   if (scheduleConfirmed) {
     handoff = true;
-    reply = customerReplyForFollowUp(handoffScheduleReply(lead), lead, Boolean(previousOutboundText));
+    reply = customerReplyForFollowUp(handoffScheduleReply(lead, contactMode), lead, Boolean(previousOutboundText));
     summary = appendSummaryLine(summary || leadFacts(lead), `*Agendado*: ${options.customerMessage.trim()}`);
     summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
   }
