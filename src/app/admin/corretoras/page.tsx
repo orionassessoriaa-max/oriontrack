@@ -93,7 +93,10 @@ function getCorretoraMembers(group: CorretoraGroup): CorretoraMember[] {
       nome: profile.nome,
       email,
       email_real: profile.email_real,
-      telefone: corretorRow?.telefone || profile.telefone,
+      // O perfil guarda o telefone individual. `corretorRow` representa a
+      // concessionaria compartilhada e nao pode emprestar o mesmo numero para
+      // todos os integrantes do grupo.
+      telefone: profile.telefone || null,
       status: profile.status,
       tipo_usuario: profile.tipo_usuario,
       foto_url: profile.foto_url,
