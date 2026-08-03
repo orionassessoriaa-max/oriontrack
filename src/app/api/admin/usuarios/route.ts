@@ -423,6 +423,35 @@ export async function POST(request: Request) {
           : await supabaseAdmin.from('corretor_time_membros').insert([memberPayload]);
 
         if (memberError) throw memberError;
+
+        const requestedRoutes = Array.isArray(body.distribuicao_rotas) ? body.distribuicao_rotas : [];
+        if (String(memberBrokerageName || body.nome_empresa || '').trim()) {
+          const { data: brokerage } = await supabaseAdmin
+            .from('corretoras')
+            .select('id, distribuicao_regras')
+            .ilike('nome', String(memberBrokerageName || body.nome_empresa).trim())
+            .maybeSingle();
+          if (brokerage && Array.isArray(brokerage.distribuicao_regras)) {
+            const selectedByRoute = new Map(requestedRoutes.map((route: any) => [
+              String(route?.id || ''),
+              Math.max(1, Math.min(10, Math.round(Number(route?.peso) || 1))),
+            ]));
+            const nextRules = brokerage.distribuicao_regras.map((route: any) => ({
+              ...route,
+              membros: [
+                ...(Array.isArray(route?.membros) ? route.membros : []).filter((member: any) => member?.profile_id !== authUser.user.id),
+                ...(selectedByRoute.has(String(route?.id || ''))
+                  ? [{ profile_id: authUser.user.id, peso: selectedByRoute.get(String(route.id)) }]
+                  : []),
+              ],
+            }));
+            const { error: routeError } = await supabaseAdmin
+              .from('corretoras')
+              .update({ distribuicao_regras: nextRules, updated_at: new Date().toISOString() })
+              .eq('id', brokerage.id);
+            if (routeError) throw routeError;
+          }
+        }
       }
 
       await writeAuditLog(request, guard.profile as any, {
@@ -639,6 +668,27 @@ export async function PATCH(request: Request) {
               }
             });
           }
+        }
+      }
+
+      if (roleToSave === 'corretor_membro' && String(body.nome_empresa || '').trim()) {
+        const { data: brokerage } = await supabaseAdmin
+          .from('corretoras')
+          .select('id, distribuicao_regras')
+          .ilike('nome', String(body.nome_empresa).trim())
+          .maybeSingle();
+        if (brokerage && Array.isArray(brokerage.distribuicao_regras)) {
+          const requestedRoutes = Array.isArray(body.distribuicao_rotas) ? body.distribuicao_rotas : [];
+          const selectedByRoute = new Map(requestedRoutes.map((route: any) => [String(route?.id || ''), Math.max(1, Math.min(10, Math.round(Number(route?.peso) || 1)))]));
+          const nextRules = brokerage.distribuicao_regras.map((route: any) => ({
+            ...route,
+            membros: [
+              ...(Array.isArray(route?.membros) ? route.membros : []).filter((member: any) => member?.profile_id !== id),
+              ...(selectedByRoute.has(String(route?.id || '')) ? [{ profile_id: id, peso: selectedByRoute.get(String(route.id)) }] : []),
+            ],
+          }));
+          const { error: routeError } = await supabaseAdmin.from('corretoras').update({ distribuicao_regras: nextRules, updated_at: new Date().toISOString() }).eq('id', brokerage.id);
+          if (routeError) return NextResponse.json({ error: routeError.message }, { status: 500 });
         }
       }
 

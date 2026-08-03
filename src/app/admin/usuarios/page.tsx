@@ -37,6 +37,8 @@ type AdminProfile = Profile & {
   is_admin_master?: boolean;
 };
 
+type DistributionRoute = { id: string; nome: string; membros?: Array<{ profile_id: string; peso: number }> };
+
 const initialForm = {
   nome: '',
   nome_empresa: '',
@@ -48,6 +50,7 @@ const initialForm = {
   time_operacional: [] as OrionTeamMember[],
   rodizio_ativo: true,
   participa_rodizio: true,
+  distribuicao_rotas: [] as Array<{ id: string; peso: number }>,
   foto_url: '',
   operadora_outros: '',
   equipe_orion: '' as '' | 'apollo' | 'kripto_hunters',
@@ -61,7 +64,7 @@ export default function AdminUsuariosPage() {
   const router = useRouter();
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [corretores, setCorretores] = useState<Corretor[]>([]);
-  const [corretoras, setCorretoras] = useState<Array<{ id: string; nome: string }>>([]);
+  const [corretoras, setCorretoras] = useState<Array<{ id: string; nome: string; distribuicao_regras?: DistributionRoute[] }>>([]);
   const [form, setForm] = useState(initialForm);
   const [showBrokerageOptions, setShowBrokerageOptions] = useState(false);
   const [search, setSearch] = useState('');
@@ -91,6 +94,10 @@ export default function AdminUsuariosPage() {
     if (!term) return brokerageOptions;
     return brokerageOptions.filter((name) => name.toLowerCase().includes(term));
   }, [brokerageOptions, form.nome_empresa]);
+  const selectedBrokerageRoutes = useMemo(() => {
+    const brokerage = corretoras.find((item) => item.nome.trim().toLowerCase() === form.nome_empresa.trim().toLowerCase());
+    return Array.isArray(brokerage?.distribuicao_regras) ? brokerage.distribuicao_regras : [];
+  }, [corretoras, form.nome_empresa]);
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
@@ -99,6 +106,8 @@ export default function AdminUsuariosPage() {
 
   function fillEditForm(profile: AdminProfile, brokerList = corretores) {
     const corretor = brokerList.find((item) => item.id === profile.corretor_id);
+    const brokerageName = corretor?.nome_empresa || profile.nome_empresa || '';
+    const brokerageRoutes = corretoras.find((item) => item.nome.trim().toLowerCase() === brokerageName.trim().toLowerCase())?.distribuicao_regras || [];
     const savedOperadoras = Array.isArray(corretor?.operadoras_info?.selecionadas)
       ? corretor.operadoras_info.selecionadas
       : [];
@@ -110,7 +119,7 @@ export default function AdminUsuariosPage() {
     setError(null);
     setForm({
       nome: profile.nome || '',
-      nome_empresa: corretor?.nome_empresa || profile.nome_empresa || '',
+      nome_empresa: brokerageName,
       email_real: profile.email_real || '',
       tipo_usuario: profile.tipo_usuario,
       telefone: profile.tipo_usuario === 'corretor_membro'
@@ -121,6 +130,10 @@ export default function AdminUsuariosPage() {
       time_operacional: Array.isArray(corretor?.time_operacional) ? corretor.time_operacional as OrionTeamMember[] : [],
       rodizio_ativo: corretor?.rodizio_ativo !== false,
       participa_rodizio: true,
+      distribuicao_rotas: brokerageRoutes.flatMap((route) => {
+        const membership = route.membros?.find((member) => member.profile_id === profile.id);
+        return membership ? [{ id: route.id, peso: membership.peso || 1 }] : [];
+      }),
       foto_url: profile.foto_url || '',
       operadora_outros: customOperadora || '',
       equipe_orion: profile.tipo_usuario === 'corretor' ? '' : (profile.equipe_orion || ''),
@@ -163,7 +176,7 @@ export default function AdminUsuariosPage() {
 
     const { data: corretorasData } = await supabase
       .from('corretoras')
-      .select('id, nome')
+      .select('id, nome, distribuicao_regras')
       .order('nome');
     setCorretoras(corretorasData || []);
 
@@ -590,7 +603,7 @@ export default function AdminUsuariosPage() {
                   </label>
                   <input
                     value={form.nome_empresa}
-                    onChange={(event) => setForm((current) => ({ ...current, nome_empresa: event.target.value }))}
+                    onChange={(event) => setForm((current) => ({ ...current, nome_empresa: event.target.value, distribuicao_rotas: [] }))}
                     onFocus={() => setShowBrokerageOptions(true)}
                     onBlur={() => window.setTimeout(() => setShowBrokerageOptions(false), 150)}
                     placeholder="Digite ou selecione uma concessionaria"
@@ -605,7 +618,7 @@ export default function AdminUsuariosPage() {
                             type="button"
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={() => {
-                              setForm((current) => ({ ...current, nome_empresa: name }));
+                              setForm((current) => ({ ...current, nome_empresa: name, distribuicao_rotas: [] }));
                               setShowBrokerageOptions(false);
                             }}
                             className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-xs font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
@@ -628,6 +641,29 @@ export default function AdminUsuariosPage() {
 
                 {form.tipo_usuario === 'corretor_membro' && (
                   <>
+                    {selectedBrokerageRoutes.length > 0 && (
+                      <div>
+                        <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Rotas que este integrante recebe</label>
+                        <div className="mt-2 space-y-2 rounded-2xl bg-slate-50 p-3">
+                          {selectedBrokerageRoutes.map((route) => {
+                            const selected = form.distribuicao_rotas.find((item) => item.id === route.id);
+                            return <div key={route.id} className="flex items-center gap-3 rounded-xl bg-white px-3 py-3 shadow-sm">
+                              <input type="checkbox" checked={Boolean(selected)} onChange={(event) => setForm((current) => ({
+                                ...current,
+                                distribuicao_rotas: event.target.checked
+                                  ? [...current.distribuicao_rotas, { id: route.id, peso: 1 }]
+                                  : current.distribuicao_rotas.filter((item) => item.id !== route.id),
+                              }))} />
+                              <span className="min-w-0 flex-1 text-xs font-black text-slate-700">{route.nome}</span>
+                              {selected && <label className="flex items-center gap-2 text-[9px] font-black uppercase text-slate-400">Peso
+                                <input type="number" min={1} max={10} value={selected.peso} onChange={(event) => setForm((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => item.id === route.id ? { ...item, peso: Math.max(1, Number(event.target.value) || 1) } : item) }))} className="w-14 rounded-lg bg-slate-100 px-2 py-1.5 text-center text-xs text-slate-800" />
+                              </label>}
+                            </div>;
+                          })}
+                        </div>
+                        <p className="mt-2 text-[10px] font-bold text-slate-400">Se nenhuma rota for marcada, ele permanece fora das rotas segmentadas até o admin configurar em Meu Time.</p>
+                      </div>
+                    )}
                     <div className="rounded-2xl border border-cyan-100 bg-cyan-50 px-5 py-4 text-xs font-bold text-cyan-800">
                       O recebimento de novos leads é configurado na concessionária. Depois, um administrador pode ajustar os participantes em Meu Time.
                     </div>

@@ -447,7 +447,10 @@ export default function CrmPage() {
   }
 
   useEffect(() => {
-    setCrmScopeView(profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
+    // A visão inicial é individual. Para administradores da concessionária,
+    // fetchTeamMembers altera para a visão geral somente quando o perfil não
+    // participa da distribuição de leads.
+    setCrmScopeView(isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
   }, [profile?.id, profile?.tipo_usuario, isViewingBrokerAsAdmin]);
 
   // Metrics Dashboard States
@@ -919,7 +922,7 @@ export default function CrmPage() {
 
   useEffect(() => {
     if (crmScopeOptions.some((option) => option.value === crmScopeView)) return;
-    setCrmScopeView(profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
+    setCrmScopeView(isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
   }, [crmScopeOptions, crmScopeView, profile?.tipo_usuario, isViewingBrokerAsAdmin]);
 
   const viewScopedLeads = useMemo(() => {
@@ -945,13 +948,6 @@ export default function CrmPage() {
       return assignedToMe;
     });
   }, [leads, crmScopeView, canUseDealershipViews, teamMembers, profile?.id, profile?.corretor_id, simulatedCorretorId]);
-
-  useEffect(() => {
-    if (!canUseDealershipViews || crmScopeView !== 'meus' || loading) return;
-    if (leads.length > 0 && viewScopedLeads.length === 0) {
-      setCrmScopeView('todos_concessionaria');
-    }
-  }, [canUseDealershipViews, crmScopeView, leads.length, loading, viewScopedLeads.length]);
 
   const scopedLeadIds = useMemo(() => new Set(viewScopedLeads.map((lead) => lead.id)), [viewScopedLeads]);
   const staleLeadIds = useMemo(() => new Set(viewScopedLeads.filter(isStale).map((lead) => lead.id)), [viewScopedLeads]);

@@ -214,6 +214,15 @@ export async function POST(request: Request) {
     const modo_operacao = normalizeOperationMode(body.modo_operacao);
     const distribuicao_modelo = normalizeLeadDistributionModel(body.distribuicao_modelo);
     const distribuicao_publico = normalizeLeadDistributionAudience(body.distribuicao_publico);
+    const distribuicao_regras = (Array.isArray(body.distribuicao_regras) ? body.distribuicao_regras : []).slice(0, 12).map((rule: any, index: number) => ({
+      id: normalizeName(rule?.id) || `regra-${index + 1}`,
+      nome: normalizeName(rule?.nome) || `Regra ${index + 1}`,
+      termos: Array.from(new Set((Array.isArray(rule?.termos) ? rule.termos : []).map(normalizeName).filter(Boolean))).slice(0, 30),
+      fallback: rule?.fallback === true,
+      ativo: rule?.ativo !== false,
+      prioridade: index + 1,
+      membros: [],
+    }));
     const time_operacional = normalizeOperationalTeam(body.time_operacional);
     const gestor_trafego_id = resolveTrafficManagerId(body.gestor_trafego_id, time_operacional);
 
@@ -254,6 +263,7 @@ export async function POST(request: Request) {
         modo_operacao,
         distribuicao_modelo,
         distribuicao_publico,
+        distribuicao_regras,
         time_operacional,
         gestor_trafego_id,
         created_by: guard.profile.id,

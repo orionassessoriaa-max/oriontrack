@@ -81,7 +81,10 @@ type BatchPerson = {
   telefone: string;
   tipo_usuario: BatchPersonRole;
   recebe_leads: boolean;
+  distribuicao_rotas: Array<{ id: string; peso: number }>;
 };
+
+type BrokerageRouteDraft = { id: string; nome: string; termos: string; fallback: boolean };
 
 type CreatedCredential = {
   nome: string;
@@ -97,6 +100,14 @@ const createBatchPerson = (tipo_usuario: BatchPersonRole = 'corretor_admin'): Ba
   telefone: '',
   tipo_usuario,
   recebe_leads: true,
+  distribuicao_rotas: [],
+});
+
+const createRouteDraft = (nome = '', termos = ''): BrokerageRouteDraft => ({
+  id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rota-${Date.now()}-${Math.random()}`,
+  nome,
+  termos,
+  fallback: false,
 });
 
 const emptyBrokerageForm = () => ({
@@ -106,6 +117,7 @@ const emptyBrokerageForm = () => ({
   pessoas: [createBatchPerson()] as BatchPerson[],
   distribuicao_modelo: 'rodizio' as LeadDistributionModel,
   distribuicao_publico: 'todos' as LeadDistributionAudience,
+  distribuicao_rotas: [createRouteDraft('PME', 'pme'), createRouteDraft('Individual', 'individual'), createRouteDraft('Adesao', 'adesao, adesão')] as BrokerageRouteDraft[],
 });
 
 const formatPhone = (value: string) => {
@@ -567,6 +579,15 @@ function CorretorasContent() {
           modo_operacao: 'individual',
           distribuicao_modelo: newBrokerage.distribuicao_modelo,
           distribuicao_publico: newBrokerage.distribuicao_publico,
+          distribuicao_regras: newBrokerage.distribuicao_rotas.filter((route) => route.nome.trim()).map((route, index) => ({
+            id: route.id,
+            nome: route.nome.trim(),
+            termos: route.termos.split(',').map((term) => term.trim().toLowerCase()).filter(Boolean),
+            fallback: route.fallback,
+            ativo: true,
+            prioridade: index + 1,
+            membros: [],
+          })),
           time_operacional: newBrokerage.time_operacional,
           gestor_trafego_id: newBrokerage.time_operacional.find(isTrafficManagerMember)?.profile_id || null,
         }),
@@ -611,6 +632,7 @@ function CorretorasContent() {
             email: generateOrionEmail(person.nome),
             tipo_campanha: 'ambos',
             participa_rodizio: person.recebe_leads,
+            distribuicao_rotas: person.distribuicao_rotas,
             time_operacional: isPrimaryAdministrator ? newBrokerage.time_operacional : undefined,
             gestor_trafego_id: isPrimaryAdministrator
               ? newBrokerage.time_operacional.find(isTrafficManagerMember)?.profile_id || null
@@ -933,6 +955,48 @@ function CorretorasContent() {
                 </div>
               </fieldset>
 
+              <fieldset className="rounded-[1.5rem] border border-violet-400/20 bg-violet-500/[0.04] p-4">
+                <legend className="px-2 text-[10px] font-black uppercase tracking-widest text-violet-300">Rotas de distribuição</legend>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-white">Defina as rotas desta concessionária</p>
+                    <p className="mt-1 text-xs font-bold text-slate-400">Ex.: PME, Individual e Adesão. Os termos identificam a rota pela campanha ou conjunto.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: [...current.distribuicao_rotas, createRouteDraft()] }))}
+                    className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-violet-300/20 bg-violet-400/10 px-4 py-3 text-xs font-black text-violet-200 transition hover:bg-violet-400/20"
+                  >
+                    <Plus size={15} /> Adicionar rota
+                  </button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {newBrokerage.distribuicao_rotas.map((route, routeIndex) => (
+                    <div key={route.id} className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-3 md:grid-cols-[220px_1fr_145px_48px] md:items-end">
+                      <div>
+                        <label htmlFor={`route-name-${route.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome da rota</label>
+                        <input id={`route-name-${route.id}`} value={route.nome} onChange={(event) => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => item.id === route.id ? { ...item, nome: event.target.value } : item) }))} placeholder="PME" className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-sm font-black text-white outline-none focus:border-violet-300" />
+                      </div>
+                      <div>
+                        <label htmlFor={`route-terms-${route.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Identificar na campanha ou conjunto</label>
+                        <input id={`route-terms-${route.id}`} value={route.termos} onChange={(event) => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => item.id === route.id ? { ...item, termos: event.target.value } : item) }))} placeholder="pme, empresarial" className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-sm font-bold text-white outline-none focus:border-violet-300" />
+                      </div>
+                      <label className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-[11px] font-black text-slate-200">
+                        Rota padrão
+                        <input type="checkbox" checked={route.fallback} onChange={(event) => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => ({ ...item, fallback: item.id === route.id ? event.target.checked : false })) }))} className="h-5 w-5 rounded border-slate-500 text-violet-500 focus:ring-violet-400" />
+                      </label>
+                      <button type="button" aria-label={`Remover rota ${route.nome || routeIndex + 1}`} onClick={() => setNewBrokerage((current) => ({
+                        ...current,
+                        distribuicao_rotas: current.distribuicao_rotas.filter((item) => item.id !== route.id),
+                        pessoas: current.pessoas.map((person) => ({ ...person, distribuicao_rotas: person.distribuicao_rotas.filter((item) => item.id !== route.id) })),
+                      }))} className="flex min-h-11 items-center justify-center rounded-xl border border-rose-400/20 text-rose-300 transition hover:bg-rose-500/10">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </fieldset>
+
               <fieldset className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
                 <legend className="px-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">Acessos da concessionária</legend>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -984,6 +1048,36 @@ function CorretorasContent() {
                       <button type="button" aria-label={`Remover ${person.nome || `pessoa ${index + 1}`}`} disabled={newBrokerage.pessoas.length === 1} onClick={() => removeBatchPerson(person.id)} className="flex min-h-11 items-center justify-center rounded-xl border border-rose-400/20 text-rose-300 transition hover:bg-rose-500/10 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-30">
                         <Trash2 size={16} />
                       </button>
+                      {newBrokerage.distribuicao_rotas.some((route) => route.nome.trim()) && (
+                        <div className="md:col-span-5 rounded-2xl border border-violet-300/15 bg-violet-500/[0.05] p-3">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-violet-300">Rotas que esta pessoa recebe</p>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            {newBrokerage.distribuicao_rotas.filter((route) => route.nome.trim()).map((route) => {
+                              const membership = person.distribuicao_rotas.find((item) => item.id === route.id);
+                              return (
+                                <div key={route.id} className={`flex min-h-12 items-center gap-3 rounded-xl border px-3 py-2 ${membership ? 'border-violet-300/40 bg-violet-400/10' : 'border-white/10 bg-black/20'}`}>
+                                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-xs font-black text-white">
+                                    <input type="checkbox" checked={Boolean(membership)} onChange={(event) => updateBatchPerson(person.id, {
+                                      distribuicao_rotas: event.target.checked
+                                        ? [...person.distribuicao_rotas, { id: route.id, peso: 1 }]
+                                        : person.distribuicao_rotas.filter((item) => item.id !== route.id),
+                                    })} className="h-5 w-5 rounded border-slate-500 text-violet-500 focus:ring-violet-400" />
+                                    <span className="truncate">{route.nome}</span>
+                                  </label>
+                                  {membership && (
+                                    <label className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400">
+                                      Peso
+                                      <input type="number" min={1} max={10} value={membership.peso} onChange={(event) => updateBatchPerson(person.id, {
+                                        distribuicao_rotas: person.distribuicao_rotas.map((item) => item.id === route.id ? { ...item, peso: Math.max(1, Math.min(10, Number(event.target.value) || 1)) } : item),
+                                      })} className="h-9 w-14 rounded-lg border border-white/10 bg-[#111827] px-2 text-center text-xs font-black text-white outline-none focus:border-violet-300" />
+                                    </label>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1135,6 +1229,15 @@ function CorretorasContent() {
                         <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-cyan-700 dark:text-cyan-300">{leadDistributionModelLabels[normalizeLeadDistributionModel(c.distribuicao_modelo)]}</span>
                       )}
                       <span className="text-[10px] font-bold text-slate-400">{leadDistributionAudienceLabels[normalizeLeadDistributionAudience(c.distribuicao_publico)]}</span>
+                      {isAdmin && c.corretoresRows[0]?.id && (
+                        <Link
+                          href={`/admin/corretores/${c.corretoresRows[0].id}/time`}
+                          onClick={(event) => event.stopPropagation()}
+                          className="mt-1 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-cyan-500 transition hover:text-cyan-300"
+                        >
+                          <Users size={12} /> Definir quem recebe e a visão inicial
+                        </Link>
+                      )}
                     </div>
 
                     {isAdmin && (
