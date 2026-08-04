@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'ia:whatsapp:connect', { limit: 10, windowMs: 10 * 60_000 });
     if (limited) return limited;
-    const guard = await requireApiUser(request, ['corretor', 'corretor_admin', 'admin']);
+    const guard = await requireApiUser(request, ['corretor', 'corretor_admin', 'corretor_membro', 'admin']);
     if ('error' in guard) return guard.error;
     const context = await resolveAiContext(guard.profile);
     if (!context?.config || context.config.sender_mode !== 'dedicated') {
