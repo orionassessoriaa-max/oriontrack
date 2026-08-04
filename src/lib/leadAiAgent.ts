@@ -41,6 +41,10 @@ function formatAiBrokerageDisplayName(name?: string | null) {
     return 'Octavita Seguros';
   }
 
+  if (/\bitael\b/i.test(rawName)) {
+    return 'equipe do Itael';
+  }
+
   return (cleanName || rawName)
     .toLowerCase()
     .split(' ')
