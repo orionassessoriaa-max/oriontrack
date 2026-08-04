@@ -120,7 +120,6 @@ function dedupeMessages(messages: any[]) {
     const createdAt = message?.created_at ? new Date(message.created_at).getTime() : 0;
     const bucket = createdAt ? Math.floor(createdAt / 30_000) : 0;
     const contentKey = [
-      message?.conversa_id || '',
       message?.direction || '',
       message?.remetente || '',
       String(message?.mensagem || '').trim(),
@@ -323,31 +322,22 @@ export async function GET(request: Request) {
 
     const conversationIds = await findAccessibleConversationIdsByPhone(guard.profile, conversation);
 
-    // Read the selected conversation first. This prevents an alternate
-    // conversation for the same phone from masking an existing history.
-    const directQuery = await supabaseAdmin
+    // Um mesmo contato pode possuir conversas diferentes quando foi atendido
+    // por integrantes/instancias distintas. O Inbox deve apresentar uma unica
+    // timeline, respeitando somente as conversas que o usuario pode acessar.
+    const historyQuery = await supabaseAdmin
       .from('whatsapp_mensagens')
       .select('*')
-      .eq('conversa_id', conversation.id)
+      .in('conversa_id', conversationIds)
       .order('created_at', { ascending: true })
-      .limit(300);
+      .limit(1000);
 
-    if (directQuery.error) throw directQuery.error;
+    if (historyQuery.error) throw historyQuery.error;
 
-    let data = directQuery.data || [];
-    if (!data.length && conversationIds.length > 1) {
-      const fallback = await supabaseAdmin
-        .from('whatsapp_mensagens')
-        .select('*')
-        .in('conversa_id', conversationIds.filter((id) => id !== conversation.id))
-        .order('created_at', { ascending: true })
-        .limit(300);
-
-      if (fallback.error) throw fallback.error;
-      data = fallback.data || [];
-    }
-
-    return NextResponse.json({ messages: dedupeMessages(data || []) });
+    return NextResponse.json({
+      messages: dedupeMessages(historyQuery.data || []),
+      conversation_ids: conversationIds,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao consegui carregar as mensagens.' }, { status: 500 });
   }

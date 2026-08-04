@@ -290,6 +290,7 @@ export default function BrokerInboxPage() {
   const audioStreamRef = useRef<MediaStream | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const selectedConversationRef = useRef<Conversation | null>(null);
+  const visibleConversationIdsRef = useRef<Set<string>>(new Set());
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Audio Playback States
@@ -686,8 +687,9 @@ export default function BrokerInboxPage() {
           const newMsg = payload.new as InboxMessage;
           const currentSelected = selectedConversationRef.current;
 
-          // If the message is for the currently selected conversation, append it
-          if (currentSelected && newMsg.conversa_id === currentSelected.id) {
+          // O historico exibido pode unir mais de uma conversa do mesmo numero.
+          // Atualize em tempo real qualquer parte dessa timeline unificada.
+          if (currentSelected && visibleConversationIdsRef.current.has(newMsg.conversa_id)) {
             const isAudio = 
               newMsg.mensagem?.includes('[Áudio Gravado]') || 
               newMsg.mensagem?.includes('🎤 Mensagem de voz') || 
@@ -762,6 +764,7 @@ export default function BrokerInboxPage() {
   async function fetchMessages(conversationId: string) {
     if (conversationId.startsWith('new-')) {
       setMessages([]);
+      visibleConversationIdsRef.current = new Set();
       return;
     }
 
@@ -793,6 +796,11 @@ export default function BrokerInboxPage() {
         setSendError(errorMessage);
         return;
       }
+      visibleConversationIdsRef.current = new Set(
+        Array.isArray(payload.conversation_ids)
+          ? payload.conversation_ids.map(String)
+          : [conversationId, ...mapped.map((message: InboxMessage) => String(message.conversa_id))],
+      );
       setMessages(mapped);
     } catch (err) {
       console.error(err);
