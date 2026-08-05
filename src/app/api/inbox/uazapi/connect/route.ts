@@ -11,6 +11,12 @@ type WhatsappTargetProfile = ApiProfile & {
   equipe_orion?: 'apollo' | 'kripto_hunters' | null;
 };
 
+type UazapiConnectionSnapshot = {
+  state: 'open' | 'connecting' | 'close';
+  qrcode: string | null;
+  disconnectReason: string;
+};
+
 function canViewWhatsappTarget(actor: ApiProfile, target: WhatsappTargetProfile) {
   if (actor.id === target.id) return true;
   if (actor.tipo_usuario === 'admin') return true;
@@ -53,16 +59,15 @@ function targetPayload(profile: WhatsappTargetProfile) {
 function normalizeUazapiState(value?: unknown, connectedField?: boolean) {
   const raw = String(value || '').toLowerCase();
   if (
-    !raw ||
     raw.includes('disconnect') ||
     raw.includes('disconnected') ||
     raw.includes('close') ||
     raw.includes('logout') ||
     raw.includes('loggedout')
   ) return 'close';
-  if (connectedField === true) return 'open';
+  if (raw.includes('connecting') || raw.includes('qr') || raw.includes('pairing') || raw.includes('hibernat')) return 'connecting';
   if (['open', 'connected', 'connectado', 'conectado', 'true', 'loggedin'].includes(raw)) return 'open';
-  if (raw.includes('connecting') || raw.includes('qr') || raw.includes('pairing')) return 'connecting';
+  if (connectedField === true) return 'open';
   return 'close';
 }
 
@@ -70,6 +75,7 @@ function readUazapiStatus(payload: any) {
   return (
     payload?.instance?.status ||
     payload?.status?.status ||
+    (typeof payload?.status === 'string' ? payload.status : '') ||
     payload?.state ||
     ''
   );
@@ -82,8 +88,30 @@ function readUazapiConnected(payload: any) {
     payload?.instance?.connected === true ||
     payload?.instance?.loggedIn === true ||
     payload?.status?.connected === true ||
-    payload?.status?.loggedIn === true ||
-    Boolean(payload?.jid || payload?.status?.jid || payload?.instance?.jid || payload?.instance?.owner)
+    payload?.status?.loggedIn === true
+  );
+}
+
+function readUazapiDisconnectReason(payload: any) {
+  return String(
+    payload?.instance?.lastDisconnectReason ||
+    payload?.lastDisconnectReason ||
+    payload?.data?.instance?.lastDisconnectReason ||
+    payload?.data?.lastDisconnectReason ||
+    ''
+  );
+}
+
+function isTransientUazapiDisconnect(reason: string) {
+  const normalized = reason.toLowerCase();
+  if (!normalized || normalized.includes('qr code timeout')) return false;
+  return (
+    normalized.includes('health_reconnect_timeout') ||
+    normalized.includes('network error') ||
+    normalized.includes('connection closed') ||
+    normalized.includes('stream errored') ||
+    normalized.includes('server not available') ||
+    normalized.includes('temporarily unavailable')
   );
 }
 
@@ -106,14 +134,20 @@ function readInstanceName(instance: any) {
   );
 }
 
-async function fetchUazapiInstanceStateFromList(instance: string) {
+async function fetchUazapiInstanceStateFromList(instance: string): Promise<UazapiConnectionSnapshot> {
   const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
   const found = asArray(payload).find((item) => readInstanceName(item) === instance);
-  if (!found) return 'close';
-  return normalizeUazapiState(
+  if (!found) return { state: 'close', qrcode: null, disconnectReason: '' };
+  const qrcode = extractUazapiQrCode(found);
+  const normalizedState = normalizeUazapiState(
     found?.status || found?.state || found?.connectionStatus || found?.sessionStatus,
-    Boolean(found?.connected || found?.isConnected || found?.loggedIn || found?.owner || found?.jid)
+    found?.connected === true || found?.isConnected === true || found?.loggedIn === true
   );
+  return {
+    state: qrcode && normalizedState === 'close' ? 'connecting' : normalizedState,
+    qrcode,
+    disconnectReason: readUazapiDisconnectReason(found),
+  };
 }
 
 function isNonReconnectableSession(value: unknown) {
@@ -155,6 +189,13 @@ async function createUazapiInstance(instance: string) {
 
 async function connectUazapiInstance(instance: string) {
   return uazapiFetch('/instance/connect', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }, { instanceName: instance });
+}
+
+async function resetUazapiInstanceRuntime(instance: string) {
+  return uazapiFetch('/instance/reset', {
     method: 'POST',
     body: JSON.stringify({}),
   }, { instanceName: instance });
@@ -213,28 +254,39 @@ async function disconnectUazapiInstanceEverywhere(instance: string) {
 }
 
 function extractUazapiQrCode(payload: any): string | null {
-  return (
+  const candidates = [
     payload?.qrcode ||
-    payload?.base64 ||
+    null,
+    payload?.base64,
     payload?.instance?.qrcode ||
-    payload?.instance?.base64 ||
+    null,
+    payload?.instance?.base64,
     payload?.data?.qrcode ||
-    payload?.data?.base64 ||
+    null,
+    payload?.data?.base64,
     payload?.data?.instance?.qrcode ||
-    payload?.data?.instance?.base64 ||
+    null,
+    payload?.data?.instance?.base64,
     payload?.qrcode?.base64 ||
-    payload?.qrcode?.code ||
-    null
-  );
+    null,
+    payload?.qrcode?.code,
+    payload?.instance?.qrcode?.base64,
+    payload?.instance?.qrcode?.code,
+    payload?.data?.qrcode?.base64,
+    payload?.data?.qrcode?.code,
+  ];
+  return candidates.find((candidate) => typeof candidate === 'string' && candidate.length > 0) || null;
 }
 
-async function fetchUazapiInstanceState(instance: string) {
+async function fetchUazapiInstanceState(instance: string): Promise<UazapiConnectionSnapshot> {
   try {
     const payload = await uazapiFetch('/instance/status', { method: 'GET' }, { instanceName: instance });
     const statusStr = readUazapiStatus(payload);
     const isConnected = readUazapiConnected(payload);
-    const state = normalizeUazapiState(statusStr, isConnected);
-    if (state !== 'close') return state;
+    const qrcode = extractUazapiQrCode(payload);
+    const normalizedState = normalizeUazapiState(statusStr, isConnected);
+    const state = qrcode && normalizedState === 'close' ? 'connecting' : normalizedState;
+    if (state !== 'close') return { state, qrcode, disconnectReason: readUazapiDisconnectReason(payload) };
 
     // Alguns retornos do UAZAPI podem vir incompletos no endpoint de status.
     // Antes de mostrar desconectado, confirme na lista geral de instancias.
@@ -245,7 +297,7 @@ async function fetchUazapiInstanceState(instance: string) {
       return await fetchUazapiInstanceStateFromList(instance);
     } catch (fallbackError) {
       console.warn(`[GET /api/inbox/uazapi/connect] instance/all fallback failed for ${instance}. returning close.`, fallbackError);
-      return 'close';
+      return { state: 'close', qrcode: null, disconnectReason: '' };
     }
   }
 }
@@ -302,20 +354,39 @@ export async function POST(request: Request) {
 
     // Conectar e buscar QR code
     let recoveredSession = false;
+    let resetTransientSession = false;
     let payload: unknown;
-    try {
-      payload = await connectUazapiInstance(instance);
-      if (isNonReconnectableSession(payload)) {
+    const currentSnapshot = await fetchUazapiInstanceState(instance);
+    if (currentSnapshot.state === 'open') {
+      payload = { status: 'connected' };
+    } else if (currentSnapshot.state === 'connecting' && currentSnapshot.qrcode) {
+      // Reaproveita o QR ainda valido. Gerar outro a cada clique invalida o
+      // codigo que o usuario ja esta tentando escanear.
+      payload = { status: 'connecting', qrcode: currentSnapshot.qrcode };
+    } else {
+      try {
+        if (currentSnapshot.state === 'close' && isTransientUazapiDisconnect(currentSnapshot.disconnectReason)) {
+          payload = await resetUazapiInstanceRuntime(instance);
+          resetTransientSession = true;
+        } else {
+          payload = await connectUazapiInstance(instance);
+        }
+        if (isNonReconnectableSession(payload)) {
+          payload = await recoverNonReconnectableUazapiInstance(instance);
+          recoveredSession = true;
+        }
+      } catch (error) {
+        if (!isNonReconnectableSession(error)) throw error;
         payload = await recoverNonReconnectableUazapiInstance(instance);
         recoveredSession = true;
       }
-    } catch (error) {
-      if (!isNonReconnectableSession(error)) throw error;
-      payload = await recoverNonReconnectableUazapiInstance(instance);
-      recoveredSession = true;
     }
 
-    const qrcode = extractUazapiQrCode(payload);
+    const refreshedSnapshot = await fetchUazapiInstanceState(instance);
+    const qrcode = extractUazapiQrCode(payload) || refreshedSnapshot.qrcode;
+    const state = (qrcode || resetTransientSession) && refreshedSnapshot.state === 'close'
+      ? 'connecting'
+      : refreshedSnapshot.state;
 
     await writeAuditLog(request, guard.profile, {
       action: 'whatsapp.connect.request',
@@ -325,6 +396,7 @@ export async function POST(request: Request) {
         target_profile_id: targetProfile.id,
         target_role: targetProfile.tipo_usuario,
         recovered_non_reconnectable_session: recoveredSession,
+        reset_transient_session: resetTransientSession,
       },
     });
 
@@ -332,6 +404,8 @@ export async function POST(request: Request) {
       success: true,
       instance,
       qrcode,
+      state,
+      connected: state === 'open',
       targetProfile: targetPayload(targetProfile),
       raw: qrcode ? undefined : payload,
     });
@@ -361,12 +435,13 @@ export async function GET(request: Request) {
     const instance = uazapiInstanceName(targetProfile.id);
 
     try {
-      const state = await fetchUazapiInstanceState(instance);
+      const snapshot = await fetchUazapiInstanceState(instance);
       return NextResponse.json({
         success: true,
         instance,
-        state, // 'open', 'connecting', 'close'
-        connected: state === 'open',
+        state: snapshot.state, // 'open', 'connecting', 'close'
+        connected: snapshot.state === 'open',
+        qrcode: snapshot.qrcode,
         statusSource: 'provider',
         targetProfile: targetPayload(targetProfile),
       }, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } });
@@ -400,9 +475,9 @@ export async function DELETE(request: Request) {
 
     const instance = uazapiInstanceName(targetProfile.id);
     const disconnectResults = await disconnectUazapiInstanceEverywhere(instance);
-    const finalState = await fetchUazapiInstanceStateFromList(instance).catch((error) => {
+    const finalSnapshot = await fetchUazapiInstanceStateFromList(instance).catch((error) => {
       console.warn(`[DELETE /api/inbox/uazapi/connect] Status check failed after disconnect for ${instance}:`, error);
-      return 'unknown';
+      return { state: 'unknown', qrcode: null, disconnectReason: '' };
     });
 
     /*
@@ -434,7 +509,7 @@ export async function DELETE(request: Request) {
         target_role: targetProfile.tipo_usuario,
         disconnected_by: guard.profile.id,
         disconnected_by_role: guard.profile.tipo_usuario,
-        final_state: finalState,
+        final_state: finalSnapshot.state,
         attempts: disconnectResults,
       },
     });
@@ -442,7 +517,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({
       success: true,
       targetProfile: targetPayload(targetProfile),
-      state: finalState,
+      state: finalSnapshot.state,
       attempts: disconnectResults,
       message: 'WhatsApp desconectado com sucesso.'
     });

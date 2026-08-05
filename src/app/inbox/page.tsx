@@ -428,6 +428,11 @@ export default function BrokerInboxPage() {
         if (payload.connected) {
           setQrCode(null);
           setConnectError(null);
+        } else if (typeof payload.qrcode === 'string' && payload.qrcode) {
+          setQrCode(payload.qrcode);
+          setConnectError(null);
+        } else if (payload.state === 'close') {
+          setQrCode(null);
         }
       }
     } catch (err) {
@@ -1053,14 +1058,23 @@ export default function BrokerInboxPage() {
         return;
       }
 
-      if (!payload.qrcode) {
-        setConnectError('A conexao respondeu, mas ainda nao trouxe o QR Code. Tente novamente em alguns segundos.');
+      setWhatsAppOwnerName(payload.targetProfile?.nome || profile?.nome || '');
+
+      if (payload.connected || payload.state === 'open') {
+        setIsWhatsAppConnected(true);
+        setWhatsappStatus('open');
+        setQrCode(null);
+        setConnectError(null);
         return;
       }
 
-      setWhatsAppOwnerName(payload.targetProfile?.nome || profile?.nome || '');
-      setQrCode(payload.qrcode);
-      setWhatsappStatus('connecting');
+      setIsWhatsAppConnected(false);
+      setWhatsappStatus(payload.state || 'connecting');
+      if (payload.qrcode) {
+        setQrCode(payload.qrcode);
+      } else if (payload.state === 'close') {
+        setConnectError('Nao consegui iniciar uma nova conexao agora. Aguarde alguns segundos e tente novamente.');
+      }
     } catch (err) {
       console.error(err);
       setConnectError('Erro de conexao ao gerar o QR Code.');
@@ -2143,9 +2157,15 @@ export default function BrokerInboxPage() {
             <div className="orion-inbox-connection-info flex items-center gap-3">
               <QrCode className="text-amber-400 shrink-0" size={20} />
               <div>
-                <p className="text-xs font-black text-amber-200 uppercase tracking-wider">WhatsApp Desconectado</p>
+                <p className="text-xs font-black text-amber-200 uppercase tracking-wider">
+                  {whatsappStatus === 'connecting' ? 'Preparando conexao do WhatsApp' : 'WhatsApp Desconectado'}
+                </p>
                 <p className="text-2xs text-slate-400 font-bold mt-0.5">
-                  {whatsAppOwnerName ? `${whatsAppOwnerName} ainda nao esta conectado ao Inbox.` : 'Conecte esta conta para poder enviar mensagens reais diretamente por aqui.'}
+                  {whatsappStatus === 'connecting'
+                    ? 'O QR Code esta sendo gerado. Ele aparecera automaticamente nesta tela.'
+                    : whatsAppOwnerName
+                      ? `${whatsAppOwnerName} ainda nao esta conectado ao Inbox.`
+                      : 'Conecte esta conta para poder enviar mensagens reais diretamente por aqui.'}
                 </p>
                 {connectError && (
                   <p className="mt-2 text-[10px] font-black text-rose-300">{connectError}</p>
@@ -2162,10 +2182,10 @@ export default function BrokerInboxPage() {
               </button>
               <button
                 onClick={connectWhatsApp}
-                disabled={connecting}
+                disabled={connecting || whatsappStatus === 'connecting'}
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-2xs font-black uppercase text-white shadow-lg shadow-orange-950/20 disabled:opacity-50 cursor-pointer"
               >
-                {connecting ? 'Gerando QR...' : 'Conectar Conta'}
+                {connecting || whatsappStatus === 'connecting' ? 'Gerando QR...' : 'Conectar Conta'}
               </button>
             </div>
           </div>
