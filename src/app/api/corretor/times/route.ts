@@ -765,14 +765,66 @@ export async function POST(request: Request) {
       const participaRodizio = Boolean(body.participa_rodizio);
       if (!memberId) return NextResponse.json({ error: 'Membro nao informado.' }, { status: 400 });
 
+      let resolvedMemberId = memberId;
       if (memberId.startsWith('profile:')) {
-        return NextResponse.json({ error: 'Salve este perfil no time antes de alterar o rodizio.' }, { status: 400 });
+        const profileId = memberId.replace('profile:', '').trim();
+        const { data: assignableProfile, error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .select('id, nome, email, email_real, corretor_id')
+          .eq('id', profileId)
+          .in('corretor_id', scope.corretorIds)
+          .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro'])
+          .in('status', ACTIVE_PROFILE_STATUSES)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+        if (!assignableProfile) {
+          return NextResponse.json({ error: 'Perfil nao encontrado nesta concessionaria.' }, { status: 404 });
+        }
+
+        const { data: existingMember, error: existingMemberError } = await supabaseAdmin
+          .from('corretor_time_membros')
+          .select('id')
+          .eq('time_id', team.id)
+          .eq('profile_id', profileId)
+          .maybeSingle();
+        if (existingMemberError) throw existingMemberError;
+
+        if (existingMember?.id) {
+          resolvedMemberId = existingMember.id;
+        } else {
+          const { data: lastMember, error: lastMemberError } = await supabaseAdmin
+            .from('corretor_time_membros')
+            .select('ordem')
+            .eq('time_id', team.id)
+            .order('ordem', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (lastMemberError) throw lastMemberError;
+
+          const { data: createdMember, error: createMemberError } = await supabaseAdmin
+            .from('corretor_time_membros')
+            .insert([{
+              time_id: team.id,
+              corretor_id: assignableProfile.corretor_id || corretorId,
+              profile_id: profileId,
+              nome: assignableProfile.nome,
+              email: assignableProfile.email_real || assignableProfile.email,
+              status: 'ativo',
+              ordem: Number(lastMember?.ordem || 0) + 1,
+              participa_rodizio: participaRodizio,
+            }])
+            .select('id')
+            .single();
+          if (createMemberError) throw createMemberError;
+          resolvedMemberId = createdMember.id;
+        }
       }
 
       const { data, error } = await supabaseAdmin
         .from('corretor_time_membros')
         .update({ participa_rodizio: participaRodizio })
-        .eq('id', memberId)
+        .eq('id', resolvedMemberId)
         .eq('time_id', team.id)
         .select('*')
         .single();

@@ -1252,7 +1252,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
                               type="checkbox"
                               className="peer sr-only"
                               checked={member.participa_rodizio !== false}
-                              disabled={settingsSaving || member.id.startsWith('profile:')}
+                              disabled={settingsSaving}
                               onChange={(event) => toggleMemberDistribution(member, event.target.checked)}
                             />
                             <span className="h-6 w-11 rounded-full bg-white/10 transition peer-checked:bg-emerald-500 peer-disabled:opacity-50" />
