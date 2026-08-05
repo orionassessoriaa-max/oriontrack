@@ -956,45 +956,90 @@ function CorretorasContent() {
               </fieldset>
 
               <fieldset className="rounded-[1.5rem] border border-violet-400/20 bg-violet-500/[0.04] p-4">
-                <legend className="px-2 text-[10px] font-black uppercase tracking-widest text-violet-300">Rotas de distribuição</legend>
+                <legend className="px-2 text-[10px] font-black uppercase tracking-widest text-violet-300">Separação por tipo de lead</legend>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-sm font-black text-white">Defina as rotas desta concessionária</p>
-                    <p className="mt-1 text-xs font-bold text-slate-400">Ex.: PME, Individual e Adesão. Os termos identificam a rota pela campanha ou conjunto.</p>
+                  <div className="max-w-2xl">
+                    <p className="text-sm font-black text-white">Como o sistema escolhe para qual grupo enviar o lead?</p>
+                    <p className="mt-1 text-xs font-bold leading-5 text-slate-400">Ele procura palavras no nome da campanha ou do conjunto de anúncios. Quando encontra uma palavra cadastrada, usa a rota correspondente.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: [...current.distribuicao_rotas, createRouteDraft()] }))}
-                    className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-violet-300/20 bg-violet-400/10 px-4 py-3 text-xs font-black text-violet-200 transition hover:bg-violet-400/20"
+                    className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-violet-300/20 bg-violet-400/10 px-4 py-3 text-xs font-black text-violet-200 transition hover:bg-violet-400/20 focus:outline-none focus:ring-2 focus:ring-violet-300"
                   >
                     <Plus size={15} /> Adicionar rota
                   </button>
                 </div>
-                <div className="mt-4 space-y-3">
-                  {newBrokerage.distribuicao_rotas.map((route, routeIndex) => (
-                    <div key={route.id} className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-3 md:grid-cols-[220px_1fr_145px_48px] md:items-end">
-                      <div>
-                        <label htmlFor={`route-name-${route.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Nome da rota</label>
-                        <input id={`route-name-${route.id}`} value={route.nome} onChange={(event) => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => item.id === route.id ? { ...item, nome: event.target.value } : item) }))} placeholder="PME" className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-sm font-black text-white outline-none focus:border-violet-300" />
-                      </div>
-                      <div>
-                        <label htmlFor={`route-terms-${route.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Identificar na campanha ou conjunto</label>
-                        <input id={`route-terms-${route.id}`} value={route.termos} onChange={(event) => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => item.id === route.id ? { ...item, termos: event.target.value } : item) }))} placeholder="pme, empresarial" className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-sm font-bold text-white outline-none focus:border-violet-300" />
-                      </div>
-                      <label className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-[11px] font-black text-slate-200">
-                        Rota padrão
-                        <input type="checkbox" checked={route.fallback} onChange={(event) => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => ({ ...item, fallback: item.id === route.id ? event.target.checked : false })) }))} className="h-5 w-5 rounded border-slate-500 text-violet-500 focus:ring-violet-400" />
-                      </label>
-                      <button type="button" aria-label={`Remover rota ${route.nome || routeIndex + 1}`} onClick={() => setNewBrokerage((current) => ({
-                        ...current,
-                        distribuicao_rotas: current.distribuicao_rotas.filter((item) => item.id !== route.id),
-                        pessoas: current.pessoas.map((person) => ({ ...person, distribuicao_rotas: person.distribuicao_rotas.filter((item) => item.id !== route.id) })),
-                      }))} className="flex min-h-11 items-center justify-center rounded-xl border border-rose-400/20 text-rose-300 transition hover:bg-rose-500/10">
-                        <Trash2 size={16} />
-                      </button>
+
+                <div className="mt-4 grid gap-2 rounded-2xl border border-violet-300/15 bg-violet-400/[0.06] p-3 sm:grid-cols-3">
+                  {[
+                    ['1', 'O lead chega', 'O sistema lê campanha e conjunto.'],
+                    ['2', 'Procura as palavras', 'Ex.: “pme”, “individual” ou “adesão”.'],
+                    ['3', 'Escolhe a rota', 'Sem combinação, usa a rota reserva.'],
+                  ].map(([step, title, description]) => (
+                    <div key={step} className="flex gap-3 rounded-xl bg-black/20 p-3">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-400/20 text-xs font-black text-violet-200">{step}</span>
+                      <span>
+                        <span className="block text-xs font-black text-white">{title}</span>
+                        <span className="mt-1 block text-[11px] font-bold leading-4 text-slate-400">{description}</span>
+                      </span>
                     </div>
                   ))}
                 </div>
+
+                <div className="mt-4 space-y-3">
+                  {newBrokerage.distribuicao_rotas.map((route, routeIndex) => {
+                    const firstTerm = route.termos.split(',').map((term) => term.trim()).find(Boolean);
+                    const routeName = route.nome.trim() || `Rota ${routeIndex + 1}`;
+
+                    return (
+                      <div key={route.id} className={`rounded-2xl border p-4 ${route.fallback ? 'border-violet-300/35 bg-violet-400/[0.08]' : 'border-white/10 bg-black/20'}`}>
+                        <div className="mb-4 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Rota {routeIndex + 1}</span>
+                            {route.fallback && <span className="rounded-full bg-violet-400/20 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-violet-200">Rota reserva</span>}
+                          </div>
+                          <button type="button" aria-label={`Remover rota ${route.nome || routeIndex + 1}`} onClick={() => setNewBrokerage((current) => ({
+                            ...current,
+                            distribuicao_rotas: current.distribuicao_rotas.filter((item) => item.id !== route.id),
+                            pessoas: current.pessoas.map((person) => ({ ...person, distribuicao_rotas: person.distribuicao_rotas.filter((item) => item.id !== route.id) })),
+                          }))} className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-rose-400/20 text-rose-300 transition hover:bg-rose-500/10 focus:outline-none focus:ring-2 focus:ring-rose-300">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+
+                        <div className="grid gap-4 lg:grid-cols-[minmax(180px,0.7fr)_minmax(280px,1.3fr)_minmax(230px,0.8fr)] lg:items-start">
+                          <div>
+                            <label htmlFor={`route-name-${route.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Nome do grupo</label>
+                            <input id={`route-name-${route.id}`} value={route.nome} onChange={(event) => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => item.id === route.id ? { ...item, nome: event.target.value } : item) }))} placeholder="Ex.: PME" className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-sm font-black text-white outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-300/20" />
+                            <p className="mt-2 text-[11px] font-bold leading-4 text-slate-500">Este nome aparecerá na distribuição para a equipe.</p>
+                          </div>
+                          <div>
+                            <label htmlFor={`route-terms-${route.id}`} className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Quais palavras identificam este grupo?</label>
+                            <input id={`route-terms-${route.id}`} aria-describedby={`route-terms-help-${route.id}`} value={route.termos} onChange={(event) => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => item.id === route.id ? { ...item, termos: event.target.value } : item) }))} placeholder="Ex.: pme, empresarial, cnpj" className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-sm font-bold text-white outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-300/20" />
+                            <p id={`route-terms-help-${route.id}`} className="mt-2 text-[11px] font-bold leading-4 text-slate-500">Separe as palavras por vírgulas. O sistema procura qualquer uma delas na campanha ou conjunto.</p>
+                          </div>
+                          <label className={`flex min-h-[76px] cursor-pointer items-start justify-between gap-3 rounded-xl border px-4 py-3 transition focus-within:ring-2 focus-within:ring-violet-300 ${route.fallback ? 'border-violet-300/40 bg-violet-400/10' : 'border-white/10 bg-black/30 hover:bg-white/5'}`}>
+                            <span>
+                              <span className="block text-xs font-black text-white">Usar como rota reserva</span>
+                              <span className="mt-1 block text-[11px] font-bold leading-4 text-slate-400">Recebe o lead quando nenhuma palavra combinar.</span>
+                            </span>
+                            <input type="checkbox" checked={route.fallback} onChange={(event) => setNewBrokerage((current) => ({ ...current, distribuicao_rotas: current.distribuicao_rotas.map((item) => ({ ...item, fallback: item.id === route.id ? event.target.checked : false })) }))} className="mt-1 h-5 w-5 shrink-0 rounded border-slate-500 text-violet-500 focus:ring-violet-400" />
+                          </label>
+                        </div>
+
+                        {(firstTerm || route.fallback) && (
+                          <p className="mt-4 rounded-xl border border-white/5 bg-black/20 px-3 py-2 text-[11px] font-bold leading-5 text-slate-300">
+                            {firstTerm ? <>Exemplo: se a campanha contiver <strong className="text-violet-200">“{firstTerm}”</strong>, o lead vai para <strong className="text-white">{routeName}</strong>.</> : null}
+                            {firstTerm && route.fallback ? ' ' : null}
+                            {route.fallback ? <>Se nenhuma rota combinar, o lead também vai para <strong className="text-white">{routeName}</strong>.</> : null}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-[11px] font-bold leading-5 text-slate-500">Dica: marque somente uma rota como reserva. Ela evita que leads sem uma palavra conhecida fiquem sem destino.</p>
               </fieldset>
 
               <fieldset className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
