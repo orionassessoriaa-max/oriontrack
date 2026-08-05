@@ -224,9 +224,18 @@ async function tryStartLeadAiForWebhook(leadId?: string | null) {
     console.error('[Webhook n8n] Failed starting lead AI:', aiErr);
     const rawMessage = String((aiErr as any)?.message || aiErr || '');
     const lowerMessage = rawMessage.toLowerCase();
-    const reason = lowerMessage.includes('whatsapp disconnected')
-      ? 'WhatsApp desconectado na instancia que envia a IA.'
-      : rawMessage || 'Erro desconhecido ao iniciar a IA.';
+    const missingInboxConnection =
+      lowerMessage.includes('instancia uazapi') ||
+      lowerMessage.includes('instância uazapi') ||
+      lowerMessage.includes('ainda nao foi criada') ||
+      lowerMessage.includes('ainda não foi criada') ||
+      lowerMessage.includes('nao possui token') ||
+      lowerMessage.includes('não possui token');
+    const reason = missingInboxConnection
+      ? 'Voce ainda nao conectou seu numero no Inbox.'
+      : lowerMessage.includes('whatsapp disconnected')
+        ? 'Seu numero esta desconectado no Inbox. Conecte novamente para a IA atender automaticamente.'
+        : 'A IA nao conseguiu iniciar automaticamente. A equipe Orion pode verificar o ocorrido.';
 
     return {
       started: false,
