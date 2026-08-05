@@ -482,10 +482,15 @@ export async function POST(request: Request) {
       });
       if (claimError && !/not_shared_queue/i.test(claimError.message || '')) throw claimError;
       const claim = claimResult as any;
-      if (claim?.reason === 'already_claimed' && claim?.responsavel_profile_id !== senderProfileId) {
+      const enforceExclusiveOwnership = senderProfile.tipo_usuario === 'corretor_membro';
+
+      // Donos e administradores da corretora mantêm a supervisão do inbox e
+      // podem responder leads do próprio time. A exclusividade evita apenas
+      // que dois integrantes operacionais atendam o mesmo lead.
+      if (enforceExclusiveOwnership && claim?.reason === 'already_claimed' && claim?.responsavel_profile_id !== senderProfileId) {
         return NextResponse.json({ error: 'Este lead acabou de ser assumido por outro atendente. Atualize a conversa para ver o responsável.' }, { status: 409 });
       }
-      if (claim?.reason === 'not_participant') {
+      if (enforceExclusiveOwnership && claim?.reason === 'not_participant') {
         return NextResponse.json({ error: 'Você não participa da distribuição de novos leads desta concessionária.' }, { status: 403 });
       }
     }
