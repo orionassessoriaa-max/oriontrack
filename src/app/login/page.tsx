@@ -20,10 +20,25 @@ export default function LoginPage() {
   
   // Estados da transição cinematográfica
   const videoRef = useRef<HTMLVideoElement>(null);
+  const redirectFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [videoState, setVideoState] = useState<'playing-intro' | 'paused-form' | 'playing-goal' | 'redirecting'>('playing-intro');
   const [targetRoute, setTargetRoute] = useState<string>('');
 
   const router = useRouter();
+
+  const clearRedirectFallback = () => {
+    if (!redirectFallbackRef.current) return;
+    clearTimeout(redirectFallbackRef.current);
+    redirectFallbackRef.current = null;
+  };
+
+  const finishLoginRedirect = (path: string) => {
+    clearRedirectFallback();
+    setVideoState('redirecting');
+    router.replace(path);
+  };
+
+  useEffect(() => () => clearRedirectFallback(), []);
 
   // Fallback robusto caso o vídeo não inicie ou o autoplay seja bloqueado
   useEffect(() => {
@@ -40,14 +55,21 @@ export default function LoginPage() {
   const handlePlayGoal = (path: string) => {
     setTargetRoute(path);
     setVideoState('playing-goal');
+
+    clearRedirectFallback();
+    redirectFallbackRef.current = setTimeout(() => {
+      // A animação é apenas visual e nunca pode bloquear o acesso.
+      // A navegação completa também recupera navegadores com chunks antigos.
+      window.location.replace(path);
+    }, 3000);
     
     if (videoRef.current) {
       videoRef.current.play().catch((err) => {
         console.warn('Play do vídeo bloqueado ou falhou. Redirecionando imediatamente:', err);
-        router.replace(path);
+        finishLoginRedirect(path);
       });
     } else {
-      router.replace(path);
+      finishLoginRedirect(path);
     }
   };
 
@@ -107,8 +129,8 @@ export default function LoginPage() {
       }
 
       handlePlayGoal(destination);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao entrar no painel.');
       setLoading(false);
     }
   };
@@ -128,8 +150,8 @@ export default function LoginPage() {
 
       setSuccess('Link de recuperação enviado para seu email!');
       setTimeout(() => setView('login'), 5000);
-    } catch (err: any) {
-      setError(err.message || 'Erro ao enviar email de recuperação.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao enviar email de recuperação.');
     } finally {
       setLoading(false);
     }
@@ -164,9 +186,17 @@ export default function LoginPage() {
         }}
         onEnded={() => {
           // Quando o vídeo acaba (gol marcado), faz o redirecionamento
-          if (videoState === 'playing-goal') {
-            setVideoState('redirecting');
-            router.replace(targetRoute);
+          if (videoState === 'playing-goal' && targetRoute) {
+            finishLoginRedirect(targetRoute);
+          }
+        }}
+        onError={() => {
+          if (videoState === 'playing-goal' && targetRoute) {
+            finishLoginRedirect(targetRoute);
+            return;
+          }
+          if (videoState === 'playing-intro') {
+            setVideoState('paused-form');
           }
         }}
       />
