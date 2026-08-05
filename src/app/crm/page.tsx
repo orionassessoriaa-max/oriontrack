@@ -645,7 +645,9 @@ export default function CrmPage() {
     const payload = await response.json().catch(() => ({}));
     if (response.ok) {
       setTeamMembers(payload.membros || []);
-      setCrmScopeView(payload.settings?.current_profile_in_distribution ? 'meus' : 'todos_concessionaria');
+      // Administradores da concessionaria tambem iniciam na carteira pessoal.
+      // A visao geral continua disponivel no seletor quando precisarem.
+      setCrmScopeView('meus');
     }
   }
 

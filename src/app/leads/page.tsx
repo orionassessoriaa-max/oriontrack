@@ -222,7 +222,7 @@ export default function BrokerLeadsPage() {
   const [campaignFilter, setCampaignFilter] = useState('todos');
   const [adsetFilter, setAdsetFilter] = useState('todos');
   const [adFilter, setAdFilter] = useState('todos');
-  const [responsavelFilter, setResponsavelFilter] = useState('todos');
+  const [responsavelFilter, setResponsavelFilter] = useState('meus');
   const [showCrmModal, setShowCrmModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showManualLeadModal, setShowManualLeadModal] = useState(false);
@@ -271,6 +271,12 @@ export default function BrokerLeadsPage() {
     const urlStatus = new URLSearchParams(window.location.search).get('status');
     if (urlStatus) setStatusFilter(urlStatus);
   }, []);
+
+  useEffect(() => {
+    // Ao trocar de perfil (inclusive no modo admin), a carteira sempre abre
+    // mostrando somente os leads do usuario selecionado.
+    setResponsavelFilter('meus');
+  }, [profile?.id]);
 
   useEffect(() => {
     if (profile?.corretor_id) {
@@ -761,6 +767,10 @@ export default function BrokerLeadsPage() {
     setShowManualLeadModal(false);
   };
 
+  const currentMemberIds = teamMembers
+    .filter((member) => member.profile_id === profile?.id)
+    .map((member) => member.id);
+
   const filteredLeads = leads.filter(lead => {
     const leadTab = tabLabel(lead.operadora);
     const searchMatch =
@@ -786,7 +796,11 @@ export default function BrokerLeadsPage() {
     const toMatch = !dateTo || (leadDate && leadDate <= new Date(dateTo + 'T23:59:59'));
     const responsavelMatch =
       responsavelFilter === 'todos' ||
-      (responsavelFilter === 'sem_responsavel' ? !lead.responsavel_membro_id : lead.responsavel_membro_id === responsavelFilter);
+      (responsavelFilter === 'meus'
+        ? lead.responsavel_profile_id === profile?.id || currentMemberIds.includes(String(lead.responsavel_membro_id || ''))
+        : responsavelFilter === 'sem_responsavel'
+          ? !lead.responsavel_membro_id && !lead.responsavel_profile_id
+          : lead.responsavel_membro_id === responsavelFilter);
 
     return searchMatch && cnpjMatch && statusMatch && operadoraMatch && origemMatch && campaignMatch && adsetMatch && adMatch && dateTypeMatch && fromMatch && toMatch && responsavelMatch;
   });
@@ -825,7 +839,7 @@ export default function BrokerLeadsPage() {
     campaignFilter !== 'todos' ||
     adsetFilter !== 'todos' ||
     adFilter !== 'todos' ||
-    responsavelFilter !== 'todos'
+    responsavelFilter !== 'meus'
   );
 
   const clearFilters = () => {
@@ -840,7 +854,7 @@ export default function BrokerLeadsPage() {
     setCampaignFilter('todos');
     setAdsetFilter('todos');
     setAdFilter('todos');
-    setResponsavelFilter('todos');
+    setResponsavelFilter('meus');
   };
 
   const exportToCsv = () => {
@@ -1070,9 +1084,9 @@ export default function BrokerLeadsPage() {
             <select
               value={responsavelFilter}
               onChange={(e) => setResponsavelFilter(e.target.value)}
-              disabled={teamMembers.length === 0}
-              className="orion-control min-w-[220px] flex-[1_1_220px] px-4 py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className="orion-control min-w-[220px] flex-[1_1_220px] px-4 py-3.5 text-sm"
             >
+              <option value="meus">Responsavel: meus leads</option>
               <option value="todos">Responsavel: todos</option>
               <option value="sem_responsavel">Sem responsavel</option>
               {teamMembers.map((member) => (
@@ -1130,7 +1144,11 @@ export default function BrokerLeadsPage() {
           )}
           {!isTeamMemberProfile && responsavelFilter !== 'todos' && (
             <span className="orion-chip bg-indigo-50 text-indigo-700">
-              Responsável: {responsavelFilter === 'sem_responsavel' ? 'sem responsável' : teamMembers.find(m => m.id === responsavelFilter)?.nome || 'carregando...'}
+              Responsável: {responsavelFilter === 'meus'
+                ? 'meus leads'
+                : responsavelFilter === 'sem_responsavel'
+                  ? 'sem responsável'
+                  : teamMembers.find(m => m.id === responsavelFilter)?.nome || 'carregando...'}
             </span>
           )}
         </div>
