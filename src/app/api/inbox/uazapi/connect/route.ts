@@ -198,9 +198,6 @@ async function fetchUazapiInstanceState(instance: string) {
 
 export async function POST(request: Request) {
   try {
-    const limited = rateLimit(request, 'inbox:uazapi:connect', { limit: 12, windowMs: 10 * 60_000 });
-    if (limited) return limited;
-
     const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 
@@ -210,6 +207,13 @@ export async function POST(request: Request) {
     }
 
     const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
+    const limited = rateLimit(request, 'inbox:uazapi:connect', {
+      limit: 12,
+      windowMs: 10 * 60_000,
+      key: targetProfile.id,
+    });
+    if (limited) return limited;
+
     const instance = uazapiInstanceName(targetProfile.id);
 
     await writeAuditLog(request, guard.profile, {
@@ -285,13 +289,17 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const limited = rateLimit(request, 'inbox:uazapi:status', { limit: 30, windowMs: 1 * 60_000 });
-    if (limited) return limited;
-
     const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 
     const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
+    const limited = rateLimit(request, 'inbox:uazapi:status', {
+      limit: 30,
+      windowMs: 1 * 60_000,
+      key: targetProfile.id,
+    });
+    if (limited) return limited;
+
     const instance = uazapiInstanceName(targetProfile.id);
 
     try {
@@ -321,13 +329,17 @@ export async function GET(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const limited = rateLimit(request, 'inbox:uazapi:disconnect', { limit: 12, windowMs: 10 * 60_000 });
-    if (limited) return limited;
-
     const guard = await requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager']);
     if ('error' in guard) return guard.error;
 
     const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
+    const limited = rateLimit(request, 'inbox:uazapi:disconnect', {
+      limit: 12,
+      windowMs: 10 * 60_000,
+      key: targetProfile.id,
+    });
+    if (limited) return limited;
+
     const instance = uazapiInstanceName(targetProfile.id);
     const disconnectResults = await disconnectUazapiInstanceEverywhere(instance);
     const finalState = await fetchUazapiInstanceStateFromList(instance).catch((error) => {
