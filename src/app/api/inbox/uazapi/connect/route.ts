@@ -116,6 +116,59 @@ async function fetchUazapiInstanceStateFromList(instance: string) {
   );
 }
 
+function isNonReconnectableSession(value: unknown) {
+  const message = value instanceof Error
+    ? value.message
+    : typeof value === 'string'
+      ? value
+      : JSON.stringify(value || {});
+  const normalized = message.toLowerCase();
+  return normalized.includes('session is not reconnectable') || normalized.includes('not reconnectable');
+}
+
+async function createUazapiInstance(instance: string) {
+  const body = JSON.stringify({
+    name: instance,
+    instance,
+    instanceName: instance,
+  });
+
+  try {
+    return await uazapiFetch('/instance/create', {
+      method: 'POST',
+      body,
+    }, { useAdminAuth: true });
+  } catch (error) {
+    const message = String(error instanceof Error ? error.message : error).toLowerCase();
+    const legacyFallback =
+      message.includes('method not allowed') ||
+      message.includes('not found') ||
+      message.includes('404');
+    if (!legacyFallback) throw error;
+
+    return uazapiFetch('/instance/init', {
+      method: 'POST',
+      body,
+    }, { useAdminAuth: true });
+  }
+}
+
+async function connectUazapiInstance(instance: string) {
+  return uazapiFetch('/instance/connect', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }, { instanceName: instance });
+}
+
+async function recoverNonReconnectableUazapiInstance(instance: string) {
+  // Endpoint oficial da uazapiGO v2.1: remove somente a instancia autenticada
+  // pelo token dela. Depois recriamos o mesmo nome para gerar um QR limpo.
+  await uazapiFetch('/instance', { method: 'DELETE' }, { instanceName: instance });
+  await createUazapiInstance(instance);
+  await configureUazapiWebhook(instance);
+  return connectUazapiInstance(instance);
+}
+
 async function disconnectUazapiInstanceEverywhere(instance: string) {
   const body = JSON.stringify({
     instance,
@@ -135,6 +188,7 @@ async function disconnectUazapiInstanceEverywhere(instance: string) {
     { label: 'logout-token-delete', path: '/instance/logout', init: { method: 'DELETE' }, options: { instanceName: instance } },
     { label: 'disconnect-token-post', path: '/instance/disconnect', init: { method: 'POST' }, options: { instanceName: instance } },
     { label: 'disconnect-token-delete', path: '/instance/disconnect', init: { method: 'DELETE' }, options: { instanceName: instance } },
+    { label: 'delete-token-official', path: '/instance', init: { method: 'DELETE' }, options: { instanceName: instance } },
     { label: 'logout-admin-post-body', path: '/instance/logout', init: { method: 'POST', body }, options: { useAdminAuth: true } },
     { label: 'logout-admin-delete-body', path: '/instance/logout', init: { method: 'DELETE', body }, options: { useAdminAuth: true } },
     { label: 'disconnect-admin-post-body', path: '/instance/disconnect', init: { method: 'POST', body }, options: { useAdminAuth: true } },
@@ -229,25 +283,16 @@ export async function POST(request: Request) {
       },
     });
 
-    let createPayload: any = null;
     try {
-      createPayload = await uazapiFetch('/instance/init', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: instance,
-          instance: instance,
-          instanceName: instance,
-        }),
-      }, { useAdminAuth: true });
+      await createUazapiInstance(instance);
     } catch (error: any) {
       const message = String(error.message || '').toLowerCase();
       const isAlreadyExists = error.message === 'Instance already exists' || message.includes('already') || message.includes('existe');
       if (isAlreadyExists) {
-        // Nunca apagar uma instancia existente: isso invalida a sessao e o
-        // QR do usuario. Reutilizamos o token atual e apenas solicitamos a
-        // reconexao abaixo.
+        // Instancias existentes e saudaveis sao reutilizadas. A recuperacao
+        // destrutiva abaixo so roda quando o provedor declara explicitamente
+        // que a sessao nao pode mais ser reconectada.
         console.log(`[POST /api/inbox/uazapi/connect] Reusing existing instance ${instance}.`);
-        createPayload = { existing: true };
       } else {
         throw error;
       }
@@ -256,10 +301,19 @@ export async function POST(request: Request) {
     await configureUazapiWebhook(instance);
 
     // Conectar e buscar QR code
-    const payload = await uazapiFetch('/instance/connect', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    }, { instanceName: instance });
+    let recoveredSession = false;
+    let payload: unknown;
+    try {
+      payload = await connectUazapiInstance(instance);
+      if (isNonReconnectableSession(payload)) {
+        payload = await recoverNonReconnectableUazapiInstance(instance);
+        recoveredSession = true;
+      }
+    } catch (error) {
+      if (!isNonReconnectableSession(error)) throw error;
+      payload = await recoverNonReconnectableUazapiInstance(instance);
+      recoveredSession = true;
+    }
 
     const qrcode = extractUazapiQrCode(payload);
 
@@ -267,7 +321,11 @@ export async function POST(request: Request) {
       action: 'whatsapp.connect.request',
       entity_type: 'whatsapp_instance',
       entity_id: instance,
-      metadata: { target_profile_id: targetProfile.id, target_role: targetProfile.tipo_usuario },
+      metadata: {
+        target_profile_id: targetProfile.id,
+        target_role: targetProfile.tipo_usuario,
+        recovered_non_reconnectable_session: recoveredSession,
+      },
     });
 
     return NextResponse.json({
