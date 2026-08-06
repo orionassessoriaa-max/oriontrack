@@ -3,6 +3,7 @@ import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
+import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request);
@@ -17,6 +18,14 @@ export async function POST(request: Request) {
   const requestedSdrId = body.sdr_id === null || body.sdr_id === '' ? null : String(body.sdr_id || '').trim();
 
   if (canAssignAnySdr && hasRequestedAssignee) {
+    const { data: previousLead, error: previousLeadError } = await supabaseAdmin
+      .from('comercial_leads')
+      .select('id,sdr_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (previousLeadError) return NextResponse.json({ error: previousLeadError.message }, { status: 500 });
+    if (!previousLead) return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
+
     if (requestedSdrId) {
       const { data: member, error: memberError } = await supabaseAdmin
         .from('comercial_membros')
@@ -56,6 +65,13 @@ export async function POST(request: Request) {
         : `${guard.profile.nome || 'Equipe comercial'} removeu o SDR responsavel.`,
       metadata: { sdr_id: requestedSdrId },
     });
+    if (requestedSdrId && previousLead.sdr_id !== requestedSdrId) {
+      try {
+        await notifyCommercialLeadAssignment(data);
+      } catch (notificationError) {
+        console.error('commercial_lead_assignment_notification_failed', notificationError);
+      }
+    }
     return NextResponse.json({ lead: data, sdr_id: requestedSdrId });
   }
 

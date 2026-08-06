@@ -4,6 +4,8 @@ import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { startCommercialBotIfEligible } from '@/lib/commercialBot';
 import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
+import { isCommercialMql } from '@/lib/commercialQualification';
+import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 
 type CommercialLeadPayload = Record<string, unknown>;
 
@@ -301,7 +303,7 @@ export async function POST(request: Request) {
       status,
       sdr_id: sdrId || null,
       closer_id: closerId || null,
-      lead_qualificado: false,
+      lead_qualificado: isCommercialMql(faturamentoMensal, investimento),
       valor_negociacao: parseCurrencyValue(field(rawPayload, ['valor_negociacao', 'valor negociacao', 'valor', 'receita', 'ticket'])),
       observacoes: notes,
       data_entrada: dataEntrada,
@@ -326,6 +328,10 @@ export async function POST(request: Request) {
           faturamento_mensal: existing.faturamento_mensal || incoming.faturamento_mensal,
           prioridade: existing.prioridade || incoming.prioridade,
           investimento: existing.investimento || incoming.investimento,
+          lead_qualificado: isCommercialMql(
+            existing.faturamento_mensal || incoming.faturamento_mensal,
+            existing.investimento || incoming.investimento,
+          ),
           vidas: existing.vidas || incoming.vidas,
           utm_source: existing.utm_source || incoming.utm_source,
           utm_medium: existing.utm_medium || incoming.utm_medium,
@@ -379,6 +385,11 @@ export async function POST(request: Request) {
       entity_id: data.id,
       metadata: { origem: incoming.origem, campanha: incoming.campanha, sheet },
     });
+    try {
+      await notifyCommercialLeadAssignment(data);
+    } catch (notificationError) {
+      console.error('commercial_lead_assignment_notification_failed', notificationError);
+    }
 
     return NextResponse.json({ success: true, lead: data, sheet }, { status: 201 });
   } catch (error: unknown) {

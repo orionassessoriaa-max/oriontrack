@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
+  CalendarClock,
   CheckCircle2,
+  ClipboardList,
   Loader2,
   MessageSquare,
   Mic,
@@ -24,7 +27,28 @@ type Conversation = {
   nome_contato: string | null;
   status: string | null;
   ultima_mensagem_at: string | null;
-  commercial_lead: { nome: string; status: string };
+  commercial_lead: {
+    id: string;
+    nome: string;
+    telefone: string | null;
+    email: string | null;
+    empresa: string | null;
+    estado: string | null;
+    origem: string | null;
+    campanha: string | null;
+    status: string;
+    sdr_id: string | null;
+    closer_id: string | null;
+    prioridade: string | null;
+    vidas: string | null;
+    ja_investiu_trafego: string | null;
+    faturamento_mensal: string | null;
+    investimento: string | null;
+    data_entrada: string;
+    ultimo_contato_at: string | null;
+    utm_source: string | null;
+    utm_campaign: string | null;
+  };
 };
 
 type Message = {
@@ -67,11 +91,14 @@ function base64ToObjectUrl(base64: string, mimeType: string) {
 }
 
 export default function CommercialInboxPage() {
-  const { api, role } = useCommercial();
+  const router = useRouter();
+  const { api, role, members } = useCommercial();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('todos');
+  const [stageFilter, setStageFilter] = useState('todos');
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -154,10 +181,29 @@ export default function CommercialInboxPage() {
     });
   }, []);
 
-  const filtered = useMemo(
-    () => conversations.filter((item) => `${item.nome_contato || ''} ${item.telefone} ${item.commercial_lead.nome}`.toLowerCase().includes(search.toLowerCase())),
-    [conversations, search],
-  );
+  const memberMap = useMemo(() => new Map(members.map((member) => [member.profile_id, member])), [members]);
+  const funnelStages = useMemo(() => Array.from(new Set(conversations.map((item) => item.commercial_lead.status).filter(Boolean))).sort(), [conversations]);
+  const filtered = useMemo(() => conversations.filter((item) => {
+    const lead = item.commercial_lead;
+    const matchesSearch = `${item.nome_contato || ''} ${item.telefone} ${lead.nome} ${lead.status}`.toLowerCase().includes(search.toLowerCase());
+    const matchesOwner = ownerFilter === 'todos' || lead.sdr_id === ownerFilter || lead.closer_id === ownerFilter;
+    const matchesStage = stageFilter === 'todos' || lead.status === stageFilter;
+    return matchesSearch && matchesOwner && matchesStage;
+  }), [conversations, ownerFilter, search, stageFilter]);
+
+  function scheduleLeadReturn() {
+    if (!selected) return;
+    const lead = selected.commercial_lead;
+    const params = new URLSearchParams({ novo: '1', lead_id: lead.id });
+    const responsibleId = lead.sdr_id || lead.closer_id;
+    if (responsibleId) params.set('responsavel_id', responsibleId);
+    router.push(`/comercial/tarefas?${params.toString()}`);
+  }
+
+  function openLeadHistory() {
+    if (!selected) return;
+    router.push(`/comercial/historico?lead_id=${encodeURIComponent(selected.commercial_lead.id)}`);
+  }
 
   async function connectWhatsapp() {
     try {
@@ -363,11 +409,21 @@ export default function CommercialInboxPage() {
         <aside className="kh-panel kh-conversation-list">
           <div className="kh-inbox-list-head"><strong>Conversas</strong><span>{filtered.length}</span></div>
           <label className="kh-inbox-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar nome ou telefone..." /></label>
+          <div className="kh-inbox-filters">
+            <select value={ownerFilter} onChange={(event) => setOwnerFilter(event.target.value)} aria-label="Filtrar conversas por responsável">
+              <option value="todos">Todos os responsáveis</option>
+              {members.filter((member) => member.ativo && (member.papel === 'sdr' || member.papel === 'closer')).map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}
+            </select>
+            <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)} aria-label="Filtrar conversas por etapa">
+              <option value="todos">Todas as etapas</option>
+              {funnelStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
+            </select>
+          </div>
           <div className="kh-conversations">
             {filtered.map((conversation) => (
               <button key={conversation.id} className={selected?.id === conversation.id ? 'active' : ''} onClick={() => setSelected(conversation)}>
                 <span className="kh-avatar">{(conversation.nome_contato || conversation.commercial_lead.nome).split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
-                <span className="kh-conversation-copy"><strong>{conversation.nome_contato || conversation.commercial_lead.nome}</strong><small>{conversation.commercial_lead.nome} · {conversation.commercial_lead.status}</small></span>
+                <span className="kh-conversation-copy"><strong>{conversation.nome_contato || conversation.commercial_lead.nome}</strong><small>{conversation.commercial_lead.status}</small><small>SDR: {memberMap.get(conversation.commercial_lead.sdr_id || '')?.nome || 'Sem responsável'}</small></span>
                 <time>{time(conversation.ultima_mensagem_at)}</time>
               </button>
             ))}
@@ -431,6 +487,35 @@ export default function CommercialInboxPage() {
             )}
           </form>
         </main>
+
+        <aside className="kh-panel kh-inbox-lead-panel">
+          {selected ? (() => {
+            const lead = selected.commercial_lead;
+            const sdrName = memberMap.get(lead.sdr_id || '')?.nome || 'Sem SDR';
+            const closerName = memberMap.get(lead.closer_id || '')?.nome || 'Sem closer';
+            return <>
+              <header><div><span>Dados do lead</span><h2>{lead.nome}</h2></div><em>{lead.status}</em></header>
+              <dl>
+                <div><dt>Responsável atual</dt><dd>{lead.sdr_id ? sdrName : closerName}</dd></div>
+                <div><dt>SDR</dt><dd>{sdrName}</dd></div>
+                <div><dt>Closer</dt><dd>{closerName}</dd></div>
+                <div><dt>Telefone</dt><dd>{lead.telefone || selected.telefone || 'Não informado'}</dd></div>
+                <div><dt>E-mail</dt><dd>{lead.email || 'Não informado'}</dd></div>
+                <div><dt>Empresa</dt><dd>{lead.empresa || 'Não informada'}</dd></div>
+                <div><dt>Faturamento</dt><dd>{lead.faturamento_mensal || 'Não informado'}</dd></div>
+                <div><dt>Investimento</dt><dd>{lead.investimento || 'Não informado'}</dd></div>
+                <div><dt>Prioridade</dt><dd>{lead.prioridade || 'Não informada'}</dd></div>
+                <div><dt>Vidas</dt><dd>{lead.vidas || 'Não informado'}</dd></div>
+                <div><dt>Origem</dt><dd>{lead.origem || lead.utm_source || 'Não informada'}</dd></div>
+                <div><dt>Campanha</dt><dd>{lead.campanha || lead.utm_campaign || 'Não informada'}</dd></div>
+              </dl>
+              <div className="kh-inbox-lead-actions">
+                <button type="button" className="kh-button primary" onClick={scheduleLeadReturn}><CalendarClock size={15} /> Agendar retorno</button>
+                <button type="button" className="kh-button" onClick={openLeadHistory}><ClipboardList size={15} /> Ver histórico</button>
+              </div>
+            </>;
+          })() : <div className="kh-inbox-empty"><ClipboardList size={24} /> Selecione uma conversa para ver os dados do lead.</div>}
+        </aside>
       </section>
       <small className="kh-inbox-role">Acesso atual: {role === 'coordenador' ? 'administrador comercial' : role === 'sdr' ? 'SDR' : 'Closer'}</small>
     </div>

@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   if ('error' in guard) return guard.error;
   let leadQuery = supabaseAdmin
     .from('comercial_leads')
-    .select('id,nome,telefone,sdr_id,closer_id,status,updated_at')
+    .select('id,nome,telefone,email,empresa,estado,origem,campanha,sdr_id,closer_id,status,prioridade,vidas,ja_investiu_trafego,faturamento_mensal,investimento,data_entrada,ultimo_contato_at,utm_source,utm_campaign,updated_at')
     .limit(5000);
   leadQuery = applyCommercialLeadScope(leadQuery, guard.commercialRole, guard.profile.id);
   const { data: leads, error: leadError } = await leadQuery;

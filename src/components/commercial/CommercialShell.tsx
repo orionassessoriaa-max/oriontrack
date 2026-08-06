@@ -11,6 +11,7 @@ import { canSelectOperationalTeam } from '@/lib/teamSelection';
 type CommercialContextValue = {
   role: CommercialRole | null;
   canViewCommercialFinancials: boolean;
+  canViewCommercialLeadQualification: boolean;
   members: CommercialMember[];
   currentProfileId: string | null;
   canViewMetaInvestment: boolean;
@@ -30,6 +31,7 @@ const CommercialContext = createContext<CommercialContextValue | null>(null);
 type CommercialAccessPayload = {
   role: CommercialRole | null;
   canViewCommercialFinancials?: boolean;
+  canViewCommercialLeadQualification?: boolean;
   members?: CommercialMember[];
   currentProfileId?: string | null;
   canViewMetaInvestment?: boolean;
@@ -72,6 +74,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   const [moreOpen, setMoreOpen] = useState(false);
   const [role, setRole] = useState<CommercialRole | null>(initialCachedAccess?.role || null);
   const [canViewCommercialFinancials, setCanViewCommercialFinancials] = useState(Boolean(initialCachedAccess?.canViewCommercialFinancials));
+  const [canViewCommercialLeadQualification, setCanViewCommercialLeadQualification] = useState(initialCachedAccess?.canViewCommercialLeadQualification !== false);
   const [members, setMembers] = useState<CommercialMember[]>(initialCachedAccess?.members || []);
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(initialCachedAccess?.currentProfileId || null);
   const [canViewMetaInvestment, setCanViewMetaInvestment] = useState(Boolean(initialCachedAccess?.canViewMetaInvestment));
@@ -84,6 +87,7 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   const applyAccess = useCallback((payload: CommercialAccessPayload) => {
     setRole(payload.role);
     setCanViewCommercialFinancials(Boolean(payload.canViewCommercialFinancials));
+    setCanViewCommercialLeadQualification(payload.canViewCommercialLeadQualification !== false);
     setMembers(payload.members || []);
     setCurrentProfileId(payload.currentProfileId || null);
     setCanViewMetaInvestment(Boolean(payload.canViewMetaInvestment));
@@ -167,14 +171,14 @@ export default function CommercialShell({ children }: { children: React.ReactNod
   if (authLoading || loading) return <div className="kh-loading"><img src="/brand-logo.png" alt="ORION TRACK" className="kh-loading-logo" /><span>Preparando operação comercial</span></div>;
   if (error) return <div className="kh-loading kh-error-state"><div className="kh-error-icon"><X size={24} /></div><h1>Não foi possível abrir o comercial</h1><p>{error}</p><button type="button" onClick={() => void refreshAccess()}>Tentar novamente</button></div>;
 
-  const directNavigation = navigation.slice(0, 4);
-  const overflowNavigation = navigation.slice(4);
+  const directNavigation = navigation.slice(0, 5);
+  const overflowNavigation = navigation.slice(5);
   const currentMemberName = currentMember?.nome || actualProfile?.nome || 'Usuário';
   const initials = currentMemberName.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   const overflowActive = overflowNavigation.some((item) => pathname.startsWith(item.href));
 
   return (
-    <CommercialContext.Provider value={{ role, canViewCommercialFinancials, members, currentProfileId, canViewMetaInvestment, isDevOps, loading, error, api, refreshAccess, canViewCommercialAsUser, viewingCommercialProfileId, startViewingCommercialMember, stopViewingCommercialMember }}>
+    <CommercialContext.Provider value={{ role, canViewCommercialFinancials, canViewCommercialLeadQualification, members, currentProfileId, canViewMetaInvestment, isDevOps, loading, error, api, refreshAccess, canViewCommercialAsUser, viewingCommercialProfileId, startViewingCommercialMember, stopViewingCommercialMember }}>
       <div className="kh"><div className="kh-workspace">
         <header className="kh-topbar">
           <div className="kh-topbar-left">

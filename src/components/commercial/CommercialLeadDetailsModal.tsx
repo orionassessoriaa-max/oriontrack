@@ -43,6 +43,7 @@ type Props = {
   lead: CommercialLead | null;
   members: CommercialMember[];
   canViewFinancials: boolean;
+  canViewQualification?: boolean;
   stages: CommercialStage[];
   onMoveStage: (status: string) => void;
   interactions: LeadInteraction[];
@@ -158,7 +159,7 @@ function editableLead(lead: CommercialLead): EditableLead {
 }
 
 export default function CommercialLeadDetailsModal({
-  lead, members, canViewFinancials, stages, onMoveStage, interactions, interactionText, interactionFile,
+  lead, members, canViewFinancials, canViewQualification = true, stages, onMoveStage, interactions, interactionText, interactionFile,
   interactionSaving, interactionError, taskForm, taskSaving, onTaskChange, onCreateTask,
   onInteractionTextChange, onInteractionFileChange, onAddInteraction, onClose, onSave,
 }: Props) {
@@ -247,9 +248,9 @@ export default function CommercialLeadDetailsModal({
   const qualificationRows: Array<[string, React.ReactNode]> = [
     ['Vidas', editing ? inlineInput('vidas', 'Vidas') : displayValue(lead.vidas)],
     ['Prioridade', editing ? inlineInput('prioridade', 'Prioridade') : displayValue(lead.prioridade)],
-    ...(canViewFinancials ? [['Faturamento', editing ? inlineInput('faturamento_mensal', 'Faturamento mensal') : displayValue(lead.faturamento_mensal)] as [string, React.ReactNode]] : []),
+    ...(canViewQualification ? [['Faturamento', editing ? inlineInput('faturamento_mensal', 'Faturamento mensal') : displayValue(lead.faturamento_mensal)] as [string, React.ReactNode]] : []),
     ['É o decisor?', displayValue(decisionMaker)],
-    ...(canViewFinancials ? [['Já investiu em tráfego?', editing ? inlineInput('ja_investiu_trafego', 'Investimento anterior em tráfego') : displayValue(lead.ja_investiu_trafego)] as [string, React.ReactNode]] : []),
+    ...(canViewQualification ? [['Já investiu em tráfego?', editing ? inlineInput('ja_investiu_trafego', 'Investimento anterior em tráfego') : displayValue(lead.ja_investiu_trafego)] as [string, React.ReactNode]] : []),
   ];
   const contactRows: Array<[string, React.ReactNode]> = [
     ['Nome', editing ? inlineInput('nome', 'Nome') : displayValue(lead.nome)],
@@ -287,7 +288,7 @@ export default function CommercialLeadDetailsModal({
           </div>
         </div>
         <div className="kh-lead-head-status">
-          {canViewFinancials && <span className={`kh-mql-level level-${mqlLevel.toLowerCase()}`}><b>{mqlCopy[mqlLevel].title}</b><small>{mqlCopy[mqlLevel].detail}</small></span>}
+          {canViewQualification && <span className={`kh-mql-level level-${mqlLevel.toLowerCase()}`}><b>{mqlCopy[mqlLevel].title}</b><small>{mqlCopy[mqlLevel].detail}</small></span>}
           <span className="stage">{lead.status}</span>
           <span className="elapsed"><Clock3 size={13} /> {elapsedLabel(lastActivity)}</span>
           {editing ? <>
@@ -332,13 +333,13 @@ export default function CommercialLeadDetailsModal({
 
         <aside className="kh-lead-data-stack">
           <section className="kh-lead-qualification">
-            <div className="kh-section-title"><div><BadgeCheck size={16} /><h3>Qualificação</h3></div>{canViewFinancials && <span className={`kh-mql-level compact level-${mqlLevel.toLowerCase()}`}><b>{mqlCopy[mqlLevel].title}</b><small>{mqlCopy[mqlLevel].detail}</small></span>}</div>
+            <div className="kh-section-title"><div><BadgeCheck size={16} /><h3>Qualificação</h3></div>{canViewQualification && <span className={`kh-mql-level compact level-${mqlLevel.toLowerCase()}`}><b>{mqlCopy[mqlLevel].title}</b><small>{mqlCopy[mqlLevel].detail}</small></span>}</div>
             <dl>{qualificationRows.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl>
           </section>
           <details className="kh-lead-accordion" open><summary><span>Contato e empresa</span><ChevronDown size={16} /></summary><dl>{contactRows.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl></details>
           <details className="kh-lead-accordion"><summary><span>Origem e mídia <small>({sourceRows.length} campos)</small></span><ChevronDown size={16} /></summary><dl>{sourceRows.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl></details>
           <details className="kh-lead-accordion"><summary><span>Datas e controle</span><ChevronDown size={16} /></summary><dl>{controlRows.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl></details>
-          {canViewFinancials && <details className="kh-lead-accordion"><summary><span>Valores comerciais</span><ChevronDown size={16} /></summary><dl><div><dt>Investimento</dt><dd>{editing ? inlineInput('investimento', 'Investimento') : displayValue(lead.investimento)}</dd></div><div><dt>Valor em negociação</dt><dd>{editing ? inlineInput('valor_negociacao', 'Valor em negociação', 'number') : `R$ ${Number(lead.valor_negociacao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}</dd></div></dl></details>}
+          {canViewQualification && <details className="kh-lead-accordion"><summary><span>Valores comerciais</span><ChevronDown size={16} /></summary><dl><div><dt>Investimento</dt><dd>{editing ? inlineInput('investimento', 'Investimento') : displayValue(lead.investimento)}</dd></div>{canViewFinancials && <div><dt>Valor em negociação</dt><dd>{editing ? inlineInput('valor_negociacao', 'Valor em negociação', 'number') : `R$ ${Number(lead.valor_negociacao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}</dd></div>}</dl></details>}
         </aside>
       </div>
     </section>

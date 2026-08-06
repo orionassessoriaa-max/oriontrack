@@ -24,9 +24,30 @@ export default function CommercialTasksPage() {
   const [editingTask, setEditingTask] = useState<CommercialTask | null>(null);
   const [form, setForm] = useState({ titulo: '', descricao: '', vencimento: '', prioridade: 'normal', responsavel_id: currentProfileId || '', lead_id: '' });
   const [saving, setSaving] = useState(false);
+  const [prefillHandled, setPrefillHandled] = useState(false);
   const load = useCallback(async () => { setLoading(true); try { const [taskPayload, leadPayload] = await Promise.all([api('/api/comercial/tasks'), api('/api/comercial/leads')]); setTasks(taskPayload.tasks || []); setLeads(leadPayload.leads || []); } finally { setLoading(false); } }, [api]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (!form.responsavel_id && currentProfileId) setForm((value) => ({ ...value, responsavel_id: currentProfileId })); }, [currentProfileId, form.responsavel_id]);
+  useEffect(() => {
+    if (prefillHandled || !leads.length || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('novo') !== '1') { setPrefillHandled(true); return; }
+    const leadId = params.get('lead_id') || '';
+    const lead = leads.find((item) => item.id === leadId);
+    const requestedResponsible = params.get('responsavel_id') || currentProfileId || '';
+    setEditingTask(null);
+    setForm({
+      titulo: lead ? `Retorno com ${lead.nome}` : 'Retorno comercial',
+      descricao: lead ? `Dar continuidade ao atendimento de ${lead.nome}.` : '',
+      vencimento: '',
+      prioridade: 'normal',
+      responsavel_id: role === 'coordenador' ? requestedResponsible : currentProfileId || '',
+      lead_id: lead?.id || '',
+    });
+    setOpen(true);
+    setPrefillHandled(true);
+    window.history.replaceState({}, '', '/comercial/tarefas');
+  }, [currentProfileId, leads, prefillHandled, role]);
   const memberMap = useMemo(() => new Map(members.map((member) => [member.profile_id, member])), [members]);
   const groups = useMemo(() => ({ late: tasks.filter((task) => dueState(task) === 'late'), today: tasks.filter((task) => dueState(task) === 'today'), later: tasks.filter((task) => dueState(task) === 'later'), done: tasks.filter((task) => dueState(task) === 'done') }), [tasks]);
   async function complete(task: CommercialTask) { setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status: task.status === 'concluida' ? 'pendente' : 'concluida' } : item)); await api('/api/comercial/tasks', { method: 'PATCH', body: JSON.stringify({ id: task.id, status: task.status === 'concluida' ? 'pendente' : 'concluida' }) }); }

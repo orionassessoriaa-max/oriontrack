@@ -5,6 +5,7 @@ import { writeAuditLog } from '@/lib/api/security';
 import { startCommercialBotIfEligible } from '@/lib/commercialBot';
 import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
 import { isCommercialMql } from '@/lib/commercialQualification';
+import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 
 function normalizeStage(value: unknown) {
@@ -23,7 +24,7 @@ function isNoShowStage(value: unknown) {
 function redactFinancialFields<T extends Record<string, any>>(lead: T, canView: boolean) {
   if (canView) return lead;
   const sanitized = { ...lead };
-  for (const field of ['ja_investiu_trafego', 'faturamento_mensal', 'investimento', 'valor_negociacao', 'valor_fechado']) delete sanitized[field];
+  for (const field of ['valor_negociacao', 'valor_fechado']) delete sanitized[field];
   return sanitized;
 }
 
@@ -73,10 +74,10 @@ export async function POST(request: Request) {
     estado: String(body.estado || '').trim().toUpperCase().slice(0, 2) || null,
     origem: String(body.origem || '').trim() || null,
     campanha: String(body.campanha || '').trim() || null,
-    ja_investiu_trafego: guard.canViewCommercialFinancials ? String(body.ja_investiu_trafego || '').trim() || null : null,
-    faturamento_mensal: guard.canViewCommercialFinancials ? String(body.faturamento_mensal || '').trim() || null : null,
+    ja_investiu_trafego: String(body.ja_investiu_trafego || '').trim() || null,
+    faturamento_mensal: String(body.faturamento_mensal || '').trim() || null,
     prioridade: String(body.prioridade || '').trim() || null,
-    investimento: guard.canViewCommercialFinancials ? String(body.investimento || '').trim() || null : null,
+    investimento: String(body.investimento || '').trim() || null,
     vidas: String(body.vidas || '').trim() || null,
     negocio_etapa: String(body.negocio_etapa || '').trim() || null,
     utm_source: String(body.utm_source || '').trim() || null,
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
     status,
     sdr_id: assignedSdrId || null,
     closer_id: guard.commercialRole === 'closer' ? guard.profile.id : body.closer_id || null,
-    lead_qualificado: guard.canViewCommercialFinancials && isCommercialMql(body.faturamento_mensal, body.investimento),
+    lead_qualificado: isCommercialMql(body.faturamento_mensal, body.investimento),
     valor_negociacao: guard.canViewCommercialFinancials ? Number(body.valor_negociacao || 0) : 0,
     observacoes: String(body.observacoes || '').trim() || null,
     created_by: guard.profile.id,
@@ -109,6 +110,11 @@ export async function POST(request: Request) {
     description: `Lead criado por ${guard.profile.nome || 'Equipe comercial'}.`,
     metadata: { status: data.status, sdr_id: data.sdr_id, closer_id: data.closer_id },
   });
+  try {
+    await notifyCommercialLeadAssignment(data);
+  } catch (notificationError) {
+    console.error('commercial_lead_assignment_notification_failed', notificationError);
+  }
   return NextResponse.json({ lead: redactFinancialFields(data, guard.canViewCommercialFinancials) }, { status: 201 });
 }
 
@@ -140,7 +146,7 @@ export async function PATCH(request: Request) {
   ];
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const field of allowedFields) {
-    if (!guard.canViewCommercialFinancials && ['ja_investiu_trafego', 'faturamento_mensal', 'investimento', 'valor_negociacao', 'valor_fechado'].includes(field)) continue;
+    if (!guard.canViewCommercialFinancials && ['valor_negociacao', 'valor_fechado'].includes(field)) continue;
     if (guard.commercialRole === 'sdr' && ['sdr_id', 'closer_id'].includes(field)) continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
   }
@@ -154,7 +160,7 @@ export async function PATCH(request: Request) {
     update.reuniao_realizada_at = body.reuniao_realizada_at || new Date().toISOString();
     update.no_show = false;
   }
-  if (guard.canViewCommercialFinancials && (Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') || Object.prototype.hasOwnProperty.call(body, 'investimento'))) {
+  if (Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') || Object.prototype.hasOwnProperty.call(body, 'investimento')) {
     update.lead_qualificado = isCommercialMql(
       Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') ? body.faturamento_mensal : allowed.faturamento_mensal,
       Object.prototype.hasOwnProperty.call(body, 'investimento') ? body.investimento : allowed.investimento,

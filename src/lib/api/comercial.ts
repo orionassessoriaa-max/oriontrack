@@ -9,6 +9,7 @@ export type CommercialGuard = {
   profile: ApiProfile;
   commercialRole: CommercialRole;
   canViewCommercialFinancials: boolean;
+  canViewCommercialLeadQualification: boolean;
   canViewMetaInvestment: boolean;
   isDevOps: boolean;
 };
@@ -71,7 +72,8 @@ export async function requireCommercialUser(
   // Acesso financeiro pertence ao coordenador da operacao. Nunca herdar a
   // permissao do admin original quando ele estiver visualizando um integrante.
   const canViewCommercialFinancials = role === 'coordenador';
-  return { user: base.user, profile: base.profile, commercialRole: role, canViewCommercialFinancials, canViewMetaInvestment, isDevOps } as CommercialGuard;
+  const canViewCommercialLeadQualification = true;
+  return { user: base.user, profile: base.profile, commercialRole: role, canViewCommercialFinancials, canViewCommercialLeadQualification, canViewMetaInvestment, isDevOps } as CommercialGuard;
 }
 
 export function applyCommercialLeadScope<T extends { eq: (column: string, value: string) => T }>(

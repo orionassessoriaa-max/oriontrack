@@ -28,7 +28,10 @@ export default function CommercialHistoryPage() {
     try {
       const payload = await api('/api/comercial/historico');
       setLeads(payload.leads || []); setInteractions(payload.interactions || []); setTasks(payload.tasks || []); setProfiles(payload.profiles || []);
-      setSelectedId((current: string | null) => current && (payload.leads || []).some((lead: Lead) => lead.id === current) ? current : payload.leads?.[0]?.id || null);
+      const requestedLeadId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('lead_id') : null;
+      setSelectedId((current: string | null) => requestedLeadId && (payload.leads || []).some((lead: Lead) => lead.id === requestedLeadId)
+        ? requestedLeadId
+        : current && (payload.leads || []).some((lead: Lead) => lead.id === current) ? current : payload.leads?.[0]?.id || null);
     } catch (err) { setError(err instanceof Error ? err.message : 'Nao foi possivel carregar o historico.'); }
     finally { setLoading(false); }
   }, [api]);

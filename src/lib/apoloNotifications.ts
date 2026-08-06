@@ -24,6 +24,7 @@ type SendApoloOptions = {
   title: string;
   message: string;
   profiles: TargetProfile[];
+  respectPreferences?: boolean;
 };
 
 const defaultTypeEnabled: Record<ApoloNotificationType, boolean> = {
@@ -45,7 +46,7 @@ function firstName(nome?: string | null) {
   return String(nome || 'tudo bem').trim().split(/\s+/)[0] || 'tudo bem';
 }
 
-export async function sendApoloWhatsApp({ type, title, message, profiles }: SendApoloOptions) {
+export async function sendApoloWhatsApp({ type, title, message, profiles, respectPreferences = true }: SendApoloOptions) {
   const uniqueProfiles = Array.from(new Map(profiles.filter((p) => p?.id).map((p) => [p.id, p])).values());
   if (uniqueProfiles.length === 0) return [];
 
@@ -64,7 +65,7 @@ export async function sendApoloWhatsApp({ type, title, message, profiles }: Send
  
    for (const profile of uniqueProfiles) {
      const pref = prefsByProfile.get(profile.id) as any;
-     if (!pref?.whatsapp_enabled || !isTypeEnabled(pref.tipos, type)) {
+     if (respectPreferences && (!pref?.whatsapp_enabled || !isTypeEnabled(pref.tipos, type))) {
        results.push({ profile_id: profile.id, status: 'skipped', reason: 'Preferencia desativada.' });
        continue;
      }
