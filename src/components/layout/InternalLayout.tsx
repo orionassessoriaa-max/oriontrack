@@ -33,6 +33,11 @@ export default function InternalLayout({ children }: { children: React.ReactNode
 
         if (isTeamSelectionRoute) return;
 
+        const selectedTeam = window.sessionStorage.getItem(TEAM_SELECTION_STORAGE_KEY);
+        if (canSelectOperationalTeam(actualProfile) && selectedTeam === 'kripto_hunters' && pathname.startsWith('/comercial')) {
+          return;
+        }
+
         const isAdmin = profile.tipo_usuario === 'admin';
         const isTrafficManager = profile.tipo_usuario === 'gestor_trafego';
         const isCorretor = profile.tipo_usuario === 'corretor' || profile.tipo_usuario === 'corretor_admin';

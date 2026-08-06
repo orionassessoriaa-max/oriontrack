@@ -5,10 +5,17 @@ export const TEAM_SELECTION_STORAGE_KEY = 'orion:selected_team';
 
 export type OrionTeamKey = 'apollo' | 'kripto_hunters';
 
+const MULTI_TEAM_PROFILE_IDS = new Set([
+  'ba8b0494-9a36-46cf-95eb-5679e6738904', // Matheus Rodrigues
+]);
+
 export function canSelectOperationalTeam(profile?: Profile | null) {
   const name = String(profile?.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const isNamedCoordinator = name.includes('pedro') || name.includes('patrick');
-  return profile?.tipo_usuario === 'admin' || isDevOpsManagerProfile(profile) || (profile?.tipo_usuario === 'corretor_admin' && isNamedCoordinator);
+  return Boolean(profile?.id && MULTI_TEAM_PROFILE_IDS.has(profile.id))
+    || profile?.tipo_usuario === 'admin'
+    || isDevOpsManagerProfile(profile)
+    || (profile?.tipo_usuario === 'corretor_admin' && isNamedCoordinator);
 }
 
 export function getTeamHome(team: OrionTeamKey | string | null) {

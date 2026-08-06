@@ -54,7 +54,10 @@ export default function SelecionarTimePage() {
     window.sessionStorage.setItem(TEAM_SELECTION_STORAGE_KEY, team);
     window.localStorage.setItem(TEAM_SELECTION_STORAGE_KEY, team);
     window.dispatchEvent(new Event('orion:team_selected'));
-    router.replace(getTeamHome(team));
+    const destination = team === 'apollo' && actualProfile?.tipo_usuario === 'gestor_trafego'
+      ? '/trafego'
+      : getTeamHome(team);
+    router.replace(destination);
   }
 
   if (loading || !user || !actualProfile) {

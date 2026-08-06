@@ -6,6 +6,7 @@ import { Lock, Mail, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'luci
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/types';
+import { canSelectOperationalTeam, TEAM_SELECTION_STORAGE_KEY } from '@/lib/teamSelection';
 
 // Ponto exato da câmera lenta no vídeo (em segundos)
 const PAUSE_TIME = 2.6;
@@ -107,8 +108,8 @@ export default function LoginPage() {
 
       // Define a rota de destino baseada no perfil
       let destination = '/dashboard';
-      if (profile.tipo_usuario === 'admin') {
-        window.sessionStorage.removeItem('orion:selected_team');
+      if (canSelectOperationalTeam(profile)) {
+        window.sessionStorage.removeItem(TEAM_SELECTION_STORAGE_KEY);
         destination = '/selecionar-time';
       } else if (profile.tipo_usuario === 'gestor_trafego') {
         destination = '/trafego';
@@ -118,7 +119,7 @@ export default function LoginPage() {
         destination = '/account';
       }
 
-      if (profile.tipo_usuario !== 'admin') {
+      if (!canSelectOperationalTeam(profile)) {
         const { data: commercialMember } = await supabase
           .from('comercial_membros')
           .select('ativo')
