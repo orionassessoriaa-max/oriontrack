@@ -199,12 +199,6 @@ export default function CommercialLeadDetailsModal({
   const internalNotes = freeNotes(lead.observacoes);
   const decisionMaker = noteField(lead.observacoes, ['decisor', 'é o decisor', 'tomador de decisão']);
   const mqlLevel = getCommercialMqlLevel(editing ? effective.faturamento_mensal : lead.faturamento_mensal, editing ? effective.investimento : lead.investimento);
-  const nextStep = lead.reuniao_agendada_at
-    ? `Reunião agendada para ${dateTime(lead.reuniao_agendada_at)}`
-    : lead.status === 'Perdido'
-      ? 'Lead marcado como perdido'
-      : `Próximo passo: avançar o atendimento na etapa ${lead.status}`;
-
   function focusInteraction() {
     interactionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     window.setTimeout(() => interactionRef.current?.focus(), 250);
@@ -305,7 +299,6 @@ export default function CommercialLeadDetailsModal({
       </header>
 
       {editError && <div className="kh-inline-error kh-lead-edit-error" role="alert">{editError}</div>}
-      <div className="kh-lead-next-step"><CalendarClock size={16} /><strong>{nextStep}</strong></div>
 
       <div className="kh-lead-quick-actions" aria-label="Ações do lead">
         <button type="button" onClick={focusInteraction}><MessageSquarePlus size={16} /> Registrar interação</button>

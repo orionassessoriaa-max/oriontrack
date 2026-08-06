@@ -396,7 +396,11 @@
 .kh-kanban-cards article.dragging { opacity: .45; transform: rotate(1deg) scale(.98); box-shadow: 0 12px 24px rgba(0,0,0,.28); }
 .kh-kanban-cards article.moving { opacity: .62; pointer-events: none; }
 .kh-card-top { display: flex; align-items: center; gap: 6px; }.kh-card-expand { margin-left: auto; display: grid; place-items: center; color: var(--kh-cyan); }
-.kh-dot { width: 7px; height: 7px; border-radius: 50%; background: #68788d; }.kh-dot.qualified { background: var(--kh-green); box-shadow: 0 0 9px rgba(47,210,160,.45); }
+.kh-dot { width: 7px; height: 7px; border-radius: 50%; background: #68788d; }
+.kh-dot.level-s { background: #2962ff; box-shadow: 0 0 9px rgba(41,98,255,.72); }
+.kh-dot.level-a { background: #24dc86; box-shadow: 0 0 9px rgba(36,220,134,.62); }
+.kh-dot.level-b { background: #ffd52e; box-shadow: 0 0 9px rgba(255,213,46,.6); }
+.kh-dot.level-c { background: #ff4967; box-shadow: 0 0 9px rgba(255,73,103,.62); }
 .kh-card-top small { color: var(--kh-muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .kh-kanban-cards h3 { margin: 12px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .kh-kanban-cards p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--kh-muted); font-size: 10px; }
