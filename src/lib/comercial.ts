@@ -73,6 +73,8 @@ export type CommercialLead = {
   fechado_at: string | null;
   data_entrada: string;
   status_started_at: string | null;
+  proximo_retorno_at?: string | null;
+  proximo_retorno_titulo?: string | null;
   created_at: string;
   updated_at: string;
 };

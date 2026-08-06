@@ -59,6 +59,20 @@ function readInstanceToken(instance: any) {
   ).trim();
 }
 
+function isConnectedUazapiInstance(instance: any) {
+  const state = String(
+    instance?.status ||
+    instance?.state ||
+    instance?.connectionStatus ||
+    instance?.instance?.status ||
+    ''
+  ).trim().toLowerCase();
+  if (state.includes('disconnect') || state.includes('close') || state.includes('offline') || state.includes('logout')) return false;
+  return instance?.connected === true
+    || instance?.loggedIn === true
+    || ['open', 'connected', 'online', 'loggedin'].includes(state);
+}
+
 export function uazapiInstanceName(profileId: string) {
   const prefix = process.env.UAZAPI_INSTANCE_PREFIX || 'orion';
   return `${prefix}_${profileId.replace(/-/g, '')}`;
@@ -101,9 +115,12 @@ async function getUazapiInstanceToken(baseUrl: string, globalToken: string, inst
     throw new Error(payload?.message || payload?.error || 'Nao consegui listar instancias do UAZAPI.');
   }
 
-  const instance = asArray(payload).find(
+  const matchingInstances = asArray(payload).filter(
     (item) => readInstanceName(item).toLowerCase() === instanceName.toLowerCase()
   );
+  // O provedor pode devolver registros antigos com o mesmo nome. Para o
+  // Apolo, sempre usa primeiro a sessao que esta efetivamente conectada.
+  const instance = matchingInstances.find(isConnectedUazapiInstance) || matchingInstances[0];
   const token = readInstanceToken(instance);
   if (!token) {
     throw new Error(`Instancia UAZAPI ${instanceName} ainda nao foi criada ou nao possui token.`);

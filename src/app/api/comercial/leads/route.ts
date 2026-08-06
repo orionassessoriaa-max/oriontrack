@@ -46,11 +46,30 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const leadIds = (data || []).map((lead) => lead.id);
+  const { data: pendingTasks } = leadIds.length
+    ? await supabaseAdmin
+      .from('comercial_tarefas')
+      .select('lead_id,titulo,vencimento')
+      .in('lead_id', leadIds)
+      .eq('status', 'pendente')
+      .not('vencimento', 'is', null)
+      .order('vencimento', { ascending: true })
+    : { data: [] };
+  const nextReturnByLead = new Map<string, { titulo: string | null; vencimento: string | null }>();
+  for (const task of pendingTasks || []) {
+    if (task.lead_id && !nextReturnByLead.has(task.lead_id)) nextReturnByLead.set(task.lead_id, task);
+  }
   return NextResponse.json({
-    leads: (data || []).map((lead) => redactFinancialFields({
-      ...lead,
-      lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento),
-    }, guard.canViewCommercialFinancials)),
+    leads: (data || []).map((lead) => {
+      const nextReturn = nextReturnByLead.get(lead.id);
+      return redactFinancialFields({
+        ...lead,
+        lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento),
+        proximo_retorno_at: nextReturn?.vencimento || null,
+        proximo_retorno_titulo: nextReturn?.titulo || null,
+      }, guard.canViewCommercialFinancials);
+    }),
     role: guard.commercialRole,
   });
 }

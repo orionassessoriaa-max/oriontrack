@@ -85,6 +85,7 @@ type EditableLead = {
   closer_id: string;
   valor_negociacao: string;
   observacoes: string;
+  decisor: string;
 };
 
 const mqlCopy: Record<CommercialMqlLevel, { title: string; detail: string }> = {
@@ -94,7 +95,7 @@ const mqlCopy: Record<CommercialMqlLevel, { title: string; detail: string }> = {
   C: { title: 'MQL C', detail: 'Fora do MQL' },
 };
 
-function dateTime(value: string | null) {
+function dateTime(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não informado';
 }
 
@@ -147,6 +148,16 @@ function freeNotes(notes: string | null) {
   }).join(' | ');
 }
 
+function withStructuredNote(notes: string, label: string, value: string) {
+  const target = noteKey(label);
+  const remaining = noteParts(notes).filter((part) => {
+    const separator = part.indexOf(':');
+    return separator < 0 || noteKey(part.slice(0, separator)) !== target;
+  });
+  if (value.trim()) remaining.push(`${label}: ${value.trim()}`);
+  return remaining.join(' | ');
+}
+
 function editableLead(lead: CommercialLead): EditableLead {
   return {
     nome: lead.nome || '', telefone: lead.telefone || '', email: lead.email || '', empresa: lead.empresa || '', estado: lead.estado || '',
@@ -155,6 +166,7 @@ function editableLead(lead: CommercialLead): EditableLead {
     negocio_etapa: lead.negocio_etapa || '', utm_source: lead.utm_source || '', utm_medium: lead.utm_medium || '', utm_campaign: lead.utm_campaign || '',
     utm_term: lead.utm_term || '', utm_content: lead.utm_content || '', sdr_id: lead.sdr_id || '', closer_id: lead.closer_id || '',
     valor_negociacao: String(lead.valor_negociacao || ''), observacoes: lead.observacoes || '',
+    decisor: noteField(lead.observacoes, ['decisor', 'é o decisor', 'tomador de decisão']) || '',
   };
 }
 
@@ -236,7 +248,13 @@ export default function CommercialLeadDetailsModal({
     setEditSaving(true);
     setEditError(null);
     try {
-      await onSave({ ...effective, id: currentLead.id, valor_negociacao: Number(effective.valor_negociacao || 0) });
+      const { decisor, ...leadFields } = effective;
+      await onSave({
+        ...leadFields,
+        observacoes: withStructuredNote(effective.observacoes, 'É o decisor?', decisor),
+        id: currentLead.id,
+        valor_negociacao: Number(effective.valor_negociacao || 0),
+      });
       setEditing(false);
     } catch (error) {
       setEditError(error instanceof Error ? error.message : 'Não foi possível salvar as alterações.');
@@ -249,7 +267,7 @@ export default function CommercialLeadDetailsModal({
     ['Vidas', editing ? inlineInput('vidas', 'Vidas') : displayValue(lead.vidas)],
     ['Prioridade', editing ? inlineInput('prioridade', 'Prioridade') : displayValue(lead.prioridade)],
     ...(canViewQualification ? [['Faturamento', editing ? inlineInput('faturamento_mensal', 'Faturamento mensal') : displayValue(lead.faturamento_mensal)] as [string, React.ReactNode]] : []),
-    ['É o decisor?', displayValue(decisionMaker)],
+    ['É o decisor?', editing ? inlineInput('decisor', 'É o decisor?') : displayValue(decisionMaker)],
     ...(canViewQualification ? [['Já investiu em tráfego?', editing ? inlineInput('ja_investiu_trafego', 'Investimento anterior em tráfego') : displayValue(lead.ja_investiu_trafego)] as [string, React.ReactNode]] : []),
   ];
   const contactRows: Array<[string, React.ReactNode]> = [
@@ -307,6 +325,11 @@ export default function CommercialLeadDetailsModal({
         <label><RefreshCw size={15} /><span>Mudar etapa</span><select value={lead.status} onChange={(event) => onMoveStage(event.target.value)} aria-label="Mudar etapa do lead">{stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.label}</option>)}</select></label>
         <button type="button" className="danger" onClick={() => onMoveStage('Perdido')} disabled={lead.status === 'Perdido'}><CircleX size={16} /> Marcar perdido</button>
       </div>
+
+      {lead.proximo_retorno_at && <div className="kh-lead-next-return">
+        <CalendarClock size={16} />
+        <div><span>Próximo retorno agendado</span><strong>{dateTime(lead.proximo_retorno_at)}</strong>{lead.proximo_retorno_titulo && <small>{lead.proximo_retorno_titulo}</small>}</div>
+      </div>}
 
       {scheduleOpen && <form className="kh-lead-return-form" onSubmit={(event) => { void onCreateTask(event).then(() => setScheduleOpen(false)).catch(() => undefined); }}>
         <label><span>Próximo retorno</span><input className="kh-input" type="datetime-local" value={taskForm.vencimento} onChange={(event) => onTaskChange('vencimento', event.target.value)} required autoFocus /></label>

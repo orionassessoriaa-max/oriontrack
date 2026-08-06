@@ -187,14 +187,17 @@ async function canAccessConversation(profile: any, conversation: any) {
     const commercialPhone = String(conversation.telefone || '').replace(/\D/g, '');
     const commercialLast8 = commercialPhone.slice(-8);
     if (commercialLast8) {
-      let commercialQuery = supabaseAdmin
+      const commercialLast4 = commercialLast8.slice(-4);
+      const { data: commercialCandidates } = await supabaseAdmin
         .from('comercial_leads')
-        .select('id,sdr_id,closer_id')
-        .or(`telefone.eq.${conversation.telefone},telefone.ilike.%${commercialLast8}`);
-      if (commercialMember.papel === 'sdr') {
-        commercialQuery = commercialQuery.eq('sdr_id', profile.id);
-      }
-      const { data: commercialLead } = await commercialQuery.limit(1).maybeSingle();
+        .select('id,sdr_id,closer_id,telefone')
+        .ilike('telefone', `%${commercialLast4}`)
+        .limit(100);
+      const commercialLead = (commercialCandidates || []).find((lead) => {
+        const leadPhone = String(lead.telefone || '').replace(/\D/g, '');
+        const samePhone = leadPhone.slice(-8) === commercialLast8;
+        return samePhone && (commercialMember.papel !== 'sdr' || lead.sdr_id === profile.id);
+      });
       if (commercialLead) return true;
     }
     // Se e conversa comercial mas nao pertence ao SDR, nao deixa a regra de

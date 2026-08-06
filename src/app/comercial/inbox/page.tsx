@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
+import type { CommercialStage } from '@/lib/comercial';
 
 type Conversation = {
   id: string;
@@ -99,6 +100,10 @@ export default function CommercialInboxPage() {
   const [search, setSearch] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('todos');
   const [stageFilter, setStageFilter] = useState('todos');
+  const [stages, setStages] = useState<CommercialStage[]>([]);
+  const [movingStage, setMovingStage] = useState(false);
+  const [meetingStage, setMeetingStage] = useState('');
+  const [meetingAt, setMeetingAt] = useState('');
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -127,9 +132,13 @@ export default function CommercialInboxPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const payload = await api('/api/comercial/inbox');
+      const [payload, stagePayload] = await Promise.all([
+        api('/api/comercial/inbox'),
+        api('/api/comercial/stages'),
+      ]);
       const next = payload.conversations || [];
       setConversations(next);
+      setStages(stagePayload.stages || []);
       const phone = new URLSearchParams(window.location.search).get('telefone');
       if (phone) {
         setSelected(next.find((item: Conversation) => normalizePhone(item.telefone) === normalizePhone(phone)) || null);
@@ -182,7 +191,9 @@ export default function CommercialInboxPage() {
   }, []);
 
   const memberMap = useMemo(() => new Map(members.map((member) => [member.profile_id, member])), [members]);
-  const funnelStages = useMemo(() => Array.from(new Set(conversations.map((item) => item.commercial_lead.status).filter(Boolean))).sort(), [conversations]);
+  const funnelStages = useMemo(() => stages.length
+    ? stages.map((stage) => stage.id)
+    : Array.from(new Set(conversations.map((item) => item.commercial_lead.status).filter(Boolean))).sort(), [conversations, stages]);
   const filtered = useMemo(() => conversations.filter((item) => {
     const lead = item.commercial_lead;
     const matchesSearch = `${item.nome_contato || ''} ${item.telefone} ${lead.nome} ${lead.status}`.toLowerCase().includes(search.toLowerCase());
@@ -203,6 +214,46 @@ export default function CommercialInboxPage() {
   function openLeadHistory() {
     if (!selected) return;
     router.push(`/comercial/historico?lead_id=${encodeURIComponent(selected.commercial_lead.id)}`);
+  }
+
+  function selectLeadStage(status: string) {
+    const normalized = status.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (normalized.includes('reunio') && normalized.includes('agend')) {
+      setMeetingStage(status);
+      setMeetingAt('');
+      return;
+    }
+    setMeetingStage('');
+    void moveSelectedLead(status);
+  }
+
+  async function moveSelectedLead(status: string, scheduledAt?: string) {
+    if (!selected || !status || status === selected.commercial_lead.status || movingStage) return;
+    setMovingStage(true);
+    setNotice('');
+    try {
+      const payload = await api('/api/comercial/leads', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          id: selected.commercial_lead.id,
+          status,
+          ...(scheduledAt ? { reuniao_agendada_at: new Date(scheduledAt).toISOString() } : {}),
+        }),
+      });
+      const updatedLead = payload.lead || { ...selected.commercial_lead, status };
+      setConversations((current) => current.map((conversation) => conversation.commercial_lead.id === updatedLead.id
+        ? { ...conversation, commercial_lead: { ...conversation.commercial_lead, ...updatedLead } }
+        : conversation));
+      setSelected((current) => current && current.commercial_lead.id === updatedLead.id
+        ? { ...current, commercial_lead: { ...current.commercial_lead, ...updatedLead } }
+        : current);
+      setMeetingStage('');
+      setMeetingAt('');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Não foi possível mover o lead de etapa.');
+    } finally {
+      setMovingStage(false);
+    }
   }
 
   async function connectWhatsapp() {
@@ -495,6 +546,8 @@ export default function CommercialInboxPage() {
             const closerName = memberMap.get(lead.closer_id || '')?.nome || 'Sem closer';
             return <>
               <header><div><span>Dados do lead</span><h2>{lead.nome}</h2></div><em>{lead.status}</em></header>
+              <label className="kh-inbox-stage-move"><span>Mover para outra etapa</span><select value={meetingStage || lead.status} onChange={(event) => selectLeadStage(event.target.value)} disabled={movingStage}>{funnelStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select></label>
+              {meetingStage && <div className="kh-inbox-meeting-move"><label><span>Data e hora da reunião</span><input type="datetime-local" value={meetingAt} onChange={(event) => setMeetingAt(event.target.value)} /></label><div><button type="button" className="kh-button primary" disabled={!meetingAt || movingStage} onClick={() => void moveSelectedLead(meetingStage, meetingAt)}>Confirmar</button><button type="button" className="kh-button" onClick={() => { setMeetingStage(''); setMeetingAt(''); }}>Cancelar</button></div></div>}
               <dl>
                 <div><dt>Responsável atual</dt><dd>{lead.sdr_id ? sdrName : closerName}</dd></div>
                 <div><dt>SDR</dt><dd>{sdrName}</dd></div>

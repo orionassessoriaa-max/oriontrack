@@ -158,5 +158,26 @@ export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotific
     }),
   ]);
 
+  await supabaseAdmin.from('audit_logs').insert({
+    actor_profile_id: null,
+    actor_email: null,
+    actor_role: 'system',
+    action: 'commercial.lead.assignment_notifications',
+    entity_type: 'commercial_lead',
+    entity_id: lead.id,
+    metadata: {
+      sdr_id: targets.sdr.id,
+      sdr_delivery: sdrResult.map((item) => ({ profile_id: item.profile_id, status: item.status, reason: 'reason' in item ? item.reason : null })),
+      coordinator_delivery: coordinatorResult.map((item) => ({ profile_id: item.profile_id, status: item.status, reason: 'reason' in item ? item.reason : null })),
+      apolo_instance: 'apolo_master_sender',
+    },
+    ip_address: null,
+    user_agent: 'Orion Track / Apolo Notificador',
+  });
+
+  if (!sdrResult.some((item) => item.status === 'success')) {
+    throw new Error(`Apolo nao entregou o aviso ao SDR ${targets.sdr.nome || targets.sdr.id}.`);
+  }
+
   return { sdr: sdrResult, coordinators: coordinatorResult };
 }
