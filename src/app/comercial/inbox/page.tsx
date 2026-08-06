@@ -30,6 +30,7 @@ type Conversation = {
 type Message = {
   id: string;
   direction: 'inbound' | 'outbound';
+  remetente?: string | null;
   mensagem: string;
   created_at: string;
   metadata?: Record<string, unknown> | null;
@@ -382,6 +383,12 @@ export default function CommercialInboxPage() {
             {messages.map((message) => {
               const audio = isAudioMessage(message);
               const media = audioMedia[message.id];
+              const isAiSender = message.metadata?.ai_agent === 'commercial_sdr';
+              const senderName = message.remetente?.trim()
+                || (message.direction === 'inbound'
+                  ? selected?.nome_contato || selected?.commercial_lead.nome || 'Lead'
+                  : 'Equipe comercial');
+              const senderLabel = isAiSender ? `${senderName} · IA` : senderName;
               return (
                 <div key={message.id} className={`kh-chat-bubble ${message.direction === 'outbound' ? 'outbound' : 'inbound'} ${audio ? 'audio' : ''}`}>
                   {audio ? media ? (
@@ -391,7 +398,10 @@ export default function CommercialInboxPage() {
                       {loadingAudioId === message.id ? <Loader2 size={16} className="kh-spin" /> : <Volume2 size={16} />} {loadingAudioId === message.id ? 'Carregando áudio...' : 'Ouvir mensagem de voz'}
                     </button>
                   ) : <p>{message.mensagem}</p>}
-                  <time>{time(message.created_at)}</time>
+                  <div className="kh-chat-message-meta">
+                    <strong>{senderLabel}</strong>
+                    <time>{time(message.created_at)}</time>
+                  </div>
                 </div>
               );
             })}
