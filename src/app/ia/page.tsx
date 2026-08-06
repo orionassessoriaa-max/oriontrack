@@ -3,16 +3,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Loader2, QrCode, X } from 'lucide-react';
 import InternalLayout from '@/components/layout/InternalLayout';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 
 type AiConnection = {
   dedicated?: boolean;
+  can_connect?: boolean;
   connected?: boolean;
   state?: 'open' | 'connecting' | 'close';
   error?: string;
 };
 
 export default function AiConnectionPage() {
+  const { profile } = useAuth();
   const [connection, setConnection] = useState<AiConnection>({});
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -24,15 +27,21 @@ export default function AiConnectionPage() {
     [],
   );
 
+  const requestHeaders = useCallback(async () => ({
+    Authorization: `Bearer ${await accessToken()}`,
+    ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+  }), [accessToken, profile?.id]);
+
   const load = useCallback(async () => {
     try {
       const response = await fetch('/api/ia/whatsapp', {
-        headers: { Authorization: `Bearer ${await accessToken()}` },
+        headers: await requestHeaders(),
         cache: 'no-store',
       });
       const payload = await response.json();
       setConnection(payload);
-      if (!response.ok) setNotice(payload.error || 'Nao foi possivel consultar a conexao.');
+      if (response.ok) setNotice(null);
+      else setNotice(payload.error || 'Nao foi possivel consultar a conexao.');
       if (payload.connected) {
         setQr(null);
         setNotice(null);
@@ -42,7 +51,7 @@ export default function AiConnectionPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [requestHeaders]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -58,7 +67,7 @@ export default function AiConnectionPage() {
     try {
       const response = await fetch('/api/ia/whatsapp', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${await accessToken()}` },
+        headers: await requestHeaders(),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Falha ao conectar.');
@@ -87,7 +96,7 @@ export default function AiConnectionPage() {
           ) : (
             <button
               type="button"
-              disabled={connecting || !connection.dedicated}
+              disabled={connecting || connection.can_connect !== true}
               onClick={() => void connect()}
               className="mt-8 flex w-full items-center justify-center gap-3 rounded-2xl bg-cyan-500 px-5 py-4 text-sm font-black text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -96,9 +105,9 @@ export default function AiConnectionPage() {
             </button>
           )}
 
-          {!loading && !connection.dedicated && (
+          {!loading && connection.can_connect === false && (
             <p className="mt-4 text-sm font-bold text-amber-300">
-              A conexao exclusiva da IA ainda nao foi habilitada para esta concessionaria.
+              Esta concessionaria ja usa a IA pelo WhatsApp de um perfil. Altere para numero exclusivo no painel administrativo antes de conectar.
             </p>
           )}
           {notice && <p className="mt-4 text-sm font-bold text-rose-300">{notice}</p>}
