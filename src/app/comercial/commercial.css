@@ -1234,3 +1234,4 @@
 .kh-distribution-member small,
 .kh-distribution-help { color: var(--kh-muted); font-size: 10px; }
 .kh-supervision-label { color: #73889d; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.kh-read-only .kh-sheet-table .select { display: none; }

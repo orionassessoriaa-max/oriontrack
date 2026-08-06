@@ -1,32 +1,44 @@
 export const COMMERCIAL_STATUSES = [
-  'Oportunidade',
-  '1º dia',
-  'Tentando contato',
-  'Plano de saúde',
-  'Fora do ICP com recurso',
-  'Dentro do ICP sem recurso',
-  'Reuniões agendadas',
-  'No-show',
-  'Outros seguros',
-  'Fora do MQL',
-  'Carrossel holandês',
-  'Follow TCV',
-  'Follow MRR',
-  'Stand-by',
-  'Desqualificado',
-  'Perdido',
-  'Negócio fechado',
+  "Oportunidade",
+  "1º dia",
+  "Tentando contato",
+  "Plano de saúde",
+  "Fora do ICP com recurso",
+  "Dentro do ICP sem recurso",
+  "Reuniões agendadas",
+  "No-show",
+  "Outros seguros",
+  "Fora do MQL",
+  "Carrossel holandês",
+  "Follow TCV",
+  "Follow MRR",
+  "Stand-by",
+  "Desqualificado",
+  "Perdido",
+  "Negócio fechado",
 ] as const;
 
-export type CommercialStage = { id: string; label: string; desc?: string; protected?: boolean };
-export const COMMERCIAL_STAGES: CommercialStage[] = COMMERCIAL_STATUSES.map((label) => ({
-  id: label,
-  label,
-  protected: ['Oportunidade', 'Em negociaÃ§Ã£o', 'NegÃ³cio fechado', 'Sem interesse'].includes(label),
-}));
+export type CommercialStage = {
+  id: string;
+  label: string;
+  desc?: string;
+  protected?: boolean;
+};
+export const COMMERCIAL_STAGES: CommercialStage[] = COMMERCIAL_STATUSES.map(
+  (label) => ({
+    id: label,
+    label,
+    protected: [
+      "Oportunidade",
+      "Em negociaÃ§Ã£o",
+      "NegÃ³cio fechado",
+      "Sem interesse",
+    ].includes(label),
+  }),
+);
 
 export type CommercialStatus = string;
-export type CommercialRole = 'coordenador' | 'closer' | 'sdr';
+export type CommercialRole = "coordenador" | "closer" | "sdr" | "visualizador";
 
 export type CommercialMember = {
   profile_id: string;
@@ -86,23 +98,27 @@ export type CommercialTask = {
   titulo: string;
   descricao: string | null;
   vencimento: string | null;
-  prioridade: 'baixa' | 'normal' | 'alta';
-  status: 'pendente' | 'concluida' | 'cancelada';
+  prioridade: "baixa" | "normal" | "alta";
+  status: "pendente" | "concluida" | "cancelada";
   created_at: string;
   updated_at: string;
-  lead?: Pick<CommercialLead, 'id' | 'nome' | 'telefone' | 'status'> | null;
+  lead?: Pick<CommercialLead, "id" | "nome" | "telefone" | "status"> | null;
 };
 
 export function commercialRoleLabel(role?: CommercialRole | null) {
-  if (role === 'coordenador') return 'Coordenador comercial';
-  if (role === 'closer') return 'Closer';
-  return 'SDR';
+  if (role === "coordenador") return "Coordenador comercial";
+  if (role === "closer") return "Closer";
+  if (role === "visualizador") return "Gestor (somente leitura)";
+  return "SDR";
 }
 
 export function currency(value: number | string | null | undefined) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(value || 0));
 }
 
 export function percent(value: number | null | undefined) {
-  return `${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  return `${Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
