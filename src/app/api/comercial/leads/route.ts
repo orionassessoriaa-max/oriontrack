@@ -45,7 +45,13 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ leads: (data || []).map((lead) => redactFinancialFields(lead, guard.canViewCommercialFinancials)), role: guard.commercialRole });
+  return NextResponse.json({
+    leads: (data || []).map((lead) => redactFinancialFields({
+      ...lead,
+      lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento),
+    }, guard.canViewCommercialFinancials)),
+    role: guard.commercialRole,
+  });
 }
 
 export async function POST(request: Request) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isCommercialMql } from '@/lib/commercialQualification';
 
 function ratio(value: number, total: number) {
   return total > 0 ? (value / total) * 100 : 0;
@@ -119,7 +120,10 @@ export async function GET(request: Request) {
   ]);
   if (leadResult.error) return NextResponse.json({ error: leadResult.error.message }, { status: 500 });
 
-  const leads = leadResult.data || [];
+  const leads = (leadResult.data || []).map((lead) => ({
+    ...lead,
+    lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento),
+  }));
   const weekStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 6)).toISOString().slice(0, 10);
   const weekEnd = now.toISOString().slice(0, 10);
   let weeklyMeetingQuery = supabaseAdmin

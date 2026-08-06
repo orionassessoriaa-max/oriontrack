@@ -14,9 +14,11 @@ import {
   Pencil,
   Phone,
   RefreshCw,
+  Save,
   X,
 } from 'lucide-react';
 import type { CommercialLead, CommercialMember, CommercialStage } from '@/lib/comercial';
+import { getCommercialMqlLevel, type CommercialMqlLevel } from '@/lib/commercialQualification';
 
 type LeadInteraction = {
   id: string;
@@ -56,7 +58,39 @@ type Props = {
   onInteractionFileChange: (file: File | null) => void;
   onAddInteraction: (event: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
-  onEdit: () => void;
+  onSave: (data: Record<string, unknown>) => Promise<void>;
+};
+
+type EditableLead = {
+  nome: string;
+  telefone: string;
+  email: string;
+  empresa: string;
+  estado: string;
+  origem: string;
+  campanha: string;
+  ja_investiu_trafego: string;
+  faturamento_mensal: string;
+  prioridade: string;
+  investimento: string;
+  vidas: string;
+  negocio_etapa: string;
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+  utm_term: string;
+  utm_content: string;
+  sdr_id: string;
+  closer_id: string;
+  valor_negociacao: string;
+  observacoes: string;
+};
+
+const mqlCopy: Record<CommercialMqlLevel, { title: string; detail: string }> = {
+  S: { title: 'MQL S', detail: 'Pica das galáxias' },
+  A: { title: 'MQL A', detail: 'R$ 10 mil a R$ 20 mil' },
+  B: { title: 'MQL B', detail: 'Abaixo de R$ 10 mil, com investimento' },
+  C: { title: 'MQL C', detail: 'Fora do MQL' },
 };
 
 function dateTime(value: string | null) {
@@ -84,10 +118,9 @@ function noteKey(value: string) {
 }
 
 const structuredNoteLabels = new Set([
-  'nome', 'telefone', 'email', 'empresa', 'estado', 'origem', 'campanha', 'status', 'etapa',
-  'data entrada', 'ja investiu trafego', 'ja investiu em trafego', 'faturamento mensal', 'faturamento',
-  'prioridade', 'investimento', 'vidas', 'quantidade de vidas', 'negocio etapa',
-  'utm source', 'utm medium', 'utm campaign', 'utm term', 'utm content',
+  'nome', 'telefone', 'email', 'empresa', 'estado', 'origem', 'campanha', 'status', 'etapa', 'data entrada',
+  'ja investiu trafego', 'ja investiu em trafego', 'faturamento mensal', 'faturamento', 'prioridade', 'investimento',
+  'vidas', 'quantidade de vidas', 'negocio etapa', 'utm source', 'utm medium', 'utm campaign', 'utm term', 'utm content',
   'decisor', 'e o decisor', 'tomador de decisao',
 ]);
 
@@ -113,29 +146,28 @@ function freeNotes(notes: string | null) {
   }).join(' | ');
 }
 
+function editableLead(lead: CommercialLead): EditableLead {
+  return {
+    nome: lead.nome || '', telefone: lead.telefone || '', email: lead.email || '', empresa: lead.empresa || '', estado: lead.estado || '',
+    origem: lead.origem || '', campanha: lead.campanha || '', ja_investiu_trafego: lead.ja_investiu_trafego || '',
+    faturamento_mensal: lead.faturamento_mensal || '', prioridade: lead.prioridade || '', investimento: lead.investimento || '', vidas: lead.vidas || '',
+    negocio_etapa: lead.negocio_etapa || '', utm_source: lead.utm_source || '', utm_medium: lead.utm_medium || '', utm_campaign: lead.utm_campaign || '',
+    utm_term: lead.utm_term || '', utm_content: lead.utm_content || '', sdr_id: lead.sdr_id || '', closer_id: lead.closer_id || '',
+    valor_negociacao: String(lead.valor_negociacao || ''), observacoes: lead.observacoes || '',
+  };
+}
+
 export default function CommercialLeadDetailsModal({
-  lead,
-  members,
-  canViewFinancials,
-  stages,
-  onMoveStage,
-  interactions,
-  interactionText,
-  interactionFile,
-  interactionSaving,
-  interactionError,
-  taskForm,
-  taskSaving,
-  onTaskChange,
-  onCreateTask,
-  onInteractionTextChange,
-  onInteractionFileChange,
-  onAddInteraction,
-  onClose,
-  onEdit,
+  lead, members, canViewFinancials, stages, onMoveStage, interactions, interactionText, interactionFile,
+  interactionSaving, interactionError, taskForm, taskSaving, onTaskChange, onCreateTask,
+  onInteractionTextChange, onInteractionFileChange, onAddInteraction, onClose, onSave,
 }: Props) {
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState<EditableLead | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const interactionRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -148,15 +180,25 @@ export default function CommercialLeadDetailsModal({
     };
   }, [interactionFile]);
 
+  useEffect(() => {
+    if (!lead) return;
+    setEditForm(editableLead(lead));
+    setEditing(false);
+    setEditError(null);
+  }, [lead?.id]);
+
   if (!lead) return null;
 
+  const currentLead = lead;
+  const effective = editForm || editableLead(lead);
   const memberName = (id: string | null, fallback: string) => members.find((member) => member.profile_id === id)?.nome || fallback;
-  const leadName = lead.nome;
-  const sdrName = memberName(lead.sdr_id, 'Sem SDR');
-  const closerName = memberName(lead.closer_id, 'Sem closer');
+  const leadName = editing ? effective.nome : lead.nome;
+  const sdrName = memberName(editing ? effective.sdr_id || null : lead.sdr_id, 'Sem SDR');
+  const closerName = memberName(editing ? effective.closer_id || null : lead.closer_id, 'Sem closer');
   const lastActivity = lead.ultimo_contato_at || interactions[0]?.created_at || lead.data_entrada;
   const internalNotes = freeNotes(lead.observacoes);
   const decisionMaker = noteField(lead.observacoes, ['decisor', 'é o decisor', 'tomador de decisão']);
+  const mqlLevel = getCommercialMqlLevel(editing ? effective.faturamento_mensal : lead.faturamento_mensal, editing ? effective.investimento : lead.investimento);
   const nextStep = lead.reuniao_agendada_at
     ? `Reunião agendada para ${dateTime(lead.reuniao_agendada_at)}`
     : lead.status === 'Perdido'
@@ -173,46 +215,96 @@ export default function CommercialLeadDetailsModal({
     setScheduleOpen(true);
   }
 
-  const qualificationRows = [
-    ['Vidas', displayValue(lead.vidas)],
-    ['Prioridade', displayValue(lead.prioridade)],
-    ...(canViewFinancials ? [['Faturamento', displayValue(lead.faturamento_mensal)]] : []),
+  function setEdit(field: keyof EditableLead, value: string) {
+    setEditForm((current) => current ? { ...current, [field]: value } : current);
+  }
+
+  function inlineInput(field: keyof EditableLead, label: string, type = 'text') {
+    return <input className="kh-inline-edit" aria-label={label} type={type} value={effective[field]} onChange={(event) => setEdit(field, event.target.value)} />;
+  }
+
+  function memberSelect(field: 'sdr_id' | 'closer_id', role: 'sdr' | 'closer', label: string) {
+    return <select className="kh-inline-edit" aria-label={label} value={effective[field]} onChange={(event) => setEdit(field, event.target.value)}>
+      <option value="">Sem {role}</option>
+      {members.filter((member) => member.papel === role && member.ativo).map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}
+    </select>;
+  }
+
+  function cancelEditing() {
+    setEditForm(editableLead(currentLead));
+    setEditing(false);
+    setEditError(null);
+  }
+
+  async function saveEditing() {
+    if (!effective.nome.trim() || editSaving) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      await onSave({ ...effective, id: currentLead.id, valor_negociacao: Number(effective.valor_negociacao || 0) });
+      setEditing(false);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : 'Não foi possível salvar as alterações.');
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  const qualificationRows: Array<[string, React.ReactNode]> = [
+    ['Vidas', editing ? inlineInput('vidas', 'Vidas') : displayValue(lead.vidas)],
+    ['Prioridade', editing ? inlineInput('prioridade', 'Prioridade') : displayValue(lead.prioridade)],
+    ...(canViewFinancials ? [['Faturamento', editing ? inlineInput('faturamento_mensal', 'Faturamento mensal') : displayValue(lead.faturamento_mensal)] as [string, React.ReactNode]] : []),
     ['É o decisor?', displayValue(decisionMaker)],
-    ...(canViewFinancials ? [['Já investiu em tráfego?', displayValue(lead.ja_investiu_trafego)]] : []),
+    ...(canViewFinancials ? [['Já investiu em tráfego?', editing ? inlineInput('ja_investiu_trafego', 'Investimento anterior em tráfego') : displayValue(lead.ja_investiu_trafego)] as [string, React.ReactNode]] : []),
   ];
-  const contactRows = [
-    ['Nome', displayValue(lead.nome)], ['WhatsApp', displayValue(lead.telefone)], ['E-mail', displayValue(lead.email)],
-    ['Empresa', displayValue(lead.empresa)], ['Estado', displayValue(lead.estado)], ['SDR', sdrName], ['Closer', closerName],
+  const contactRows: Array<[string, React.ReactNode]> = [
+    ['Nome', editing ? inlineInput('nome', 'Nome') : displayValue(lead.nome)],
+    ['WhatsApp', editing ? inlineInput('telefone', 'WhatsApp', 'tel') : displayValue(lead.telefone)],
+    ['E-mail', editing ? inlineInput('email', 'E-mail', 'email') : displayValue(lead.email)],
+    ['Empresa', editing ? inlineInput('empresa', 'Empresa') : displayValue(lead.empresa)],
+    ['Estado', editing ? inlineInput('estado', 'Estado') : displayValue(lead.estado)],
+    ['SDR', editing ? memberSelect('sdr_id', 'sdr', 'SDR') : sdrName],
+    ['Closer', editing ? memberSelect('closer_id', 'closer', 'Closer') : closerName],
   ];
-  const sourceRows = [
-    ['Origem', displayValue(lead.origem)], ['Campanha', displayValue(lead.campanha)], ['UTM source', displayValue(lead.utm_source)],
-    ['UTM medium', displayValue(lead.utm_medium)], ['UTM campaign', displayValue(lead.utm_campaign)],
-    ['UTM term', displayValue(lead.utm_term)], ['UTM content', displayValue(lead.utm_content)],
+  const sourceRows: Array<[string, React.ReactNode]> = [
+    ['Origem', editing ? inlineInput('origem', 'Origem') : displayValue(lead.origem)],
+    ['Campanha', editing ? inlineInput('campanha', 'Campanha') : displayValue(lead.campanha)],
+    ['UTM source', editing ? inlineInput('utm_source', 'UTM source') : displayValue(lead.utm_source)],
+    ['UTM medium', editing ? inlineInput('utm_medium', 'UTM medium') : displayValue(lead.utm_medium)],
+    ['UTM campaign', editing ? inlineInput('utm_campaign', 'UTM campaign') : displayValue(lead.utm_campaign)],
+    ['UTM term', editing ? inlineInput('utm_term', 'UTM term') : displayValue(lead.utm_term)],
+    ['UTM content', editing ? inlineInput('utm_content', 'UTM content') : displayValue(lead.utm_content)],
   ];
-  const controlRows = [
+  const controlRows: Array<[string, React.ReactNode]> = [
     ['Entrada', dateTime(lead.data_entrada)], ['Último contato', dateTime(lead.ultimo_contato_at)],
     ['Reunião agendada', dateTime(lead.reuniao_agendada_at)], ['Reunião realizada', dateTime(lead.reuniao_realizada_at)],
-    ['Negócio / etapa', displayValue(lead.negocio_etapa)], ['No-shows', String(Number(lead.no_show_count || 0))],
+    ['Negócio / etapa', editing ? inlineInput('negocio_etapa', 'Negócio ou etapa') : displayValue(lead.negocio_etapa)],
+    ['No-shows', String(Number(lead.no_show_count || 0))],
   ];
 
   return <div className="kh-lead-details-overlay" role="dialog" aria-modal="true" aria-labelledby="kh-lead-details-title">
-    <section className="kh-lead-details-modal kh-lead-reference">
+    <section className={`kh-lead-details-modal kh-lead-reference ${editing ? 'is-editing' : ''}`}>
       <header className="kh-lead-reference-head">
         <div className="kh-lead-identity">
-          <span className="kh-lead-avatar" aria-hidden="true">{initials(lead.nome)}</span>
+          <span className="kh-lead-avatar" aria-hidden="true">{initials(leadName)}</span>
           <div>
-            <h2 id="kh-lead-details-title">{lead.nome}</h2>
-            <p><Phone size={13} /> {lead.telefone || 'WhatsApp não informado'} <span>•</span> SDR {sdrName} <span>•</span> Closer {closerName}</p>
+            <h2 id="kh-lead-details-title">{leadName || 'Lead sem nome'}</h2>
+            <p><Phone size={13} /> {effective.telefone || 'WhatsApp não informado'} <span>•</span> SDR {sdrName} <span>•</span> Closer {closerName}</p>
           </div>
         </div>
         <div className="kh-lead-head-status">
+          {canViewFinancials && <span className={`kh-mql-level level-${mqlLevel.toLowerCase()}`}><b>{mqlCopy[mqlLevel].title}</b><small>{mqlCopy[mqlLevel].detail}</small></span>}
           <span className="stage">{lead.status}</span>
           <span className="elapsed"><Clock3 size={13} /> {elapsedLabel(lastActivity)}</span>
-          <button type="button" className="kh-icon-button" aria-label="Editar lead" onClick={onEdit}><Pencil size={17} /></button>
+          {editing ? <>
+            <button type="button" className="kh-edit-save" aria-label="Salvar alterações" onClick={() => void saveEditing()} disabled={editSaving || !effective.nome.trim()}><Save size={17} /> <span>{editSaving ? 'Salvando...' : 'Salvar'}</span></button>
+            <button type="button" className="kh-icon-button" aria-label="Cancelar edição" onClick={cancelEditing} disabled={editSaving}><X size={18} /></button>
+          </> : <button type="button" className="kh-icon-button" aria-label="Editar lead" onClick={() => setEditing(true)}><Pencil size={17} /></button>}
           <button type="button" className="kh-icon-button" aria-label="Fechar detalhes" onClick={onClose}><X size={19} /></button>
         </div>
       </header>
 
+      {editError && <div className="kh-inline-error kh-lead-edit-error" role="alert">{editError}</div>}
       <div className="kh-lead-next-step"><CalendarClock size={16} /><strong>{nextStep}</strong></div>
 
       <div className="kh-lead-quick-actions" aria-label="Ações do lead">
@@ -238,7 +330,7 @@ export default function CommercialLeadDetailsModal({
             {interactionError && <div className="kh-inline-error" role="alert">{interactionError}</div>}
             <div><label className="kh-file-button" htmlFor="lead-attachment-modal"><Paperclip size={14} /> {interactionFile ? interactionFile.name : 'Anexar'}</label><input id="lead-attachment-modal" type="file" accept="image/*" onChange={(event) => onInteractionFileChange(event.target.files?.[0] || null)} /><button className="kh-button primary" disabled={interactionSaving}>{interactionSaving ? 'Salvando...' : 'Registrar'}</button></div>
           </form>
-          {internalNotes && <article className="kh-lead-internal-note"><strong>Observação interna</strong><p>{internalNotes}</p></article>}
+          {editing ? <article className="kh-lead-internal-note"><strong>Observações internas</strong><textarea className="kh-inline-edit kh-inline-notes" aria-label="Observações internas" value={effective.observacoes} onChange={(event) => setEdit('observacoes', event.target.value)} /></article> : internalNotes && <article className="kh-lead-internal-note"><strong>Observação interna</strong><p>{internalNotes}</p></article>}
           <div className="kh-interaction-list kh-history-list">
             {interactions.map((item) => <article key={item.id} className={item.tipo && item.tipo !== 'comentario' ? 'system-event' : ''}><div><strong>{item.tipo && item.tipo !== 'comentario' ? 'Evento do CRM' : item.autor_nome}</strong><small>{dateTime(item.created_at)}</small></div>{item.tipo && item.tipo !== 'comentario' && <em>{item.autor_nome}</em>}{item.comentario && <p>{item.comentario}</p>}{item.anexo_url && <a href={item.anexo_url} target="_blank" rel="noreferrer"><Image src={item.anexo_url} alt={item.anexo_nome || 'Print anexado'} width={220} height={150} unoptimized /></a>}</article>)}
             {!interactions.length && <span>Nenhuma interação registrada. Use a nota rápida acima para iniciar o histórico.</span>}
@@ -247,13 +339,13 @@ export default function CommercialLeadDetailsModal({
 
         <aside className="kh-lead-data-stack">
           <section className="kh-lead-qualification">
-            <div className="kh-section-title"><div><BadgeCheck size={16} /><h3>Qualificação</h3></div>{lead.lead_qualificado && <span className="mql">Dentro do MQL</span>}</div>
+            <div className="kh-section-title"><div><BadgeCheck size={16} /><h3>Qualificação</h3></div>{canViewFinancials && <span className={`kh-mql-level compact level-${mqlLevel.toLowerCase()}`}><b>{mqlCopy[mqlLevel].title}</b><small>{mqlCopy[mqlLevel].detail}</small></span>}</div>
             <dl>{qualificationRows.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl>
           </section>
           <details className="kh-lead-accordion" open><summary><span>Contato e empresa</span><ChevronDown size={16} /></summary><dl>{contactRows.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl></details>
           <details className="kh-lead-accordion"><summary><span>Origem e mídia <small>({sourceRows.length} campos)</small></span><ChevronDown size={16} /></summary><dl>{sourceRows.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl></details>
           <details className="kh-lead-accordion"><summary><span>Datas e controle</span><ChevronDown size={16} /></summary><dl>{controlRows.map(([label, content]) => <div key={label}><dt>{label}</dt><dd>{content}</dd></div>)}</dl></details>
-          {canViewFinancials && <details className="kh-lead-accordion"><summary><span>Valores comerciais</span><ChevronDown size={16} /></summary><dl><div><dt>Investimento</dt><dd>{displayValue(lead.investimento)}</dd></div><div><dt>Valor em negociação</dt><dd>R$ {Number(lead.valor_negociacao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</dd></div></dl></details>}
+          {canViewFinancials && <details className="kh-lead-accordion"><summary><span>Valores comerciais</span><ChevronDown size={16} /></summary><dl><div><dt>Investimento</dt><dd>{editing ? inlineInput('investimento', 'Investimento') : displayValue(lead.investimento)}</dd></div><div><dt>Valor em negociação</dt><dd>{editing ? inlineInput('valor_negociacao', 'Valor em negociação', 'number') : `R$ ${Number(lead.valor_negociacao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}</dd></div></dl></details>}
         </aside>
       </div>
     </section>
