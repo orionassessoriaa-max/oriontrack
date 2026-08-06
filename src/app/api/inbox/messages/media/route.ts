@@ -373,6 +373,37 @@ async function getMessageAndConversation(messageId: string) {
 async function canAccessConversation(profile: any, conversation: any) {
   if (!conversation) return false;
   if (profile.tipo_usuario === 'admin' || profile.tipo_usuario === 'account_manager') return true;
+
+  // No Inbox comercial, o papel definido em comercial_membros prevalece sobre
+  // o tipo operacional do profile. Closer e coordenador supervisionam todas as
+  // conversas comerciais; SDR acessa somente os leads atribuídos a ele.
+  const { data: commercialMember } = await supabaseAdmin
+    .from('comercial_membros')
+    .select('papel,ativo')
+    .eq('profile_id', profile.id)
+    .eq('ativo', true)
+    .maybeSingle();
+
+  if (commercialMember) {
+    const phoneDigits = String(conversation.telefone || '').replace(/\D/g, '');
+    const last8 = phoneDigits.slice(-8);
+    if (last8) {
+      let commercialQuery = supabaseAdmin
+        .from('comercial_leads')
+        .select('id,sdr_id,closer_id')
+        .or(`telefone.eq.${conversation.telefone},telefone.ilike.%${last8}`);
+
+      if (commercialMember.papel === 'sdr') {
+        commercialQuery = commercialQuery.eq('sdr_id', profile.id);
+      }
+
+      const { data: commercialLead } = await commercialQuery.limit(1).maybeSingle();
+      if (commercialLead) return true;
+    }
+
+    if (commercialMember.papel === 'sdr' && !conversation.corretor_id) return false;
+  }
+
   if (profile.tipo_usuario === 'corretor_membro') {
     if (!conversation.lead_id) return false;
     const { data: lead } = await supabaseAdmin
