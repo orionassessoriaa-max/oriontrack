@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
-import { configureUazapiWebhook, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { configureUazapiWebhook, ensureUazapiInstance, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { writeAuditLog } from '@/lib/api/security';
 
 function stateFromPayload(payload: any): 'open' | 'connecting' | 'close' {
@@ -25,7 +25,8 @@ async function statusForInstance(instance: string) {
   try {
     const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
     const list = Array.isArray(payload) ? payload : payload?.data || payload?.instances || [];
-    const found = list.find((item: any) => String(item?.name || item?.instanceName || item?.instance || item?.session || '').toLowerCase() === instance.toLowerCase());
+    const matches = list.filter((item: any) => String(item?.name || item?.instanceName || item?.instance || item?.session || '').toLowerCase() === instance.toLowerCase());
+    const found = matches.find((item: any) => stateFromPayload(item) === 'open') || matches[0];
     return found ? stateFromPayload(found) : 'close';
   } catch {
     return 'close';
@@ -66,12 +67,7 @@ export async function POST(request: Request) {
         commercial_role: guard.commercialRole,
       },
     });
-    try {
-      await uazapiFetch('/instance/init', { method: 'POST', body: JSON.stringify({ name: instance, instance, instanceName: instance }) }, { useAdminAuth: true });
-    } catch (error: any) {
-      const message = String(error?.message || '').toLowerCase();
-      if (!message.includes('already') && !message.includes('existe')) throw error;
-    }
+    await ensureUazapiInstance(instance);
     await configureUazapiWebhook(instance);
     const payload = await uazapiFetch('/instance/connect', { method: 'POST', body: JSON.stringify({}) }, { instanceName: instance });
     return NextResponse.json({

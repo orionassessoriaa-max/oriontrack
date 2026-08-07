@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { configureUazapiWebhook, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { configureUazapiWebhook, ensureUazapiInstance, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 
 const WHATSAPP_TARGET_ROLES = ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const CAN_VIEW_AS_ROLES = ['admin', 'gestor_trafego', 'account_manager'] as const;
@@ -136,7 +136,11 @@ function readInstanceName(instance: any) {
 
 async function fetchUazapiInstanceStateFromList(instance: string): Promise<UazapiConnectionSnapshot> {
   const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
-  const found = asArray(payload).find((item) => readInstanceName(item) === instance);
+  const matches = asArray(payload).filter((item) => readInstanceName(item) === instance);
+  const found = matches.find((item) => normalizeUazapiState(
+    item?.status || item?.state || item?.connectionStatus || item?.sessionStatus,
+    item?.connected === true || item?.isConnected === true || item?.loggedIn === true
+  ) === 'open') || matches[0];
   if (!found) return { state: 'close', qrcode: null, disconnectReason: '' };
   const qrcode = extractUazapiQrCode(found);
   const normalizedState = normalizeUazapiState(
@@ -160,33 +164,6 @@ function isNonReconnectableSession(value: unknown) {
   return normalized.includes('session is not reconnectable') || normalized.includes('not reconnectable');
 }
 
-async function createUazapiInstance(instance: string) {
-  const body = JSON.stringify({
-    name: instance,
-    instance,
-    instanceName: instance,
-  });
-
-  try {
-    return await uazapiFetch('/instance/create', {
-      method: 'POST',
-      body,
-    }, { useAdminAuth: true });
-  } catch (error) {
-    const message = String(error instanceof Error ? error.message : error).toLowerCase();
-    const legacyFallback =
-      message.includes('method not allowed') ||
-      message.includes('not found') ||
-      message.includes('404');
-    if (!legacyFallback) throw error;
-
-    return uazapiFetch('/instance/init', {
-      method: 'POST',
-      body,
-    }, { useAdminAuth: true });
-  }
-}
-
 async function connectUazapiInstance(instance: string) {
   return uazapiFetch('/instance/connect', {
     method: 'POST',
@@ -205,7 +182,7 @@ async function recoverNonReconnectableUazapiInstance(instance: string) {
   // Endpoint oficial da uazapiGO v2.1: remove somente a instancia autenticada
   // pelo token dela. Depois recriamos o mesmo nome para gerar um QR limpo.
   await uazapiFetch('/instance', { method: 'DELETE' }, { instanceName: instance });
-  await createUazapiInstance(instance);
+  await ensureUazapiInstance(instance);
   await configureUazapiWebhook(instance);
   return connectUazapiInstance(instance);
 }
@@ -335,20 +312,8 @@ export async function POST(request: Request) {
       },
     });
 
-    try {
-      await createUazapiInstance(instance);
-    } catch (error: any) {
-      const message = String(error.message || '').toLowerCase();
-      const isAlreadyExists = error.message === 'Instance already exists' || message.includes('already') || message.includes('existe');
-      if (isAlreadyExists) {
-        // Instancias existentes e saudaveis sao reutilizadas. A recuperacao
-        // destrutiva abaixo so roda quando o provedor declara explicitamente
-        // que a sessao nao pode mais ser reconectada.
-        console.log(`[POST /api/inbox/uazapi/connect] Reusing existing instance ${instance}.`);
-      } else {
-        throw error;
-      }
-    }
+    const ensuredInstance = await ensureUazapiInstance(instance);
+    console.log(`[POST /api/inbox/uazapi/connect] ${ensuredInstance.created ? 'Created' : 'Reusing'} instance ${instance}. Duplicates: ${ensuredInstance.duplicateCount}.`);
 
     await configureUazapiWebhook(instance);
 

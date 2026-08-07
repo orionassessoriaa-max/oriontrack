@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { configureUazapiWebhook, uazapiAiInstanceName, uazapiFetch } from '@/lib/uazapi';
+import { configureUazapiWebhook, ensureUazapiInstance, uazapiAiInstanceName, uazapiFetch } from '@/lib/uazapi';
 import { DEFAULT_LEAD_AI_PERSONA, DEFAULT_LEAD_AI_SYSTEM_PROMPT } from '@/lib/defaultLeadAiPrompt';
 
 const AI_TARGET_ROLES = ['corretor', 'corretor_admin', 'corretor_membro'] as const;
@@ -73,7 +73,8 @@ async function resolveAiContext(profile: any) {
 
 async function providerState(instance: string) {
   const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
-  const found = asArray(payload).find((row) => instanceName(row).toLowerCase() === instance.toLowerCase());
+  const matches = asArray(payload).filter((row) => instanceName(row).toLowerCase() === instance.toLowerCase());
+  const found = matches.find((row) => stateOf(row) === 'open') || matches[0];
   return found ? stateOf(found) : 'close';
 }
 
@@ -142,16 +143,7 @@ export async function POST(request: Request) {
       context.config = createdConfig;
     }
 
-    try {
-      await uazapiFetch('/instance/init', {
-        method: 'POST',
-        body: JSON.stringify({ name: context.instance, instance: context.instance, instanceName: context.instance }),
-      }, { useAdminAuth: true });
-    } catch (error: any) {
-      const message = String(error?.message || '').toLowerCase();
-      if (!message.includes('exist') && !message.includes('already')) throw error;
-      // Nunca exclui ou recria uma sessao existente, especialmente a do Danilo.
-    }
+    await ensureUazapiInstance(context.instance);
 
     await configureUazapiWebhook(context.instance);
     const payload = await uazapiFetch('/instance/connect', { method: 'POST', body: '{}' }, { instanceName: context.instance });

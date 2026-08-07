@@ -73,6 +73,16 @@ function isConnectedUazapiInstance(instance: any) {
     || ['open', 'connected', 'online', 'loggedin'].includes(state);
 }
 
+type EnsureUazapiInstanceResult = {
+  created: boolean;
+  instance: any;
+  duplicateCount: number;
+};
+
+// Evita duas criacoes simultaneas no mesmo processo quando o usuario clica
+// mais de uma vez ou duas telas solicitam o QR ao mesmo tempo.
+const ensureInstanceLocks = new Map<string, Promise<EnsureUazapiInstanceResult>>();
+
 export function uazapiInstanceName(profileId: string) {
   const prefix = process.env.UAZAPI_INSTANCE_PREFIX || 'orion';
   return `${prefix}_${profileId.replace(/-/g, '')}`;
@@ -194,6 +204,63 @@ export async function uazapiFetch(
   }
 
   return payload;
+}
+
+async function createUazapiInstance(instanceName: string) {
+  const body = JSON.stringify({
+    name: instanceName,
+    instance: instanceName,
+    instanceName,
+  });
+
+  try {
+    return await uazapiFetch('/instance/create', {
+      method: 'POST',
+      body,
+    }, { useAdminAuth: true });
+  } catch (error) {
+    const message = String(error instanceof Error ? error.message : error).toLowerCase();
+    const legacyFallback = message.includes('method not allowed') || message.includes('not found') || message.includes('404');
+    if (!legacyFallback) throw error;
+    return uazapiFetch('/instance/init', {
+      method: 'POST',
+      body,
+    }, { useAdminAuth: true });
+  }
+}
+
+export async function ensureUazapiInstance(instanceName: string): Promise<EnsureUazapiInstanceResult> {
+  const normalizedName = String(instanceName || '').trim().toLowerCase();
+  if (!normalizedName) throw new Error('Nome da instancia UAZAPI nao informado.');
+
+  const running = ensureInstanceLocks.get(normalizedName);
+  if (running) return running;
+
+  const operation = (async () => {
+    const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
+    const matches = asArray(payload).filter(
+      (item) => readInstanceName(item).trim().toLowerCase() === normalizedName
+    );
+
+    if (matches.length > 0) {
+      const selected = matches.find(isConnectedUazapiInstance) || matches[0];
+      return {
+        created: false,
+        instance: selected,
+        duplicateCount: Math.max(0, matches.length - 1),
+      };
+    }
+
+    const created = await createUazapiInstance(instanceName);
+    return { created: true, instance: created, duplicateCount: 0 };
+  })();
+
+  ensureInstanceLocks.set(normalizedName, operation);
+  try {
+    return await operation;
+  } finally {
+    ensureInstanceLocks.delete(normalizedName);
+  }
 }
 
 export async function configureUazapiWebhook(instanceName: string) {

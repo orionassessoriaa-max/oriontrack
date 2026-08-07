@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { configureUazapiWebhook, uazapiFetch } from '@/lib/uazapi';
+import { configureUazapiWebhook, ensureUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 
 const MASTER_INSTANCE = 'apolo_master_sender';
 
@@ -151,22 +151,7 @@ export async function POST(request: Request) {
       },
     });
 
-    let createPayload: any = null;
-    try {
-      createPayload = await uazapiFetch('/instance/init', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: MASTER_INSTANCE,
-          instance: MASTER_INSTANCE,
-          instanceName: MASTER_INSTANCE,
-        }),
-      }, { useAdminAuth: true });
-    } catch (error: any) {
-      const message = String(error.message || '').toLowerCase();
-      if (!message.includes('already') && !message.includes('existe') && !message.includes('exist')) {
-        throw error;
-      }
-    }
+    await ensureUazapiInstance(MASTER_INSTANCE);
 
     await configureUazapiWebhook(MASTER_INSTANCE);
 
