@@ -1189,13 +1189,13 @@
 /* Compact Kanban card aligned with the Danilo CRM reference. */
 .kh-danilo-card {
   box-sizing: border-box;
-  height: 154px;
-  min-height: 154px !important;
-  overflow: hidden;
+  height: auto;
+  min-height: 174px !important;
+  overflow: visible;
   border: 1px solid #23354a !important;
   border-radius: 6px !important;
   background: #07111b !important;
-  padding: 8px !important;
+  padding: 9px 10px 12px !important;
 }
 .kh-danilo-card .kh-card-top { min-height: 13px; gap: 5px; }
 .kh-danilo-card .kh-card-top small { color: #8aa0b7; font-size: 8px; letter-spacing: .05em; }
@@ -1224,7 +1224,7 @@
   line-height: 1;
 }
 .kh-danilo-card .kh-card-inbox:hover { border-color: #2ce6a3; background: #08714c; color: #fff; }
-.kh-danilo-card .kh-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 8px; min-height: 25px; }
+.kh-danilo-card .kh-card-actions { width: calc(100% - 4px); display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 2px 2px; min-height: 25px; }
 .kh-danilo-card .kh-card-actions .kh-card-inbox { margin-top: 0; }
 .kh-danilo-card .kh-card-start { min-height: 25px; border: 1px solid #2d8cff; border-radius: 4px; background: #0d5ec9; color: #fff; padding: 4px 9px; font: inherit; font-size: 9px; font-weight: 800; line-height: 1; cursor: pointer; }
 .kh-danilo-card .kh-card-start:hover:not(:disabled) { border-color: #69b0ff; background: #1678ed; }
