@@ -6,6 +6,8 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
+  FileText,
+  Image as ImageIcon,
   Loader2,
   MessageSquare,
   Mic,
@@ -16,6 +18,7 @@ import {
   Smartphone,
   Square,
   Trash2,
+  Video,
   Volume2,
   X,
 } from 'lucide-react';
@@ -52,13 +55,17 @@ type Conversation = {
   };
 };
 
+type MessageMetadata = Record<string, unknown> & {
+  message?: Record<string, unknown>;
+};
+
 type Message = {
   id: string;
   direction: 'inbound' | 'outbound';
   remetente?: string | null;
   mensagem: string;
   created_at: string;
-  metadata?: Record<string, unknown> | null;
+  metadata?: MessageMetadata | null;
 };
 
 type WhatsappState = {
@@ -68,7 +75,13 @@ type WhatsappState = {
   targetProfile?: { id?: string; nome?: string | null } | null;
 };
 
-type AudioMedia = { url: string; objectUrl: boolean };
+type MessageMediaKind = 'audio' | 'image' | 'video' | 'file' | null;
+type MessageMedia = {
+  url: string;
+  objectUrl: boolean;
+  mimeType: string;
+  fileName: string;
+};
 
 const time = (value?: string | null) => value
   ? new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -81,6 +94,45 @@ function isAudioMessage(message: Message) {
   const mime = String(metadata.media_mimetype || metadata.mediaMimeType || metadata.mimetype || '').toLowerCase();
   const mediaType = String(metadata.mediaType || metadata.mediatype || '').toLowerCase();
   return mime.startsWith('audio/') || mediaType === 'ptt' || mediaType === 'audio' || /mensagem de voz|\báudio\b|\baudio\b/i.test(message.mensagem || '');
+}
+
+function getMessageMimeType(message: Message) {
+  const metadata = message.metadata || {};
+  return String(
+    metadata.media_mimetype ||
+    metadata.mediaMimeType ||
+    metadata.mimetype ||
+    metadata.mimeType ||
+    metadata.message?.mimetype ||
+    metadata.message?.mimeType ||
+    ''
+  ).toLowerCase();
+}
+
+function getMessageMediaKind(message: Message): MessageMediaKind {
+  if (isAudioMessage(message)) return 'audio';
+  const metadata = message.metadata || {};
+  const mime = getMessageMimeType(message);
+  const type = String(metadata.mediaType || metadata.mediatype || metadata.messageType || metadata.message?.type || '').toLowerCase();
+  const text = String(message.mensagem || '').toLowerCase();
+  if (mime.startsWith('image/') || type.includes('image') || text.includes('imagem')) return 'image';
+  if (mime.startsWith('video/') || type.includes('video') || text.includes('video') || text.includes('vídeo')) return 'video';
+  if (mime || type.includes('document') || type.includes('file') || text.includes('arquivo') || text.includes('documento')) return 'file';
+  return null;
+}
+
+function getMessageFileName(message: Message) {
+  const metadata = message.metadata || {};
+  return String(
+    metadata.media_file_name ||
+    metadata.mediaFileName ||
+    metadata.fileName ||
+    metadata.filename ||
+    metadata.message?.fileName ||
+    metadata.message?.filename ||
+    message.mensagem ||
+    'Arquivo recebido'
+  ).replace(/[()]/g, '').trim();
 }
 
 function base64ToObjectUrl(base64: string, mimeType: string) {
@@ -110,15 +162,16 @@ export default function CommercialInboxPage() {
   const [notice, setNotice] = useState('');
   const [qr, setQr] = useState<string | null>(null);
   const [whatsapp, setWhatsapp] = useState<WhatsappState>({ configured: false, connected: false, state: 'close' });
-  const [audioMedia, setAudioMedia] = useState<Record<string, AudioMedia>>({});
-  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
+  const [messageMedia, setMessageMedia] = useState<Record<string, MessageMedia>>({});
+  const [loadingMediaId, setLoadingMediaId] = useState<string | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<MessageMedia | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
-  const audioMediaRef = useRef<Record<string, AudioMedia>>({});
+  const messageMediaRef = useRef<Record<string, MessageMedia>>({});
 
   const loadWhatsapp = useCallback(async () => {
     try {
@@ -178,17 +231,26 @@ export default function CommercialInboxPage() {
   }, [loadMessages, selected]);
 
   useEffect(() => {
-    audioMediaRef.current = audioMedia;
-  }, [audioMedia]);
+    messageMediaRef.current = messageMedia;
+  }, [messageMedia]);
 
   useEffect(() => () => {
     if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
     if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current?.stop();
     audioStreamRef.current?.getTracks().forEach((track) => track.stop());
-    Object.values(audioMediaRef.current).forEach((media) => {
+    Object.values(messageMediaRef.current).forEach((media) => {
       if (media.objectUrl) URL.revokeObjectURL(media.url);
     });
   }, []);
+
+  useEffect(() => {
+    if (!mediaPreview) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMediaPreview(null);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [mediaPreview]);
 
   const memberMap = useMemo(() => new Map(members.map((member) => [member.profile_id, member])), [members]);
   const funnelStages = useMemo(() => stages.length
@@ -289,23 +351,31 @@ export default function CommercialInboxPage() {
     }
   }
 
-  async function loadAudio(message: Message) {
-    if (audioMedia[message.id]) return;
-    setLoadingAudioId(message.id);
+  async function loadMessageMedia(message: Message, openPreview = false) {
+    const cached = messageMedia[message.id];
+    if (cached) {
+      if (openPreview) setMediaPreview(cached);
+      return cached;
+    }
+    setLoadingMediaId(message.id);
     try {
       const payload = await api(`/api/inbox/messages/media?message_id=${encodeURIComponent(message.id)}`);
-      const mimeType = String(payload.mimeType || payload.mimetype || 'audio/ogg');
+      const kind = getMessageMediaKind(message);
+      const mimeType = String(payload.mimeType || payload.mimetype || getMessageMimeType(message) || (kind === 'audio' ? 'audio/ogg' : 'application/octet-stream'));
       const media = payload.base64
-        ? { url: base64ToObjectUrl(payload.base64, mimeType), objectUrl: true }
+        ? { url: base64ToObjectUrl(payload.base64, mimeType), objectUrl: true, mimeType, fileName: String(payload.fileName || payload.filename || getMessageFileName(message)) }
         : payload.url
-          ? { url: String(payload.url), objectUrl: false }
+          ? { url: String(payload.url), objectUrl: false, mimeType, fileName: String(payload.fileName || payload.filename || getMessageFileName(message)) }
           : null;
-      if (!media) throw new Error('O arquivo deste áudio não está disponível.');
-      setAudioMedia((current) => ({ ...current, [message.id]: media }));
+      if (!media) throw new Error('O arquivo desta mensagem não está disponível.');
+      setMessageMedia((current) => ({ ...current, [message.id]: media }));
+      if (openPreview) setMediaPreview(media);
+      return media;
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Não foi possível carregar o áudio.');
+      setNotice(error instanceof Error ? error.message : 'Não foi possível carregar a mídia.');
+      return null;
     } finally {
-      setLoadingAudioId(null);
+      setLoadingMediaId(null);
     }
   }
 
@@ -488,8 +558,9 @@ export default function CommercialInboxPage() {
           </div>
           <div className="kh-chat-messages">
             {messages.map((message) => {
-              const audio = isAudioMessage(message);
-              const media = audioMedia[message.id];
+              const mediaKind = getMessageMediaKind(message);
+              const media = messageMedia[message.id];
+              const isMediaLoading = loadingMediaId === message.id;
               const isAiSender = message.metadata?.ai_agent === 'commercial_sdr';
               const senderName = message.remetente?.trim()
                 || (message.direction === 'inbound'
@@ -497,12 +568,31 @@ export default function CommercialInboxPage() {
                   : 'Equipe comercial');
               const senderLabel = isAiSender ? `${senderName} · IA` : senderName;
               return (
-                <div key={message.id} className={`kh-chat-bubble ${message.direction === 'outbound' ? 'outbound' : 'inbound'} ${audio ? 'audio' : ''}`}>
-                  {audio ? media ? (
+                <div key={message.id} className={`kh-chat-bubble ${message.direction === 'outbound' ? 'outbound' : 'inbound'} ${mediaKind === 'audio' ? 'audio' : ''}`}>
+                  {mediaKind === 'audio' ? media ? (
                     <div className="kh-audio-message"><Volume2 size={17} aria-hidden="true" /><audio controls preload="metadata" src={media.url}>Seu navegador não suporta áudio.</audio></div>
                   ) : (
-                    <button className="kh-audio-load" type="button" onClick={() => void loadAudio(message)} disabled={loadingAudioId === message.id}>
-                      {loadingAudioId === message.id ? <Loader2 size={16} className="kh-spin" /> : <Volume2 size={16} />} {loadingAudioId === message.id ? 'Carregando áudio...' : 'Ouvir mensagem de voz'}
+                    <button className="kh-audio-load" type="button" onClick={() => void loadMessageMedia(message)} disabled={isMediaLoading}>
+                      {isMediaLoading ? <Loader2 size={16} className="kh-spin" /> : <Volume2 size={16} />} {isMediaLoading ? 'Carregando áudio...' : 'Ouvir mensagem de voz'}
+                    </button>
+                  ) : mediaKind === 'image' ? media ? (
+                    <button type="button" className="kh-inline-image" onClick={() => setMediaPreview(media)} aria-label={`Visualizar ${media.fileName}`}>
+                      <img src={media.url} alt={media.fileName} />
+                      <span>Ampliar imagem</span>
+                    </button>
+                  ) : (
+                    <button className="kh-media-load" type="button" onClick={() => void loadMessageMedia(message, true)} disabled={isMediaLoading}>
+                      {isMediaLoading ? <Loader2 size={16} className="kh-spin" /> : <ImageIcon size={16} />} {isMediaLoading ? 'Carregando imagem...' : 'Visualizar imagem'}
+                    </button>
+                  ) : mediaKind === 'video' ? media ? (
+                    <video controls preload="metadata" src={media.url} className="kh-inline-video" />
+                  ) : (
+                    <button className="kh-media-load" type="button" onClick={() => void loadMessageMedia(message, true)} disabled={isMediaLoading}>
+                      {isMediaLoading ? <Loader2 size={16} className="kh-spin" /> : <Video size={16} />} {isMediaLoading ? 'Carregando vídeo...' : 'Visualizar vídeo'}
+                    </button>
+                  ) : mediaKind === 'file' ? (
+                    <button className="kh-media-load" type="button" onClick={() => void loadMessageMedia(message, true)} disabled={isMediaLoading}>
+                      {isMediaLoading ? <Loader2 size={16} className="kh-spin" /> : <FileText size={16} />} {isMediaLoading ? 'Carregando arquivo...' : getMessageFileName(message)}
                     </button>
                   ) : <p>{message.mensagem}</p>}
                   <div className="kh-chat-message-meta">
@@ -571,6 +661,28 @@ export default function CommercialInboxPage() {
         </aside>
       </section>
       <small className="kh-inbox-role">Acesso atual: {role === 'coordenador' ? 'administrador comercial' : role === 'sdr' ? 'SDR' : 'Closer'}</small>
+      {mediaPreview && (
+        <div className="kh-media-viewer" role="dialog" aria-modal="true" aria-label={`Visualizar ${mediaPreview.fileName}`}>
+          <button type="button" className="kh-media-viewer-scrim" onClick={() => setMediaPreview(null)} aria-label="Fechar visualização" />
+          <section className="kh-media-viewer-panel">
+            <header>
+              <div><strong>{mediaPreview.fileName}</strong><span>Visualização dentro do Inbox</span></div>
+              <button type="button" onClick={() => setMediaPreview(null)} aria-label="Fechar visualização"><X size={18} /></button>
+            </header>
+            <div className="kh-media-viewer-content">
+              {mediaPreview.mimeType.startsWith('image/') ? (
+                <img src={mediaPreview.url} alt={mediaPreview.fileName} />
+              ) : mediaPreview.mimeType.startsWith('video/') ? (
+                <video controls autoPlay src={mediaPreview.url} />
+              ) : mediaPreview.mimeType.startsWith('audio/') ? (
+                <audio controls autoPlay src={mediaPreview.url}>Seu navegador não suporta áudio.</audio>
+              ) : (
+                <iframe src={mediaPreview.url} title={mediaPreview.fileName} />
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

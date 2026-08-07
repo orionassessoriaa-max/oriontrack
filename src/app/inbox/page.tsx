@@ -94,6 +94,11 @@ type InboxMessage = {
 };
 
 type MessageMediaKind = 'audio' | 'image' | 'video' | 'file' | 'call' | null;
+type InlineMediaPreview = {
+  url: string;
+  mimeType: string;
+  fileName: string;
+};
 type SelectedAttachment = {
   id: string;
   file: File;
@@ -170,6 +175,8 @@ function getMessageMimeType(message: InboxMessage) {
   return String(
     media?.mimetype ||
     media?.mimeType ||
+    metadata.media_mimetype ||
+    metadata.mediaMimeType ||
     metadata.message?.mimetype ||
     metadata.message?.mimeType ||
     metadata.mimetype ||
@@ -186,6 +193,8 @@ function getMessageFileName(message: InboxMessage) {
   return String(
     media?.fileName ||
     media?.filename ||
+    metadata.media_file_name ||
+    metadata.mediaFileName ||
     metadata.message?.fileName ||
     metadata.message?.filename ||
     metadata.fileName ||
@@ -313,7 +322,7 @@ export default function BrokerInboxPage() {
   const [mediaUrls, setMediaUrls] = useState<Record<string, { url: string; mimeType: string; fileName?: string }>>({});
   const [loadingMediaId, setLoadingMediaId] = useState<string | null>(null);
   const [mediaLoadErrors, setMediaLoadErrors] = useState<Record<string, boolean>>({});
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<InlineMediaPreview | null>(null);
 
   // Template Modal
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -702,6 +711,15 @@ export default function BrokerInboxPage() {
     }
   }, [showForwardModal]);
 
+  useEffect(() => {
+    if (!mediaPreview) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMediaPreview(null);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [mediaPreview]);
+
   // Maintain selectedConversationRef pointing to current selected conversation
   useEffect(() => {
     selectedConversationRef.current = selectedConversation;
@@ -727,6 +745,7 @@ export default function BrokerInboxPage() {
               newMsg.mensagem?.includes('[Áudio Gravado]') || 
               newMsg.mensagem?.includes('🎤 Mensagem de voz') || 
               newMsg.mensagem?.includes('🎵 Áudio') || 
+              String(newMsg.metadata?.media_mimetype || '').toLowerCase().startsWith('audio/') ||
               Boolean(newMsg.metadata?.message?.audioMessage || newMsg.metadata?.audioMessage || newMsg.metadata?.data?.message?.audioMessage);
             const mappedMsg = {
               ...newMsg,
@@ -819,6 +838,7 @@ export default function BrokerInboxPage() {
           m.mensagem?.includes('[Áudio Gravado]') || 
           m.mensagem?.includes('🎤 Mensagem de voz') || 
           m.mensagem?.includes('🎵 Áudio') || 
+          String(m.metadata?.media_mimetype || '').toLowerCase().startsWith('audio/') ||
           Boolean(m.metadata?.message?.audioMessage || m.metadata?.audioMessage || m.metadata?.data?.message?.audioMessage);
         return {
           ...m,
@@ -1417,23 +1437,6 @@ export default function BrokerInboxPage() {
     }
   };
 
-  const playUrl = (url: string, messageId: string) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-    }
-    const audio = new Audio();
-    audio.preload = 'auto';
-    audio.src = url;
-    audio.currentTime = 0;
-    audioRef.current = audio;
-    audio.play().catch(e => console.error('Erro ao tocar áudio:', e));
-    setPlayingAudioId(messageId);
-    audio.onended = () => {
-      setPlayingAudioId(null);
-    };
-  };
-
   const fetchMessageMedia = useCallback(async (message: InboxMessage) => {
     const cached = mediaUrls[message.id];
     if (cached) return cached;
@@ -1477,7 +1480,11 @@ export default function BrokerInboxPage() {
   const openMessageMedia = async (message: InboxMessage) => {
     try {
       const media = await fetchMessageMedia(message);
-      window.open(media.url, '_blank', 'noopener,noreferrer');
+      setMediaPreview({
+        url: media.url,
+        mimeType: media.mimeType,
+        fileName: media.fileName || getMessageFileName(message) || 'Arquivo recebido',
+      });
     } catch (err: any) {
       console.error('Erro ao abrir arquivo:', err);
       alert(err.message || 'Nao foi possivel abrir o arquivo.');
@@ -1485,35 +1492,26 @@ export default function BrokerInboxPage() {
   };
 
   const handlePlayAudio = async (messageId: string) => {
-    if (playingAudioId === messageId) {
-      audioRef.current?.pause();
-      setPlayingAudioId(null);
-      return;
-    }
-
-    if (audioUrls[messageId]) {
-      playUrl(audioUrls[messageId], messageId);
-      return;
-    }
+    if (audioUrls[messageId]) return;
 
     setLoadingAudioId(messageId);
     try {
       const token = await getToken();
-      const response = await fetch(`/api/inbox/messages/media?message_id=${messageId}&refresh=1`, {
+      const response = await fetch(`/api/inbox/messages/media?message_id=${messageId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
         }
       });
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Nao foi possivel carregar este audio.');
+      }
       if (data.base64) {
         const url = base64ToObjectUrl(data.base64, data.mimeType || 'audio/ogg');
-        
         setAudioUrls(prev => ({ ...prev, [messageId]: url }));
-        playUrl(url, messageId);
       } else if (data.url) {
         setAudioUrls(prev => ({ ...prev, [messageId]: data.url }));
-        playUrl(data.url, messageId);
       } else {
         alert('Não foi possível obter o arquivo de áudio no momento.');
       }
@@ -2579,7 +2577,23 @@ export default function BrokerInboxPage() {
                           }`}>
                             {/* Se for áudio */}
                             {mediaKind === 'audio' ? (
-                              <div className="flex items-center gap-3">
+                              audioUrls[message.id] ? (
+                                <div className="min-w-[260px] max-w-full space-y-1.5">
+                                  <span className="block text-[10px] font-black uppercase tracking-wider">Mensagem de voz</span>
+                                  <audio
+                                    controls
+                                    autoPlay
+                                    preload="metadata"
+                                    src={audioUrls[message.id]}
+                                    className="h-10 w-full max-w-[340px] [color-scheme:dark]"
+                                    onPlay={() => setPlayingAudioId(message.id)}
+                                    onPause={() => setPlayingAudioId((current) => current === message.id ? null : current)}
+                                    onEnded={() => setPlayingAudioId((current) => current === message.id ? null : current)}
+                                  >
+                                    Seu navegador nao suporta audio.
+                                  </audio>
+                                </div>
+                              ) : <div className="flex items-center gap-3">
                                 <button
                                   onClick={() => handlePlayAudio(message.id)}
                                   className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 transition-all border cursor-pointer ${
@@ -4005,6 +4019,39 @@ export default function BrokerInboxPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {mediaPreview && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={`Visualizar ${mediaPreview.fileName}`}>
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm"
+            onClick={() => setMediaPreview(null)}
+            aria-label="Fechar visualizacao"
+          />
+          <div className="relative flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-cyan-400/25 bg-[#07111f] shadow-2xl">
+            <header className="flex min-h-14 items-center justify-between gap-4 border-b border-white/10 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-white">{mediaPreview.fileName}</p>
+                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Visualizacao dentro do Inbox</p>
+              </div>
+              <button type="button" onClick={() => setMediaPreview(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white" aria-label="Fechar visualizacao">
+                <X size={17} />
+              </button>
+            </header>
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-black/30 p-3 sm:p-5">
+              {mediaPreview.mimeType.startsWith('image/') ? (
+                <img src={mediaPreview.url} alt={mediaPreview.fileName} className="max-h-[calc(94dvh-6rem)] max-w-full object-contain" />
+              ) : mediaPreview.mimeType.startsWith('video/') ? (
+                <video controls autoPlay src={mediaPreview.url} className="max-h-[calc(94dvh-6rem)] max-w-full" />
+              ) : mediaPreview.mimeType.startsWith('audio/') ? (
+                <audio controls autoPlay src={mediaPreview.url} className="w-full max-w-xl [color-scheme:dark]">Seu navegador nao suporta audio.</audio>
+              ) : (
+                <iframe src={mediaPreview.url} title={mediaPreview.fileName} className="h-[calc(94dvh-6rem)] w-full rounded-xl bg-white" />
+              )}
+            </div>
+          </div>
         </div>
       )}
 
