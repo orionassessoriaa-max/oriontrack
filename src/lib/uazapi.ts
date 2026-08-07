@@ -73,6 +73,38 @@ function isConnectedUazapiInstance(instance: any) {
     || ['open', 'connected', 'online', 'loggedin'].includes(state);
 }
 
+export type UazapiInstanceConnection = {
+  found: boolean;
+  connected: boolean;
+  state: string;
+};
+
+export async function getUazapiInstanceConnection(instanceName: string): Promise<UazapiInstanceConnection> {
+  const normalizedName = String(instanceName || '').trim().toLowerCase();
+  if (!normalizedName) return { found: false, connected: false, state: 'missing' };
+
+  const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
+  const matches = asArray(payload).filter(
+    (item) => readInstanceName(item).trim().toLowerCase() === normalizedName
+  );
+  const selected = matches.find(isConnectedUazapiInstance) || matches[0];
+  if (!selected) return { found: false, connected: false, state: 'missing' };
+
+  const state = String(
+    selected?.status ||
+    selected?.state ||
+    selected?.connectionStatus ||
+    selected?.instance?.status ||
+    'unknown'
+  ).trim().toLowerCase();
+
+  return {
+    found: true,
+    connected: isConnectedUazapiInstance(selected),
+    state,
+  };
+}
+
 type EnsureUazapiInstanceResult = {
   created: boolean;
   instance: any;
@@ -264,36 +296,44 @@ export async function ensureUazapiInstance(instanceName: string): Promise<Ensure
 }
 
 export async function configureUazapiWebhook(instanceName: string) {
-  try {
-    let webhookUrl = process.env.UAZAPI_WEBHOOK_URL;
-    if (!webhookUrl) {
-      const isInternalDocker = String(process.env.UAZAPI_URL).includes('uazapi_uazapi');
-      if (isInternalDocker) {
-        webhookUrl = 'http://oriontrack_oriontrack:3000/api/inbox/uazapi/webhook';
-      } else {
-        webhookUrl = `${PUBLIC_APP_URL}/api/inbox/uazapi/webhook`;
-      }
+  let webhookUrl = process.env.UAZAPI_WEBHOOK_URL;
+  if (!webhookUrl) {
+    const isInternalDocker = String(process.env.UAZAPI_URL).includes('uazapi_uazapi');
+    if (isInternalDocker) {
+      webhookUrl = 'http://oriontrack_oriontrack:3000/api/inbox/uazapi/webhook';
+    } else {
+      webhookUrl = `${PUBLIC_APP_URL}/api/inbox/uazapi/webhook`;
     }
+  }
 
-    console.log(`[configureUazapiWebhook] Setting webhook for instance ${instanceName} to URL: ${webhookUrl}`);
+  console.log(`[configureUazapiWebhook] Setting webhook for instance ${instanceName} to URL: ${webhookUrl}`);
 
-    await uazapiFetch('/webhook', {
-      method: 'POST',
-      body: JSON.stringify({
-        webhook: {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await uazapiFetch('/webhook', {
+        method: 'POST',
+        body: JSON.stringify({
+          webhook: {
+            url: webhookUrl,
+            enabled: true,
+            events: ['messages', 'connection', 'status', 'qrcode']
+          },
           url: webhookUrl,
           enabled: true,
           events: ['messages', 'connection', 'status', 'qrcode']
-        },
-        url: webhookUrl,
-        enabled: true,
-        events: ['messages', 'connection', 'status', 'qrcode']
-      })
-    }, { instanceName });
-
-  } catch (err: any) {
-    console.error(`[configureUazapiWebhook ERROR] Failed to set webhook for ${instanceName}:`, err.message);
+        })
+      }, { instanceName });
+      return;
+    } catch (error) {
+      lastError = error;
+      console.error(`[configureUazapiWebhook] Attempt ${attempt}/3 failed for ${instanceName}:`, error);
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+    }
   }
+
+  const message = lastError instanceof Error ? lastError.message : String(lastError || 'erro desconhecido');
+  throw new Error(`Nao foi possivel configurar o recebimento de mensagens da instancia ${instanceName}: ${message}`);
 }
 
 export function normalizePhone(value?: string | null) {

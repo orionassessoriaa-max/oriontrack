@@ -1063,6 +1063,96 @@ async function hasRecentDuplicateMessage(conversationId: string, direction: 'inb
   return Boolean(data?.id);
 }
 
+function readConnectionState(body: any) {
+  const connected = [
+    body?.connected,
+    body?.loggedIn,
+    body?.instance?.connected,
+    body?.instance?.loggedIn,
+    body?.data?.connected,
+    body?.data?.loggedIn,
+    body?.data?.instance?.connected,
+    body?.data?.instance?.loggedIn,
+  ].find((value) => typeof value === 'boolean');
+
+  if (connected === true) return 'connected';
+
+  const raw = pickString(
+    typeof body?.status === 'string' ? body.status : '',
+    typeof body?.state === 'string' ? body.state : '',
+    typeof body?.connectionStatus === 'string' ? body.connectionStatus : '',
+    typeof body?.instance?.status === 'string' ? body.instance.status : '',
+    typeof body?.instance?.state === 'string' ? body.instance.state : '',
+    typeof body?.data?.status === 'string' ? body.data.status : '',
+    typeof body?.data?.state === 'string' ? body.data.state : '',
+    typeof body?.data?.connectionStatus === 'string' ? body.data.connectionStatus : '',
+    typeof body?.data?.instance?.status === 'string' ? body.data.instance.status : '',
+  ).toLowerCase();
+
+  if (raw.includes('connected') && !raw.includes('disconnect')) return 'connected';
+  if (raw.includes('connecting') || raw.includes('qrcode') || raw.includes('pair')) return 'connecting';
+  if (
+    connected === false ||
+    raw.includes('disconnect') ||
+    raw.includes('close') ||
+    raw.includes('offline') ||
+    raw.includes('logout') ||
+    raw.includes('hibernate')
+  ) return 'disconnected';
+  return 'unknown';
+}
+
+async function handleDedicatedAiConnectionEvent(instance: string, state: string) {
+  if (!instance.includes('_ai_') || state === 'unknown') return false;
+
+  const { data: config } = await supabaseAdmin
+    .from('corretora_ai_configs')
+    .select('id, corretora_id, status')
+    .eq('dedicated_instance_name', instance)
+    .eq('sender_mode', 'dedicated')
+    .maybeSingle();
+
+  if (!config) return false;
+
+  const nextStatus = state === 'connected' ? 'ativo' : 'aguardando_conexao';
+  if (config.status !== nextStatus) {
+    await supabaseAdmin
+      .from('corretora_ai_configs')
+      .update({ status: nextStatus, updated_at: new Date().toISOString() })
+      .eq('id', config.id);
+  }
+
+  if (state !== 'disconnected') return true;
+
+  const { data: company } = await supabaseAdmin
+    .from('corretoras')
+    .select('nome')
+    .eq('id', config.corretora_id)
+    .maybeSingle();
+  if (!company?.nome) return true;
+
+  const { data: brokers } = await supabaseAdmin
+    .from('corretores')
+    .select('id')
+    .eq('nome_empresa', company.nome);
+  const brokerIds = (brokers || []).map((broker) => broker.id);
+  if (!brokerIds.length) return true;
+
+  const { data: sessions } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .select('lead_id')
+    .in('corretor_id', brokerIds)
+    .eq('status', 'active');
+
+  await Promise.allSettled((sessions || []).map((session) =>
+    handoffLeadAiToResponsible(
+      session.lead_id,
+      'WhatsApp exclusivo da IA desconectou. O atendimento foi encaminhado para uma pessoa para o lead nao ficar sem resposta.'
+    )
+  ));
+  return true;
+}
+
 export async function POST(request: Request) {
   try {
     ensureLeadAiTimeoutScheduler();
@@ -1083,6 +1173,13 @@ export async function POST(request: Request) {
     ).toUpperCase();
 
     const callEvent = isCallEvent(body, event);
+    const instance = readWebhookInstanceName(body);
+    const connectionEvent = event.includes('CONNECTION') || event.includes('QRCODE') || event === 'CONNECTED' || event === 'DISCONNECTED';
+    if (connectionEvent) {
+      const connectionState = event.includes('QRCODE') ? 'connecting' : readConnectionState(body);
+      const handled = await handleDedicatedAiConnectionEvent(instance, connectionState);
+      return NextResponse.json({ ok: true, connection: connectionState, handled });
+    }
 
     // No UAZAPI, a mensagem recebida tem wook "RECEIVE_MESSAGE" ou tipo similar.
     // Aceitamos qualquer evento que contenha MESSAGE, SEND, ou seja um Call.
@@ -1090,7 +1187,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true });
     }
 
-    const instance = readWebhookInstanceName(body);
     const providerId = readProviderId(body);
     let remoteJid = readRemoteJid(body);
     const providerPhone = providerId.includes(':') ? providerId.split(':')[0] : '';

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { configureUazapiWebhook, uazapiFetch, uazapiAiInstanceName, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
+import { configureUazapiWebhook, getUazapiInstanceConnection, uazapiFetch, uazapiAiInstanceName, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
@@ -1369,6 +1369,27 @@ export async function startLeadAiIfEligible(leadId: string) {
     adminProfile.ai_instance_name = aiConfig.dedicated_instance_name || uazapiAiInstanceName(corretora.id);
   }
 
+  const senderInstance = aiInstanceName(adminProfile);
+  const connection = await getUazapiInstanceConnection(senderInstance).catch((error) => {
+    console.error(`[lead_ai_agent] Failed checking instance ${senderInstance}:`, error);
+    return { found: false, connected: false, state: 'check_failed' };
+  });
+  if (!connection.connected) {
+    if (aiConfig.sender_mode === 'dedicated' && aiConfig.status !== 'aguardando_conexao') {
+      await supabaseAdmin
+        .from('corretora_ai_configs')
+        .update({ status: 'aguardando_conexao', updated_at: new Date().toISOString() })
+        .eq('id', aiConfig.id);
+    }
+    return {
+      started: false,
+      eligible: true,
+      reason: connection.found
+        ? `WhatsApp da IA desconectado (${connection.state}). Conecte novamente antes de iniciar o atendimento.`
+        : 'WhatsApp da IA ainda nao foi conectado ao Inbox.',
+    };
+  }
+
   const phone = normalizePhone(lead.telefone);
   if (!phone) return { started: false, eligible: true, reason: 'Lead sem telefone.' };
 
@@ -1412,12 +1433,12 @@ export async function startLeadAiIfEligible(leadId: string) {
     }], { onConflict: 'lead_id' });
 
   try {
-    await configureUazapiWebhook(aiInstanceName(adminProfile));
+    await configureUazapiWebhook(senderInstance);
     registerAiOutbound(phone, intro);
     const payload = await sendAiAdminText(adminProfile, phone, intro);
     await insertMessage(conversation.id, 'outbound', aiConfig.persona, intro, {
       ...(payload || {}),
-      instance: aiInstanceName(adminProfile),
+      instance: senderInstance,
       ai_agent: aiConfig.persona,
     });
   } catch (error: any) {
