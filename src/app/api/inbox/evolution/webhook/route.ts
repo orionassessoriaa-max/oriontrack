@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone, profileIdFromEvolutionInstance } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound } from '@/lib/leadAiAgent';
+import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 
 function readText(data: any) {
@@ -368,6 +368,10 @@ export async function POST(request: Request) {
     if (fromMe && isAiOutbound(phone, message)) {
       console.log(`[evolution_webhook] Ignorando retorno de mensagem enviada pela propria IA: ${phone}`);
       return NextResponse.json({ ok: true, ignored: true, ai_outbound: true });
+    }
+
+    if (fromMe && lead?.id) {
+      await stopLeadAiForHumanTakeover(lead.id, profile.nome);
     }
 
     const { error: insertError } = await supabaseAdmin.from('whatsapp_mensagens').insert([{

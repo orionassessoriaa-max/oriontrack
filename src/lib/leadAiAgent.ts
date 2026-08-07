@@ -749,6 +749,18 @@ async function handoffAiFailure(params: {
   return { handled: true, handoff: true, reason };
 }
 
+async function isLeadAiSessionActive(sessionId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .select('id')
+    .eq('id', sessionId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
+}
+
 function providerMessageId(payload: any) {
   return String(
     payload?.key?.id ||
@@ -1610,6 +1622,10 @@ export async function continueLeadAiFromIncoming(options: {
     isAffirmativeAnswer(options.customerMessage) &&
     !isCnpjConfirmationQuestion(previousOutboundText)
   ) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
     const reply = customerReplyForFollowUp(cnpjConfirmationReply(lead), lead, Boolean(previousOutboundText));
     registerAiOutbound(lead.telefone || '', reply);
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
@@ -1636,6 +1652,10 @@ export async function continueLeadAiFromIncoming(options: {
     (isInitialConfirmationQuestion(previousOutboundText) || (recentInitialConfirmation && !recentCnpjConfirmation)) &&
     isGreetingOnly(options.customerMessage)
   ) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
     const greeting = normalizeAiText(options.customerMessage).includes('boa tarde')
       ? 'Boa tarde!'
       : normalizeAiText(options.customerMessage).includes('boa noite')
@@ -1668,6 +1688,10 @@ export async function continueLeadAiFromIncoming(options: {
     (isCnpjConfirmationQuestion(previousOutboundText) || recentCnpjConfirmation) &&
     (isAffirmativeAnswer(options.customerMessage) || isDocumentTypeAnswer(options.customerMessage))
   ) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
     const reply = customerReplyForFollowUp(nextQuestionAfterCnpjConfirmation(lead), lead, Boolean(previousOutboundText));
     if (options.incomingWasAudio) {
       try {
@@ -1719,6 +1743,10 @@ export async function continueLeadAiFromIncoming(options: {
   }
 
   if (scheduleConfirmed) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
     return await finalizeScheduledHandoff({
       session,
       lead,
@@ -1780,7 +1808,18 @@ export async function continueLeadAiFromIncoming(options: {
     reply = '';
   }
 
+  // O modelo pode levar alguns segundos para responder. Confere novamente o
+  // estado persistido antes de enviar qualquer coisa para que uma mensagem
+  // humana recebida nesse intervalo encerre a automacao de verdade.
+  if (!(await isLeadAiSessionActive(session.id))) {
+    return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+  }
+
   for (const part of reply ? splitReply(reply) : []) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
     if (options.incomingWasAudio) {
       try {
         registerAiOutbound(lead.telefone || '', '🎤 Mensagem de voz');
@@ -1831,7 +1870,8 @@ export async function continueLeadAiFromIncoming(options: {
       last_ai_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq('id', session.id);
+    .eq('id', session.id)
+    .eq('status', 'active');
 
   if (currentSummary) {
     await updateLeadFromSummary(lead.id, currentSummary);
@@ -1888,6 +1928,49 @@ export async function handoffLeadAiToResponsible(leadId: string, reason: string)
   return { handled: true, handoff: true };
 }
 
+export async function stopLeadAiForHumanTakeover(leadId: string, brokerName?: string | null) {
+  const { data: session, error: sessionError } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .select('id, summary')
+    .eq('lead_id', leadId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (sessionError) throw sessionError;
+  if (!session) return { handled: false, reason: 'Sem sessao ativa.' };
+
+  const responsible = String(brokerName || '').trim() || 'corretor';
+  const summary = appendSummaryLine(
+    session.summary || '',
+    `IA encerrada: atendimento assumido por ${responsible}.`
+  );
+
+  const { data: updatedSession, error: updateError } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .update({
+      status: 'handoff',
+      summary,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', session.id)
+    .eq('status', 'active')
+    .select('id')
+    .maybeSingle();
+
+  if (updateError) throw updateError;
+
+  if (updatedSession) {
+    processingLeadLocks.delete(leadId);
+    console.log(`[lead_ai_agent] IA bloqueada: atendimento do lead ${leadId} assumido por ${responsible}.`);
+  }
+
+  return {
+    handled: Boolean(updatedSession),
+    handoff: true,
+    reason: updatedSession ? 'Atendimento humano assumido.' : 'Sessao ja encerrada.',
+  };
+}
+
 export async function checkLeadAiTimeouts() {
   await recoverStalledLeadAiSessions();
 
@@ -1932,7 +2015,8 @@ export async function checkLeadAiTimeouts() {
       .maybeSingle();
 
     // Somente uma mensagem realmente enviada pela IA pode iniciar o timeout.
-    // Mensagens humanas do corretor nunca devem encerrar a sessão da IA.
+    // Mensagens humanas encerram a sessao imediatamente no webhook e nao
+    // devem ser confundidas com o silencio do cliente neste cron.
     if (!lastMsg || lastMsg.direction !== 'outbound' || !lastMsg.metadata?.ai_agent) continue;
     if (new Date(lastMsg.created_at).getTime() > lastAiMessageAt + 5_000) continue;
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { normalizePhone, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound } from '@/lib/leadAiAgent';
+import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { continueCommercialSdrFromIncoming } from '@/lib/commercialSdrAgent';
 import { ensureCommercialConversation, findCommercialConversation } from '@/lib/commercialInbox';
@@ -1420,6 +1420,10 @@ export async function POST(request: Request) {
     if (fromMe && isAiOutbound(phone, message)) {
       console.log(`[uazapi_webhook] Ignorando retorno de mensagem enviada pela propria IA: ${phone}`);
       return NextResponse.json({ ok: true, ignored: true, ai_outbound: true });
+    }
+
+    if (fromMe && lead?.id && !commercialMode) {
+      await stopLeadAiForHumanTakeover(lead.id, profile?.nome);
     }
 
     const direction = fromMe ? 'outbound' : 'inbound';
