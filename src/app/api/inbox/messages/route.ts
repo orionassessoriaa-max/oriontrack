@@ -286,13 +286,19 @@ async function findAccessibleConversationIdsByPhone(profile: any, conversation: 
 
   if (!last8) return [conversation.id];
 
-  const { data, error } = await supabaseAdmin
-    .from('whatsapp_conversas')
-    .select('id, lead_id, corretor_id, telefone')
-    .or(`telefone.eq.${phone},telefone.ilike.%${last8}`)
-    .limit(50);
-
-  if (error) throw error;
+  const data: any[] = [];
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data: page, error } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .select('id, lead_id, corretor_id, telefone')
+      .or(`telefone.eq.${phone},telefone.ilike.%${last8}`)
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    data.push(...(page || []));
+    if (!page || page.length < pageSize) break;
+  }
 
   const accessible: string[] = [];
   for (const candidate of data || []) {
@@ -328,17 +334,23 @@ export async function GET(request: Request) {
     // Um mesmo contato pode possuir conversas diferentes quando foi atendido
     // por integrantes/instancias distintas. O Inbox deve apresentar uma unica
     // timeline, respeitando somente as conversas que o usuario pode acessar.
-    const historyQuery = await supabaseAdmin
-      .from('whatsapp_mensagens')
-      .select('*')
-      .in('conversa_id', conversationIds)
-      .order('created_at', { ascending: true })
-      .limit(1000);
-
-    if (historyQuery.error) throw historyQuery.error;
+    const history: any[] = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data: page, error } = await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .select('*')
+        .in('conversa_id', conversationIds)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      history.push(...(page || []));
+      if (!page || page.length < pageSize) break;
+    }
 
     return NextResponse.json({
-      messages: dedupeMessages(historyQuery.data || []),
+      messages: dedupeMessages(history),
       conversation_ids: conversationIds,
     });
   } catch (error: any) {

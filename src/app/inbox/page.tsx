@@ -152,6 +152,13 @@ function readNestedMedia(message: InboxMessage) {
       root.documentMessage ||
       root.stickerMessage;
     if (media) return media;
+
+    const flatType = String(root.type || root.messageType || root.mediaType || '').toLowerCase();
+    if (['audio', 'ptt', 'image', 'video', 'document', 'file', 'sticker'].some((type) => flatType.includes(type))) {
+      return root.content && typeof root.content === 'object'
+        ? { ...root.content, type: root.type, messageType: root.messageType, mediaType: root.mediaType }
+        : root;
+    }
   }
 
   return null;
@@ -163,6 +170,8 @@ function getMessageMimeType(message: InboxMessage) {
   return String(
     media?.mimetype ||
     media?.mimeType ||
+    metadata.message?.mimetype ||
+    metadata.message?.mimeType ||
     metadata.mimetype ||
     metadata.mimeType ||
     metadata.mediaMimeType ||
@@ -177,6 +186,8 @@ function getMessageFileName(message: InboxMessage) {
   return String(
     media?.fileName ||
     media?.filename ||
+    metadata.message?.fileName ||
+    metadata.message?.filename ||
     metadata.fileName ||
     metadata.filename ||
     metadata.caption ||
@@ -190,6 +201,8 @@ function getMessageMediaKind(message: InboxMessage): MessageMediaKind {
   const mime = getMessageMimeType(message);
   const messageType = String(
     metadata.messageType ||
+    metadata.message?.type ||
+    metadata.message?.messageType ||
     metadata.type ||
     metadata.mediaType ||
     metadata.data?.messageType ||
@@ -492,32 +505,47 @@ export default function BrokerInboxPage() {
     // para que o responsável não perca o histórico no Inbox.
     let assignedLeadIds: string[] = [];
     if (!isTeamMember) {
-      const { data: assignedLeads } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('responsavel_profile_id', profile.id)
-        .limit(500);
-      assignedLeadIds = (assignedLeads || []).map((lead) => String(lead.id)).filter(Boolean);
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data: assignedLeads, error } = await supabase
+          .from('leads')
+          .select('id')
+          .eq('responsavel_profile_id', profile.id)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        assignedLeadIds.push(...(assignedLeads || []).map((lead) => String(lead.id)).filter(Boolean));
+        if (!assignedLeads || assignedLeads.length < pageSize) break;
+      }
     }
 
-    let conversationsQuery = supabase
-      .from('whatsapp_conversas')
-      .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, status, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
-      .in('corretor_id', idsToFetch)
-      .order('ultima_mensagem_at', { ascending: false })
-      .limit(80);
+    // Carrega a lista completa em paginas. Um limite fixo faz conversas mais
+    // antigas, mas ainda ativas, desaparecerem do Inbox.
+    const data: any[] = [];
+    const conversationPageSize = 500;
+    for (let from = 0; ; from += conversationPageSize) {
+      let conversationsQuery = supabase
+        .from('whatsapp_conversas')
+        .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, status, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
+        .in('corretor_id', idsToFetch)
+        .order('ultima_mensagem_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, from + conversationPageSize - 1);
 
-    if (assignedLeadIds.length > 0) {
-      conversationsQuery = conversationsQuery.or(
-        `corretor_id.in.(${idsToFetch.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
-      );
+      if (assignedLeadIds.length > 0) {
+        conversationsQuery = conversationsQuery.or(
+          `corretor_id.in.(${idsToFetch.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
+        );
+      }
+
+      if (isTeamMember) {
+        conversationsQuery = conversationsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
+      }
+
+      const { data: page, error } = await conversationsQuery;
+      if (error) throw error;
+      data.push(...(page || []));
+      if (!page || page.length < conversationPageSize) break;
     }
-
-    if (isTeamMember) {
-      conversationsQuery = conversationsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
-    }
-
-    const { data } = await conversationsQuery;
 
     const rows = (data || []).map((row: any) => {
       const lead = row.leads as any;
@@ -779,6 +807,7 @@ export default function BrokerInboxPage() {
     setLoadingMessages(true);
     try {
       const response = await fetch(`/api/inbox/messages?conversation_id=${conversationId}`, {
+        cache: 'no-store',
         headers: { 
           Authorization: `Bearer ${token}`,
           ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
@@ -824,6 +853,20 @@ export default function BrokerInboxPage() {
       setMessages([]);
     }
   }, [selectedConversation?.id]);
+
+  // Ao voltar para a aba/janela, sincroniza novamente a lista completa. Isso
+  // evita que o usuario entre no Inbox vendo um snapshot antigo.
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void fetchInbox(true);
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
   useEffect(() => {
     const corretorId = selectedConversation?.corretor_id || profile?.corretor_id;

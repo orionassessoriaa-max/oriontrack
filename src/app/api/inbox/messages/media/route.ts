@@ -50,6 +50,15 @@ function pickMediaMessage(metadata: any) {
       root.documentMessage ||
       root.stickerMessage;
     if (media) return media;
+
+    // A UAZAPI tambem entrega midia no formato plano:
+    // metadata.message = { type: 'document', mimetype, fileName, ... }.
+    const flatType = String(root.type || root.messageType || root.mediaType || '').toLowerCase();
+    if (['audio', 'ptt', 'image', 'video', 'document', 'file', 'sticker'].some((type) => flatType.includes(type))) {
+      return root.content && typeof root.content === 'object'
+        ? { ...root.content, type: root.type, messageType: root.messageType, mediaType: root.mediaType }
+        : root;
+    }
   }
 
   return null;
@@ -224,10 +233,11 @@ function buildUazapiDownloadPayloads(providerId: string, mediaMessage: any) {
   };
   const wrappedMessage: Record<string, any> = {};
 
-  if (mediaMessage?.url) {
-    body.Url = mediaMessage.url;
-    body.url = mediaMessage.url;
-    wrappedMessage.Url = mediaMessage.url;
+  const mediaUrl = mediaMessage?.url || mediaMessage?.URL;
+  if (mediaUrl) {
+    body.Url = mediaUrl;
+    body.url = mediaUrl;
+    wrappedMessage.Url = mediaUrl;
   }
   if (mediaMessage?.mimetype || mediaMessage?.mimeType) {
     body.Mimetype = mediaMessage.mimetype || mediaMessage.mimeType;
@@ -242,14 +252,14 @@ function buildUazapiDownloadPayloads(providerId: string, mediaMessage: any) {
     wrappedMessage.MediaKey = mediaKey;
   }
 
-  const fileSha256 = byteObjectToBase64(mediaMessage?.fileSha256);
+  const fileSha256 = byteObjectToBase64(mediaMessage?.fileSha256 || mediaMessage?.fileSHA256);
   if (fileSha256) {
     body.FileSHA256 = fileSha256;
     body.fileSha256 = fileSha256;
     wrappedMessage.FileSHA256 = fileSha256;
   }
 
-  const fileEncSha256 = byteObjectToBase64(mediaMessage?.fileEncSha256);
+  const fileEncSha256 = byteObjectToBase64(mediaMessage?.fileEncSha256 || mediaMessage?.fileEncSHA256);
   if (fileEncSha256) {
     body.FileEncSHA256 = fileEncSha256;
     body.fileEncSha256 = fileEncSha256;
@@ -290,7 +300,7 @@ function whatsappMediaInfo(mimeType?: string | null) {
 }
 
 async function decryptWhatsAppMediaFromMetadata(mediaMessage: any, mimeType?: string | null) {
-  const encryptedUrl = pickString(mediaMessage?.url, mediaMessage?.mediaUrl, mediaMessage?.downloadUrl);
+  const encryptedUrl = pickString(mediaMessage?.url, mediaMessage?.URL, mediaMessage?.mediaUrl, mediaMessage?.downloadUrl);
   const mediaKeyBase64 = byteObjectToBase64(mediaMessage?.mediaKey);
   if (!encryptedUrl || !mediaKeyBase64 || !/^https?:\/\//i.test(encryptedUrl)) return null;
 
@@ -390,14 +400,18 @@ async function canAccessConversation(profile: any, conversation: any) {
     if (last8) {
       let commercialQuery = supabaseAdmin
         .from('comercial_leads')
-        .select('id,sdr_id,closer_id')
-        .or(`telefone.eq.${conversation.telefone},telefone.ilike.%${last8}`);
+        .select('id,sdr_id,closer_id,telefone')
+        .ilike('telefone', `%${last8.slice(-4)}`);
 
       if (commercialMember.papel === 'sdr') {
         commercialQuery = commercialQuery.eq('sdr_id', profile.id);
       }
 
-      const { data: commercialLead } = await commercialQuery.limit(1).maybeSingle();
+      const { data: commercialCandidates } = await commercialQuery.limit(100);
+      const commercialLead = (commercialCandidates || []).find((lead) => {
+        const leadPhone = String(lead.telefone || '').replace(/\D/g, '');
+        return leadPhone.slice(-8) === last8;
+      });
       if (commercialLead) return true;
     }
 
@@ -484,27 +498,42 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Esta mensagem nao possui arquivo salvo para abrir.' }, { status: 400 });
     }
 
-    const metadataInstance =
-      message.metadata?.instance ||
-      message.metadata?.session ||
-      message.metadata?.instanceName ||
-      message.metadata?.data?.instance ||
-      message.metadata?.data?.session;
+    const metadataInstances = [
+      message.metadata?.instance,
+      message.metadata?.session,
+      message.metadata?.instanceName,
+      message.metadata?.data?.instance,
+      message.metadata?.data?.session,
+      message.metadata?.data?.instanceName,
+      message.metadata?.message?.instance,
+      message.metadata?.message?.instanceName,
+    ].filter(Boolean) as string[];
 
-    const { data: ownerProfile } = await supabaseAdmin
+    // Uma conversa pode ter passado pela IA, pelo administrador e por outro
+    // integrante. Tentar somente o primeiro profile da corretora fazia o
+    // download procurar a midia na sessao errada.
+    const { data: relatedProfiles } = await supabaseAdmin
       .from('profiles')
       .select('id')
       .eq('corretor_id', conversation.corretor_id)
-      .eq('tipo_usuario', 'corretor')
-      .limit(1)
-      .maybeSingle();
+      .limit(100);
 
-    const profileIdForInstance = ownerProfile ? ownerProfile.id : conversation.corretor_id;
-    const currentActiveInstance = uazapiInstanceName(profileIdForInstance);
+    const relatedProfileIds = new Set((relatedProfiles || []).map((item) => String(item.id)).filter(Boolean));
+    if (conversation.lead_id) {
+      const { data: lead } = await supabaseAdmin
+        .from('leads')
+        .select('responsavel_profile_id')
+        .eq('id', conversation.lead_id)
+        .maybeSingle();
+      if (lead?.responsavel_profile_id) relatedProfileIds.add(String(lead.responsavel_profile_id));
+    }
+
+    const profileInstances = Array.from(relatedProfileIds).map((profileId) => uazapiInstanceName(profileId));
+    const currentActiveInstance = metadataInstances[0] || profileInstances[0] || null;
 
     const instancesToTry = Array.from(new Set([
-      metadataInstance,
-      currentActiveInstance,
+      ...metadataInstances,
+      ...profileInstances,
       'apolo_master_sender'
     ].filter(Boolean) as string[]));
 
@@ -514,7 +543,7 @@ export async function GET(request: Request) {
 
     if (isEvolution) {
       console.log(`[Media API] Mensagem identificada como Evolution API. Tentando Evolution primeiro.`);
-      const evoInstance = metadataInstance || currentActiveInstance;
+      const evoInstance = metadataInstances[0] || currentActiveInstance;
       if (evoInstance) {
         try {
           const evoBase64 = await getEvolutionMediaBase64(evoInstance, providerId);
@@ -573,7 +602,7 @@ export async function GET(request: Request) {
     }
 
     if (!isEvolution) {
-      const evoInstance = metadataInstance || currentActiveInstance;
+      const evoInstance = metadataInstances[0] || currentActiveInstance;
       if (evoInstance) {
         try {
           console.log(`[Media API] UAZAPI falhou. Tentando Evolution API como fallback secundario.`);
