@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Bot, Loader2, Shield, Sparkles, Target, Trophy } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { canSelectOperationalTeam, getTeamHome, TEAM_SELECTION_STORAGE_KEY, type OrionTeamKey } from '@/lib/teamSelection';
+import { canSelectOperationalTeam, DUAL_OPERATION_ACCESS_KEY, getTeamHome, TEAM_SELECTION_STORAGE_KEY, type OrionTeamKey } from '@/lib/teamSelection';
 
 const teams: Array<{
   id: OrionTeamKey;
@@ -45,7 +45,10 @@ export default function SelecionarTimePage() {
       router.replace('/login');
       return;
     }
-    if (actualProfile && !canSelectOperationalTeam(actualProfile)) {
+    const verifiedDualAccess = actualProfile
+      ? window.sessionStorage.getItem(DUAL_OPERATION_ACCESS_KEY) === actualProfile.id
+      : false;
+    if (actualProfile && !canSelectOperationalTeam(actualProfile, verifiedDualAccess)) {
       router.replace('/');
     }
   }, [actualProfile, loading, router, user]);

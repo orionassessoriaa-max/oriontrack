@@ -33,7 +33,7 @@ import {
   type CommercialMember,
   type CommercialRole,
 } from "@/lib/comercial";
-import { canSelectOperationalTeam } from "@/lib/teamSelection";
+import { canSelectOperationalTeam, DUAL_OPERATION_ACCESS_KEY } from "@/lib/teamSelection";
 
 type CommercialContextValue = {
   role: CommercialRole | null;
@@ -331,6 +331,10 @@ export default function CommercialShell({
   const overflowActive = overflowNavigation.some((item) =>
     pathname.startsWith(item.href),
   );
+  const canSwitchOperation = canSelectOperationalTeam(actualProfile, Boolean(role));
+  const rememberDualOperationAccess = () => {
+    if (actualProfile?.id) window.sessionStorage.setItem(DUAL_OPERATION_ACCESS_KEY, actualProfile.id);
+  };
 
   return (
     <CommercialContext.Provider
@@ -441,8 +445,8 @@ export default function CommercialShell({
                   <X size={13} />
                 </button>
               )}
-              {canSelectOperationalTeam(actualProfile) && (
-                <Link href="/selecionar-time" className="kh-switch-operation">
+              {canSwitchOperation && (
+                <Link href="/selecionar-time" className="kh-switch-operation" onClick={rememberDualOperationAccess}>
                   Trocar operação
                 </Link>
               )}
@@ -492,10 +496,13 @@ export default function CommercialShell({
                     </Link>
                   );
                 })}
-                {canSelectOperationalTeam(actualProfile) && (
+                {canSwitchOperation && (
                   <Link
                     href="/selecionar-time"
-                    onClick={() => setMobileOpen(false)}
+                    onClick={() => {
+                      rememberDualOperationAccess();
+                      setMobileOpen(false);
+                    }}
                   >
                     <span>Trocar operação</span>
                   </Link>

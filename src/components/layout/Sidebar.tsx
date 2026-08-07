@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
+  ArrowLeftRight,
   Bell,
   Bot,
   Building2,
@@ -44,6 +45,7 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { canUseFerramentasPreview } from '@/lib/ferramentasAccess';
+import { canSelectOperationalTeam, DUAL_OPERATION_ACCESS_KEY } from '@/lib/teamSelection';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -62,6 +64,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const [toast, setToast] = useState<{ id: string; titulo: string; mensagem: string } | null>(null);
   const [tema, setTema] = useState<string>('noturno');
   const [hasTeamMembers, setHasTeamMembers] = useState(true);
+  const [hasCommercialAccess, setHasCommercialAccess] = useState(false);
 
   useEffect(() => {
     const handleThemeChange = () => {
@@ -75,6 +78,22 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const isDark = tema === 'noturno';
 
   const { profile, actualProfile, loading, signOut, isViewingAsCorretor, isViewingAsGestor, isViewingAsDesigner, isViewingAsAccount, stopViewingAsCorretor } = useAuth();
+
+  useEffect(() => {
+    if (!actualProfile?.id) return;
+    let cancelled = false;
+    const verifyCommercialAccess = async () => {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
+      const response = await fetch('/api/comercial/members', {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => null);
+      if (!cancelled) setHasCommercialAccess(Boolean(response?.ok));
+    };
+    void verifyCommercialAccess();
+    return () => { cancelled = true; };
+  }, [actualProfile?.id]);
 
   useEffect(() => {
     if (!profile?.corretor_id) return;
@@ -188,6 +207,10 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     .filter(Boolean)
     .map((email) => String(email).toLowerCase())
     .includes('ewerttonherculano@gmail.com');
+  const canSwitchOperation = canSelectOperationalTeam(actualProfile, hasCommercialAccess);
+  const rememberDualOperationAccess = () => {
+    if (actualProfile?.id) window.sessionStorage.setItem(DUAL_OPERATION_ACCESS_KEY, actualProfile.id);
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -538,6 +561,17 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
             </div>
           )}
 
+          {canSwitchOperation && !isViewingAsUser && (
+            <Link
+              href="/selecionar-time"
+              onClick={rememberDualOperationAccess}
+              className="hidden h-10 items-center gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 text-[9px] font-black uppercase tracking-widest text-amber-300 transition hover:bg-amber-400/15 xl:flex"
+            >
+              <ArrowLeftRight size={14} />
+              Trocar operação
+            </Link>
+          )}
+
           {/* Theme Toggle Button */}
           <button
             onClick={() => {
@@ -600,6 +634,18 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
             "fixed left-0 right-0 top-20 z-50 flex h-[calc(100vh-5rem)] w-full flex-col border-t p-6 text-white shadow-2xl transition-all duration-300 lg:hidden overflow-y-auto",
             isDark ? "bg-[#020617] border-white/5" : "bg-[#0f172a] border-white/10"
           )}>
+            {canSwitchOperation && !isViewingAsUser && (
+              <Link
+                href="/selecionar-time"
+                onClick={() => {
+                  rememberDualOperationAccess();
+                  setCollapsed(true);
+                }}
+                className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-300"
+              >
+                <ArrowLeftRight size={15} /> Trocar operação
+              </Link>
+            )}
             {isViewingAsUser && (
               <div className="mb-4 border border-amber-400/20 bg-amber-400/10 p-4 rounded-2xl">
                 <p className="text-[10px] font-black uppercase tracking-widest text-amber-200">Modo admin</p>
