@@ -84,7 +84,10 @@ export async function GET(request: Request) {
       noShows,
       qualified: realized.filter((lead) => lead.reuniao_qualificada === true).length,
       sales: sold.length,
-      ...(guard.canViewCommercialFinancials ? { revenue: sold.reduce((sum, lead) => sum + Number(lead.valor_pago || lead.valor_fechado || 0), 0) } : {}),
+      ...(guard.canViewCommercialFinancials ? {
+        revenue: sold.reduce((sum, lead) => sum + Number(lead.valor_fechado || lead.valor_pago || 0), 0),
+        receivedRevenue: sold.reduce((sum, lead) => sum + Number(lead.valor_pago || 0), 0),
+      } : {}),
     };
   });
 
@@ -104,10 +107,33 @@ export async function GET(request: Request) {
   sales.forEach((lead) => {
     const row = day(String(lead.fechado_at || lead.updated_at).slice(0, 10));
     row.sales += 1;
-    row.revenue += Number(lead.valor_pago || lead.valor_fechado || 0);
+    row.revenue += Number(lead.valor_fechado || lead.valor_pago || 0);
   });
 
-  const revenue = sales.reduce((sum, lead) => sum + Number(lead.valor_pago || lead.valor_fechado || 0), 0);
+  const revenue = sales.reduce((sum, lead) => sum + Number(lead.valor_fechado || lead.valor_pago || 0), 0);
+  const receivedRevenue = sales.reduce((sum, lead) => sum + Number(lead.valor_pago || 0), 0);
+  const paymentModels = ["tcv", "mrr", "mesclado"].map((model) => {
+    const modelSales = sales.filter((lead) => normalized(lead.modelo_pagamento) === model);
+    return {
+      model,
+      sales: modelSales.length,
+      revenue: modelSales.reduce((sum, lead) => sum + Number(lead.valor_fechado || lead.valor_pago || 0), 0),
+    };
+  });
+  const originMap = new Map<string, { origin: string; leads: number; scheduled: number; realized: number; qualified: number; sales: number }>();
+  const originName = (lead: Record<string, unknown>) => String(lead.origem || lead.utm_source || "Nao informado").trim() || "Nao informado";
+  const originRow = (lead: Record<string, unknown>) => {
+    const origin = originName(lead);
+    if (!originMap.has(origin)) originMap.set(origin, { origin, leads: 0, scheduled: 0, realized: 0, qualified: 0, sales: 0 });
+    return originMap.get(origin)!;
+  };
+  enteredLeads.forEach((lead) => { originRow(lead).leads += 1; });
+  scheduledLeads.forEach((lead) => { originRow(lead).scheduled += 1; });
+  realizedLeads.forEach((lead) => {
+    originRow(lead).realized += 1;
+    if (lead.reuniao_qualificada === true) originRow(lead).qualified += 1;
+  });
+  sales.forEach((lead) => { originRow(lead).sales += 1; });
   return NextResponse.json({
     start,
     end,
@@ -120,7 +146,7 @@ export async function GET(request: Request) {
       qualified: realizedLeads.filter((lead) => lead.reuniao_qualificada === true).length,
       noShows: scheduledLeads.reduce((sum, lead) => sum + Number(lead.no_show_count || (lead.no_show ? 1 : 0)), 0),
       sales: sales.length,
-      ...(guard.canViewCommercialFinancials ? { revenue, averageTicket: sales.length ? revenue / sales.length : 0 } : {}),
+      ...(guard.canViewCommercialFinancials ? { revenue, receivedRevenue, receivableRevenue: Math.max(0, revenue - receivedRevenue), averageTicket: sales.length ? revenue / sales.length : 0 } : {}),
     },
     team,
     daily: Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
@@ -138,8 +164,10 @@ export async function GET(request: Request) {
       seller_name: profileMap.get(lead.closer_id)?.nome || "Não informado",
       closed_at: lead.fechado_at || lead.updated_at,
       payment_model: lead.modelo_pagamento,
-      ...(guard.canViewCommercialFinancials ? { amount: Number(lead.valor_pago || lead.valor_fechado || 0) } : {}),
+      ...(guard.canViewCommercialFinancials ? { amount: Number(lead.valor_fechado || lead.valor_pago || 0), received_amount: Number(lead.valor_pago || 0) } : {}),
     })),
+    paymentModels: guard.canViewCommercialFinancials ? paymentModels : [],
+    origins: Array.from(originMap.values()).sort((a, b) => b.leads - a.leads),
     canViewFinancials: guard.canViewCommercialFinancials,
     updatedAt: new Date().toISOString(),
   });

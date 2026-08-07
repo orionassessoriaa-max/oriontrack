@@ -26,8 +26,11 @@ export async function POST(request: Request) {
   const body = await request.json();
   const mes = monthStart(String(body.mes || ''));
   const meta_valor = Math.max(0, Number(body.meta_valor || 0));
-  if (!meta_valor) return NextResponse.json({ error: 'Informe um valor de meta maior que zero.' }, { status: 400 });
-  const { data, error } = await supabaseAdmin.from('comercial_metas').upsert({ mes, meta_valor, created_by: guard.profile.id, updated_at: new Date().toISOString() }, { onConflict: 'mes' }).select('*').single();
+  const meta_vendas = Math.max(0, Math.round(Number(body.meta_vendas || 0)));
+  const meta_calls = Math.max(0, Math.round(Number(body.meta_calls || 0)));
+  const ticket_medio = Math.max(0, Number(body.ticket_medio || 0));
+  if (!meta_valor && !meta_vendas && !meta_calls && !ticket_medio) return NextResponse.json({ error: 'Informe ao menos uma meta maior que zero.' }, { status: 400 });
+  const { data, error } = await supabaseAdmin.from('comercial_metas').upsert({ mes, meta_valor, meta_vendas, meta_calls, ticket_medio, created_by: guard.profile.id, updated_at: new Date().toISOString() }, { onConflict: 'mes' }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ goal: data });
 }
