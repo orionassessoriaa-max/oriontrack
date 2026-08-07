@@ -447,11 +447,11 @@ export default function CrmPage() {
   }
 
   useEffect(() => {
-    // A visão inicial é individual. Para administradores da concessionária,
-    // fetchTeamMembers altera para a visão geral somente quando o perfil não
-    // participa da distribuição de leads.
-    setCrmScopeView(isViewingBrokerAsAdmin ? 'todos_concessionaria' : 'meus');
-  }, [profile?.id, profile?.tipo_usuario, isViewingBrokerAsAdmin]);
+    // Administradores começam na visão geral. Depois que o time é carregado,
+    // somente quem participa da distribuição e já possui carteira abre em "Meus leads".
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCrmScopeView(isViewingBrokerAsAdmin || !isTeamMemberProfile ? 'todos_concessionaria' : 'meus');
+  }, [profile?.id, profile?.tipo_usuario, isViewingBrokerAsAdmin, isTeamMemberProfile]);
 
   // Metrics Dashboard States
   const [crmView, setCrmView] = useState<'board' | 'analytics'>('board');
@@ -644,10 +644,18 @@ export default function CrmPage() {
     });
     const payload = await response.json().catch(() => ({}));
     if (response.ok) {
-      setTeamMembers(payload.membros || []);
-      // Administradores da concessionaria tambem iniciam na carteira pessoal.
-      // A visao geral continua disponivel no seletor quando precisarem.
-      setCrmScopeView('meus');
+      const members = payload.membros || [];
+      const currentMemberIds = members
+        .filter((member: TeamMember) => member.profile_id === profile.id)
+        .map((member: TeamMember) => member.id);
+      const hasAssignedLead = (payload.leads || []).some((lead: Lead) => (
+        lead.responsavel_profile_id === profile.id ||
+        currentMemberIds.includes(String(lead.responsavel_membro_id || ''))
+      ));
+      const shouldOpenMyLeads = payload.settings?.current_profile_in_distribution === true && hasAssignedLead;
+
+      setTeamMembers(members);
+      setCrmScopeView(shouldOpenMyLeads ? 'meus' : 'todos_concessionaria');
     }
   }
 

@@ -222,7 +222,8 @@ export default function BrokerLeadsPage() {
   const [campaignFilter, setCampaignFilter] = useState('todos');
   const [adsetFilter, setAdsetFilter] = useState('todos');
   const [adFilter, setAdFilter] = useState('todos');
-  const [responsavelFilter, setResponsavelFilter] = useState('meus');
+  const [responsavelFilter, setResponsavelFilter] = useState('todos');
+  const [defaultResponsavelFilter, setDefaultResponsavelFilter] = useState('todos');
   const [showCrmModal, setShowCrmModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showManualLeadModal, setShowManualLeadModal] = useState(false);
@@ -273,10 +274,14 @@ export default function BrokerLeadsPage() {
   }, []);
 
   useEffect(() => {
-    // Ao trocar de perfil (inclusive no modo admin), a carteira sempre abre
-    // mostrando somente os leads do usuario selecionado.
-    setResponsavelFilter('meus');
-  }, [profile?.id]);
+    // A confirmação definitiva vem das configurações do time. Enquanto elas
+    // carregam, administradores nunca devem ficar presos em uma carteira vazia.
+    const initialFilter = isTeamMemberProfile ? 'meus' : 'todos';
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDefaultResponsavelFilter(initialFilter);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setResponsavelFilter(initialFilter);
+  }, [profile?.id, isTeamMemberProfile]);
 
   useEffect(() => {
     if (profile?.corretor_id) {
@@ -382,6 +387,8 @@ export default function BrokerLeadsPage() {
   const fetchTeamMembers = async () => {
     if (!profile?.id || !canAssignTeamLeads) {
       setTeamMembers([]);
+      setDefaultResponsavelFilter(isTeamMemberProfile ? 'meus' : 'todos');
+      setResponsavelFilter(isTeamMemberProfile ? 'meus' : 'todos');
       return;
     }
 
@@ -395,7 +402,21 @@ export default function BrokerLeadsPage() {
     });
     const payload = await response.json().catch(() => ({}));
     if (response.ok) {
-      setTeamMembers(payload.membros || []);
+      const members = payload.membros || [];
+      const currentMemberIds = members
+        .filter((member: TeamMember) => member.profile_id === profile.id)
+        .map((member: TeamMember) => member.id);
+      const hasAssignedLead = (payload.leads || []).some((lead: Lead) => (
+        lead.responsavel_profile_id === profile.id ||
+        currentMemberIds.includes(String(lead.responsavel_membro_id || ''))
+      ));
+      const nextDefaultFilter = payload.settings?.current_profile_in_distribution === true && hasAssignedLead
+        ? 'meus'
+        : 'todos';
+
+      setTeamMembers(members);
+      setDefaultResponsavelFilter(nextDefaultFilter);
+      setResponsavelFilter(nextDefaultFilter);
       setResolvedCorretorId(payload.primary_corretor_id || profile.corretor_id || null);
       setResolvedCorretorIds(Array.isArray(payload.corretor_ids) && payload.corretor_ids.length > 0
         ? payload.corretor_ids
@@ -408,6 +429,8 @@ export default function BrokerLeadsPage() {
     } else {
       console.error('Erro ao buscar responsaveis:', payload.error || response.statusText);
       setTeamMembers([]);
+      setDefaultResponsavelFilter('todos');
+      setResponsavelFilter('todos');
     }
   };
 
@@ -839,7 +862,7 @@ export default function BrokerLeadsPage() {
     campaignFilter !== 'todos' ||
     adsetFilter !== 'todos' ||
     adFilter !== 'todos' ||
-    responsavelFilter !== 'meus'
+    responsavelFilter !== defaultResponsavelFilter
   );
 
   const clearFilters = () => {
@@ -854,7 +877,7 @@ export default function BrokerLeadsPage() {
     setCampaignFilter('todos');
     setAdsetFilter('todos');
     setAdFilter('todos');
-    setResponsavelFilter('meus');
+    setResponsavelFilter(defaultResponsavelFilter);
   };
 
   const exportToCsv = () => {
