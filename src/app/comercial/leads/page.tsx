@@ -102,6 +102,7 @@ export default function CommercialLeadsPage() {
   }, [api]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -307,7 +308,7 @@ export default function CommercialLeadsPage() {
   }
 
   return (
-    <div className={canEditCommercial ? "" : "kh-read-only"}>
+    <div className={`kh-commercial-leads-page${canEditCommercial ? "" : " kh-read-only"}`}>
       <header className="kh-page-head">
         <div>
           <div className="kh-eyebrow">Central de leads</div>
@@ -426,25 +427,25 @@ export default function CommercialLeadsPage() {
                   )}
                 </button>
             </th>}
-              <th>#</th>
-              <th>DATA</th>
-              <th>NOME</th>
-              <th>TELEFONE</th>
-              <th>EMAIL</th>
+              <th className="index">#</th>
+              <th className="date">DATA</th>
+              <th className="name">NOME</th>
+              <th className="phone">TELEFONE</th>
+              <th className="email">EMAIL</th>
               {canViewCommercialLeadQualification && (
                 <>
-                  <th>JA INVESTIU EM TRAFEGO?</th>
-                  <th>FATURAMENTO MENSAL</th>
+                  <th className="qualification">JA INVESTIU EM TRAFEGO?</th>
+                  <th className="revenue">FATURAMENTO MENSAL</th>
                 </>
               )}
-              <th>PRIORIDADE</th>
-              {canViewCommercialLeadQualification && <th>INVESTIMENTO</th>}
-              <th>VIDAS</th>
-              <th>UTM SOURCE</th>
-              <th>UTM MEDIUM</th>
-              <th>UTM CAMPAIGN</th>
-              <th>UTM TERM</th>
-              <th>UTM CONTENT</th>
+              <th className="priority">PRIORIDADE</th>
+              {canViewCommercialLeadQualification && <th className="investment">INVESTIMENTO</th>}
+              <th className="lives">VIDAS</th>
+              <th className="utm">UTM SOURCE</th>
+              <th className="utm">UTM MEDIUM</th>
+              <th className="utm campaign">UTM CAMPAIGN</th>
+              <th className="utm">UTM TERM</th>
+              <th className="utm">UTM CONTENT</th>
             </tr>
           </thead>
           <tbody>
@@ -453,7 +454,7 @@ export default function CommercialLeadsPage() {
                 key={lead.id}
                 className={selected.has(lead.id) ? "selected" : ""}
               >
-                {canEditCommercial && <td className="select">
+                {canEditCommercial && <td className="select" data-label="Selecionar">
                   <button
                     onClick={() => toggle(lead.id)}
                     aria-label={`Selecionar ${lead.nome}`}
@@ -465,27 +466,27 @@ export default function CommercialLeadsPage() {
                     )}
                   </button>
                 </td>}
-                <td>{index + 1}</td>
-                <td>{formatDate(lead.data_entrada)}</td>
-                <td className="name">{lead.nome}</td>
-                <td>{lead.telefone ? (canEditCommercial ? <button type="button" className="kh-table-phone" onClick={() => void startCall(lead)} title="Ligar e registrar no CRM"><PhoneCall size={14} />{lead.telefone}</button> : lead.telefone) : "-"}</td>
-                <td>{lead.email || "-"}</td>
+                <td className="index" data-label="#">{index + 1}</td>
+                <td className="date" data-label="Data">{formatDate(lead.data_entrada)}</td>
+                <td className="name" data-label="Nome">{lead.nome}</td>
+                <td className="phone" data-label="Telefone">{lead.telefone ? (canEditCommercial ? <button type="button" className="kh-table-phone" onClick={() => void startCall(lead)} title="Ligar e registrar no CRM"><PhoneCall size={14} />{lead.telefone}</button> : lead.telefone) : "-"}</td>
+                <td className="email" data-label="E-mail">{lead.email || "-"}</td>
                 {canViewCommercialLeadQualification && (
                   <>
-                    <td>{lead.ja_investiu_trafego || "-"}</td>
-                    <td>{lead.faturamento_mensal || "-"}</td>
+                    <td className="qualification" data-label="Já investiu em tráfego?">{lead.ja_investiu_trafego || "-"}</td>
+                    <td className="revenue" data-label="Faturamento mensal">{lead.faturamento_mensal || "-"}</td>
                   </>
                 )}
-                <td>{lead.prioridade || "-"}</td>
+                <td className="priority" data-label="Prioridade">{lead.prioridade || "-"}</td>
                 {canViewCommercialLeadQualification && (
-                  <td>{lead.investimento || "-"}</td>
+                  <td className="investment" data-label="Investimento">{lead.investimento || "-"}</td>
                 )}
-                <td>{lead.vidas || "-"}</td>
-                <td>{lead.utm_source || "-"}</td>
-                <td>{lead.utm_medium || "-"}</td>
-                <td>{lead.utm_campaign || "-"}</td>
-                <td>{lead.utm_term || "-"}</td>
-                <td>{lead.utm_content || "-"}</td>
+                <td className="lives" data-label="Vidas">{lead.vidas || "-"}</td>
+                <td className="utm" data-label="UTM source">{lead.utm_source || "-"}</td>
+                <td className="utm" data-label="UTM medium">{lead.utm_medium || "-"}</td>
+                <td className="utm campaign" data-label="UTM campaign">{lead.utm_campaign || "-"}</td>
+                <td className="utm" data-label="UTM term">{lead.utm_term || "-"}</td>
+                <td className="utm" data-label="UTM content">{lead.utm_content || "-"}</td>
               </tr>
             ))}
             {!visible.length && (
