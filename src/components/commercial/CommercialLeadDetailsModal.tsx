@@ -52,6 +52,7 @@ type Props = {
   canViewFinancials: boolean;
   canViewQualification?: boolean;
   readOnly?: boolean;
+  canEditSale?: boolean;
   stages: CommercialStage[];
   onMoveStage: (status: string) => void;
   interactions: LeadInteraction[];
@@ -91,6 +92,8 @@ type EditableLead = {
   utm_content: string;
   sdr_id: string;
   closer_id: string;
+  vendedor_id: string;
+  reuniao_link: string;
   valor_negociacao: string;
   observacoes: string;
   decisor: string;
@@ -240,6 +243,8 @@ function editableLead(lead: CommercialLead): EditableLead {
     utm_content: lead.utm_content || "",
     sdr_id: lead.sdr_id || "",
     closer_id: lead.closer_id || "",
+    vendedor_id: lead.vendedor_id || lead.closer_id || "",
+    reuniao_link: lead.reuniao_link || "",
     valor_negociacao: String(lead.valor_negociacao || ""),
     observacoes: lead.observacoes || "",
     decisor:
@@ -257,6 +262,7 @@ export default function CommercialLeadDetailsModal({
   canViewFinancials,
   canViewQualification = true,
   readOnly = false,
+  canEditSale = false,
   stages,
   onMoveStage,
   interactions,
@@ -319,6 +325,7 @@ export default function CommercialLeadDetailsModal({
     editing ? effective.closer_id || null : lead.closer_id,
     "Sem closer",
   );
+  const sellerName = memberName(lead.vendedor_id || lead.closer_id, "Nao informado");
   const lastActivity =
     lead.ultimo_contato_at || interactions[0]?.created_at || lead.data_entrada;
   const internalNotes = freeNotes(lead.observacoes);
@@ -391,6 +398,17 @@ export default function CommercialLeadDetailsModal({
     );
   }
 
+  function sellerSelect() {
+    return (
+      <select className="kh-inline-edit" aria-label="Quem vendeu" value={effective.vendedor_id} onChange={(event) => setEdit("vendedor_id", event.target.value)}>
+        <option value="">Selecione o vendedor</option>
+        {members
+          .filter((member) => member.ativo && (member.papel === "closer" || member.profile_id === "a12b63f9-4c72-4a92-a99a-98c020723a06"))
+          .map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}
+      </select>
+    );
+  }
+
   function cancelEditing() {
     setEditForm(editableLead(currentLead));
     setEditing(false);
@@ -402,9 +420,10 @@ export default function CommercialLeadDetailsModal({
     setEditSaving(true);
     setEditError(null);
     try {
-      const { decisor, ...leadFields } = effective;
+      const { decisor, vendedor_id, reuniao_link, ...leadFields } = effective;
       await onSave({
         ...leadFields,
+        ...(canEditSale ? { vendedor_id, reuniao_link } : {}),
         observacoes: withStructuredNote(
           effective.observacoes,
           "É o decisor?",
@@ -541,6 +560,15 @@ export default function CommercialLeadDetailsModal({
     ["Último contato", dateTime(lead.ultimo_contato_at)],
     ["Reunião agendada", dateTime(lead.reuniao_agendada_at)],
     ["Reunião realizada", dateTime(lead.reuniao_realizada_at)],
+    ["Quem vendeu", editing && canEditSale ? sellerSelect() : sellerName],
+    [
+      "Link da reunião",
+      editing && canEditSale
+        ? inlineInput("reuniao_link", "Link da reunião", "url")
+        : lead.reuniao_link
+          ? <a href={lead.reuniao_link} target="_blank" rel="noreferrer">Abrir reunião</a>
+          : "Não informado",
+    ],
     [
       "Negócio / etapa",
       editing

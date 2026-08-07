@@ -201,6 +201,8 @@ export async function GET(request: Request) {
   const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
   const team = (memberResult.data || []).map((member) => {
     const owned = leads.filter((lead) => member.papel === 'sdr' ? lead.sdr_id === member.profile_id : member.papel === 'closer' ? lead.closer_id === member.profile_id : false);
+    const sold = leads.filter((lead) => (lead.status === 'Negócio fechado' || Number(lead.valor_fechado || 0) > 0)
+      && lead.closer_id === member.profile_id);
     return {
       id: member.profile_id,
       role: member.papel,
@@ -209,8 +211,8 @@ export async function GET(request: Request) {
       leads: owned.length,
       mql: owned.filter((lead) => lead.lead_qualificado).length,
       meetings: owned.filter((lead) => lead.reuniao_agendada_at).length,
-      sales: owned.filter((lead) => lead.status === 'Negócio fechado').length,
-      ...(guard.canViewCommercialFinancials ? { revenue: owned.reduce((sum, lead) => sum + Number(lead.valor_fechado || 0), 0) } : {}),
+      sales: sold.length,
+      ...(guard.canViewCommercialFinancials ? { revenue: sold.reduce((sum, lead) => sum + Number(lead.valor_fechado || 0), 0) } : {}),
     };
   });
 

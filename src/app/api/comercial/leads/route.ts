@@ -21,6 +21,38 @@ function isNoShowStage(value: unknown) {
   return normalizeStage(value).replace(/[-_]/g, ' ').includes('no show');
 }
 
+function isClosedStage(value: unknown) {
+  return normalizeStage(value).trim() === 'negocio fechado';
+}
+
+const PEDRO_GHISOLFI_PROFILE_ID = 'a12b63f9-4c72-4a92-a99a-98c020723a06';
+const MEETING_LINK_LABEL = 'Link da reunião';
+
+function meetingLinkFromNotes(notes: unknown) {
+  const match = String(notes || '').split(/\s*\|\s*/).find((part) => normalizeStage(part.split(':')[0]).trim() === normalizeStage(MEETING_LINK_LABEL));
+  return match ? match.slice(match.indexOf(':') + 1).trim() || null : null;
+}
+
+function notesWithMeetingLink(notes: unknown, link: string) {
+  const parts = String(notes || '').split(/\s*\|\s*/).map((part) => part.trim()).filter(Boolean)
+    .filter((part) => normalizeStage(part.split(':')[0]).trim() !== normalizeStage(MEETING_LINK_LABEL));
+  parts.push(`${MEETING_LINK_LABEL}: ${link}`);
+  return parts.join(' | ');
+}
+
+function enrichSaleFields<T extends Record<string, any>>(lead: T) {
+  return { ...lead, vendedor_id: lead.closer_id || null, reuniao_link: meetingLinkFromNotes(lead.observacoes) };
+}
+
+function validMeetingLink(value: unknown) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function redactFinancialFields<T extends Record<string, any>>(lead: T, canView: boolean) {
   if (canView) return lead;
   const sanitized = { ...lead };
@@ -63,12 +95,12 @@ export async function GET(request: Request) {
   return NextResponse.json({
     leads: (data || []).map((lead) => {
       const nextReturn = nextReturnByLead.get(lead.id);
-      return redactFinancialFields({
+      return redactFinancialFields(enrichSaleFields({
         ...lead,
         lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento),
         proximo_retorno_at: nextReturn?.vencimento || null,
         proximo_retorno_titulo: nextReturn?.titulo || null,
-      }, guard.canViewCommercialFinancials);
+      }), guard.canViewCommercialFinancials);
     }),
     role: guard.commercialRole,
   });
@@ -144,7 +176,7 @@ export async function PATCH(request: Request) {
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'Lead obrigatorio.' }, { status: 400 });
 
-  let check = supabaseAdmin.from('comercial_leads').select('id,sdr_id,closer_id,status,reuniao_agendada_at,reuniao_realizada_at,no_show,no_show_count,faturamento_mensal,investimento,lead_qualificado').eq('id', id);
+  let check = supabaseAdmin.from('comercial_leads').select('id,sdr_id,closer_id,observacoes,status,reuniao_agendada_at,reuniao_realizada_at,no_show,no_show_count,faturamento_mensal,investimento,lead_qualificado').eq('id', id);
   check = applyCommercialLeadScope(check, guard.commercialRole, guard.profile.id);
   const { data: allowed } = await check.maybeSingle();
   if (!allowed) return NextResponse.json({ error: 'Lead nao encontrado ou sem permissao.' }, { status: 404 });
@@ -164,10 +196,61 @@ export async function PATCH(request: Request) {
     'reuniao_realizada_at', 'reuniao_qualificada', 'no_show', 'observacoes', 'ultimo_contato_at', 'fechado_at',
   ];
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const closingSale = isClosedStage(targetStatus) && !isClosedStage(allowed.status);
+  const editingSaleFields = Object.prototype.hasOwnProperty.call(body, 'vendedor_id')
+    || Object.prototype.hasOwnProperty.call(body, 'reuniao_link');
+  if (editingSaleFields && !closingSale && guard.commercialRole !== 'coordenador') {
+    return NextResponse.json({ error: 'Somente o administrador pode editar os dados de uma venda concluida.' }, { status: 403 });
+  }
   for (const field of allowedFields) {
     if (!guard.canViewCommercialFinancials && ['valor_negociacao', 'valor_fechado'].includes(field)) continue;
     if (guard.commercialRole === 'sdr' && ['sdr_id', 'closer_id'].includes(field)) continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
+  }
+  if (closingSale) {
+    const automaticSellerId = guard.commercialRole === 'closer' || guard.profile.id === PEDRO_GHISOLFI_PROFILE_ID
+      ? guard.profile.id
+      : null;
+    const sellerId = String(body.vendedor_id || automaticSellerId || '').trim();
+    const meetingLink = validMeetingLink(body.reuniao_link);
+    if (!sellerId) {
+      return NextResponse.json({ error: 'Selecione quem realizou a venda.' }, { status: 400 });
+    }
+    const { data: sellerMember } = await supabaseAdmin
+      .from('comercial_membros')
+      .select('profile_id,papel,ativo')
+      .eq('profile_id', sellerId)
+      .eq('ativo', true)
+      .maybeSingle();
+    const validSeller = sellerMember?.papel === 'closer' || sellerId === PEDRO_GHISOLFI_PROFILE_ID;
+    if (!validSeller) {
+      return NextResponse.json({ error: 'O vendedor deve ser um closer ativo ou o administrador Pedro.' }, { status: 400 });
+    }
+    if (!meetingLink) {
+      return NextResponse.json({ error: 'Informe um link valido da reuniao para concluir a venda.' }, { status: 400 });
+    }
+    update.closer_id = sellerId;
+    update.observacoes = notesWithMeetingLink(body.observacoes ?? allowed.observacoes, meetingLink);
+  } else if (editingSaleFields && guard.commercialRole === 'coordenador') {
+    if (Object.prototype.hasOwnProperty.call(body, 'reuniao_link')) {
+      const meetingLink = validMeetingLink(body.reuniao_link);
+      if (!meetingLink) return NextResponse.json({ error: 'Informe um link valido da reuniao.' }, { status: 400 });
+      update.observacoes = notesWithMeetingLink(body.observacoes ?? allowed.observacoes, meetingLink);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'vendedor_id')) {
+      const sellerId = String(body.vendedor_id || '').trim();
+      if (!sellerId) return NextResponse.json({ error: 'Selecione quem realizou a venda.' }, { status: 400 });
+      const { data: sellerMember } = await supabaseAdmin
+        .from('comercial_membros')
+        .select('profile_id,papel,ativo')
+        .eq('profile_id', sellerId)
+        .eq('ativo', true)
+        .maybeSingle();
+      if (sellerMember?.papel !== 'closer' && sellerId !== PEDRO_GHISOLFI_PROFILE_ID) {
+        return NextResponse.json({ error: 'O vendedor deve ser um closer ativo ou o administrador Pedro.' }, { status: 400 });
+      }
+      update.closer_id = sellerId;
+    }
   }
   const statusChanged = Boolean(targetStatus) && targetStatus !== allowed.status;
   if (statusChanged && isNoShowStage(targetStatus) && !isNoShowStage(allowed.status)) {
@@ -185,7 +268,7 @@ export async function PATCH(request: Request) {
       Object.prototype.hasOwnProperty.call(body, 'investimento') ? body.investimento : allowed.investimento,
     );
   }
-  if (update.status === 'Negócio fechado' && !Object.prototype.hasOwnProperty.call(body, 'fechado_at')) {
+  if (isClosedStage(update.status) && !Object.prototype.hasOwnProperty.call(body, 'fechado_at')) {
     update.fechado_at = new Date().toISOString();
   }
 
@@ -207,9 +290,9 @@ export async function PATCH(request: Request) {
     actorId: guard.profile.id,
     type: statusChanged ? (isNoShowStage(targetStatus) ? 'meeting_no_show' : 'stage_changed') : 'lead_updated',
     description: timelineDescription,
-    metadata: { from_status: allowed.status, to_status: targetStatus || allowed.status, fields: changedFields },
+    metadata: { from_status: allowed.status, to_status: targetStatus || allowed.status, fields: changedFields, vendedor_id: data.closer_id || null, reuniao_link: meetingLinkFromNotes(data.observacoes) },
   });
-  return NextResponse.json({ lead: redactFinancialFields(data, guard.canViewCommercialFinancials) });
+  return NextResponse.json({ lead: redactFinancialFields(enrichSaleFields(data), guard.canViewCommercialFinancials) });
 }
 
 export async function DELETE(request: Request) {

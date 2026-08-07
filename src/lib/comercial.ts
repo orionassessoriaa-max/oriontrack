@@ -72,12 +72,14 @@ export type CommercialLead = {
   status: string;
   sdr_id: string | null;
   closer_id: string | null;
+  vendedor_id: string | null;
   lead_qualificado: boolean;
   valor_negociacao: number;
   valor_fechado: number;
   reuniao_agendada_at: string | null;
   reuniao_realizada_at: string | null;
   reuniao_qualificada: boolean | null;
+  reuniao_link: string | null;
   no_show: boolean;
   no_show_count: number;
   observacoes: string | null;

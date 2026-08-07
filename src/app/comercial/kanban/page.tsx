@@ -168,6 +168,10 @@ export default function CommercialKanbanPage() {
   } | null>(null);
   const [meetingAt, setMeetingAt] = useState("");
   const [meetingSaving, setMeetingSaving] = useState(false);
+  const [saleMove, setSaleMove] = useState<{ leadId: string; status: string } | null>(null);
+  const [saleSellerId, setSaleSellerId] = useState("");
+  const [saleMeetingLink, setSaleMeetingLink] = useState("");
+  const [saleSaving, setSaleSaving] = useState(false);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [assignmentChoice, setAssignmentChoice] = useState<
     Record<string, string>
@@ -226,6 +230,10 @@ export default function CommercialKanbanPage() {
     () => members.filter((member) => member.ativo && member.papel === "sdr"),
     [members],
   );
+  const saleSellerMembers = useMemo(
+    () => members.filter((member) => member.ativo && (member.papel === "closer" || member.profile_id === "a12b63f9-4c72-4a92-a99a-98c020723a06")),
+    [members],
+  );
   const canAssignSdr = isDevOps || role === "coordenador";
   const visible = useMemo(
     () =>
@@ -264,6 +272,17 @@ export default function CommercialKanbanPage() {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase();
+    if (normalizedStatus.trim() === "negocio fechado") {
+      const lead = leads.find((item) => item.id === id);
+      const currentUserCanSell = role === "closer" || currentProfileId === "a12b63f9-4c72-4a92-a99a-98c020723a06";
+      const suggestedSeller = currentUserCanSell
+        ? currentProfileId || ""
+        : lead?.vendedor_id || lead?.closer_id || "";
+      setSaleMove({ leadId: id, status });
+      setSaleSellerId(saleSellerMembers.some((member) => member.profile_id === suggestedSeller) ? suggestedSeller : "");
+      setSaleMeetingLink(lead?.reuniao_link || "");
+      return;
+    }
     if (
       normalizedStatus.includes("reunio") &&
       normalizedStatus.includes("agend")
@@ -295,6 +314,35 @@ export default function CommercialKanbanPage() {
     } catch {
       await load();
     } finally {
+      setMovingId(null);
+    }
+  }
+  async function confirmSaleMove(event: React.FormEvent) {
+    event.preventDefault();
+    if (!saleMove || !saleSellerId || !saleMeetingLink.trim()) return;
+    setSaleSaving(true);
+    setMovingId(saleMove.leadId);
+    setStageError(null);
+    try {
+      const payload = await api("/api/comercial/leads", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: saleMove.leadId,
+          status: saleMove.status,
+          vendedor_id: saleSellerId,
+          reuniao_link: saleMeetingLink.trim(),
+        }),
+      });
+      if (payload.lead) {
+        setLeads((current) => current.map((lead) => lead.id === saleMove.leadId ? payload.lead : lead));
+      }
+      setSaleMove(null);
+      setSaleSellerId("");
+      setSaleMeetingLink("");
+    } catch (error) {
+      setStageError(error instanceof Error ? error.message : "Nao foi possivel contabilizar a venda.");
+    } finally {
+      setSaleSaving(false);
       setMovingId(null);
     }
   }
@@ -1105,6 +1153,26 @@ export default function CommercialKanbanPage() {
           </form>
         </div>
       )}
+      {saleMove && (
+        <div className="kh-modal" role="dialog" aria-modal="true" aria-labelledby="sale-modal-title">
+          <button type="button" className="kh-modal-scrim" aria-label="Fechar" onClick={() => setSaleMove(null)} />
+          <form className="kh-modal-sheet kh-meeting-modal" onSubmit={(event) => void confirmSaleMove(event)}>
+            <header>
+              <div><span>Venda concluida</span><h2 id="sale-modal-title">Confirmar negocio fechado</h2></div>
+              <button type="button" aria-label="Fechar" onClick={() => setSaleMove(null)}><X size={18} /></button>
+            </header>
+            <div className="kh-meeting-form">
+              <p>Confirme quem realizou a venda e informe o link da reuniao. A venda sera contabilizada somente depois desta confirmacao.</p>
+              <label><span>Quem vendeu?</span><select className="kh-input" value={saleSellerId} onChange={(event) => setSaleSellerId(event.target.value)} required autoFocus><option value="">Selecione o closer ou Pedro</option>{saleSellerMembers.map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
+              <label><span>Link da reuniao</span><input className="kh-input" type="url" value={saleMeetingLink} onChange={(event) => setSaleMeetingLink(event.target.value)} placeholder="https://meet.google.com/..." required /></label>
+            </div>
+            <footer>
+              <button type="button" className="kh-button" onClick={() => setSaleMove(null)}>Cancelar</button>
+              <button type="submit" className="kh-button primary" disabled={saleSaving || !saleSellerId || !saleMeetingLink.trim()}>{saleSaving ? <RefreshCw size={15} className="kh-spin" /> : <UserRound size={15} />} {saleSaving ? "Contabilizando..." : "Confirmar venda"}</button>
+            </footer>
+          </form>
+        </div>
+      )}
       <CommercialLeadDetailsModal
         lead={
           expandedLeadId
@@ -1114,6 +1182,7 @@ export default function CommercialKanbanPage() {
         members={members}
         canViewFinancials={canViewCommercialFinancials}
         readOnly={!canEditCommercial}
+        canEditSale={role === "coordenador" || isDevOps}
         stages={stages}
         onMoveStage={(status) => {
           if (expandedLeadId) void moveLead(expandedLeadId, status);
