@@ -1,4 +1,5 @@
 import { checkLeadAiTimeouts } from '@/lib/leadAiAgent';
+import { checkLeadAiInstanceHealth } from '@/lib/leadAiHealthMonitor';
 
 const DEFAULT_INTERVAL_MS = 60 * 1000;
 
@@ -25,6 +26,10 @@ async function runTimeoutCheck() {
     }
     if ('error' in result && result.error) {
       console.error('[lead_ai_timeout_scheduler] Timeout check returned error:', result.error);
+    }
+    const health = await checkLeadAiInstanceHealth();
+    if (health.disconnected > 0 || health.recovered > 0) {
+      console.log('[lead_ai_timeout_scheduler] AI instance health:', health);
     }
   } catch (error) {
     console.error('[lead_ai_timeout_scheduler] Timeout check failed:', error);

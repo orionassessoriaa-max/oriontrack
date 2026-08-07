@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { checkLeadAiTimeouts } from '@/lib/leadAiAgent';
+import { checkLeadAiInstanceHealth } from '@/lib/leadAiHealthMonitor';
 
 export async function POST(request: Request) {
   try {
@@ -11,13 +12,15 @@ export async function POST(request: Request) {
     }
 
     console.log('[uazapi_cron_timeout] Checking lead AI timeouts...');
-    const result = await checkLeadAiTimeouts();
+    const dryRun = new URL(request.url).searchParams.get('dry_run') === '1';
+    const result = dryRun ? { count: 0, dryRun: true } : await checkLeadAiTimeouts();
+    const health = await checkLeadAiInstanceHealth({ notify: !dryRun, reconnect: !dryRun, mutate: !dryRun });
     console.log('[uazapi_cron_timeout] Finished checking timeouts:', result);
 
-    return NextResponse.json({ ok: true, ...result });
-  } catch (error: any) {
+    return NextResponse.json({ ok: true, timeouts: result, health });
+  } catch (error: unknown) {
     console.error('[uazapi_cron_timeout] Error in timeout cron route:', error);
-    return NextResponse.json({ error: error?.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal Server Error' }, { status: 500 });
   }
 }
 
