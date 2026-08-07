@@ -1156,10 +1156,27 @@ function extractSummaryField(summary: string, key: string) {
   return match?.[1]?.trim() || '';
 }
 
-function cleanSummaryValue(value: unknown, fallback = 'Nao informado') {
+function polishNotificationPortuguese(value: string) {
+  return value
+    .replace(/\bnao\b/gi, (word) => word[0] === 'N' ? 'Não' : 'não')
+    .replace(/\banuncio\b/gi, (word) => word[0] === 'A' ? 'Anúncio' : 'anúncio')
+    .replace(/\bregiao\b/gi, (word) => word[0] === 'R' ? 'Região' : 'região')
+    .replace(/\btecnica\b/gi, (word) => word[0] === 'T' ? 'Técnica' : 'técnica')
+    .replace(/\btecnico\b/gi, (word) => word[0] === 'T' ? 'Técnico' : 'técnico')
+    .replace(/\bproxima\b/gi, (word) => word[0] === 'P' ? 'Próxima' : 'próxima')
+    .replace(/\bproximo\b/gi, (word) => word[0] === 'P' ? 'Próximo' : 'próximo')
+    .replace(/\bultima\b/gi, (word) => word[0] === 'U' ? 'Última' : 'última')
+    .replace(/\bultimo\b/gi, (word) => word[0] === 'U' ? 'Último' : 'último')
+    .replace(/\bsera\b/gi, (word) => word[0] === 'S' ? 'Será' : 'será')
+    .replace(/\bnumero\b/gi, (word) => word[0] === 'N' ? 'Número' : 'número')
+    .replace(/\bresponsavel\b/gi, (word) => word[0] === 'R' ? 'Responsável' : 'responsável')
+    .replace(/\bpossivel\b/gi, (word) => word[0] === 'P' ? 'Possível' : 'possível');
+}
+
+function cleanSummaryValue(value: unknown, fallback = 'Não informado') {
   const text = String(value ?? '').replace(/\*/g, '').replace(/\s+/g, ' ').trim();
   if (!text || ['-', 'nao', 'não', 'null', 'undefined'].includes(normalizeAiText(text))) return fallback;
-  return text;
+  return polishNotificationPortuguese(text);
 }
 
 function formatResponsibleSummary(lead: LeadRow, summary: string) {
@@ -1168,23 +1185,21 @@ function formatResponsibleSummary(lead: LeadRow, summary: string) {
   const errorReason = extractSummaryField(summary, 'Erro IA');
 
   return [
-    `Nome: ${cleanSummaryValue(lead.nome)}`,
-    `Telefone: ${cleanSummaryValue(lead.telefone)}`,
-    `Idades: ${field('Idades|Idade\\(s\\)', lead.idades)}`,
-    `CNPJ/MEI: ${field('CNPJ/MEI|Possui CNPJ/MEI', lead.possui_cnpj)}`,
-    `Cidade: ${field('Cidade', lead.cidade)}`,
-    `Anuncio: ${cleanSummaryValue(lead.utm_content)}`,
-    `Conjunto: ${cleanSummaryValue(lead.utm_term)}`,
-    `Campanha: ${cleanSummaryValue(lead.utm_campaign)}`,
-    `Investimento: ${field('Investimento|Investimento pretendido', lead.investimento)}`,
-    `Plano atual: ${field('Plano\\s+Atual|Plano atual', lead.plano_atual)}`,
-    `Motivo: ${field('Motivo|Motivo da busca', lead.motivo_busca)}`,
-    `Hospital/Regiao: ${field('Hospital/Regiao|Hospital/Regi.o de prefer.ncia', lead.hospital_preferencia)}`,
-    `Email: ${field('Email|E-mail', lead.email)}`,
-    `Agendado: ${field('Agendado', 'Nao')}`,
-    `Pendente: ${field('Pendente', 'Nao')}`,
-    finishedReason ? `Status da IA: ${cleanSummaryValue(finishedReason)}` : null,
-    errorReason ? `Erro IA: ${cleanSummaryValue(errorReason)}` : null,
+    `*Nome:* ${cleanSummaryValue(lead.nome)}`,
+    `*Telefone:* ${cleanSummaryValue(lead.telefone)}`,
+    `*Idades:* ${field('Idades|Idade\\(s\\)', lead.idades)}`,
+    `*CNPJ/MEI:* ${field('CNPJ/MEI|Possui CNPJ/MEI', lead.possui_cnpj)}`,
+    `*Cidade:* ${field('Cidade', lead.cidade)}`,
+    `*Investimento:* ${field('Investimento|Investimento pretendido', lead.investimento)}`,
+    `*Plano atual:* ${field('Plano\\s+Atual|Plano atual', lead.plano_atual)}`,
+    `*Motivo:* ${field('Motivo|Motivo da busca', lead.motivo_busca)}`,
+    `*Hospital/Região:* ${field('Hospital/Regiao|Hospital/Regi.o de prefer.ncia', lead.hospital_preferencia)}`,
+    `*E-mail:* ${field('Email|E-mail', lead.email)}`,
+    `*Agendado:* ${field('Agendado', 'Não')}`,
+    `*Pendente:* ${field('Pendente', 'Não')}`,
+    finishedReason ? `*Status da IA:* ${cleanSummaryValue(finishedReason)}` : null,
+    errorReason ? `*Erro da IA:* ${cleanSummaryValue(errorReason)}` : null,
+    `*Anúncio:* ${cleanSummaryValue(adName(lead))}`,
   ].filter(Boolean).join('\n');
 }
 

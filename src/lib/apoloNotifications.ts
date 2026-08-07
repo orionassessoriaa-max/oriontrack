@@ -66,17 +66,17 @@ export async function sendApoloWhatsApp({ type, title, message, profiles, respec
    for (const profile of uniqueProfiles) {
      const pref = prefsByProfile.get(profile.id) as any;
      if (respectPreferences && (!pref?.whatsapp_enabled || !isTypeEnabled(pref.tipos, type))) {
-       results.push({ profile_id: profile.id, status: 'skipped', reason: 'Preferencia desativada.' });
+       results.push({ profile_id: profile.id, status: 'skipped', reason: 'Preferência desativada.' });
        continue;
      }
  
      const phone = normalizePhone(pref.telefone || profile.telefone);
      if (!phone) {
-       results.push({ profile_id: profile.id, status: 'failed', reason: 'Telefone nao informado.' });
+       results.push({ profile_id: profile.id, status: 'failed', reason: 'Telefone não informado.' });
        continue;
      }
  
-     const text = `*${title}*\n\nOla, ${firstName(profile.nome)}!\n\n${message}\n\n_Apolo Notificador - Orion Track_`;
+     const text = `*${title}*\n\nOlá, ${firstName(profile.nome)}!\n\n${message}\n\n_Apolo Notificador - Orion Track_`;
      try {
        await uazapiFetch('/send/text', {
          method: 'POST',
