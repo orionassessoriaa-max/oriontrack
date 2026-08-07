@@ -410,7 +410,7 @@
 .kh-kanban-column > header b { min-width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid hsl(var(--stage-hue) 50% 35%); border-radius: 50%; background: rgba(0,0,0,.15); font-size: 10px; }
 .kh-kanban-column > header small { display: block; margin: 12px 0 0 33px; color: #9eb0c5; font-size: 10px; font-variant-numeric: tabular-nums; }
 .kh-kanban-cards { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 9px; overflow: hidden; }
-.kh-kanban-list { min-height: 0; max-height: 520px; flex: 0 1 520px; display: grid; align-content: start; gap: 8px; overflow-y: auto; padding-right: 4px; scrollbar-width: none; -ms-overflow-style: none; }
+.kh-kanban-list { min-height: 0; max-height: 520px; flex: 0 1 520px; display: grid; grid-auto-rows: max-content; align-content: start; gap: 8px; overflow-y: auto; padding-right: 4px; scrollbar-width: none; -ms-overflow-style: none; }
 .kh-kanban-list::-webkit-scrollbar { width: 0; height: 0; }
 .kh-remove-stage { display: none; }
 .kh-remove-stage:hover { color: #ff7580; opacity: 1; }
@@ -1189,9 +1189,11 @@
 /* Compact Kanban card aligned with the Danilo CRM reference. */
 .kh-danilo-card {
   box-sizing: border-box;
-  height: auto;
+  width: 100%;
+  height: fit-content;
   min-height: 174px !important;
-  overflow: visible;
+  align-self: start;
+  overflow: hidden;
   border: 1px solid #23354a !important;
   border-radius: 6px !important;
   background: #07111b !important;
@@ -1224,7 +1226,7 @@
   line-height: 1;
 }
 .kh-danilo-card .kh-card-inbox:hover { border-color: #2ce6a3; background: #08714c; color: #fff; }
-.kh-danilo-card .kh-card-actions { width: calc(100% - 4px); display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 2px 2px; min-height: 25px; }
+.kh-danilo-card .kh-card-actions { width: 100%; box-sizing: border-box; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; min-height: 25px; padding: 0 2px 2px; }
 .kh-danilo-card .kh-card-actions .kh-card-inbox { margin-top: 0; }
 .kh-danilo-card .kh-card-start { min-height: 25px; border: 1px solid #2d8cff; border-radius: 4px; background: #0d5ec9; color: #fff; padding: 4px 9px; font: inherit; font-size: 9px; font-weight: 800; line-height: 1; cursor: pointer; }
 .kh-danilo-card .kh-card-start:hover:not(:disabled) { border-color: #69b0ff; background: #1678ed; }

@@ -8,6 +8,8 @@ export const recentAiOutboundMessages = new Set<string>();
 // entrega o mesmo webhook duas vezes ao mesmo tempo
 const processingLeadLocks = new Map<string, number>();
 const AI_LOCK_TTL_MS = 30_000;
+const AI_REQUEST_TIMEOUT_MS = 9_000;
+const STALLED_INBOUND_RECOVERY_MS = 45_000;
 
 function cleanSignatureText(text: string) {
   return String(text || '').replace(/\s+/g, '').replace(/[\u{1F300}-\u{1FAFF}]/gu, '').toLowerCase();
@@ -456,6 +458,15 @@ function isInitialConfirmationQuestion(text?: string | null) {
 function isAffirmativeAnswer(text?: string | null) {
   const normalized = normalizeAiText(text);
   return /\b(sim|isso|correto|certo|ok|okay|pode|quero|gostaria|confirmo|perfeito|ta certo|esta certo)\b/.test(normalized);
+}
+
+function isDocumentTypeAnswer(text?: string | null) {
+  const normalized = normalizeAiText(text)
+    .replace(/[^a-z0-9\s/]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return /\b(cnpj|mei|cpf|pessoa fisica|pessoa juridica|empresa|empresarial)\b/.test(normalized);
 }
 
 function isGreetingOnly(text?: string | null) {
@@ -1308,30 +1319,56 @@ async function askAline(
     ? messages
     : [...messages, { role: 'user', content: customerMessage }];
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: process.env.ORION_LEAD_AI_MODEL || 'gpt-4o-mini',
-      temperature: 0.35,
-      max_tokens: 650,
-      messages: [
-        { role: 'system', content: system },
-        ...promptMessages,
-      ],
-      response_format: { type: 'json_object' },
-    }),
+  const requestBody = JSON.stringify({
+    model: process.env.ORION_LEAD_AI_MODEL || 'gpt-4o-mini',
+    temperature: 0.35,
+    max_tokens: 650,
+    messages: [
+      { role: 'system', content: system },
+      ...promptMessages,
+    ],
+    response_format: { type: 'json_object' },
   });
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || 'Erro ao chamar IA do lead.');
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: requestBody,
+        signal: controller.signal,
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        return parseAiJson(payload?.choices?.[0]?.message?.content || '');
+      }
+
+      const requestError = new Error(payload?.error?.message || `Erro HTTP ${response.status} ao chamar IA do lead.`);
+      if (response.status < 500 && response.status !== 408 && response.status !== 429) {
+        throw requestError;
+      }
+      lastError = requestError;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= 2) break;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 650));
   }
 
-  return parseAiJson(payload?.choices?.[0]?.message?.content || '');
+  if (lastError instanceof Error && lastError.name === 'AbortError') {
+    throw new Error('A IA demorou para responder em duas tentativas consecutivas.');
+  }
+  throw lastError instanceof Error ? lastError : new Error('Erro ao chamar IA do lead.');
 }
 
 function formatOperadoraName(name?: string | null) {
@@ -1497,6 +1534,18 @@ export async function continueLeadAiFromIncoming(options: {
 
   if (!session) { processingLeadLocks.delete(options.leadId); return { handled: false, reason: 'Sem sessao ativa.' }; }
 
+  // Registra a chegada antes de qualquer chamada externa. Assim, se o processo
+  // for interrompido, o monitor sabe que existe uma resposta pendente e pode
+  // retomá-la sem classificar o lead como silencioso.
+  await supabaseAdmin
+    .from('lead_ai_sessions')
+    .update({
+      last_customer_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', session.id)
+    .eq('status', 'active');
+
   const { data: lead } = await supabaseAdmin
     .from('leads')
     .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, email, motivo_busca, hospital_preferencia, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id')
@@ -1617,7 +1666,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   if (
     (isCnpjConfirmationQuestion(previousOutboundText) || recentCnpjConfirmation) &&
-    isAffirmativeAnswer(options.customerMessage)
+    (isAffirmativeAnswer(options.customerMessage) || isDocumentTypeAnswer(options.customerMessage))
   ) {
     const reply = customerReplyForFollowUp(nextQuestionAfterCnpjConfirmation(lead), lead, Boolean(previousOutboundText));
     if (options.incomingWasAudio) {
@@ -1840,6 +1889,8 @@ export async function handoffLeadAiToResponsible(leadId: string, reason: string)
 }
 
 export async function checkLeadAiTimeouts() {
+  await recoverStalledLeadAiSessions();
+
   const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
   // Find active sessions where the last AI message has been unanswered for 15 minutes.
@@ -1874,13 +1925,16 @@ export async function checkLeadAiTimeouts() {
 
     const { data: lastMsg } = await supabaseAdmin
       .from('whatsapp_mensagens')
-      .select('id, direction')
+      .select('id, direction, metadata, created_at')
       .eq('conversa_id', conv.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (!lastMsg || lastMsg.direction !== 'outbound') continue;
+    // Somente uma mensagem realmente enviada pela IA pode iniciar o timeout.
+    // Mensagens humanas do corretor nunca devem encerrar a sessão da IA.
+    if (!lastMsg || lastMsg.direction !== 'outbound' || !lastMsg.metadata?.ai_agent) continue;
+    if (new Date(lastMsg.created_at).getTime() > lastAiMessageAt + 5_000) continue;
 
     console.log(`[cron_timeout] Lead ${session.lead_id} timed out after unanswered AI message.`);
 
@@ -1922,6 +1976,69 @@ export async function checkLeadAiTimeouts() {
   }
 
   return { count: handoffCount };
+}
+
+async function recoverStalledLeadAiSessions() {
+  const recoveryCutoff = Date.now() - STALLED_INBOUND_RECOVERY_MS;
+  const { data: sessions, error } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .select('id, lead_id, last_ai_message_at')
+    .eq('status', 'active');
+
+  if (error) {
+    console.error('[lead_ai_recovery] Failed loading active sessions:', error);
+    return 0;
+  }
+
+  let recovered = 0;
+  for (const session of sessions || []) {
+    const { data: conversation } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .select('id')
+      .eq('lead_id', session.lead_id)
+      .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+    if (!conversation) continue;
+
+    const { data: lastMessage } = await supabaseAdmin
+      .from('whatsapp_mensagens')
+      .select('direction, mensagem, metadata, created_at')
+      .eq('conversa_id', conversation.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!lastMessage || lastMessage.direction !== 'inbound') continue;
+
+    const inboundAt = new Date(lastMessage.created_at).getTime();
+    const lastAiAt = session.last_ai_message_at ? new Date(session.last_ai_message_at).getTime() : 0;
+    if (!inboundAt || inboundAt > recoveryCutoff || inboundAt <= lastAiAt) continue;
+
+    const customerMessage = String(
+      lastMessage.metadata?.audio_transcript ||
+      lastMessage.metadata?.ai_customer_message ||
+      lastMessage.mensagem ||
+      ''
+    ).replace(/^Audio transcrito do cliente:\s*/i, '').trim();
+    if (!customerMessage) continue;
+
+    try {
+      const result = await continueLeadAiFromIncoming({
+        leadId: session.lead_id,
+        conversationId: conversation.id,
+        customerMessage,
+        incomingWasAudio: Boolean(lastMessage.metadata?.audio_transcript),
+      });
+      if (result.handled) recovered += 1;
+    } catch (recoveryError) {
+      console.error(`[lead_ai_recovery] Failed recovering lead ${session.lead_id}:`, recoveryError);
+    }
+  }
+
+  if (recovered > 0) {
+    console.log('[lead_ai_recovery] Recovered stalled inbound messages:', recovered);
+  }
+  return recovered;
 }
 function extractAgendadoValue(summary?: string | null): string | null {
   if (!summary) return null;
