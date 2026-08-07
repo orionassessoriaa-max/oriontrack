@@ -71,6 +71,8 @@ export async function GET(request: Request) {
     const realized = realizedLeads.filter((lead) => lead.sdr_id === member.profile_id);
     const sold = sales.filter((lead) => lead.sdr_id === member.profile_id);
     const noShows = meetings.reduce((sum, lead) => sum + Number(lead.no_show_count || (lead.no_show ? 1 : 0)), 0);
+    const qualified = realized.filter((lead) => lead.reuniao_qualificada === true).length;
+    const disqualified = realized.filter((lead) => lead.reuniao_qualificada === false).length;
     return {
       id: member.profile_id,
       name: profileMap.get(member.profile_id)?.nome || "SDR",
@@ -82,7 +84,8 @@ export async function GET(request: Request) {
       meetings: meetings.length,
       realized: realized.length,
       noShows,
-      qualified: realized.filter((lead) => lead.reuniao_qualificada === true).length,
+      qualified,
+      disqualified,
       sales: sold.length,
       ...(guard.canViewCommercialFinancials ? {
         revenue: sold.reduce((sum, lead) => sum + Number(lead.valor_fechado || lead.valor_pago || 0), 0),
@@ -91,9 +94,9 @@ export async function GET(request: Request) {
     };
   });
 
-  const dailyMap = new Map<string, { date: string; leads: number; calls: number; meetings: number; noShows: number; qualified: number; sales: number; revenue: number }>();
+  const dailyMap = new Map<string, { date: string; leads: number; calls: number; meetings: number; realized: number; noShows: number; qualified: number; disqualified: number; sales: number; revenue: number }>();
   const day = (date: string) => {
-    if (!dailyMap.has(date)) dailyMap.set(date, { date, leads: 0, calls: 0, meetings: 0, noShows: 0, qualified: 0, sales: 0, revenue: 0 });
+    if (!dailyMap.has(date)) dailyMap.set(date, { date, leads: 0, calls: 0, meetings: 0, realized: 0, noShows: 0, qualified: 0, disqualified: 0, sales: 0, revenue: 0 });
     return dailyMap.get(date)!;
   };
   enteredLeads.forEach((lead) => { day(String(lead.data_entrada).slice(0, 10)).leads += 1; });
@@ -102,7 +105,12 @@ export async function GET(request: Request) {
     const row = day(String(lead.reuniao_agendada_at).slice(0, 10));
     row.meetings += 1;
     row.noShows += Number(lead.no_show_count || (lead.no_show ? 1 : 0));
+  });
+  realizedLeads.forEach((lead) => {
+    const row = day(String(lead.reuniao_realizada_at).slice(0, 10));
+    row.realized += 1;
     if (lead.reuniao_qualificada === true) row.qualified += 1;
+    if (lead.reuniao_qualificada === false) row.disqualified += 1;
   });
   sales.forEach((lead) => {
     const row = day(String(lead.fechado_at || lead.updated_at).slice(0, 10));
@@ -120,20 +128,30 @@ export async function GET(request: Request) {
       revenue: modelSales.reduce((sum, lead) => sum + Number(lead.valor_fechado || lead.valor_pago || 0), 0),
     };
   });
-  const originMap = new Map<string, { origin: string; leads: number; scheduled: number; realized: number; qualified: number; sales: number }>();
+  const originMap = new Map<string, { origin: string; leads: number; scheduled: number; realized: number; noShows: number; qualified: number; disqualified: number; sales: number; revenue: number }>();
   const originName = (lead: Record<string, unknown>) => String(lead.origem || lead.utm_source || "Nao informado").trim() || "Nao informado";
   const originRow = (lead: Record<string, unknown>) => {
     const origin = originName(lead);
-    if (!originMap.has(origin)) originMap.set(origin, { origin, leads: 0, scheduled: 0, realized: 0, qualified: 0, sales: 0 });
+    if (!originMap.has(origin)) originMap.set(origin, { origin, leads: 0, scheduled: 0, realized: 0, noShows: 0, qualified: 0, disqualified: 0, sales: 0, revenue: 0 });
     return originMap.get(origin)!;
   };
   enteredLeads.forEach((lead) => { originRow(lead).leads += 1; });
-  scheduledLeads.forEach((lead) => { originRow(lead).scheduled += 1; });
+  scheduledLeads.forEach((lead) => {
+    originRow(lead).scheduled += 1;
+    originRow(lead).noShows += Number(lead.no_show_count || (lead.no_show ? 1 : 0));
+  });
   realizedLeads.forEach((lead) => {
     originRow(lead).realized += 1;
     if (lead.reuniao_qualificada === true) originRow(lead).qualified += 1;
+    if (lead.reuniao_qualificada === false) originRow(lead).disqualified += 1;
   });
-  sales.forEach((lead) => { originRow(lead).sales += 1; });
+  sales.forEach((lead) => {
+    originRow(lead).sales += 1;
+    originRow(lead).revenue += Number(lead.valor_fechado || lead.valor_pago || 0);
+  });
+  const qualifiedMeetings = realizedLeads.filter((lead) => lead.reuniao_qualificada === true).length;
+  const disqualifiedMeetings = realizedLeads.filter((lead) => lead.reuniao_qualificada === false).length;
+  const fullyReceivedSales = sales.filter((lead) => Number(lead.valor_pago || 0) >= Number(lead.valor_fechado || lead.valor_pago || 0) && Number(lead.valor_pago || 0) > 0).length;
   return NextResponse.json({
     start,
     end,
@@ -143,9 +161,11 @@ export async function GET(request: Request) {
       answeredCalls: calls.filter((call) => ["atendida", "concluida"].includes(call.status)).length,
       scheduled: scheduledLeads.length,
       realized: realizedLeads.length,
-      qualified: realizedLeads.filter((lead) => lead.reuniao_qualificada === true).length,
+      qualified: qualifiedMeetings,
+      disqualified: disqualifiedMeetings,
       noShows: scheduledLeads.reduce((sum, lead) => sum + Number(lead.no_show_count || (lead.no_show ? 1 : 0)), 0),
       sales: sales.length,
+      fullyReceivedSales,
       ...(guard.canViewCommercialFinancials ? { revenue, receivedRevenue, receivableRevenue: Math.max(0, revenue - receivedRevenue), averageTicket: sales.length ? revenue / sales.length : 0 } : {}),
     },
     team,
@@ -163,6 +183,8 @@ export async function GET(request: Request) {
       sdr_name: profileMap.get(lead.sdr_id)?.nome || "Sem SDR",
       seller_name: profileMap.get(lead.closer_id)?.nome || "Não informado",
       closed_at: lead.fechado_at || lead.updated_at,
+      meeting_at: lead.reuniao_realizada_at || lead.reuniao_agendada_at,
+      origin: originName(lead),
       payment_model: lead.modelo_pagamento,
       ...(guard.canViewCommercialFinancials ? { amount: Number(lead.valor_fechado || lead.valor_pago || 0), received_amount: Number(lead.valor_pago || 0) } : {}),
     })),
