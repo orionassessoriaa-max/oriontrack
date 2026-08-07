@@ -130,9 +130,9 @@ export async function requireCommercialUser(
     };
   }
 
-  // Acesso financeiro pertence ao coordenador da operacao. Nunca herdar a
-  // permissao do admin original quando ele estiver visualizando um integrante.
-  const canViewCommercialFinancials = role === "coordenador";
+  // Coordenador e closer acompanham o resultado financeiro completo. A edicao
+  // administrativa continua protegida separadamente nas rotas de escrita.
+  const canViewCommercialFinancials = role === "coordenador" || role === "closer";
   const canViewCommercialLeadQualification = true;
   return {
     user: base.user,

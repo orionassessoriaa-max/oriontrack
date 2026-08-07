@@ -5,8 +5,11 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 function monthStart(value?: string) { return /^\d{4}-\d{2}$/.test(value || '') ? `${value}-01` : new Date().toISOString().slice(0, 7) + '-01'; }
 
 export async function GET(request: Request) {
-  const guard = await requireCommercialUser(request, true);
+  const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
+  if (!['coordenador', 'closer'].includes(guard.commercialRole)) {
+    return NextResponse.json({ error: 'Visualizacao de metas restrita ao coordenador e ao closer.' }, { status: 403 });
+  }
   const month = monthStart(new URL(request.url).searchParams.get('month') || undefined);
   const end = new Date(new Date(`${month}T12:00:00Z`).getUTCFullYear(), new Date(`${month}T12:00:00Z`).getUTCMonth() + 1, 0).toISOString();
   const [{ data: goal }, { data: leads, error }] = await Promise.all([
