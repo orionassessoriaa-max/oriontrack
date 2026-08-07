@@ -581,6 +581,53 @@ function nextQuestionAfterCnpjConfirmation(lead: LeadRow) {
   return `Perfeito, ${firstName}. Com essas informacoes, consigo analisar seu perfil e te apresentar as melhores opcoes com mais clareza.\n\nQue dia e horario voce esta mais confortavel para uma ligacao rapida de 15 minutos?`;
 }
 
+function fallbackLeadAiContinuation(params: {
+  lead: LeadRow;
+  sessionSummary?: string | null;
+  customerMessage: string;
+  previousOutboundText?: string | null;
+}) {
+  const { lead, customerMessage, previousOutboundText } = params;
+  const customerText = String(customerMessage || '').trim();
+  const normalizedCustomer = normalizeAiText(customerText);
+  const normalizedPrevious = normalizeAiText(previousOutboundText);
+  let summary = params.sessionSummary || leadFacts(lead);
+
+  if (/hospital|clinica|rede|regiao/.test(normalizedPrevious)) {
+    summary = appendSummaryLine(summary, `*Hospital/Regiao*: ${customerText}`);
+  } else if (/e-?mail/.test(normalizedPrevious) || /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/.test(customerText)) {
+    summary = appendSummaryLine(summary, `*Email*: ${customerText}`);
+  } else if (/\b(pagando|pagar|economizar|mais barato|reduzir|diminuir|caro)\b/.test(normalizedCustomer)) {
+    summary = appendSummaryLine(summary, `*Motivo*: ${customerText}`);
+  } else {
+    summary = appendSummaryLine(summary, `*Observacao do lead*: ${customerText}`);
+  }
+
+  summary = appendSummaryLine(summary, '*Contingencia*: resposta mantida automaticamente durante indisponibilidade temporaria do gerador de IA.');
+
+  const hospital = extractSummaryField(summary, 'Hospital/Regiao');
+  const motive = extractSummaryField(summary, 'Motivo');
+  const email = extractSummaryField(summary, 'Email');
+
+  let reply: string;
+  if (!hasKnownValue(lead.hospital_preferencia) && !hasKnownValue(hospital)) {
+    reply = 'Entendi. Tem algum hospital ou clinica de preferencia na sua regiao?';
+  } else if (!hasKnownValue(lead.motivo_busca) && !hasKnownValue(motive)) {
+    reply = 'Anotado. E qual e o principal motivo para buscar um novo plano: economia, rede de atendimento ou alguma necessidade especifica?';
+  } else if (!hasKnownValue(lead.email) && !hasKnownValue(email)) {
+    reply = 'Certo. Qual e o melhor e-mail para eu deixar a proposta organizada?';
+  } else {
+    reply = 'Com essas informacoes, consigo direcionar melhor as opcoes. Que dia e horario voce esta mais confortavel para uma ligacao rapida de 15 minutos?';
+  }
+
+  return {
+    handoff: false,
+    reply,
+    summary,
+    fallback: true,
+  };
+}
+
 function isSchedulePrompt(text?: string | null) {
   const normalized = normalizeAiText(text);
   return (
@@ -1784,11 +1831,12 @@ export async function continueLeadAiFromIncoming(options: {
     try {
       ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName, contactMode);
     } catch (error) {
-      console.error('[lead_ai_agent] IA falhou ao continuar atendimento. Fazendo handoff:', error);
-      return await handoffAiFailure({
-        session,
+      console.error('[lead_ai_agent] IA falhou ao continuar atendimento. Usando fluxo de contingencia:', error);
+      ai = fallbackLeadAiContinuation({
         lead,
-        reason: 'falha tecnica ao gerar a proxima resposta da IA.',
+        sessionSummary: session.summary,
+        customerMessage: options.customerMessage,
+        previousOutboundText,
       });
     }
   }
