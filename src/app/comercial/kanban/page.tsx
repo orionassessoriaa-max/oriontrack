@@ -8,6 +8,8 @@ import {
   CalendarPlus,
   ChevronDown,
   ChevronUp,
+  Download,
+  FileCheck2,
   GripVertical,
   MessageSquare,
   Paperclip,
@@ -29,6 +31,7 @@ import {
   type CommercialStage,
 } from "@/lib/comercial";
 import { getCommercialMqlLevel } from "@/lib/commercialQualification";
+import { supabase } from "@/lib/supabase/client";
 
 type DatePreset =
   "todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado";
@@ -48,6 +51,12 @@ function localDateValue(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+function localDateTimeValue(value: string | Date = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 function formatLeadEntry(value: string | null | undefined) {
   if (!value) return "Entrada não informada";
@@ -171,7 +180,12 @@ export default function CommercialKanbanPage() {
   const [saleMove, setSaleMove] = useState<{ leadId: string; status: string } | null>(null);
   const [saleSellerId, setSaleSellerId] = useState("");
   const [saleMeetingLink, setSaleMeetingLink] = useState("");
+  const [saleClosedAt, setSaleClosedAt] = useState(localDateTimeValue());
+  const [saleAmountPaid, setSaleAmountPaid] = useState("");
+  const [salePaymentModel, setSalePaymentModel] = useState<"" | "tcv" | "mrr" | "mesclado">("");
+  const [saleBriefingLead, setSaleBriefingLead] = useState<CommercialLead | null>(null);
   const [saleSaving, setSaleSaving] = useState(false);
+  const [briefingDownloading, setBriefingDownloading] = useState<string | null>(null);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [assignmentChoice, setAssignmentChoice] = useState<
     Record<string, string>
@@ -281,6 +295,10 @@ export default function CommercialKanbanPage() {
       setSaleMove({ leadId: id, status });
       setSaleSellerId(saleSellerMembers.some((member) => member.profile_id === suggestedSeller) ? suggestedSeller : "");
       setSaleMeetingLink(lead?.reuniao_link || "");
+      setSaleClosedAt(localDateTimeValue(lead?.fechado_at || new Date()));
+      setSaleAmountPaid(String(lead?.valor_pago || lead?.valor_fechado || ""));
+      setSalePaymentModel(lead?.modelo_pagamento || "");
+      setSaleBriefingLead(null);
       return;
     }
     if (
@@ -319,7 +337,7 @@ export default function CommercialKanbanPage() {
   }
   async function confirmSaleMove(event: React.FormEvent) {
     event.preventDefault();
-    if (!saleMove || !saleSellerId || !saleMeetingLink.trim()) return;
+    if (!saleMove || !saleSellerId || !saleMeetingLink.trim() || !saleClosedAt || !saleAmountPaid || !salePaymentModel) return;
     setSaleSaving(true);
     setMovingId(saleMove.leadId);
     setStageError(null);
@@ -331,19 +349,50 @@ export default function CommercialKanbanPage() {
           status: saleMove.status,
           vendedor_id: saleSellerId,
           reuniao_link: saleMeetingLink.trim(),
+          fechado_at: new Date(saleClosedAt).toISOString(),
+          valor_pago: Number(saleAmountPaid),
+          modelo_pagamento: salePaymentModel,
         }),
       });
       if (payload.lead) {
         setLeads((current) => current.map((lead) => lead.id === saleMove.leadId ? payload.lead : lead));
+        setSaleBriefingLead(payload.lead);
       }
-      setSaleMove(null);
-      setSaleSellerId("");
-      setSaleMeetingLink("");
     } catch (error) {
       setStageError(error instanceof Error ? error.message : "Nao foi possivel contabilizar a venda.");
     } finally {
       setSaleSaving(false);
       setMovingId(null);
+    }
+  }
+  async function downloadBriefingPdf(leadId: string) {
+    setBriefingDownloading(leadId);
+    setStageError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sessão expirada. Entre novamente para baixar o PDF.");
+      const query = currentProfileId ? `?view_profile_id=${encodeURIComponent(currentProfileId)}` : "";
+      const response = await fetch(`/api/comercial/leads/${leadId}/briefing${query}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Não foi possível baixar o briefing.");
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `briefing-onboarding-${leadId}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      setStageError(error instanceof Error ? error.message : "Não foi possível baixar o briefing.");
+    } finally {
+      setBriefingDownloading(null);
     }
   }
   async function confirmMeetingMove(event: React.FormEvent) {
@@ -1162,13 +1211,33 @@ export default function CommercialKanbanPage() {
               <button type="button" aria-label="Fechar" onClick={() => setSaleMove(null)}><X size={18} /></button>
             </header>
             <div className="kh-meeting-form">
-              <p>Confirme quem realizou a venda e informe o link da reuniao. A venda sera contabilizada somente depois desta confirmacao.</p>
-              <label><span>Quem vendeu?</span><select className="kh-input" value={saleSellerId} onChange={(event) => setSaleSellerId(event.target.value)} required autoFocus><option value="">Selecione o closer ou Pedro</option>{saleSellerMembers.map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
-              <label><span>Link da reuniao</span><input className="kh-input" type="url" value={saleMeetingLink} onChange={(event) => setSaleMeetingLink(event.target.value)} placeholder="https://meet.google.com/..." required /></label>
+              {saleBriefingLead ? (
+                <div className="kh-briefing-ready">
+                  <FileCheck2 size={30} />
+                  <div><strong>Venda salva e briefing gerado</strong><p>O relatório operacional foi preparado com até 15 tópicos e já pode ser baixado em PDF.</p></div>
+                  <ol>{String(saleBriefingLead.onboarding_briefing || "").split(/\r?\n/).filter(Boolean).slice(0, 15).map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}</ol>
+                </div>
+              ) : (
+                <>
+                  <p>Informe os dados do fechamento e o link da reunião. Ao salvar, o briefing operacional será gerado automaticamente.</p>
+                  <label><span>Quem vendeu?</span><select className="kh-input" value={saleSellerId} onChange={(event) => setSaleSellerId(event.target.value)} required autoFocus><option value="">Selecione o closer ou Pedro</option>{saleSellerMembers.map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
+                  <div className="kh-sale-grid">
+                    <label><span>Quando o lead fechou?</span><input className="kh-input" type="datetime-local" value={saleClosedAt} onChange={(event) => setSaleClosedAt(event.target.value)} required /></label>
+                    <label><span>Quanto pagou?</span><input className="kh-input" type="number" min="0.01" step="0.01" value={saleAmountPaid} onChange={(event) => setSaleAmountPaid(event.target.value)} placeholder="0,00" required /></label>
+                  </div>
+                  <label><span>Modelo de pagamento</span><select className="kh-input" value={salePaymentModel} onChange={(event) => setSalePaymentModel(event.target.value as typeof salePaymentModel)} required><option value="">Selecione</option><option value="tcv">TCV</option><option value="mrr">MRR</option><option value="mesclado">Mesclado</option></select></label>
+                  <label><span>Link da reunião</span><input className="kh-input" type="url" value={saleMeetingLink} onChange={(event) => setSaleMeetingLink(event.target.value)} placeholder="https://meet.google.com/..." required /></label>
+                </>
+              )}
+              {stageError && <div className="kh-inline-error" role="alert">{stageError}</div>}
             </div>
             <footer>
-              <button type="button" className="kh-button" onClick={() => setSaleMove(null)}>Cancelar</button>
-              <button type="submit" className="kh-button primary" disabled={saleSaving || !saleSellerId || !saleMeetingLink.trim()}>{saleSaving ? <RefreshCw size={15} className="kh-spin" /> : <UserRound size={15} />} {saleSaving ? "Contabilizando..." : "Confirmar venda"}</button>
+              <button type="button" className="kh-button" onClick={() => { setSaleMove(null); setSaleBriefingLead(null); }}>{saleBriefingLead ? "Concluir" : "Cancelar"}</button>
+              {saleBriefingLead ? (
+                <button type="button" className="kh-button primary" disabled={briefingDownloading === saleBriefingLead.id} onClick={() => void downloadBriefingPdf(saleBriefingLead.id)}><Download size={15} /> {briefingDownloading === saleBriefingLead.id ? "Baixando..." : "Baixar PDF agora"}</button>
+              ) : (
+                <button type="submit" className="kh-button primary" disabled={saleSaving || !saleSellerId || !saleMeetingLink.trim() || !saleClosedAt || !saleAmountPaid || !salePaymentModel}>{saleSaving ? <RefreshCw size={15} className="kh-spin" /> : <UserRound size={15} />} {saleSaving ? "Gerando briefing..." : "Salvar e gerar briefing"}</button>
+              )}
             </footer>
           </form>
         </div>
@@ -1183,6 +1252,8 @@ export default function CommercialKanbanPage() {
         canViewFinancials={canViewCommercialFinancials}
         readOnly={!canEditCommercial}
         canEditSale={role === "coordenador" || isDevOps}
+        briefingDownloading={briefingDownloading === expandedLeadId}
+        onDownloadBriefing={(leadId) => downloadBriefingPdf(leadId)}
         stages={stages}
         onMoveStage={(status) => {
           if (expandedLeadId) void moveLead(expandedLeadId, status);

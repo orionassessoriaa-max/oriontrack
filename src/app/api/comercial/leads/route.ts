@@ -7,6 +7,7 @@ import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
 import { isCommercialMql } from '@/lib/commercialQualification';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
+import { generateOnboardingBriefing } from '@/lib/commercialOnboardingBriefing';
 
 function normalizeStage(value: unknown) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -40,8 +41,8 @@ function notesWithMeetingLink(notes: unknown, link: string) {
   return parts.join(' | ');
 }
 
-function enrichSaleFields<T extends Record<string, any>>(lead: T) {
-  return { ...lead, vendedor_id: lead.closer_id || null, reuniao_link: meetingLinkFromNotes(lead.observacoes) };
+function enrichSaleFields<T extends Record<string, unknown>>(lead: T) {
+  return { ...lead, vendedor_id: lead.closer_id || null, reuniao_link: lead.reuniao_link || meetingLinkFromNotes(lead.observacoes) };
 }
 
 function validMeetingLink(value: unknown) {
@@ -53,10 +54,10 @@ function validMeetingLink(value: unknown) {
   }
 }
 
-function redactFinancialFields<T extends Record<string, any>>(lead: T, canView: boolean) {
+function redactFinancialFields<T extends Record<string, unknown>>(lead: T, canView: boolean) {
   if (canView) return lead;
   const sanitized = { ...lead };
-  for (const field of ['valor_negociacao', 'valor_fechado']) delete sanitized[field];
+  for (const field of ['valor_negociacao', 'valor_fechado', 'valor_pago', 'modelo_pagamento']) delete sanitized[field];
   return sanitized;
 }
 
@@ -176,7 +177,7 @@ export async function PATCH(request: Request) {
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'Lead obrigatorio.' }, { status: 400 });
 
-  let check = supabaseAdmin.from('comercial_leads').select('id,sdr_id,closer_id,observacoes,status,reuniao_agendada_at,reuniao_realizada_at,no_show,no_show_count,faturamento_mensal,investimento,lead_qualificado').eq('id', id);
+  let check = supabaseAdmin.from('comercial_leads').select('*').eq('id', id);
   check = applyCommercialLeadScope(check, guard.commercialRole, guard.profile.id);
   const { data: allowed } = await check.maybeSingle();
   if (!allowed) return NextResponse.json({ error: 'Lead nao encontrado ou sem permissao.' }, { status: 404 });
@@ -194,16 +195,20 @@ export async function PATCH(request: Request) {
     'utm_content', 'status', 'sdr_id', 'closer_id',
     'lead_qualificado', 'valor_negociacao', 'valor_fechado', 'reuniao_agendada_at',
     'reuniao_realizada_at', 'reuniao_qualificada', 'no_show', 'observacoes', 'ultimo_contato_at', 'fechado_at',
+    'valor_pago', 'modelo_pagamento', 'reuniao_link',
   ];
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   const closingSale = isClosedStage(targetStatus) && !isClosedStage(allowed.status);
   const editingSaleFields = Object.prototype.hasOwnProperty.call(body, 'vendedor_id')
-    || Object.prototype.hasOwnProperty.call(body, 'reuniao_link');
+    || Object.prototype.hasOwnProperty.call(body, 'reuniao_link')
+    || Object.prototype.hasOwnProperty.call(body, 'valor_pago')
+    || Object.prototype.hasOwnProperty.call(body, 'modelo_pagamento')
+    || Object.prototype.hasOwnProperty.call(body, 'fechado_at');
   if (editingSaleFields && !closingSale && guard.commercialRole !== 'coordenador') {
     return NextResponse.json({ error: 'Somente o administrador pode editar os dados de uma venda concluida.' }, { status: 403 });
   }
   for (const field of allowedFields) {
-    if (!guard.canViewCommercialFinancials && ['valor_negociacao', 'valor_fechado'].includes(field)) continue;
+    if (!guard.canViewCommercialFinancials && ['valor_negociacao', 'valor_fechado', 'valor_pago', 'modelo_pagamento'].includes(field)) continue;
     if (guard.commercialRole === 'sdr' && ['sdr_id', 'closer_id'].includes(field)) continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
   }
@@ -213,6 +218,9 @@ export async function PATCH(request: Request) {
       : null;
     const sellerId = String(body.vendedor_id || automaticSellerId || '').trim();
     const meetingLink = validMeetingLink(body.reuniao_link);
+    const amountPaid = Number(body.valor_pago);
+    const paymentModel = String(body.modelo_pagamento || '').trim().toLowerCase();
+    const closedAt = body.fechado_at ? new Date(String(body.fechado_at)) : new Date();
     if (!sellerId) {
       return NextResponse.json({ error: 'Selecione quem realizou a venda.' }, { status: 400 });
     }
@@ -229,12 +237,27 @@ export async function PATCH(request: Request) {
     if (!meetingLink) {
       return NextResponse.json({ error: 'Informe um link valido da reuniao para concluir a venda.' }, { status: 400 });
     }
+    if (!Number.isFinite(amountPaid) || amountPaid <= 0) {
+      return NextResponse.json({ error: 'Informe quanto o cliente pagou.' }, { status: 400 });
+    }
+    if (!['tcv', 'mrr', 'mesclado'].includes(paymentModel)) {
+      return NextResponse.json({ error: 'Selecione o modelo de pagamento: TCV, MRR ou Mesclado.' }, { status: 400 });
+    }
+    if (Number.isNaN(closedAt.getTime())) {
+      return NextResponse.json({ error: 'Informe uma data valida para o fechamento.' }, { status: 400 });
+    }
     update.closer_id = sellerId;
+    update.valor_pago = amountPaid;
+    update.valor_fechado = amountPaid;
+    update.modelo_pagamento = paymentModel;
+    update.fechado_at = closedAt.toISOString();
+    update.reuniao_link = meetingLink;
     update.observacoes = notesWithMeetingLink(body.observacoes ?? allowed.observacoes, meetingLink);
   } else if (editingSaleFields && guard.commercialRole === 'coordenador') {
     if (Object.prototype.hasOwnProperty.call(body, 'reuniao_link')) {
       const meetingLink = validMeetingLink(body.reuniao_link);
       if (!meetingLink) return NextResponse.json({ error: 'Informe um link valido da reuniao.' }, { status: 400 });
+      update.reuniao_link = meetingLink;
       update.observacoes = notesWithMeetingLink(body.observacoes ?? allowed.observacoes, meetingLink);
     }
     if (Object.prototype.hasOwnProperty.call(body, 'vendedor_id')) {
@@ -250,6 +273,28 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'O vendedor deve ser um closer ativo ou o administrador Pedro.' }, { status: 400 });
       }
       update.closer_id = sellerId;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'valor_pago')) {
+      const amountPaid = Number(body.valor_pago);
+      if (!Number.isFinite(amountPaid) || amountPaid <= 0) {
+        return NextResponse.json({ error: 'Informe quanto o cliente pagou.' }, { status: 400 });
+      }
+      update.valor_pago = amountPaid;
+      update.valor_fechado = amountPaid;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'modelo_pagamento')) {
+      const paymentModel = String(body.modelo_pagamento || '').trim().toLowerCase();
+      if (!['tcv', 'mrr', 'mesclado'].includes(paymentModel)) {
+        return NextResponse.json({ error: 'Selecione o modelo de pagamento: TCV, MRR ou Mesclado.' }, { status: 400 });
+      }
+      update.modelo_pagamento = paymentModel;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'fechado_at')) {
+      const closedAt = new Date(String(body.fechado_at || ''));
+      if (Number.isNaN(closedAt.getTime())) {
+        return NextResponse.json({ error: 'Informe uma data valida para o fechamento.' }, { status: 400 });
+      }
+      update.fechado_at = closedAt.toISOString();
     }
   }
   const statusChanged = Boolean(targetStatus) && targetStatus !== allowed.status;
@@ -274,6 +319,40 @@ export async function PATCH(request: Request) {
 
   const { data, error } = await supabaseAdmin.from('comercial_leads').update(update).eq('id', id).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  let result = data;
+  const shouldGenerateBriefing = isClosedStage(data.status)
+    && (closingSale
+      || Object.prototype.hasOwnProperty.call(body, 'reuniao_link')
+      || Object.prototype.hasOwnProperty.call(body, 'valor_pago')
+      || Object.prototype.hasOwnProperty.call(body, 'modelo_pagamento')
+      || Object.prototype.hasOwnProperty.call(body, 'fechado_at'));
+  if (shouldGenerateBriefing && data.reuniao_link) {
+    const [{ data: seller }, { data: interactions }] = await Promise.all([
+      data.closer_id
+        ? supabaseAdmin.from('profiles').select('nome').eq('id', data.closer_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabaseAdmin
+        .from('comercial_lead_interacoes')
+        .select('comentario,tipo,created_at')
+        .eq('lead_id', id)
+        .order('created_at', { ascending: false })
+        .limit(50),
+    ]);
+    const briefingLines = await generateOnboardingBriefing({
+      lead: data,
+      meetingLink: data.reuniao_link,
+      sellerName: seller?.nome || null,
+      interactions: interactions || [],
+    });
+    const briefingGeneratedAt = new Date().toISOString();
+    const briefingUpdate = await supabaseAdmin
+      .from('comercial_leads')
+      .update({ onboarding_briefing: briefingLines.join('\n'), briefing_gerado_at: briefingGeneratedAt })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (!briefingUpdate.error && briefingUpdate.data) result = briefingUpdate.data;
+  }
   await writeAuditLog(request, guard.profile, {
     action: 'commercial.lead.update', entity_type: 'commercial_lead', entity_id: id, metadata: { fields: Object.keys(update) },
   });
@@ -290,9 +369,9 @@ export async function PATCH(request: Request) {
     actorId: guard.profile.id,
     type: statusChanged ? (isNoShowStage(targetStatus) ? 'meeting_no_show' : 'stage_changed') : 'lead_updated',
     description: timelineDescription,
-    metadata: { from_status: allowed.status, to_status: targetStatus || allowed.status, fields: changedFields, vendedor_id: data.closer_id || null, reuniao_link: meetingLinkFromNotes(data.observacoes) },
+    metadata: { from_status: allowed.status, to_status: targetStatus || allowed.status, fields: changedFields, vendedor_id: result.closer_id || null, reuniao_link: result.reuniao_link || meetingLinkFromNotes(result.observacoes) },
   });
-  return NextResponse.json({ lead: redactFinancialFields(enrichSaleFields(data), guard.canViewCommercialFinancials) });
+  return NextResponse.json({ lead: redactFinancialFields(enrichSaleFields(result), guard.canViewCommercialFinancials) });
 }
 
 export async function DELETE(request: Request) {

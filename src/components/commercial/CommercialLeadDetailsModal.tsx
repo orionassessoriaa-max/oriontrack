@@ -8,6 +8,7 @@ import {
   ChevronDown,
   CircleX,
   Clock3,
+  Download,
   FileText,
   MessageSquarePlus,
   Paperclip,
@@ -69,6 +70,8 @@ type Props = {
   onAddInteraction: (event: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
   onSave: (data: Record<string, unknown>) => Promise<void>;
+  onDownloadBriefing?: (leadId: string) => Promise<void>;
+  briefingDownloading?: boolean;
 };
 
 type EditableLead = {
@@ -94,6 +97,9 @@ type EditableLead = {
   closer_id: string;
   vendedor_id: string;
   reuniao_link: string;
+  fechado_at: string;
+  valor_pago: string;
+  modelo_pagamento: string;
   valor_negociacao: string;
   observacoes: string;
   decisor: string;
@@ -113,6 +119,17 @@ function dateTime(value: string | null | undefined) {
         timeStyle: "short",
       })
     : "Não informado";
+}
+
+function dateTimeInput(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
+function money(value: number | null | undefined) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
 }
 
 function displayValue(value: unknown) {
@@ -245,6 +262,9 @@ function editableLead(lead: CommercialLead): EditableLead {
     closer_id: lead.closer_id || "",
     vendedor_id: lead.vendedor_id || lead.closer_id || "",
     reuniao_link: lead.reuniao_link || "",
+    fechado_at: dateTimeInput(lead.fechado_at),
+    valor_pago: String(lead.valor_pago || lead.valor_fechado || ""),
+    modelo_pagamento: lead.modelo_pagamento || "",
     valor_negociacao: String(lead.valor_negociacao || ""),
     observacoes: lead.observacoes || "",
     decisor:
@@ -279,6 +299,8 @@ export default function CommercialLeadDetailsModal({
   onAddInteraction,
   onClose,
   onSave,
+  onDownloadBriefing,
+  briefingDownloading = false,
 }: Props) {
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(
     null,
@@ -420,10 +442,16 @@ export default function CommercialLeadDetailsModal({
     setEditSaving(true);
     setEditError(null);
     try {
-      const { decisor, vendedor_id, reuniao_link, ...leadFields } = effective;
+      const { decisor, vendedor_id, reuniao_link, fechado_at, valor_pago, modelo_pagamento, ...leadFields } = effective;
       await onSave({
         ...leadFields,
-        ...(canEditSale ? { vendedor_id, reuniao_link } : {}),
+        ...(canEditSale ? {
+          vendedor_id,
+          reuniao_link,
+          fechado_at: fechado_at ? new Date(fechado_at).toISOString() : null,
+          valor_pago: Number(valor_pago || 0),
+          modelo_pagamento,
+        } : {}),
         observacoes: withStructuredNote(
           effective.observacoes,
           "É o decisor?",
@@ -562,6 +590,23 @@ export default function CommercialLeadDetailsModal({
     ["Reunião realizada", dateTime(lead.reuniao_realizada_at)],
     ["Quem vendeu", editing && canEditSale ? sellerSelect() : sellerName],
     [
+      "Fechado em",
+      editing && canEditSale
+        ? inlineInput("fechado_at", "Data do fechamento", "datetime-local")
+        : dateTime(lead.fechado_at),
+    ],
+    ...(canViewFinancials ? [[
+      "Valor pago",
+      editing && canEditSale
+        ? inlineInput("valor_pago", "Valor pago", "number")
+        : money(lead.valor_pago ?? lead.valor_fechado),
+    ] as [string, React.ReactNode], [
+      "Modelo de pagamento",
+      editing && canEditSale
+        ? <select className="kh-inline-edit" aria-label="Modelo de pagamento" value={effective.modelo_pagamento} onChange={(event) => setEdit("modelo_pagamento", event.target.value)}><option value="">Selecione</option><option value="tcv">TCV</option><option value="mrr">MRR</option><option value="mesclado">Mesclado</option></select>
+        : displayValue(lead.modelo_pagamento?.toUpperCase()),
+    ] as [string, React.ReactNode]] : []),
+    [
       "Link da reunião",
       editing && canEditSale
         ? inlineInput("reuniao_link", "Link da reunião", "url")
@@ -576,6 +621,10 @@ export default function CommercialLeadDetailsModal({
         : displayValue(lead.negocio_etapa),
     ],
     ["No-shows", String(Number(lead.no_show_count || 0))],
+    ...(lead.onboarding_briefing && onDownloadBriefing ? [[
+      "Briefing operacional",
+      <button key="download-briefing" type="button" className="kh-inline-download" disabled={briefingDownloading} onClick={() => void onDownloadBriefing(lead.id)}><Download size={14} /> {briefingDownloading ? "Baixando..." : "Baixar PDF"}</button>,
+    ] as [string, React.ReactNode]] : []),
   ];
 
   return (

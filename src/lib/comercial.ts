@@ -76,10 +76,14 @@ export type CommercialLead = {
   lead_qualificado: boolean;
   valor_negociacao: number;
   valor_fechado: number;
+  valor_pago: number | null;
+  modelo_pagamento: "tcv" | "mrr" | "mesclado" | null;
   reuniao_agendada_at: string | null;
   reuniao_realizada_at: string | null;
   reuniao_qualificada: boolean | null;
   reuniao_link: string | null;
+  onboarding_briefing: string | null;
+  briefing_gerado_at: string | null;
   no_show: boolean;
   no_show_count: number;
   observacoes: string | null;
