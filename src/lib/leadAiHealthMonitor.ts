@@ -168,10 +168,17 @@ export async function checkLeadAiInstanceHealth(options: MonitorOptions = {}) {
         );
         const targets = recipients.length ? recipients : sender ? [sender] : [];
         if (targets.length) {
+          const usesDedicatedNumber = config.sender_mode === 'dedicated';
+          const notificationTitle = usesDedicatedNumber
+            ? 'IA desconectada'
+            : 'WhatsApp do Inbox desconectado';
+          const notificationMessage = usesDedicatedNumber
+            ? `O WhatsApp exclusivo da IA da ${company.nome} desconectou. A tentativa automatica de reconexao nao funcionou. Abra a pagina IA e escaneie um novo QR Code. Os atendimentos ativos foram encaminhados para o time.`
+            : `O WhatsApp de ${sender?.nome || 'um integrante'}, usado pela IA da ${company.nome}, desconectou do Inbox. A tentativa automatica de reconexao nao funcionou. Abra o Inbox e reconecte o proprio numero. Os atendimentos ativos foram encaminhados para o time.`;
           await sendApoloWhatsApp({
             type: 'notificacao',
-            title: 'IA desconectada',
-            message: `O WhatsApp da IA da ${company.nome} desconectou. A tentativa automatica de reconexao nao funcionou. Abra a pagina IA e escaneie um novo QR Code. Os atendimentos ativos foram encaminhados para o time.`,
+            title: notificationTitle,
+            message: notificationMessage,
             profiles: targets,
             respectPreferences: false,
           });
