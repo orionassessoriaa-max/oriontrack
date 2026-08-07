@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  ArrowLeft,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
@@ -172,6 +173,7 @@ export default function CommercialInboxPage() {
   const audioStreamRef = useRef<MediaStream | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
   const messageMediaRef = useRef<Record<string, MessageMedia>>({});
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const loadWhatsapp = useCallback(async () => {
     try {
@@ -229,6 +231,10 @@ export default function CommercialInboxPage() {
     const timer = window.setTimeout(() => void loadMessages(selected), 0);
     return () => window.clearTimeout(timer);
   }, [loadMessages, selected]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages]);
 
   useEffect(() => {
     messageMediaRef.current = messageMedia;
@@ -493,11 +499,15 @@ export default function CommercialInboxPage() {
 
   return (
     <div className="kh-commercial-inbox">
-      <header className="kh-page-head">
-        <div>
-          <div className="kh-eyebrow">Atendimento comercial</div>
-          <h1>Inbox</h1>
-          <p>{role === 'sdr' ? 'Aqui aparecem somente as conversas dos leads atribuídos a você.' : 'Acompanhe e responda as conversas de todo o time comercial.'}</p>
+      <header className="kh-inbox-toolbar">
+        <div className="kh-inbox-title">
+          <MessageSquare size={21} />
+          <div><h1>Inbox</h1><span>{filtered.length} conversas · {role === 'coordenador' ? 'administrador comercial' : role === 'sdr' ? 'SDR' : 'Closer'}</span></div>
+        </div>
+        <div className={`kh-whatsapp-status ${whatsapp.state}`}>
+          <span className="kh-whatsapp-status-dot" />
+          <div><strong>{connectionLabel}</strong><span>{whatsapp.state === 'open' ? `${whatsapp.targetProfile?.nome || 'Seu usuário'} está pronto para atender.` : whatsapp.state === 'connecting' ? 'Leia o QR Code para ativar.' : 'Reconecte para enviar mensagens.'}</span></div>
+          {whatsapp.state === 'open' && <CheckCircle2 size={16} />}
         </div>
         <div className="kh-actions">
           <button className="kh-button" onClick={() => { void load(); void loadWhatsapp(); }}>
@@ -509,13 +519,6 @@ export default function CommercialInboxPage() {
         </div>
       </header>
 
-      <div className={`kh-whatsapp-status ${whatsapp.state}`}>
-        <span className="kh-whatsapp-status-dot" />
-        <strong>{connectionLabel}</strong>
-        <span>{whatsapp.state === 'open' ? `${whatsapp.targetProfile?.nome || 'Seu usuário'} está pronto para enviar e receber mensagens.` : whatsapp.state === 'connecting' ? 'Leia o QR Code para ativar seu atendimento.' : 'Conecte o WhatsApp deste usuário para atender seus leads.'}</span>
-        {whatsapp.state === 'open' && <CheckCircle2 size={16} />}
-      </div>
-
       {notice && <div className="kh-inline-error">{notice}<button aria-label="Fechar aviso" onClick={() => setNotice('')}><X size={14} /></button></div>}
       {qr && (
         <div className="kh-panel kh-whatsapp-qr">
@@ -526,7 +529,7 @@ export default function CommercialInboxPage() {
         </div>
       )}
 
-      <section className="kh-inbox-layout">
+      <section className={`kh-inbox-layout ${selected ? 'has-selection' : ''}`}>
         <aside className="kh-panel kh-conversation-list">
           <div className="kh-inbox-list-head"><strong>Conversas</strong><span>{filtered.length}</span></div>
           <label className="kh-inbox-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar nome ou telefone..." /></label>
@@ -554,7 +557,7 @@ export default function CommercialInboxPage() {
 
         <main className="kh-panel kh-chat">
           <div className="kh-chat-head">
-            {selected ? <><div className="kh-avatar">{(selected.nome_contato || selected.commercial_lead.nome).slice(0, 2).toUpperCase()}</div><div><strong>{selected.nome_contato || selected.commercial_lead.nome}</strong><span>{selected.telefone} · {selected.commercial_lead.status}</span></div></> : <><MessageSquare size={22} /><div><strong>Selecione uma conversa</strong><span>Admins e closer visualizam e respondem todo o Inbox.</span></div></>}
+            {selected ? <><button type="button" className="kh-chat-back" onClick={() => setSelected(null)} aria-label="Voltar para as conversas"><ArrowLeft size={20} /></button><div className="kh-avatar">{(selected.nome_contato || selected.commercial_lead.nome).slice(0, 2).toUpperCase()}</div><div><strong>{selected.nome_contato || selected.commercial_lead.nome}</strong><span>{selected.telefone} · {selected.commercial_lead.status}</span></div></> : <><MessageSquare size={22} /><div><strong>Orion WhatsApp</strong><span>Selecione uma conversa para iniciar o atendimento.</span></div></>}
           </div>
           <div className="kh-chat-messages">
             {messages.map((message) => {
@@ -603,6 +606,7 @@ export default function CommercialInboxPage() {
               );
             })}
             {selected && !messages.length && <div className="kh-inbox-empty">Nenhuma mensagem registrada.</div>}
+            <div ref={messagesEndRef} aria-hidden="true" />
           </div>
 
           <form className={`kh-chat-compose ${isRecording ? 'recording' : ''}`} onSubmit={sendMessage}>
@@ -660,7 +664,6 @@ export default function CommercialInboxPage() {
           })() : <div className="kh-inbox-empty"><ClipboardList size={24} /> Selecione uma conversa para ver os dados do lead.</div>}
         </aside>
       </section>
-      <small className="kh-inbox-role">Acesso atual: {role === 'coordenador' ? 'administrador comercial' : role === 'sdr' ? 'SDR' : 'Closer'}</small>
       {mediaPreview && (
         <div className="kh-media-viewer" role="dialog" aria-modal="true" aria-label={`Visualizar ${mediaPreview.fileName}`}>
           <button type="button" className="kh-media-viewer-scrim" onClick={() => setMediaPreview(null)} aria-label="Fechar visualização" />
