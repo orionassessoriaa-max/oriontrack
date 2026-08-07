@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
   Bot,
+  BarChart3,
   BriefcaseBusiness,
   CheckSquare2,
   ChevronDown,
@@ -88,6 +89,7 @@ const baseNavigation = [
   { href: "/comercial/inbox", label: "Inbox", icon: MessageSquare },
   { href: "/comercial/kanban", label: "Kanban", icon: BriefcaseBusiness },
   { href: "/comercial/leads", label: "Leads", icon: Table2 },
+  { href: "/comercial/inteligencia", label: "Inteligência", icon: BarChart3 },
   { href: "/comercial/historico", label: "Historico", icon: ClipboardList },
   { href: "/comercial/tarefas", label: "Tarefas", icon: CheckSquare2 },
   { href: "/comercial/metas", label: "Metas", icon: Target },

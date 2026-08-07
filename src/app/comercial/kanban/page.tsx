@@ -395,6 +395,20 @@ export default function CommercialKanbanPage() {
       setBriefingDownloading(null);
     }
   }
+  async function startTrackedCall(lead: CommercialLead) {
+    const digits = String(lead.telefone || "").replace(/\D/g, "");
+    if (!digits) return;
+    setStageError(null);
+    try {
+      await api("/api/comercial/calls", {
+        method: "POST",
+        body: JSON.stringify({ lead_id: lead.id, sdr_id: lead.sdr_id }),
+      });
+      window.location.href = `tel:${digits}`;
+    } catch (callError) {
+      setStageError(callError instanceof Error ? callError.message : "Não foi possível registrar a ligação.");
+    }
+  }
   async function confirmMeetingMove(event: React.FormEvent) {
     event.preventDefault();
     if (!meetingMove || !meetingAt) return;
@@ -1254,6 +1268,7 @@ export default function CommercialKanbanPage() {
         canEditSale={role === "coordenador" || isDevOps}
         briefingDownloading={briefingDownloading === expandedLeadId}
         onDownloadBriefing={(leadId) => downloadBriefingPdf(leadId)}
+        onStartCall={startTrackedCall}
         stages={stages}
         onMoveStage={(status) => {
           if (expandedLeadId) void moveLead(expandedLeadId, status);

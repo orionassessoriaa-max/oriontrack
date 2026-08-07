@@ -371,6 +371,13 @@ export async function PATCH(request: Request) {
     description: timelineDescription,
     metadata: { from_status: allowed.status, to_status: targetStatus || allowed.status, fields: changedFields, vendedor_id: result.closer_id || null, reuniao_link: result.reuniao_link || meetingLinkFromNotes(result.observacoes) },
   });
+  if (result.sdr_id && result.sdr_id !== allowed.sdr_id) {
+    try {
+      await notifyCommercialLeadAssignment(result);
+    } catch (notificationError) {
+      console.error('commercial_lead_reassignment_notification_failed', notificationError);
+    }
+  }
   return NextResponse.json({ lead: redactFinancialFields(enrichSaleFields(result), guard.canViewCommercialFinancials) });
 }
 

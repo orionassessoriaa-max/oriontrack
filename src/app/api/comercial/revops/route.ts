@@ -1,0 +1,146 @@
+import { NextResponse } from "next/server";
+import { requireCommercialUser } from "@/lib/api/comercial";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+
+function normalized(value: unknown) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+function inPeriod(value: unknown, start: string, end: string) {
+  const date = String(value || "").slice(0, 10);
+  return Boolean(date && date >= start && date <= end);
+}
+
+function isClosed(lead: Record<string, unknown>) {
+  return normalized(lead.status) === "negocio fechado" || Number(lead.valor_fechado || lead.valor_pago || 0) > 0;
+}
+
+export async function GET(request: Request) {
+  const guard = await requireCommercialUser(request);
+  if ("error" in guard) return guard.error;
+  const url = new URL(request.url);
+  const now = new Date();
+  const start = url.searchParams.get("start") || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const end = url.searchParams.get("end") || now.toISOString().slice(0, 10);
+
+  let leadQuery = supabaseAdmin.from("comercial_leads").select("*").order("data_entrada", { ascending: false }).limit(5000);
+  let callQuery = supabaseAdmin.from("comercial_ligacoes")
+    .select("id,lead_id,sdr_id,status,iniciada_at,finalizada_at,duracao_segundos,gravacao_url,observacoes")
+    .gte("iniciada_at", `${start}T00:00:00-03:00`)
+    .lte("iniciada_at", `${end}T23:59:59-03:00`)
+    .order("iniciada_at", { ascending: false })
+    .limit(3000);
+  if (guard.commercialRole === "sdr") {
+    leadQuery = leadQuery.eq("sdr_id", guard.profile.id);
+    callQuery = callQuery.eq("sdr_id", guard.profile.id);
+  }
+  if (guard.commercialRole === "closer") leadQuery = leadQuery.eq("closer_id", guard.profile.id);
+
+  const [leadResult, callResult, memberResult] = await Promise.all([
+    leadQuery,
+    callQuery,
+    supabaseAdmin.from("comercial_membros").select("profile_id,papel,ativo").eq("ativo", true),
+  ]);
+  if (leadResult.error) return NextResponse.json({ error: leadResult.error.message }, { status: 500 });
+  if (callResult.error) return NextResponse.json({ error: callResult.error.message }, { status: 500 });
+
+  const allLeads = leadResult.data || [];
+  const calls = callResult.data || [];
+  const enteredLeads = allLeads.filter((lead) => inPeriod(lead.data_entrada, start, end));
+  const scheduledLeads = allLeads.filter((lead) => inPeriod(lead.reuniao_agendada_at, start, end));
+  const realizedLeads = allLeads.filter((lead) => inPeriod(lead.reuniao_realizada_at, start, end));
+  const sales = allLeads.filter((lead) => isClosed(lead) && inPeriod(lead.fechado_at || lead.updated_at, start, end));
+
+  const profileIds = Array.from(new Set([
+    ...(memberResult.data || []).map((member) => member.profile_id),
+    ...calls.map((call) => call.sdr_id),
+    ...sales.map((lead) => lead.closer_id).filter(Boolean),
+  ]));
+  const { data: profiles } = profileIds.length
+    ? await supabaseAdmin.from("profiles").select("id,nome,foto_url").in("id", profileIds)
+    : { data: [] };
+  const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
+  const leadMap = new Map(allLeads.map((lead) => [lead.id, lead]));
+
+  const sdrMembers = (memberResult.data || []).filter((member) => member.papel === "sdr"
+    && (guard.commercialRole !== "sdr" || member.profile_id === guard.profile.id));
+  const team = sdrMembers.map((member, index) => {
+    const leads = enteredLeads.filter((lead) => lead.sdr_id === member.profile_id);
+    const memberCalls = calls.filter((call) => call.sdr_id === member.profile_id);
+    const meetings = scheduledLeads.filter((lead) => lead.sdr_id === member.profile_id);
+    const realized = realizedLeads.filter((lead) => lead.sdr_id === member.profile_id);
+    const sold = sales.filter((lead) => lead.sdr_id === member.profile_id);
+    const noShows = meetings.reduce((sum, lead) => sum + Number(lead.no_show_count || (lead.no_show ? 1 : 0)), 0);
+    return {
+      id: member.profile_id,
+      name: profileMap.get(member.profile_id)?.nome || "SDR",
+      photo: profileMap.get(member.profile_id)?.foto_url || null,
+      color: ["#20a4f3", "#28d7a1", "#a78bfa", "#f0b84b", "#f06f86"][index % 5],
+      leads: leads.length,
+      calls: memberCalls.length,
+      answeredCalls: memberCalls.filter((call) => ["atendida", "concluida"].includes(call.status)).length,
+      meetings: meetings.length,
+      realized: realized.length,
+      noShows,
+      qualified: realized.filter((lead) => lead.reuniao_qualificada === true).length,
+      sales: sold.length,
+      ...(guard.canViewCommercialFinancials ? { revenue: sold.reduce((sum, lead) => sum + Number(lead.valor_pago || lead.valor_fechado || 0), 0) } : {}),
+    };
+  });
+
+  const dailyMap = new Map<string, { date: string; leads: number; calls: number; meetings: number; noShows: number; qualified: number; sales: number; revenue: number }>();
+  const day = (date: string) => {
+    if (!dailyMap.has(date)) dailyMap.set(date, { date, leads: 0, calls: 0, meetings: 0, noShows: 0, qualified: 0, sales: 0, revenue: 0 });
+    return dailyMap.get(date)!;
+  };
+  enteredLeads.forEach((lead) => { day(String(lead.data_entrada).slice(0, 10)).leads += 1; });
+  calls.forEach((call) => { day(String(call.iniciada_at).slice(0, 10)).calls += 1; });
+  scheduledLeads.forEach((lead) => {
+    const row = day(String(lead.reuniao_agendada_at).slice(0, 10));
+    row.meetings += 1;
+    row.noShows += Number(lead.no_show_count || (lead.no_show ? 1 : 0));
+    if (lead.reuniao_qualificada === true) row.qualified += 1;
+  });
+  sales.forEach((lead) => {
+    const row = day(String(lead.fechado_at || lead.updated_at).slice(0, 10));
+    row.sales += 1;
+    row.revenue += Number(lead.valor_pago || lead.valor_fechado || 0);
+  });
+
+  const revenue = sales.reduce((sum, lead) => sum + Number(lead.valor_pago || lead.valor_fechado || 0), 0);
+  return NextResponse.json({
+    start,
+    end,
+    summary: {
+      leads: enteredLeads.length,
+      calls: calls.length,
+      answeredCalls: calls.filter((call) => ["atendida", "concluida"].includes(call.status)).length,
+      scheduled: scheduledLeads.length,
+      realized: realizedLeads.length,
+      qualified: realizedLeads.filter((lead) => lead.reuniao_qualificada === true).length,
+      noShows: scheduledLeads.reduce((sum, lead) => sum + Number(lead.no_show_count || (lead.no_show ? 1 : 0)), 0),
+      sales: sales.length,
+      ...(guard.canViewCommercialFinancials ? { revenue, averageTicket: sales.length ? revenue / sales.length : 0 } : {}),
+    },
+    team,
+    daily: Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
+    calls: calls.slice(0, 200).map((call) => ({
+      ...call,
+      lead_name: leadMap.get(call.lead_id)?.nome || "Lead",
+      lead_phone: leadMap.get(call.lead_id)?.telefone || null,
+      sdr_name: profileMap.get(call.sdr_id)?.nome || "SDR",
+    })),
+    sales: sales.map((lead) => ({
+      id: lead.id,
+      lead_name: lead.nome,
+      company: lead.empresa,
+      sdr_name: profileMap.get(lead.sdr_id)?.nome || "Sem SDR",
+      seller_name: profileMap.get(lead.closer_id)?.nome || "Não informado",
+      closed_at: lead.fechado_at || lead.updated_at,
+      payment_model: lead.modelo_pagamento,
+      ...(guard.canViewCommercialFinancials ? { amount: Number(lead.valor_pago || lead.valor_fechado || 0) } : {}),
+    })),
+    canViewFinancials: guard.canViewCommercialFinancials,
+    updatedAt: new Date().toISOString(),
+  });
+}

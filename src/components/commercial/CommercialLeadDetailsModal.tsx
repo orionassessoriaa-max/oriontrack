@@ -14,6 +14,7 @@ import {
   Paperclip,
   Pencil,
   Phone,
+  PhoneCall,
   RefreshCw,
   Save,
   X,
@@ -72,6 +73,7 @@ type Props = {
   onSave: (data: Record<string, unknown>) => Promise<void>;
   onDownloadBriefing?: (leadId: string) => Promise<void>;
   briefingDownloading?: boolean;
+  onStartCall?: (lead: CommercialLead) => Promise<void>;
 };
 
 type EditableLead = {
@@ -301,6 +303,7 @@ export default function CommercialLeadDetailsModal({
   onSave,
   onDownloadBriefing,
   briefingDownloading = false,
+  onStartCall,
 }: Props) {
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(
     null,
@@ -715,6 +718,7 @@ export default function CommercialLeadDetailsModal({
 
         {!readOnly && (
           <div className="kh-lead-quick-actions" aria-label="Ações do lead">
+            {lead.telefone && onStartCall && <button type="button" onClick={() => void onStartCall(lead)}><PhoneCall size={16} /> Ligar e registrar</button>}
             <button type="button" onClick={focusInteraction}>
               <MessageSquarePlus size={16} /> Registrar interação
             </button>

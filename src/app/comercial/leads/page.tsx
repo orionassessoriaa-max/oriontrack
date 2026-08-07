@@ -7,6 +7,7 @@ import {
   Download,
   Edit3,
   Plus,
+  PhoneCall,
   RefreshCw,
   Search,
   Square,
@@ -74,6 +75,21 @@ export default function CommercialLeadsPage() {
   const [sheetLink, setSheetLink] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
+  async function startCall(lead: CommercialLead) {
+    const digits = String(lead.telefone || "").replace(/\D/g, "");
+    if (!digits) return;
+    setNotice(null);
+    try {
+      await api("/api/comercial/calls", {
+        method: "POST",
+        body: JSON.stringify({ lead_id: lead.id, sdr_id: lead.sdr_id }),
+      });
+      window.location.href = `tel:${digits}`;
+    } catch (callError) {
+      setNotice(callError instanceof Error ? callError.message : "Não foi possível registrar a ligação.");
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -452,7 +468,7 @@ export default function CommercialLeadsPage() {
                 <td>{index + 1}</td>
                 <td>{formatDate(lead.data_entrada)}</td>
                 <td className="name">{lead.nome}</td>
-                <td>{lead.telefone || "-"}</td>
+                <td>{lead.telefone ? (canEditCommercial ? <button type="button" className="kh-table-phone" onClick={() => void startCall(lead)} title="Ligar e registrar no CRM"><PhoneCall size={14} />{lead.telefone}</button> : lead.telefone) : "-"}</td>
                 <td>{lead.email || "-"}</td>
                 {canViewCommercialLeadQualification && (
                   <>
