@@ -231,8 +231,15 @@ async function tryStartLeadAiForWebhook(leadId?: string | null) {
       lowerMessage.includes('ainda não foi criada') ||
       lowerMessage.includes('nao possui token') ||
       lowerMessage.includes('não possui token');
-    const reason = missingInboxConnection
-      ? 'Voce ainda nao conectou seu numero no Inbox.'
+    const invalidWhatsAppNumber =
+      lowerMessage.includes('not on whatsapp') ||
+      lowerMessage.includes('nao esta no whatsapp') ||
+      lowerMessage.includes('não está no whatsapp') ||
+      lowerMessage.includes('number does not exist');
+    const reason = invalidWhatsAppNumber
+      ? 'O telefone informado nao esta cadastrado no WhatsApp ou pode estar digitado incorretamente.'
+      : missingInboxConnection
+        ? 'Voce ainda nao conectou seu numero no Inbox.'
       : lowerMessage.includes('whatsapp disconnected')
         ? 'Seu numero esta desconectado no Inbox. Conecte novamente para a IA atender automaticamente.'
         : 'A IA nao conseguiu iniciar automaticamente. A equipe Orion pode verificar o ocorrido.';
