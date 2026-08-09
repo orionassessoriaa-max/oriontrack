@@ -1486,11 +1486,12 @@ export async function startLeadAiIfEligible(leadId: string) {
     return { found: false, connected: false, state: 'check_failed' };
   });
   if (!connection.connected) {
-    if (aiConfig.sender_mode === 'dedicated' && aiConfig.status !== 'aguardando_conexao') {
+    if (aiConfig.sender_mode === 'dedicated' && aiConfig.status === 'ativo') {
       await supabaseAdmin
         .from('corretora_ai_configs')
-        .update({ status: 'aguardando_conexao', updated_at: new Date().toISOString() })
-        .eq('id', aiConfig.id);
+        .update({ status: 'desconexao_pendente', updated_at: new Date().toISOString() })
+        .eq('id', aiConfig.id)
+        .eq('status', 'ativo');
     }
     return {
       started: false,

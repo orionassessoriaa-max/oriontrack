@@ -88,10 +88,11 @@ export async function GET(request: Request) {
     const dedicated = context.config?.sender_mode === 'dedicated';
     const state = dedicated ? await providerState(context.instance).catch(() => 'close') : 'close';
     if (dedicated && context.config) {
-      const nextStatus = state === 'open' ? 'ativo' : 'aguardando_conexao';
-      if (context.config.status !== nextStatus) {
-        await supabaseAdmin.from('corretora_ai_configs').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', context.config.id);
-        context.config.status = nextStatus;
+      // Uma consulta da pagina pode confirmar recuperacao, mas nunca deve
+      // transformar uma oscilacao isolada em desconexao definitiva.
+      if (state === 'open' && context.config.status !== 'ativo') {
+        await supabaseAdmin.from('corretora_ai_configs').update({ status: 'ativo', updated_at: new Date().toISOString() }).eq('id', context.config.id);
+        context.config.status = 'ativo';
       }
     }
     return NextResponse.json({
@@ -147,6 +148,10 @@ export async function POST(request: Request) {
 
     await configureUazapiWebhook(context.instance);
     const payload = await uazapiFetch('/instance/connect', { method: 'POST', body: '{}' }, { instanceName: context.instance });
+    await supabaseAdmin
+      .from('corretora_ai_configs')
+      .update({ status: 'aguardando_conexao', updated_at: new Date().toISOString() })
+      .eq('id', context.config.id);
     await writeAuditLog(request, guard.profile, {
       action: 'ai.whatsapp.connect.request',
       entity_type: 'corretora_ai_configs',

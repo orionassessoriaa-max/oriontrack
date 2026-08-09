@@ -1114,7 +1114,11 @@ async function handleDedicatedAiConnectionEvent(instance: string, state: string)
 
   if (!config) return false;
 
-  const nextStatus = state === 'connected' ? 'ativo' : 'aguardando_conexao';
+  const nextStatus = state === 'connected'
+    ? 'ativo'
+    : state === 'disconnected' && config.status === 'ativo'
+      ? 'desconexao_pendente'
+      : config.status;
   if (config.status !== nextStatus) {
     await supabaseAdmin
       .from('corretora_ai_configs')
@@ -1122,34 +1126,8 @@ async function handleDedicatedAiConnectionEvent(instance: string, state: string)
       .eq('id', config.id);
   }
 
-  if (state !== 'disconnected') return true;
-
-  const { data: company } = await supabaseAdmin
-    .from('corretoras')
-    .select('nome')
-    .eq('id', config.corretora_id)
-    .maybeSingle();
-  if (!company?.nome) return true;
-
-  const { data: brokers } = await supabaseAdmin
-    .from('corretores')
-    .select('id')
-    .eq('nome_empresa', company.nome);
-  const brokerIds = (brokers || []).map((broker) => broker.id);
-  if (!brokerIds.length) return true;
-
-  const { data: sessions } = await supabaseAdmin
-    .from('lead_ai_sessions')
-    .select('lead_id')
-    .in('corretor_id', brokerIds)
-    .eq('status', 'active');
-
-  await Promise.allSettled((sessions || []).map((session) =>
-    handoffLeadAiToResponsible(
-      session.lead_id,
-      'WhatsApp exclusivo da IA desconectou. O atendimento foi encaminhado para uma pessoa para o lead nao ficar sem resposta.'
-    )
-  ));
+  // O evento do provedor pode oscilar por alguns segundos. O monitor de saude
+  // confirma a queda antes de encerrar sessoes e notificar a equipe.
   return true;
 }
 

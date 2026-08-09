@@ -16,6 +16,7 @@ type AiConfigRow = {
   sender_mode: string | null;
   sender_profile_id: string | null;
   dedicated_instance_name: string | null;
+  updated_at: string;
 };
 
 type ProfileRow = {
@@ -34,6 +35,17 @@ type MonitorOptions = {
   reconnect?: boolean;
   mutate?: boolean;
 };
+
+const DISCONNECT_PENDING_STATUS = 'desconexao_pendente';
+const DISCONNECTED_STATUS = 'desconectado';
+const DEFAULT_DISCONNECT_CONFIRM_MS = 2 * 60 * 1000;
+
+function disconnectConfirmMs() {
+  const configured = Number(process.env.LEAD_AI_DISCONNECT_CONFIRM_MS || '');
+  return Number.isFinite(configured) && configured >= 60_000
+    ? configured
+    : DEFAULT_DISCONNECT_CONFIRM_MS;
+}
 
 function activeProfile(profile: ProfileRow) {
   return ['active', 'ativo', 'Ativo'].includes(String(profile.status || ''));
@@ -77,8 +89,8 @@ export async function checkLeadAiInstanceHealth(options: MonitorOptions = {}) {
   const mutate = options.mutate !== false;
   const { data: configs, error: configError } = await supabaseAdmin
     .from('corretora_ai_configs')
-    .select('id, corretora_id, status, sender_mode, sender_profile_id, dedicated_instance_name')
-    .in('status', ['ativo', 'aguardando_conexao']);
+    .select('id, corretora_id, status, sender_mode, sender_profile_id, dedicated_instance_name, updated_at')
+    .in('status', ['ativo', 'aguardando_conexao', DISCONNECT_PENDING_STATUS, DISCONNECTED_STATUS]);
   if (configError) throw configError;
   if (!configs?.length) return { checked: 0, connected: 0, disconnected: 0, recovered: 0, alerts: 0, handoffs: 0, details: [] };
 
@@ -134,7 +146,12 @@ export async function checkLeadAiInstanceHealth(options: MonitorOptions = {}) {
 
     let connection = await getUazapiInstanceConnection(instance).catch(() => ({ found: false, connected: false, state: 'check_failed' }));
     let recovered = false;
-    if (!connection.connected && connection.found && reconnect && config.status === 'ativo') {
+    if (
+      !connection.connected
+      && connection.found
+      && reconnect
+      && ['ativo', 'aguardando_conexao', DISCONNECT_PENDING_STATUS].includes(config.status)
+    ) {
       try {
         await uazapiFetch('/instance/connect', { method: 'POST', body: '{}' }, { instanceName: instance });
         await new Promise((resolve) => setTimeout(resolve, 1_500));
@@ -157,36 +174,94 @@ export async function checkLeadAiInstanceHealth(options: MonitorOptions = {}) {
     }
 
     summary.disconnected += 1;
-    const firstDetection = config.status === 'ativo';
-    if (firstDetection && mutate) {
-      await supabaseAdmin.from('corretora_ai_configs').update({ status: 'aguardando_conexao', updated_at: new Date().toISOString() }).eq('id', config.id);
-      summary.handoffs += await handoffBrokerageSessions(companyBrokerIds);
 
-      if (notify) {
-        const recipients = (companyProfiles as ProfileRow[]).filter(
-          (profile) => activeProfile(profile) && profile.tipo_usuario === 'corretor_admin'
-        );
-        const targets = recipients.length ? recipients : sender ? [sender] : [];
-        if (targets.length) {
-          const usesDedicatedNumber = config.sender_mode === 'dedicated';
-          const notificationTitle = usesDedicatedNumber
-            ? 'IA desconectada'
-            : 'WhatsApp do Inbox desconectado';
-          const notificationMessage = usesDedicatedNumber
-            ? `O WhatsApp exclusivo da IA da ${company.nome} desconectou. A tentativa automatica de reconexao nao funcionou. Abra a pagina IA e escaneie um novo QR Code. Os atendimentos ativos foram encaminhados para o time.`
-            : `O WhatsApp de ${sender?.nome || 'um integrante'}, usado pela IA da ${company.nome}, desconectou do Inbox. A tentativa automatica de reconexao nao funcionou. Abra o Inbox e reconecte o proprio numero. Os atendimentos ativos foram encaminhados para o time.`;
-          await sendApoloWhatsApp({
-            type: 'notificacao',
-            title: notificationTitle,
-            message: notificationMessage,
-            profiles: targets,
-            respectPreferences: false,
-          });
-          summary.alerts += targets.length;
-        }
+    // A primeira leitura negativa apenas inicia a janela de confirmacao. Isso
+    // evita encerrar atendimentos por oscilacoes curtas do provedor.
+    if (config.status === 'ativo') {
+      if (mutate) {
+        await supabaseAdmin
+          .from('corretora_ai_configs')
+          .update({ status: DISCONNECT_PENDING_STATUS, updated_at: new Date().toISOString() })
+          .eq('id', config.id)
+          .eq('status', 'ativo');
+      }
+      details.push({ company: company.nome, instance, state: connection.state, action: mutate ? 'confirming_disconnect' : 'would_confirm_disconnect' });
+      continue;
+    }
+
+    if (config.status !== DISCONNECT_PENDING_STATUS) {
+      details.push({ company: company.nome, instance, state: connection.state, action: 'waiting' });
+      continue;
+    }
+
+    const pendingSince = new Date(config.updated_at).getTime();
+    if (!Number.isFinite(pendingSince) || Date.now() - pendingSince < disconnectConfirmMs()) {
+      details.push({ company: company.nome, instance, state: connection.state, action: 'confirming_disconnect' });
+      continue;
+    }
+
+    // Confere uma ultima vez imediatamente antes de assumir a queda.
+    const finalConnection = await getUazapiInstanceConnection(instance).catch(() => ({ found: false, connected: false, state: 'check_failed' }));
+    if (finalConnection.connected) {
+      summary.connected += 1;
+      summary.disconnected -= 1;
+      if (mutate) {
+        await configureUazapiWebhook(instance);
+        await supabaseAdmin
+          .from('corretora_ai_configs')
+          .update({ status: 'ativo', updated_at: new Date().toISOString() })
+          .eq('id', config.id);
+      }
+      details.push({ company: company.nome, instance, state: finalConnection.state, action: 'recovered_before_alert' });
+      continue;
+    }
+
+    if (!mutate) {
+      details.push({ company: company.nome, instance, state: finalConnection.state, action: 'would_alert' });
+      continue;
+    }
+
+    // A troca condicional funciona como um claim entre replicas: somente uma
+    // delas consegue confirmar a queda e enviar a notificacao.
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from('corretora_ai_configs')
+      .update({ status: DISCONNECTED_STATUS, updated_at: new Date().toISOString() })
+      .eq('id', config.id)
+      .eq('status', DISCONNECT_PENDING_STATUS)
+      .select('id')
+      .maybeSingle();
+    if (claimError) throw claimError;
+    if (!claimed) {
+      details.push({ company: company.nome, instance, state: finalConnection.state, action: 'claimed_by_another_worker' });
+      continue;
+    }
+
+    summary.handoffs += await handoffBrokerageSessions(companyBrokerIds);
+
+    if (notify) {
+      const recipients = (companyProfiles as ProfileRow[]).filter(
+        (profile) => activeProfile(profile) && profile.tipo_usuario === 'corretor_admin'
+      );
+      const targets = recipients.length ? recipients : sender ? [sender] : [];
+      if (targets.length) {
+        const usesDedicatedNumber = config.sender_mode === 'dedicated';
+        const notificationTitle = usesDedicatedNumber
+          ? 'IA desconectada'
+          : 'WhatsApp do Inbox desconectado';
+        const notificationMessage = usesDedicatedNumber
+          ? `O WhatsApp exclusivo da IA da ${company.nome} desconectou. A tentativa automatica de reconexao nao funcionou. Abra a pagina IA e escaneie um novo QR Code. Os atendimentos ativos foram encaminhados para o time.`
+          : `O WhatsApp de ${sender?.nome || 'um integrante'}, usado pela IA da ${company.nome}, desconectou do Inbox. A tentativa automatica de reconexao nao funcionou. Abra o Inbox e reconecte o proprio numero. Os atendimentos ativos foram encaminhados para o time.`;
+        await sendApoloWhatsApp({
+          type: 'notificacao',
+          title: notificationTitle,
+          message: notificationMessage,
+          profiles: targets,
+          respectPreferences: false,
+        });
+        summary.alerts += targets.length;
       }
     }
-    details.push({ company: company.nome, instance, state: connection.state, action: firstDetection ? (mutate ? 'alerted' : 'would_alert') : 'waiting' });
+    details.push({ company: company.nome, instance, state: finalConnection.state, action: 'alerted' });
   }
 
   return { ...summary, details };
