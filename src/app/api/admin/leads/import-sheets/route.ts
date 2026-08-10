@@ -283,8 +283,14 @@ function mergeLeadImportData(existing: LeadInsert, incoming: LeadInsert) {
 }
 
 function isLeadDedupeConstraintError(error: any) {
-  const message = String(error?.message || error?.details || error?.hint || '');
-  return error?.code === '23505' && message.includes('leads_exact_dedupe_v2_idx');
+  const message = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return String(error?.code || '') === '23505'
+    || message.includes('leads_exact_dedupe_v2_idx')
+    || message.includes('duplicate key value');
 }
 
 async function insertLeadHandlingMissingOrigin(lead: LeadInsert) {
@@ -893,6 +899,10 @@ export async function POST(request: Request) {
         .eq('id', item.id);
 
       if (updateError) {
+        if (isLeadDedupeConstraintError(updateError)) {
+          continue;
+        }
+
         if (isMissingLeadOriginColumn(updateError) && item.update.origem !== undefined) {
           const { origem: _origem, ...fallbackUpdate } = item.update;
           const { error: fallbackError } = await supabaseAdmin
@@ -901,6 +911,9 @@ export async function POST(request: Request) {
             .eq('id', item.id);
 
           if (fallbackError) {
+            if (isLeadDedupeConstraintError(fallbackError)) {
+              continue;
+            }
             return NextResponse.json({ error: fallbackError.message }, { status: 500 });
           }
         } else {

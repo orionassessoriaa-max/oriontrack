@@ -66,16 +66,20 @@ function collectPayloadEntries(input: any, entries: Array<[string, unknown]> = [
 }
 
 function field(body: Record<string, any>, aliases: string[]) {
-  const normalized = new Map<string, unknown>();
-  collectPayloadEntries(body || {}).forEach(([key, value]) => {
-    normalized.set(normalizeKey(key), value);
-  });
+  const entries = collectPayloadEntries(body || {});
 
   for (const alias of aliases) {
     const direct = body[alias];
     if (direct !== undefined && direct !== null && normalizeText(direct)) return direct;
-    const value = normalized.get(normalizeKey(alias));
-    if (value !== undefined && value !== null && normalizeText(value)) return value;
+
+    const normalizedAlias = normalizeKey(alias);
+    const match = entries.find(([key, value]) => (
+      normalizeKey(key) === normalizedAlias
+      && value !== undefined
+      && value !== null
+      && Boolean(normalizeText(value))
+    ));
+    if (match) return match[1];
   }
 
   return '';
@@ -478,7 +482,17 @@ export async function POST(request: Request) {
       'receita',
     ]));
 
-    const utmCampaign = normalizeText(field(body, ['utm_campaign', 'campaign', 'campanha', 'nome campanha'])) || null;
+    const utmCampaign = normalizeText(field(body, [
+      'utm_campaign',
+      'utmCampaign',
+      'utm campaign',
+      'campaign_name',
+      'campaignName',
+      'campaign',
+      'campanha',
+      'nome campanha',
+      'respondent_utms_utm_campaign',
+    ])) || null;
 
     const leadPayload = {
       corretor_id: corretorId,
