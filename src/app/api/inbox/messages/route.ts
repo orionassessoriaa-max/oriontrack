@@ -142,6 +142,41 @@ function providerMessages(payload: any): any[] {
   return [];
 }
 
+function providerChats(payload: any): any[] {
+  if (Array.isArray(payload?.chats)) return payload.chats;
+  if (Array.isArray(payload?.data?.chats)) return payload.data.chats;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+async function providerChatIds(instance: string, phone: string) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const last8 = digits.slice(-8);
+  if (!last8) return [`${digits}@s.whatsapp.net`];
+
+  const payload = await uazapiFetch('/chat/find', {
+    method: 'POST',
+    body: JSON.stringify({
+      operator: 'OR',
+      sort: '-wa_lastMsgTimestamp',
+      limit: 50,
+      offset: 0,
+      wa_chatid: `~${last8}`,
+      wa_fastid: `~${last8}`,
+    }),
+  }, { instanceName: instance });
+
+  const ids = providerChats(payload)
+    .map((chat) => String(chat?.wa_chatid || chat?.chatid || chat?.id || '').trim())
+    .filter((chatId) => {
+      if (!chatId || chatId.endsWith('@g.us')) return false;
+      const chatDigits = chatId.split('@')[0].replace(/\D/g, '');
+      return chatDigits.slice(-8) === last8;
+    });
+
+  return [...new Set(ids.length ? ids : [`${digits}@s.whatsapp.net`])];
+}
+
 function providerMessageText(message: any) {
   const direct = String(message?.text || '').trim();
   if (direct) return direct;
@@ -224,30 +259,32 @@ async function syncProviderHistory(conversation: any) {
 
   const collected = new Map<string, { message: any; instance: string }>();
   await Promise.all(instances.map(async ({ instance, senderName }) => {
-    let offset = 0;
-    const limit = 500;
-    for (let page = 0; page < 20; page += 1) {
-      try {
-        const payload = await uazapiFetch('/message/find', {
-          method: 'POST',
-          body: JSON.stringify({ chatid: `${phone}@s.whatsapp.net`, limit, offset }),
-        }, { instanceName: instance });
-        const messages = providerMessages(payload);
-        for (const message of messages) {
-          const providerId = String(message?.messageid || message?.id || '').trim();
-          if (providerId) collected.set(providerId, { message: { ...message, orionSenderName: senderName }, instance });
+    try {
+      const chatIds = await providerChatIds(instance, phone);
+      for (const chatid of chatIds) {
+        let offset = 0;
+        const limit = 500;
+        for (let page = 0; page < 20; page += 1) {
+          const payload = await uazapiFetch('/message/find', {
+            method: 'POST',
+            body: JSON.stringify({ chatid, limit, offset }),
+          }, { instanceName: instance });
+          const messages = providerMessages(payload);
+          for (const message of messages) {
+            const providerId = String(message?.messageid || message?.id || '').trim();
+            if (providerId) collected.set(providerId, { message: { ...message, orionSenderName: senderName }, instance });
+          }
+          const hasMore = payload?.hasMore === true || payload?.data?.hasMore === true;
+          if (!hasMore || messages.length === 0) break;
+          offset = Number(payload?.nextOffset ?? payload?.data?.nextOffset ?? (offset + messages.length));
         }
-        const hasMore = payload?.hasMore === true || payload?.data?.hasMore === true;
-        if (!hasMore || messages.length === 0) break;
-        offset = Number(payload?.nextOffset ?? payload?.data?.nextOffset ?? (offset + messages.length));
-      } catch (error) {
-        console.warn('[inbox_messages] Nao foi possivel sincronizar o historico da instancia.', {
-          instance,
-          conversationId: conversation.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        break;
       }
+    } catch (error) {
+      console.warn('[inbox_messages] Nao foi possivel sincronizar o historico da instancia.', {
+        instance,
+        conversationId: conversation.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }));
 
