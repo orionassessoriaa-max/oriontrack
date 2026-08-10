@@ -371,6 +371,11 @@ export default function CrmPage() {
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const requestedLeadIdRef = useRef<string | null>(null);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
+  const usesMyLeadsByDefault = String(profile?.nome_empresa || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase() === 'CONEXAO CORRETORA';
   const canAssignTeamLeads = !isTeamMemberProfile && (
     profile?.tipo_usuario === 'admin' ||
     profile?.tipo_usuario === 'corretor' ||
@@ -450,8 +455,12 @@ export default function CrmPage() {
     // Administradores começam na visão geral. Depois que o time é carregado,
     // somente quem participa da distribuição e já possui carteira abre em "Meus leads".
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCrmScopeView(isViewingBrokerAsAdmin || !isTeamMemberProfile ? 'todos_concessionaria' : 'meus');
-  }, [profile?.id, profile?.tipo_usuario, isViewingBrokerAsAdmin, isTeamMemberProfile]);
+    setCrmScopeView(
+      !isViewingBrokerAsAdmin && (usesMyLeadsByDefault || isTeamMemberProfile)
+        ? 'meus'
+        : 'todos_concessionaria'
+    );
+  }, [profile?.id, profile?.tipo_usuario, isViewingBrokerAsAdmin, isTeamMemberProfile, usesMyLeadsByDefault]);
 
   // Metrics Dashboard States
   const [crmView, setCrmView] = useState<'board' | 'analytics'>('board');
@@ -652,7 +661,9 @@ export default function CrmPage() {
         lead.responsavel_profile_id === profile.id ||
         currentMemberIds.includes(String(lead.responsavel_membro_id || ''))
       ));
-      const shouldOpenMyLeads = payload.settings?.current_profile_in_distribution === true && hasAssignedLead;
+      const shouldOpenMyLeads = usesMyLeadsByDefault || (
+        payload.settings?.current_profile_in_distribution === true && hasAssignedLead
+      );
 
       setTeamMembers(members);
       setCrmScopeView(shouldOpenMyLeads ? 'meus' : 'todos_concessionaria');

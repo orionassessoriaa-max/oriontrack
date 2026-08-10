@@ -199,6 +199,14 @@ function leadOrigem(lead: Lead) {
   }) || '-';
 }
 
+function isConexaoCorretora(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase() === 'CONEXAO CORRETORA';
+}
+
 export default function BrokerLeadsPage() {
   const { profile, actualProfile, isViewingAsCorretor } = useAuth();
   const { confirmDialog } = useDialog();
@@ -244,6 +252,7 @@ export default function BrokerLeadsPage() {
   const [rankingEnabled, setRankingEnabled] = useState(false);
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
+  const usesMyLeadsByDefault = isConexaoCorretora(profile?.nome_empresa);
   const canAssignTeamLeads = !isTeamMemberProfile && (
     profile?.tipo_usuario === 'admin' ||
     profile?.tipo_usuario === 'corretor' ||
@@ -276,12 +285,12 @@ export default function BrokerLeadsPage() {
   useEffect(() => {
     // A confirmação definitiva vem das configurações do time. Enquanto elas
     // carregam, administradores nunca devem ficar presos em uma carteira vazia.
-    const initialFilter = isTeamMemberProfile ? 'meus' : 'todos';
+    const initialFilter = usesMyLeadsByDefault || isTeamMemberProfile ? 'meus' : 'todos';
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDefaultResponsavelFilter(initialFilter);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setResponsavelFilter(initialFilter);
-  }, [profile?.id, isTeamMemberProfile]);
+  }, [profile?.id, isTeamMemberProfile, usesMyLeadsByDefault]);
 
   useEffect(() => {
     if (profile?.corretor_id) {
@@ -387,8 +396,9 @@ export default function BrokerLeadsPage() {
   const fetchTeamMembers = async () => {
     if (!profile?.id || !canAssignTeamLeads) {
       setTeamMembers([]);
-      setDefaultResponsavelFilter(isTeamMemberProfile ? 'meus' : 'todos');
-      setResponsavelFilter(isTeamMemberProfile ? 'meus' : 'todos');
+      const fallbackFilter = usesMyLeadsByDefault || isTeamMemberProfile ? 'meus' : 'todos';
+      setDefaultResponsavelFilter(fallbackFilter);
+      setResponsavelFilter(fallbackFilter);
       return;
     }
 
@@ -410,9 +420,9 @@ export default function BrokerLeadsPage() {
         lead.responsavel_profile_id === profile.id ||
         currentMemberIds.includes(String(lead.responsavel_membro_id || ''))
       ));
-      const nextDefaultFilter = payload.settings?.current_profile_in_distribution === true && hasAssignedLead
-        ? 'meus'
-        : 'todos';
+      const nextDefaultFilter = usesMyLeadsByDefault || (
+        payload.settings?.current_profile_in_distribution === true && hasAssignedLead
+      ) ? 'meus' : 'todos';
 
       setTeamMembers(members);
       setDefaultResponsavelFilter(nextDefaultFilter);
@@ -429,8 +439,9 @@ export default function BrokerLeadsPage() {
     } else {
       console.error('Erro ao buscar responsaveis:', payload.error || response.statusText);
       setTeamMembers([]);
-      setDefaultResponsavelFilter('todos');
-      setResponsavelFilter('todos');
+      const fallbackFilter = usesMyLeadsByDefault ? 'meus' : 'todos';
+      setDefaultResponsavelFilter(fallbackFilter);
+      setResponsavelFilter(fallbackFilter);
     }
   };
 
