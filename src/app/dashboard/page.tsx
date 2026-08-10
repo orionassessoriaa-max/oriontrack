@@ -516,10 +516,8 @@ export default function DashboardPage() {
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
 
-        let allLeads: LeadMetricRow[] = [];
-        let pageNum = 0;
         const limitNum = 1000;
-        let keepFetching = true;
+        const leadMetricColumns = 'status, conta_como_venda, data_entrada, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes, cidade, valor_negociacao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim';
 
         const companyName = data?.nome_empresa || profile.nome_empresa;
         let idsToFetch = [profile.corretor_id];
@@ -533,33 +531,49 @@ export default function DashboardPage() {
           }
         }
 
-        while (keepFetching) {
-          const from = pageNum * limitNum;
-          const to = from + limitNum - 1;
-          let statsRequest = supabase
+        let firstStatsRequest = supabase
+          .from('leads')
+          .select(leadMetricColumns, { count: 'exact' })
+          .in('corretor_id', idsToFetch)
+          .order('id', { ascending: true })
+          .range(0, limitNum - 1);
+
+        if (profile.tipo_usuario === 'corretor_membro') {
+          firstStatsRequest = firstStatsRequest.eq('responsavel_profile_id', profile.id);
+        }
+
+        const firstStatsPage = await firstStatsRequest;
+        if (firstStatsPage.error) throw firstStatsPage.error;
+        if (!isCurrentRequest()) return;
+
+        const totalLeadRows = firstStatsPage.count ?? firstStatsPage.data?.length ?? 0;
+        const remainingPageIndexes = Array.from(
+          { length: Math.max(0, Math.ceil(totalLeadRows / limitNum) - 1) },
+          (_, index) => index + 1,
+        );
+        const remainingStatsPages = await Promise.all(remainingPageIndexes.map((pageIndex) => {
+          const from = pageIndex * limitNum;
+          let request = supabase
             .from('leads')
-            .select('status, conta_como_venda, data_entrada, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes, cidade, valor_negociacao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim')
+            .select(leadMetricColumns)
             .in('corretor_id', idsToFetch)
-            .range(from, to);
+            .order('id', { ascending: true })
+            .range(from, from + limitNum - 1);
 
           if (profile.tipo_usuario === 'corretor_membro') {
-            statsRequest = statsRequest.eq('responsavel_profile_id', profile.id);
+            request = request.eq('responsavel_profile_id', profile.id);
           }
+          return request;
+        }));
 
-          const statsQuery = await statsRequest;
+        const failedStatsPage = remainingStatsPages.find((page) => page.error);
+        if (failedStatsPage?.error) throw failedStatsPage.error;
+        if (!isCurrentRequest()) return;
 
-          if (statsQuery.error) throw statsQuery.error;
-          if (!isCurrentRequest()) return;
-
-          const dataRows = statsQuery.data || [];
-          allLeads = [...allLeads, ...(dataRows as LeadMetricRow[])];
-
-          if (dataRows.length < limitNum) {
-            keepFetching = false;
-          } else {
-            pageNum += 1;
-          }
-        }
+        const allLeads = [
+          ...(firstStatsPage.data || []),
+          ...remainingStatsPages.flatMap((page) => page.data || []),
+        ] as LeadMetricRow[];
 
         const availableOrigins = Array.from(new Set(allLeads.map(leadOriginLabel)))
           .sort((a, b) => a === 'Orion' ? -1 : b === 'Orion' ? 1 : a.localeCompare(b, 'pt-BR'));
@@ -626,45 +640,42 @@ export default function DashboardPage() {
             .slice(0, 5)
         );
 
-        // Investment and CPL Orion are cumulative from the first Orion campaign.
-        // The date picker continues to control the operational funnel below.
-        let currentPeriodSpend = 0;
-        if (isOrionOriginFilter(originFilter) && accessToken && profile.corretor_id && dataInicio && dataFim) {
-          try {
-            const metaRange = getMetaCompatibleRange(dataInicio, dataFim);
-            const spendResponse = await fetch('/api/integrations/meta/spend', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${accessToken}`,
-              },
-                body: JSON.stringify({
-                  corretor_id: profile.corretor_id,
-                  data_inicio: metaRange.since,
-                  data_fim: metaRange.until,
-                  acumulado_orion: true,
-                }),
-            });
-
-            const spendPayload = await spendResponse.json().catch(() => ({}));
-            if (spendResponse.ok) {
-              currentPeriodSpend = Number(spendPayload.spend || 0);
-            } else {
-              console.error('Erro ao buscar investimento Meta do periodo:', spendPayload?.error || spendResponse.statusText);
-            }
-          } catch (error) {
-            console.error('Erro ao buscar investimento Meta do periodo:', error);
-          }
-        }
-        if (!isCurrentRequest()) return;
-        setPeriodSpend(currentPeriodSpend);
-
-        // Fetch monthly Meta spends (static 6-months)
+        // Render CRM metrics immediately. Meta spend is loaded in the background
+        // because external API latency must not block the dashboard.
+        setMonthlyPerformance(Array.from(monthMap.values()));
+        setPeriodSpend(0);
         if (isOrionOriginFilter(originFilter) && accessToken) {
-          const spendResults = await Promise.all(
-            months.map(async (month) => {
-              const range = monthRange(month.key);
+          void (async () => {
+            let currentPeriodSpend = 0;
+            if (profile.corretor_id && dataInicio && dataFim) {
+              try {
+                const metaRange = getMetaCompatibleRange(dataInicio, dataFim);
+                const spendResponse = await fetch('/api/integrations/meta/spend', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                  },
+                  body: JSON.stringify({
+                    corretor_id: profile.corretor_id,
+                    data_inicio: metaRange.since,
+                    data_fim: metaRange.until,
+                    acumulado_orion: true,
+                  }),
+                });
+                const spendPayload = await spendResponse.json().catch(() => ({}));
+                if (spendResponse.ok) {
+                  currentPeriodSpend = Number(spendPayload.spend || 0);
+                } else {
+                  console.error('Erro ao buscar investimento Meta do periodo:', spendPayload?.error || spendResponse.statusText);
+                }
+              } catch (error) {
+                console.error('Erro ao buscar investimento Meta do periodo:', error);
+              }
+            }
 
+            const spendResults = await Promise.all(months.map(async (month) => {
+              const range = monthRange(month.key);
               try {
                 const response = await fetch('/api/integrations/meta/spend', {
                   method: 'POST',
@@ -678,32 +689,26 @@ export default function DashboardPage() {
                     data_fim: range.until,
                   }),
                 });
-
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok) {
                   console.error('Erro ao buscar investimento Meta do mes:', month.key, payload?.error || response.statusText);
                 }
-                return {
-                  key: month.key,
-                  spend: response.ok ? Number(payload.spend || 0) : 0,
-                };
+                return { key: month.key, spend: response.ok ? Number(payload.spend || 0) : 0 };
               } catch (error) {
                 console.error('Erro ao buscar investimento Meta do mes:', month.key, error);
                 return { key: month.key, spend: 0 };
               }
-            })
-          );
+            }));
 
-          if (!isCurrentRequest()) return;
-
-          spendResults.forEach((result) => {
-            const current = monthMap.get(result.key);
-            if (current) current.spend = result.spend;
-          });
+            if (!isCurrentRequest()) return;
+            const monthlyWithSpend = Array.from(monthMap.values()).map((month) => ({
+              ...month,
+              spend: spendResults.find((result) => result.key === month.key)?.spend || 0,
+            }));
+            setPeriodSpend(currentPeriodSpend);
+            setMonthlyPerformance(monthlyWithSpend);
+          })();
         }
-
-        if (!isCurrentRequest()) return;
-        setMonthlyPerformance(Array.from(monthMap.values()));
 
         // Filter leads in memory for active date filter (used for status, pizza, funnel)
         let statsRes = originScopedAllLeads;
@@ -814,31 +819,33 @@ export default function DashboardPage() {
         // Fetch Meta Account alerts for this broker specifically
         if (profile.corretor_id && accessToken) {
           setLoadingMeta(true);
-          try {
-            const response = await fetch('/api/integrations/meta/alerts', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({
-                corretor_id: profile.corretor_id
-              }),
-            });
-            if (response.ok) {
-              const payload = await response.json();
-              if (payload.accounts && payload.accounts.length > 0) {
-                const matchingAcc = payload.accounts.find((acc: any) => acc.corretor_id === profile.corretor_id);
-                if (isCurrentRequest()) setMetaAccount(matchingAcc || null);
-              } else {
-                if (isCurrentRequest()) setMetaAccount(null);
+          void (async () => {
+            try {
+              const response = await fetch('/api/integrations/meta/alerts', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                  corretor_id: profile.corretor_id
+                }),
+              });
+              if (response.ok) {
+                const payload = await response.json();
+                if (payload.accounts && payload.accounts.length > 0) {
+                  const matchingAcc = payload.accounts.find((acc: any) => acc.corretor_id === profile.corretor_id);
+                  if (isCurrentRequest()) setMetaAccount(matchingAcc || null);
+                } else if (isCurrentRequest()) {
+                  setMetaAccount(null);
+                }
               }
+            } catch (err) {
+              console.error('Error fetching broker meta status:', err);
+            } finally {
+              if (isCurrentRequest()) setLoadingMeta(false);
             }
-          } catch (err) {
-            console.error('Error fetching broker meta status:', err);
-          } finally {
-            if (isCurrentRequest()) setLoadingMeta(false);
-          }
+          })();
         }
 
       } catch (err: unknown) {
