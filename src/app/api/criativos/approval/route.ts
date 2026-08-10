@@ -88,7 +88,7 @@ export async function GET(request: Request) {
       .from('criativo_assets')
       .select('id, demanda_id, corretor_id, titulo, descricao, arquivo_url, status, comentario_corretor, created_at')
       .in('corretor_id', scope.ids)
-      .neq('status', 'rascunho')
+      .in('status', ['em_aprovacao', 'aprovado', 'revisao', 'rodando'])
       .order('created_at', { ascending: false });
     if (error) throw error;
     return NextResponse.json({

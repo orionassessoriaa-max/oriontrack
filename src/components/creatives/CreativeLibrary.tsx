@@ -147,6 +147,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [sendingApprovalId, setSendingApprovalId] = useState<string | null>(null);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
   const [approvalFeedback, setApprovalFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -494,6 +495,39 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     }
   };
 
+  const deleteCreative = async (asset: LibraryAsset) => {
+    const confirmed = window.confirm(
+      `Apagar definitivamente o criativo "${asset.titulo}" do CRM, do armazenamento e do Google Drive?`
+    );
+    if (!confirmed) return;
+
+    setDeletingAssetId(asset.id);
+    setApprovalFeedback(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const response = await fetch('/api/criativos/library', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_id: asset.id,
+          corretor_id: asset.corretor_id,
+          gestor_id: gestorId,
+          drive_file_id: asset.drive_file_id,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel apagar o criativo.');
+      setApprovalFeedback({ tone: 'success', message: `O criativo "${asset.titulo}" foi apagado.` });
+      if (expandedUrl === asset.arquivo_url) setExpandedUrl(null);
+      await fetchLibrary(true);
+    } catch (error: unknown) {
+      setApprovalFeedback({ tone: 'error', message: errorMessage(error, 'Erro ao apagar o criativo.') });
+    } finally {
+      setDeletingAssetId(null);
+    }
+  };
+
   const deleteFolder = async (folder: CreativeFolder) => {
     const confirmed = window.confirm(
       `Mover a pasta "${folder.name}" para a lixeira do Google Drive? Ela tambem deixara de aparecer no CRM.`
@@ -756,6 +790,15 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                               {asset.drive_web_view_link ? 'Abrir no Drive' : 'Baixar'}
                             </a>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => void deleteCreative(asset)}
+                            disabled={deletingAssetId === asset.id}
+                            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-black text-rose-400 transition hover:bg-rose-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-wait disabled:opacity-50"
+                          >
+                            {deletingAssetId === asset.id ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />}
+                            Apagar
+                          </button>
                         </div>
                       </div>
                       {['rascunho', 'revisao'].includes(asset.status) ? (

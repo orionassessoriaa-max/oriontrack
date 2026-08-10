@@ -493,8 +493,8 @@ export async function DELETE(request: Request) {
   const guard = await requireApiUser(request, [...STAFF_ROLES]);
   if ('error' in guard) return guard.error;
 
-  const limited = rateLimit(request, 'criativos:library:delete-folder', {
-    limit: 10,
+  const limited = rateLimit(request, 'criativos:library:delete', {
+    limit: 30,
     windowMs: 10 * 60_000,
     key: guard.profile.id,
   });
@@ -502,9 +502,69 @@ export async function DELETE(request: Request) {
 
   try {
     const body = await request.json().catch(() => ({}));
+    const assetId = String(body.asset_id || '').trim();
     const corretorId = String(body.corretor_id || '').trim();
     const gestorId = String(body.gestor_id || '').trim() || null;
+    const requestedDriveFileId = extractDriveId(String(body.drive_file_id || ''));
     const driveFolderId = extractDriveId(String(body.drive_folder_id || ''));
+
+    if (assetId) {
+      if (!corretorId) {
+        return NextResponse.json({ error: 'Informe a concessionaria do criativo.' }, { status: 400 });
+      }
+      if (!(await canUseCreativeFolder(guard.profile, corretorId, gestorId))) {
+        return NextResponse.json({ error: 'Este criativo nao pertence ao escopo deste gestor.' }, { status: 403 });
+      }
+
+      const driveOnly = assetId.startsWith('drive:');
+      if (driveOnly) {
+        const driveFileId = extractDriveId(assetId.slice('drive:'.length)) || requestedDriveFileId;
+        if (!driveFileId) {
+          return NextResponse.json({ error: 'Arquivo do Google Drive invalido.' }, { status: 400 });
+        }
+        await deleteDriveFile(driveFileId);
+        await writeAuditLog(request, guard.profile, {
+          action: 'creative.asset.delete',
+          entity_type: 'google_drive_file',
+          entity_id: driveFileId,
+          metadata: { corretor_id: corretorId, gestor_id: gestorId, source: 'drive' },
+        });
+        return NextResponse.json({ ok: true, asset_id: assetId });
+      }
+
+      const { data: asset, error: assetError } = await supabaseAdmin
+        .from('criativo_assets')
+        .select('id, corretor_id, titulo, arquivo_path, drive_file_id')
+        .eq('id', assetId)
+        .eq('corretor_id', corretorId)
+        .maybeSingle();
+      if (assetError) throw assetError;
+      if (!asset) {
+        return NextResponse.json({ error: 'Criativo nao encontrado ou fora desta concessionaria.' }, { status: 404 });
+      }
+
+      const driveFileId = extractDriveId(asset.drive_file_id) || requestedDriveFileId;
+      if (driveFileId) await deleteDriveFile(driveFileId);
+      if (asset.arquivo_path) {
+        const { error: storageError } = await supabaseAdmin.storage.from(BUCKET).remove([asset.arquivo_path]);
+        if (storageError) throw storageError;
+      }
+      const { error: deleteError } = await supabaseAdmin
+        .from('criativo_assets')
+        .delete()
+        .eq('id', asset.id)
+        .eq('corretor_id', corretorId);
+      if (deleteError) throw deleteError;
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'creative.asset.delete',
+        entity_type: 'criativo_asset',
+        entity_id: asset.id,
+        metadata: { corretor_id: corretorId, gestor_id: gestorId, title: asset.titulo },
+      });
+      return NextResponse.json({ ok: true, asset_id: asset.id });
+    }
+
     if (!corretorId || !driveFolderId) {
       return NextResponse.json({ error: 'Informe a concessionaria e a pasta do Google Drive.' }, { status: 400 });
     }
