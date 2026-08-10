@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { normalizePhone, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
@@ -1172,8 +1172,9 @@ export async function POST(request: Request) {
       remoteJid = providerPhone;
     }
     let phone = normalizePhone(remoteJid.split('@')[0]);
-    const commercialLead = await findCommercialLead(phone);
-    let profile = await findProfileFromWebhook(body, instance) || await findProfileFromCrmPhone(phone);
+    let profile = await findProfileFromWebhook(body, instance);
+    const commercialLead = profile?.corretor_id ? null : await findCommercialLead(phone);
+    profile = profile || await findProfileFromCrmPhone(phone);
     if (!profile?.corretor_id && commercialLead) {
       profile = await findProfileById(commercialLead.created_by || commercialLead.sdr_id || commercialLead.closer_id);
     }
@@ -1400,10 +1401,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, ai_outbound: true });
     }
 
-    if (fromMe && lead?.id && !commercialMode) {
-      await stopLeadAiForHumanTakeover(lead.id, profile?.nome);
-    }
-
     const direction = fromMe ? 'outbound' : 'inbound';
     if (!providerId && !hasMedia && await hasRecentDuplicateMessage(conversation.id, direction, message)) {
       console.log('[uazapi_webhook] Ignorando mensagem duplicada recente.', {
@@ -1448,14 +1445,25 @@ export async function POST(request: Request) {
       throw insertError;
     }
 
+    if (fromMe && lead?.id && !commercialMode) {
+      after(async () => {
+        try {
+          await stopLeadAiForHumanTakeover(lead.id, profile?.nome);
+        } catch (takeoverError) {
+          console.error('[uazapi_webhook] Failed stopping AI after human takeover:', takeoverError);
+        }
+      });
+    }
+
     if (!fromMe && lead?.id) {
-      try {
+      after(async () => {
+        try {
         if (hasAudio && !audioTranscript && !commercialLead) {
           await handoffLeadAiToResponsible(
             lead.id,
             'audio recebido, mas nao foi possivel transcrever automaticamente. Responsavel deve ouvir o audio no inbox e assumir o atendimento sem resposta automatica ao cliente.'
           );
-          return NextResponse.json({ ok: true, audio_handoff: true });
+          return;
         }
 
         if (commercialLead) {
@@ -1477,9 +1485,10 @@ export async function POST(request: Request) {
             incomingWasAudio: hasAudio,
           });
         }
-      } catch (aiErr) {
-        console.error('[uazapi_webhook] Failed continuing lead AI:', aiErr);
-      }
+        } catch (aiErr) {
+          console.error('[uazapi_webhook] Failed continuing lead AI:', aiErr);
+        }
+      });
     }
 
     return NextResponse.json({ ok: true });

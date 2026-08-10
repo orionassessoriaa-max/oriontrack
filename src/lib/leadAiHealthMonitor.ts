@@ -3,6 +3,7 @@ import { handoffLeadAiToResponsible } from '@/lib/leadAiAgent';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
   configureUazapiWebhook,
+  ensureUazapiWebhookConfigured,
   getUazapiInstanceConnection,
   uazapiAiInstanceName,
   uazapiFetch,
@@ -165,8 +166,10 @@ export async function checkLeadAiInstanceHealth(options: MonitorOptions = {}) {
     if (connection.connected) {
       summary.connected += 1;
       if (recovered) summary.recovered += 1;
+      await ensureUazapiWebhookConfigured(instance).catch((webhookError) => {
+        console.error(`[lead_ai_health] Failed refreshing webhook for ${instance}:`, webhookError);
+      });
       if (mutate && config.status !== 'ativo') {
-        await configureUazapiWebhook(instance);
         await supabaseAdmin.from('corretora_ai_configs').update({ status: 'ativo', updated_at: new Date().toISOString() }).eq('id', config.id);
       }
       details.push({ company: company.nome, instance, state: connection.state, action: recovered ? 'recovered' : 'healthy' });

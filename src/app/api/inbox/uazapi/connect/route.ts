@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
-import { configureUazapiWebhook, ensureUazapiInstance, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { configureUazapiWebhook, ensureUazapiInstance, ensureUazapiWebhookConfigured, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 
 const WHATSAPP_TARGET_ROLES = ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const CAN_VIEW_AS_ROLES = ['admin', 'gestor_trafego', 'account_manager'] as const;
@@ -401,6 +401,15 @@ export async function GET(request: Request) {
 
     try {
       const snapshot = await fetchUazapiInstanceState(instance);
+      if (snapshot.state === 'open') {
+        after(async () => {
+          try {
+            await ensureUazapiWebhookConfigured(instance);
+          } catch (webhookError) {
+            console.error(`[GET /api/inbox/uazapi/connect] Failed refreshing webhook for ${instance}:`, webhookError);
+          }
+        });
+      }
       return NextResponse.json({
         success: true,
         instance,

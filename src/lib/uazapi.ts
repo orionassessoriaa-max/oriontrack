@@ -314,14 +314,12 @@ export async function configureUazapiWebhook(instanceName: string) {
       await uazapiFetch('/webhook', {
         method: 'POST',
         body: JSON.stringify({
-          webhook: {
-            url: webhookUrl,
-            enabled: true,
-            events: ['messages', 'connection', 'status', 'qrcode']
-          },
           url: webhookUrl,
           enabled: true,
-          events: ['messages', 'connection', 'status', 'qrcode']
+          events: ['messages', 'messages_update', 'history', 'connection', 'call'],
+          excludeMessages: [],
+          addUrlEvents: false,
+          addUrlTypesMessages: false,
         })
       }, { instanceName });
       return;
@@ -334,6 +332,18 @@ export async function configureUazapiWebhook(instanceName: string) {
 
   const message = lastError instanceof Error ? lastError.message : String(lastError || 'erro desconhecido');
   throw new Error(`Nao foi possivel configurar o recebimento de mensagens da instancia ${instanceName}: ${message}`);
+}
+
+const webhookConfigurationTimes = new Map<string, number>();
+
+export async function ensureUazapiWebhookConfigured(instanceName: string, maxAgeMs = 15 * 60 * 1000) {
+  const key = String(instanceName || '').trim().toLowerCase();
+  if (!key) return;
+  const configuredAt = webhookConfigurationTimes.get(key) || 0;
+  if (Date.now() - configuredAt < maxAgeMs) return;
+
+  await configureUazapiWebhook(instanceName);
+  webhookConfigurationTimes.set(key, Date.now());
 }
 
 export function normalizePhone(value?: string | null) {

@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { configureUazapiWebhook, ensureUazapiInstance, uazapiAiInstanceName, uazapiFetch } from '@/lib/uazapi';
+import { configureUazapiWebhook, ensureUazapiInstance, ensureUazapiWebhookConfigured, uazapiAiInstanceName, uazapiFetch } from '@/lib/uazapi';
 import { DEFAULT_LEAD_AI_PERSONA, DEFAULT_LEAD_AI_SYSTEM_PROMPT } from '@/lib/defaultLeadAiPrompt';
 
 const AI_TARGET_ROLES = ['corretor', 'corretor_admin', 'corretor_membro'] as const;
@@ -87,6 +87,15 @@ export async function GET(request: Request) {
     if (!context) return NextResponse.json({ configured: false, error: 'Concessionaria nao identificada.' }, { status: 404 });
     const dedicated = context.config?.sender_mode === 'dedicated';
     const state = dedicated ? await providerState(context.instance).catch(() => 'close') : 'close';
+    if (dedicated && state === 'open') {
+      after(async () => {
+        try {
+          await ensureUazapiWebhookConfigured(context.instance);
+        } catch (webhookError) {
+          console.error(`[GET /api/ia/whatsapp] Failed refreshing webhook for ${context.instance}:`, webhookError);
+        }
+      });
+    }
     if (dedicated && context.config) {
       // Uma consulta da pagina pode confirmar recuperacao, mas nunca deve
       // transformar uma oscilacao isolada em desconexao definitiva.
