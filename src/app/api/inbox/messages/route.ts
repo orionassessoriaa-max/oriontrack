@@ -285,13 +285,23 @@ async function syncProviderHistory(conversation: any) {
     .filter(Boolean);
 
   for (let index = 0; index < rows.length; index += 250) {
+    const batch = rows.slice(index, index + 250) as any[];
     const { error } = await supabaseAdmin
       .from('whatsapp_mensagens')
-      .upsert(rows.slice(index, index + 250) as any[], {
-        onConflict: 'provider_message_id',
-        ignoreDuplicates: true,
-      });
-    if (error) throw error;
+      .insert(batch);
+    if (!error) continue;
+    if (error.code !== '23505') throw error;
+
+    // Existe um indice unico parcial para provider_message_id. O PostgREST
+    // nao consegue usa-lo como alvo de ON CONFLICT, entao em uma corrida entre
+    // webhook e sincronizacao repetimos individualmente e ignoramos somente a
+    // duplicidade confirmada.
+    for (const row of batch) {
+      const { error: rowError } = await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .insert(row);
+      if (rowError && rowError.code !== '23505') throw rowError;
+    }
   }
 
   const latest = rows.reduce<string | null>((current, row: any) => (
