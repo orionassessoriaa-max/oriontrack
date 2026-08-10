@@ -44,6 +44,7 @@ export default function EntradaGestorPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('Entrada salva com sucesso.');
   const [strategies, setStrategies] = useState<StrategyEntry[]>([]);
   const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
   const [operatorChoice, setOperatorChoice] = useState('');
@@ -271,6 +272,7 @@ export default function EntradaGestorPage() {
 
     setSaving(true);
     setSaved(false);
+    setSaveMessage('Entrada salva com sucesso.');
     const onboarding_status = formData.campanhas_ativas
       ? 'campanhas_ativas'
       : dataComplete
@@ -323,6 +325,7 @@ export default function EntradaGestorPage() {
     const strategyPayload = await strategyResponse.json().catch(() => ({}));
     setSaving(false);
     if (!strategyResponse.ok) return setError(strategyPayload.error || 'Entrada salva, mas a estrategia nao foi sincronizada.');
+    setSaveMessage(strategyPayload.message || 'Entrada salva com sucesso.');
     setSaved(true);
     setCorretores(prev => prev.map(c => c.id === selectedId ? {
       ...c,
@@ -433,7 +436,7 @@ export default function EntradaGestorPage() {
 
               {saved && (
                 <div className="mb-6 flex items-center gap-3 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm font-bold text-green-700">
-                  <CheckCircle2 size={18} /> Entrada salva com sucesso.
+                  <CheckCircle2 size={18} /> {saveMessage}
                 </div>
               )}
 

@@ -1,8 +1,8 @@
 import { after, NextResponse } from 'next/server';
 import { requireApiUser, rateLimit } from '@/lib/api/security';
 import { canUseCreativeFolder } from '@/lib/creatives/access';
-import { ensureCreativeStrategyFolder } from '@/lib/creatives/automation';
-import { getDefaultCreativePrompt } from '@/lib/creatives/operatorPrompts';
+import { ensureCreativeStrategyFolder, processCreativeGenerationJob } from '@/lib/creatives/automation';
+import { getDefaultCreativePrompt, mergeCreativeBriefing } from '@/lib/creatives/operatorPrompts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 function clean(value: unknown, max = 120) {
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
       if (error) throw error;
     }
 
-    const savedStrategies: Array<{ id: string; operadora: string; regiao: string }> = [];
+    const savedStrategies: Array<{ id: string; operadora: string; regiao: string; creative_prompt: string }> = [];
     for (const entry of uniqueEntries) {
       const current = existingByKey.get(keyOf(entry));
       if (current) {
@@ -118,7 +118,12 @@ export async function POST(request: Request) {
           })
           .eq('id', current.id);
         if (error) throw error;
-        savedStrategies.push({ id: current.id, operadora: entry.operadora, regiao: entry.regiao });
+        savedStrategies.push({
+          id: current.id,
+          operadora: entry.operadora,
+          regiao: entry.regiao,
+          creative_prompt: entry.creative_prompt,
+        });
       } else {
         const { data, error } = await supabaseAdmin
           .from('trafego_estrategias_criativos')
@@ -132,9 +137,43 @@ export async function POST(request: Request) {
           .select('id, operadora, regiao')
           .single();
         if (error) throw error;
-        savedStrategies.push(data);
+        savedStrategies.push({ ...data, creative_prompt: entry.creative_prompt });
       }
     }
+
+    const strategyIds = savedStrategies.map((strategy) => strategy.id);
+    const { data: existingJobs, error: existingJobsError } = await supabaseAdmin
+      .from('criativo_generation_jobs')
+      .select('estrategia_id')
+      .in('estrategia_id', strategyIds)
+      .in('status', ['na_fila', 'gerando', 'pronto']);
+    if (existingJobsError) throw existingJobsError;
+
+    const strategiesWithJobs = new Set((existingJobs || []).map((job) => job.estrategia_id));
+    const generationRows = savedStrategies
+      .filter((strategy) => !strategiesWithJobs.has(strategy.id))
+      .map((strategy) => ({
+        corretor_id: corretorId,
+        gestor_id: gestorId,
+        estrategia_id: strategy.id,
+        recommendation_id: null,
+        operadora: strategy.operadora,
+        regiao: strategy.regiao,
+        quantidade: 4,
+        briefing: mergeCreativeBriefing(strategy.operadora, strategy.creative_prompt, ''),
+        referencia_url: null,
+        origem: 'entrada',
+        status: 'na_fila',
+        solicitado_por_profile_id: guard.profile.id,
+      }));
+
+    const { data: generationJobs, error: generationError } = generationRows.length
+      ? await supabaseAdmin
+        .from('criativo_generation_jobs')
+        .insert(generationRows)
+        .select('id')
+      : { data: [], error: null };
+    if (generationError) throw generationError;
 
     after(async () => {
       for (const strategy of savedStrategies) {
@@ -146,13 +185,19 @@ export async function POST(request: Request) {
           regiao: strategy.regiao,
         }).catch((error) => console.error('Erro ao preparar pasta de criativos:', error));
       }
+      for (const job of generationJobs || []) {
+        await processCreativeGenerationJob(job.id);
+      }
     });
 
     return NextResponse.json({
       success: true,
       saved: savedStrategies.length,
       removed: removedIds.length,
-      message: 'Estratégias e prompts salvos. As pastas serão preparadas em segundo plano.',
+      generation_started: generationJobs?.length || 0,
+      message: generationJobs?.length
+        ? `${generationJobs.length} lote(s) de criativos entraram na fila. As imagens serao geradas em segundo plano.`
+        : 'Estrategias salvas. Os criativos existentes foram preservados sem duplicacao.',
     });
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Erro ao salvar estratégia.' }, { status: 500 });

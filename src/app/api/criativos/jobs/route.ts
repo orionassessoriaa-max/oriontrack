@@ -52,6 +52,14 @@ export async function GET(request: Request) {
       .in('id', corretorIds)
     : { data: [], error: null };
   if (corretoresError) return NextResponse.json({ error: corretoresError.message }, { status: 500 });
+  const queuedJobs = jobs.filter((job) => job.status === 'na_fila').slice(0, 5);
+  if (queuedJobs.length) {
+    after(async () => {
+      for (const job of queuedJobs) {
+        await processCreativeGenerationJob(job.id);
+      }
+    });
+  }
   const concessionariaById = new Map(
     (corretores || []).map((corretor) => [
       corretor.id,
