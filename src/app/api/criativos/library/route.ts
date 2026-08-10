@@ -319,7 +319,7 @@ export async function GET(request: Request) {
           .limit(1000),
         supabaseAdmin
           .from('trafego_estrategias_criativos')
-          .select('id, corretor_id, operadora, regiao')
+          .select('id, corretor_id, operadora, regiao, creative_prompt')
           .in('corretor_id', corretorIds)
           .eq('ativa', true)
           .order('created_at', { ascending: false }),

@@ -6,11 +6,13 @@ import {
   findOrCreateDriveFolder,
   uploadDriveFile,
 } from '@/lib/integrations/googleDrive';
+import { creativeOperatorProfile } from '@/lib/creatives/operatorPrompts';
 
 const BUCKET = 'criativos';
 
 type JobRow = {
   id: string;
+  estrategia_id?: string | null;
   corretor_id: string;
   gestor_id: string;
   operadora: string;
@@ -49,6 +51,24 @@ async function ensureBucket() {
 
 function fallbackCopies(job: JobRow): CopyVariation[] {
   const base = `${job.operadora} em ${job.regiao}`;
+  const profile = creativeOperatorProfile(job.operadora);
+  if (profile === 'medsenior_49') {
+    return [
+      { angle: 'economia', headline: 'Cuide-se pagando melhor', legenda: `Compare opções ${base} para pessoas a partir de 49 anos.`, visual_prompt: 'adultos brasileiros maduros e ativos, visual premium, limpo e acolhedor' },
+      { angle: 'comparacao', headline: 'Seu plano pode caber melhor', legenda: `Veja alternativas ${base} para o público 49+ com orientação especializada.`, visual_prompt: 'casal maduro brasileiro em ambiente moderno, composição clara e confiável' },
+      { angle: 'cuidado', headline: 'Cuidado para a sua fase', legenda: `Conheça possibilidades ${base} a partir de 49 anos e compare seu plano atual.`, visual_prompt: 'mulher brasileira madura e ativa, luz natural, tipografia grande, poucos elementos' },
+      { angle: 'consultoria', headline: 'Compare antes de decidir', legenda: `Converse com um especialista sobre opções ${base} para pessoas 49+.`, visual_prompt: 'atendimento consultivo a pessoa madura, composição minimalista e humana' },
+    ];
+  }
+  const minimumLives = profile === 'amil_2_vidas' ? 2 : profile === 'empresarial_3_vidas' ? 3 : null;
+  if (minimumLives) {
+    return [
+      { angle: 'reducao', headline: `CNPJ a partir de ${minimumLives} vidas`, legenda: `Compare seu plano empresarial ${base} e verifique oportunidades de redução.`, visual_prompt: 'equipe de pequena empresa brasileira, composição premium, limpa e corporativa' },
+      { angle: 'economia', headline: 'Sua empresa pode pagar melhor', legenda: `Para CNPJ ou MEI a partir de ${minimumLives} vidas. Compare opções ${base}.`, visual_prompt: 'empreendedores brasileiros em escritório contemporâneo, poucos elementos' },
+      { angle: 'comparacao', headline: 'Compare o plano da empresa', legenda: `Conheça alternativas ${base} para CNPJ a partir de ${minimumLives} vidas.`, visual_prompt: 'gestor analisando custos com equipe, visual claro e profissional' },
+      { angle: 'consultoria', headline: 'Reduza custos com estratégia', legenda: `Solicite uma análise para CNPJ ou MEI a partir de ${minimumLives} vidas.`, visual_prompt: 'consultoria empresarial brasileira, fundo limpo, tipografia de alto contraste' },
+    ];
+  }
   return [
     { angle: 'seguranca', headline: `Protecao para sua rotina`, legenda: `Conheca as possibilidades de ${base} e converse com um especialista.`, visual_prompt: 'familia brasileira em momento cotidiano, atmosfera de seguranca e acolhimento' },
     { angle: 'praticidade', headline: `Cuidado sem complicacao`, legenda: `Veja como encontrar uma opcao de ${base} adequada ao seu momento.`, visual_prompt: 'pessoa usando celular com tranquilidade, composicao limpa e moderna' },
@@ -71,9 +91,11 @@ async function generateCopies(job: JobRow): Promise<CopyVariation[]> {
       messages: [
         {
           role: 'system',
-          content: `Crie variacoes de anuncios de plano de saude em portugues do Brasil.
-Cada variacao deve usar um angulo diferente. Nao invente preco, desconto, cobertura, carencia, rede, telefone ou promessa.
-Headline curta, legenda persuasiva e responsavel, e visual_prompt descrevendo apenas a direcao visual.
+          content: `Crie variações de anúncios de plano de saúde em português do Brasil.
+Cada variação deve usar um ângulo diferente e obedecer integralmente ao briefing, inclusive idade, CNPJ e quantidade mínima de vidas.
+Não invente preço, percentual de economia, cobertura, carência, rede, telefone ou promessa.
+Use headline curta, no máximo uma linha curta de apoio, legenda persuasiva e responsável e visual_prompt descrevendo uma composição limpa com poucos elementos.
+O criativo deve qualificar o lead antes do clique. Não esconda nem flexibilize os requisitos obrigatórios do briefing.
 Retorne JSON: {"variations":[{"angle":"","headline":"","legenda":"","visual_prompt":""}]}.`,
         },
         {
@@ -158,7 +180,9 @@ ${reference ? 'Use a imagem enviada como referencia de composicao, sem copiar ma
   return Buffer.from(base64, 'base64');
 }
 
-async function resolveFolderPath(job: JobRow) {
+type FolderPathInput = Pick<JobRow, 'corretor_id' | 'gestor_id' | 'operadora' | 'regiao'>;
+
+async function resolveFolderPath(job: FolderPathInput) {
   const rootId = extractDriveId(process.env.GOOGLE_DRIVE_FOLDER_ID);
   if (!rootId) throw new Error('GOOGLE_DRIVE_FOLDER_ID nao configurado.');
   const [{ data: corretor, error: corretorError }, { data: gestor, error: gestorError }] = await Promise.all([
@@ -177,6 +201,33 @@ async function resolveFolderPath(job: JobRow) {
   return { gestorFolder, concessionariaFolder, regionFolder, operatorFolder, concessionariaName };
 }
 
+export async function ensureCreativeStrategyFolder(input: {
+  strategyId: string;
+  corretorId: string;
+  gestorId: string;
+  operadora: string;
+  regiao: string;
+}) {
+  const folders = await resolveFolderPath({
+    corretor_id: input.corretorId,
+    gestor_id: input.gestorId,
+    operadora: input.operadora,
+    regiao: input.regiao,
+  });
+  const { error } = await supabaseAdmin
+    .from('trafego_estrategias_criativos')
+    .update({
+      drive_gestor_folder_id: folders.gestorFolder.id,
+      drive_concessionaria_folder_id: folders.concessionariaFolder.id,
+      drive_regiao_folder_id: folders.regionFolder.id,
+      drive_operadora_folder_id: folders.operatorFolder.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.strategyId);
+  if (error) throw error;
+  return folders;
+}
+
 export async function ensureConcessionariaDriveFolder(corretorId: string, gestorId?: string | null) {
   const rootId = extractDriveId(process.env.GOOGLE_DRIVE_FOLDER_ID);
   if (!rootId) throw new Error('GOOGLE_DRIVE_FOLDER_ID nao configurado.');
@@ -188,7 +239,7 @@ export async function ensureConcessionariaDriveFolder(corretorId: string, gestor
   if (corretorError) throw corretorError;
   if (!corretor) throw new Error('Concessionaria nao encontrada.');
   const teamManager = Array.isArray(corretor.time_operacional)
-    ? corretor.time_operacional.find((member: any) => {
+    ? corretor.time_operacional.find((member: Record<string, unknown>) => {
         const role = String(member?.tipo_usuario || '').trim().toLowerCase();
         const position = String(member?.cargo || '')
           .normalize('NFD')
@@ -226,7 +277,7 @@ export async function processCreativeGenerationJob(jobId: string) {
     .update({ status: 'gerando', started_at: new Date().toISOString(), erro: null, updated_at: new Date().toISOString() })
     .eq('id', jobId)
     .eq('status', 'na_fila')
-    .select('id, corretor_id, gestor_id, operadora, regiao, quantidade, briefing, referencia_url, origem')
+    .select('id, corretor_id, gestor_id, estrategia_id, operadora, regiao, quantidade, briefing, referencia_url, origem')
     .maybeSingle();
   if (claimError || !claimed) return;
   const job = claimed as JobRow;
@@ -237,6 +288,18 @@ export async function processCreativeGenerationJob(jobId: string) {
       generateCopies(job),
       fetchReference(job.referencia_url),
     ]);
+    if (job.estrategia_id) {
+      await supabaseAdmin
+        .from('trafego_estrategias_criativos')
+        .update({
+          drive_gestor_folder_id: folderPath.gestorFolder.id,
+          drive_concessionaria_folder_id: folderPath.concessionariaFolder.id,
+          drive_regiao_folder_id: folderPath.regionFolder.id,
+          drive_operadora_folder_id: folderPath.operatorFolder.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', job.estrategia_id);
+    }
     const results: Array<Record<string, unknown>> = [];
     for (let index = 0; index < job.quantidade; index += 1) {
       const variation = variations[index] || fallbackCopies(job)[index % 4];

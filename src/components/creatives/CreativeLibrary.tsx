@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useCreativeJobs } from '@/components/creatives/CreativeJobsProvider';
+import { getDefaultCreativePrompt } from '@/lib/creatives/operatorPrompts';
 
 type LibraryAsset = {
   id: string;
@@ -50,6 +51,7 @@ type CreativeStrategy = {
   corretor_id: string;
   operadora: string;
   regiao: string;
+  creative_prompt?: string | null;
 };
 
 type CreativeFolder = {
@@ -274,9 +276,17 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   }, [selectedFolder]);
   const selectedRegion = folderHierarchy.find((region) => region.key === selectedRegionKey) || null;
   const selectedOperator = selectedRegion?.operators.find((operator) => operator.key === selectedOperatorKey) || null;
+  const selectedStrategy = selectedFolder?.strategies.find((strategy) => (
+    pathKey(strategy.regiao) === selectedRegionKey
+    && pathKey(strategy.operadora) === selectedOperatorKey
+  )) || null;
+  const generatorStrategy = selectedFolder?.strategies.find((strategy) => (
+    pathKey(strategy.regiao) === pathKey(batchRegion)
+    && pathKey(strategy.operadora) === pathKey(batchOperator)
+  )) || null;
 
   const resetGenerator = () => {
-    setPrompt('');
+    setPrompt(selectedStrategy?.creative_prompt || getDefaultCreativePrompt(selectedOperator?.name || ''));
     setSize('1024x1024');
     setReferenceDataUrl(null);
     setReferenceName('');
@@ -908,18 +918,27 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
             <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
               <div className="space-y-6 border-b border-slate-800 p-5 sm:p-7 lg:border-b-0 lg:border-r">
                 <div>
-                  <label htmlFor="creative-prompt" className="text-sm font-black text-slate-200">O que voce quer criar?</label>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Informe oferta, publico, estilo, cores e os textos exatos que precisam aparecer. A IA nao deve inventar informacoes.</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label htmlFor="creative-prompt" className="text-sm font-black text-slate-200">Direção do criativo</label>
+                    <button
+                      type="button"
+                      onClick={() => setPrompt(generatorStrategy?.creative_prompt || getDefaultCreativePrompt(batchOperator))}
+                      className="min-h-10 rounded-xl border border-slate-700 px-3 text-xs font-black text-slate-300 transition hover:border-cyan-500 hover:text-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                    >
+                      Restaurar padrão da operadora
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">A regra salva na Entrada já aparece aqui. Acrescente hospital, estilo, cores ou outra instrução específica. Você também pode anexar uma foto de referência.</p>
                   <textarea
                     ref={promptInputRef}
                     id="creative-prompt"
                     value={prompt}
                     onChange={(event) => { setPrompt(event.target.value); setSavedGeneratedAsset(null); }}
-                    placeholder="Ex.: Criativo moderno para plano de saude PME, fundo azul, familia sorrindo, destaque para atendimento nacional..."
+                    placeholder="Ex.: Usar uma foto do Hospital São Luiz de Brasília, fundo azul e composição limpa..."
                     className="mt-3 min-h-40 w-full resize-y rounded-2xl border border-slate-700 bg-slate-950/60 p-4 text-base font-semibold leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
-                    maxLength={3000}
+                    maxLength={8000}
                   />
-                  <p className="mt-1 text-right text-[11px] font-bold text-slate-600">{prompt.length}/3000</p>
+                  <p className="mt-1 text-right text-[11px] font-bold text-slate-600">{prompt.length}/8000</p>
                 </div>
 
                 <fieldset>

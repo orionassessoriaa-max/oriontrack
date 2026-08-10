@@ -6,8 +6,9 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import { Corretor, MetaAdAccount } from '@/types';
 import { getOnboardingStatus, OPERADORAS_ONBOARDING } from '@/lib/onboarding';
-import { Building2, CheckCircle2, Layers3, Link2, Loader2, Plus, Save, Search, ShieldAlert, Trash2, Unlink, UserPlus } from 'lucide-react';
+import { Building2, CheckCircle2, Layers3, Link2, Loader2, Pencil, Plus, RotateCcw, Save, Search, ShieldAlert, Trash2, Unlink, UserPlus } from 'lucide-react';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { getDefaultCreativePrompt } from '@/lib/creatives/operatorPrompts';
 
 type EntradaForm = {
   facebook_login: string;
@@ -29,7 +30,7 @@ const emptyForm: EntradaForm = {
   observacoes: ''
 };
 
-type StrategyEntry = { id: string; operadora: string; regiao: string };
+type StrategyEntry = { id: string; operadora: string; regiao: string; creative_prompt: string };
 const REGION_OPTIONS = ['SP', 'DF', 'RJ', 'MG', 'PR', 'SC', 'RS', 'GO', 'BA', 'PE', 'CE', 'Outros'];
 
 export default function EntradaGestorPage() {
@@ -44,6 +45,7 @@ export default function EntradaGestorPage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [strategies, setStrategies] = useState<StrategyEntry[]>([]);
+  const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
   const [operatorChoice, setOperatorChoice] = useState('');
   const [operatorOther, setOperatorOther] = useState('');
   const [regionChoice, setRegionChoice] = useState('');
@@ -51,17 +53,6 @@ export default function EntradaGestorPage() {
   const [metaAccountId, setMetaAccountId] = useState('');
   const [linkingMeta, setLinkingMeta] = useState(false);
   const [metaFeedback, setMetaFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
-
-  useEffect(() => {
-    void fetchCorretores();
-    const refresh = () => void fetchCorretores(true);
-    const interval = window.setInterval(refresh, 60_000);
-    window.addEventListener('focus', refresh);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener('focus', refresh);
-    };
-  }, [profile?.id]);
 
   const selectedCorretor = corretores.find(c => c.id === selectedId) || null;
   const selectedStatus = selectedCorretor ? getOnboardingStatus(selectedCorretor) : null;
@@ -92,7 +83,7 @@ export default function EntradaGestorPage() {
     );
   }, [concessionarias, search]);
 
-  const fetchCorretores = async (silent = false) => {
+  async function fetchCorretores(silent = false) {
     if (!profile?.id) {
       setLoading(false);
       return;
@@ -135,7 +126,19 @@ export default function EntradaGestorPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    const initial = window.setTimeout(() => void fetchCorretores(), 0);
+    const refresh = () => void fetchCorretores(true);
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [profile?.id]);
 
   const selectCorretor = async (corretor: Corretor) => {
     setSelectedId(corretor.id);
@@ -179,6 +182,7 @@ export default function EntradaGestorPage() {
       id: item.id,
       operadora: item.operadora,
       regiao: item.regiao,
+      creative_prompt: item.creative_prompt || getDefaultCreativePrompt(item.operadora),
     })));
   };
 
@@ -247,7 +251,14 @@ export default function EntradaGestorPage() {
       return setError('Essa combinacao de operadora e regiao ja foi adicionada.');
     }
     setError(null);
-    setStrategies((current) => [...current, { id: `new-${crypto.randomUUID()}`, operadora, regiao }]);
+    const id = `new-${crypto.randomUUID()}`;
+    setStrategies((current) => [...current, {
+      id,
+      operadora,
+      regiao,
+      creative_prompt: getDefaultCreativePrompt(operadora),
+    }]);
+    setExpandedPromptId(id);
     setOperatorChoice('');
     setOperatorOther('');
     setRegionChoice('');
@@ -306,8 +317,7 @@ export default function EntradaGestorPage() {
         gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
           ? profile.id
           : undefined,
-        estrategias: strategies.map(({ operadora, regiao }) => ({ operadora, regiao })),
-        briefing: formData.observacoes,
+        estrategias: strategies.map(({ operadora, regiao, creative_prompt }) => ({ operadora, regiao, creative_prompt })),
       }),
     });
     const strategyPayload = await strategyResponse.json().catch(() => ({}));
@@ -525,7 +535,7 @@ export default function EntradaGestorPage() {
                   Estratégia de criativos
                 </legend>
                 <p className="mb-5 text-sm font-medium text-slate-500">
-                  Cada entrada cria a pasta Região / Operadora e coloca 4 criativos nela em segundo plano.
+                  Ao salvar, o sistema prepara a pasta Região / Operadora e guarda uma regra de criação editável. Os criativos só serão gerados quando o gestor solicitar na página Criativos.
                 </p>
                 <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
                   <div className="space-y-2">
@@ -566,17 +576,56 @@ export default function EntradaGestorPage() {
                   {strategies.length === 0 ? (
                     <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-center text-sm font-bold text-slate-400">Nenhuma combinação adicionada.</p>
                   ) : strategies.map((strategy, index) => (
-                    <div key={strategy.id || `${strategy.operadora}-${strategy.regiao}-${index}`} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-4">
-                      <div className="flex items-center gap-3">
-                        <span className="rounded-xl bg-blue-50 p-2 text-blue-600"><Layers3 size={18} /></span>
-                        <div>
-                          <p className="font-black text-slate-900">{strategy.regiao} / {strategy.operadora}</p>
-                          <p className="text-xs font-bold text-slate-400">4 criativos na criação desta entrada</p>
+                    <div key={strategy.id || `${strategy.operadora}-${strategy.regiao}-${index}`} className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-xl bg-blue-50 p-2 text-blue-600"><Layers3 size={18} /></span>
+                          <div>
+                            <p className="font-black text-slate-900">{strategy.regiao} / {strategy.operadora}</p>
+                            <p className="text-xs font-bold text-slate-400">Prompt padrão salvo para esta combinação</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedPromptId((current) => current === strategy.id ? null : strategy.id)}
+                            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            aria-expanded={expandedPromptId === strategy.id}
+                          >
+                            <Pencil size={15} /> {expandedPromptId === strategy.id ? 'Fechar prompt' : 'Editar prompt'}
+                          </button>
+                          <button type="button" aria-label={`Remover ${strategy.operadora} de ${strategy.regiao}`} onClick={() => setStrategies((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">
+                            <Trash2 size={18} />
+                          </button>
                         </div>
                       </div>
-                      <button type="button" aria-label={`Remover ${strategy.operadora} de ${strategy.regiao}`} onClick={() => setStrategies((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded-xl p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">
-                        <Trash2 size={18} />
-                      </button>
+                      {expandedPromptId === strategy.id && (
+                        <div className="mt-4 border-t border-slate-100 pt-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <label htmlFor={`strategy-prompt-${strategy.id}`} className="text-[10px] font-black uppercase tracking-widest text-slate-500">Regra de copy e direção visual</label>
+                            <button
+                              type="button"
+                              onClick={() => setStrategies((current) => current.map((item) => item.id === strategy.id
+                                ? { ...item, creative_prompt: getDefaultCreativePrompt(item.operadora) }
+                                : item))}
+                              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <RotateCcw size={14} /> Restaurar padrão
+                            </button>
+                          </div>
+                          <textarea
+                            id={`strategy-prompt-${strategy.id}`}
+                            value={strategy.creative_prompt}
+                            onChange={(event) => setStrategies((current) => current.map((item) => item.id === strategy.id
+                              ? { ...item, creative_prompt: event.target.value }
+                              : item))}
+                            maxLength={8000}
+                            rows={8}
+                            className="mt-3 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold leading-6 text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                          />
+                          <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">O gestor pode alterar esta regra. Na geração, ele ainda poderá acrescentar um hospital ou anexar uma imagem de referência.</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

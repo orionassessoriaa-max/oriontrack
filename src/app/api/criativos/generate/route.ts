@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const size = String(body.size || '1024x1024');
     const reference = parseReference(String(body.reference_data_url || ''));
 
-    if (prompt.length < 12 || prompt.length > 3000) {
+    if (prompt.length < 12 || prompt.length > 8000) {
       return NextResponse.json({ error: 'Descreva o criativo em 12 a 3.000 caracteres.' }, { status: 400 });
     }
     if (!ALLOWED_SIZES.has(size)) {

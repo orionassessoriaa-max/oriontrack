@@ -2,6 +2,7 @@ import { after, NextResponse } from 'next/server';
 import { requireApiUser, rateLimit } from '@/lib/api/security';
 import { canUseCreativeFolder } from '@/lib/creatives/access';
 import { processCreativeGenerationJob } from '@/lib/creatives/automation';
+import { mergeCreativeBriefing } from '@/lib/creatives/operatorPrompts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const ROLES = ['admin', 'gestor_trafego'] as const;
@@ -90,6 +91,20 @@ export async function POST(request: Request) {
     if (!(await canUseCreativeFolder(guard.profile, corretorId, requestedGestorId))) {
       return NextResponse.json({ error: 'Concessionaria fora do escopo deste gestor.' }, { status: 403 });
     }
+    const { data: strategy, error: strategyError } = await supabaseAdmin
+      .from('trafego_estrategias_criativos')
+      .select('id, creative_prompt')
+      .eq('corretor_id', corretorId)
+      .eq('operadora', operadora)
+      .eq('regiao', regiao)
+      .eq('ativa', true)
+      .maybeSingle();
+    if (strategyError) throw strategyError;
+    const briefing = mergeCreativeBriefing(
+      operadora,
+      strategy?.creative_prompt,
+      clean(body.briefing, 8000),
+    );
     const referenceUrl = clean(body.referencia_url, 1000)
       || await saveReference(guard.profile.id, clean(body.reference_data_url, 15_000_000));
     const { data: job, error } = await supabaseAdmin
@@ -97,12 +112,12 @@ export async function POST(request: Request) {
       .insert({
         corretor_id: corretorId,
         gestor_id: gestorId,
-        estrategia_id: body.estrategia_id || null,
+        estrategia_id: body.estrategia_id || strategy?.id || null,
         recommendation_id: body.recommendation_id || null,
         operadora,
         regiao,
         quantidade,
-        briefing: clean(body.briefing, 4000) || null,
+        briefing,
         referencia_url: referenceUrl,
         origem: ['entrada', 'criativos', 'apolo', 'troca_criativo'].includes(body.origem) ? body.origem : 'criativos',
         status: 'na_fila',
