@@ -134,6 +134,177 @@ function dedupeMessages(messages: any[]) {
   return result;
 }
 
+function providerMessages(payload: any): any[] {
+  if (Array.isArray(payload?.messages)) return payload.messages;
+  if (Array.isArray(payload?.data?.messages)) return payload.data.messages;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+function providerMessageText(message: any) {
+  const direct = String(message?.text || '').trim();
+  if (direct) return direct;
+
+  let content = message?.content;
+  if (typeof content === 'string') {
+    try {
+      content = JSON.parse(content);
+    } catch {
+      if (content.trim()) return content.trim();
+    }
+  }
+
+  const candidates = [
+    content?.conversation,
+    content?.text,
+    content?.caption,
+    content?.extendedTextMessage?.text,
+    content?.imageMessage?.caption,
+    content?.videoMessage?.caption,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+
+  const messageType = String(message?.messageType || '').toLowerCase();
+  if (messageType.includes('audio') || messageType.includes('ptt')) return 'Mensagem de voz';
+  if (messageType.includes('image')) return 'Imagem';
+  if (messageType.includes('video')) return 'Video';
+  if (messageType.includes('document')) return 'Arquivo';
+  if (message?.fileURL) return 'Arquivo';
+  return '';
+}
+
+function providerCreatedAt(value: unknown) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return new Date().toISOString();
+  const milliseconds = numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+  return new Date(milliseconds).toISOString();
+}
+
+async function historyInstanceNames(conversation: any) {
+  const profileIds = new Set<string>();
+  if (conversation?.lead_id) {
+    const { data: lead } = await supabaseAdmin
+      .from('leads')
+      .select('responsavel_profile_id')
+      .eq('id', conversation.lead_id)
+      .maybeSingle();
+    if (lead?.responsavel_profile_id) profileIds.add(String(lead.responsavel_profile_id));
+  }
+
+  if (conversation?.corretor_id) {
+    const { data: owners } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('corretor_id', conversation.corretor_id)
+      .in('tipo_usuario', ['corretor', 'corretor_admin', 'corretor_membro']);
+    (owners || []).forEach((owner) => profileIds.add(String(owner.id)));
+  }
+
+  if (!profileIds.size) return [];
+  const { data: profiles, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome')
+    .in('id', [...profileIds]);
+  if (error) throw error;
+  return (profiles || []).map((profile) => ({
+    instance: uazapiInstanceName(String(profile.id)),
+    senderName: String(profile.nome || 'Corretor'),
+  }));
+}
+
+async function syncProviderHistory(conversation: any) {
+  const phone = normalizePhone(conversation?.telefone || '');
+  if (!phone) return;
+
+  const instances = await historyInstanceNames(conversation);
+  if (!instances.length) return;
+
+  const collected = new Map<string, { message: any; instance: string }>();
+  await Promise.all(instances.map(async ({ instance, senderName }) => {
+    let offset = 0;
+    const limit = 500;
+    for (let page = 0; page < 20; page += 1) {
+      try {
+        const payload = await uazapiFetch('/message/find', {
+          method: 'POST',
+          body: JSON.stringify({ chatid: `${phone}@s.whatsapp.net`, limit, offset }),
+        }, { instanceName: instance });
+        const messages = providerMessages(payload);
+        for (const message of messages) {
+          const providerId = String(message?.messageid || message?.id || '').trim();
+          if (providerId) collected.set(providerId, { message: { ...message, orionSenderName: senderName }, instance });
+        }
+        const hasMore = payload?.hasMore === true || payload?.data?.hasMore === true;
+        if (!hasMore || messages.length === 0) break;
+        offset = Number(payload?.nextOffset ?? payload?.data?.nextOffset ?? (offset + messages.length));
+      } catch (error) {
+        console.warn('[inbox_messages] Nao foi possivel sincronizar o historico da instancia.', {
+          instance,
+          conversationId: conversation.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        break;
+      }
+    }
+  }));
+
+  if (!collected.size) return;
+  const providerIds = [...collected.keys()];
+  const existingIds = new Set<string>();
+  for (let index = 0; index < providerIds.length; index += 500) {
+    const chunk = providerIds.slice(index, index + 500);
+    const { data, error } = await supabaseAdmin
+      .from('whatsapp_mensagens')
+      .select('provider_message_id')
+      .in('provider_message_id', chunk);
+    if (error) throw error;
+    (data || []).forEach((row) => existingIds.add(String(row.provider_message_id)));
+  }
+
+  const rows = [...collected.entries()]
+    .filter(([providerId]) => !existingIds.has(providerId))
+    .map(([providerId, entry]) => {
+      const message = entry.message;
+      const text = providerMessageText(message);
+      if (!text) return null;
+      return {
+        conversa_id: conversation.id,
+        direction: message?.fromMe === true ? 'outbound' : 'inbound',
+        remetente: message?.fromMe === true
+          ? String(message?.orionSenderName || 'Corretor')
+          : String(message?.senderName || conversation.nome_contato || phone),
+        mensagem: text,
+        provider_message_id: providerId,
+        created_at: providerCreatedAt(message?.messageTimestamp),
+        metadata: { ...message, instance: entry.instance, synced_from: 'uazapi_message_find' },
+      };
+    })
+    .filter(Boolean);
+
+  for (let index = 0; index < rows.length; index += 250) {
+    const { error } = await supabaseAdmin
+      .from('whatsapp_mensagens')
+      .upsert(rows.slice(index, index + 250) as any[], {
+        onConflict: 'provider_message_id',
+        ignoreDuplicates: true,
+      });
+    if (error) throw error;
+  }
+
+  const latest = rows.reduce<string | null>((current, row: any) => (
+    !current || row.created_at > current ? row.created_at : current
+  ), null);
+  if (latest) {
+    await supabaseAdmin
+      .from('whatsapp_conversas')
+      .update({ ultima_mensagem_at: latest, updated_at: new Date().toISOString() })
+      .eq('id', conversation.id);
+  }
+}
+
 async function getConversation(id: string) {
   const { data, error } = await supabaseAdmin
     .from('whatsapp_conversas')
@@ -330,6 +501,12 @@ export async function GET(request: Request) {
     }
 
     const conversationIds = await findAccessibleConversationIdsByPhone(guard.profile, conversation);
+
+    // O banco local pode estar incompleto quando mensagens foram trocadas
+    // diretamente no WhatsApp ou chegaram durante uma falha do webhook.
+    // Ao abrir a conversa, reconcilia o historico mantido pela instancia antes
+    // de montar a timeline exibida no Inbox.
+    await syncProviderHistory(conversation);
 
     // Um mesmo contato pode possuir conversas diferentes quando foi atendido
     // por integrantes/instancias distintas. O Inbox deve apresentar uma unica

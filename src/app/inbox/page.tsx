@@ -535,7 +535,6 @@ export default function BrokerInboxPage() {
       let conversationsQuery = supabase
         .from('whatsapp_conversas')
         .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, status, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
-        .in('corretor_id', idsToFetch)
         .order('ultima_mensagem_at', { ascending: false })
         .order('id', { ascending: true })
         .range(from, from + conversationPageSize - 1);
@@ -544,6 +543,8 @@ export default function BrokerInboxPage() {
         conversationsQuery = conversationsQuery.or(
           `corretor_id.in.(${idsToFetch.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
         );
+      } else {
+        conversationsQuery = conversationsQuery.in('corretor_id', idsToFetch);
       }
 
       if (isTeamMember) {
@@ -592,7 +593,6 @@ export default function BrokerInboxPage() {
         let savedConversationQuery = supabase
           .from('whatsapp_conversas')
           .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, status, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
-          .in('corretor_id', idsToFetch)
           .or(`telefone.eq.${targetPhone},telefone.ilike.%${targetLast8}`)
           .order('ultima_mensagem_at', { ascending: false })
           .limit(1);
@@ -601,6 +601,8 @@ export default function BrokerInboxPage() {
           savedConversationQuery = savedConversationQuery.or(
             `corretor_id.in.(${idsToFetch.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
           );
+        } else {
+          savedConversationQuery = savedConversationQuery.in('corretor_id', idsToFetch);
         }
 
         if (isTeamMember) {
