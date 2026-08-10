@@ -755,7 +755,7 @@ export default function GestorDashboardPage() {
 
             <Collapsible title="Criativos ativos" detail={`${criativos.length} anúncio(s) rodando`}>
               {criativos.length === 0 ? (
-                <Empty titulo="Nenhum criativo ativo no período." texto="Rode Otimizar para reler os anúncios na Meta." />
+                <Empty titulo="Nenhum criativo ativo no período." texto="Não foram encontrados anúncios ativos para as datas selecionadas." />
               ) : (
                 <div className="space-y-3">
                   {criativos.map((criativo) => {

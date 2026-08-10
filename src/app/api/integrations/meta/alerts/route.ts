@@ -522,8 +522,7 @@ async function persistRecommendations(
   recommendations: Recommendation[],
   since: string,
   until: string,
-  accountIds: string[],
-  preserveAdRecommendations = false
+  accountIds: string[]
 ) {
   const uniqueAccountIds = Array.from(new Set(accountIds.filter(Boolean)));
   if (uniqueAccountIds.length === 0) return [] as any[];
@@ -543,15 +542,12 @@ async function persistRecommendations(
   // A fila pendente e sempre regenerada a partir das metricas do momento, entao
   // pendencia que a regra deixou de emitir some sozinha. Decisoes ja tomadas
   // ficam preservadas porque so as pendentes sao apagadas.
-  let pendingDelete = supabaseAdmin
+  const pendingDelete = supabaseAdmin
     .from('trafego_recomendacoes')
     .delete()
     .eq('status', 'pendente')
     .in('meta_ad_account_id', uniqueAccountIds);
 
-  // Na atualizacao automatica os criativos vem somente do cache. Se ainda nao
-  // houver cache, preservamos as decisoes de anuncio da ultima analise completa.
-  if (preserveAdRecommendations) pendingDelete = pendingDelete.neq('nivel', 'anuncio');
   const { error: deleteError } = await pendingDelete;
 
   if (deleteError) {
@@ -607,14 +603,39 @@ async function persistRecommendations(
       .insert(rows)
       .select('id, corretor_id, concessionaria_nome, meta_ad_account_id, nivel, alvo_id, alvo_nome, acao, severidade, motivo, metricas, status');
 
-    if (error) {
+    if (error && error.code === '23505') {
+      // Duas abas podem concluir a mesma otimização quase juntas. A restrição
+      // parcial protege a fila; nesse caso devolvemos a fila que venceu a
+      // corrida em vez de transformar a colisão esperada em erro para o gestor.
+      const { data: concurrentRows, error: concurrentError } = await supabaseAdmin
+        .from('trafego_recomendacoes')
+        .select('id, corretor_id, concessionaria_nome, meta_ad_account_id, nivel, alvo_id, alvo_nome, acao, severidade, motivo, metricas, status')
+        .in('meta_ad_account_id', uniqueAccountIds)
+        .eq('status', 'pendente');
+      if (concurrentError) throw new Error(`Não foi possível recuperar as recomendações: ${concurrentError.message}`);
+      inserted = concurrentRows || [];
+    } else if (error) {
       console.error('Erro ao gravar recomendacoes de trafego:', error.message);
       throw new Error(`Nao foi possivel salvar as recomendacoes: ${error.message}`);
+    } else {
+      inserted = data || [];
     }
-    inserted = data || [];
   }
 
   return [...(awaitingActivation || []), ...inserted];
+}
+
+async function loadPersistedRecommendations(accountIds: string[]) {
+  const uniqueAccountIds = Array.from(new Set(accountIds.filter(Boolean)));
+  if (uniqueAccountIds.length === 0) return [];
+  const { data, error } = await supabaseAdmin
+    .from('trafego_recomendacoes')
+    .select('id, corretor_id, concessionaria_nome, meta_ad_account_id, nivel, alvo_id, alvo_nome, acao, severidade, motivo, metricas, status')
+    .in('meta_ad_account_id', uniqueAccountIds)
+    .in('status', ['pendente', 'aprovada'])
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(`Não foi possível carregar as recomendações: ${error.message}`);
+  return data || [];
 }
 
 export async function POST(request: Request) {
@@ -857,9 +878,9 @@ export async function POST(request: Request) {
       })
       .sort((a, b) => Number(b.alerta_cpl_alto) - Number(a.alerta_cpl_alto));
 
-    // A abertura normal usa apenas criativos ja em cache. A leitura completa
-    // acontece no comando explicito de analise, economizando duas chamadas por
-    // conta em cada atualizacao automatica da carteira.
+    // O período selecionado atualiza também os criativos. O cache continua
+    // protegendo a cota da Meta, mas uma combinação de datas ainda não lida
+    // pode consultar a API sem exigir o botão Otimizar.
     const creativeSettled = await settleInBatches(
       filtered,
       (corretor) => fetchActiveCreatives(
@@ -869,20 +890,26 @@ export async function POST(request: Request) {
         accessToken,
         graphVersion,
         leadsByCorretor.get(corretor.id) || [],
-        !shouldAnalyze
+        false
       )
     );
     const activeCreatives = creativeSettled
       .flatMap((result) => result.status === 'fulfilled' ? result.value : [])
       .sort((a: any, b: any) => Number(b.spend || 0) - Number(a.spend || 0));
 
-    const recommendations = buildRecommendations({
-      accounts: accounts as unknown as AccountLike[],
-      creatives: activeCreatives as unknown as CreativeLike[],
-    });
+    const recommendations = shouldAnalyze
+      ? buildRecommendations({
+          accounts: accounts as unknown as AccountLike[],
+          creatives: activeCreatives as unknown as CreativeLike[],
+        })
+      : [];
 
     const accountIds = filtered.map((corretor) => String(corretor.meta_ad_account_id || '')).filter(Boolean);
-    const persisted = await persistRecommendations(recommendations, since, until, accountIds, !shouldAnalyze);
+    // Trocar o período é somente leitura. Recomendações e resumo da IA são
+    // gerados e gravados exclusivamente pelo comando Otimizar.
+    const persisted = shouldAnalyze
+      ? await persistRecommendations(recommendations, since, until, accountIds)
+      : await loadPersistedRecommendations(accountIds);
 
     const portfolioAiReview = shouldAnalyze
       ? await generatePortfolioAiReview(accounts, activeCreatives, recommendations, since, until)
