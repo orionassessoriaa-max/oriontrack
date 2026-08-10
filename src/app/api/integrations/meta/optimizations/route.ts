@@ -242,6 +242,12 @@ function attributionMatch(value?: string | null, name?: string | null) {
   return overlap.length >= 2;
 }
 
+function exactAttributionMatch(value?: string | null, name?: string | null) {
+  const source = normalizeKey(value);
+  const target = normalizeKey(name);
+  return Boolean(source && target && source === target);
+}
+
 function countLeadsForNode(
   leads: any[],
   node: { campaignName?: string | null; adsetName?: string | null; adName?: string | null; level: 'campaign' | 'adset' | 'ad' }
@@ -257,8 +263,23 @@ function countLeadsForNode(
       || attributionMatch(lead.utm_content, node.adsetName);
     if (node.level === 'adset') return adsetMatch;
 
-    return attributionMatch(lead.utm_content, node.adName)
-      || attributionMatch(lead.utm_term, node.adName);
+    return exactAttributionMatch(lead.utm_content, node.adName)
+      || exactAttributionMatch(lead.utm_term, node.adName);
+  }).length;
+}
+
+function countLeadsForAdset(
+  leads: any[],
+  campaignName: string,
+  adsetName: string,
+  ads: any[],
+  isOnlyAdset: boolean
+) {
+  const adNames = ads.map((ad) => String(ad.ad_name || '')).filter(Boolean);
+  return leads.filter((lead) => {
+    if (!attributionMatch(lead.utm_campaign, campaignName)) return false;
+    if (isOnlyAdset || attributionMatch(lead.utm_term, adsetName)) return true;
+    return adNames.some((adName) => exactAttributionMatch(lead.utm_content, adName));
   }).length;
 }
 
@@ -411,7 +432,14 @@ function buildTree(
       adsets: campaignAdsets.map((adset) => {
         const adsetKey = String(adset.adset_id || adset.adset_name || 'sem-conjunto');
         const adsetName = adset.adset_name || 'Conjunto sem nome';
-        const adsetLeads = countLeadsForNode(leads, { level: 'adset', campaignName, adsetName });
+        const adsetAds = adsByAdset.get(adsetKey) || [];
+        const adsetLeads = countLeadsForAdset(
+          leads,
+          campaignName,
+          adsetName,
+          adsetAds,
+          campaignAdsets.length === 1
+        );
         const adsetDetail = adsetDetails.get(adset.adset_id);
         const adsetMeta = statusFromDetails(adsetDetail);
         const adsetBudget = budgetFromDetails(adsetDetail);
@@ -423,7 +451,7 @@ function buildTree(
           ...adsetBudget,
           budget_type: budgetType,
           metrics: metricRow(adset, adsetLeads, currency),
-          ads: (adsByAdset.get(adsetKey) || []).map((ad) => {
+          ads: adsetAds.map((ad) => {
             const adName = ad.ad_name || 'Anuncio sem nome';
             const details = adDetails.get(ad.ad_id);
             const adMeta = statusFromDetails(details);
@@ -443,7 +471,13 @@ function buildTree(
                 title: details.creative.title || details.creative.object_story_spec?.link_data?.name || null,
                 body: details.creative.body || details.creative.object_story_spec?.link_data?.message || null,
               } : null,
-              metrics: metricRow(ad, countLeadsForNode(leads, { level: 'ad', campaignName, adsetName, adName }), currency),
+              metrics: metricRow(
+                ad,
+                adsetAds.length === 1
+                  ? adsetLeads
+                  : countLeadsForNode(leads, { level: 'ad', campaignName, adsetName, adName }),
+                currency
+              ),
             };
           }),
         };
