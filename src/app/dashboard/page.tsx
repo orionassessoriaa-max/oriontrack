@@ -337,7 +337,7 @@ export default function DashboardPage() {
     salesPotential: 0
   });
   const [periodSpend, setPeriodSpend] = useState(0);
-  const [allTimeOrionLeads, setAllTimeOrionLeads] = useState(0);
+  const [periodOrionLeads, setPeriodOrionLeads] = useState(0);
   const [chartAnimate, setChartAnimate] = useState(false);
   const dashboardFetchRequestRef = useRef(0);
 
@@ -582,11 +582,8 @@ export default function DashboardPage() {
         const originScopedAllLeads = allLeads.filter((lead) => matchesOriginFilter(lead, originFilter));
         // A origem selecionada controla os leads. Investimento Meta só existe
         // quando a seleção é exclusivamente Orion.
-        const orionAllLeads = allLeads.filter(isOrionLead);
-
         // Calculate all-time summary (used for the 4 financial cards step 3)
         const allTimeSoldLeads = originScopedAllLeads.filter(isLeadSale);
-        const allTimeOrionCount = orionAllLeads.length;
         const activeRevenueStatuses = ['Em negociação', 'Cotação enviada', 'Contato feito', 'Aguardando atendimento'];
         
         if (!isCurrentRequest()) return;
@@ -599,7 +596,6 @@ export default function DashboardPage() {
             .filter((lead) => activeRevenueStatuses.includes(normalizeLeadStatus(lead.status)))
             .reduce((sum, lead) => sum + parseCurrencyValue(lead.valor_negociacao), 0)
         });
-        setAllTimeOrionLeads(allTimeOrionCount);
 
         // Calculate current month summary (used for the progress bars step 6)
         const thisMonthKey = monthKey(new Date());
@@ -660,7 +656,6 @@ export default function DashboardPage() {
                     corretor_id: profile.corretor_id,
                     data_inicio: metaRange.since,
                     data_fim: metaRange.until,
-                    acumulado_orion: true,
                   }),
                 });
                 const spendPayload = await spendResponse.json().catch(() => ({}));
@@ -730,6 +725,7 @@ export default function DashboardPage() {
 
         const soldLeads = statsRes.filter(isLeadSale);
         const orionStatsRes = statsRes.filter(isOrionLead);
+        setPeriodOrionLeads(orionStatsRes.length);
         let pendingTasks: Array<{ id: string; vencimento: string | null }> = [];
         if (idsToFetch.length > 0) {
           let tasksRequest = supabase
@@ -899,7 +895,7 @@ export default function DashboardPage() {
 
 
 
-  const periodCpl = allTimeOrionLeads > 0 ? periodSpend / allTimeOrionLeads : 0;
+  const periodCpl = periodOrionLeads > 0 ? periodSpend / periodOrionLeads : 0;
   const periodConversion = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
 
   const periodLabelText = presetLabel === 'Todo o período'
@@ -910,7 +906,7 @@ export default function DashboardPage() {
         ? 'do mês passado'
         : `de ${presetLabel.toLowerCase()}`;
   // Geral e demais origens não possuem investimento conhecido: mostram apenas leads.
-  const displayPeriodCpl = isOrionOriginFilter(originFilter) && allTimeOrionLeads > 0 ? periodCpl : null;
+  const displayPeriodCpl = isOrionOriginFilter(originFilter) && periodOrionLeads > 0 ? periodCpl : null;
 
   const salesConversionRate = stats.total > 0 ? (stats.sold / stats.total) * 100 : 0;
   const chartHeight = 176;
@@ -1338,9 +1334,9 @@ export default function DashboardPage() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <MiniMetric icon={Users} label={`Leads ${periodLabelText}`} value={stats.total} />
-                <MiniMetric icon={DollarSign} label="Investimento Orion acumulado" value={formatCurrency(periodSpend)} />
-                <MiniMetric icon={Users} label="Leads Orion acumulados" value={allTimeOrionLeads} />
-                <MiniMetric icon={Target} label="CPL Orion acumulado" value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
+                <MiniMetric icon={DollarSign} label={`Investimento Orion ${periodLabelText}`} value={formatCurrency(periodSpend)} />
+                <MiniMetric icon={Users} label={`Leads Orion ${periodLabelText}`} value={periodOrionLeads} />
+                <MiniMetric icon={Target} label={`CPL Orion ${periodLabelText}`} value={displayPeriodCpl === null ? 'N/A' : formatCurrency(displayPeriodCpl)} />
                 <MiniMetric icon={TrendingUp} label={`Conversao ${periodLabelText}`} value={`${periodConversion.toFixed(1).replace('.', ',')}%`} />
                 <MiniMetric icon={Clock} label="Em negociacao" value={stats.inProgress} />
               </div>
