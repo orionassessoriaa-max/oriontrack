@@ -6,6 +6,7 @@ import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { buildLeadContactKey, buildLeadDuplicateKey, buildLeadIdentityKey } from '@/lib/leadDuplicate';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { isBlockedLeadSpam } from '@/lib/leadSpam';
 
 type CsvRow = Record<string, string>;
 type LeadInsert = {
@@ -790,6 +791,7 @@ export async function POST(request: Request) {
 
     let skipped = 0;
     let duplicated = 0;
+    let blockedSpam = 0;
     let incomplete = 0;
     const leads: LeadInsert[] = [];
     const incomingKeys = new Set<string>();
@@ -825,6 +827,11 @@ export async function POST(request: Request) {
 
           // Skip completely empty/blank rows
           if (!rawNome && !rawTelefone) {
+            return;
+          }
+
+          if (isBlockedLeadSpam({ nome: rawNome, telefone: rawTelefone })) {
+            blockedSpam += 1;
             return;
           }
 
@@ -990,6 +997,7 @@ export async function POST(request: Request) {
         duplicated,
         skipped,
         incomplete,
+        blocked_spam: blockedSpam,
       });
     }
 
@@ -1021,6 +1029,7 @@ export async function POST(request: Request) {
         incomplete,
         skipped,
         duplicated,
+        blocked_spam: blockedSpam,
         paginas: sources.length,
       },
     });
@@ -1032,6 +1041,7 @@ export async function POST(request: Request) {
       skipped,
       duplicated,
       incomplete,
+      blocked_spam: blockedSpam,
       paginas: sources.length,
       corretor: corretor.nome,
     });

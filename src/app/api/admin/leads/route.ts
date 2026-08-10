@@ -7,6 +7,7 @@ import { startLeadBotIfEligible } from '@/lib/leadBot';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { buildLeadContactKey, buildLeadIdentityKey } from '@/lib/leadDuplicate';
+import { getLeadSpamReason } from '@/lib/leadSpam';
 
 const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
 const LEAD_CREATOR_PROFILE_TYPES = [
@@ -332,6 +333,16 @@ export async function POST(request: Request) {
 
     if (!nome || !telefone) {
       return NextResponse.json({ error: 'Informe nome e telefone do lead.' }, { status: 400 });
+    }
+
+    const spamReason = getLeadSpamReason({ nome, telefone });
+    if (spamReason) {
+      await writeAuditLog(request, guard.profile as any, {
+        action: 'lead.blocked_spam',
+        entity_type: 'lead',
+        metadata: { corretor_id: corretorId, reason: spamReason },
+      });
+      return NextResponse.json({ error: 'Este contato foi identificado como spam e nao foi cadastrado.' }, { status: 422 });
     }
 
     const { data: corretor } = await supabaseAdmin

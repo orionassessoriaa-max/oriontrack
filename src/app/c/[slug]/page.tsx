@@ -17,6 +17,7 @@ import { Corretor } from '@/types';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { isBlockedLeadSpam } from '@/lib/leadSpam';
 
 export default function CapturePage() {
   const params = useParams();
@@ -63,6 +64,11 @@ export default function CapturePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!corretor) return;
+
+    if (isBlockedLeadSpam(formData)) {
+      setIsSuccess(true);
+      return;
+    }
     
     setIsSubmitting(true);
     try {

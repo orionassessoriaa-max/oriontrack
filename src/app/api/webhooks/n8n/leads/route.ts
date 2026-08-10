@@ -8,6 +8,7 @@ import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
+import { getLeadSpamReason } from '@/lib/leadSpam';
 
 function normalizeText(value: unknown, fallback = '') {
   if (value === undefined || value === null) return fallback;
@@ -461,6 +462,20 @@ export async function POST(request: Request) {
 
     if (!nome || !telefone) {
       return NextResponse.json({ error: 'Nome e telefone do lead são obrigatórios.' }, { status: 400 });
+    }
+
+    const spamReason = getLeadSpamReason({ nome, telefone });
+    if (spamReason) {
+      await writeAuditLog(request, null, {
+        action: 'lead.blocked_spam',
+        entity_type: 'lead',
+        metadata: { corretor_id: corretorId, reason: spamReason },
+      });
+      return NextResponse.json({
+        success: true,
+        blocked: true,
+        message: 'Lead identificado como spam e bloqueado antes de entrar no CRM.',
+      });
     }
 
     const rawDate = field(body, ['data_entrada', 'data entrada', 'data', 'created_time', 'timestamp', 'data do lead']);
