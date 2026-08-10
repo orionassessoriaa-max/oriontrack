@@ -36,6 +36,11 @@ type LeadInsert = {
   responsavel_profile_id?: string | null;
 };
 
+const IMPORT_INSERT_BATCH_SIZE = 200;
+const IMPORT_EXISTING_PAGE_SIZE = 1000;
+const IMPORT_PARALLEL_BATCHES = 4;
+const IMPORT_PARALLEL_UPDATES = 10;
+
 async function requireImporter(request: Request) {
   return requireApiUser(request, ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'gestor_trafego']);
 }
@@ -293,25 +298,79 @@ function isLeadDedupeConstraintError(error: any) {
     || message.includes('duplicate key value');
 }
 
-async function insertLeadHandlingMissingOrigin(lead: LeadInsert) {
+async function insertLeadBatchHandlingMissingOrigin(leads: LeadInsert[]) {
   let { data, error } = await supabaseAdmin
     .from('leads')
-    .insert([lead])
-    .select('id')
-    .maybeSingle();
+    .insert(leads)
+    .select('id');
 
   if (error && isMissingLeadOriginColumn(error)) {
-    const { origem: _origem, ...fallbackLead } = lead;
+    const fallbackLeads = leads.map(({ origem: _origem, ...lead }) => lead);
     const retry = await supabaseAdmin
       .from('leads')
-      .insert([fallbackLead])
-      .select('id')
-      .maybeSingle();
+      .insert(fallbackLeads)
+      .select('id');
     data = retry.data;
     error = retry.error;
   }
 
-  return { data, error };
+  return { data: data || [], error };
+}
+
+async function insertLeadBatchResilient(leads: LeadInsert[]): Promise<{ ids: string[]; duplicated: number }> {
+  if (leads.length === 0) return { ids: [], duplicated: 0 };
+
+  const { data, error } = await insertLeadBatchHandlingMissingOrigin(leads);
+  if (!error) {
+    return {
+      ids: data.map((lead) => String(lead.id)).filter(Boolean),
+      duplicated: 0,
+    };
+  }
+
+  if (!isLeadDedupeConstraintError(error)) {
+    throw new Error(error.message || 'Erro ao inserir lote de leads.');
+  }
+
+  if (leads.length === 1) {
+    return { ids: [], duplicated: 1 };
+  }
+
+  const middle = Math.ceil(leads.length / 2);
+  const [left, right] = await Promise.all([
+    insertLeadBatchResilient(leads.slice(0, middle)),
+    insertLeadBatchResilient(leads.slice(middle)),
+  ]);
+
+  return {
+    ids: [...left.ids, ...right.ids],
+    duplicated: left.duplicated + right.duplicated,
+  };
+}
+
+async function updateLeadEnrichment(item: { id: string; update: Record<string, string | number | null> }) {
+  const payload = { ...item.update, updated_at: new Date().toISOString() };
+  const { error } = await supabaseAdmin
+    .from('leads')
+    .update(payload)
+    .eq('id', item.id);
+
+  if (!error) return true;
+  if (isLeadDedupeConstraintError(error)) return false;
+
+  if (isMissingLeadOriginColumn(error) && item.update.origem !== undefined) {
+    const { origem: _origem, ...fallbackUpdate } = item.update;
+    const fallback = await supabaseAdmin
+      .from('leads')
+      .update({ ...fallbackUpdate, updated_at: payload.updated_at })
+      .eq('id', item.id);
+
+    if (!fallback.error) return true;
+    if (isLeadDedupeConstraintError(fallback.error)) return false;
+    throw new Error(fallback.error.message);
+  }
+
+  throw new Error(error.message);
 }
 
 function orderedCells(row: CsvRow) {
@@ -736,9 +795,17 @@ export async function POST(request: Request) {
     const incomingKeys = new Set<string>();
     const incomingIdentity = new Map<string, LeadInsert>();
 
-    for (const source of sources) {
-      const response = await fetch(source.csvUrl, { cache: 'no-store' });
+    const loadedSources = await Promise.all(sources.map(async (source) => {
+      const [response, resolvedName] = await Promise.all([
+        fetch(source.csvUrl, { cache: 'no-store' }),
+        source.name ? Promise.resolve(source.name) : resolveSheetName(editUrl, source.gid),
+      ]);
       const csv = await response.text();
+      return { source, response, csv, sheetName: resolvedName };
+    }));
+
+    for (const loaded of loadedSources) {
+      const { source, response, csv, sheetName } = loaded;
 
       if (!response.ok || csv.toLowerCase().includes('<html')) {
         if (sources.length === 1) {
@@ -751,7 +818,6 @@ export async function POST(request: Request) {
       }
 
       const rows = toRows(csv);
-      const sheetName = source.name || await resolveSheetName(editUrl, source.gid);
 
       rows.forEach((row) => {
           const rawNome = (pick(row, ['nome', 'name', 'cliente', 'nome completo']) || findNameFallback(row)).trim();
@@ -830,24 +896,44 @@ export async function POST(request: Request) {
     const existingKeys = new Set<string>();
     const existingIdentity = new Map<string, any>();
     const previousOwnerByContact = new Map<string, any>();
-    let existingPage = 0;
-    const existingLimit = 1000;
-    let fetchExisting = true;
+    const existingColumns = 'id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, valor_negociacao, operadora_negociacao, status, responsavel_membro_id, responsavel_profile_id';
+    const firstExistingPage = await supabaseAdmin
+      .from('leads')
+      .select(existingColumns, { count: 'exact' })
+      .eq('corretor_id', targetCorretorId)
+      .order('id', { ascending: true })
+      .range(0, IMPORT_EXISTING_PAGE_SIZE - 1);
 
-    while (fetchExisting) {
-      const from = existingPage * existingLimit;
-      const to = from + existingLimit - 1;
-      const { data: existingLeads, error: existingError } = await supabaseAdmin
+    if (firstExistingPage.error) {
+      return NextResponse.json({ error: firstExistingPage.error.message }, { status: 500 });
+    }
+
+    const totalExisting = firstExistingPage.count ?? firstExistingPage.data?.length ?? 0;
+    const remainingPageIndexes = Array.from(
+      { length: Math.max(0, Math.ceil(totalExisting / IMPORT_EXISTING_PAGE_SIZE) - 1) },
+      (_, index) => index + 1,
+    );
+    const remainingExistingPages = await Promise.all(remainingPageIndexes.map((pageIndex) => {
+      const from = pageIndex * IMPORT_EXISTING_PAGE_SIZE;
+      return supabaseAdmin
         .from('leads')
-        .select('id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, valor_negociacao, operadora_negociacao, status, responsavel_membro_id, responsavel_profile_id')
+        .select(existingColumns)
         .eq('corretor_id', targetCorretorId)
-        .range(from, to);
+        .order('id', { ascending: true })
+        .range(from, from + IMPORT_EXISTING_PAGE_SIZE - 1);
+    }));
 
-      if (existingError) {
-        return NextResponse.json({ error: existingError.message }, { status: 500 });
-      }
+    const failedExistingPage = remainingExistingPages.find((page) => page.error);
+    if (failedExistingPage?.error) {
+      return NextResponse.json({ error: failedExistingPage.error.message }, { status: 500 });
+    }
 
-      (existingLeads || []).forEach((lead) => {
+    const allExistingLeads = [
+      ...(firstExistingPage.data || []),
+      ...remainingExistingPages.flatMap((page) => page.data || []),
+    ];
+
+    allExistingLeads.forEach((lead) => {
         existingKeys.add(buildLeadDuplicateKey(lead));
         existingIdentity.set(buildLeadIdentityKey(lead), lead);
         if (lead.responsavel_membro_id || lead.responsavel_profile_id) {
@@ -857,13 +943,7 @@ export async function POST(request: Request) {
             previousOwnerByContact.set(contactKey, lead);
           }
         }
-      });
-      if (!existingLeads || existingLeads.length < existingLimit) {
-        fetchExisting = false;
-      } else {
-        existingPage += 1;
-      }
-    }
+    });
 
     const enrichmentUpdates: Array<{ id: string; update: Record<string, string | number | null> }> = [];
     const uniqueLeads = leads.filter((lead) => {
@@ -892,35 +972,13 @@ export async function POST(request: Request) {
     });
 
     let enriched = 0;
-    for (const item of enrichmentUpdates) {
-      const { error: updateError } = await supabaseAdmin
-        .from('leads')
-        .update({ ...item.update, updated_at: new Date().toISOString() })
-        .eq('id', item.id);
-
-      if (updateError) {
-        if (isLeadDedupeConstraintError(updateError)) {
-          continue;
-        }
-
-        if (isMissingLeadOriginColumn(updateError) && item.update.origem !== undefined) {
-          const { origem: _origem, ...fallbackUpdate } = item.update;
-          const { error: fallbackError } = await supabaseAdmin
-            .from('leads')
-            .update({ ...fallbackUpdate, updated_at: new Date().toISOString() })
-            .eq('id', item.id);
-
-          if (fallbackError) {
-            if (isLeadDedupeConstraintError(fallbackError)) {
-              continue;
-            }
-            return NextResponse.json({ error: fallbackError.message }, { status: 500 });
-          }
-        } else {
-          return NextResponse.json({ error: updateError.message }, { status: 500 });
-        }
-      }
-      enriched += 1;
+    for (let index = 0; index < enrichmentUpdates.length; index += IMPORT_PARALLEL_UPDATES) {
+      const results = await Promise.all(
+        enrichmentUpdates
+          .slice(index, index + IMPORT_PARALLEL_UPDATES)
+          .map(updateLeadEnrichment),
+      );
+      enriched += results.filter(Boolean).length;
     }
 
     if (uniqueLeads.length === 0) {
@@ -935,21 +993,22 @@ export async function POST(request: Request) {
       });
     }
 
-    const insertedIds: string[] = [];
-    for (const lead of uniqueLeads) {
-      const { data: insertedLead, error: insertError } = await insertLeadHandlingMissingOrigin(lead);
-
-      if (insertError) {
-        if (isLeadDedupeConstraintError(insertError)) {
-          duplicated += 1;
-          continue;
-        }
-
-        return NextResponse.json({ error: insertError.message }, { status: 500 });
-      }
-
-      if (insertedLead?.id) insertedIds.push(insertedLead.id);
+    const insertBatches = Array.from(
+      { length: Math.ceil(uniqueLeads.length / IMPORT_INSERT_BATCH_SIZE) },
+      (_, index) => uniqueLeads.slice(
+        index * IMPORT_INSERT_BATCH_SIZE,
+        (index + 1) * IMPORT_INSERT_BATCH_SIZE,
+      ),
+    );
+    const insertResults: Array<{ ids: string[]; duplicated: number }> = [];
+    for (let index = 0; index < insertBatches.length; index += IMPORT_PARALLEL_BATCHES) {
+      const results = await Promise.all(
+        insertBatches.slice(index, index + IMPORT_PARALLEL_BATCHES).map(insertLeadBatchResilient),
+      );
+      insertResults.push(...results);
     }
+    const insertedIds = insertResults.flatMap((result) => result.ids);
+    duplicated += insertResults.reduce((sum, result) => sum + result.duplicated, 0);
 
     await writeAuditLog(request, guard.profile, {
       action: 'lead.import_sheet',
