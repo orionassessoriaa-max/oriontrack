@@ -952,8 +952,8 @@ export default function DashboardPage() {
   return (
     <InternalLayout>
       {/* Header Section */}
-      <div className="mb-10 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
-        <div>
+      <div className="mb-10 flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="min-w-0 2xl:min-w-[320px]">
           <h1 className="mb-2 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl flex flex-wrap items-center gap-3">
             {isDataLoading ? (
               <span className="inline-block w-48 h-10 bg-gray-100 animate-pulse rounded-lg" />
@@ -970,14 +970,14 @@ export default function DashboardPage() {
           </h1>
           <p className="text-base font-bold text-blue-600 sm:text-lg">Painel de crescimento comercial e aceleração de vendas</p>
         </div>
-        <div className="relative flex flex-wrap items-center gap-3 shrink-0">
-          <label className="relative">
+        <div className="relative flex w-full flex-wrap items-center gap-3 2xl:w-auto 2xl:justify-end">
+          <label className="relative min-w-[220px] flex-1 2xl:flex-none">
             <span className="sr-only">Filtrar indicadores por origem</span>
             <Filter className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400" size={16} />
             <select
               value={originFilter}
               onChange={(event) => setOriginFilter(event.target.value)}
-              className="min-h-11 min-w-[190px] cursor-pointer appearance-none rounded-2xl border border-white/10 bg-slate-950 py-3 pl-11 pr-10 text-xs font-black text-white outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10"
+              className="min-h-11 w-full cursor-pointer appearance-none rounded-2xl border border-white/10 bg-slate-950 py-3 pl-11 pr-10 text-xs font-black text-white outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-400/10"
               aria-label="Origem considerada nos indicadores"
             >
               <option value={ALL_ORIGINS}>Origem: Todas (visao geral)</option>
@@ -989,13 +989,13 @@ export default function DashboardPage() {
           </label>
           
           {/* Custom Date Range Popover Button (Meta style) */}
-          <div className="relative">
+          <div className="relative min-w-0 max-w-full">
             <button
               onClick={() => setShowDatePicker((prev) => !prev)}
-              className="flex items-center gap-3 bg-white/5 border border-white/5 hover:bg-white/10 transition px-5 py-3 rounded-2xl text-xs font-black text-white cursor-pointer select-none outline-none"
+              className="flex max-w-full items-center gap-3 bg-white/5 border border-white/5 hover:bg-white/10 transition px-5 py-3 rounded-2xl text-xs font-black text-white cursor-pointer select-none outline-none"
             >
               <CalendarDays size={16} className="text-blue-400 shrink-0" />
-              <span className="font-extrabold">{presetLabel} {dataInicio && dataFim ? `(${formatDateDisplay(dataInicio, dataFim)})` : ''}</span>
+              <span className="truncate font-extrabold">{presetLabel} {dataInicio && dataFim ? `(${formatDateDisplay(dataInicio, dataFim)})` : ''}</span>
               <ChevronDown size={14} className="text-slate-400 shrink-0" />
             </button>
 
