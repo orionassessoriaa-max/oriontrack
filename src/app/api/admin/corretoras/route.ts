@@ -73,6 +73,46 @@ function isMissingCorretorasTable(error?: { message?: string | null } | null) {
   return /corretoras|schema cache|does not exist|could not find/i.test(String(error?.message || ''));
 }
 
+async function ensureBrokerageLeadOwner(corretora: {
+  id: string;
+  nome: string;
+  time_operacional?: unknown;
+  gestor_trafego_id?: string | null;
+}) {
+  const brokerageName = normalizeName(corretora.nome);
+  const { data: existingOwner, error: lookupError } = await supabaseAdmin
+    .from('corretores')
+    .select('id')
+    .ilike('nome_empresa', brokerageName)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) throw lookupError;
+  if (existingOwner?.id) return existingOwner.id;
+
+  const { data: createdOwner, error: createError } = await supabaseAdmin
+    .from('corretores')
+    .insert([{
+      nome: `${brokerageName} - Conta da concessionaria`,
+      email: `concessionaria-${corretora.id}@orion.internal`,
+      telefone: '',
+      nome_empresa: brokerageName,
+      status: 'inativo',
+      tipo_campanha: 'ambos',
+      operadoras_info: { selecionadas: [] },
+      time_operacional: normalizeOperationalTeam(corretora.time_operacional),
+      gestor_trafego_id: corretora.gestor_trafego_id || null,
+      rodizio_ativo: true,
+      observacoes: 'Conta interna para receber leads antes da criacao dos usuarios.',
+    }])
+    .select('id')
+    .single();
+
+  if (createError) throw createError;
+  return createdOwner.id;
+}
+
 async function syncBrokerageDistribution(
   brokerageName: string,
   participantProfileIds: string[],
@@ -276,7 +316,13 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (existing) {
-      return NextResponse.json({ success: true, corretora: existing, already_exists: true });
+      const leadOwnerCorretorId = await ensureBrokerageLeadOwner(existing);
+      return NextResponse.json({
+        success: true,
+        corretora: existing,
+        lead_owner_corretor_id: leadOwnerCorretorId,
+        already_exists: true,
+      });
     }
 
     const { data, error } = await supabaseAdmin
@@ -306,6 +352,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    let leadOwnerCorretorId: string;
+    try {
+      leadOwnerCorretorId = await ensureBrokerageLeadOwner(data);
+    } catch (leadOwnerError) {
+      await supabaseAdmin.from('corretoras').delete().eq('id', data.id);
+      throw leadOwnerError;
+    }
+
     await writeAuditLog(request, guard.profile, {
       action: 'corretora.create',
       entity_type: 'corretoras',
@@ -313,7 +367,11 @@ export async function POST(request: Request) {
       metadata: { nome, gestor_trafego_id, time_operacional },
     });
 
-    return NextResponse.json({ success: true, corretora: data });
+    return NextResponse.json({
+      success: true,
+      corretora: data,
+      lead_owner_corretor_id: leadOwnerCorretorId,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao criar concessionaria.' }, { status: 500 });
   }

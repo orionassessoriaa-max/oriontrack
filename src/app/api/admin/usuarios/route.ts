@@ -120,7 +120,7 @@ async function resolvePrimaryCorretorByBrokerage(nomeEmpresa: unknown) {
 
   const { data, error } = await supabaseAdmin
     .from('corretores')
-    .select('id, nome, nome_empresa')
+    .select('id, nome, nome_empresa, email, status')
     .eq('nome_empresa', brokerageName)
     .order('created_at', { ascending: true })
     .limit(1)
@@ -283,23 +283,35 @@ export async function POST(request: Request) {
           timeOperacional
         );
 
-        const { data: corretor, error: corretorError } = await supabaseAdmin
-          .from('corretores')
-          .insert([{
-            nome,
-            email,
-            telefone,
-            nome_empresa: body.nome_empresa || null,
-            status,
-            tipo_campanha: tipoCampanha,
-            operadoras_info: { selecionadas: Array.isArray(body.operadoras) ? body.operadoras : [] },
-            time_operacional: timeOperacional,
-            gestor_trafego_id: gestorTrafegoId,
-            rodizio_ativo: body.rodizio_ativo !== false,
-            observacoes: body.observacoes || null,
-          }])
-          .select()
-          .single();
+        const brokerageOwner = await resolvePrimaryCorretorByBrokerage(body.nome_empresa);
+        const canReuseInternalOwner = Boolean(
+          brokerageOwner?.id && String(brokerageOwner.email || '').toLowerCase().endsWith('@orion.internal')
+        );
+        const corretorPayload = {
+          nome,
+          email,
+          telefone,
+          nome_empresa: body.nome_empresa || null,
+          status,
+          tipo_campanha: tipoCampanha,
+          operadoras_info: { selecionadas: Array.isArray(body.operadoras) ? body.operadoras : [] },
+          time_operacional: timeOperacional,
+          gestor_trafego_id: gestorTrafegoId,
+          rodizio_ativo: body.rodizio_ativo !== false,
+          observacoes: body.observacoes || null,
+        };
+        const { data: corretor, error: corretorError } = canReuseInternalOwner
+          ? await supabaseAdmin
+              .from('corretores')
+              .update(corretorPayload)
+              .eq('id', brokerageOwner!.id)
+              .select()
+              .single()
+          : await supabaseAdmin
+              .from('corretores')
+              .insert([corretorPayload])
+              .select()
+              .single();
 
         if (corretorError) throw corretorError;
         corretorId = corretor.id;
@@ -307,7 +319,28 @@ export async function POST(request: Request) {
 
       if (role === 'corretor_membro' || role === 'corretor_admin') {
         const primaryCorretor = await resolvePrimaryCorretorByBrokerage(body.nome_empresa);
-        if (!primaryCorretor?.id) {
+        const primaryIsInternal = Boolean(
+          primaryCorretor?.id && String(primaryCorretor.email || '').toLowerCase().endsWith('@orion.internal')
+        );
+        if (primaryIsInternal) {
+          const { error: promoteInternalError } = await supabaseAdmin
+            .from('corretores')
+            .update({
+              nome,
+              email,
+              telefone,
+              status,
+              tipo_campanha: tipoCampanha,
+              operadoras_info: { selecionadas: Array.isArray(body.operadoras) ? body.operadoras : [] },
+              rodizio_ativo: body.rodizio_ativo !== false,
+              observacoes: body.observacoes || null,
+            })
+            .eq('id', primaryCorretor!.id);
+          if (promoteInternalError) throw promoteInternalError;
+          corretorId = primaryCorretor!.id;
+          memberBrokerageName = primaryCorretor!.nome_empresa || String(body.nome_empresa || '').trim();
+          profileRole = 'corretor';
+        } else if (!primaryCorretor?.id) {
           if (role === 'corretor_admin') {
             throw new Error('Crie primeiro o administrador principal da concessionaria.');
           }

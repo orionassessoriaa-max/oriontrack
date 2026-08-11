@@ -272,8 +272,33 @@ async function tryStartLeadBotForWebhook(leadId?: string | null) {
 async function resolveCorretorId(body: any) {
   let resolvedId: string | null = null;
 
+  const corretoraId = normalizeText(field(body, [
+    'corretora_id',
+    'id_corretora',
+    'concessionaria_id',
+    'id_concessionaria',
+  ]));
+  if (corretoraId) {
+    const { data: corretora } = await supabaseAdmin
+      .from('corretoras')
+      .select('nome')
+      .eq('id', corretoraId)
+      .maybeSingle();
+
+    if (corretora?.nome) {
+      const { data: brokerageOwner } = await supabaseAdmin
+        .from('corretores')
+        .select('id')
+        .ilike('nome_empresa', corretora.nome)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (brokerageOwner?.id) resolvedId = brokerageOwner.id;
+    }
+  }
+
   const corretorId = normalizeText(field(body, ['corretor_id', 'id_corretor', 'broker_id']));
-  if (corretorId) {
+  if (!resolvedId && corretorId) {
     const { data } = await supabaseAdmin
       .from('corretores')
       .select('id')
@@ -453,7 +478,7 @@ export async function POST(request: Request) {
 
     if (!corretorId) {
       return NextResponse.json({
-        error: 'Corretor não encontrado. Envie corretor_id, corretor_email ou corretor_nome.'
+        error: 'Concessionaria ou corretor nao encontrado. Envie corretora_id, corretor_id, corretor_email ou corretor_nome.'
       }, { status: 400 });
     }
 

@@ -115,7 +115,7 @@ const emptyBrokerageForm = () => ({
   nome: '',
   descricao: '',
   time_operacional: [] as OrionTeamMember[],
-  pessoas: [createBatchPerson()] as BatchPerson[],
+  pessoas: [] as BatchPerson[],
   distribuicao_modelo: 'rodizio' as LeadDistributionModel,
   distribuicao_publico: 'todos' as LeadDistributionAudience,
   distribuicao_rotas: [createRouteDraft('PME', 'pme'), createRouteDraft('Individual', 'individual'), createRouteDraft('Adesao', 'adesao, adesão')] as BrokerageRouteDraft[],
@@ -186,6 +186,7 @@ function getCorretoraMembers(group: CorretoraGroup): CorretoraMember[] {
   group.corretoresRows.forEach((corretor) => {
     const email = corretor.email || '';
     const normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail.endsWith('@orion.internal')) return;
     if (usedCorretorIds.has(corretor.id) || (normalizedEmail && usedEmails.has(normalizedEmail))) {
       return;
     }
@@ -627,14 +628,15 @@ function CorretorasContent() {
       const nome = newBrokerage.nome.trim().replace(/\s+/g, ' ');
       const descricao = newBrokerage.descricao.trim() || null;
       if (!nome) throw new Error('Informe o nome da concessionaria.');
-      if (newBrokerage.pessoas.length === 0) throw new Error('Adicione pelo menos uma pessoa.');
-      const invalidPerson = newBrokerage.pessoas.find((person) =>
-        !person.nome.trim() || person.telefone.replace(/\D/g, '').length !== 11
-      );
-      if (invalidPerson) throw new Error('Preencha nome e telefone completo de todas as pessoas.');
       const administrators = newBrokerage.pessoas.filter((person) => person.tipo_usuario === 'corretor_admin');
-      if (administrators.length === 0) {
-        throw new Error('Defina pelo menos uma pessoa como Administrador da concessionaria.');
+      if (newBrokerage.pessoas.length > 0) {
+        const invalidPerson = newBrokerage.pessoas.find((person) =>
+          !person.nome.trim() || person.telefone.replace(/\D/g, '').length !== 11
+        );
+        if (invalidPerson) throw new Error('Preencha nome e telefone completo de todas as pessoas.');
+        if (administrators.length === 0) {
+          throw new Error('Defina pelo menos uma pessoa como Administrador da concessionaria.');
+        }
       }
 
       const { data } = await supabase.auth.getSession();
@@ -683,10 +685,9 @@ function CorretorasContent() {
         });
       }
 
-      const orderedPeople = [
-        administrators[0],
-        ...newBrokerage.pessoas.filter((person) => person.id !== administrators[0].id),
-      ];
+      const orderedPeople = administrators.length > 0
+        ? [administrators[0], ...newBrokerage.pessoas.filter((person) => person.id !== administrators[0].id)]
+        : [];
       const credentials: CreatedCredential[] = [];
       const participantProfileIds: string[] = [];
       for (let index = 0; index < orderedPeople.length; index += 1) {
@@ -935,7 +936,7 @@ function CorretorasContent() {
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Cadastro de concessionaria</p>
                 <h2 className="mt-1 text-2xl font-black text-white">Nova concessionaria</h2>
-                <p className="mt-1 text-xs font-bold text-slate-400">Defina o time responsável e crie todos os acessos da concessionária de uma vez.</p>
+                <p className="mt-1 text-xs font-bold text-slate-400">Crie a concessionária agora. Os acessos podem ser adicionados neste cadastro ou depois.</p>
               </div>
               <button type="button" onClick={() => setCreateModalOpen(false)} className="rounded-xl bg-white/5 p-2 text-slate-400 hover:text-white">
                 <X size={18} />
@@ -1120,17 +1121,28 @@ function CorretorasContent() {
                 <legend className="px-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">Acessos da concessionária</legend>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs font-bold text-slate-400">Informe nome, telefone e o nível de acesso de cada pessoa.</p>
+                    <p className="text-xs font-bold text-slate-400">Opcional. Cadastre os acessos agora ou adicione as pessoas depois.</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setNewBrokerage((current) => ({ ...current, pessoas: [...current.pessoas, createBatchPerson('corretor_membro')] }))}
+                    onClick={() => setNewBrokerage((current) => ({
+                      ...current,
+                      pessoas: [
+                        ...current.pessoas,
+                        createBatchPerson(current.pessoas.length === 0 ? 'corretor_admin' : 'corretor_membro'),
+                      ],
+                    }))}
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-xs font-black text-cyan-300 transition hover:bg-cyan-400/20 focus:outline-none focus:ring-2 focus:ring-cyan-300"
                   >
                     <UserPlus size={16} /> Adicionar pessoa
                   </button>
                 </div>
                 <div className="mt-4 space-y-3">
+                  {newBrokerage.pessoas.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-cyan-400/20 bg-cyan-400/[0.04] px-4 py-5 text-center text-xs font-bold text-slate-400">
+                      Nenhum acesso será criado agora. A concessionária já poderá receber leads pelo ID do N8N.
+                    </div>
+                  )}
                   {newBrokerage.pessoas.map((person, index) => (
                     <div key={person.id} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_180px_190px_155px_48px] md:items-end">
                       <div>
@@ -1164,7 +1176,7 @@ function CorretorasContent() {
                           }));
                         }} className="h-5 w-5 rounded border-slate-500 text-cyan-500 focus:ring-cyan-400" />
                       </label>
-                      <button type="button" aria-label={`Remover ${person.nome || `pessoa ${index + 1}`}`} disabled={newBrokerage.pessoas.length === 1} onClick={() => removeBatchPerson(person.id)} className="flex min-h-11 items-center justify-center rounded-xl border border-rose-400/20 text-rose-300 transition hover:bg-rose-500/10 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-30">
+                      <button type="button" aria-label={`Remover ${person.nome || `pessoa ${index + 1}`}`} onClick={() => removeBatchPerson(person.id)} className="flex min-h-11 items-center justify-center rounded-xl border border-rose-400/20 text-rose-300 transition hover:bg-rose-500/10 focus:outline-none focus:ring-2 focus:ring-rose-300">
                         <Trash2 size={16} />
                       </button>
                       {newBrokerage.distribuicao_rotas.some((route) => route.nome.trim()) && (
@@ -1207,7 +1219,8 @@ function CorretorasContent() {
                 Cancelar
               </button>
               <button type="submit" disabled={creatingBrokerage} className="flex items-center gap-2 rounded-2xl bg-cyan-500 px-6 py-3 text-xs font-black text-slate-950 disabled:opacity-60">
-                {creatingBrokerage ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Criar concessionaria e acessos
+                {creatingBrokerage ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+                {newBrokerage.pessoas.length > 0 ? 'Criar concessionaria e acessos' : 'Criar concessionaria'}
               </button>
             </div>
           </form>
@@ -1409,6 +1422,19 @@ function CorretorasContent() {
                       >
                         <UserPlus size={13} /> Adicionar corretor
                       </Link>
+                    )}
+
+                    {isAdmin && c.corretora_id && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          copyId(c.corretora_id!);
+                        }}
+                        className="inline-flex min-h-10 items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3.5 py-1.5 text-xs font-black uppercase tracking-widest text-cyan-700 transition hover:bg-cyan-500/20 focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:text-cyan-300"
+                      >
+                        <Copy size={13} /> Copiar ID N8N
+                      </button>
                     )}
 
                     {isAdmin && c.corretora_id && (
