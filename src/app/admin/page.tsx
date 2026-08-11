@@ -119,48 +119,8 @@ export default function AdminCentralPage() {
     setLoading(true);
     try {
       // 1. Total Corretores
-      const { count: countCorretores } = await supabase
-        .from('corretores')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['active', 'ativo', 'Ativo']);
-
-      const { count: countGestores } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('tipo_usuario', 'gestor_trafego')
-        .in('status', ['active', 'ativo', 'Ativo']);
-
-      const { count: countAccounts } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('tipo_usuario', 'account_manager')
-        .in('status', ['active', 'ativo', 'Ativo']);
-
-      const { count: countDesigners } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('tipo_usuario', 'designer')
-        .in('status', ['active', 'ativo', 'Ativo']);
-
-      // 4. Suporte Pendente
-      const { count: countSuporte } = await supabase
-        .from('solicitacoes_suporte')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'nova');
-
       const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-      const { data: oldTrafficRequests } = await supabase
-        .from('solicitacoes_suporte')
-        .select('id, solicitante_nome, categoria, tipo, mensagem, created_at')
-        .eq('status', 'nova')
-        .lt('created_at', threeHoursAgo);
-
-      setOverdueTrafficRequests((oldTrafficRequests || []).filter((request) =>
-        /trafego|tráfego|meta|cpl|campanha|anuncio|anúncio|aprov/i.test(`${request.categoria || ''} ${request.tipo || ''} ${request.mensagem || ''}`)
-      ));
-
-      // 5. Gestores e corretores
-      const [profilesRes, corretoresRes, corretorasRes] = await Promise.all([
+      const baseDataPromise = Promise.all([
         supabase
           .from('profiles')
           .select('id, nome, email')
@@ -173,6 +133,32 @@ export default function AdminCentralPage() {
           .from('corretoras')
           .select('id, nome, status, meta_ad_account_id, meta_ad_account_name')
       ]);
+      const [
+        { count: countCorretores },
+        { count: countGestores },
+        { count: countAccounts },
+        { count: countDesigners },
+        { count: countSuporte },
+        { data: oldTrafficRequests },
+      ] = await Promise.all([
+        supabase.from('corretores').select('*', { count: 'exact', head: true }).in('status', ['active', 'ativo', 'Ativo']),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('tipo_usuario', 'gestor_trafego').in('status', ['active', 'ativo', 'Ativo']),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('tipo_usuario', 'account_manager').in('status', ['active', 'ativo', 'Ativo']),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('tipo_usuario', 'designer').in('status', ['active', 'ativo', 'Ativo']),
+        supabase.from('solicitacoes_suporte').select('*', { count: 'exact', head: true }).eq('status', 'nova'),
+        supabase
+          .from('solicitacoes_suporte')
+          .select('id, solicitante_nome, categoria, tipo, mensagem, created_at')
+          .eq('status', 'nova')
+          .lt('created_at', threeHoursAgo),
+      ]);
+
+      setOverdueTrafficRequests((oldTrafficRequests || []).filter((request) =>
+        /trafego|tráfego|meta|cpl|campanha|anuncio|anúncio|aprov/i.test(`${request.categoria || ''} ${request.tipo || ''} ${request.mensagem || ''}`)
+      ));
+
+      // 5. Gestores e corretores
+      const [profilesRes, corretoresRes, corretorasRes] = await baseDataPromise;
 
       const gestores = profilesRes.data || [];
       const corretorasCadastradas = corretorasRes.error ? [] : (corretorasRes.data || []);
@@ -229,26 +215,32 @@ export default function AdminCentralPage() {
       setGestoresStats(statsPorGestor);
       setCorretoresSemGestor(semGestor);
       setCorretoresSemCorretora(semCorretora);
-      // Fetch Meta spend/balance alerts
-      const sessionRes = await supabase.auth.getSession();
-      const token = sessionRes.data.session?.access_token;
-      if (token) {
-        const response = await fetch('/api/integrations/meta/alerts', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            data_inicio: format(new Date(), 'yyyy-MM-dd'),
-            data_fim: format(new Date(), 'yyyy-MM-dd')
-          })
-        });
-        if (response.ok) {
-          const payload = await response.json();
-          setAlertsList(payload.accounts || []);
+      setLoading(false);
+
+      void (async () => {
+        try {
+          const sessionRes = await supabase.auth.getSession();
+          const token = sessionRes.data.session?.access_token;
+          if (!token) return;
+          const response = await fetch('/api/integrations/meta/alerts', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              data_inicio: format(new Date(), 'yyyy-MM-dd'),
+              data_fim: format(new Date(), 'yyyy-MM-dd')
+            })
+          });
+          if (response.ok) {
+            const payload = await response.json();
+            setAlertsList(payload.accounts || []);
+          }
+        } catch (alertsError) {
+          console.error('Erro ao carregar alertas Meta em segundo plano:', alertsError);
         }
-      }
+      })();
     } catch (err) {
       console.error('Error fetching admin stats:', err);
     } finally {
