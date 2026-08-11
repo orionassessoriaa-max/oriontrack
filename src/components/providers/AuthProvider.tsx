@@ -45,6 +45,24 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 const BROKER_VIEW_ROLES = ['corretor', 'corretor_admin', 'corretor_membro'];
+const AUTH_SESSION_TIMEOUT_MS = 10_000;
+const AUTH_PROFILE_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -54,37 +72,36 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const sessionRequestRef = useRef(0);
   const router = useRouter();
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, accessToken?: string | null) => {
     try {
-      // Buscamos campos garantidos. Se houver erro de coluna status, o log detalhado avisará.
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching profile details:', JSON.stringify(error, null, 2));
-        
-        // Fallback para ambientes onde migrations novas ainda nao foram aplicadas.
-        if (error.message?.includes('status') || error.message?.includes('equipe_orion') || error.code === 'PGRST202') {
-          console.warn('Tentando carregar profile sem campos opcionais...');
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .from('profiles')
-            .select('id, email, email_real, nome, tipo_usuario, corretor_id, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, created_at, telefone')
-            .eq('id', userId)
-            .maybeSingle();
-          
-          if (fallbackError) {
-            console.error('Fallback error:', JSON.stringify(fallbackError, null, 2));
-            return null;
-          }
-          return fallbackData as Profile;
-        }
-        
-        return null;
+      let token = accessToken;
+      if (!token) {
+        const { data } = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_SESSION_TIMEOUT_MS,
+          'Tempo esgotado ao recuperar a sessao.',
+        );
+        token = data.session?.access_token;
       }
-      return data as Profile;
+      if (!token) return null;
+
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), AUTH_PROFILE_TIMEOUT_MS);
+      try {
+        const response = await fetch('/api/auth/profile', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          console.error('Error fetching profile details:', payload?.error || response.statusText);
+          return null;
+        }
+        return payload.profile as Profile;
+      } finally {
+        window.clearTimeout(timeout);
+      }
     } catch (error) {
       console.error('Unexpected error fetching profile:', error);
       return null;
@@ -251,7 +268,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         if (session?.user) {
           if (!active) return;
           setUser(session.user);
-          const p = await fetchProfile(session.user.id);
+          const p = await fetchProfile(session.user.id, session.access_token);
           if (!active || requestId !== sessionRequestRef.current) return;
           setActualProfile(p);
         } else {
@@ -282,7 +299,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       }
     };
 
-    void supabase.auth.getSession().then(({ data }) => applySession(data.session));
+    void withTimeout(
+      supabase.auth.getSession(),
+      AUTH_SESSION_TIMEOUT_MS,
+      'Tempo esgotado ao iniciar a sessao.',
+    )
+      .then(({ data }) => applySession(data.session))
+      .catch((error) => {
+        console.error('Error recovering auth session:', error);
+        if (active) setLoading(false);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') return;

@@ -63,11 +63,32 @@ export default function SelecionarTimePage() {
     router.replace(destination);
   }
 
-  if (loading || !user || !actualProfile) {
+  if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#020617] text-white">
         <Loader2 className="animate-spin text-cyan-400" size={38} />
       </div>
+    );
+  }
+
+  if (!actualProfile) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#020617] px-5 text-white">
+        <section className="w-full max-w-lg rounded-3xl border border-red-400/20 bg-[#08111f] p-8 text-center shadow-2xl">
+          <h1 className="text-2xl font-black">Nao foi possivel carregar seu acesso</h1>
+          <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-400">
+            A conexao demorou mais que o esperado. Tente novamente sem precisar fechar o navegador.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button type="button" onClick={() => window.location.reload()} className="rounded-xl bg-cyan-500 px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-950">
+              Tentar novamente
+            </button>
+            <button type="button" onClick={signOut} className="rounded-xl border border-white/10 px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-300">
+              Voltar ao login
+            </button>
+          </div>
+        </section>
+      </main>
     );
   }
 
