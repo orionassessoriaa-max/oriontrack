@@ -32,31 +32,10 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { getProfileRoleLabel } from '@/lib/users';
-
-function normalizeText(value?: string | null) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
-}
+import { normalizeAccessText as normalizeText, resolveActiveGestorId } from '@/lib/gestorAccess';
 
 function inferGestorIdFromTeam(corretor: any, gestores: Array<{ id: string; nome: string }>) {
-  if (corretor.gestor_trafego_id) return corretor.gestor_trafego_id;
-
-  const team = Array.isArray(corretor.time_operacional) ? corretor.time_operacional : [];
-  const managerMember = team.find((member: any) => {
-    const role = normalizeText(member?.tipo_usuario);
-    const cargo = normalizeText(member?.cargo);
-    const nome = normalizeText(member?.nome);
-    return role === 'gestor_trafego' || cargo.includes('trafego') || gestores.some((gestor) => normalizeText(gestor.nome) === nome);
-  });
-
-  if (!managerMember) return null;
-  if (managerMember.profile_id) return String(managerMember.profile_id);
-
-  const memberName = normalizeText(managerMember.nome);
-  return gestores.find((gestor) => normalizeText(gestor.nome) === memberName)?.id || null;
+  return resolveActiveGestorId(corretor, gestores);
 }
 
 export default function AdminCentralPage() {

@@ -23,37 +23,15 @@ import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile } from '@/types';
 import Link from 'next/link';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { resolveActiveGestorId } from '@/lib/gestorAccess';
 
 type CorretorWithGestorJoin = Corretor & {
   profiles?: Profile | null;
 };
 
-function normalizeText(value?: string | null) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
-}
-
 function inferGestorFromTeam(corretor: CorretorWithGestorJoin, gestores: Profile[]) {
-  if (corretor.profiles) return corretor.profiles;
-
-  const team = Array.isArray(corretor.time_operacional) ? corretor.time_operacional : [];
-  const managerMember = team.find((member: any) => {
-    const role = normalizeText(member?.tipo_usuario);
-    const cargo = normalizeText(member?.cargo);
-    const nome = normalizeText(member?.nome);
-    return role === 'gestor_trafego' || cargo.includes('trafego') || gestores.some((gestor) => normalizeText(gestor.nome) === nome);
-  }) as any;
-
-  if (!managerMember) return null;
-
-  if (managerMember.profile_id) {
-    return gestores.find((gestor) => gestor.id === managerMember.profile_id) || null;
-  }
-
-  return gestores.find((gestor) => normalizeText(gestor.nome) === normalizeText(managerMember.nome)) || null;
+  const gestorId = resolveActiveGestorId(corretor, gestores);
+  return gestores.find((gestor) => gestor.id === gestorId) || null;
 }
 
 function CorretoresContent() {
@@ -93,7 +71,7 @@ function CorretoresContent() {
         const inferredGestor = inferGestorFromTeam(c, gestoresList);
         return {
           ...c,
-          gestor_trafego_id: c.gestor_trafego_id || inferredGestor?.id || null,
+          gestor_trafego_id: inferredGestor?.id || null,
           gestor: inferredGestor || undefined
         };
       });

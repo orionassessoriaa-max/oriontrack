@@ -774,6 +774,35 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'O DevOps Manager não pode ser removido.' }, { status: 403 });
     }
 
+    if (profile.tipo_usuario === 'gestor_trafego') {
+      const { data: linkedCorretores, error: linkedCorretoresError } = await supabaseAdmin
+        .from('corretores')
+        .select('id, gestor_trafego_id, time_operacional');
+
+      if (linkedCorretoresError) {
+        return NextResponse.json({ error: linkedCorretoresError.message }, { status: 500 });
+      }
+
+      for (const corretor of linkedCorretores || []) {
+        const currentTeam = Array.isArray(corretor.time_operacional) ? corretor.time_operacional : [];
+        const nextTeam = currentTeam.filter((member: any) => String(member?.profile_id || '') !== id);
+        const hasDirectLink = String(corretor.gestor_trafego_id || '') === id;
+        if (!hasDirectLink && nextTeam.length === currentTeam.length) continue;
+
+        const { error: unlinkError } = await supabaseAdmin
+          .from('corretores')
+          .update({
+            gestor_trafego_id: hasDirectLink ? null : corretor.gestor_trafego_id,
+            time_operacional: nextTeam,
+          })
+          .eq('id', corretor.id);
+
+        if (unlinkError) {
+          return NextResponse.json({ error: unlinkError.message }, { status: 500 });
+        }
+      }
+    }
+
     if (profile.corretor_id) {
       await supabaseAdmin.from('leads').delete().eq('corretor_id', profile.corretor_id);
       await supabaseAdmin.from('relatorios_trafego').delete().eq('corretor_id', profile.corretor_id);

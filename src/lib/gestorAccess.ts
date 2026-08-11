@@ -11,6 +11,35 @@ type CorretorLike = {
   nome_empresa?: string | null;
 };
 
+export function resolveActiveGestorId(
+  corretor: CorretorLike,
+  gestores: GestorProfileLike[]
+) {
+  const gestoresById = new Set(
+    gestores.filter((gestor) => Boolean(gestor.id)).map((gestor) => String(gestor.id))
+  );
+  const gestoresByName = new Map(
+    gestores
+      .filter((gestor) => Boolean(gestor.id) && Boolean(normalizeAccessText(gestor.nome)))
+      .map((gestor) => [normalizeAccessText(gestor.nome), String(gestor.id)])
+  );
+
+  const directId = String(corretor.gestor_trafego_id || '').trim();
+  if (directId && gestoresById.has(directId)) return directId;
+
+  const team = Array.isArray(corretor.time_operacional) ? corretor.time_operacional : [];
+  for (const rawMember of team) {
+    const member = rawMember as { profile_id?: string | null; nome?: string | null };
+    const profileId = String(member?.profile_id || '').trim();
+    if (profileId && gestoresById.has(profileId)) return profileId;
+
+    const gestorIdByName = gestoresByName.get(normalizeAccessText(member?.nome));
+    if (gestorIdByName) return gestorIdByName;
+  }
+
+  return null;
+}
+
 export function normalizeAccessText(value?: string | null) {
   return String(value || '')
     .normalize('NFD')
