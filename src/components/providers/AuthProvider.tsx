@@ -46,7 +46,44 @@ export const useAuth = () => useContext(AuthContext);
 
 const BROKER_VIEW_ROLES = ['corretor', 'corretor_admin', 'corretor_membro'];
 const AUTH_SESSION_TIMEOUT_MS = 10_000;
-const AUTH_PROFILE_TIMEOUT_MS = 12_000;
+const AUTH_PROFILE_TIMEOUT_MS = 8_000;
+const PROFILE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+type CachedProfile = {
+  profile: Profile;
+  cachedAt: number;
+};
+
+function profileCacheKey(userId: string) {
+  return `orion:auth_profile:${userId}`;
+}
+
+function readCachedProfile(userId: string) {
+  try {
+    const raw = window.localStorage.getItem(profileCacheKey(userId));
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as CachedProfile;
+    if (cached?.profile?.id !== userId || Date.now() - Number(cached.cachedAt || 0) > PROFILE_CACHE_TTL_MS) {
+      window.localStorage.removeItem(profileCacheKey(userId));
+      return null;
+    }
+    return cached.profile;
+  } catch {
+    return null;
+  }
+}
+
+function cacheProfile(userId: string, profile: Profile) {
+  try {
+    window.localStorage.setItem(profileCacheKey(userId), JSON.stringify({ profile, cachedAt: Date.now() }));
+  } catch {
+    // O cache e apenas uma protecao contra indisponibilidade temporaria.
+  }
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
   return new Promise<T>((resolve, reject) => {
@@ -83,35 +120,60 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         );
         token = data.session?.access_token;
       }
-      if (!token) return null;
+      if (!token) return readCachedProfile(userId);
 
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), AUTH_PROFILE_TIMEOUT_MS);
-      try {
-        const response = await fetch('/api/auth/profile', {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-          signal: controller.signal,
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          console.error('Error fetching profile details:', payload?.error || response.statusText);
-          return null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), AUTH_PROFILE_TIMEOUT_MS);
+        try {
+          const response = await fetch('/api/auth/profile', {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+            signal: controller.signal,
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload.profile) {
+            const loadedProfile = payload.profile as Profile;
+            cacheProfile(userId, loadedProfile);
+            return loadedProfile;
+          }
+          if (response.status === 401 || response.status === 404) {
+            console.error('Error fetching profile details:', payload?.error || response.statusText);
+            return null;
+          }
+          console.error('Temporary error fetching profile details:', payload?.error || response.statusText);
+        } catch (error) {
+          console.error(`Temporary profile request failure (${attempt + 1}/2):`, error);
+        } finally {
+          window.clearTimeout(timeout);
         }
-        return payload.profile as Profile;
-      } finally {
-        window.clearTimeout(timeout);
+        if (attempt === 0) await wait(400);
       }
+
+      const { data: directProfile, error: directError } = await supabase
+        .from('profiles')
+        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!directError && directProfile) {
+        const loadedProfile = directProfile as Profile;
+        cacheProfile(userId, loadedProfile);
+        return loadedProfile;
+      }
+
+      console.error('Direct profile fallback failed:', directError);
+      return readCachedProfile(userId);
     } catch (error) {
       console.error('Unexpected error fetching profile:', error);
-      return null;
+      return readCachedProfile(userId);
     }
   };
 
   const refreshProfile = async () => {
     if (user) {
       const p = await fetchProfile(user.id);
-      setActualProfile(p);
+      if (p) setActualProfile(p);
     }
   };
 
@@ -268,9 +330,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         if (session?.user) {
           if (!active) return;
           setUser(session.user);
+          const cachedProfile = readCachedProfile(session.user.id);
+          if (cachedProfile) {
+            setActualProfile(cachedProfile);
+            setLoading(false);
+          }
           const p = await fetchProfile(session.user.id, session.access_token);
           if (!active || requestId !== sessionRequestRef.current) return;
-          setActualProfile(p);
+          setActualProfile((currentProfile) => p || currentProfile || cachedProfile);
         } else {
           if (!active) return;
           setUser(null);
