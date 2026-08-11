@@ -435,10 +435,7 @@ function CorretorasContent() {
             const directManagerIsActive = Boolean(
               corretora.gestor_trafego_id && activeManagerIds.has(corretora.gestor_trafego_id)
             );
-            const teamHasActiveManager = Array.isArray(corretora.time_operacional) && corretora.time_operacional.some((member) =>
-              isTrafficManagerMember(member) && Boolean(member.profile_id && activeManagerIds.has(member.profile_id))
-            );
-            if (directManagerIsActive || teamHasActiveManager) {
+            if (directManagerIsActive) {
               const name = normalizeAccessText(corretora.nome);
               if (name) managedConcessionariaNames.add(name);
             }
@@ -472,10 +469,7 @@ function CorretorasContent() {
             });
             loadedCorretoras.forEach((corretora) => {
               const linkedDirectly = corretora.gestor_trafego_id === selectedGestor.id;
-              const linkedInTeam = Array.isArray(corretora.time_operacional) && corretora.time_operacional.some((member) =>
-                member.profile_id === selectedGestor.id && isTrafficManagerMember(member)
-              );
-              if (linkedDirectly || linkedInTeam) {
+              if (linkedDirectly) {
                 const name = normalizeAccessText(corretora.nome);
                 if (name) concessionariaNames.add(name);
               }
