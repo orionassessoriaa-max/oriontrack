@@ -348,44 +348,50 @@ export default function DashboardPage() {
   const [originOptions, setOriginOptions] = useState<string[]>(['Orion']);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function initializeDefaultDates() {
       if (!profile || !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario)) return;
       if (!profile.corretor_id) return;
-      
+
+      let firstLeadDate = '2026-01-01';
       try {
-        let idsToFetch = [profile.corretor_id];
-        if (profile.nome_empresa) {
-          const { data: siblings } = await supabase
-            .from('corretores')
-            .select('id')
-            .eq('nome_empresa', profile.nome_empresa);
-          if (siblings && siblings.length > 0) {
-            idsToFetch = siblings.map((s) => s.id);
-          }
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) throw new Error('Sessao expirada.');
+
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 10_000);
+        let response: Response;
+        try {
+          response = await fetch(
+            `/api/dashboard/corretor?corretor_id=${encodeURIComponent(profile.corretor_id)}&range_only=1`,
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              cache: 'no-store',
+              signal: controller.signal,
+            },
+          );
+        } finally {
+          window.clearTimeout(timeout);
         }
 
-        const { data: oldestLeadData } = await supabase
-          .from('leads')
-          .select('data_entrada')
-          .in('corretor_id', idsToFetch)
-          .order('data_entrada', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-
-        let firstLeadDate = '2026-01-01';
-        if (oldestLeadData?.data_entrada) {
-          firstLeadDate = oldestLeadData.data_entrada.slice(0, 10);
-        }
-        
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok && payload.oldestDate) firstLeadDate = payload.oldestDate;
+      } catch (err) {
+        console.error('Error fetching oldest lead date:', err);
+      } finally {
+        if (cancelled) return;
         setOldestDate(firstLeadDate);
         setDataInicio(firstLeadDate);
         setDataFim(toLocalDateString(getSaoPauloToday()));
-      } catch (err) {
-        console.error('Error fetching oldest lead date:', err);
       }
     }
 
     initializeDefaultDates();
+    return () => {
+      cancelled = true;
+    };
   }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -498,82 +504,37 @@ export default function DashboardPage() {
       
       try {
         // 1. Buscar dados do Corretor (Time e Configurações)
-        const { data, error: corretorError } = await supabase
-          .from("corretores")
-          .select("id, nome, nome_empresa, email, telefone, link_pagina, gestor_trafego_id, time_operacional")
-          .eq("id", profile.corretor_id)
-          .maybeSingle();
-
-        if (corretorError) {
-          console.error("Erro ao buscar corretor do dashboard:", JSON.stringify(corretorError, null, 2));
-          throw corretorError;
-        }
-
-        if (!isCurrentRequest()) return;
-        setCorretorData(data);
-
-        // 2. Buscar Todos os Estatísticas de Leads (Sem filtro de data na query)
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
 
-        const limitNum = 1000;
-        const leadMetricColumns = 'status, conta_como_venda, data_entrada, origem, utm_source, utm_medium, utm_campaign, utm_term, utm_content, operadora, observacoes, cidade, valor_negociacao, responsavel_profile_id, cadencia_ativa, cadencia_inicio, cadencia_fim';
+        if (!accessToken) throw new Error('Sessao expirada. Entre novamente.');
 
-        const companyName = data?.nome_empresa || profile.nome_empresa;
-        let idsToFetch = [profile.corretor_id];
-        if (companyName) {
-          const { data: siblings } = await supabase
-            .from('corretores')
-            .select('id')
-            .eq('nome_empresa', companyName);
-          if (siblings && siblings.length > 0) {
-            idsToFetch = siblings.map((s) => s.id);
-          }
+        const dashboardController = new AbortController();
+        const dashboardTimeout = window.setTimeout(() => dashboardController.abort(), 20_000);
+        let dashboardResponse: Response;
+        try {
+          dashboardResponse = await fetch(
+            `/api/dashboard/corretor?corretor_id=${encodeURIComponent(profile.corretor_id)}`,
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              cache: 'no-store',
+              signal: dashboardController.signal,
+            },
+          );
+        } finally {
+          window.clearTimeout(dashboardTimeout);
         }
 
-        let firstStatsRequest = supabase
-          .from('leads')
-          .select(leadMetricColumns, { count: 'exact' })
-          .in('corretor_id', idsToFetch)
-          .order('id', { ascending: true })
-          .range(0, limitNum - 1);
-
-        if (profile.tipo_usuario === 'corretor_membro') {
-          firstStatsRequest = firstStatsRequest.eq('responsavel_profile_id', profile.id);
+        const dashboardPayload = await dashboardResponse.json().catch(() => ({}));
+        if (!dashboardResponse.ok) {
+          throw new Error(dashboardPayload?.error || 'Nao foi possivel carregar o dashboard.');
         }
-
-        const firstStatsPage = await firstStatsRequest;
-        if (firstStatsPage.error) throw firstStatsPage.error;
         if (!isCurrentRequest()) return;
 
-        const totalLeadRows = firstStatsPage.count ?? firstStatsPage.data?.length ?? 0;
-        const remainingPageIndexes = Array.from(
-          { length: Math.max(0, Math.ceil(totalLeadRows / limitNum) - 1) },
-          (_, index) => index + 1,
-        );
-        const remainingStatsPages = await Promise.all(remainingPageIndexes.map((pageIndex) => {
-          const from = pageIndex * limitNum;
-          let request = supabase
-            .from('leads')
-            .select(leadMetricColumns)
-            .in('corretor_id', idsToFetch)
-            .order('id', { ascending: true })
-            .range(from, from + limitNum - 1);
-
-          if (profile.tipo_usuario === 'corretor_membro') {
-            request = request.eq('responsavel_profile_id', profile.id);
-          }
-          return request;
-        }));
-
-        const failedStatsPage = remainingStatsPages.find((page) => page.error);
-        if (failedStatsPage?.error) throw failedStatsPage.error;
-        if (!isCurrentRequest()) return;
-
-        const allLeads = [
-          ...(firstStatsPage.data || []),
-          ...remainingStatsPages.flatMap((page) => page.data || []),
-        ] as LeadMetricRow[];
+        const data = dashboardPayload.corretor;
+        const allLeads = (dashboardPayload.leads || []) as LeadMetricRow[];
+        const pendingTasks = (dashboardPayload.pendingTasks || []) as Array<{ id: string; vencimento: string | null }>;
+        setCorretorData(data);
 
         const availableOrigins = Array.from(new Set(allLeads.map(leadOriginLabel)))
           .sort((a, b) => a === 'Orion' ? -1 : b === 'Orion' ? 1 : a.localeCompare(b, 'pt-BR'));
@@ -726,23 +687,6 @@ export default function DashboardPage() {
         const soldLeads = statsRes.filter(isLeadSale);
         const orionStatsRes = statsRes.filter(isOrionLead);
         setPeriodOrionLeads(orionStatsRes.length);
-        let pendingTasks: Array<{ id: string; vencimento: string | null }> = [];
-        if (idsToFetch.length > 0) {
-          let tasksRequest = supabase
-            .from('lead_tarefas')
-            .select('id, vencimento')
-            .in('corretor_id', idsToFetch)
-            .eq('status', 'pendente');
-
-          if (profile.tipo_usuario === 'corretor_membro') {
-            tasksRequest = tasksRequest.eq('responsavel_profile_id', profile.id);
-          }
-
-          const tasksResult = await tasksRequest;
-          if (!tasksResult.error) {
-            pendingTasks = tasksResult.data || [];
-          }
-        }
         const todayDate = new Date().toDateString();
         
         // Categorizar os status secundários nas 5 categorias primárias do painel

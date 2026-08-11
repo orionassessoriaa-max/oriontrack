@@ -7,6 +7,63 @@ import { createDecipheriv, hkdfSync } from 'crypto';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const MAX_CACHE_BASE64_BYTES = Number(process.env.INBOX_MEDIA_CACHE_MAX_BYTES || 15 * 1024 * 1024);
+const MAX_PROXY_MEDIA_BYTES = Number(process.env.INBOX_MEDIA_PROXY_MAX_BYTES || 25 * 1024 * 1024);
+
+function canProxyMediaUrl(value?: string | null) {
+  try {
+    const url = new URL(String(value || ''));
+    if (url.protocol !== 'https:') return false;
+
+    const configuredHost = (() => {
+      try {
+        return new URL(String(process.env.UAZAPI_URL || '')).hostname.toLowerCase();
+      } catch {
+        return '';
+      }
+    })();
+    const hostname = url.hostname.toLowerCase();
+    return hostname === configuredHost || hostname === 'uazapi.com' || hostname.endsWith('.uazapi.com');
+  } catch {
+    return false;
+  }
+}
+
+async function proxyRemoteMedia(url: string, fallbackMimeType?: string | null) {
+  if (!canProxyMediaUrl(url)) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, {
+      cache: 'no-store',
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      console.warn('[Media API] URL externa recusou o download:', response.status);
+      return null;
+    }
+
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    if (contentLength > MAX_PROXY_MEDIA_BYTES) {
+      console.warn('[Media API] Arquivo externo excede o limite de visualizacao:', contentLength);
+      return null;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!buffer.length || buffer.length > MAX_PROXY_MEDIA_BYTES) return null;
+
+    return {
+      base64: buffer.toString('base64'),
+      mimeType: response.headers.get('content-type')?.split(';')[0] || fallbackMimeType || 'application/octet-stream',
+    };
+  } catch (error: any) {
+    console.warn('[Media API] Falha ao intermediar arquivo externo:', error?.message || error);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 async function getEvolutionMediaBase64(instance: string, providerId: string) {
   if (!providerId) return '';
@@ -488,12 +545,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ base64: directBase64, mimeType, fileName });
     }
 
+    const providerId = message.provider_message_id;
     const directUrl = pickMediaUrl(message.metadata);
-    if (directUrl && (!forceRefresh || !message.provider_message_id)) {
-      return NextResponse.json({ url: directUrl, mimeType, fileName });
+    if (directUrl && (!forceRefresh || !providerId)) {
+      const proxied = await proxyRemoteMedia(directUrl, mimeType);
+      if (proxied) {
+        const recovered = { ...proxied, fileName };
+        await cacheRecoveredMedia(message, recovered);
+        return NextResponse.json(recovered);
+      }
     }
 
-    const providerId = message.provider_message_id;
     if (!providerId) {
       return NextResponse.json({ error: 'Esta mensagem nao possui arquivo salvo para abrir.' }, { status: 400 });
     }
@@ -587,13 +649,16 @@ export async function GET(request: Request) {
 
           const url = pickProviderPayloadUrl(payload);
           if (url) {
-            const recovered = {
-              url,
-              mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
-              fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
-            };
-            await cacheRecoveredMedia(message, recovered);
-            return NextResponse.json(recovered);
+            const recoveredMimeType = payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType;
+            const proxied = await proxyRemoteMedia(url, recoveredMimeType);
+            if (proxied) {
+              const recovered = {
+                ...proxied,
+                fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
+              };
+              await cacheRecoveredMedia(message, recovered);
+              return NextResponse.json(recovered);
+            }
           }
         } catch (uazapiErr: any) {
           console.warn(`[Media API] UAZAPI nao retornou midia via ${attempt.path} na instancia ${inst}:`, uazapiErr?.message || uazapiErr);
@@ -638,7 +703,12 @@ export async function GET(request: Request) {
 
     const fallbackUrl = pickMediaUrl(message.metadata);
     if (fallbackUrl) {
-      return NextResponse.json({ url: fallbackUrl, mimeType, fileName });
+      const proxied = await proxyRemoteMedia(fallbackUrl, mimeType);
+      if (proxied) {
+        const recovered = { ...proxied, fileName };
+        await cacheRecoveredMedia(message, recovered);
+        return NextResponse.json(recovered);
+      }
     }
 
     return NextResponse.json({ error: 'Nao consegui extrair a midia desta mensagem pelo UAZAPI ou Evolution API.' }, { status: 404 });
