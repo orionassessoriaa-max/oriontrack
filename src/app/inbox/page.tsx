@@ -313,6 +313,8 @@ export default function BrokerInboxPage() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const selectedConversationRef = useRef<Conversation | null>(null);
   const visibleConversationIdsRef = useRef<Set<string>>(new Set());
+  const messageSyncInFlightRef = useRef(false);
+  const messageFetchRequestRef = useRef(0);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Audio Playback States
@@ -646,7 +648,7 @@ export default function BrokerInboxPage() {
             setConversations(rows);
             setSelectedConversation(rows[0] || null);
             setLoading(false);
-            void fetchConnectionStatus();
+            if (!isSilent) void fetchConnectionStatus();
             return;
           }
           if (leadData?.nome) {
@@ -687,7 +689,7 @@ export default function BrokerInboxPage() {
     if (!isSilent && nextSelection?.id && !nextSelection.id.startsWith('new-')) {
       void fetchMessages(nextSelection.id);
     }
-    void fetchConnectionStatus();
+    if (!isSilent) void fetchConnectionStatus();
   }
 
   useEffect(() => {
@@ -815,17 +817,21 @@ export default function BrokerInboxPage() {
 
 
   // Fetch Messages for Selected Conversation
-  async function fetchMessages(conversationId: string) {
+  async function fetchMessages(conversationId: string, options: { silent?: boolean } = {}) {
     if (conversationId.startsWith('new-')) {
       setMessages([]);
       visibleConversationIdsRef.current = new Set();
       return;
     }
 
+    if (options.silent && messageSyncInFlightRef.current) return;
+
     const token = await getToken();
     if (!token) return;
 
-    setLoadingMessages(true);
+    const requestId = ++messageFetchRequestRef.current;
+    messageSyncInFlightRef.current = true;
+    if (!options.silent) setLoadingMessages(true);
     try {
       const response = await fetch(`/api/inbox/messages?conversation_id=${conversationId}`, {
         cache: 'no-store',
@@ -849,19 +855,32 @@ export default function BrokerInboxPage() {
       });
       if (!response.ok) {
         const errorMessage = typeof payload.error === 'string' ? payload.error : 'Nao foi possivel carregar o historico desta conversa.';
-        setSendError(errorMessage);
+        if (!options.silent) setSendError(errorMessage);
         return;
       }
+      if (selectedConversationRef.current?.id !== conversationId) return;
       visibleConversationIdsRef.current = new Set(
         Array.isArray(payload.conversation_ids)
           ? payload.conversation_ids.map(String)
           : [conversationId, ...mapped.map((message: InboxMessage) => String(message.conversa_id))],
       );
-      setMessages(mapped);
+      setMessages((current) => {
+        const unchanged = current.length === mapped.length && current.every((message, index) => {
+          const nextMessage = mapped[index];
+          return message.id === nextMessage?.id
+            && message.mensagem === nextMessage?.mensagem
+            && message.direction === nextMessage?.direction
+            && message.created_at === nextMessage?.created_at;
+        });
+        return unchanged ? current : mapped;
+      });
     } catch (err) {
       console.error(err);
     } finally {
-      setLoadingMessages(false);
+      if (requestId === messageFetchRequestRef.current) {
+        messageSyncInFlightRef.current = false;
+        if (!options.silent) setLoadingMessages(false);
+      }
     }
   }
 
@@ -876,11 +895,41 @@ export default function BrokerInboxPage() {
     }
   }, [selectedConversation?.id]);
 
+  // O Realtime continua sendo o caminho principal. Esta sincronizacao silenciosa
+  // cobre navegadores ou sessoes em que o evento nao chega, sem exigir F5.
+  useEffect(() => {
+    const conversationId = selectedConversation?.id;
+    if (!conversationId || conversationId.startsWith('new-')) return;
+
+    const syncOpenConversation = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchMessages(conversationId, { silent: true });
+      }
+    };
+    const interval = window.setInterval(syncOpenConversation, 5_000);
+    return () => window.clearInterval(interval);
+  }, [selectedConversation?.id, profile?.id]);
+
+  // Atualiza a ordem e a previa das conversas com uma frequencia menor para
+  // evitar consultas pesadas, mantendo a lista lateral sincronizada.
+  useEffect(() => {
+    if (!profile?.id) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void fetchInbox(true);
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
+
   // Ao voltar para a aba/janela, sincroniza novamente a lista completa. Isso
   // evita que o usuario entre no Inbox vendo um snapshot antigo.
   useEffect(() => {
     const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') void fetchInbox(true);
+      if (document.visibilityState !== 'visible') return;
+      void fetchInbox(true);
+      const conversationId = selectedConversationRef.current?.id;
+      if (conversationId && !conversationId.startsWith('new-')) {
+        void fetchMessages(conversationId, { silent: true });
+      }
     };
     window.addEventListener('focus', refreshWhenVisible);
     document.addEventListener('visibilitychange', refreshWhenVisible);
