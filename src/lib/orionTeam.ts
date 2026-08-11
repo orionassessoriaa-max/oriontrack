@@ -16,7 +16,7 @@ export const ORION_TEAM_MEMBERS: OrionTeamMember[] = [
   { nome: 'Geovana', cargo: 'Gestora de Tráfego' },
   { nome: 'Lucas', cargo: 'Gestor de Projetos' },
   { nome: 'Patrick', cargo: 'Coordenador Operacional' },
-  { nome: 'Nataline', cargo: 'Designer' },
+  { nome: 'Nataline', cargo: 'Gestora de Tráfego' },
 ];
 // ...
 const TEAM_PHOTOS: Record<string, string> = {
@@ -51,7 +51,7 @@ export function getTeamMemberPhoto(name?: string | null) {
 }
 
 export function isTrafficManagerMember(member: OrionTeamMember) {
-  return member.cargo.toLowerCase().includes('tráfego') || ['ewertton', 'geovana', 'geovanna'].includes(normalizeTeamMemberName(member.nome));
+  return member.cargo.toLowerCase().includes('tráfego') || ['ewertton', 'geovana', 'geovanna', 'nataline'].includes(normalizeTeamMemberName(member.nome));
 }
 
 export function getTeamMemberAvatar(member: OrionTeamMember) {

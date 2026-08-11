@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { getGestorConcessionariaNames, isGestorLinkedToConcessionariaCorretor, normalizeAccessText } from '@/lib/gestorAccess';
+import { ensureConcessionariaDriveFolder } from '@/lib/creatives/automation';
 import {
   normalizeLeadDistributionAudience,
   normalizeLeadDistributionModel,
@@ -42,6 +43,30 @@ function resolveTrafficManagerId(explicitId: unknown, team: ReturnType<typeof no
     member.cargo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('trafego')
   );
   return manager?.profile_id || null;
+}
+
+function isTrafficManager(member: Record<string, unknown>) {
+  const role = normalizeName(member?.tipo_usuario).toLowerCase();
+  const position = normalizeName(member?.cargo)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return role === 'gestor_trafego' || position.includes('gestor de trafego');
+}
+
+function replaceTrafficManager(teamValue: unknown, manager: Record<string, any> | null) {
+  const team = normalizeOperationalTeam(teamValue).filter((member) => !isTrafficManager(member));
+  if (!manager) return team;
+  return [{
+    nome: normalizeName(manager.nome),
+    cargo: 'Gestor de trafego',
+    profile_id: manager.id,
+    foto_url: manager.foto_url || null,
+    tipo_usuario: 'gestor_trafego',
+    email: manager.email || null,
+    email_real: manager.email_real || null,
+    is_admin_master: Boolean(manager.is_admin_master),
+  }, ...team];
 }
 
 function isMissingCorretorasTable(error?: { message?: string | null } | null) {
@@ -304,9 +329,6 @@ export async function PATCH(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const id = normalizeName(body.id);
-    const modo_operacao = normalizeOperationMode(body.modo_operacao);
-    const distribuicao_modelo = normalizeLeadDistributionModel(body.distribuicao_modelo);
-    const distribuicao_publico = normalizeLeadDistributionAudience(body.distribuicao_publico);
     const participantes = Array.isArray(body.participantes_profile_ids)
       ? body.participantes_profile_ids.map(normalizeName).filter(Boolean)
       : null;
@@ -315,9 +337,51 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Informe a concessionaria.' }, { status: 400 });
     }
 
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from('corretoras')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    if (!current) return NextResponse.json({ error: 'Concessionaria nao encontrada.' }, { status: 404 });
+
+    const managerWasSent = Object.prototype.hasOwnProperty.call(body, 'gestor_trafego_id');
+    const gestorTrafegoId = managerWasSent ? normalizeName(body.gestor_trafego_id) || null : current.gestor_trafego_id || null;
+    let gestor: Record<string, any> | null = null;
+    if (gestorTrafegoId) {
+      const { data: managerProfile, error: managerError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, nome, email, email_real, foto_url, tipo_usuario, status, is_admin_master')
+        .eq('id', gestorTrafegoId)
+        .eq('tipo_usuario', 'gestor_trafego')
+        .in('status', ['active', 'ativo', 'Ativo'])
+        .maybeSingle();
+      if (managerError) throw managerError;
+      if (!managerProfile) return NextResponse.json({ error: 'O gestor de trafego selecionado nao esta ativo.' }, { status: 400 });
+      gestor = managerProfile;
+    }
+
+    const modoOperacao = Object.prototype.hasOwnProperty.call(body, 'modo_operacao')
+      ? normalizeOperationMode(body.modo_operacao)
+      : normalizeOperationMode(current.modo_operacao);
+    const distribuicaoModelo = Object.prototype.hasOwnProperty.call(body, 'distribuicao_modelo')
+      ? normalizeLeadDistributionModel(body.distribuicao_modelo)
+      : normalizeLeadDistributionModel(current.distribuicao_modelo);
+    const distribuicaoPublico = Object.prototype.hasOwnProperty.call(body, 'distribuicao_publico')
+      ? normalizeLeadDistributionAudience(body.distribuicao_publico)
+      : normalizeLeadDistributionAudience(current.distribuicao_publico);
+    const timeOperacional = managerWasSent
+      ? replaceTrafficManager(current.time_operacional, gestor)
+      : normalizeOperationalTeam(current.time_operacional);
+
     const { data, error } = await supabaseAdmin
       .from('corretoras')
-      .update({ modo_operacao, distribuicao_modelo, distribuicao_publico })
+      .update({
+        modo_operacao: modoOperacao,
+        distribuicao_modelo: distribuicaoModelo,
+        distribuicao_publico: distribuicaoPublico,
+        ...(managerWasSent ? { gestor_trafego_id: gestorTrafegoId, time_operacional: timeOperacional } : {}),
+      })
       .eq('id', id)
       .select('*')
       .single();
@@ -337,6 +401,29 @@ export async function PATCH(request: Request) {
       .update({ rodizio_ativo: true })
       .ilike('nome_empresa', data.nome);
 
+    if (managerWasSent) {
+      const { data: brokerageBrokers, error: brokersError } = await supabaseAdmin
+        .from('corretores')
+        .select('id, time_operacional')
+        .ilike('nome_empresa', data.nome);
+      if (brokersError) throw brokersError;
+      for (const broker of brokerageBrokers || []) {
+        const { error: brokerUpdateError } = await supabaseAdmin
+          .from('corretores')
+          .update({
+            gestor_trafego_id: gestorTrafegoId,
+            time_operacional: replaceTrafficManager(broker.time_operacional, gestor),
+          })
+          .eq('id', broker.id);
+        if (brokerUpdateError) throw brokerUpdateError;
+      }
+      if (gestorTrafegoId && brokerageBrokers?.[0]?.id) {
+        await ensureConcessionariaDriveFolder(brokerageBrokers[0].id, gestorTrafegoId).catch((driveError) => {
+          console.error('Nao foi possivel preparar a pasta do novo gestor:', driveError);
+        });
+      }
+    }
+
     if (participantes) {
       await syncBrokerageDistribution(data.nome, participantes);
     }
@@ -345,7 +432,14 @@ export async function PATCH(request: Request) {
       action: 'corretora.distribution.update',
       entity_type: 'corretoras',
       entity_id: data.id,
-      metadata: { nome: data.nome, modo_operacao, distribuicao_modelo, distribuicao_publico, participantes },
+      metadata: {
+        nome: data.nome,
+        modo_operacao: modoOperacao,
+        distribuicao_modelo: distribuicaoModelo,
+        distribuicao_publico: distribuicaoPublico,
+        participantes,
+        gestor_trafego_id: gestorTrafegoId,
+      },
     });
 
     return NextResponse.json({ success: true, corretora: data });

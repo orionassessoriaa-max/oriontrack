@@ -57,6 +57,7 @@ interface CorretoraGroup {
   modo_operacao?: OperationMode;
   distribuicao_modelo?: LeadDistributionModel;
   distribuicao_publico?: LeadDistributionAudience;
+  gestor_trafego_id?: string | null;
 }
 
 interface CorretoraRecord {
@@ -227,6 +228,7 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
       modo_operacao: normalizeOperationMode(corretora.modo_operacao),
       distribuicao_modelo: normalizeLeadDistributionModel(corretora.distribuicao_modelo),
       distribuicao_publico: normalizeLeadDistributionAudience(corretora.distribuicao_publico),
+      gestor_trafego_id: corretora.gestor_trafego_id || null,
     };
   });
 
@@ -250,11 +252,15 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
         modo_operacao: 'individual',
         distribuicao_modelo: 'rodizio',
         distribuicao_publico: 'todos',
+        gestor_trafego_id: c.gestor_trafego_id || null,
       };
     }
 
     groups[key].empty = false;
     groups[key].corretoresRows.push(c);
+    if (!groups[key].gestor_trafego_id && c.gestor_trafego_id) {
+      groups[key].gestor_trafego_id = c.gestor_trafego_id;
+    }
     if (c.meta_ad_account_name && !groups[key].meta_ad_account_name) {
       groups[key].meta_ad_account_name = c.meta_ad_account_name;
       groups[key].meta_ad_account_id = c.meta_ad_account_id;
@@ -293,6 +299,7 @@ function groupData(corretoresList: Corretor[], profilesList: Profile[], corretor
         modo_operacao: 'individual',
         distribuicao_modelo: 'rodizio',
         distribuicao_publico: 'todos',
+        gestor_trafego_id: null,
       };
     }
 
@@ -331,6 +338,7 @@ function CorretorasContent() {
   const [createdCredentials, setCreatedCredentials] = useState<CreatedCredential[]>([]);
   const [migrationPending, setMigrationPending] = useState(false);
   const [savingDistribution, setSavingDistribution] = useState<string | null>(null);
+  const [savingGestor, setSavingGestor] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [deletingBrokerageId, setDeletingBrokerageId] = useState<string | null>(null);
   const isAdmin = profile?.tipo_usuario === 'admin';
@@ -536,6 +544,29 @@ function CorretorasContent() {
       alert(err.message || 'Não foi possível atualizar a distribuição.');
     } finally {
       setSavingDistribution(null);
+    }
+  };
+
+  const updateTrafficManager = async (group: CorretoraGroup, gestorId: string) => {
+    const corretoraId = group.corretora_id || (group.empty ? group.id : null);
+    if (!corretoraId) return alert('Cadastre a concessionaria antes de alterar o gestor.');
+    setSavingGestor(group.id);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Sessao expirada.');
+      const response = await fetch('/api/admin/corretoras', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: corretoraId, gestor_trafego_id: gestorId || null }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel atualizar o gestor.');
+      await fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Nao foi possivel atualizar o gestor.');
+    } finally {
+      setSavingGestor(null);
     }
   };
 
@@ -1261,6 +1292,28 @@ function CorretorasContent() {
                   </div>
 
                   <div className="flex items-center gap-4 flex-wrap md:flex-nowrap justify-between md:justify-end">
+                    {isAdmin && (
+                      <div
+                        onClick={(event) => event.stopPropagation()}
+                        className="flex min-w-[210px] flex-col gap-1"
+                      >
+                        <label htmlFor={`gestor-${c.id}`} className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                          Gestor de trafego
+                        </label>
+                        <select
+                          id={`gestor-${c.id}`}
+                          value={c.gestor_trafego_id || ''}
+                          disabled={savingGestor === c.id}
+                          onChange={(event) => void updateTrafficManager(c, event.target.value)}
+                          className="min-h-10 rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 text-[11px] font-black uppercase tracking-widest text-violet-700 outline-none focus:ring-2 focus:ring-violet-400 disabled:cursor-wait disabled:opacity-60 dark:bg-[#111827] dark:text-violet-300"
+                        >
+                          <option value="">Sem gestor definido</option>
+                          {gestores.map((gestor) => (
+                            <option key={gestor.id} value={gestor.id}>{gestor.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <div
                       onClick={(event) => event.stopPropagation()}
                       className="flex min-w-[230px] flex-col gap-1"
