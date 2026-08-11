@@ -428,22 +428,64 @@ function CorretorasContent() {
       } else if (profile?.tipo_usuario === 'admin' && initialGestorId) {
         let concessionariaNames = new Set<string>();
         if (initialGestorId === 'sem-gestor') {
-          loadedCorretores = loadedCorretores.filter((corretor) =>
-            Boolean(String(corretor.nome_empresa || '').trim()) &&
-            !loadedGestores.some((gestor) => isGestorLinkedToCorretor(corretor, gestor))
-          );
+          const activeManagerIds = new Set(loadedGestores.map((gestor) => gestor.id));
+          const managedConcessionariaNames = new Set<string>();
+
+          loadedCorretoras.forEach((corretora) => {
+            const directManagerIsActive = Boolean(
+              corretora.gestor_trafego_id && activeManagerIds.has(corretora.gestor_trafego_id)
+            );
+            const teamHasActiveManager = Array.isArray(corretora.time_operacional) && corretora.time_operacional.some((member) =>
+              isTrafficManagerMember(member) && Boolean(member.profile_id && activeManagerIds.has(member.profile_id))
+            );
+            if (directManagerIsActive || teamHasActiveManager) {
+              const name = normalizeAccessText(corretora.nome);
+              if (name) managedConcessionariaNames.add(name);
+            }
+          });
+
           loadedCorretores.forEach((corretor) => {
             const name = normalizeAccessText(corretor.nome_empresa);
-            if (name) concessionariaNames.add(name);
+            if (name && loadedGestores.some((gestor) => isGestorLinkedToCorretor(corretor, gestor))) {
+              managedConcessionariaNames.add(name);
+            }
           });
+
+          const allConcessionariaNames = new Set([
+            ...loadedCorretoras.map((corretora) => normalizeAccessText(corretora.nome)),
+            ...loadedCorretores.map((corretor) => normalizeAccessText(corretor.nome_empresa)),
+          ].filter(Boolean));
+          concessionariaNames = new Set(
+            [...allConcessionariaNames].filter((name) => !managedConcessionariaNames.has(name))
+          );
+          loadedCorretores = loadedCorretores.filter((corretor) =>
+            concessionariaNames.has(normalizeAccessText(corretor.nome_empresa))
+          );
         } else {
           const selectedGestor = loadedGestores.find((gestor) => gestor.id === initialGestorId);
-          loadedCorretores = selectedGestor
-            ? loadedCorretores.filter((corretor) => isGestorLinkedToConcessionariaCorretor(corretor, selectedGestor))
-            : [];
-          concessionariaNames = selectedGestor
-            ? getGestorConcessionariaNames(loadedCorretores, selectedGestor)
-            : new Set<string>();
+          if (selectedGestor) {
+            loadedCorretores.forEach((corretor) => {
+              if (isGestorLinkedToConcessionariaCorretor(corretor, selectedGestor)) {
+                const name = normalizeAccessText(corretor.nome_empresa);
+                if (name) concessionariaNames.add(name);
+              }
+            });
+            loadedCorretoras.forEach((corretora) => {
+              const linkedDirectly = corretora.gestor_trafego_id === selectedGestor.id;
+              const linkedInTeam = Array.isArray(corretora.time_operacional) && corretora.time_operacional.some((member) =>
+                member.profile_id === selectedGestor.id && isTrafficManagerMember(member)
+              );
+              if (linkedDirectly || linkedInTeam) {
+                const name = normalizeAccessText(corretora.nome);
+                if (name) concessionariaNames.add(name);
+              }
+            });
+            loadedCorretores = loadedCorretores.filter((corretor) =>
+              concessionariaNames.has(normalizeAccessText(corretor.nome_empresa))
+            );
+          } else {
+            loadedCorretores = [];
+          }
         }
 
         const linkedCorretorIds = new Set(loadedCorretores.map((corretor) => corretor.id));
