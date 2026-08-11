@@ -555,6 +555,13 @@ function CorretorasContent() {
     router.push('/admin/corretoras');
   };
 
+  const changeGestorFilter = (gestorId: string) => {
+    router.push(gestorId === 'all'
+      ? '/admin/corretoras'
+      : `/admin/corretoras?gestor=${encodeURIComponent(gestorId)}`
+    );
+  };
+
   const toggleExpand = (id: string) => {
     setExpandedGroups(prev => ({
       ...prev,
@@ -1233,7 +1240,7 @@ function CorretorasContent() {
       {/* Painel de Filtros */}
       <div className="orion-panel mb-8 p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-          <div className="md:col-span-8 relative group">
+          <div className={`${isAdmin ? 'md:col-span-6' : 'md:col-span-8'} relative group`}>
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
             <input 
               type="text"
@@ -1243,17 +1250,37 @@ function CorretorasContent() {
               className="orion-control w-full py-4 pl-12 pr-4 font-medium"
             />
           </div>
-          <div className="md:col-span-4 relative">
+          {isAdmin && (
+            <div className="relative md:col-span-3">
+              <Users className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <select
+                value={initialGestorId || 'all'}
+                onChange={(event) => changeGestorFilter(event.target.value)}
+                className="orion-control min-h-12 w-full cursor-pointer appearance-none py-4 pl-12 pr-10 font-bold"
+                aria-label="Filtrar concessionarias por gestor"
+              >
+                <option value="all">Todos os gestores</option>
+                <option value="sem-gestor">Sem gestor definido</option>
+                {gestores.map((gestor) => (
+                  <option key={gestor.id} value={gestor.id}>{gestor.nome}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            </div>
+          )}
+          <div className={`${isAdmin ? 'md:col-span-3' : 'md:col-span-4'} relative`}>
             <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <select 
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="orion-control w-full appearance-none py-4 pl-12 pr-4 font-bold"
+              className="orion-control min-h-12 w-full cursor-pointer appearance-none py-4 pl-12 pr-10 font-bold"
+              aria-label="Filtrar concessionarias por tipo"
             >
               <option value="all">Todas</option>
               <option value="empresa">Apenas Empresas/Grupos</option>
               <option value="individual">Apenas Corretores Individuais</option>
             </select>
+            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           </div>
         </div>
       </div>
