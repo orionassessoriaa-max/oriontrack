@@ -81,10 +81,6 @@ function cacheProfile(userId: string, profile: Profile) {
   }
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
   return new Promise<T>((resolve, reject) => {
     const timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs);
@@ -122,7 +118,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       }
       if (!token) return readCachedProfile(userId);
 
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      const loadFromApi = async () => {
         const controller = new AbortController();
         const timeout = window.setTimeout(() => controller.abort(), AUTH_PROFILE_TIMEOUT_MS);
         try {
@@ -132,40 +128,40 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             signal: controller.signal,
           });
           const payload = await response.json().catch(() => ({}));
-          if (response.ok && payload.profile) {
-            const loadedProfile = payload.profile as Profile;
-            cacheProfile(userId, loadedProfile);
-            return loadedProfile;
+          if (!response.ok || !payload.profile) {
+            throw new Error(payload?.error || response.statusText || 'Perfil nao retornado pela API.');
           }
-          if (response.status === 401 || response.status === 404) {
-            console.error('Error fetching profile details:', payload?.error || response.statusText);
-            return null;
-          }
-          console.error('Temporary error fetching profile details:', payload?.error || response.statusText);
-        } catch (error) {
-          console.error(`Temporary profile request failure (${attempt + 1}/2):`, error);
+          return payload.profile as Profile;
         } finally {
           window.clearTimeout(timeout);
         }
-        if (attempt === 0) await wait(400);
-      }
+      };
 
-      const { data: directProfile, error: directError } = await supabase
-        .from('profiles')
-        .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
-        .eq('id', userId)
-        .maybeSingle();
+      const loadDirectly = async () => {
+        const { data: directProfile, error: directError } = await withTimeout(
+          Promise.resolve(
+            supabase
+              .from('profiles')
+              .select('id, email, email_real, nome, tipo_usuario, corretor_id, status, foto_url, nome_empresa, precisa_trocar_senha, is_admin_master, tema_sistema, equipe_orion, created_at, telefone')
+              .eq('id', userId)
+              .maybeSingle(),
+          ),
+          AUTH_PROFILE_TIMEOUT_MS,
+          'Tempo esgotado na consulta direta do perfil.',
+        );
 
-      if (!directError && directProfile) {
-        const loadedProfile = directProfile as Profile;
-        cacheProfile(userId, loadedProfile);
-        return loadedProfile;
-      }
+        if (directError || !directProfile) {
+          throw directError || new Error('Perfil nao retornado pela consulta direta.');
+        }
+        return directProfile as Profile;
+      };
 
-      console.error('Direct profile fallback failed:', directError);
-      return readCachedProfile(userId);
+      const loadedProfile = await Promise.any([loadFromApi(), loadDirectly()]);
+      cacheProfile(userId, loadedProfile);
+      return loadedProfile;
+
     } catch (error) {
-      console.error('Unexpected error fetching profile:', error);
+      console.error('All profile loading strategies failed:', error);
       return readCachedProfile(userId);
     }
   };
