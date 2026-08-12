@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Loader2, Sparkles, TriangleAlert } from 'lucide-react';
+import { Ban, CheckCircle2, Loader2, Sparkles, TriangleAlert } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 
@@ -14,7 +14,7 @@ export type CreativeGenerationJob = {
   regiao: string;
   quantidade: number;
   origem: string;
-  status: 'na_fila' | 'gerando' | 'pronto' | 'falhou';
+  status: 'na_fila' | 'gerando' | 'pronto' | 'falhou' | 'cancelado';
   progresso: number;
   erro: string | null;
   created_at: string;
@@ -51,9 +51,13 @@ function jobSignature(jobs: CreativeGenerationJob[]) {
 function CreativeJobsProgress({
   jobs,
   recentTerminalIds,
+  onCancel,
+  canceling,
 }: {
   jobs: CreativeGenerationJob[];
   recentTerminalIds: string[];
+  onCancel: (jobIds: string[]) => Promise<void>;
+  canceling: boolean;
 }) {
   const activeJobs = jobs.filter((job) => job.status === 'na_fila' || job.status === 'gerando');
   const recentFinished = jobs.filter((job) => recentTerminalIds.includes(job.id));
@@ -66,6 +70,7 @@ function CreativeJobsProgress({
     0
   );
   const failed = visibleJobs.some((job) => job.status === 'falhou');
+  const canceled = activeJobs.length === 0 && visibleJobs.every((job) => job.status === 'cancelado');
   const finished = activeJobs.length === 0 && visibleJobs.every((job) => job.status === 'pronto');
   const percent = activeJobs.length > 0
     ? Math.min(100, Math.round((completed / Math.max(1, total)) * 100))
@@ -81,22 +86,35 @@ function CreativeJobsProgress({
         <span className={`mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
           failed
             ? 'bg-red-400/10 text-red-300'
+            : canceled
+              ? 'bg-amber-400/10 text-amber-300'
             : finished
               ? 'bg-emerald-400/10 text-emerald-300'
               : 'bg-cyan-400/10 text-cyan-300'
         }`}>
-          {failed ? <TriangleAlert size={19} /> : finished ? <CheckCircle2 size={19} /> : <Loader2 className="animate-spin" size={19} />}
+          {failed ? <TriangleAlert size={19} /> : canceled ? <Ban size={19} /> : finished ? <CheckCircle2 size={19} /> : <Loader2 className="animate-spin" size={19} />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
             <p className="flex items-center gap-2 text-sm font-black text-white">
               <Sparkles size={15} className="text-cyan-400" />
-              {failed ? 'Falha na geração' : finished ? 'Criativos finalizados' : 'Criando em segundo plano'}
+              {failed ? 'Falha na geração' : canceled ? 'Geração cancelada' : finished ? 'Criativos finalizados' : 'Criando em segundo plano'}
             </p>
             <p className="text-xs font-black tabular-nums text-cyan-300">
-              {activeJobs.length > 0 ? `${completed} de ${total} criados · ${percent}%` : finished ? '100%' : 'Verifique o erro'}
+              {activeJobs.length > 0 ? `${completed} de ${total} criados · ${percent}%` : canceled ? 'Interrompida' : finished ? '100%' : 'Verifique o erro'}
             </p>
           </div>
+          {activeJobs.length > 0 && (
+            <button
+              type="button"
+              disabled={canceling}
+              onClick={() => void onCancel(activeJobs.map((job) => job.id))}
+              className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-200 transition hover:bg-rose-500/20 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {canceling ? <Loader2 className="animate-spin" size={15} /> : <Ban size={15} />}
+              {canceling ? 'Cancelando...' : 'Cancelar geração'}
+            </button>
+          )}
           <div className="mt-2 space-y-1">
             {visibleJobs.slice(0, 3).map((job) => (
               <p key={job.id} className="truncate text-xs font-semibold text-slate-400">
@@ -143,6 +161,7 @@ export default function CreativeJobsProvider({ children }: { children: React.Rea
   const signatureRef = useRef<string | null>(null);
   const previousJobsRef = useRef<Map<string, CreativeGenerationJob>>(new Map());
   const pollingRef = useRef(false);
+  const [canceling, setCanceling] = useState(false);
 
   const managerId = profile?.tipo_usuario === 'gestor_trafego' ? profile.id : null;
   const canTrack = Boolean(
@@ -175,7 +194,7 @@ export default function CreativeJobsProvider({ children }: { children: React.Rea
         return Boolean(
           previous
           && ['na_fila', 'gerando'].includes(previous.status)
-          && ['pronto', 'falhou'].includes(job.status)
+          && ['pronto', 'falhou', 'cancelado'].includes(job.status)
         );
       });
       if (newlyFinished.length > 0) {
@@ -192,6 +211,34 @@ export default function CreativeJobsProvider({ children }: { children: React.Rea
       pollingRef.current = false;
     }
   }, [actualProfile?.tipo_usuario, canTrack, managerId]);
+
+  const cancelJobs = useCallback(async (jobIds: string[]) => {
+    if (!managerId || jobIds.length === 0 || canceling) return;
+    if (!window.confirm('Cancelar os lotes em andamento? Os criativos já concluídos serão mantidos.')) return;
+    setCanceling(true);
+    try {
+      const token = await authToken();
+      if (!token) return;
+      const response = await fetch('/api/criativos/jobs', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          job_ids: jobIds,
+          gestor_id: actualProfile?.tipo_usuario === 'admin' ? managerId : undefined,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível cancelar a geração.');
+      await refreshJobs();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Não foi possível cancelar a geração.');
+    } finally {
+      setCanceling(false);
+    }
+  }, [actualProfile?.tipo_usuario, canceling, managerId, refreshJobs]);
 
   useEffect(() => {
     if (!canTrack) {
@@ -223,7 +270,14 @@ export default function CreativeJobsProvider({ children }: { children: React.Rea
   return (
     <CreativeJobsContext.Provider value={value}>
       {children}
-      {canTrack && <CreativeJobsProgress jobs={jobs} recentTerminalIds={recentTerminalIds} />}
+      {canTrack && (
+        <CreativeJobsProgress
+          jobs={jobs}
+          recentTerminalIds={recentTerminalIds}
+          onCancel={cancelJobs}
+          canceling={canceling}
+        />
+      )}
     </CreativeJobsContext.Provider>
   );
 }

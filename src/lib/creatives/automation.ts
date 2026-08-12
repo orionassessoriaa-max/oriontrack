@@ -302,8 +302,22 @@ export async function processCreativeGenerationJob(jobId: string) {
     }
     const results: Array<Record<string, unknown>> = [];
     for (let index = 0; index < job.quantidade; index += 1) {
+      const { data: currentJob } = await supabaseAdmin
+        .from('criativo_generation_jobs')
+        .select('status')
+        .eq('id', job.id)
+        .maybeSingle();
+      if (currentJob?.status === 'cancelado') return;
+
       const variation = variations[index] || fallbackCopies(job)[index % 4];
       const bytes = await generateImage(job, variation, reference);
+      const { data: jobAfterGeneration } = await supabaseAdmin
+        .from('criativo_generation_jobs')
+        .select('status')
+        .eq('id', job.id)
+        .maybeSingle();
+      if (jobAfterGeneration?.status === 'cancelado') return;
+
       const fileName = `${safeName(job.operadora)}-${safeName(job.regiao)}-${String(index + 1).padStart(2, '0')}.png`;
       const storagePath = `${job.corretor_id}/${safeName(job.regiao)}/${safeName(job.operadora)}/${Date.now()}-${fileName}`;
       const driveFile = await uploadDriveFile({
@@ -356,7 +370,8 @@ export async function processCreativeGenerationJob(jobId: string) {
     await supabaseAdmin
       .from('criativo_generation_jobs')
       .update({ status: 'pronto', progresso: results.length, resultado: results, finished_at: finishedAt, updated_at: finishedAt })
-      .eq('id', job.id);
+      .eq('id', job.id)
+      .eq('status', 'gerando');
     await supabaseAdmin.from('notificacoes').insert({
       titulo: 'Criativos prontos',
       mensagem: `${results.length} criativos de ${job.operadora}/${job.regiao} foram gerados para revisao.`,

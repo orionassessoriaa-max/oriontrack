@@ -144,3 +144,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Erro ao criar lote.' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  const guard = await requireApiUser(request, [...ROLES]);
+  if ('error' in guard) return guard.error;
+  const limited = rateLimit(request, 'criativos:jobs:cancel', {
+    limit: 30,
+    windowMs: 5 * 60_000,
+    key: guard.profile.id,
+  });
+  if (limited) return limited;
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const jobIds = Array.isArray(body.job_ids)
+      ? body.job_ids.map((id: unknown) => clean(id, 80)).filter(Boolean).slice(0, 30)
+      : [];
+    if (jobIds.length === 0) {
+      return NextResponse.json({ error: 'Nenhum lote em andamento foi informado.' }, { status: 400 });
+    }
+
+    const requestedGestorId = clean(body.gestor_id, 80) || null;
+    const gestorId = guard.profile.tipo_usuario === 'admin' && requestedGestorId
+      ? requestedGestorId
+      : guard.profile.id;
+    const finishedAt = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from('criativo_generation_jobs')
+      .update({
+        status: 'cancelado',
+        erro: null,
+        finished_at: finishedAt,
+        updated_at: finishedAt,
+      })
+      .in('id', jobIds)
+      .eq('gestor_id', gestorId)
+      .in('status', ['na_fila', 'gerando'])
+      .select('id');
+    if (error) throw error;
+
+    return NextResponse.json({
+      success: true,
+      canceled: data?.length || 0,
+      message: `${data?.length || 0} lote(s) cancelado(s). Os criativos já concluídos foram mantidos.`,
+    });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Erro ao cancelar os lotes.' }, { status: 500 });
+  }
+}
