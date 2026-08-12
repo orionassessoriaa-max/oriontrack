@@ -297,8 +297,7 @@ export default function BrokerInboxPage() {
   // File states
   const [selectedAttachments, setSelectedAttachments] = useState<SelectedAttachment[]>([]);
 
-  // Tab Filtering & Search
-  const [activeFilter, setActiveFilter] = useState<'chatting' | 'waiting' | 'closed' | 'alerts'>('chatting');
+  // Conversation filters
   const [searchTerm, setSearchTerm] = useState('');
   const [responsibleFilter, setResponsibleFilter] = useState('todos');
   const [stageFilter, setStageFilter] = useState('todos');
@@ -359,8 +358,10 @@ export default function BrokerInboxPage() {
   ]);
   const [selectedFlowStepId, setSelectedFlowStepId] = useState('step_welcome');
   const [closeReason, setCloseReason] = useState('');
+  const [closingConversation, setClosingConversation] = useState(false);
 
-  // Local message search state
+  // Kept internally for backward compatibility; these legacy tools are no
+  // longer exposed in the operational Inbox.
   const [showSearchChat, setShowSearchChat] = useState(false);
   const [searchChatQuery, setSearchChatQuery] = useState('');
 
@@ -559,7 +560,7 @@ export default function BrokerInboxPage() {
       if (!page || page.length < conversationPageSize) break;
     }
 
-    const rows = (data || []).map((row: any) => {
+    const rows = (data || []).filter((row: any) => row.status !== 'resolvida').map((row: any) => {
       const lead = row.leads as any;
       const responsibleProfileId = lead?.responsavel_profile_id || null;
       const member = responsibleProfileId ? teamMemberByProfileId.get(String(responsibleProfileId)) : null;
@@ -612,7 +613,7 @@ export default function BrokerInboxPage() {
         }
 
         const { data: savedConversations } = await savedConversationQuery;
-        const savedRow = savedConversations?.[0] as any;
+        const savedRow = savedConversations?.find((row: any) => row.status !== 'resolvida') as any;
         if (savedRow) {
           const savedLead = savedRow.leads as any;
           const savedResponsibleProfileId = savedLead?.responsavel_profile_id || null;
@@ -682,7 +683,7 @@ export default function BrokerInboxPage() {
     setConversations(rows);
     const previousSelection = selectedConversationRef.current;
     const nextSelection = previousSelection
-      ? rows.find((row) => row.id === previousSelection.id) || previousSelection
+      ? rows.find((row) => row.id === previousSelection.id) || matchedConv || rows[0] || null
       : matchedConv || rows[0] || null;
     setSelectedConversation(nextSelection);
     setLoading(false);
@@ -1587,27 +1588,50 @@ export default function BrokerInboxPage() {
   };
 
   const updateConversationStatus = async (newStatus: string) => {
-    if (!selectedConversation) return;
-    
-    // UI state updates optimistically
-    const updated = { ...selectedConversation, status: newStatus };
-    setSelectedConversation(updated);
-    setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
+    if (!selectedConversation) return false;
 
-    if (selectedConversation.id.startsWith('new-')) return;
+    const conversation = selectedConversation;
+    const clearClosedConversationFromView = () => {
+      setConversations((current) => current.filter((item) => item.id !== conversation.id));
+      setSelectedConversation(null);
+      setMessages([]);
+
+      const url = new URL(window.location.href);
+      url.searchParams.delete('telefone');
+      url.searchParams.delete('lead');
+      url.searchParams.delete('nome');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    };
+
+    if (conversation.id.startsWith('new-')) {
+      if (newStatus === 'fechada') {
+        clearClosedConversationFromView();
+      }
+      return true;
+    }
 
     // Map UI statuses ('espera', 'fechada', 'pausada') to DB statuses ('aguardando', 'resolvida', 'aberta')
     const dbStatus = newStatus === 'espera' ? 'aguardando' : newStatus === 'fechada' ? 'resolvida' : newStatus === 'pausada' ? 'aberta' : newStatus;
 
-    try {
-      const { error } = await supabase
-        .from('whatsapp_conversas')
-        .update({ status: dbStatus, updated_at: new Date().toISOString() })
-        .eq('id', selectedConversation.id);
-      if (error) throw error;
-    } catch (err) {
-      console.error('Erro ao salvar status da conversa no Supabase:', err);
+    const { error } = await supabase
+      .from('whatsapp_conversas')
+      .update({ status: dbStatus, updated_at: new Date().toISOString() })
+      .eq('id', conversation.id);
+
+    if (error) {
+      console.error('Erro ao salvar status da conversa no Supabase:', error);
+      return false;
     }
+
+    if (newStatus === 'fechada') {
+      clearClosedConversationFromView();
+    } else {
+      const updated = { ...conversation, status: newStatus };
+      setSelectedConversation(updated);
+      setConversations((current) => current.map((item) => item.id === conversation.id ? updated : item));
+    }
+
+    return true;
   };
 
   const handleShare = () => {
@@ -2066,11 +2090,8 @@ export default function BrokerInboxPage() {
 
     if (stageFilter !== 'todos' && normalizeLeadStatus(c.leadStatus) !== stageFilter) return false;
 
-    // Tab filter
-    if (activeFilter === 'chatting') return c.status === 'aberta' || c.status === 'pausada';
-    if (activeFilter === 'waiting') return c.status === 'espera';
-    if (activeFilter === 'closed') return c.status === 'fechada';
-    return true; // fallback
+    // The Inbox is an active work queue. Closed conversations stay out of it.
+    return c.status !== 'fechada';
   });
 
   const internalNotes = leadActivities
@@ -2088,14 +2109,6 @@ export default function BrokerInboxPage() {
       .sort((a, b) => new Date(a.vencimento || a.created_at).getTime() - new Date(b.vencimento || b.created_at).getTime());
     return active[0] || leadTasks[0] || null;
   }, [leadTasks]);
-
-  const getFilterCount = (filter: 'chatting' | 'waiting' | 'closed' | 'alerts') => {
-    if (filter === 'chatting') return conversationsByResponsible.filter(c => c.status === 'aberta' || c.status === 'pausada').length;
-    if (filter === 'waiting') return conversationsByResponsible.filter(c => c.status === 'espera').length;
-    if (filter === 'closed') return conversationsByResponsible.filter(c => c.status === 'fechada').length;
-    if (filter === 'alerts') return 0;
-    return 0;
-  };
 
   const formatHour = (value: string) => {
     try {
@@ -2182,10 +2195,7 @@ export default function BrokerInboxPage() {
     );
   }, [messages, leadActivities, selectedConversation]);
 
-  const filteredChatMessages = mergedChatMessages.filter(m => 
-    !searchChatQuery.trim() || 
-    m.mensagem.toLowerCase().includes(searchChatQuery.toLowerCase().trim())
-  );
+  const filteredChatMessages = mergedChatMessages;
 
   const displayChatMessages = useMemo(() => {
     const reactionsByTarget = new Map<string, string[]>();
@@ -2304,30 +2314,16 @@ export default function BrokerInboxPage() {
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
           <div className={`orion-inbox-list border-r border-white/5 ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col bg-slate-900/20 h-full overflow-hidden`}>
-            {/* Counts Filter Header */}
+            {/* Active conversation filters */}
             <div className="p-4 border-b border-white/5 space-y-3.5">
-              <div className="flex items-center justify-between bg-white/5 p-1 rounded-2xl gap-0.5 shadow-inner">
-                {([
-                  { filter: 'alerts', icon: AlertTriangle },
-                  { filter: 'waiting', icon: Clock },
-                  { filter: 'chatting', icon: MessageSquare },
-                  { filter: 'closed', icon: Archive }
-                ] as const).map((tab) => {
-                  const count = getFilterCount(tab.filter);
-                  const isActive = activeFilter === tab.filter;
-                  return (
-                    <button
-                      key={tab.filter}
-                      onClick={() => setActiveFilter(tab.filter)}
-                      className={`relative flex-1 py-2 rounded-xl flex items-center justify-center gap-1 transition-all ${
-                        isActive ? 'bg-cyan-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      <tab.icon size={13} />
-                      <span className="text-[10px] font-black">{count}</span>
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between gap-3 px-1">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">Conversas ativas</p>
+                  <p className="mt-0.5 text-[10px] font-semibold text-slate-500">Atendimentos em andamento e aguardando resposta</p>
+                </div>
+                <span className="flex h-8 min-w-8 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 text-[10px] font-black tabular-nums text-cyan-300">
+                  {filteredConversations.length}
+                </span>
               </div>
 
               {profile?.tipo_usuario !== 'corretor_membro' && (responsibleOptions.length > 1 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
@@ -2472,12 +2468,6 @@ export default function BrokerInboxPage() {
                       Dados do lead
                     </button>
                     <button
-                      onClick={() => setShowTemplateModal(true)}
-                      className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
-                    >
-                      Template
-                    </button>
-                    <button
                       onClick={() => {
                         if (!selectedConversation?.lead_id) {
                           alert('Esta conversa não possui um Lead associado.');
@@ -2490,12 +2480,6 @@ export default function BrokerInboxPage() {
                       Encaminhar para Responsável
                     </button>
                     <button
-                      onClick={handleTogglePause}
-                      className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-[9px] font-black uppercase tracking-wider text-slate-300 transition-all cursor-pointer"
-                    >
-                      {selectedConversation.status === 'pausada' ? 'Retomar' : 'Pausar'}
-                    </button>
-                    <button
                       onClick={handleEndChat}
                       className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl border border-rose-500/30 hover:bg-rose-500/10 text-[9px] font-black uppercase tracking-wider text-rose-400 transition-all cursor-pointer"
                     >
@@ -2503,7 +2487,7 @@ export default function BrokerInboxPage() {
                     </button>
  
                     {/* Header Action Icons Toolbar */}
-                    <div className="flex shrink-0 items-center gap-1.5 border-l border-white/5 pl-2 ml-1">
+                    <div className="hidden">
                       <button onClick={handleShare} className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer" title="Compartilhar conversa">
                         <Share2 size={13} />
                       </button>
@@ -2906,7 +2890,7 @@ export default function BrokerInboxPage() {
                         <button
                           type="button"
                           onClick={() => setShowTemplateModal(true)}
-                          className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5 cursor-pointer shrink-0"
+                          className="hidden"
                           title="Mensagens Rápidas"
                         >
                           <FileText size={16} />
@@ -3773,30 +3757,43 @@ export default function BrokerInboxPage() {
               </button>
               <button
                 type="button"
-                disabled={!closeReason}
+                disabled={!closeReason || closingConversation}
                 onClick={async () => {
-                  if (!selectedConversation || !closeReason) return;
-                  
-                  // Log event in database activities timeline
-                  if (selectedConversation.lead_id) {
-                    await supabase.from('lead_atividades').insert([{
-                      lead_id: selectedConversation.lead_id,
-                      profile_id: profile?.id,
-                      tipo: 'sistema',
-                      titulo: 'Conversa encerrada',
-                      descricao: `Finalizada pelo atendente. Motivo: ${closeReason}`
-                    }]);
+                  if (!selectedConversation || !closeReason || closingConversation) return;
+                  setClosingConversation(true);
+
+                  try {
+                    const conversationToClose = selectedConversation;
+                    const selectedReason = closeReason;
+                    const closed = await updateConversationStatus('fechada');
+                    if (!closed) throw new Error('Nao foi possivel salvar o encerramento.');
+
+                    if (conversationToClose.lead_id) {
+                      const { error: activityError } = await supabase.from('lead_atividades').insert([{
+                        lead_id: conversationToClose.lead_id,
+                        profile_id: profile?.id,
+                        tipo: 'sistema',
+                        titulo: 'Conversa encerrada',
+                        descricao: `Finalizada pelo atendente. Motivo: ${selectedReason}`
+                      }]);
+                      if (activityError) {
+                        console.warn('Conversa encerrada, mas o historico nao foi registrado:', activityError);
+                      }
+                    }
+
+                    setShowCloseReasonModal(false);
+                    setCloseReason('');
+                    alert('Conversa encerrada e removida da caixa ativa.');
+                  } catch (error: unknown) {
+                    console.error('Erro ao encerrar conversa:', error);
+                    alert(error instanceof Error ? error.message : 'Nao foi possivel encerrar a conversa. Tente novamente.');
+                  } finally {
+                    setClosingConversation(false);
                   }
-                  
-                  // Update status to fechada
-                  updateConversationStatus('fechada');
-                  setShowCloseReasonModal(false);
-                  setCloseReason('');
-                  alert('Conversa encerrada e registrada!');
                 }}
                 className="px-5 py-2.5 rounded-xl bg-cyan-600 disabled:opacity-50 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-cyan-600/10 hover:-translate-y-0.5 transition-all cursor-pointer"
               >
-                Confirmar e Encerrar
+                {closingConversation ? 'Encerrando...' : 'Confirmar e Encerrar'}
               </button>
             </div>
 
