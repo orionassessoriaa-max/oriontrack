@@ -701,8 +701,9 @@ export async function POST(request: Request) {
 
     let senderProfile: any = guard.profile;
     let senderProfileId = guard.profile.id;
-    const viewingProfileId = request.headers.get('x-orion-view-profile-id');
-    if (guard.profile.tipo_usuario === 'admin' && viewingProfileId) {
+    const viewingProfileId = request.headers.get('x-commercial-view-profile-id')
+      || request.headers.get('x-orion-view-profile-id');
+    if (viewingProfileId && (guard.profile.tipo_usuario === 'admin' || viewingProfileId === guard.profile.id)) {
       const { data } = await supabaseAdmin
         .from('profiles')
         .select('id, nome, email, email_real, tipo_usuario, corretor_id')
@@ -812,7 +813,14 @@ export async function POST(request: Request) {
         remetente: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
         mensagem: messageTextDb,
         provider_message_id: providerId,
-        metadata: { ...(payload || {}), ...outboundMediaMetadata, instance },
+        metadata: {
+          ...(payload || {}),
+          ...outboundMediaMetadata,
+          instance,
+          sender_profile_id: senderProfileId,
+          sender_name: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
+          sender_type: 'human',
+        },
       }])
       .select('*')
       .single();

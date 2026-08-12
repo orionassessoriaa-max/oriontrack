@@ -60,7 +60,7 @@ export async function insertCommercialAiMessage(
   const { error } = await supabaseAdmin.from('whatsapp_mensagens').insert([{
     conversa_id: conversationId,
     direction: 'outbound',
-    remetente: 'Aline',
+    remetente: 'Orion',
     mensagem: text,
     metadata: { ...metadata, ai_agent: COMMERCIAL_AI_AGENT },
   }]);

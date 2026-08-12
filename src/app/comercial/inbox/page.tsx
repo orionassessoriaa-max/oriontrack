@@ -564,12 +564,24 @@ export default function CommercialInboxPage() {
               const mediaKind = getMessageMediaKind(message);
               const media = messageMedia[message.id];
               const isMediaLoading = loadingMediaId === message.id;
-              const isAiSender = message.metadata?.ai_agent === 'commercial_sdr';
-              const senderName = message.remetente?.trim()
-                || (message.direction === 'inbound'
-                  ? selected?.nome_contato || selected?.commercial_lead.nome || 'Lead'
-                  : 'Equipe comercial');
-              const senderLabel = isAiSender ? `${senderName} · IA` : senderName;
+              const isAiSender = ['commercial_sdr', 'commercial_bot'].includes(String(message.metadata?.ai_agent || ''));
+              const senderProfileId = String(message.metadata?.sender_profile_id || '');
+              const instanceProfileId = String(message.metadata?.instance || '')
+                .replace(/^orion_/, '')
+                .replace(/[^a-f0-9]/gi, '');
+              const instanceMember = instanceProfileId.length === 32
+                ? members.find((member) => member.profile_id.replace(/-/g, '').toLowerCase() === instanceProfileId.toLowerCase())
+                : null;
+              const senderName = isAiSender
+                ? 'Orion'
+                : String(message.metadata?.sender_name || '').trim()
+                  || memberMap.get(senderProfileId)?.nome
+                  || instanceMember?.nome
+                  || message.remetente?.trim()
+                  || (message.direction === 'inbound'
+                    ? selected?.nome_contato || selected?.commercial_lead.nome || 'Lead'
+                    : 'Equipe comercial');
+              const senderLabel = senderName;
               return (
                 <div key={message.id} className={`kh-chat-bubble ${message.direction === 'outbound' ? 'outbound' : 'inbound'} ${mediaKind === 'audio' ? 'audio' : ''}`}>
                   {mediaKind === 'audio' ? media ? (

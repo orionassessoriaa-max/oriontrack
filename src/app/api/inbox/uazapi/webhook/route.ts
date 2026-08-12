@@ -822,6 +822,18 @@ async function findProfileFromWebhook(body: any, instance: string) {
       .maybeSingle();
 
     if (data?.corretor_id) return data;
+
+    // Integrantes do Kriptos nao pertencem a uma corretora operacional. A
+    // instancia pessoal ainda identifica exatamente quem enviou a mensagem.
+    if (data) {
+      const { data: commercialMember } = await supabaseAdmin
+        .from('comercial_membros')
+        .select('profile_id')
+        .eq('profile_id', data.id)
+        .eq('ativo', true)
+        .maybeSingle();
+      if (commercialMember) return data;
+    }
   }
 
   // Instancias exclusivas da IA nao pertencem a um perfil. Resolva a
@@ -1415,7 +1427,7 @@ export async function POST(request: Request) {
     const { error: insertError } = await supabaseAdmin.from('whatsapp_mensagens').insert([{
       conversa_id: conversation.id,
       direction,
-      remetente: fromMe ? (commercialMode ? 'Aline' : (profile!.nome || 'Orion')) : contactName,
+      remetente: fromMe ? (profile?.nome || 'Orion') : contactName,
       mensagem: message,
       provider_message_id: providerId || null,
       metadata: {
@@ -1428,6 +1440,10 @@ export async function POST(request: Request) {
         audio_transcript: audioTranscript || undefined,
         ai_customer_message: aiCustomerMessage || undefined,
         audio_transcription_failed: hasAudio ? audioTranscriptionFailed : undefined,
+        instance,
+        sender_profile_id: fromMe ? profile?.id : undefined,
+        sender_name: fromMe ? (profile?.nome || 'Orion') : undefined,
+        sender_type: fromMe ? 'human' : undefined,
       },
     }]);
 
