@@ -29,6 +29,11 @@ async function saveReference(profileId: string, dataUrl: string) {
   return supabaseAdmin.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
+function serializeReferenceUrls(urls: string[]) {
+  if (urls.length === 0) return null;
+  return urls.length === 1 ? urls[0] : JSON.stringify(urls);
+}
+
 export async function GET(request: Request) {
   const guard = await requireApiUser(request, [...ROLES]);
   if ('error' in guard) return guard.error;
@@ -113,8 +118,23 @@ export async function POST(request: Request) {
       strategy?.creative_prompt,
       clean(body.briefing, 8000),
     );
-    const referenceUrl = clean(body.referencia_url, 1000)
-      || await saveReference(guard.profile.id, clean(body.reference_data_url, 15_000_000));
+    const directReferenceUrls = (Array.isArray(body.referencia_urls) ? body.referencia_urls : [body.referencia_url])
+      .map((value: unknown) => clean(value, 1000))
+      .filter(Boolean)
+      .slice(0, 5);
+    const referenceDataUrls = (Array.isArray(body.reference_data_urls)
+      ? body.reference_data_urls
+      : body.reference_data_url ? [body.reference_data_url] : [])
+      .map((value: unknown) => clean(value, 15_000_000))
+      .filter(Boolean)
+      .slice(0, 5 - directReferenceUrls.length);
+    const uploadedReferenceUrls = await Promise.all(
+      referenceDataUrls.map((dataUrl: string) => saveReference(guard.profile.id, dataUrl)),
+    );
+    const referenceUrl = serializeReferenceUrls([
+      ...directReferenceUrls,
+      ...uploadedReferenceUrls.filter((url): url is string => Boolean(url)),
+    ]);
     const { data: job, error } = await supabaseAdmin
       .from('criativo_generation_jobs')
       .insert({

@@ -73,6 +73,12 @@ type Props = {
 
 type SavedGeneratedAsset = Pick<LibraryAsset, 'id' | 'titulo' | 'status'>;
 
+type CreativeReference = {
+  id: string;
+  name: string;
+  dataUrl: string;
+};
+
 const FORMATS = [
   { value: '1024x1024', label: 'Feed quadrado', detail: '1:1' },
   { value: '1024x1536', label: 'Stories / Reels', detail: 'Vertical' },
@@ -130,8 +136,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [generatorOpen, setGeneratorOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [size, setSize] = useState<(typeof FORMATS)[number]['value']>('1024x1024');
-  const [referenceDataUrl, setReferenceDataUrl] = useState<string | null>(null);
-  const [referenceName, setReferenceName] = useState('');
+  const [references, setReferences] = useState<CreativeReference[]>([]);
   const [generatedDataUrl, setGeneratedDataUrl] = useState<string | null>(null);
   const [savedGeneratedAsset, setSavedGeneratedAsset] = useState<SavedGeneratedAsset | null>(null);
   const [generatedAction, setGeneratedAction] = useState<'save' | 'approval' | null>(null);
@@ -204,19 +209,13 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     if (!generatorOpen) return;
 
     const handlePaste = async (event: ClipboardEvent) => {
-      const image = [...(event.clipboardData?.items || [])]
-        .find((item) => item.type.startsWith('image/'))
-        ?.getAsFile();
-      if (!image) return;
+      const images = [...(event.clipboardData?.items || [])]
+        .filter((item) => item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((item): item is File => Boolean(item));
+      if (!images.length) return;
       event.preventDefault();
-      try {
-        if (image.size > 10 * 1024 * 1024) throw new Error('A referencia deve ter no maximo 10 MB.');
-        setReferenceDataUrl(await readFileAsDataUrl(image));
-        setReferenceName(image.name || 'Imagem colada');
-        setGenerationError(null);
-      } catch (error: unknown) {
-        setGenerationError(errorMessage(error, 'Nao foi possivel colar a imagem.'));
-      }
+      await attachReferences(images, 'Imagem colada');
     };
 
     window.addEventListener('paste', handlePaste);
@@ -289,8 +288,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const resetGenerator = () => {
     setPrompt(selectedStrategy?.creative_prompt || getDefaultCreativePrompt(selectedOperator?.name || ''));
     setSize('1024x1024');
-    setReferenceDataUrl(null);
-    setReferenceName('');
+    setReferences([]);
     setGeneratedDataUrl(null);
     setSavedGeneratedAsset(null);
     setGeneratedAction(null);
@@ -308,18 +306,24 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     setGeneratorOpen(true);
   };
 
-  const attachReference = async (file?: File | null) => {
-    if (!file) return;
+  const attachReferences = async (files: File[], fallbackName = 'Imagem de referencia') => {
+    if (!files.length) return;
     try {
-      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-        throw new Error('Use uma imagem PNG, JPG ou WebP.');
+      const selected = files.slice(0, 5);
+      if (selected.some((file) => !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
+        throw new Error('Use apenas imagens PNG, JPG ou WebP.');
       }
-      if (file.size > 10 * 1024 * 1024) throw new Error('A referencia deve ter no maximo 10 MB.');
-      setReferenceDataUrl(await readFileAsDataUrl(file));
-      setReferenceName(file.name);
+      if (selected.some((file) => file.size > 10 * 1024 * 1024)) throw new Error('Cada referencia deve ter no maximo 10 MB.');
+      const appended = await Promise.all(selected.map(async (file, index) => ({
+        id: `${Date.now()}-${index}-${file.name}`,
+        name: file.name || fallbackName,
+        dataUrl: await readFileAsDataUrl(file),
+      })));
+      setReferences((current) => [...current, ...appended].slice(0, 5));
+      setSavedGeneratedAsset(null);
       setGenerationError(null);
     } catch (error: unknown) {
-      setGenerationError(errorMessage(error, 'Nao foi possivel anexar a imagem.'));
+      setGenerationError(errorMessage(error, 'Nao foi possivel anexar as imagens.'));
     }
   };
 
@@ -344,7 +348,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
         body: JSON.stringify({
           prompt: prompt.trim(),
           size,
-          reference_data_url: referenceDataUrl,
+          reference_data_urls: references.map((reference) => reference.dataUrl),
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -385,7 +389,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
           regiao: batchRegion.trim(),
           quantidade: batchQuantity,
           briefing: prompt.trim(),
-          reference_data_url: referenceDataUrl,
+          reference_data_urls: references.map((reference) => reference.dataUrl),
           origem: 'criativos',
         }),
       });
@@ -394,8 +398,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       setSuccessMessage(payload.message || 'Lote iniciado. Voce pode fechar esta janela e continuar trabalhando.');
       await refreshJobs();
       setPrompt('');
-      setReferenceDataUrl(null);
-      setReferenceName('');
+      setReferences([]);
     } catch (error: unknown) {
       setGenerationError(errorMessage(error, 'Erro ao colocar os criativos na fila.'));
     } finally {
@@ -1007,48 +1010,58 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                 </fieldset>
 
                 <div>
-                  <p className="text-sm font-black text-slate-200">Imagem de referencia <span className="font-semibold text-slate-600">(opcional)</span></p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-black text-slate-200">Imagens de referencia <span className="font-semibold text-slate-600">(opcional)</span></p>
+                    <span className="text-xs font-bold tabular-nums text-slate-500">{references.length}/5</span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="mt-3 flex min-h-28 w-full items-center gap-4 rounded-2xl border border-dashed border-slate-600 bg-slate-950/35 p-4 text-left transition hover:border-cyan-500/70 hover:bg-cyan-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                    disabled={references.length >= 5}
+                    className="mt-3 flex min-h-24 w-full items-center gap-4 rounded-2xl border border-dashed border-slate-600 bg-slate-950/35 p-4 text-left transition hover:border-cyan-500/70 hover:bg-cyan-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-45"
                   >
-                    {referenceDataUrl ? (
-                      <>
-                        <img src={referenceDataUrl} alt="Referencia anexada" className="h-20 w-20 shrink-0 rounded-xl object-cover" />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-black text-slate-200">{referenceName || 'Imagem colada'}</span>
-                          <span className="mt-1 block text-xs font-semibold text-cyan-400">Clique para trocar ou use Ctrl+V novamente</span>
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-cyan-400">
-                          <Paperclip size={21} />
-                        </span>
-                        <span>
-                          <span className="block text-sm font-black text-slate-200">Cole com Ctrl+V ou escolha uma imagem</span>
-                          <span className="mt-1 block text-xs font-semibold text-slate-500">PNG, JPG ou WebP de ate 10 MB</span>
-                        </span>
-                      </>
-                    )}
+                    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-cyan-400">
+                      <Paperclip size={21} />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-black text-slate-200">
+                        {references.length ? 'Adicionar mais referencias' : 'Cole com Ctrl+V ou escolha imagens'}
+                      </span>
+                      <span className="mt-1 block text-xs font-semibold text-slate-500">Selecione varias de uma vez. PNG, JPG ou WebP, ate 10 MB cada.</span>
+                    </span>
                   </button>
                   <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     accept="image/png,image/jpeg,image/webp"
                     className="hidden"
-                    onChange={(event) => void attachReference(event.target.files?.[0])}
+                    onChange={(event) => {
+                      void attachReferences(Array.from(event.target.files || []));
+                      event.target.value = '';
+                    }}
                   />
-                  {referenceDataUrl && (
-                    <button
-                      type="button"
-                      onClick={() => { setReferenceDataUrl(null); setReferenceName(''); }}
-                      className="mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-black text-slate-500 transition hover:bg-slate-800 hover:text-slate-300"
-                    >
-                      <X size={14} /> Remover referencia
-                    </button>
-                  )}
+                  {references.length > 0 ? (
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Referencias anexadas">
+                      {references.map((reference, index) => (
+                        <div key={reference.id} className="group relative overflow-hidden rounded-2xl border border-slate-700 bg-slate-950/60">
+                          <img src={reference.dataUrl} alt={`Referencia ${index + 1}: ${reference.name}`} className="aspect-square w-full object-cover" />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent px-3 pb-2 pt-8">
+                            <p className="truncate text-[11px] font-black text-slate-200">{index + 1}. {reference.name}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))}
+                            className="absolute right-2 top-2 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-red-300/25 bg-slate-950/85 text-red-300 transition hover:bg-red-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                            aria-label={`Remover referencia ${reference.name}`}
+                            title="Remover referencia"
+                          >
+                            <X size={17} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="rounded-3xl border border-cyan-400/20 bg-cyan-400/[0.04] p-5">
@@ -1124,7 +1137,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                         <ImagePlus size={30} />
                       </span>
                       <h3 className="mt-5 text-lg font-black text-slate-300">A previa aparecera aqui</h3>
-                      <p className="mx-auto mt-2 max-w-sm text-sm font-semibold leading-6 text-slate-600">Escreva o briefing, adicione uma referencia se quiser e clique em gerar.</p>
+                      <p className="mx-auto mt-2 max-w-sm text-sm font-semibold leading-6 text-slate-600">Escreva o briefing, adicione referencias se quiser e clique em gerar.</p>
                     </div>
                   )}
                 </div>

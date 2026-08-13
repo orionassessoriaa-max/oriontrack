@@ -128,6 +128,15 @@ Retorne JSON: {"variations":[{"angle":"","headline":"","legenda":"","visual_prom
   return fallbackCopies(job).slice(0, job.quantidade);
 }
 
+function parseReferenceUrls(value?: string | null) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 5);
+  } catch { /* A single legacy URL is handled below. */ }
+  return [value];
+}
+
 async function fetchReference(url?: string | null) {
   if (!url || !url.startsWith('http')) return null;
   const response = await fetch(url);
@@ -141,7 +150,12 @@ async function fetchReference(url?: string | null) {
   return { bytes, contentType };
 }
 
-async function generateImage(job: JobRow, variation: CopyVariation, reference: Awaited<ReturnType<typeof fetchReference>>) {
+async function fetchReferences(value?: string | null) {
+  return (await Promise.all(parseReferenceUrls(value).map((url) => fetchReference(url))))
+    .filter((reference): reference is NonNullable<Awaited<ReturnType<typeof fetchReference>>> => Boolean(reference));
+}
+
+async function generateImage(job: JobRow, variation: CopyVariation, references: Awaited<ReturnType<typeof fetchReferences>>) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
   const model = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
@@ -152,16 +166,19 @@ Direcao visual: ${variation.visual_prompt}.
 Briefing adicional: ${job.briefing || 'nenhum'}.
 Nao inclua preco, desconto, telefone, carencia, rede, cobertura ou promessa nao fornecida.
 Texto em portugues do Brasil, ortografia revisada, leitura clara no celular, sem mockup e sem marca d'agua.
-${reference ? 'Use a imagem enviada como referencia de composicao, sem copiar marcas ou informacoes nao confirmadas.' : ''}`;
+${references.length ? `Use as ${references.length} imagens enviadas como referencias de composicao, combinando apenas elementos coerentes e sem copiar marcas ou informacoes nao confirmadas.` : ''}`;
   let response: Response;
-  if (reference) {
+  if (references.length) {
     const form = new FormData();
     form.append('model', model);
     form.append('prompt', prompt);
     form.append('size', '1024x1024');
     form.append('quality', 'medium');
     form.append('output_format', 'png');
-    form.append('image[]', new Blob([Uint8Array.from(reference.bytes).buffer as ArrayBuffer], { type: reference.contentType }), 'referencia.png');
+    references.forEach((reference, index) => {
+      const extension = reference.contentType === 'image/jpeg' ? 'jpg' : reference.contentType.split('/')[1];
+      form.append('image[]', new Blob([Uint8Array.from(reference.bytes).buffer as ArrayBuffer], { type: reference.contentType }), `referencia-${index + 1}.${extension}`);
+    });
     response = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
@@ -283,10 +300,10 @@ export async function processCreativeGenerationJob(jobId: string) {
   const job = claimed as JobRow;
   try {
     await ensureBucket();
-    const [folderPath, variations, reference] = await Promise.all([
+    const [folderPath, variations, references] = await Promise.all([
       resolveFolderPath(job),
       generateCopies(job),
-      fetchReference(job.referencia_url),
+      fetchReferences(job.referencia_url),
     ]);
     if (job.estrategia_id) {
       await supabaseAdmin
@@ -310,7 +327,7 @@ export async function processCreativeGenerationJob(jobId: string) {
       if (currentJob?.status === 'cancelado') return;
 
       const variation = variations[index] || fallbackCopies(job)[index % 4];
-      const bytes = await generateImage(job, variation, reference);
+      const bytes = await generateImage(job, variation, references);
       const { data: jobAfterGeneration } = await supabaseAdmin
         .from('criativo_generation_jobs')
         .select('status')

@@ -21,7 +21,12 @@ function parseReference(dataUrl: string) {
   return { contentType: match[1], bytes };
 }
 
-function buildCreativePrompt(userPrompt: string, hasReference: boolean) {
+function parseReferences(value: unknown) {
+  const dataUrls = Array.isArray(value) ? value.slice(0, 5) : [];
+  return dataUrls.map((dataUrl) => parseReference(String(dataUrl || ''))).filter(Boolean) as NonNullable<ReturnType<typeof parseReference>>[];
+}
+
+function buildCreativePrompt(userPrompt: string, referenceCount: number) {
   return `Crie um criativo publicitario profissional para redes sociais, com acabamento premium e leitura clara em tela de celular.
 
 Briefing do gestor:
@@ -33,7 +38,7 @@ Regras:
 - Nao invente precos, coberturas, descontos, telefones, regulamentacoes ou beneficios que nao estejam no briefing.
 - Priorize hierarquia visual, contraste, espaco de respiro e uma chamada principal curta.
 - Revise cuidadosamente a ortografia de todo texto visivel.
-${hasReference ? '- Use a imagem anexada como referencia visual e de composicao, preservando somente os elementos que fizerem sentido no briefing.' : ''}`;
+${referenceCount ? `- Use as ${referenceCount} imagens anexadas como referencias visuais e de composicao. Combine somente os elementos que fizerem sentido no briefing e nao trate nenhuma referencia como a arte final.` : ''}`;
 }
 
 export async function POST(request: Request) {
@@ -51,7 +56,11 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const prompt = String(body.prompt || '').trim();
     const size = String(body.size || '1024x1024');
-    const reference = parseReference(String(body.reference_data_url || ''));
+    const references = parseReferences(
+      Array.isArray(body.reference_data_urls)
+        ? body.reference_data_urls
+        : body.reference_data_url ? [body.reference_data_url] : [],
+    );
 
     if (prompt.length < 12 || prompt.length > 8000) {
       return NextResponse.json({ error: 'Descreva o criativo em 12 a 3.000 caracteres.' }, { status: 400 });
@@ -66,20 +75,23 @@ export async function POST(request: Request) {
     }
 
     const model = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
-    const fullPrompt = buildCreativePrompt(prompt, Boolean(reference));
+    const fullPrompt = buildCreativePrompt(prompt, references.length);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 150_000);
     let response: Response;
 
     try {
-      if (reference) {
+      if (references.length) {
         const form = new FormData();
         form.append('model', model);
         form.append('prompt', fullPrompt);
         form.append('size', size);
         form.append('quality', 'medium');
         form.append('output_format', 'png');
-        form.append('image[]', new Blob([reference.bytes], { type: reference.contentType }), 'referencia.png');
+        references.forEach((reference, index) => {
+          const extension = reference.contentType === 'image/jpeg' ? 'jpg' : reference.contentType.split('/')[1];
+          form.append('image[]', new Blob([reference.bytes], { type: reference.contentType }), `referencia-${index + 1}.${extension}`);
+        });
         response = await fetch('https://api.openai.com/v1/images/edits', {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}` },
@@ -125,7 +137,7 @@ export async function POST(request: Request) {
     await writeAuditLog(request, guard.profile, {
       action: 'creative.ai.generate',
       entity_type: 'criativo_asset',
-      metadata: { model, size, has_reference: Boolean(reference) },
+      metadata: { model, size, reference_count: references.length },
     });
 
     return NextResponse.json({
