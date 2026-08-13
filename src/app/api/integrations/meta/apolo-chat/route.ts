@@ -60,6 +60,26 @@ function requestedCampaignTokens(messages: ChatMessage[]) {
     .filter(Boolean);
 }
 
+function recentUserRequest(messages: ChatMessage[]) {
+  return messages
+    .filter((message) => message.role === 'user')
+    .slice(-4)
+    .map((message) => plainMessageContent(message.content))
+    .join(' ');
+}
+
+function requestsAdInExistingDestination(messages: ChatMessage[]) {
+  const request = recentUserRequest(messages);
+  const asksForAd = /(?:criar|subir|adicionar|colocar).{0,50}(?:anuncio|anúncio|criativo)/i.test(request);
+  const mentionsExistingDestination = /(?:campanha|conjunto).{0,40}(?:existente|destino)|dentro de (?:uma |um )?(?:campanha|conjunto)|campanha d[aoe]/i.test(request);
+  return asksForAd && mentionsExistingDestination;
+}
+
+function hasExistingDestination(draft: any) {
+  if (!draft?.campaign?.existing_id) return false;
+  return Array.isArray(draft.adsets) && draft.adsets.some((adset: any) => adset?.existing_id || adset?.adset_id);
+}
+
 function enforceExistingDestination(draft: any, tree: unknown, messages: ChatMessage[]) {
   if (!draft || !Array.isArray(tree)) return draft;
   const tokens = requestedCampaignTokens(messages);
@@ -179,6 +199,7 @@ Nunca execute uma alteracao neste chat. Gere apenas um plano para revisao humana
 Se o gestor pedir para subir um criativo em uma campanha ou conjunto que ja existe na estrutura recebida, nao crie outra campanha nem outro conjunto. Localize o item exato na estrutura e use campaign.existing_id e adsets[].existing_id com os IDs reais recebidos no contexto. Nesse caso, apenas ads[] representa o item novo e deve sair PAUSED. Um nome entre colchetes como [ORION][AMIL] e uma referencia de busca da campanha existente, nao uma ordem para criar campanha com esse nome.
 O Google Drive esta disponivel para buscar arquivos quando estiver configurado no ambiente. Nunca diga que encontrou um arquivo sem receber a confirmacao do servidor; se a busca nao retornar exatamente um arquivo, explique isso ao gestor.
 Quando "criativo_drive_selecionado" estiver preenchido, o arquivo ja foi validado pelo servidor. Use obrigatoriamente esse criativo no plano solicitado e nunca diga que falta uma imagem ou referencia.
+Quando o gestor ja tiver pedido para criar ou subir um anuncio, nunca pergunte novamente qual acao ele deseja realizar. Se o criativo estiver selecionado e faltar o destino, pergunte somente o nome exato da campanha e do conjunto. Nao crie campanha ou conjunto novo para completar essa informacao.
 O gestor tambem pode pedir a criacao de uma ou varias pastas/lotes de criativos. Quando houver dados suficientes, liste cada pedido em creative_requests com operadora, regiao, quantidade e briefing. Quantidade padrao 4 e maxima 20. Nao gere nem publique ainda: a interface perguntara se ele possui um modelo de referencia.
 Responda sempre em JSON valido neste formato: {"reply":"resposta curta e clara","draft":null,"creative_requests":[]}.
 Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ads, actions, missing_info e human_review_checklist.
@@ -250,6 +271,14 @@ daily_budget deve ser informado em reais (exemplo: 50 para R$ 50,00). Nunca inve
       .filter((item: { operadora: string; regiao: string }) => item.operadora && item.regiao);
     if (creativeRequests.length) {
       parsed.reply = `${String(parsed.reply || 'Entendi os lotes solicitados.').trim()}\n\nVocê tem algum modelo de referência para esses criativos?`;
+    }
+    if (
+      selectedDriveFile
+      && requestsAdInExistingDestination(messages)
+      && !hasExistingDestination(parsed.draft)
+    ) {
+      parsed.reply = `Entendi: criar um anuncio pausado usando o criativo "${selectedDriveFile.name}" em uma estrutura existente. Informe o nome exato da campanha e do conjunto de destino.`;
+      parsed.draft = null;
     }
     let drive: any = { configured: isGoogleDriveConfigured(), status: 'not_requested' };
     const prompt = String(last.content || '');
