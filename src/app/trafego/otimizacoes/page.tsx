@@ -157,6 +157,9 @@ export default function OtimizacoesPage() {
   const [apoloMessages, setApoloMessages] = useState<ApoloMessage[]>(initialApoloMessages());
   const [apoloInput, setApoloInput] = useState('');
   const [apoloBusy, setApoloBusy] = useState(false);
+  const [adOrderOpen, setAdOrderOpen] = useState(false);
+  const [adOrderCampaignId, setAdOrderCampaignId] = useState('');
+  const [adOrderAdsetId, setAdOrderAdsetId] = useState('');
   const [pendingCreativeRequests, setPendingCreativeRequests] = useState<CreativeRequest[]>([]);
   const [queuingCreatives, setQueuingCreatives] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -171,6 +174,8 @@ export default function OtimizacoesPage() {
     () => Array.from(new Set(tree.map((campaign) => campaign.budget_type).filter((mode): mode is 'ABO' | 'CBO' => Boolean(mode)))),
     [tree]
   );
+  const adOrderCampaign = tree.find((campaign) => campaign.id === adOrderCampaignId) || null;
+  const adOrderAdsets = adOrderCampaign?.adsets || [];
 
   function chooseApoloAction(prompt: string) {
     setApoloInput(prompt);
@@ -198,6 +203,9 @@ export default function OtimizacoesPage() {
     setApoloMessages(initialApoloMessages(brokerage));
     setApoloInput('');
     setApoloBusy(false);
+    setAdOrderOpen(false);
+    setAdOrderCampaignId('');
+    setAdOrderAdsetId('');
     setPendingCreativeRequests([]);
     setQueuingCreatives(false);
     setUploadingCreative(false);
@@ -398,8 +406,8 @@ export default function OtimizacoesPage() {
     setDraftExecution(null);
   }
 
-  async function sendApoloMessage() {
-    const text = apoloInput.trim();
+  async function sendApoloMessage(messageOverride?: string) {
+    const text = String(messageOverride || apoloInput).trim();
     if (!text || !selected?.meta_ad_account_id || apoloBusy) return;
     const selectedSnapshot = selected;
     const metricsSnapshot = total;
@@ -473,6 +481,23 @@ export default function OtimizacoesPage() {
     setApoloMessages((current) => [...current, { role: 'assistant', content: payload.reply }]);
     setPendingCreativeRequests(Array.isArray(payload.creative_requests) ? payload.creative_requests : []);
     if (payload.draft) setOptimizationDraft(normalizeOptimizationDraft(payload.draft));
+  }
+
+  function openAdOrder() {
+    setDraftError(null);
+    setAdOrderOpen(true);
+    setAdOrderCampaignId('');
+    setAdOrderAdsetId('');
+  }
+
+  function confirmAdOrder() {
+    const campaign = tree.find((item) => item.id === adOrderCampaignId);
+    const adset = campaign?.adsets.find((item) => item.id === adOrderAdsetId);
+    if (!selectedDriveFile || !campaign || !adset) return;
+    setAdOrderOpen(false);
+    void sendApoloMessage(
+      `Confirmar pedido: criar somente um anuncio novo e pausado na campanha [${campaign.name}], no conjunto "${adset.name}", usando o criativo selecionado "${selectedDriveFile.name}". Nao criar nem alterar campanha ou conjunto.`,
+    );
   }
 
   async function confirmApoloCreativeRequests(useReference: boolean) {
@@ -963,7 +988,8 @@ export default function OtimizacoesPage() {
                               {
                                 label: 'Criar anúncio',
                                 icon: <FilePlus2 size={13} />,
-                                prompt: 'Quero criar um novo anúncio dentro de uma campanha e conjunto existentes. Pergunte o destino e use o criativo selecionado, se houver.',
+                                prompt: '',
+                                guidedAction: 'create-ad',
                               },
                               {
                                 label: 'Alterar orçamento',
@@ -974,7 +1000,7 @@ export default function OtimizacoesPage() {
                               <button
                                 key={action.label}
                                 type="button"
-                                onClick={() => chooseApoloAction(action.prompt)}
+                                onClick={() => action.guidedAction === 'create-ad' ? openAdOrder() : chooseApoloAction(action.prompt)}
                                 disabled={!selected || apoloBusy}
                                 className="tf-no-lift inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-bold transition disabled:opacity-40"
                                 style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}
@@ -996,6 +1022,64 @@ export default function OtimizacoesPage() {
                             </button>
                           </div>
                         ) : null}
+                        {adOrderOpen ? (
+                          <div className="mb-2 rounded-xl border p-3" style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-accent-border)' }}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-black" style={{ color: 'var(--tf-ink)' }}>Criar anúncio em estrutura existente</p>
+                                <p className="mt-1 text-[11px] leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>Escolha o destino. O anúncio será montado como pausado para revisão.</p>
+                              </div>
+                              <button type="button" onClick={() => setAdOrderOpen(false)} className="tf-no-lift inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-mute)' }} aria-label="Cancelar pedido">
+                                <X size={15} />
+                              </button>
+                            </div>
+                            {!selectedDriveFile ? (
+                              <div role="alert" className="mt-3 rounded-lg border px-3 py-2 text-[11px] font-bold" style={{ background: 'var(--tf-warn-soft)', borderColor: 'var(--tf-warn-border)', color: 'var(--tf-warn)' }}>
+                                Selecione primeiro o criativo na área Criativos Orion.
+                              </div>
+                            ) : null}
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              <label className="block">
+                                <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Campanha de destino</span>
+                                <select
+                                  value={adOrderCampaignId}
+                                  onChange={(event) => { setAdOrderCampaignId(event.target.value); setAdOrderAdsetId(''); }}
+                                  className="mt-1 min-h-11 w-full rounded-lg border px-3 text-xs font-bold outline-none focus:ring-2"
+                                  style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }}
+                                >
+                                  <option value="">Selecione a campanha</option>
+                                  {tree.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                                </select>
+                              </label>
+                              <label className="block">
+                                <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>Conjunto de destino</span>
+                                <select
+                                  value={adOrderAdsetId}
+                                  onChange={(event) => setAdOrderAdsetId(event.target.value)}
+                                  disabled={!adOrderCampaignId}
+                                  className="mt-1 min-h-11 w-full rounded-lg border px-3 text-xs font-bold outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-45"
+                                  style={{ background: 'var(--tf-surface-2)', borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }}
+                                >
+                                  <option value="">Selecione o conjunto</option>
+                                  {adOrderAdsets.map((adset) => <option key={adset.id} value={adset.id}>{adset.name}</option>)}
+                                </select>
+                              </label>
+                            </div>
+                            <div className="mt-3 flex flex-wrap justify-end gap-2">
+                              <button type="button" onClick={() => setAdOrderOpen(false)} className="tf-no-lift min-h-11 rounded-lg border px-4 text-xs font-bold" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-soft)' }}>Cancelar</button>
+                              <button
+                                type="button"
+                                onClick={confirmAdOrder}
+                                disabled={!selectedDriveFile || !adOrderCampaignId || !adOrderAdsetId || apoloBusy}
+                                className="tf-no-lift inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+                                style={{ background: 'var(--tf-accent)' }}
+                              >
+                                {apoloBusy ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
+                                Confirmar pedido
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                         <div className="flex items-end gap-2">
                           <textarea
                             ref={apoloInputRef}
@@ -1007,7 +1091,7 @@ export default function OtimizacoesPage() {
                           />
                           <button
                             type="button"
-                            onClick={sendApoloMessage}
+                            onClick={() => void sendApoloMessage()}
                             disabled={apoloBusy || uploadingCreative || !selected || !apoloInput.trim()}
                             className="tf-no-lift inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg px-3 text-xs font-bold text-white transition disabled:opacity-50"
                             style={{ background: 'var(--tf-accent)' }}
