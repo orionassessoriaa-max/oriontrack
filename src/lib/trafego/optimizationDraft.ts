@@ -53,6 +53,17 @@ function parseTargeting(value: unknown) {
   return undefined;
 }
 
+function normalizeCampaignObjective(value: unknown) {
+  const requestedObjective = text(value).toUpperCase();
+
+  // LEAD_GENERATION was the legacy campaign objective. Meta's ODAX campaign
+  // endpoint now expects OUTCOME_LEADS, while LEAD_GENERATION remains valid as
+  // the ad set optimization goal.
+  if (requestedObjective === 'LEAD_GENERATION') return 'OUTCOME_LEADS';
+
+  return requestedObjective || 'OUTCOME_TRAFFIC';
+}
+
 export function normalizeOptimizationDraft(value: unknown): NormalizedOptimizationDraft {
   const source = isRecord(value) ? value : {};
   const campaignSource = isRecord(source.campaign)
@@ -60,8 +71,7 @@ export function normalizeOptimizationDraft(value: unknown): NormalizedOptimizati
     : text(source.campaign)
       ? { name: text(source.campaign) }
       : {};
-  const requestedObjective = text(campaignSource.objective).toUpperCase();
-  const objective = requestedObjective || 'OUTCOME_TRAFFIC';
+  const objective = normalizeCampaignObjective(campaignSource.objective);
   const campaign: OptimizationDraftRecord = {
     ...campaignSource,
     name: text(campaignSource.name) || `[ORION] Campanha | ${new Date().toISOString().slice(0, 10)}`,
