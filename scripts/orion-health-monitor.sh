@@ -8,11 +8,122 @@ LOG_DIR="${ORION_MONITOR_LOG_DIR:-/var/log/oriontrack-monitor}"
 LOG_FILE="${LOG_DIR}/health.jsonl"
 STATE_FILE="${LOG_DIR}/last-state"
 HEARTBEAT_FILE="${LOG_DIR}/last-heartbeat"
+INCIDENT_STARTED_FILE="${LOG_DIR}/incident-started-at"
+NOTIFICATION_LOG="${LOG_DIR}/notifications.jsonl"
 INCIDENT_DIR="${LOG_DIR}/incidents"
 TMP_DIR="/tmp/oriontrack-monitor"
+ALERT_PHONE="${ORION_MONITOR_WHATSAPP:-5561984409328}"
+APOLO_INSTANCE="${ORION_MONITOR_APOLO_INSTANCE:-apolo_master_sender}"
 
 mkdir -p "$LOG_DIR" "$INCIDENT_DIR" "$TMP_DIR"
 touch "$LOG_FILE"
+
+send_apolo_alert() {
+  local title="$1"
+  local message="$2"
+
+  ALERT_TITLE="$title" ALERT_MESSAGE="$message" ALERT_PHONE="$ALERT_PHONE" \
+  APOLO_INSTANCE="$APOLO_INSTANCE" NOTIFICATION_LOG="$NOTIFICATION_LOG" python3 - <<'PY'
+import json, os, sys, urllib.error, urllib.request
+from datetime import datetime, timezone
+
+base_url = os.environ.get("UAZAPI_URL", "").rstrip("/")
+global_token = os.environ.get("UAZAPI_GLOBAL_TOKEN", "")
+instance_name = os.environ.get("APOLO_INSTANCE", "apolo_master_sender")
+phone = "".join(ch for ch in os.environ.get("ALERT_PHONE", "") if ch.isdigit())
+log_file = os.environ.get("NOTIFICATION_LOG", "/var/log/oriontrack-monitor/notifications.jsonl")
+
+result = {
+    "timestamp": datetime.now(timezone.utc).isoformat(),
+    "instance": instance_name,
+    "phone_suffix": phone[-4:] if phone else None,
+    "status": "failed",
+}
+
+def write_result():
+    with open(log_file, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+if not base_url or not global_token or not phone:
+    result["reason"] = "Configuracao UAZAPI ou telefone ausente."
+    write_result()
+    sys.exit(1)
+
+def request_json(url, method="GET", headers=None, body=None, timeout=15):
+    payload = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(url, data=payload, method=method, headers=headers or {})
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        raw = response.read().decode("utf-8", errors="replace")
+        return json.loads(raw) if raw else {}
+
+def as_array(payload):
+    if isinstance(payload, list): return payload
+    for key in ("data", "instances", "response"):
+        if isinstance(payload.get(key), list): return payload[key]
+    return []
+
+def instance_name_of(item):
+    return str(item.get("name") or item.get("instanceName") or item.get("instance") or item.get("session") or item.get("sessionkey") or "")
+
+def instance_token_of(item):
+    credential = item.get("credential") if isinstance(item.get("credential"), dict) else {}
+    return str(item.get("token") or item.get("instanceToken") or item.get("apikey") or item.get("apiKey") or item.get("key") or credential.get("token") or "").strip()
+
+def connected(item):
+    nested = item.get("instance") if isinstance(item.get("instance"), dict) else {}
+    state = str(item.get("status") or item.get("state") or item.get("connectionStatus") or nested.get("status") or "").lower()
+    if any(word in state for word in ("disconnect", "close", "offline", "logout")): return False
+    return item.get("connected") is True or item.get("loggedIn") is True or state in ("open", "connected", "online", "loggedin")
+
+try:
+    instances = request_json(
+        f"{base_url}/instance/all",
+        headers={"Content-Type": "application/json", "admintoken": global_token},
+    )
+    matches = [item for item in as_array(instances) if instance_name_of(item).lower() == instance_name.lower()]
+    selected = next((item for item in matches if connected(item)), matches[0] if matches else None)
+    token = instance_token_of(selected or {})
+    if not token:
+        raise RuntimeError("Instancia Apolo sem token ou nao encontrada.")
+
+    alert_message = os.environ.get("ALERT_MESSAGE", "").replace("\\n", "\n")
+    text = f"*{os.environ.get('ALERT_TITLE', 'Alerta do CRM')}*\n\n{alert_message}\n\n_Apolo Notificador - Orion Track_"
+    request_json(
+        f"{base_url}/send/text",
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "token": token,
+            "sessionkey": instance_name,
+            "session": instance_name,
+        },
+        body={"number": phone, "text": text},
+    )
+    result["status"] = "success"
+    write_result()
+except Exception as error:
+    result["reason"] = str(error)[:240]
+    write_result()
+    sys.exit(1)
+PY
+}
+
+format_duration() {
+  local total_seconds="$1"
+  if [ "$total_seconds" -lt 60 ]; then
+    printf '%ss' "$total_seconds"
+  elif [ "$total_seconds" -lt 3600 ]; then
+    printf '%sm %ss' $((total_seconds / 60)) $((total_seconds % 60))
+  else
+    printf '%sh %sm' $((total_seconds / 3600)) $(((total_seconds % 3600) / 60))
+  fi
+}
+
+if [ "${1:-}" = "--test-alert" ]; then
+  send_apolo_alert "Monitor do CRM ativado" "O monitor independente do Orion Track foi configurado com sucesso. Este numero recebera avisos de instabilidade, queda e recuperacao do sistema." 
+  echo "Mensagem de teste enviada pelo Apolo Notificador."
+  exit 0
+fi
 
 write_event() {
   local event="$1"
@@ -98,6 +209,27 @@ while true; do
   if [ -n "$event" ]; then
     write_event "$event" "$state" "$health_code" "$deep_code" "$health_time" "$deep_time" "${replicas:-missing}" "${dns_result:-unresolved}" "$deep_body"
     printf '%s' "$now_epoch" > "$HEARTBEAT_FILE"
+  fi
+
+  if [ "$event" = "state_change" ]; then
+    local_time="$(date '+%d/%m/%Y %H:%M:%S %Z')"
+    if [ "$state" = "UP" ] && { [ "$previous_state" = "DOWN" ] || [ "$previous_state" = "DEGRADED" ]; }; then
+      incident_started="$(cat "$INCIDENT_STARTED_FILE" 2>/dev/null || printf '%s' "$now_epoch")"
+      duration_seconds=$((now_epoch - incident_started))
+      duration_text="$(format_duration "$duration_seconds")"
+      send_apolo_alert "CRM normalizado" "O Orion Track voltou a operar normalmente.\n\nHorario da recuperacao: ${local_time}\nDuracao aproximada: ${duration_text}\nAplicacao: HTTP ${health_code}\nSupabase/Auth e banco: HTTP ${deep_code}\nDocker: ${replicas:-missing}" || true
+      rm -f "$INCIDENT_STARTED_FILE"
+    elif [ "$state" = "DOWN" ]; then
+      if [ "$previous_state" = "UP" ] || [ "$previous_state" = "UNKNOWN" ]; then
+        printf '%s' "$now_epoch" > "$INCIDENT_STARTED_FILE"
+      fi
+      send_apolo_alert "CRM fora do ar" "O monitor independente detectou indisponibilidade no Orion Track.\n\nHorario: ${local_time}\nAplicacao: HTTP ${health_code}\nDiagnostico Supabase: HTTP ${deep_code}\nDocker: ${replicas:-missing}\nDNS: ${dns_result:-unresolved}\n\nO incidente foi registrado automaticamente na VPS." || true
+    elif [ "$state" = "DEGRADED" ]; then
+      if [ "$previous_state" = "UP" ] || [ "$previous_state" = "UNKNOWN" ]; then
+        printf '%s' "$now_epoch" > "$INCIDENT_STARTED_FILE"
+      fi
+      send_apolo_alert "CRM com instabilidade" "O CRM esta respondendo, mas o diagnostico de Auth ou banco identificou falha ou lentidao.\n\nHorario: ${local_time}\nAplicacao: HTTP ${health_code} (${health_time}s)\nSupabase/Auth e banco: HTTP ${deep_code} (${deep_time}s)\nDocker: ${replicas:-missing}\n\nO incidente foi registrado automaticamente na VPS." || true
+    fi
   fi
 
   if [ "$event" = "state_change" ] && [ "$state" != "UP" ]; then

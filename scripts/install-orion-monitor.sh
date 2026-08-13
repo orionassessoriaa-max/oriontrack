@@ -22,6 +22,8 @@ ORION_MONITOR_URL=https://track.orionassessoriaa.com.br
 ORION_MONITOR_SERVICE=oriontrack_oriontrack
 ORION_MONITOR_INTERVAL=60
 ORION_MONITOR_LOG_DIR=/var/log/oriontrack-monitor
+ORION_MONITOR_WHATSAPP=5561984409328
+ORION_MONITOR_APOLO_INSTANCE=apolo_master_sender
 EOF
 
 cat > /etc/systemd/system/oriontrack-monitor.service <<'EOF'
@@ -32,6 +34,7 @@ Wants=network-online.target docker.service
 
 [Service]
 Type=simple
+EnvironmentFile=-/root/oriontrack/.env.production
 EnvironmentFile=/etc/oriontrack-monitor.env
 ExecStart=/usr/local/bin/orion-health-monitor
 Restart=always
@@ -55,7 +58,8 @@ cat > /etc/logrotate.d/oriontrack-monitor <<'EOF'
 EOF
 
 systemctl daemon-reload
-systemctl enable --now oriontrack-monitor.service
+systemctl enable oriontrack-monitor.service
+systemctl restart oriontrack-monitor.service
 systemctl --no-pager --full status oriontrack-monitor.service
 
 echo "Monitor instalado. Eventos: /var/log/oriontrack-monitor/health.jsonl"
