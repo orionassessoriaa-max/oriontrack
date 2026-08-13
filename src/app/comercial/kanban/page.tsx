@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useCommercial } from "@/components/commercial/CommercialShell";
+import CohortPeriodFilter from "@/components/commercial/CohortPeriodFilter";
 import CommercialLeadModal from "@/components/commercial/CommercialLeadModal";
 import CommercialLeadDetailsModal from "@/components/commercial/CommercialLeadDetailsModal";
 import {
@@ -31,10 +32,9 @@ import {
   type CommercialStage,
 } from "@/lib/comercial";
 import { getCommercialMqlLevel } from "@/lib/commercialQualification";
+import type { CommercialDatePreset } from "@/lib/commercialPeriod";
 import { supabase } from "@/lib/supabase/client";
 
-type DatePreset =
-  "todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado";
 type LeadInteraction = {
   id: string;
   comentario: string | null;
@@ -46,12 +46,6 @@ type LeadInteraction = {
   created_at: string;
 };
 
-function localDateValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 function localDateTimeValue(value: string | Date = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -106,22 +100,6 @@ function formatDaniloCnpj(lead: CommercialLead) {
   return "CNPJ: sim";
 }
 
-function getPresetRange(preset: DatePreset) {
-  const today = new Date();
-  const end = new Date(today);
-  const start = new Date(today);
-  if (preset === "ontem") {
-    start.setDate(start.getDate() - 1);
-    end.setDate(end.getDate() - 1);
-  }
-  if (preset === "7dias") start.setDate(start.getDate() - 6);
-  if (preset === "30dias") start.setDate(start.getDate() - 29);
-  if (preset === "mes") start.setDate(1);
-  return preset === "todos"
-    ? { start: "", end: "" }
-    : { start: localDateValue(start), end: localDateValue(end) };
-}
-
 export default function CommercialKanbanPage() {
   const {
     api,
@@ -138,7 +116,7 @@ export default function CommercialKanbanPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sdrFilter, setSdrFilter] = useState("todos");
-  const [datePreset, setDatePreset] = useState<DatePreset>("todos");
+  const [datePreset, setDatePreset] = useState<CommercialDatePreset>("todos");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -194,12 +172,15 @@ export default function CommercialKanbanPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const payload = await api("/api/comercial/leads");
+      const params = new URLSearchParams();
+      if (dateStart) params.set("start", dateStart);
+      if (dateEnd) params.set("end", dateEnd);
+      const payload = await api(`/api/comercial/leads?${params.toString()}`);
       setLeads(payload.leads || []);
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, dateEnd, dateStart]);
   const loadStages = useCallback(async () => {
     try {
       const payload = await api("/api/comercial/stages");
@@ -208,6 +189,7 @@ export default function CommercialKanbanPage() {
       /* fallback ate a migration ser aplicada */
     }
   }, [api]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     void load();
     void loadStages();
@@ -256,19 +238,14 @@ export default function CommercialKanbanPage() {
           .join(" ")
           .toLowerCase()
           .includes(search.toLowerCase());
-        const date = new Date(lead.data_entrada).getTime();
-        const matchesStart =
-          !dateStart || date >= new Date(`${dateStart}T00:00:00`).getTime();
-        const matchesEnd =
-          !dateEnd || date <= new Date(`${dateEnd}T23:59:59`).getTime();
         const matchesSdr =
           sdrFilter === "todos" ||
           (sdrFilter === "sem_responsavel"
             ? !lead.sdr_id
             : lead.sdr_id === sdrFilter);
-        return matchesSearch && matchesStart && matchesEnd && matchesSdr;
+        return matchesSearch && matchesSdr;
       }),
-    [leads, search, dateStart, dateEnd, sdrFilter],
+    [leads, search, sdrFilter],
   );
   const grouped = useMemo(
     () =>
@@ -709,15 +686,6 @@ export default function CommercialKanbanPage() {
     }
   }
 
-  function changeDatePreset(next: DatePreset) {
-    setDatePreset(next);
-    if (next !== "personalizado") {
-      const range = getPresetRange(next);
-      setDateStart(range.start);
-      setDateEnd(range.end);
-    }
-  }
-
   return (
     <div
       className={`kh-kanban-page ${canViewCommercialFinancials ? "" : "kh-hide-commercial-financials"} ${canEditCommercial ? "" : "kh-read-only"}`}
@@ -758,42 +726,17 @@ export default function CommercialKanbanPage() {
               </select>
             </label>
           )}
-          <label className="kh-date-preset">
-            <CalendarDays size={15} />
-            <select
-              value={datePreset}
-              onChange={(event) =>
-                changeDatePreset(event.target.value as DatePreset)
-              }
-              aria-label="Período"
-            >
-              <option value="todos">Todo o período</option>
-              <option value="hoje">Hoje</option>
-              <option value="ontem">Ontem</option>
-              <option value="7dias">Últimos 7 dias</option>
-              <option value="30dias">Últimos 30 dias</option>
-              <option value="mes">Este mês</option>
-              <option value="personalizado">Personalizado</option>
-            </select>
-          </label>
-          {datePreset === "personalizado" && (
-            <>
-              <input
-                className="kh-input kh-date-filter"
-                type="date"
-                value={dateStart}
-                onChange={(event) => setDateStart(event.target.value)}
-                aria-label="Data inicial"
-              />
-              <input
-                className="kh-input kh-date-filter"
-                type="date"
-                value={dateEnd}
-                onChange={(event) => setDateEnd(event.target.value)}
-                aria-label="Data final"
-              />
-            </>
-          )}
+          <CohortPeriodFilter
+            compact
+            preset={datePreset}
+            start={dateStart}
+            end={dateEnd}
+            onApply={(period) => {
+              setDatePreset(period.preset);
+              setDateStart(period.start);
+              setDateEnd(period.end);
+            }}
+          />
           <button
             className="kh-icon-button"
             onClick={() => void load()}

@@ -1,14 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleDollarSign, RefreshCw, Target, UsersRound, WalletCards } from 'lucide-react';
+import { Activity, ArrowUpRight, CalendarDays, Check, CircleDollarSign, RefreshCw, Target, UsersRound, WalletCards } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
+import CohortPeriodFilter from '@/components/commercial/CohortPeriodFilter';
 import { currency, percent } from '@/lib/comercial';
+import { commercialPresetRange, type CommercialDatePreset } from '@/lib/commercialPeriod';
 
 type Overview = {
   metrics: Record<string, number>;
   trend: Array<{ date: string; leads: number; mql: number; meetings: number; sales: number; revenue: number; investment: number }>;
-  weeklyMeetings?: Array<{ date: string; meetings: number }>;
+  statusBreakdown?: Array<{ status: string; total: number }>;
   team: Array<{ id: string; role: string; name: string; photo: string | null; leads: number; mql: number; meetings: number; sales: number; revenue: number }>;
   states: Array<{ state: string; leads: number; active: number }>;
   campaigns?: string[];
@@ -45,21 +47,6 @@ function rgba(hex: string, alpha: number) {
   return `rgba(${Number.parseInt(value.slice(0, 2), 16)}, ${Number.parseInt(value.slice(2, 4), 16)}, ${Number.parseInt(value.slice(4, 6), 16)}, ${alpha})`;
 }
 
-function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
-function startOfMonth() { const date = new Date(); return isoDate(new Date(date.getFullYear(), date.getMonth(), 1)); }
-type DatePreset = 'todos' | 'hoje' | 'ontem' | '7dias' | '30dias' | 'mes' | 'mes_passado' | 'personalizado';
-function getPresetRange(preset: DatePreset) {
-  const today = new Date(); const start = new Date(today); const end = new Date(today);
-  if (preset === 'ontem') { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); }
-  if (preset === '7dias') start.setDate(start.getDate() - 6);
-  if (preset === '30dias') start.setDate(start.getDate() - 29);
-  if (preset === 'mes') start.setDate(1);
-  if (preset === 'mes_passado') return { start: isoDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)), end: isoDate(new Date(today.getFullYear(), today.getMonth(), 0)) };
-  return preset === 'todos' ? { start: '', end: '' } : { start: isoDate(start), end: isoDate(end) };
-}
-
-function shortDate(value: string) { return value ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR') : ''; }
-
 function TrendChart({ rows }: { rows: Overview['trend'] }) {
   const width = 860;
   const height = 220;
@@ -86,14 +73,10 @@ function TrendChart({ rows }: { rows: Overview['trend'] }) {
   );
 }
 
-function WeeklyMeetingsChart({ rows }: { rows: Array<{ date: string; meetings: number }> }) {
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - (6 - index));
-    const key = isoDate(date); const row = rows.find((item) => item.date === key);
-    return { key, label: date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''), value: row?.meetings || 0 };
-  });
-  const max = Math.max(1, ...days.map((day) => day.value));
-  return <div className="kh-weekly-chart" aria-label="Reuniões agendadas nos últimos sete dias"><div className="kh-weekly-y"><span>{max}</span><span>{Math.ceil(max / 2)}</span><span>0</span></div><div className="kh-weekly-bars">{days.map((day) => <div className="kh-weekly-day" key={day.key}><div className="kh-weekly-track"><i style={{ height: `${day.value ? Math.max(10, (day.value / max) * 100) : 3}%` }}><b>{day.value}</b></i></div><span>{day.label}</span></div>)}</div></div>;
+function CohortStatusChart({ rows }: { rows: Array<{ status: string; total: number }> }) {
+  const max = Math.max(1, ...rows.map((row) => row.total));
+  if (!rows.length) return <div className="kh-chart-empty"><Activity size={24} /><span>Nenhum lead entrou na safra selecionada.</span></div>;
+  return <div className="kh-cohort-status-list">{rows.map((row) => <div key={row.status}><div><span>{row.status}</span><strong>{row.total}</strong></div><i><b style={{ width: `${Math.max(4, (row.total / max) * 100)}%` }} /></i></div>)}</div>;
 }
 
 function StateMapFlat({ states, selected, onSelect }: { states: Overview['states']; selected: string | null; onSelect: (state: string) => void }) {
@@ -128,24 +111,26 @@ function StateMap3D({ states, selected, onSelect }: { states: Overview['states']
 
 export default function CommercialDashboardPage() {
   const { api, role, currentProfileId, canViewCommercialFinancials } = useCommercial();
-  const [start, setStart] = useState(startOfMonth());
-  const [end, setEnd] = useState(isoDate(new Date()));
-  const [datePreset, setDatePreset] = useState<DatePreset>('mes');
+  const initialPeriod = useMemo(() => commercialPresetRange('mes'), []);
+  const [start, setStart] = useState(initialPeriod.start);
+  const [end, setEnd] = useState(initialPeriod.end);
+  const [datePreset, setDatePreset] = useState<CommercialDatePreset>('mes');
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
-  const [periodOpen, setPeriodOpen] = useState(false);
-  const [draftPreset, setDraftPreset] = useState<DatePreset>(datePreset);
-  const [draftStart, setDraftStart] = useState(start);
-  const [draftEnd, setDraftEnd] = useState(end);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const campaigns = selectedCampaigns.map((campaign) => encodeURIComponent(campaign)).join(',');
-      setData(await api(`/api/comercial/overview?start=${start}&end=${end}${campaigns ? `&campaigns=${campaigns}` : ''}`));
+      const campaigns = selectedCampaigns.join(',');
+      const params = new URLSearchParams();
+      if (start) params.set('start', start);
+      if (end) params.set('end', end);
+      if (!start && !end) params.set('all', 'true');
+      if (campaigns) params.set('campaigns', campaigns);
+      setData(await api(`/api/comercial/overview?${params.toString()}`));
     }
     catch (err) { setError(err instanceof Error ? err.message : 'Erro ao carregar indicadores.'); }
     finally { setLoading(false); }
@@ -154,21 +139,6 @@ export default function CommercialDashboardPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
 
-  function openPeriod() {
-    setDraftPreset(datePreset); setDraftStart(start); setDraftEnd(end); setPeriodOpen((current) => !current);
-  }
-
-  function choosePreset(next: DatePreset) {
-    setDraftPreset(next);
-    if (next !== 'personalizado') { const range = getPresetRange(next); setDraftStart(range.start); setDraftEnd(range.end); }
-  }
-
-  function applyPeriod() {
-    setDatePreset(draftPreset); setStart(draftStart); setEnd(draftEnd); setPeriodOpen(false);
-  }
-
-  const periodText = datePreset === 'todos' ? 'Todo o periodo' : `${({ hoje: 'Hoje', ontem: 'Ontem', '7dias': 'Ultimos 7 dias', '30dias': 'Ultimos 30 dias', mes: 'Este mes', mes_passado: 'Mes passado', personalizado: 'Periodo personalizado', todos: 'Todo o periodo' } as Record<DatePreset, string>)[datePreset]} (${shortDate(start)} a ${shortDate(end)})`;
-
   function toggleCampaign(campaign: string) {
     setSelectedCampaigns((current) => current.includes(campaign) ? current.filter((item) => item !== campaign) : [...current, campaign]);
   }
@@ -176,8 +146,8 @@ export default function CommercialDashboardPage() {
   const m = data?.metrics || {};
   const selectedStateData = data?.states?.find((item) => item.state === selectedState);
   const primary = [
-    ...(canViewCommercialFinancials ? [{ label: 'Investimento', value: currency(m.investment), helper: 'No período selecionado', icon: WalletCards, tone: 'blue' }] : []),
-    { label: 'Leads', value: String(m.leads || 0), helper: `${m.qualified || 0} qualificados`, icon: UsersRound, tone: 'cyan' },
+    ...(canViewCommercialFinancials ? [{ label: 'Investimento da safra', value: currency(m.investment), helper: 'No período de entrada selecionado', icon: WalletCards, tone: 'blue' }] : []),
+    { label: 'Leads da safra', value: String(m.leads || 0), helper: `${m.qualified || 0} qualificados`, icon: UsersRound, tone: 'cyan' },
     ...(canViewCommercialFinancials ? [{ label: 'Custo por lead', value: currency(m.cpl), helper: `MQL ${currency(m.costPerMql)}`, icon: CircleDollarSign, tone: 'green' }] : []),
     { label: 'Reuniões', value: String(m.scheduled || 0), helper: `${m.realized || 0} realizadas`, icon: CalendarDays, tone: 'yellow' },
     { label: 'Clientes fechados', value: String(m.closed || 0), helper: canViewCommercialFinancials ? `CAC ${currency(m.cac)}` : 'Vendas no período', icon: Target, tone: 'violet' },
@@ -203,13 +173,16 @@ export default function CommercialDashboardPage() {
       <header className="kh-page-head">
         <div><div className="kh-eyebrow">Performance comercial</div><h1>Visão geral</h1><p>Da entrada do lead ao faturamento, com os números reais da operação.</p></div>
         <div className="kh-actions kh-date-actions">
-            <div className="kh-period-control">
-              <button type="button" className="kh-period-trigger" onClick={openPeriod} aria-expanded={periodOpen}><CalendarDays size={15} /><strong>{periodText}</strong><ChevronDown size={14} /></button>
-              {periodOpen && <div className="kh-period-popover">
-                <div className="kh-period-quick"><span>Atalhos rapidos</span>{([['todos', 'Todo o periodo'], ['hoje', 'Hoje'], ['ontem', 'Ontem'], ['7dias', 'Ultimos 7 dias'], ['30dias', 'Ultimos 30 dias'], ['mes', 'Este mes'], ['mes_passado', 'Mes passado']] as Array<[DatePreset, string]>).map(([value, label]) => <button type="button" key={value} className={draftPreset === value ? 'active' : ''} onClick={() => choosePreset(value)}>{label}</button>)}</div>
-                <div className="kh-period-custom"><span>Periodo personalizado</span><label>Data de inicio<input type="date" value={draftStart} onChange={(event) => { setDraftPreset('personalizado'); setDraftStart(event.target.value); }} /></label><label>Data de fim<input type="date" value={draftEnd} onChange={(event) => { setDraftPreset('personalizado'); setDraftEnd(event.target.value); }} /></label><div className="kh-period-footer"><button type="button" onClick={() => setPeriodOpen(false)}>Cancelar</button><button type="button" className="primary" onClick={applyPeriod}>Aplicar</button></div></div>
-              </div>}
-            </div>
+            <CohortPeriodFilter
+              preset={datePreset}
+              start={start}
+              end={end}
+              onApply={(period) => {
+                setDatePreset(period.preset);
+                setStart(period.start);
+                setEnd(period.end);
+              }}
+            />
             {canViewCommercialFinancials && <details className="kh-campaign-filter"><summary>Campanhas{selectedCampaigns.length ? ` (${selectedCampaigns.length})` : ''}</summary><div className="kh-campaign-menu"><button type="button" onClick={() => setSelectedCampaigns([])}>Todas as campanhas</button>{(data?.campaigns || []).map((campaign) => <label key={campaign}><input type="checkbox" checked={selectedCampaigns.includes(campaign)} onChange={() => toggleCampaign(campaign)} /><span>{selectedCampaigns.includes(campaign) && <Check size={12} />}{campaign}</span></label>)}{!data?.campaigns?.length && <small>Nenhuma campanha encontrada.</small>}</div></details>}
           <button className="kh-icon-button" type="button" onClick={() => void load()} aria-label="Atualizar indicadores"><RefreshCw size={17} className={loading ? 'kh-spin' : ''} /></button>
         </div>
@@ -223,7 +196,7 @@ export default function CommercialDashboardPage() {
 
       <section className="kh-dashboard-grid">
         <article className="kh-panel kh-revenue-panel">
-          <div className="kh-panel-header"><div><span>Resultado no período</span><h2>Receita e evolução comercial</h2></div><div className="kh-chart-legend"><span className="l1">Leads</span><span className="l2">MQL</span><span className="l3">Reuniões</span><span className="l4">Vendas</span></div></div>
+          <div className="kh-panel-header"><div><span>Status atual da safra</span><h2>Receita e evolução dos leads selecionados</h2></div><div className="kh-chart-legend"><span className="l1">Leads</span><span className="l2">MQL</span><span className="l3">Reuniões</span><span className="l4">Vendas</span></div></div>
           <div className="kh-revenue-hero"><div><span>Receita fechada</span><strong>{currency(m.revenue)}</strong></div><div><span>Em negociação</span><strong>{currency(m.negotiation)}</strong></div><ArrowUpRight size={26} /></div>
           <TrendChart rows={data?.trend || []} />
         </article>
@@ -235,7 +208,7 @@ export default function CommercialDashboardPage() {
       </section>
 
       <section className="kh-live-grid">
-        <article className="kh-panel kh-live-meetings"><div className="kh-panel-header"><div><span>Atualização automática a cada 30 segundos</span><h2>Reuniões da semana</h2></div><span className="kh-live-dot">Ao vivo</span></div><WeeklyMeetingsChart rows={data?.weeklyMeetings || []} /></article>
+        <article className="kh-panel kh-live-meetings"><div className="kh-panel-header"><div><span>Posição atual do lote selecionado</span><h2>Saldo da safra por etapa</h2></div><span className="kh-live-dot">Safra</span></div><CohortStatusChart rows={data?.statusBreakdown || []} /></article>
         <article className="kh-panel kh-origin-panel"><div className="kh-panel-header"><div><span>Origem geográfica dos leads</span><h2>Leads por estado</h2></div><span>{data?.states?.reduce((sum, item) => sum + item.leads, 0) || 0} mapeados</span></div><StateMap3D states={data?.states || []} selected={selectedState} onSelect={setSelectedState} />{selectedStateData ? <div className="kh-state-detail"><strong>{selectedStateData.state}</strong><span>{selectedStateData.leads} leads recebidos</span><b>{selectedStateData.active} ativos na Orion</b></div> : <div className="kh-state-hint">Selecione um estado para ver os leads recebidos e os que continuam ativos.</div>}</article>
       </section>
 

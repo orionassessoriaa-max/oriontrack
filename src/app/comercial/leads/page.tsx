@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CalendarDays,
   CheckSquare2,
   Download,
   Edit3,
@@ -16,8 +15,10 @@ import {
   X,
 } from "lucide-react";
 import { useCommercial } from "@/components/commercial/CommercialShell";
+import CohortPeriodFilter from "@/components/commercial/CohortPeriodFilter";
 import CommercialLeadModal from "@/components/commercial/CommercialLeadModal";
 import { COMMERCIAL_STATUSES, type CommercialLead } from "@/lib/comercial";
+import type { CommercialDatePreset } from "@/lib/commercialPeriod";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("pt-BR", {
@@ -25,32 +26,6 @@ function formatDate(value: string) {
     month: "2-digit",
     year: "numeric",
   });
-}
-
-type DatePreset =
-  "todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado";
-
-function localDateValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getPresetRange(preset: DatePreset) {
-  const today = new Date();
-  const end = new Date(today);
-  const start = new Date(today);
-  if (preset === "ontem") {
-    start.setDate(start.getDate() - 1);
-    end.setDate(end.getDate() - 1);
-  }
-  if (preset === "7dias") start.setDate(start.getDate() - 6);
-  if (preset === "30dias") start.setDate(start.getDate() - 29);
-  if (preset === "mes") start.setDate(1);
-  return preset === "todos"
-    ? { start: "", end: "" }
-    : { start: localDateValue(start), end: localDateValue(end) };
 }
 
 export default function CommercialLeadsPage() {
@@ -64,7 +39,7 @@ export default function CommercialLeadsPage() {
   const [leads, setLeads] = useState<CommercialLead[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("todos");
-  const [datePreset, setDatePreset] = useState<DatePreset>("todos");
+  const [datePreset, setDatePreset] = useState<CommercialDatePreset>("todos");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -94,12 +69,15 @@ export default function CommercialLeadsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const payload = await api("/api/comercial/leads");
+      const params = new URLSearchParams();
+      if (dateStart) params.set("start", dateStart);
+      if (dateEnd) params.set("end", dateEnd);
+      const payload = await api(`/api/comercial/leads?${params.toString()}`);
       setLeads(payload.leads || []);
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, dateEnd, dateStart]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -129,19 +107,12 @@ export default function CommercialLeadsPage() {
           .map((value) => String(value || ""))
           .join(" ")
           .toLowerCase();
-        const date = new Date(lead.data_entrada).getTime();
-        const matchesStart =
-          !dateStart || date >= new Date(`${dateStart}T00:00:00`).getTime();
-        const matchesEnd =
-          !dateEnd || date <= new Date(`${dateEnd}T23:59:59`).getTime();
         return (
           (!search || haystack.includes(search.toLowerCase())) &&
-          (status === "todos" || lead.status === status) &&
-          matchesStart &&
-          matchesEnd
+          (status === "todos" || lead.status === status)
         );
       }),
-    [leads, search, status, dateStart, dateEnd],
+    [leads, search, status],
   );
 
   const columnCount =
@@ -298,15 +269,6 @@ export default function CommercialLeadsPage() {
     URL.revokeObjectURL(link.href);
   }
 
-  function changeDatePreset(next: DatePreset) {
-    setDatePreset(next);
-    if (next !== "personalizado") {
-      const range = getPresetRange(next);
-      setDateStart(range.start);
-      setDateEnd(range.end);
-    }
-  }
-
   return (
     <div className={`kh-commercial-leads-page${canEditCommercial ? "" : " kh-read-only"}`}>
       <header className="kh-page-head">
@@ -364,42 +326,17 @@ export default function CommercialLeadsPage() {
             placeholder="Buscar nome, telefone ou e-mail..."
           />
         </div>
-        <label className="kh-date-preset">
-          <CalendarDays size={15} />
-          <select
-            value={datePreset}
-            onChange={(event) =>
-              changeDatePreset(event.target.value as DatePreset)
-            }
-            aria-label="Período"
-          >
-            <option value="todos">Todo o período</option>
-            <option value="hoje">Hoje</option>
-            <option value="ontem">Ontem</option>
-            <option value="7dias">Últimos 7 dias</option>
-            <option value="30dias">Últimos 30 dias</option>
-            <option value="mes">Este mês</option>
-            <option value="personalizado">Personalizado</option>
-          </select>
-        </label>
-        {datePreset === "personalizado" && (
-          <>
-            <input
-              className="kh-input kh-date-filter"
-              type="date"
-              value={dateStart}
-              onChange={(event) => setDateStart(event.target.value)}
-              aria-label="Data inicial"
-            />
-            <input
-              className="kh-input kh-date-filter"
-              type="date"
-              value={dateEnd}
-              onChange={(event) => setDateEnd(event.target.value)}
-              aria-label="Data final"
-            />
-          </>
-        )}
+        <CohortPeriodFilter
+          compact
+          preset={datePreset}
+          start={dateStart}
+          end={dateEnd}
+          onApply={(period) => {
+            setDatePreset(period.preset);
+            setDateStart(period.start);
+            setDateEnd(period.end);
+          }}
+        />
         <select
           className="kh-select"
           value={status}
