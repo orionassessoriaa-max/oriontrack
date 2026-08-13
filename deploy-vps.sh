@@ -23,6 +23,20 @@ DEPLOY_TAG="$(date -u +%Y%m%d%H%M%S)"
 ORIONTRACK_IMAGE="oriontrack:${DEPLOY_TAG}"
 export ORIONTRACK_IMAGE
 
+DEPLOY_LOG_DIR="/var/log/oriontrack-monitor"
+DEPLOY_LOG_FILE="${DEPLOY_LOG_DIR}/deploys.jsonl"
+DEPLOY_FINISHED=0
+mkdir -p "$DEPLOY_LOG_DIR"
+printf '{"timestamp":"%s","event":"deploy_started","image":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ORIONTRACK_IMAGE" >> "$DEPLOY_LOG_FILE"
+
+log_failed_deploy() {
+  exit_code="$?"
+  if [ "$DEPLOY_FINISHED" -eq 0 ]; then
+    printf '{"timestamp":"%s","event":"deploy_failed","image":"%s","exit_code":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ORIONTRACK_IMAGE" "$exit_code" >> "$DEPLOY_LOG_FILE"
+  fi
+}
+trap log_failed_deploy EXIT
+
 echo "[1/3] Construindo imagem ${ORIONTRACK_IMAGE}..."
 docker build \
   --build-arg NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" \
@@ -75,4 +89,7 @@ if [ "$DEPLOY_OK" -ne 1 ]; then
 fi
 
 docker service ps "$SERVICE_NAME" --filter desired-state=running
+DEPLOY_FINISHED=1
+printf '{"timestamp":"%s","event":"deploy_completed","image":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ORIONTRACK_IMAGE" >> "$DEPLOY_LOG_FILE"
+trap - EXIT
 echo "Deploy concluido sem interrupcao. Imagem ativa: $ORIONTRACK_IMAGE"
