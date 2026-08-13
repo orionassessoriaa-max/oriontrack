@@ -404,6 +404,20 @@ export async function POST(request: Request) {
       throw insertError;
     }
 
+    // Uma resposta inbound nova e persistida reabre a conversa arquivada.
+    if (!fromMe && currentConversation?.status === 'resolvida') {
+      const { error: reopenError } = await supabaseAdmin
+        .from('whatsapp_conversas')
+        .update({
+          status: 'aberta',
+          ultima_mensagem_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', currentConversation.id);
+      if (reopenError) throw reopenError;
+      conversation = { ...conversation, status: 'aberta' };
+    }
+
     if (!fromMe && lead?.id) {
       try {
         if (hasAudio && !audioTranscript) {

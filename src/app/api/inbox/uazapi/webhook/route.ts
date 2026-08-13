@@ -1461,6 +1461,21 @@ export async function POST(request: Request) {
       throw insertError;
     }
 
+    // A conversa encerrada funciona como arquivo. Somente uma nova mensagem
+    // inbound realmente registrada a devolve para a fila ativa.
+    if (!fromMe && currentConversation?.status === 'resolvida') {
+      const { error: reopenError } = await supabaseAdmin
+        .from('whatsapp_conversas')
+        .update({
+          status: 'aberta',
+          ultima_mensagem_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', currentConversation.id);
+      if (reopenError) throw reopenError;
+      conversation = { ...conversation, status: 'aberta' };
+    }
+
     if (fromMe && lead?.id && !commercialMode) {
       after(async () => {
         try {
