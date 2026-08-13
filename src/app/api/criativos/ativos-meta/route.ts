@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { fetchWithTimeout } from '@/lib/meta/fetchWithTimeout';
+import { canUseCreativeFolder } from '@/lib/creatives/access';
+import type { ApiProfile } from '@/lib/api/security';
 
 type MetaAd = {
   id?: string | number;
@@ -80,19 +82,24 @@ export async function GET(request: Request) {
 
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('id, tipo_usuario, corretor_id, email, email_real')
+      .select('id, tipo_usuario, corretor_id, email, email_real, nome, status')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (!profile || !['admin', 'corretor', 'corretor_admin', 'corretor_membro'].includes(profile.tipo_usuario)) {
+    if (!profile || !['admin', 'gestor_trafego', 'designer', 'account_manager', 'corretor', 'corretor_admin', 'corretor_membro', 'corretor_integrante', 'corretor_parceiro'].includes(profile.tipo_usuario)) {
       return NextResponse.json({ error: 'Acesso restrito ao cliente.' }, { status: 403 });
     }
     const requestedCorretorId = validUuid(new URL(request.url).searchParams.get('corretor_id'));
-    const corretorId = profile.tipo_usuario === 'admin'
+    const gestorId = validUuid(new URL(request.url).searchParams.get('gestor_id'));
+    const isStaff = ['admin', 'gestor_trafego', 'designer', 'account_manager'].includes(profile.tipo_usuario);
+    const corretorId = isStaff
       ? requestedCorretorId
       : await resolveCorretorId(profile);
-    if (profile.tipo_usuario === 'admin' && !corretorId) {
+    if (isStaff && !corretorId) {
       return NextResponse.json({ error: 'Selecione um corretor para visualizar os criativos ativos.' }, { status: 400 });
+    }
+    if (isStaff && corretorId && !(await canUseCreativeFolder(profile as ApiProfile, corretorId, gestorId))) {
+      return NextResponse.json({ error: 'Esta concessionaria esta fora do escopo deste gestor.' }, { status: 403 });
     }
     if (!corretorId) {
       return NextResponse.json({

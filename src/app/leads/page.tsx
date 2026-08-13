@@ -18,7 +18,8 @@ import {
   Trash2,
   Trophy,
   Users,
-  Plus
+  Plus,
+  ImageIcon
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadStatus } from '@/types';
@@ -145,6 +146,24 @@ type TeamMember = {
   tipo_usuario?: string | null;
 };
 
+type ActiveMetaCreative = {
+  id: string;
+  ad_name: string;
+  creative_name?: string | null;
+  title?: string | null;
+  body?: string | null;
+  image_url?: string | null;
+  thumbnail_url?: string | null;
+  status: string;
+};
+
+type AdPreviewState = {
+  adName: string;
+  loading: boolean;
+  creative: ActiveMetaCreative | null;
+  error: string | null;
+} | null;
+
 const EMPTY_MANUAL_LEAD = {
   nome: '',
   telefone: '',
@@ -251,6 +270,8 @@ export default function BrokerLeadsPage() {
   const [resolvedCorretorIds, setResolvedCorretorIds] = useState<string[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
+  const [adPreview, setAdPreview] = useState<AdPreviewState>(null);
+  const activeMetaCreativesRef = useRef<ActiveMetaCreative[] | null>(null);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
   const usesMyLeadsByDefault = isConexaoCorretora(profile?.nome_empresa);
   const canAssignTeamLeads = !isTeamMemberProfile && (
@@ -275,6 +296,54 @@ export default function BrokerLeadsPage() {
 
   function openLeadInCrm(leadId: string) {
     window.location.href = `/crm?lead=${encodeURIComponent(leadId)}`;
+  }
+
+  async function openAdPreview(adName: string) {
+    if (!adName || adName === '-') return;
+    setAdPreview({ adName, loading: true, creative: null, error: null });
+
+    try {
+      let creatives = activeMetaCreativesRef.current;
+      if (!creatives) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) throw new Error('Sua sessao expirou. Entre novamente para visualizar o criativo.');
+
+        const params = new URLSearchParams();
+        if (brokerCorretorId) params.set('corretor_id', brokerCorretorId);
+        const response = await fetch(`/api/criativos/ativos-meta${params.size ? `?${params.toString()}` : ''}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Nao foi possivel consultar os anuncios ativos.');
+        if (!payload.account_connected) throw new Error('A conta Meta desta concessionaria ainda nao esta vinculada.');
+        creatives = Array.isArray(payload.creatives) ? payload.creatives : [];
+        activeMetaCreativesRef.current = creatives;
+      }
+
+      const availableCreatives = creatives || [];
+      const normalizedAdName = normalizeText(adName).trim();
+      const creative = availableCreatives.find((item) => normalizeText(item.ad_name).trim() === normalizedAdName)
+        || availableCreatives.find((item) => {
+          const candidate = normalizeText(item.ad_name).trim();
+          return normalizedAdName.length >= 8 && (candidate.includes(normalizedAdName) || normalizedAdName.includes(candidate));
+        })
+        || null;
+
+      setAdPreview({
+        adName,
+        loading: false,
+        creative,
+        error: creative ? null : 'Este anuncio nao foi encontrado entre os anuncios ativos da conta Meta.',
+      });
+    } catch (previewError) {
+      setAdPreview({
+        adName,
+        loading: false,
+        creative: null,
+        error: previewError instanceof Error ? previewError.message : 'Nao foi possivel abrir o criativo.',
+      });
+    }
   }
 
   useEffect(() => {
@@ -1381,7 +1450,20 @@ export default function BrokerLeadsPage() {
                     </td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadCampaign(lead)}</td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadAdset(lead)}</td>
-                    <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">{leadAd(lead)}</td>
+                    <td className="border border-slate-100 px-3 py-3 text-xs font-bold text-slate-600">
+                      {leadAd(lead) === '-' ? '-' : (
+                        <button
+                          type="button"
+                          data-row-action
+                          onClick={() => openAdPreview(leadAd(lead))}
+                          className="inline-flex max-w-[240px] items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-left font-black text-cyan-800 transition-colors hover:border-cyan-400 hover:bg-cyan-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/30"
+                          title={`Visualizar criativo do anuncio ${leadAd(lead)}`}
+                        >
+                          <ImageIcon size={14} className="shrink-0" />
+                          <span className="truncate">{leadAd(lead)}</span>
+                        </button>
+                      )}
+                    </td>
                     <td className="border border-slate-100 px-3 py-3 text-xs font-medium leading-relaxed text-slate-600">
                       <textarea
                         defaultValue={cleanObservacoes || ''}
@@ -1699,6 +1781,91 @@ export default function BrokerLeadsPage() {
                 {importing ? <Loader2 className="animate-spin" size={20} /> : <><Upload size={18} /> Importar leads</>}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {adPreview && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Criativo do anuncio ${adPreview.adName}`}
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setAdPreview(null);
+          }}
+        >
+          <div className="relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-cyan-500/30 bg-[#071521] shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-[#071521]/95 px-6 py-5 backdrop-blur sm:px-8">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-400">Anuncio ativo na Meta</p>
+                <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">{adPreview.adName}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdPreview(null)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Fechar visualizacao"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 sm:p-8">
+              {adPreview.loading ? (
+                <div className="flex min-h-80 flex-col items-center justify-center gap-4 text-slate-300">
+                  <Loader2 size={38} className="animate-spin text-cyan-400" />
+                  <p className="text-sm font-bold">Buscando o criativo na conta Meta...</p>
+                </div>
+              ) : adPreview.error ? (
+                <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-amber-400/20 bg-amber-400/5 px-6 text-center">
+                  <AlertCircle size={34} className="mb-4 text-amber-400" />
+                  <p className="max-w-lg text-sm font-bold leading-relaxed text-amber-100">{adPreview.error}</p>
+                </div>
+              ) : adPreview.creative ? (
+                <div className="grid gap-7 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+                  <div className="flex min-h-80 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70">
+                    {adPreview.creative.image_url || adPreview.creative.thumbnail_url ? (
+                      <img
+                        src={adPreview.creative.image_url || adPreview.creative.thumbnail_url || ''}
+                        alt={`Criativo do anuncio ${adPreview.creative.ad_name}`}
+                        className="max-h-[68vh] w-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 px-6 text-center text-slate-400">
+                        <ImageIcon size={40} />
+                        <p className="text-sm font-bold">A Meta nao retornou uma imagem para este anuncio.</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-5">
+                    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Status</span>
+                      <p className="mt-1 text-sm font-black text-emerald-100">Ativo</p>
+                    </div>
+                    {adPreview.creative.title && (
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Titulo</span>
+                        <p className="mt-2 text-lg font-black leading-snug text-white">{adPreview.creative.title}</p>
+                      </div>
+                    )}
+                    {adPreview.creative.body && (
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Texto do anuncio</span>
+                        <p className="mt-2 whitespace-pre-line text-sm font-medium leading-relaxed text-slate-300">{adPreview.creative.body}</p>
+                      </div>
+                    )}
+                    {adPreview.creative.creative_name && (
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Nome do criativo</span>
+                        <p className="mt-2 text-sm font-bold text-slate-300">{adPreview.creative.creative_name}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       )}
