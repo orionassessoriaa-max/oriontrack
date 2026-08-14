@@ -163,7 +163,7 @@ export default function AtendimentoAnalisePage() {
             <Loader2 className="animate-spin text-cyan-400" size={24} /> Carregando concessionárias...
           </div>
         ) : (
-          <div className="analysis-board-scroll flex min-h-[600px] gap-4 overflow-x-auto pb-5 [scrollbar-gutter:stable]">
+          <div className="analysis-board-scroll flex gap-4 overflow-x-auto pb-5 [scrollbar-gutter:stable]">
             {STAGES.map((stage, stageIndex) => {
               const stageItems = filtered.filter((item) => item.etapa === stage.key);
               const Icon = stage.icon;
@@ -175,7 +175,7 @@ export default function AtendimentoAnalisePage() {
                     const item = items.find((entry) => entry.key === dragging);
                     if (item) void move(item, stage.key);
                   }}
-                  className={`analysis-stage flex min-w-[278px] max-w-[300px] flex-1 flex-col overflow-hidden rounded-2xl border bg-slate-900/70 transition-[border-color,background-color,transform] duration-150 ${dragging ? 'border-cyan-700/70' : 'border-slate-800'}`}
+                  className={`analysis-stage flex h-[632px] min-w-[278px] max-w-[300px] flex-1 flex-col overflow-hidden rounded-2xl border bg-slate-900/70 transition-[border-color,background-color,transform] duration-150 ${dragging ? 'border-cyan-700/70' : 'border-slate-800'}`}
                 >
                   <header className="border-b border-slate-800 px-4 py-4" style={{ boxShadow: `inset 0 3px 0 ${stage.color}` }}>
                     <div className="flex items-center justify-between gap-3">
@@ -192,14 +192,14 @@ export default function AtendimentoAnalisePage() {
                     </div>
                   </header>
 
-                  <div className="flex-1 space-y-3 overflow-y-auto p-3">
+                  <div className="analysis-stage-list scrollbar-none flex-1 space-y-3 overflow-y-auto p-3">
                     {stageItems.map((item) => (
                       <article
                         key={item.key}
                         draggable={canMove}
                         onDragStart={() => canMove && setDragging(item.key)}
                         onDragEnd={() => setDragging(null)}
-                        className={`analysis-card group rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 shadow-sm transition-[transform,border-color,box-shadow,opacity] duration-150 ${canMove ? 'cursor-grab hover:-translate-y-0.5 hover:border-slate-600 hover:shadow-lg active:cursor-grabbing' : ''} ${moving === item.key ? 'opacity-50' : ''}`}
+                        className={`analysis-card group min-h-[120px] rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 shadow-sm transition-[transform,border-color,box-shadow,opacity] duration-150 ${canMove ? 'cursor-grab hover:-translate-y-0.5 hover:border-slate-600 hover:shadow-lg active:cursor-grabbing' : ''} ${moving === item.key ? 'opacity-50' : ''}`}
                       >
                         <div className="flex items-start gap-3">
                           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-300">

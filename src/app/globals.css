@@ -325,6 +325,43 @@
   border-radius: 999px;
 }
 
+/* Quadro de temperatura: quatro cards por etapa, rolagem vertical discreta
+   dentro da coluna e guia horizontal sempre identificavel no rodape. */
+.analysis-stage-list {
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.analysis-stage-list::-webkit-scrollbar {
+  display: none;
+}
+
+.analysis-board-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #16889a #07131f;
+}
+
+.analysis-board-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+
+.analysis-board-scroll::-webkit-scrollbar-track {
+  border: 1px solid #152437;
+  border-radius: 999px;
+  background: #07131f;
+}
+
+.analysis-board-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid #07131f;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0b5f6c, #1aa0b2);
+}
+
+.analysis-board-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #0d7483, #20bed0);
+}
+
 .glass {
   @apply bg-white/80 backdrop-blur-md border border-white/20;
 }
