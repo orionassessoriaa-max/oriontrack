@@ -796,6 +796,26 @@ export async function POST(request: Request) {
       }
     }
 
+    // A concessionária pode possuir vários acessos de corretor. A importação
+    // continua sendo vinculada ao cadastro escolhido, mas a verificação de
+    // duplicidade precisa considerar todos os acessos da mesma empresa.
+    let duplicateScopeCorretorIds = [targetCorretorId];
+    if (corretor.nome_empresa) {
+      const { data: brokerageBrokers, error: brokerageBrokersError } = await supabaseAdmin
+        .from('corretores')
+        .select('id')
+        .eq('nome_empresa', corretor.nome_empresa);
+
+      if (brokerageBrokersError) {
+        return NextResponse.json({ error: brokerageBrokersError.message }, { status: 500 });
+      }
+
+      duplicateScopeCorretorIds = Array.from(new Set([
+        targetCorretorId,
+        ...(brokerageBrokers || []).map((broker) => String(broker.id)).filter(Boolean),
+      ]));
+    }
+
     const { csvUrl, editUrl, gid, spreadsheetId, isDirectCsv } = parseSheetLink(sheetUrl);
     const sources = isDirectCsv
       ? [{ csvUrl, gid, name: '' }]
@@ -919,11 +939,11 @@ export async function POST(request: Request) {
     const existingKeys = new Set<string>();
     const existingIdentity = new Map<string, any>();
     const previousOwnerByContact = new Map<string, any>();
-    const existingColumns = 'id, corretor_id, data_entrada, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, valor_negociacao, operadora_negociacao, status, responsavel_membro_id, responsavel_profile_id';
+    const existingColumns = 'id, corretor_id, data_entrada, created_at, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, custo_plano_atual, investimento, cidade, operadora, utm_source, utm_medium, utm_campaign, utm_term, utm_content, valor_negociacao, operadora_negociacao, status, responsavel_membro_id, responsavel_profile_id';
     const firstExistingPage = await supabaseAdmin
       .from('leads')
       .select(existingColumns, { count: 'exact' })
-      .eq('corretor_id', targetCorretorId)
+      .in('corretor_id', duplicateScopeCorretorIds)
       .order('id', { ascending: true })
       .range(0, IMPORT_EXISTING_PAGE_SIZE - 1);
 
@@ -941,7 +961,7 @@ export async function POST(request: Request) {
       return supabaseAdmin
         .from('leads')
         .select(existingColumns)
-        .eq('corretor_id', targetCorretorId)
+        .in('corretor_id', duplicateScopeCorretorIds)
         .order('id', { ascending: true })
         .range(from, from + IMPORT_EXISTING_PAGE_SIZE - 1);
     }));
@@ -957,10 +977,20 @@ export async function POST(request: Request) {
     ];
 
     allExistingLeads.forEach((lead) => {
-        existingKeys.add(buildLeadDuplicateKey(lead));
-        existingIdentity.set(buildLeadIdentityKey(lead), lead);
+        const dealershipScopedLead = { ...lead, corretor_id: targetCorretorId };
+        existingKeys.add(buildLeadDuplicateKey(dealershipScopedLead));
+
+        const identityKey = buildLeadIdentityKey(dealershipScopedLead);
+        const currentIdentity = existingIdentity.get(identityKey);
+        if (
+          !currentIdentity
+          || new Date(lead.created_at || 0).getTime() < new Date(currentIdentity.created_at || 0).getTime()
+        ) {
+          existingIdentity.set(identityKey, lead);
+        }
+
         if (lead.responsavel_membro_id || lead.responsavel_profile_id) {
-          const contactKey = buildLeadContactKey(lead);
+          const contactKey = buildLeadContactKey(dealershipScopedLead);
           const current = previousOwnerByContact.get(contactKey);
           if (!current || new Date(lead.data_entrada || 0).getTime() > new Date(current.data_entrada || 0).getTime()) {
             previousOwnerByContact.set(contactKey, lead);
