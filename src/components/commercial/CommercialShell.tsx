@@ -22,6 +22,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  Orbit,
   Target,
   Table2,
   UsersRound,
@@ -93,8 +94,13 @@ const baseNavigation = [
   { href: "/comercial/historico", label: "Historico", icon: ClipboardList },
   { href: "/comercial/tarefas", label: "Tarefas", icon: CheckSquare2 },
   { href: "/comercial/metas", label: "Metas", icon: Target },
+  { href: "/comercial/sala", label: "Sala", icon: Orbit },
   { href: "/comercial/ia", label: "IA", icon: Bot },
 ];
+
+// A sala e uma cabine em tela cheia: ela usa o contexto comercial, mas sem a
+// barra de navegacao por cima da janela.
+const IMMERSIVE_PREFIX = "/comercial/sala";
 
 export default function CommercialShell({
   children,
@@ -336,27 +342,34 @@ export default function CommercialShell({
     if (actualProfile?.id) window.sessionStorage.setItem(DUAL_OPERATION_ACCESS_KEY, actualProfile.id);
   };
 
+  const contextValue = {
+    role,
+    canViewCommercialFinancials,
+    canViewCommercialLeadQualification,
+    canEditCommercial,
+    members,
+    currentProfileId,
+    canViewMetaInvestment,
+    isDevOps,
+    loading,
+    error,
+    api,
+    refreshAccess,
+    canViewCommercialAsUser,
+    viewingCommercialProfileId,
+    startViewingCommercialMember,
+    stopViewingCommercialMember,
+  };
+
+  if (pathname.startsWith(IMMERSIVE_PREFIX))
+    return (
+      <CommercialContext.Provider value={contextValue}>
+        {children}
+      </CommercialContext.Provider>
+    );
+
   return (
-    <CommercialContext.Provider
-      value={{
-        role,
-        canViewCommercialFinancials,
-        canViewCommercialLeadQualification,
-        canEditCommercial,
-        members,
-        currentProfileId,
-        canViewMetaInvestment,
-        isDevOps,
-        loading,
-        error,
-        api,
-        refreshAccess,
-        canViewCommercialAsUser,
-        viewingCommercialProfileId,
-        startViewingCommercialMember,
-        stopViewingCommercialMember,
-      }}
-    >
+    <CommercialContext.Provider value={contextValue}>
       <div className="kh">
         <div className="kh-workspace">
           <header className="kh-topbar">
