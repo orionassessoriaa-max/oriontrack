@@ -492,7 +492,7 @@ function parseDate(value: string) {
     return safeIso(year, month, day, hour, minute, second);
   }
 
-  const iso = dateText.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})?$/);
+  const iso = dateText.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?(?:\.\d{1,3})?(Z|[+-]\d{2}:?\d{2})?$/);
   if (iso) {
     const year = Number(iso[1]);
     const month = Number(iso[2]);
@@ -500,6 +500,22 @@ function parseDate(value: string) {
     const hour = Number(iso[4] || 12);
     const minute = Number(iso[5] || 0);
     const second = Number(iso[6] || 0);
+
+    // Timestamps do Meta/Google com Z ou offset já representam um instante
+    // absoluto. Não some novamente o fuso de Brasília durante a importação.
+    if (iso[7]) {
+      const normalizedOffset = iso[7] === 'Z'
+        ? 'Z'
+        : iso[7].replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+      const absolute = new Date(
+        `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` +
+        `T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}${normalizedOffset}`
+      );
+      if (!Number.isNaN(absolute.getTime()) && absolute.getTime() <= Date.now() + 86_400_000) {
+        return absolute.toISOString();
+      }
+      return fallback;
+    }
 
     return safeIso(year, month, day, hour, minute, second);
   }

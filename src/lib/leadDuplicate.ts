@@ -33,9 +33,28 @@ export function normalizeLeadPhoneKey(value?: string | null) {
 
 export function normalizeLeadDateKey(value?: string | null) {
   if (!value) return '';
+
+  const text = String(value).trim();
+  const dateOnly = text.match(/^(\d{4}-\d{2}-\d{2})(?:$|[T\s]00:00:00(?:\.0+)?$)/);
+  if (dateOnly) return dateOnly[1];
+
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
-  return parsed.toISOString().slice(0, 10);
+
+  // A entrada comercial acontece no horário de Brasília. Usar a data UTC
+  // permitia que o mesmo lead reaparecesse no dia seguinte após uma
+  // importação (por exemplo, 23h no Brasil vira 02h UTC).
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(parsed);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  return year && month && day ? `${year}-${month}-${day}` : parsed.toISOString().slice(0, 10);
 }
 
 export function buildLeadIdentityKey(lead: LeadDuplicateInput) {
