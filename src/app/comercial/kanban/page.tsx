@@ -22,7 +22,6 @@ import {
   X,
 } from "lucide-react";
 import { useCommercial } from "@/components/commercial/CommercialShell";
-import CohortPeriodFilter from "@/components/commercial/CohortPeriodFilter";
 import CommercialLeadModal from "@/components/commercial/CommercialLeadModal";
 import CommercialLeadDetailsModal from "@/components/commercial/CommercialLeadDetailsModal";
 import {
@@ -32,7 +31,6 @@ import {
   type CommercialStage,
 } from "@/lib/comercial";
 import { getCommercialMqlLevel } from "@/lib/commercialQualification";
-import type { CommercialDatePreset } from "@/lib/commercialPeriod";
 import { supabase } from "@/lib/supabase/client";
 
 type LeadInteraction = {
@@ -45,6 +43,16 @@ type LeadInteraction = {
   metadata?: Record<string, unknown>;
   created_at: string;
 };
+
+type DatePreset =
+  | "todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado";
+
+function localDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function localDateTimeValue(value: string | Date = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
@@ -100,6 +108,22 @@ function formatDaniloCnpj(lead: CommercialLead) {
   return "CNPJ: sim";
 }
 
+function getPresetRange(preset: DatePreset) {
+  const today = new Date();
+  const end = new Date(today);
+  const start = new Date(today);
+  if (preset === "ontem") {
+    start.setDate(start.getDate() - 1);
+    end.setDate(end.getDate() - 1);
+  }
+  if (preset === "7dias") start.setDate(start.getDate() - 6);
+  if (preset === "30dias") start.setDate(start.getDate() - 29);
+  if (preset === "mes") start.setDate(1);
+  return preset === "todos"
+    ? { start: "", end: "" }
+    : { start: localDateValue(start), end: localDateValue(end) };
+}
+
 export default function CommercialKanbanPage() {
   const {
     api,
@@ -116,7 +140,7 @@ export default function CommercialKanbanPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sdrFilter, setSdrFilter] = useState("todos");
-  const [datePreset, setDatePreset] = useState<CommercialDatePreset>("todos");
+  const [datePreset, setDatePreset] = useState<DatePreset>("todos");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -172,15 +196,12 @@ export default function CommercialKanbanPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (dateStart) params.set("start", dateStart);
-      if (dateEnd) params.set("end", dateEnd);
-      const payload = await api(`/api/comercial/leads?${params.toString()}`);
+      const payload = await api("/api/comercial/leads");
       setLeads(payload.leads || []);
     } finally {
       setLoading(false);
     }
-  }, [api, dateEnd, dateStart]);
+  }, [api]);
   const loadStages = useCallback(async () => {
     try {
       const payload = await api("/api/comercial/stages");
@@ -238,14 +259,19 @@ export default function CommercialKanbanPage() {
           .join(" ")
           .toLowerCase()
           .includes(search.toLowerCase());
+        const date = new Date(lead.data_entrada).getTime();
+        const matchesStart =
+          !dateStart || date >= new Date(`${dateStart}T00:00:00`).getTime();
+        const matchesEnd =
+          !dateEnd || date <= new Date(`${dateEnd}T23:59:59`).getTime();
         const matchesSdr =
           sdrFilter === "todos" ||
           (sdrFilter === "sem_responsavel"
             ? !lead.sdr_id
             : lead.sdr_id === sdrFilter);
-        return matchesSearch && matchesSdr;
+        return matchesSearch && matchesStart && matchesEnd && matchesSdr;
       }),
-    [leads, search, sdrFilter],
+    [leads, search, dateStart, dateEnd, sdrFilter],
   );
   const grouped = useMemo(
     () =>
@@ -614,7 +640,7 @@ export default function CommercialKanbanPage() {
     try {
       const payload = await api("/api/comercial/tasks", {
         method: "POST",
-        body: JSON.stringify({ ...taskForm, lead_id: lead.id, tipo: "retorno" }),
+        body: JSON.stringify({ ...taskForm, lead_id: lead.id }),
       });
       const scheduledAt =
         payload.task?.vencimento ||
@@ -628,9 +654,6 @@ export default function CommercialKanbanPage() {
                 ...item,
                 proximo_retorno_at: scheduledAt,
                 proximo_retorno_titulo: payload.task?.titulo || taskForm.titulo,
-                retorno_agendado_at: scheduledAt,
-                retorno_status: "agendado",
-                cadencia_ativa: false,
               }
             : item,
         ),
@@ -641,8 +664,6 @@ export default function CommercialKanbanPage() {
         vencimento: "",
         descricao: "",
       }));
-      const timeline = await api(`/api/comercial/leads/${lead.id}/interactions`);
-      setInteractionsByLead((current) => ({ ...current, [lead.id]: timeline.interactions || [] }));
     } finally {
       setTaskSaving(null);
     }
@@ -691,6 +712,15 @@ export default function CommercialKanbanPage() {
     }
   }
 
+  function changeDatePreset(next: DatePreset) {
+    setDatePreset(next);
+    if (next !== "personalizado") {
+      const range = getPresetRange(next);
+      setDateStart(range.start);
+      setDateEnd(range.end);
+    }
+  }
+
   return (
     <div
       className={`kh-kanban-page ${canViewCommercialFinancials ? "" : "kh-hide-commercial-financials"} ${canEditCommercial ? "" : "kh-read-only"}`}
@@ -731,17 +761,42 @@ export default function CommercialKanbanPage() {
               </select>
             </label>
           )}
-          <CohortPeriodFilter
-            compact
-            preset={datePreset}
-            start={dateStart}
-            end={dateEnd}
-            onApply={(period) => {
-              setDatePreset(period.preset);
-              setDateStart(period.start);
-              setDateEnd(period.end);
-            }}
-          />
+          <label className="kh-date-preset">
+            <CalendarDays size={15} />
+            <select
+              value={datePreset}
+              onChange={(event) =>
+                changeDatePreset(event.target.value as DatePreset)
+              }
+              aria-label="Período"
+            >
+              <option value="todos">Todo o período</option>
+              <option value="hoje">Hoje</option>
+              <option value="ontem">Ontem</option>
+              <option value="7dias">Últimos 7 dias</option>
+              <option value="30dias">Últimos 30 dias</option>
+              <option value="mes">Este mês</option>
+              <option value="personalizado">Personalizado</option>
+            </select>
+          </label>
+          {datePreset === "personalizado" && (
+            <>
+              <input
+                className="kh-input kh-date-filter"
+                type="date"
+                value={dateStart}
+                onChange={(event) => setDateStart(event.target.value)}
+                aria-label="Data inicial"
+              />
+              <input
+                className="kh-input kh-date-filter"
+                type="date"
+                value={dateEnd}
+                onChange={(event) => setDateEnd(event.target.value)}
+                aria-label="Data final"
+              />
+            </>
+          )}
           <button
             className="kh-icon-button"
             onClick={() => void load()}
@@ -961,21 +1016,16 @@ export default function CommercialKanbanPage() {
                         <span className="kh-card-cnpj">
                           {formatDaniloCnpj(lead)}
                         </span>
-                        {lead.retorno_status === "agendado" && lead.retorno_agendado_at ? (
-                          <div className="kh-card-return is-primary">
-                            <RefreshCw size={12} />
-                            <span>Retorno {new Date(lead.retorno_agendado_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
-                          </div>
-                        ) : lead.cadencia_ativa ? (
-                          <div className="kh-card-cadence">
-                            {formatDaniloCadence(lead.cadencia_inicio_at || lead.status_started_at || lead.data_entrada)}
-                          </div>
-                        ) : null}
+                        <div className="kh-card-cadence">
+                          {formatDaniloCadence(
+                            lead.status_started_at || lead.data_entrada,
+                          )}
+                        </div>
                         <div className="kh-card-entry">
                           <CalendarDays size={12} />
                           <span>{formatDaniloEntry(lead.data_entrada)}</span>
                         </div>
-                        {lead.proximo_retorno_at && lead.retorno_status !== "agendado" && (
+                        {lead.proximo_retorno_at && (
                           <div className="kh-card-return">
                             <CalendarClock size={12} />
                             <span>
@@ -1222,12 +1272,6 @@ export default function CommercialKanbanPage() {
         briefingDownloading={briefingDownloading === expandedLeadId}
         onDownloadBriefing={(leadId) => downloadBriefingPdf(leadId)}
         onStartCall={startTrackedCall}
-        onTimelineChanged={() => {
-          if (!expandedLeadId) return;
-          void api(`/api/comercial/leads/${expandedLeadId}/interactions`).then((payload) => {
-            setInteractionsByLead((current) => ({ ...current, [expandedLeadId]: payload.interactions || [] }));
-          });
-        }}
         stages={stages}
         onMoveStage={(status) => {
           if (expandedLeadId) void moveLead(expandedLeadId, status);

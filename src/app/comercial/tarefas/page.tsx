@@ -22,7 +22,7 @@ export default function CommercialTasksPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<CommercialTask | null>(null);
-  const [form, setForm] = useState({ titulo: '', descricao: '', vencimento: '', prioridade: 'normal', responsavel_id: currentProfileId || '', lead_id: '', tipo: 'geral' });
+  const [form, setForm] = useState({ titulo: '', descricao: '', vencimento: '', prioridade: 'normal', responsavel_id: currentProfileId || '', lead_id: '' });
   const [saving, setSaving] = useState(false);
   const [prefillHandled, setPrefillHandled] = useState(false);
   const load = useCallback(async () => { setLoading(true); try { const [taskPayload, leadPayload] = await Promise.all([api('/api/comercial/tasks'), api('/api/comercial/leads')]); setTasks(taskPayload.tasks || []); setLeads(leadPayload.leads || []); } finally { setLoading(false); } }, [api]);
@@ -43,7 +43,6 @@ export default function CommercialTasksPage() {
       prioridade: 'normal',
       responsavel_id: role === 'coordenador' ? requestedResponsible : currentProfileId || '',
       lead_id: lead?.id || '',
-      tipo: 'retorno',
     });
     setOpen(true);
     setPrefillHandled(true);
@@ -52,17 +51,17 @@ export default function CommercialTasksPage() {
   const memberMap = useMemo(() => new Map(members.map((member) => [member.profile_id, member])), [members]);
   const groups = useMemo(() => ({ late: tasks.filter((task) => dueState(task) === 'late'), today: tasks.filter((task) => dueState(task) === 'today'), later: tasks.filter((task) => dueState(task) === 'later'), done: tasks.filter((task) => dueState(task) === 'done') }), [tasks]);
   async function complete(task: CommercialTask) { setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status: task.status === 'concluida' ? 'pendente' : 'concluida' } : item)); await api('/api/comercial/tasks', { method: 'PATCH', body: JSON.stringify({ id: task.id, status: task.status === 'concluida' ? 'pendente' : 'concluida' }) }); }
-  function openNewTask() { setEditingTask(null); setForm({ titulo: '', descricao: '', vencimento: '', prioridade: 'normal', responsavel_id: currentProfileId || '', lead_id: '', tipo: 'geral' }); setOpen(true); }
+  function openNewTask() { setEditingTask(null); setForm({ titulo: '', descricao: '', vencimento: '', prioridade: 'normal', responsavel_id: currentProfileId || '', lead_id: '' }); setOpen(true); }
   function openTaskEditor(task: CommercialTask) {
     const due = task.vencimento ? new Date(task.vencimento) : null;
     const vencimento = due && !Number.isNaN(due.getTime())
       ? `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}T${String(due.getHours()).padStart(2, '0')}:${String(due.getMinutes()).padStart(2, '0')}`
       : '';
     setEditingTask(task);
-    setForm({ titulo: task.titulo, descricao: task.descricao || '', vencimento, prioridade: task.prioridade || 'normal', responsavel_id: task.responsavel_id || currentProfileId || '', lead_id: task.lead_id || '', tipo: task.tipo || 'geral' });
+    setForm({ titulo: task.titulo, descricao: task.descricao || '', vencimento, prioridade: task.prioridade || 'normal', responsavel_id: task.responsavel_id || currentProfileId || '', lead_id: task.lead_id || '' });
     setOpen(true);
   }
-  async function create(event: React.FormEvent) { event.preventDefault(); setSaving(true); try { await api('/api/comercial/tasks', { method: editingTask ? 'PATCH' : 'POST', body: JSON.stringify({ ...(editingTask ? { id: editingTask.id } : {}), ...form, vencimento: form.vencimento ? new Date(form.vencimento).toISOString() : null }) }); setOpen(false); setEditingTask(null); setForm({ titulo: '', descricao: '', vencimento: '', prioridade: 'normal', responsavel_id: currentProfileId || '', lead_id: '', tipo: 'geral' }); await load(); } finally { setSaving(false); } }
+  async function create(event: React.FormEvent) { event.preventDefault(); setSaving(true); try { await api('/api/comercial/tasks', { method: editingTask ? 'PATCH' : 'POST', body: JSON.stringify({ ...(editingTask ? { id: editingTask.id } : {}), ...form, vencimento: form.vencimento ? new Date(form.vencimento).toISOString() : null }) }); setOpen(false); setEditingTask(null); setForm({ titulo: '', descricao: '', vencimento: '', prioridade: 'normal', responsavel_id: currentProfileId || '', lead_id: '' }); await load(); } finally { setSaving(false); } }
   const sections = [{ key: 'late', title: 'Atrasadas', icon: Clock3, tone: 'red' }, { key: 'today', title: 'Hoje', icon: CalendarClock, tone: 'yellow' }, { key: 'later', title: 'Próximas', icon: Circle, tone: 'blue' }, { key: 'done', title: 'Concluídas', icon: CheckCircle2, tone: 'green' }] as const;
   return (
     <div>

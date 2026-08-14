@@ -28,7 +28,6 @@ import {
   getCommercialMqlLevel,
   type CommercialMqlLevel,
 } from "@/lib/commercialQualification";
-import CommercialCadenceWidget from "@/components/commercial/CommercialCadenceWidget";
 
 type LeadInteraction = {
   id: string;
@@ -75,7 +74,6 @@ type Props = {
   onDownloadBriefing?: (leadId: string) => Promise<void>;
   briefingDownloading?: boolean;
   onStartCall?: (lead: CommercialLead) => Promise<void>;
-  onTimelineChanged?: () => void;
 };
 
 type EditableLead = {
@@ -306,7 +304,6 @@ export default function CommercialLeadDetailsModal({
   onDownloadBriefing,
   briefingDownloading = false,
   onStartCall,
-  onTimelineChanged,
 }: Props) {
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(
     null,
@@ -664,11 +661,6 @@ export default function CommercialLeadDetailsModal({
                 <small>{mqlCopy[mqlLevel].detail}</small>
               </span>
             )}
-            {lead.retorno_status === "agendado" && lead.retorno_agendado_at ? (
-              <span className="kh-lead-return-badge"><RefreshCw size={12} /> Retorno {new Date(lead.retorno_agendado_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
-            ) : lead.cadencia_ativa && lead.cadencia_inicio_at ? (
-              <span className="kh-lead-cadence-badge">Cadência: dia {Math.max(1, Math.floor((Date.now() - new Date(lead.cadencia_inicio_at).getTime()) / 86_400_000) + 1)}</span>
-            ) : null}
             <span className="stage">{lead.status}</span>
             <span className="elapsed">
               <Clock3 size={13} /> {elapsedLabel(lastActivity)}
@@ -765,26 +757,18 @@ export default function CommercialLeadDetailsModal({
           </div>
         )}
 
-        {(lead.retorno_agendado_at || lead.proximo_retorno_at) && lead.retorno_status === "agendado" && (
+        {lead.proximo_retorno_at && (
           <div className="kh-lead-next-return">
             <CalendarClock size={16} />
             <div>
               <span>Próximo retorno agendado</span>
-              <strong>{dateTime(lead.retorno_agendado_at || lead.proximo_retorno_at)}</strong>
+              <strong>{dateTime(lead.proximo_retorno_at)}</strong>
               {lead.proximo_retorno_titulo && (
                 <small>{lead.proximo_retorno_titulo}</small>
               )}
             </div>
           </div>
         )}
-
-        <CommercialCadenceWidget
-          leadId={lead.id}
-          readOnly={readOnly}
-          cadenceActive={lead.cadencia_ativa}
-          returnActive={lead.retorno_status === "agendado"}
-          onTimelineChanged={onTimelineChanged}
-        />
 
         {scheduleOpen && (
           <form

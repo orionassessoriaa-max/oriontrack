@@ -9,10 +9,6 @@ export const COMMERCIAL_STATUSES = [
   "No-show",
   "Outros seguros",
   "Fora do MQL",
-  "MQL S",
-  "MQL A",
-  "MQL B",
-  "MQL C",
   "Carrossel holandês",
   "Follow TCV",
   "Follow MRR",
@@ -95,12 +91,6 @@ export type CommercialLead = {
   fechado_at: string | null;
   data_entrada: string;
   status_started_at: string | null;
-  cadencia_ativa: boolean;
-  cadencia_inicio_at: string | null;
-  cadencia_fim_at: string | null;
-  retorno_agendado_at: string | null;
-  retorno_status: "agendado" | "resolvido" | "nao_resolvido" | null;
-  mql_reserva: "S" | "A" | "B" | "C" | null;
   proximo_retorno_at?: string | null;
   proximo_retorno_titulo?: string | null;
   created_at: string;
@@ -115,7 +105,6 @@ export type CommercialTask = {
   descricao: string | null;
   vencimento: string | null;
   prioridade: "baixa" | "normal" | "alta";
-  tipo?: "geral" | "retorno";
   status: "pendente" | "concluida" | "cancelada";
   created_at: string;
   updated_at: string;

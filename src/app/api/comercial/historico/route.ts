@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser, applyCommercialLeadScope } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { reconcileOverdueCommercialReturns } from '@/lib/commercialCadenceServer';
 
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
-  await reconcileOverdueCommercialReturns();
-
   let leadsQuery = supabaseAdmin
     .from('comercial_leads')
     .select('id,nome,telefone,email,status,empresa,data_entrada,updated_at,sdr_id,closer_id,observacoes,utm_source,utm_campaign')

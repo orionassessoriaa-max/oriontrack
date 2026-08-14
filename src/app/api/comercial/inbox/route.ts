@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
 import { applyCommercialLeadScope, requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { reconcileOverdueCommercialReturns } from '@/lib/commercialCadenceServer';
 
 function digits(value: unknown) { return String(value || '').replace(/\D/g, '').slice(-11); }
 
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
-  await reconcileOverdueCommercialReturns();
   let leadQuery = supabaseAdmin
     .from('comercial_leads')
     .select('id,nome,telefone,email,empresa,estado,origem,campanha,sdr_id,closer_id,status,prioridade,vidas,ja_investiu_trafego,faturamento_mensal,investimento,data_entrada,ultimo_contato_at,utm_source,utm_campaign,updated_at')

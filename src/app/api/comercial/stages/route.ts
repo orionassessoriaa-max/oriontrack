@@ -18,31 +18,19 @@ function normalizeStages(input: unknown): CommercialStage[] {
   }).filter(Boolean) as CommercialStage[];
 }
 
-const MQL_RESERVE_STAGES: CommercialStage[] = (['S', 'A', 'B', 'C'] as const).map((level) => ({
-  id: `MQL ${level}`,
-  label: `MQL ${level}`,
-  desc: 'Reserva para reengajamento',
-  protected: true,
-}));
-
-function withMqlReserveStages(stages: CommercialStage[]) {
-  const ids = new Set(stages.map((stage) => stage.id));
-  return [...stages, ...MQL_RESERVE_STAGES.filter((stage) => !ids.has(stage.id))];
-}
-
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
   const { data, error } = await supabaseAdmin.from('comercial_config').select('etapas').eq('id', 1).maybeSingle();
   if (error && !/comercial_config|schema cache/i.test(error.message)) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ stages: withMqlReserveStages(normalizeStages(data?.etapas?.length ? data.etapas : COMMERCIAL_STAGES)) });
+  return NextResponse.json({ stages: normalizeStages(data?.etapas?.length ? data.etapas : COMMERCIAL_STAGES) });
 }
 
 export async function PUT(request: Request) {
   const guard = await requireCommercialUser(request, true);
   if ('error' in guard) return guard.error;
   const body = await request.json();
-  const stages = withMqlReserveStages(normalizeStages(body.stages)).slice(0, 40);
+  const stages = normalizeStages(body.stages).slice(0, 40);
   if (!stages.length) return NextResponse.json({ error: 'Inclua pelo menos uma etapa.' }, { status: 400 });
   const { error } = await supabaseAdmin.from('comercial_config').upsert({ id: 1, etapas: stages, updated_at: new Date().toISOString() });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

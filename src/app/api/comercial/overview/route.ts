@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isCommercialMql } from '@/lib/commercialQualification';
-import { reconcileOverdueCommercialReturns } from '@/lib/commercialCadenceServer';
+import { stateFromPhone } from '@/lib/comercialGeo';
 
 function ratio(value: number, total: number) {
   return total > 0 ? (value / total) * 100 : 0;
@@ -12,24 +12,6 @@ const LOST_STATES = new Set(['perdido', 'desqualificado', 'sem interesse', 'nego
 const KRIPTO_PRINCIPAL_ACCOUNT_ID = '1531044161152262';
 function normalized(value: unknown) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-}
-
-const DDD_STATE: Record<string, string> = {
-  '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP', '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
-  '21': 'RJ', '22': 'RJ', '24': 'RJ', '27': 'ES', '28': 'ES',
-  '31': 'MG', '32': 'MG', '33': 'MG', '34': 'MG', '35': 'MG', '37': 'MG', '38': 'MG',
-  '41': 'PR', '42': 'PR', '43': 'PR', '44': 'PR', '45': 'PR', '46': 'PR',
-  '47': 'SC', '48': 'SC', '49': 'SC', '51': 'RS', '53': 'RS', '54': 'RS', '55': 'RS',
-  '61': 'DF', '62': 'GO', '63': 'TO', '64': 'GO', '65': 'MT', '66': 'MT', '67': 'MS',
-  '68': 'AC', '69': 'RO', '71': 'BA', '73': 'BA', '74': 'BA', '75': 'BA', '77': 'BA', '79': 'SE',
-  '81': 'PE', '82': 'AL', '83': 'PB', '84': 'RN', '85': 'CE', '86': 'PI', '87': 'PE', '88': 'CE', '89': 'PI',
-  '91': 'PA', '92': 'AM', '93': 'PA', '94': 'PA', '95': 'RR', '96': 'AP', '97': 'AM', '98': 'MA', '99': 'MA',
-};
-
-function stateFromPhone(phone: unknown) {
-  const digits = String(phone || '').replace(/\D/g, '');
-  const national = digits.startsWith('55') && digits.length >= 12 ? digits.slice(2) : digits;
-  return DDD_STATE[national.slice(0, 2)] || null;
 }
 
 async function fetchKriptoMetaInvestment(start: string, end: string) {
@@ -96,13 +78,11 @@ async function fetchKriptoActiveCampaigns() {
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
-  await reconcileOverdueCommercialReturns();
   const url = new URL(request.url);
   const now = new Date();
   const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const allTime = url.searchParams.get('all') === 'true';
-  const start = allTime ? '2020-01-01' : url.searchParams.get('start') || defaultStart;
-  const end = allTime ? now.toISOString().slice(0, 10) : url.searchParams.get('end') || now.toISOString().slice(0, 10);
+  const start = url.searchParams.get('start') || defaultStart;
+  const end = url.searchParams.get('end') || now.toISOString().slice(0, 10);
   const selectedCampaigns = new Set((url.searchParams.get('campaigns') || '').split(',').map((item) => decodeURIComponent(item).trim()).filter(Boolean));
 
   let leadQuery = supabaseAdmin
@@ -127,6 +107,18 @@ export async function GET(request: Request) {
     ...lead,
     lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento),
   }));
+  const weekStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 6)).toISOString().slice(0, 10);
+  const weekEnd = now.toISOString().slice(0, 10);
+  let weeklyMeetingQuery = supabaseAdmin
+    .from('comercial_leads')
+    .select('reuniao_agendada_at')
+    .not('reuniao_agendada_at', 'is', null)
+    .gte('reuniao_agendada_at', `${weekStart}T00:00:00-03:00`)
+    .lte('reuniao_agendada_at', `${weekEnd}T23:59:59-03:00`);
+  if (guard.commercialRole === 'sdr') {
+    weeklyMeetingQuery = weeklyMeetingQuery.eq('sdr_id', guard.profile.id);
+  }
+  const { data: weeklyMeetingRows } = await weeklyMeetingQuery;
   const stateMap = new Map<string, { state: string; leads: number; active: number }>();
   leads.forEach((lead) => {
     const state = String(lead.estado || stateFromPhone(lead.telefone) || '').trim().toUpperCase();
@@ -164,15 +156,6 @@ export async function GET(request: Request) {
       return Number.isFinite(created) && Number.isFinite(closedAt) ? Math.max(0, (closedAt - created) / 86_400_000) : null;
     })
     .filter((value): value is number => value !== null);
-  const statusTotals = new Map<string, number>();
-  for (const lead of leads) {
-    const status = String(lead.status || 'Sem etapa');
-    statusTotals.set(status, (statusTotals.get(status) || 0) + 1);
-  }
-  const statusBreakdown = Array.from(statusTotals.entries())
-    .map(([status, total]) => ({ status, total }))
-    .sort((a, b) => b.total - a.total || a.status.localeCompare(b.status));
-
   const trendMap = new Map<string, { date: string; leads: number; mql: number; meetings: number; sales: number; revenue: number; investment: number }>();
   const ensureDay = (date: string) => {
     if (!trendMap.has(date)) trendMap.set(date, { date, leads: 0, mql: 0, meetings: 0, sales: 0, revenue: 0, investment: 0 });
@@ -258,8 +241,14 @@ export async function GET(request: Request) {
   return NextResponse.json({
     metrics,
     trend,
-    statusBreakdown,
-    cohort: { field: 'data_entrada', start, end, allTime },
+    weeklyMeetings: (weeklyMeetingRows || []).reduce((rows: Array<{ date: string; meetings: number }>, lead: { reuniao_agendada_at: string | null }) => {
+      const date = String(lead.reuniao_agendada_at || '').slice(0, 10);
+      if (!date) return rows;
+      const row = rows.find((item) => item.date === date);
+      if (row) row.meetings += 1;
+      else rows.push({ date, meetings: 1 });
+      return rows;
+    }, []).sort((a, b) => a.date.localeCompare(b.date)),
     team,
     states: Array.from(stateMap.values()).sort((a, b) => b.leads - a.leads),
     campaigns: Array.from(new Set([

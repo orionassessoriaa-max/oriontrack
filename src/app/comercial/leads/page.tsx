@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CalendarDays,
   CheckSquare2,
   ChevronLeft,
   ChevronRight,
@@ -17,10 +18,8 @@ import {
   X,
 } from "lucide-react";
 import { useCommercial } from "@/components/commercial/CommercialShell";
-import CohortPeriodFilter from "@/components/commercial/CohortPeriodFilter";
 import CommercialLeadModal from "@/components/commercial/CommercialLeadModal";
 import { COMMERCIAL_STATUSES, type CommercialLead } from "@/lib/comercial";
-import type { CommercialDatePreset } from "@/lib/commercialPeriod";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("pt-BR", {
@@ -28,6 +27,32 @@ function formatDate(value: string) {
     month: "2-digit",
     year: "numeric",
   });
+}
+
+type DatePreset =
+  | "todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado";
+
+function localDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getPresetRange(preset: DatePreset) {
+  const today = new Date();
+  const end = new Date(today);
+  const start = new Date(today);
+  if (preset === "ontem") {
+    start.setDate(start.getDate() - 1);
+    end.setDate(end.getDate() - 1);
+  }
+  if (preset === "7dias") start.setDate(start.getDate() - 6);
+  if (preset === "30dias") start.setDate(start.getDate() - 29);
+  if (preset === "mes") start.setDate(1);
+  return preset === "todos"
+    ? { start: "", end: "" }
+    : { start: localDateValue(start), end: localDateValue(end) };
 }
 
 export default function CommercialLeadsPage() {
@@ -41,7 +66,7 @@ export default function CommercialLeadsPage() {
   const [leads, setLeads] = useState<CommercialLead[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("todos");
-  const [datePreset, setDatePreset] = useState<CommercialDatePreset>("todos");
+  const [datePreset, setDatePreset] = useState<DatePreset>("todos");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -53,6 +78,8 @@ export default function CommercialLeadsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const sheetRef = useRef<HTMLElement | null>(null);
+  const sheetGuideRef = useRef<HTMLDivElement | null>(null);
+  const [sheetContentWidth, setSheetContentWidth] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -74,15 +101,12 @@ export default function CommercialLeadsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (dateStart) params.set("start", dateStart);
-      if (dateEnd) params.set("end", dateEnd);
-      const payload = await api(`/api/comercial/leads?${params.toString()}`);
+      const payload = await api("/api/comercial/leads");
       setLeads(payload.leads || []);
     } finally {
       setLoading(false);
     }
-  }, [api, dateEnd, dateStart]);
+  }, [api]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -112,29 +136,61 @@ export default function CommercialLeadsPage() {
           .map((value) => String(value || ""))
           .join(" ")
           .toLowerCase();
+        const date = new Date(lead.data_entrada).getTime();
+        const matchesStart =
+          !dateStart || date >= new Date(`${dateStart}T00:00:00`).getTime();
+        const matchesEnd =
+          !dateEnd || date <= new Date(`${dateEnd}T23:59:59`).getTime();
         return (
           (!search || haystack.includes(search.toLowerCase())) &&
-          (status === "todos" || lead.status === status)
+          (status === "todos" || lead.status === status) &&
+          matchesStart &&
+          matchesEnd
         );
       }),
-    [leads, search, status],
+    [leads, search, status, dateStart, dateEnd],
   );
 
   const updateScrollControls = useCallback(() => {
     const sheet = sheetRef.current;
     if (!sheet) return;
+    setSheetContentWidth(sheet.scrollWidth);
     setCanScrollLeft(sheet.scrollLeft > 2);
     setCanScrollRight(sheet.scrollLeft + sheet.clientWidth < sheet.scrollWidth - 2);
   }, []);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateScrollControls);
+    const sheet = sheetRef.current;
+    const table = sheet?.querySelector("table");
+    const observer = new ResizeObserver(updateScrollControls);
+    if (sheet) observer.observe(sheet);
+    if (table) observer.observe(table);
     window.addEventListener("resize", updateScrollControls);
     return () => {
       window.cancelAnimationFrame(frame);
+      observer.disconnect();
       window.removeEventListener("resize", updateScrollControls);
     };
   }, [updateScrollControls, visible.length, canViewCommercialLeadQualification]);
+
+  function syncGuideFromSheet() {
+    const sheet = sheetRef.current;
+    const guide = sheetGuideRef.current;
+    if (sheet && guide && Math.abs(guide.scrollLeft - sheet.scrollLeft) > 1) {
+      guide.scrollLeft = sheet.scrollLeft;
+    }
+    updateScrollControls();
+  }
+
+  function syncSheetFromGuide() {
+    const sheet = sheetRef.current;
+    const guide = sheetGuideRef.current;
+    if (sheet && guide && Math.abs(sheet.scrollLeft - guide.scrollLeft) > 1) {
+      sheet.scrollLeft = guide.scrollLeft;
+    }
+    updateScrollControls();
+  }
 
   function scrollSheet(direction: -1 | 1) {
     const sheet = sheetRef.current;
@@ -300,6 +356,15 @@ export default function CommercialLeadsPage() {
     URL.revokeObjectURL(link.href);
   }
 
+  function changeDatePreset(next: DatePreset) {
+    setDatePreset(next);
+    if (next !== "personalizado") {
+      const range = getPresetRange(next);
+      setDateStart(range.start);
+      setDateEnd(range.end);
+    }
+  }
+
   return (
     <div className={`kh-commercial-leads-page${canEditCommercial ? "" : " kh-read-only"}`}>
       <header className="kh-page-head">
@@ -357,17 +422,42 @@ export default function CommercialLeadsPage() {
             placeholder="Buscar nome, telefone ou e-mail..."
           />
         </div>
-        <CohortPeriodFilter
-          compact
-          preset={datePreset}
-          start={dateStart}
-          end={dateEnd}
-          onApply={(period) => {
-            setDatePreset(period.preset);
-            setDateStart(period.start);
-            setDateEnd(period.end);
-          }}
-        />
+        <label className="kh-date-preset">
+          <CalendarDays size={15} />
+          <select
+            value={datePreset}
+            onChange={(event) =>
+              changeDatePreset(event.target.value as DatePreset)
+            }
+            aria-label="Período"
+          >
+            <option value="todos">Todo o período</option>
+            <option value="hoje">Hoje</option>
+            <option value="ontem">Ontem</option>
+            <option value="7dias">Últimos 7 dias</option>
+            <option value="30dias">Últimos 30 dias</option>
+            <option value="mes">Este mês</option>
+            <option value="personalizado">Personalizado</option>
+          </select>
+        </label>
+        {datePreset === "personalizado" && (
+          <>
+            <input
+              className="kh-input kh-date-filter"
+              type="date"
+              value={dateStart}
+              onChange={(event) => setDateStart(event.target.value)}
+              aria-label="Data inicial"
+            />
+            <input
+              className="kh-input kh-date-filter"
+              type="date"
+              value={dateEnd}
+              onChange={(event) => setDateEnd(event.target.value)}
+              aria-label="Data final"
+            />
+          </>
+        )}
         <select
           className="kh-select"
           value={status}
@@ -383,32 +473,44 @@ export default function CommercialLeadsPage() {
         </span>
       </section>
       <nav className="kh-sheet-scroll-guide" aria-label="Navegação horizontal da planilha">
-        <span>Mais colunas</span>
-        <div>
-          <button
-            type="button"
-            onClick={() => scrollSheet(-1)}
-            disabled={!canScrollLeft}
-            aria-label="Mover planilha para a esquerda"
-          >
-            <ChevronLeft size={17} />
-            Esquerda
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollSheet(1)}
-            disabled={!canScrollRight}
-            aria-label="Mover planilha para a direita"
-          >
-            Direita
-            <ChevronRight size={17} />
-          </button>
+        <div className="kh-sheet-scroll-guide-head">
+          <span>Arraste a barra para ver mais colunas</span>
+          <div>
+            <button
+              type="button"
+              onClick={() => scrollSheet(-1)}
+              disabled={!canScrollLeft}
+              aria-label="Mover planilha para a esquerda"
+            >
+              <ChevronLeft size={17} />
+              Esquerda
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollSheet(1)}
+              disabled={!canScrollRight}
+              aria-label="Mover planilha para a direita"
+            >
+              Direita
+              <ChevronRight size={17} />
+            </button>
+          </div>
+        </div>
+        <div
+          ref={sheetGuideRef}
+          className="kh-sheet-scrollbar"
+          onScroll={syncSheetFromGuide}
+          role="region"
+          aria-label="Barra de rolagem horizontal da planilha"
+          tabIndex={0}
+        >
+          <div style={{ width: Math.max(sheetContentWidth, 1) }} />
         </div>
       </nav>
       <section
         ref={sheetRef}
         className={`kh-sheet-wrap${canScrollLeft ? " is-scrolled" : ""}`}
-        onScroll={updateScrollControls}
+        onScroll={syncGuideFromSheet}
       >
         <table className="kh-sheet-table">
           <thead>
