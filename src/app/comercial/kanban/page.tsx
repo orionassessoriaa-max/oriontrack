@@ -540,7 +540,7 @@ export default function CommercialKanbanPage() {
     }
   }
   async function deleteStage(stage: CommercialStage) {
-    if (stage.protected || stageSaving) return;
+    if (stageSaving) return;
     const fallback = stages.find((item) => item.id !== stage.id);
     if (!fallback) {
       setStageError("O funil precisa ter pelo menos uma etapa.");
@@ -962,7 +962,6 @@ export default function CommercialKanbanPage() {
                       onChange={(event) => setEditingStageName(event.target.value)}
                       maxLength={60}
                       aria-label="Nome da etapa"
-                      disabled={stage.protected}
                       required
                     />
                     <label title="Cor da etapa">
@@ -976,7 +975,7 @@ export default function CommercialKanbanPage() {
                     <button type="submit" title="Salvar alterações" aria-label="Salvar alterações" disabled={stageSaving}>
                       <Check size={14} />
                     </button>
-                    {!stage.protected && <button
+                    <button
                       type="button"
                       className="danger"
                       title="Excluir etapa"
@@ -985,7 +984,7 @@ export default function CommercialKanbanPage() {
                       onClick={() => void deleteStage(stage)}
                     >
                       <Trash2 size={14} />
-                    </button>}
+                    </button>
                     <button type="button" title="Cancelar" aria-label="Cancelar edição" onClick={() => setEditingStage(null)}>
                       <X size={14} />
                     </button>
@@ -1002,7 +1001,6 @@ export default function CommercialKanbanPage() {
                 </>}
                 {canManageStages && editingStage?.id !== stage.id && (
                   <div className="kh-stage-actions">
-                    {stage.protected && <em>fixa</em>}
                     <button
                       type="button"
                       title="Editar etapa"

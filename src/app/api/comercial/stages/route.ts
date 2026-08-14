@@ -68,7 +68,6 @@ export async function PATCH(request: Request) {
   const current = normalizeStages(config?.etapas?.length ? config.etapas : COMMERCIAL_STAGES);
   const target = current.find((stage) => stage.id === oldId);
   if (!target) return NextResponse.json({ error: 'Etapa nao encontrada.' }, { status: 404 });
-  if (target.protected && label !== target.label) return NextResponse.json({ error: 'Esta etapa e fixa e nao pode ser renomeada.' }, { status: 400 });
   if (current.some((stage) => stage.id !== oldId && stage.label.toLowerCase() === label.toLowerCase())) {
     return NextResponse.json({ error: 'Ja existe uma etapa com este nome.' }, { status: 409 });
   }
@@ -100,8 +99,6 @@ export async function DELETE(request: Request) {
   const fallback = current.find((stage) => stage.id === fallbackId);
   if (!target) return NextResponse.json({ error: 'Etapa nao encontrada.' }, { status: 404 });
   if (!fallback) return NextResponse.json({ error: 'Etapa de destino nao encontrada.' }, { status: 404 });
-  if (target.protected) return NextResponse.json({ error: 'Esta etapa e fixa e nao pode ser excluida.' }, { status: 400 });
-
   const { error: leadError } = await supabaseAdmin
     .from('comercial_leads')
     .update({ status: fallback.id, updated_at: new Date().toISOString() })
