@@ -614,7 +614,7 @@ export default function CommercialKanbanPage() {
     try {
       const payload = await api("/api/comercial/tasks", {
         method: "POST",
-        body: JSON.stringify({ ...taskForm, lead_id: lead.id }),
+        body: JSON.stringify({ ...taskForm, lead_id: lead.id, tipo: "retorno" }),
       });
       const scheduledAt =
         payload.task?.vencimento ||
@@ -628,6 +628,9 @@ export default function CommercialKanbanPage() {
                 ...item,
                 proximo_retorno_at: scheduledAt,
                 proximo_retorno_titulo: payload.task?.titulo || taskForm.titulo,
+                retorno_agendado_at: scheduledAt,
+                retorno_status: "agendado",
+                cadencia_ativa: false,
               }
             : item,
         ),
@@ -638,6 +641,8 @@ export default function CommercialKanbanPage() {
         vencimento: "",
         descricao: "",
       }));
+      const timeline = await api(`/api/comercial/leads/${lead.id}/interactions`);
+      setInteractionsByLead((current) => ({ ...current, [lead.id]: timeline.interactions || [] }));
     } finally {
       setTaskSaving(null);
     }
@@ -956,16 +961,21 @@ export default function CommercialKanbanPage() {
                         <span className="kh-card-cnpj">
                           {formatDaniloCnpj(lead)}
                         </span>
-                        <div className="kh-card-cadence">
-                          {formatDaniloCadence(
-                            lead.status_started_at || lead.data_entrada,
-                          )}
-                        </div>
+                        {lead.retorno_status === "agendado" && lead.retorno_agendado_at ? (
+                          <div className="kh-card-return is-primary">
+                            <RefreshCw size={12} />
+                            <span>Retorno {new Date(lead.retorno_agendado_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                          </div>
+                        ) : lead.cadencia_ativa ? (
+                          <div className="kh-card-cadence">
+                            {formatDaniloCadence(lead.cadencia_inicio_at || lead.status_started_at || lead.data_entrada)}
+                          </div>
+                        ) : null}
                         <div className="kh-card-entry">
                           <CalendarDays size={12} />
                           <span>{formatDaniloEntry(lead.data_entrada)}</span>
                         </div>
-                        {lead.proximo_retorno_at && (
+                        {lead.proximo_retorno_at && lead.retorno_status !== "agendado" && (
                           <div className="kh-card-return">
                             <CalendarClock size={12} />
                             <span>
@@ -1212,6 +1222,12 @@ export default function CommercialKanbanPage() {
         briefingDownloading={briefingDownloading === expandedLeadId}
         onDownloadBriefing={(leadId) => downloadBriefingPdf(leadId)}
         onStartCall={startTrackedCall}
+        onTimelineChanged={() => {
+          if (!expandedLeadId) return;
+          void api(`/api/comercial/leads/${expandedLeadId}/interactions`).then((payload) => {
+            setInteractionsByLead((current) => ({ ...current, [expandedLeadId]: payload.interactions || [] }));
+          });
+        }}
         stages={stages}
         onMoveStage={(status) => {
           if (expandedLeadId) void moveLead(expandedLeadId, status);

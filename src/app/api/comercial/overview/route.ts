@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isCommercialMql } from '@/lib/commercialQualification';
+import { reconcileOverdueCommercialReturns } from '@/lib/commercialCadenceServer';
 
 function ratio(value: number, total: number) {
   return total > 0 ? (value / total) * 100 : 0;
@@ -95,6 +96,7 @@ async function fetchKriptoActiveCampaigns() {
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
+  await reconcileOverdueCommercialReturns();
   const url = new URL(request.url);
   const now = new Date();
   const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);

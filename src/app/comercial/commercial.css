@@ -1225,6 +1225,26 @@
 .kh-danilo-card .kh-card-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kh-danilo-card .kh-card-cnpj { display: inline-flex; max-width: 100%; margin-top: 5px; overflow: hidden; border: 1px solid #087b59; border-radius: 999px; background: #062b26; color: #13d89a; padding: 2px 6px; font-size: 7px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .kh-danilo-card .kh-card-cadence { display: block; width: 100%; max-width: none; box-sizing: border-box; margin-top: 5px; overflow: hidden; border-radius: 999px; background: #f4dcfa; color: #8a0f9f; padding: 4px 7px; font-size: 8px; font-weight: 800; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.kh-danilo-card .kh-card-return.is-primary { display: flex; align-items: center; gap: 5px; width: 100%; box-sizing: border-box; margin-top: 5px; border: 1px solid rgba(55,143,255,.65); border-radius: 999px; background: rgba(22,91,186,.42); color: #9dccff; padding: 4px 7px; font-size: 8px; font-weight: 850; }
+.kh-lead-return-badge,.kh-lead-cadence-badge { display: inline-flex; min-height: 30px; align-items: center; gap: 5px; border-radius: 7px; padding: 5px 9px; font-size: 9px; font-weight: 900; white-space: nowrap; }
+.kh-lead-return-badge { border: 1px solid #287ed7; background: #154d93; color: #d8ecff; }
+.kh-lead-cadence-badge { border: 1px solid #de46b0; background: #9c176e; color: #fff0fa; }
+.kh-cadence-widget { margin-top: 10px; border: 1px solid #27374b; border-radius: 10px; background: #101927; padding: 14px; }
+.kh-cadence-widget.is-loading { display: flex; min-height: 72px; align-items: center; justify-content: center; gap: 8px; color: #8da0b5; font-size: 10px; }
+.kh-cadence-widget > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.kh-cadence-widget > header h3 { margin: 0; color: #eef6ff; font-size: 13px; }
+.kh-cadence-widget > header span { color: #7e91a7; font-size: 9px; }
+.kh-cadence-points { display: grid; gap: 3px; }
+.kh-cadence-point { display: grid; grid-template-columns: 22px 17px minmax(130px,1fr) minmax(125px,auto) auto; min-height: 34px; align-items: center; gap: 7px; border-top: 1px solid rgba(74,94,119,.25); color: #91a2b6; }
+.kh-cadence-point:first-child { border-top: 0; }
+.kh-cadence-point strong { color: #dbe7f3; font-size: 10px; font-weight: 700; }
+.kh-cadence-check { width: 17px; height: 17px; display: grid; place-items: center; border: 1px solid #435269; border-radius: 4px; }
+.kh-cadence-point.is-done .kh-cadence-check { border-color: #506479; background: #2b3948; color: #b8c6d3; }
+.kh-cadence-point.is-positive .kh-cadence-check { border-color: #1fd49b; background: #109269; color: #fff; }
+.kh-cadence-point select { min-height: 27px; border: 1px solid #344860; border-radius: 6px; background: #09131f; color: #dce9f5; padding: 0 8px; font-size: 9px; }
+.kh-cadence-result { justify-self: end; color: #7f92a7; font-size: 9px; text-transform: lowercase; }
+.kh-cadence-point.is-positive .kh-cadence-result { color: #38dda8; }
+@media (max-width: 640px) { .kh-cadence-point { grid-template-columns: 22px 17px minmax(0,1fr); padding: 6px 0; }.kh-cadence-point select,.kh-cadence-result { grid-column: 3; justify-self: stretch; }.kh-cadence-point > .kh-spin { grid-column: 2; } }
 .kh-danilo-card .kh-card-entry { margin-top: 5px; color: #b8c8d8; }
 .kh-danilo-card .kh-card-return { display: flex; align-items: center; gap: 5px; margin-top: 6px; border: 1px solid rgba(0, 187, 255, .38); border-radius: 6px; background: rgba(0, 139, 207, .16); color: #78ddff; padding: 5px 7px; font-size: 8px; font-weight: 850; }.kh-danilo-card .kh-card-return svg { flex: 0 0 auto; }
 .kh-danilo-card .kh-card-inbox {

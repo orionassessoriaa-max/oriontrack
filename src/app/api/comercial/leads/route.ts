@@ -8,6 +8,8 @@ import { isCommercialMql } from '@/lib/commercialQualification';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { generateOnboardingBriefing } from '@/lib/commercialOnboardingBriefing';
+import { reconcileOverdueCommercialReturns } from '@/lib/commercialCadenceServer';
+import { statusResolvesReturn, statusStartsCadence } from '@/lib/commercialCadence';
 
 function normalizeStage(value: unknown) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -69,6 +71,8 @@ export async function GET(request: Request) {
   const end = url.searchParams.get('end');
   const status = url.searchParams.get('status');
   const search = url.searchParams.get('search')?.trim();
+
+  await reconcileOverdueCommercialReturns();
 
   let query = supabaseAdmin.from('comercial_leads').select('*').order('data_entrada', { ascending: false }).limit(2000);
   query = applyCommercialLeadScope(query, guard.commercialRole, guard.profile.id);
@@ -212,6 +216,18 @@ export async function PATCH(request: Request) {
     if (guard.commercialRole === 'sdr' && ['sdr_id', 'closer_id'].includes(field)) continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
   }
+  const statusChanged = Boolean(targetStatus) && targetStatus !== allowed.status;
+  if (statusChanged && statusStartsCadence(targetStatus) && allowed.retorno_status !== 'agendado') {
+    update.cadencia_ativa = true;
+    update.cadencia_inicio_at = new Date().toISOString();
+    update.cadencia_fim_at = null;
+    update.mql_reserva = null;
+  }
+  if (statusChanged && statusResolvesReturn(targetStatus)) {
+    update.cadencia_ativa = false;
+    update.cadencia_fim_at = new Date().toISOString();
+    if (allowed.retorno_status === 'agendado') update.retorno_status = 'resolvido';
+  }
   if (closingSale) {
     const automaticSellerId = guard.commercialRole === 'closer' || guard.profile.id === PEDRO_GHISOLFI_PROFILE_ID
       ? guard.profile.id
@@ -297,7 +313,6 @@ export async function PATCH(request: Request) {
       update.fechado_at = closedAt.toISOString();
     }
   }
-  const statusChanged = Boolean(targetStatus) && targetStatus !== allowed.status;
   if (statusChanged && isNoShowStage(targetStatus) && !isNoShowStage(allowed.status)) {
     update.no_show = true;
     update.no_show_count = Number(allowed.no_show_count || 0) + 1;
