@@ -159,6 +159,33 @@ function jsonObject(value: unknown, fallback: Record<string, unknown>) {
   return fallback;
 }
 
+type AdsetDeliveryConfig = {
+  optimizationGoal: string;
+  billingEvent: string;
+  promotedObject: Record<string, unknown> | null;
+  destinationType: string;
+  sourceName: string;
+};
+
+async function existingAdsetDeliveryConfig(accountPath: string, requestedGoal: string) {
+  const payload = await graphGet(`${accountPath}/adsets`, {
+    fields: 'id,name,optimization_goal,billing_event,promoted_object,destination_type,updated_time',
+    limit: '200',
+  });
+  const candidates = (Array.isArray(payload.data) ? payload.data : [])
+    .filter((item: any) => item?.promoted_object && Object.keys(item.promoted_object).length > 0)
+    .sort((left: any, right: any) => String(right.updated_time || '').localeCompare(String(left.updated_time || '')));
+  const source = candidates.find((item: any) => String(item.optimization_goal || '') === requestedGoal) || candidates[0];
+  if (!source) return null;
+  return {
+    optimizationGoal: String(source.optimization_goal || requestedGoal || 'LEAD_GENERATION'),
+    billingEvent: String(source.billing_event || 'IMPRESSIONS'),
+    promotedObject: jsonObject(source.promoted_object, {}),
+    destinationType: String(source.destination_type || ''),
+    sourceName: String(source.name || source.id || 'conjunto existente'),
+  } satisfies AdsetDeliveryConfig;
+}
+
 async function createPaused(accountId: string, draft: any) {
   const normalizedDraft = normalizeOptimizationDraft(draft);
   const created: any[] = [];
@@ -175,6 +202,9 @@ async function createPaused(accountId: string, draft: any) {
       buying_type: String(campaign.buying_type),
       status: 'PAUSED',
       special_ad_categories: JSON.stringify(campaign.special_ad_categories || []),
+      // Obrigatorio na API Meta atual para campanhas sem orcamento no nivel
+      // da campanha. O fluxo Orion usa ABO e mantem a verba no conjunto.
+      is_adset_budget_sharing_enabled: String(campaign.is_adset_budget_sharing_enabled ?? false),
     }, 'a criacao da campanha pausada');
     campaignId = String(campaignResult.id);
     created.push({ level: 'campaign', id: campaignId, name: String(campaign.name || campaignResult.id), status: 'PAUSED' });
@@ -184,6 +214,7 @@ async function createPaused(accountId: string, draft: any) {
 
   const availableAdsetIds: string[] = [];
   const adsets = normalizedDraft.adsets;
+  let reusableLeadConfig: AdsetDeliveryConfig | null | undefined;
   for (const adset of adsets) {
     const existingAdsetId = String(adset.existing_id || adset.adset_id || '').trim();
     if (existingAdsetId) {
@@ -195,15 +226,42 @@ async function createPaused(accountId: string, draft: any) {
       skipped.push({ level: 'adset', name: adset.name || 'Conjunto', reason: 'Informe uma verba diaria valida no pedido.' });
       continue;
     }
-    const result = await graphPost(`${campaignId}/adsets`, {
+    let optimizationGoal = String(adset.optimization_goal || 'LEAD_GENERATION');
+    let billingEvent = String(adset.billing_event || 'IMPRESSIONS');
+    let bidStrategy = String(adset.bid_strategy || 'LOWEST_COST_WITHOUT_CAP');
+    let promotedObject = jsonObject(adset.promoted_object, {});
+    let destinationType = String(adset.destination_type || '').trim();
+    if (String(campaign.objective) === 'OUTCOME_LEADS' && Object.keys(promotedObject).length === 0) {
+      if (reusableLeadConfig === undefined) {
+        reusableLeadConfig = await existingAdsetDeliveryConfig(accountPath, optimizationGoal);
+      }
+      if (!reusableLeadConfig) {
+        skipped.push({
+          level: 'adset',
+          name: adset.name || 'Conjunto',
+          reason: 'A conta nao possui uma configuracao de conversao anterior que possa ser reutilizada. Crie o primeiro conjunto de leads na Meta ou informe o objeto promovido.',
+        });
+        continue;
+      }
+      optimizationGoal = reusableLeadConfig.optimizationGoal;
+      billingEvent = reusableLeadConfig.billingEvent;
+      promotedObject = reusableLeadConfig.promotedObject || {};
+      destinationType = reusableLeadConfig.destinationType;
+      warnings.push(`O conjunto "${String(adset.name || 'Conjunto ABO')}" reutilizou a configuracao de conversao de "${reusableLeadConfig.sourceName}".`);
+    }
+    const adsetParams: Record<string, string> = {
       name: String(adset.name || 'Conjunto ABO'),
       campaign_id: campaignId,
       daily_budget: String(budget),
-      billing_event: String(adset.billing_event || 'IMPRESSIONS'),
-      optimization_goal: String(adset.optimization_goal || 'LEAD_GENERATION'),
+      billing_event: billingEvent,
+      optimization_goal: optimizationGoal,
+      bid_strategy: bidStrategy,
       targeting: JSON.stringify(jsonObject(adset.targeting, { geo_locations: { countries: ['BR'] } })),
       status: 'PAUSED',
-    }, `a criacao do conjunto "${String(adset.name || 'Conjunto ABO')}"`);
+    };
+    if (Object.keys(promotedObject).length > 0) adsetParams.promoted_object = JSON.stringify(promotedObject);
+    if (destinationType && destinationType !== 'UNDEFINED') adsetParams.destination_type = destinationType;
+    const result = await graphPost(`${accountPath}/adsets`, adsetParams, `a criacao do conjunto "${String(adset.name || 'Conjunto ABO')}"`);
     const newAdsetId = String(result.id);
     availableAdsetIds.push(newAdsetId);
     created.push({ level: 'adset', id: newAdsetId, name: String(adset.name || result.id), status: 'PAUSED' });
@@ -268,7 +326,7 @@ async function createPaused(accountId: string, draft: any) {
       skipped.push({ level: 'ad', name: ad.name || 'Anuncio', reason: creativeId ? 'Nenhum conjunto criado para vincular o anuncio.' : 'Informe um creative_id da Meta ou resolva um arquivo de imagem do Drive.' });
       continue;
     }
-    const result = await graphPost(`${adsetId}/ads`, {
+    const result = await graphPost(`${accountPath}/ads`, {
       name: String(ad.name || 'Anuncio Orion'),
       adset_id: String(adsetId),
       creative: JSON.stringify({ creative_id: String(creativeId) }),

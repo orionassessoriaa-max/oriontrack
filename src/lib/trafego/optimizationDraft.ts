@@ -80,6 +80,7 @@ export function normalizeOptimizationDraft(value: unknown): NormalizedOptimizati
     special_ad_categories: Array.isArray(campaignSource.special_ad_categories)
       ? campaignSource.special_ad_categories
       : [],
+    is_adset_budget_sharing_enabled: campaignSource.is_adset_budget_sharing_enabled === true,
     status: 'PAUSED',
   };
 
@@ -92,6 +93,7 @@ export function normalizeOptimizationDraft(value: unknown): NormalizedOptimizati
       status: 'PAUSED',
       billing_event: text(item.billing_event).toUpperCase() || 'IMPRESSIONS',
       optimization_goal: requestedGoal || (objective === 'OUTCOME_TRAFFIC' ? 'LINK_CLICKS' : 'LEAD_GENERATION'),
+      bid_strategy: text(item.bid_strategy).toUpperCase() || 'LOWEST_COST_WITHOUT_CAP',
       ...(targeting ? { targeting } : {}),
       ads: undefined,
     };
