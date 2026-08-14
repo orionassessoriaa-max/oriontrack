@@ -1,7 +1,21 @@
 import { NextResponse } from 'next/server';
-import { COMMERCIAL_STAGES, type CommercialStage } from '@/lib/comercial';
+import { canManageCommercialStages, COMMERCIAL_STAGES, type CommercialStage } from '@/lib/comercial';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+
+async function requireStageManager(request: Request) {
+  const guard = await requireCommercialUser(request);
+  if ('error' in guard) return guard;
+  if (!canManageCommercialStages(guard.commercialRole, guard.profile.id)) {
+    return {
+      error: NextResponse.json(
+        { error: 'Acao restrita ao coordenador comercial e ao closer Leo.' },
+        { status: 403 },
+      ),
+    };
+  }
+  return guard;
+}
 
 function normalizeStages(input: unknown): CommercialStage[] {
   const source = Array.isArray(input) ? input : [];
@@ -29,7 +43,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const guard = await requireCommercialUser(request, true);
+  const guard = await requireStageManager(request);
   if ('error' in guard) return guard.error;
   const body = await request.json();
   const stages = normalizeStages(body.stages).slice(0, 40);
@@ -40,7 +54,7 @@ export async function PUT(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const guard = await requireCommercialUser(request, true);
+  const guard = await requireStageManager(request);
   if ('error' in guard) return guard.error;
   const body = await request.json();
   const oldId = String(body.old_id || '').trim();
@@ -70,7 +84,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const guard = await requireCommercialUser(request, true);
+  const guard = await requireStageManager(request);
   if ('error' in guard) return guard.error;
   const body = await request.json();
   const stageId = String(body.id || '').trim();

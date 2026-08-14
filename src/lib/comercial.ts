@@ -41,6 +41,19 @@ export const COMMERCIAL_STAGES: CommercialStage[] = COMMERCIAL_STATUSES.map(
 export type CommercialStatus = string;
 export type CommercialRole = "coordenador" | "closer" | "sdr" | "visualizador";
 
+export const LEO_COMMERCIAL_CLOSER_PROFILE_ID =
+  "97558b76-425a-42b7-900b-46830f2c28d3";
+
+export function canManageCommercialStages(
+  role?: CommercialRole | null,
+  profileId?: string | null,
+) {
+  return (
+    role === "coordenador" ||
+    (role === "closer" && profileId === LEO_COMMERCIAL_CLOSER_PROFILE_ID)
+  );
+}
+
 export type CommercialMember = {
   profile_id: string;
   papel: CommercialRole;

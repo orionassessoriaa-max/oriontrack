@@ -27,6 +27,7 @@ import { useCommercial } from "@/components/commercial/CommercialShell";
 import CommercialLeadModal from "@/components/commercial/CommercialLeadModal";
 import CommercialLeadDetailsModal from "@/components/commercial/CommercialLeadDetailsModal";
 import {
+  canManageCommercialStages,
   COMMERCIAL_STAGES,
   currency,
   type CommercialLead,
@@ -261,6 +262,7 @@ export default function CommercialKanbanPage() {
     [members],
   );
   const canAssignSdr = isDevOps || role === "coordenador";
+  const canManageStages = canManageCommercialStages(role, currentProfileId);
   const visible = useMemo(
     () =>
       leads.filter((lead) => {
@@ -865,7 +867,7 @@ export default function CommercialKanbanPage() {
           </button>
         </div>
       )}
-      {role === "coordenador" && (
+      {canManageStages && (
         <div className="kh-kanban-toolbar">
           <span>Arraste uma coluna para reorganizar o funil.</span>
           <button
@@ -883,7 +885,7 @@ export default function CommercialKanbanPage() {
           </button>
         </div>
       )}
-      {role === "coordenador" && newStageOpen && (
+      {canManageStages && newStageOpen && (
         <form className="kh-stage-add" onSubmit={addStage}>
           <input
             autoFocus
@@ -915,10 +917,10 @@ export default function CommercialKanbanPage() {
             <section
               key={stage.id}
               className={`kh-kanban-column ${dropStage === stage.id ? "drop-target" : ""} ${stageDragging === stage.id ? "stage-dragging" : ""}`}
-              draggable={canEditCommercial && role === "coordenador" && editingStage?.id !== stage.id}
+              draggable={canEditCommercial && canManageStages && editingStage?.id !== stage.id}
               onDragStart={(event) => {
                 event.stopPropagation();
-                if (role === "coordenador") setStageDragging(stage.id);
+                if (canManageStages) setStageDragging(stage.id);
               }}
               onDragEnd={() => setStageDragging(null)}
               onDragOver={(event) => {
@@ -929,7 +931,7 @@ export default function CommercialKanbanPage() {
               onDragLeave={() => setDropStage(null)}
               onDrop={(event) => {
                 event.stopPropagation();
-                if (stageDragging && role === "coordenador")
+                if (stageDragging && canManageStages)
                   reorderStages(stage.id);
                 else if (dragging) void moveLead(dragging, stage.id);
                 setDragging(null);
@@ -998,7 +1000,7 @@ export default function CommercialKanbanPage() {
                     <small>{currency(total)}</small>
                   )}
                 </>}
-                {role === "coordenador" && editingStage?.id !== stage.id && (
+                {canManageStages && editingStage?.id !== stage.id && (
                   <div className="kh-stage-actions">
                     {stage.protected && <em>fixa</em>}
                     <button
