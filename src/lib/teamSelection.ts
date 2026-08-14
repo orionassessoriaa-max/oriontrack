@@ -1,5 +1,5 @@
 import { Profile } from '@/types';
-import { isDevOpsManagerProfile } from '@/lib/users';
+import { isDevOpsManagerProfile, isOperationalCoordinatorProfile } from '@/lib/users';
 
 export const TEAM_SELECTION_STORAGE_KEY = 'orion:selected_team';
 export const DUAL_OPERATION_ACCESS_KEY = 'orion:dual_operation_access';
@@ -24,6 +24,7 @@ export function hasOperationalWorkspaceAccess(profile?: Profile | null) {
 }
 
 export function canSelectOperationalTeam(profile?: Profile | null, hasCommercialAccess = false) {
+  if (isOperationalCoordinatorProfile(profile)) return false;
   const name = String(profile?.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const isNamedCoordinator = name.includes('pedro') || name.includes('patrick');
   return Boolean(profile?.id && MULTI_TEAM_PROFILE_IDS.has(profile.id))

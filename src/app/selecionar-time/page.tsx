@@ -49,7 +49,7 @@ export default function SelecionarTimePage() {
       ? window.sessionStorage.getItem(DUAL_OPERATION_ACCESS_KEY) === actualProfile.id
       : false;
     if (actualProfile && !canSelectOperationalTeam(actualProfile, verifiedDualAccess)) {
-      router.replace('/');
+      router.replace(getTeamHome(actualProfile.equipe_orion || null));
     }
   }, [actualProfile, loading, router, user]);
 

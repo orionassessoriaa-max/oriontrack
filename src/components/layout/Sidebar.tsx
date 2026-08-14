@@ -46,6 +46,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { canUseFerramentasPreview } from '@/lib/ferramentasAccess';
 import { canSelectOperationalTeam, DUAL_OPERATION_ACCESS_KEY } from '@/lib/teamSelection';
+import { isOperationalCoordinatorProfile } from '@/lib/users';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -362,7 +363,9 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     ? profile.nome.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
     : '??';
 
-  const roleLabel = profile?.tipo_usuario === 'admin'
+  const roleLabel = isOperationalCoordinatorProfile(profile)
+    ? 'Coordenador Operacional'
+    : profile?.tipo_usuario === 'admin'
     ? isMasterAdmin ? 'DevOps Manager' : 'Admin Orion'
     : profile?.tipo_usuario === 'gestor_trafego'
       ? 'Gestor de Tráfego'

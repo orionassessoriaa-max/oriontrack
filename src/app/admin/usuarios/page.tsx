@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { supabase } from '@/lib/supabase/client';
 import { Corretor, Profile, TipoCampanha, UserRole } from '@/types';
-import { generateOrionEmail, getRoleLabel } from '@/lib/users';
+import { generateOrionEmail, getProfileRoleLabel } from '@/lib/users';
 import { OPERADORAS_ONBOARDING } from '@/lib/onboarding';
 import { getTeamMemberPhoto, OrionTeamMember } from '@/lib/orionTeam';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -807,7 +807,7 @@ export default function AdminUsuariosPage() {
                           <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
                             isMasterAccess ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'
                           }`}>
-                            {isMasterAccess ? 'DevOps Manager' : getRoleLabel(profile.tipo_usuario)}
+                            {isMasterAccess ? 'DevOps Manager' : getProfileRoleLabel(profile)}
                           </span>
                           {profile.precisa_trocar_senha && (
                             <span className="rounded-full bg-sky-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-sky-700">

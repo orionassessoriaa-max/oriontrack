@@ -14,7 +14,7 @@ export type OrionTeamMember = {
 export const ORION_TEAM_MEMBERS: OrionTeamMember[] = [
   { nome: 'Ewertton', cargo: 'Gestor de Tráfego' },
   { nome: 'Geovana', cargo: 'Gestora de Tráfego' },
-  { nome: 'Lucas', cargo: 'Gestor de Projetos' },
+  { nome: 'Lucas', cargo: 'Coordenador Operacional' },
   { nome: 'Patrick', cargo: 'Coordenador Operacional' },
   { nome: 'Nataline', cargo: 'Gestora de Tráfego' },
 ];

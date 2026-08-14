@@ -1,6 +1,9 @@
 import { UserRole } from '@/types';
 
 export const DEVOPS_MANAGER_EMAIL = 'ewerttonherculano@gmail.com';
+export const OPERATIONAL_COORDINATOR_PROFILE_IDS = new Set([
+  '87ef1725-fc6c-43e5-be04-50ac481e49d5', // Lucas Rodrigues
+]);
 
 export function slugifyNameForEmail(name: string) {
   return name
@@ -60,12 +63,20 @@ export function isDevOpsManagerProfile(profile?: {
   return Boolean(profile?.is_admin_master) || emails.includes(DEVOPS_MANAGER_EMAIL);
 }
 
+export function isOperationalCoordinatorProfile(profile?: {
+  id?: string | null;
+} | null) {
+  return Boolean(profile?.id && OPERATIONAL_COORDINATOR_PROFILE_IDS.has(profile.id));
+}
+
 export function getProfileRoleLabel(profile?: {
+  id?: string | null;
   tipo_usuario?: UserRole | string | null;
   email?: string | null;
   email_real?: string | null;
   is_admin_master?: boolean | null;
 } | null) {
   if (isDevOpsManagerProfile(profile)) return 'DevOps Manager';
+  if (isOperationalCoordinatorProfile(profile)) return 'Coordenador Operacional';
   return getRoleLabel((profile?.tipo_usuario || 'corretor') as UserRole);
 }
