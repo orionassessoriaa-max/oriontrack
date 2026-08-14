@@ -7,7 +7,6 @@ import Sidebar from './Sidebar';
 import { AlertCircle, Loader2, LogOut, RefreshCw } from 'lucide-react';
 import ApoloAiWidget from '@/components/ui/ApoloAiWidget';
 import { canSelectOperationalTeam, TEAM_SELECTION_STORAGE_KEY } from '@/lib/teamSelection';
-import RealtimeRefresh from '@/components/system/RealtimeRefresh';
 
 export default function InternalLayout({ children }: { children: React.ReactNode }) {
   const { profile, actualProfile, loading, user, signOut, refreshProfile, isViewingAsCorretor } = useAuth();
@@ -204,7 +203,6 @@ export default function InternalLayout({ children }: { children: React.ReactNode
       isDark ? 'bg-[#020617] text-white' : 'bg-[#f8fafc] text-slate-800'
     }`}>
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
-      <RealtimeRefresh />
       <main className="w-full min-w-0 px-3 py-5 pt-24 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7 lg:pt-28">
         <div className="mx-auto max-w-none transition-all duration-300">
           {children}

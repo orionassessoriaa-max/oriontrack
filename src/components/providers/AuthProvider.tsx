@@ -48,6 +48,7 @@ const BROKER_VIEW_ROLES = ['corretor', 'corretor_admin', 'corretor_membro'];
 const AUTH_SESSION_TIMEOUT_MS = 10_000;
 const AUTH_PROFILE_TIMEOUT_MS = 8_000;
 const PROFILE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const profileRequests = new Map<string, Promise<Profile | null>>();
 
 type CachedProfile = {
   profile: Profile;
@@ -106,7 +107,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const router = useRouter();
 
   const fetchProfile = async (userId: string, accessToken?: string | null) => {
-    try {
+    const currentRequest = profileRequests.get(userId);
+    if (currentRequest) return currentRequest;
+
+    const request = (async (): Promise<Profile | null> => {
+      try {
       let token = accessToken;
       if (!token) {
         const { data } = await withTimeout(
@@ -156,13 +161,27 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         return directProfile as Profile;
       };
 
-      const loadedProfile = await Promise.any([loadFromApi(), loadDirectly()]);
+      let loadedProfile: Profile;
+      try {
+        loadedProfile = await loadFromApi();
+      } catch (apiError) {
+        console.warn('Profile API failed; using direct fallback:', apiError);
+        loadedProfile = await loadDirectly();
+      }
       cacheProfile(userId, loadedProfile);
       return loadedProfile;
 
-    } catch (error) {
-      console.error('All profile loading strategies failed:', error);
-      return readCachedProfile(userId);
+      } catch (error) {
+        console.error('All profile loading strategies failed:', error);
+        return readCachedProfile(userId);
+      }
+    })();
+
+    profileRequests.set(userId, request);
+    try {
+      return await request;
+    } finally {
+      if (profileRequests.get(userId) === request) profileRequests.delete(userId);
     }
   };
 

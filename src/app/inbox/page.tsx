@@ -316,6 +316,10 @@ export default function BrokerInboxPage() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const selectedConversationRef = useRef<Conversation | null>(null);
   const visibleConversationIdsRef = useRef<Set<string>>(new Set());
+  const inboxCorretorIdsRef = useRef<Set<string>>(new Set());
+  const inboxSyncInFlightRef = useRef(false);
+  const inboxSyncQueuedRef = useRef(false);
+  const inboxRefreshTimerRef = useRef<number | null>(null);
   const messageSyncInFlightRef = useRef(false);
   const messageFetchRequestRef = useRef(0);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
@@ -498,9 +502,17 @@ export default function BrokerInboxPage() {
       return;
     }
 
-    if (!isSilent) {
-      setLoading(true);
+    if (inboxSyncInFlightRef.current) {
+      inboxSyncQueuedRef.current = true;
+      return;
     }
+    inboxSyncInFlightRef.current = true;
+    inboxSyncQueuedRef.current = false;
+
+    try {
+      if (!isSilent) {
+        setLoading(true);
+      }
     const params = new URLSearchParams(window.location.search);
     const urlPhone = params.get('telefone') || '';
 
@@ -515,6 +527,7 @@ export default function BrokerInboxPage() {
         idsToFetch = siblings.map((s) => s.id);
       }
     }
+    inboxCorretorIdsRef.current = new Set(idsToFetch);
 
     // A conversa pode ter sido criada com o corretor-base de outro integrante,
     // mas ainda pertencer ao responsável atual do lead. Incluímos esses leads
@@ -701,7 +714,26 @@ export default function BrokerInboxPage() {
     if (!isSilent && nextSelection?.id && !nextSelection.id.startsWith('new-')) {
       void fetchMessages(nextSelection.id);
     }
-    if (!isSilent) void fetchConnectionStatus();
+      if (!isSilent) void fetchConnectionStatus();
+    } catch (error) {
+      console.error('Erro ao atualizar o Inbox:', error);
+      if (!isSilent) setLoading(false);
+    } finally {
+      inboxSyncInFlightRef.current = false;
+      if (inboxSyncQueuedRef.current && document.visibilityState === 'visible') {
+        inboxSyncQueuedRef.current = false;
+        window.setTimeout(() => void fetchInbox(true), 250);
+      }
+    }
+  }
+
+  function scheduleInboxRefresh(delay = 750) {
+    if (document.visibilityState !== 'visible') return;
+    if (inboxRefreshTimerRef.current) window.clearTimeout(inboxRefreshTimerRef.current);
+    inboxRefreshTimerRef.current = window.setTimeout(() => {
+      inboxRefreshTimerRef.current = null;
+      void fetchInbox(true);
+    }, delay);
   }
 
   useEffect(() => {
@@ -714,7 +746,7 @@ export default function BrokerInboxPage() {
   useEffect(() => {
     const intervalTime = isWhatsAppConnected ? 30000 : 10000;
     const interval = setInterval(() => {
-      void fetchConnectionStatus();
+      if (document.visibilityState === 'visible') void fetchConnectionStatus();
     }, intervalTime);
 
     return () => clearInterval(interval);
@@ -766,12 +798,14 @@ export default function BrokerInboxPage() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
         (payload) => {
+          if (document.visibilityState !== 'visible') return;
           const newMsg = payload.new as InboxMessage;
           const currentSelected = selectedConversationRef.current;
+          const belongsToVisibleInbox = visibleConversationIdsRef.current.has(newMsg.conversa_id);
 
           // O historico exibido pode unir mais de uma conversa do mesmo numero.
           // Atualize em tempo real qualquer parte dessa timeline unificada.
-          if (currentSelected && visibleConversationIdsRef.current.has(newMsg.conversa_id)) {
+          if (currentSelected && belongsToVisibleInbox) {
             const isAudio = 
               newMsg.mensagem?.includes('[Áudio Gravado]') || 
               newMsg.mensagem?.includes('🎤 Mensagem de voz') || 
@@ -803,20 +837,27 @@ export default function BrokerInboxPage() {
           }
 
           // Trigger a silent inbox refresh to update the sidebar order/preview
-          void fetchInbox(true);
+          if (belongsToVisibleInbox) scheduleInboxRefresh();
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'whatsapp_conversas' },
-        () => {
+        (payload) => {
           // Trigger a silent inbox refresh to update the sidebar when any conversation changes
-          void fetchInbox(true);
+          const changedConversation = (payload.new || payload.old) as { corretor_id?: string | null };
+          if (changedConversation.corretor_id && inboxCorretorIdsRef.current.has(changedConversation.corretor_id)) {
+            scheduleInboxRefresh();
+          }
         }
       )
       .subscribe();
 
     return () => {
+      if (inboxRefreshTimerRef.current) {
+        window.clearTimeout(inboxRefreshTimerRef.current);
+        inboxRefreshTimerRef.current = null;
+      }
       supabase.removeChannel(channel);
     };
   }, [profile?.corretor_id]);
@@ -933,7 +974,7 @@ export default function BrokerInboxPage() {
         void fetchMessages(conversationId, { silent: true });
       }
     };
-    const interval = window.setInterval(syncOpenConversation, 5_000);
+    const interval = window.setInterval(syncOpenConversation, 30_000);
     return () => window.clearInterval(interval);
   }, [selectedConversation?.id, profile?.id]);
 
@@ -943,7 +984,7 @@ export default function BrokerInboxPage() {
     if (!profile?.id) return;
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') void fetchInbox(true);
-    }, 15_000);
+    }, 30_000);
     return () => window.clearInterval(interval);
   }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
