@@ -9,13 +9,6 @@ import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 import { getLeadSpamReason } from '@/lib/leadSpam';
-import {
-  extractLeadRoutingSources,
-  quarantineLeadRouting,
-  resolveLeadRouting,
-  strictLeadRoutingEnabled,
-  type LeadRoutingResult,
-} from '@/lib/n8nLeadRouting';
 
 function normalizeText(value: unknown, fallback = '') {
   if (value === undefined || value === null) return fallback;
@@ -276,7 +269,7 @@ async function tryStartLeadBotForWebhook(leadId?: string | null) {
   }
 }
 
-async function resolveLegacyCorretorId(body: any) {
+async function resolveCorretorId(body: any) {
   let resolvedId: string | null = null;
 
   const corretoraId = normalizeText(field(body, [
@@ -392,37 +385,6 @@ async function resolveLegacyCorretorId(body: any) {
   return null;
 }
 
-async function notifyLeadRoutingIssue(routing: LeadRoutingResult, quarantineId?: string | null) {
-  try {
-    const monitorPhone = String(process.env.ORION_MONITOR_WHATSAPP || '61984409328').replace(/\D/g, '');
-    const { data: admins } = await supabaseAdmin
-      .from('profiles')
-      .select('id, nome, email, tipo_usuario, telefone')
-      .eq('tipo_usuario', 'admin')
-      .in('status', ['active', 'ativo', 'Ativo']);
-
-    const target = (admins || []).find((profile) => String(profile.telefone || '').replace(/\D/g, '').endsWith(monitorPhone));
-    if (!target) return;
-
-    const sourceLabel = routing.source ? `${routing.source.type}: ${routing.source.id}` : 'origem nao identificada';
-    await sendApoloWhatsApp({
-      type: 'suporte',
-      title: 'Lead bloqueado por divergencia de rota',
-      message: [
-        routing.reason || 'O destino enviado pelo n8n diverge da origem cadastrada.',
-        `Origem: ${sourceLabel}`,
-        `ID enviado: ${routing.legacyCorretorId || 'nao informado'}`,
-        `ID resolvido: ${routing.corretorId || 'nao encontrado'}`,
-        quarantineId ? `Quarentena: ${quarantineId}` : '',
-      ].filter(Boolean).join('\n'),
-      profiles: [target],
-      respectPreferences: false,
-    });
-  } catch (error) {
-    console.error('[Webhook n8n] Falha ao notificar divergencia de rota:', error);
-  }
-}
-
 async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
   const { data: currentLead } = await supabaseAdmin
     .from('leads')
@@ -512,62 +474,12 @@ export async function POST(request: Request) {
     }
 
     const body = flattenPayload(await request.json());
-    const legacyCorretorId = await resolveLegacyCorretorId(body);
-    const routingSources = extractLeadRoutingSources((aliases) => field(body, aliases));
-    const routing = await resolveLeadRouting(routingSources, legacyCorretorId);
-
-    const mustQuarantine = routing.status === 'conflict'
-      || (routing.status === 'unmapped' && strictLeadRoutingEnabled());
-
-    if (mustQuarantine) {
-      const quarantineId = await quarantineLeadRouting({
-        reason: routing.reason || 'Rota de lead invalida.',
-        source: routing.source,
-        suppliedCorretorId: routing.legacyCorretorId,
-        resolvedCorretoraId: routing.corretoraId,
-        resolvedCorretorId: routing.corretorId,
-        payload: body,
-      });
-
-      await writeAuditLog(request, null, {
-        action: 'lead.routing_blocked',
-        entity_type: 'lead_routing_quarantine',
-        entity_id: quarantineId,
-        metadata: {
-          reason: routing.reason,
-          source: routing.source,
-          supplied_corretor_id: routing.legacyCorretorId,
-          resolved_corretor_id: routing.corretorId,
-          resolved_corretora_id: routing.corretoraId,
-        },
-      });
-      void notifyLeadRoutingIssue(routing, quarantineId);
-
-      return NextResponse.json({
-        error: 'Lead bloqueado porque a origem nao corresponde ao destino enviado.',
-        quarantine_id: quarantineId,
-        source: routing.source,
-      }, { status: 409 });
-    }
-
-    const corretorId = routing.corretorId;
+    const corretorId = await resolveCorretorId(body);
 
     if (!corretorId) {
       return NextResponse.json({
-        error: 'Concessionaria ou corretor nao encontrado. Envie uma origem cadastrada ou um destino legado valido.'
+        error: 'Concessionaria ou corretor nao encontrado. Envie corretora_id, corretor_id, corretor_email ou corretor_nome.'
       }, { status: 400 });
-    }
-
-    if (routing.status === 'unmapped') {
-      await writeAuditLog(request, null, {
-        action: 'lead.routing_unmapped_legacy_fallback',
-        entity_type: 'lead',
-        metadata: {
-          source: routing.source,
-          corretor_id: corretorId,
-          strict_routing: false,
-        },
-      });
     }
 
     const nome = normalizeText(field(body, ['nome', 'name', 'lead_nome', 'cliente', 'nome completo']));
