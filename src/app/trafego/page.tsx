@@ -28,6 +28,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import Link from 'next/link';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import OrionCredCard from '@/components/creatives/OrionCredCard';
 import {
   ACTION_LABELS,
   TRACKING_LABELS,
@@ -528,6 +529,9 @@ export default function GestorDashboardPage() {
           </div>
         </header>
 
+        <div className="mb-6 flex justify-end">
+          <OrionCredCard holderName={profile?.nome || 'Gestor Orion'} />
+        </div>
 
         {aviso ? (
           <div

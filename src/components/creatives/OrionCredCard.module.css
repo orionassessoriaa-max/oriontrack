@@ -1,0 +1,125 @@
+.card {
+  --cred-petroleum: #073b46;
+  --cred-petroleum-bright: #0a6673;
+  --cred-cyan: #21c7d9;
+  position: relative;
+  isolation: isolate;
+  aspect-ratio: 1.586 / 1;
+  width: min(100%, 430px);
+  overflow: hidden;
+  border: 1px solid rgba(90, 211, 222, 0.22);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(33, 199, 217, 0.18), transparent 26%),
+    radial-gradient(circle at 10% 100%, rgba(7, 59, 70, 0.72), transparent 48%),
+    linear-gradient(135deg, #030608 0%, #071115 48%, #041014 100%);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -1px 0 rgba(33, 199, 217, 0.08);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -64%;
+  left: 17%;
+  width: 112%;
+  height: 120%;
+  border: 1px solid rgba(61, 194, 207, 0.18);
+  border-radius: 50%;
+  transform: rotate(-18deg);
+  box-shadow: 0 0 42px rgba(10, 102, 115, 0.12);
+}
+
+.card::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  opacity: 0.2;
+  background-image: linear-gradient(115deg, transparent 28%, rgba(255, 255, 255, 0.07) 46%, transparent 62%);
+  transform: translateX(-55%);
+  animation: cred-sheen 9s ease-in-out infinite;
+}
+
+.chip {
+  position: relative;
+  width: 46px;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid rgba(132, 228, 235, 0.3);
+  border-radius: 9px;
+  background: linear-gradient(145deg, #0c5b66, #06323a 65%, #0a717d);
+  box-shadow: inset 0 0 14px rgba(17, 172, 187, 0.22);
+}
+
+.chip::before,
+.chip::after {
+  content: '';
+  position: absolute;
+  border: 1px solid rgba(153, 238, 242, 0.22);
+  border-radius: 4px;
+}
+
+.chip::before {
+  inset: 7px -2px;
+}
+
+.chip::after {
+  inset: -2px 14px;
+}
+
+.logo {
+  width: 132px;
+  height: auto;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.55));
+}
+
+.creditLabel {
+  color: rgba(196, 238, 241, 0.62);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.creditValue {
+  color: #f3fbfc;
+  font-size: clamp(22px, 5.4vw, 30px);
+  font-weight: 850;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+  text-shadow: 0 1px 16px rgba(33, 199, 217, 0.1);
+}
+
+.holder {
+  max-width: 70%;
+  overflow: hidden;
+  color: rgba(228, 246, 247, 0.9);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.monogram {
+  color: rgba(122, 211, 218, 0.4);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+@keyframes cred-sheen {
+  0%, 68%, 100% { transform: translateX(-55%); }
+  82% { transform: translateX(60%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card::after { animation: none; }
+}
+
