@@ -72,29 +72,29 @@ export default function OrionCredCard({ holderName, gestorId, balance = null, us
 
   return (
     <>
-      <section aria-label="Cartao Orion Cred" className={styles.card}>
-        <div className="flex h-full flex-col justify-between p-6 sm:p-7">
-          <div className="flex items-start justify-between gap-5">
+      <section aria-label="Cartão Orion Cred" className={styles.card}>
+        <div className={styles.content}>
+          <div className={styles.header}>
             <Image src="/brand-logo.png" alt="Orion Track" width={1920} height={1080} className={styles.logo} priority />
             <span className={styles.monogram}>BLACK</span>
           </div>
-          <div>
-            <div className="mb-5 flex items-center justify-between gap-5">
+          <div className={styles.balanceBlock}>
+            <div className={styles.brandRow}>
               <div className={styles.chip} aria-hidden="true" />
               <div className="text-right"><p className={styles.creditLabel}>Orion Cred</p><p className="mt-1 text-[11px] font-semibold text-cyan-100/55">Somente para criativos</p></div>
             </div>
-            <p className={styles.creditLabel}>Saldo disponivel</p>
-            <p className={`${styles.creditValue} mt-1`}>{balance === null ? 'Limite em configuracao' : `${formatCredits(balance)} creditos`}</p>
+            <p className={styles.creditLabel}>Saldo disponível</p>
+            <p className={`${styles.creditValue} mt-1`}>{balance === null ? 'Limite em configuração' : `${formatCredits(balance)} créditos`}</p>
             {balance !== null && (
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10" aria-label={`${usagePercent}% do limite utilizado`}>
+              <div className={styles.progressTrack} aria-label={`${usagePercent}% do limite utilizado`}>
                 <div className={`h-full rounded-full ${usagePercent >= 100 ? 'bg-rose-400' : usagePercent >= 80 ? 'bg-amber-300' : 'bg-cyan-400'}`} style={{ width: `${Math.min(Math.max(usagePercent, 0), 100)}%` }} />
               </div>
             )}
-            {balance !== null && <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-cyan-100/50">Usado {formatCredits(used)} de {formatCredits(limit)} | Renova em {formatDate(cycleEnd)}</p>}
+            {balance !== null && <p className={styles.usageLine}>Usado {formatCredits(used)} de {formatCredits(limit)} | Renova em {formatDate(cycleEnd)}</p>}
           </div>
-          <div className="flex items-end justify-between gap-4">
-            <div className="min-w-0"><p className={styles.holder}>{holderName || 'Gestor Orion'}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100/40">{cycleLabel}</p></div>
-            <button type="button" onClick={() => void openStatement()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-200/15 px-3 text-xs font-black text-cyan-100/70 hover:bg-cyan-300/10 hover:text-white"><FileText size={15} /> Extrato</button>
+          <div className={styles.footer}>
+            <div className={styles.holderBlock}><p className={styles.holder}>{holderName || 'Gestor Orion'}</p><p className={styles.cycle}>{cycleLabel}</p></div>
+            <button type="button" onClick={() => void openStatement()} className={styles.statementButton}><FileText size={15} /> Extrato</button>
             <LockKeyhole size={17} className="shrink-0 text-cyan-200/50" aria-label="Saldo protegido" />
           </div>
         </div>
