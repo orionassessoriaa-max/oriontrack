@@ -67,6 +67,7 @@ export interface Lead {
   cidade: string;
   operadora?: string | null;
   origem?: string | null;
+  origem_config_id?: string | null;
   email?: string | null;
   motivo_busca?: string | null;
   hospital_preferencia?: string | null;

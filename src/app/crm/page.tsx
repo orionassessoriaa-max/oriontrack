@@ -258,6 +258,19 @@ type DealershipBroker = {
   email?: string | null;
 };
 
+type LeadOriginConfig = {
+  id: string;
+  nome: string;
+  responsavel_membro_id?: string | null;
+  responsavel_profile_id?: string | null;
+  kanban_etapas?: KanbanColumn[];
+};
+
+type LeadLabelConfig = {
+  id: string;
+  nome: string;
+};
+
 const READY_LABELS = ['Amil bronze', 'Amil platinum', 'Porto p470', 'Outra etiqueta'];
 
 function getSeededValue(seed: string, min: number, max: number) {
@@ -325,6 +338,10 @@ export default function CrmPage() {
   const [search, setSearch] = useState('');
   const [pageFilter, setPageFilter] = useState('todas');
   const [originFilter, setOriginFilter] = useState('todas');
+  const [leadOriginConfigs, setLeadOriginConfigs] = useState<LeadOriginConfig[]>([]);
+  const [leadLabelConfigs, setLeadLabelConfigs] = useState<LeadLabelConfig[]>([]);
+  const [leadSettingsEnabled, setLeadSettingsEnabled] = useState(false);
+  const [brokerDefaultColumns, setBrokerDefaultColumns] = useState<KanbanColumn[]>(DEFAULT_COLUMNS);
   const [metricFilter, setMetricFilter] = useState<MetricFilter>('todos');
   const [crmScopeView, setCrmScopeView] = useState<CrmScopeView>('meus');
   const [visibleLimits, setVisibleLimits] = useState<Record<string, number>>({});
@@ -391,6 +408,16 @@ export default function CrmPage() {
   );
   const isViewingBrokerAsAdmin = Boolean(simulatedCorretorId) && !['corretor', 'corretor_admin', 'corretor_membro'].includes(profile?.tipo_usuario || '');
   const canUseDealershipViews = profile?.tipo_usuario === 'corretor' || profile?.tipo_usuario === 'corretor_admin' || isViewingBrokerAsAdmin || (canAssignTeamLeads && teamMembers.length > 0);
+  const selectedOriginConfig = useMemo(
+    () => leadOriginConfigs.find((origin) => origin.nome === originFilter) || null,
+    [leadOriginConfigs, originFilter],
+  );
+  const availableLabels = useMemo(
+    () => leadSettingsEnabled
+      ? Array.from(new Set(leadLabelConfigs.map((label) => label.nome).filter(Boolean)))
+      : READY_LABELS,
+    [leadLabelConfigs, leadSettingsEnabled],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -414,18 +441,41 @@ export default function CrmPage() {
     const timer = window.setTimeout(async () => {
       const token = await getToken();
       if (!token) return;
-      const response = await fetch('/api/crm/stages', {
+      const response = await fetch(selectedOriginConfig ? '/api/crm/origins' : '/api/crm/stages', {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ corretor_id: kanbanCorretorId, stages: columns }),
+        body: JSON.stringify({
+          corretor_id: kanbanCorretorId,
+          origin_id: selectedOriginConfig?.id,
+          stages: columns,
+        }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         setError(payload.error || 'Nao foi possivel salvar as etapas do funil.');
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (selectedOriginConfig && payload.origin) {
+        setLeadOriginConfigs((current) => current.map((origin) => (
+          origin.id === payload.origin.id ? payload.origin : origin
+        )));
+      } else if (!selectedOriginConfig) {
+        setBrokerDefaultColumns(columns);
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [columns, kanbanCorretorId, kanbanStagesLoaded, canManageKanbanStructure]);
+  }, [columns, kanbanCorretorId, kanbanStagesLoaded, canManageKanbanStructure, selectedOriginConfig?.id]);
+
+  function changeOriginFilter(nextOrigin: string) {
+    setKanbanStagesLoaded(false);
+    setOriginFilter(nextOrigin);
+    const configuredOrigin = leadOriginConfigs.find((origin) => origin.nome === nextOrigin);
+    setColumns(configuredOrigin
+      ? normalizeKanbanColumns(configuredOrigin.kanban_etapas)
+      : normalizeKanbanColumns(brokerDefaultColumns));
+    window.setTimeout(() => setKanbanStagesLoaded(true), 0);
+  }
 
   useEffect(() => {
     if (!selectedLead) return;
@@ -516,8 +566,23 @@ export default function CrmPage() {
         if (brokerRow?.id) {
           scopedBrokers = [{ id: brokerRow.id, nome: brokerRow.nome || 'Corretor', email: brokerRow.email || null }];
         }
-        setColumns(normalizeKanbanColumns(brokerRow?.kanban_etapas));
+        const defaultStages = normalizeKanbanColumns(brokerRow?.kanban_etapas);
+        setBrokerDefaultColumns(defaultStages);
+        setColumns(defaultStages);
         setKanbanStagesLoaded(true);
+
+        const token = await getToken();
+        if (token) {
+          const settingsResponse = await fetch(`/api/crm/origins?corretor_id=${encodeURIComponent(corretorScopeId)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const settingsPayload = await settingsResponse.json().catch(() => ({}));
+          if (settingsResponse.ok) {
+            setLeadSettingsEnabled(settingsPayload.enabled === true);
+            setLeadOriginConfigs(Array.isArray(settingsPayload.origins) ? settingsPayload.origins : []);
+            setLeadLabelConfigs(Array.isArray(settingsPayload.labels) ? settingsPayload.labels : []);
+          }
+        }
 
         if (companyName) {
           const { data: siblings } = await supabase
@@ -989,7 +1054,10 @@ export default function CrmPage() {
 
   const leadStatusColumns = useMemo(() => {
     const seen = new Set<string>();
-    return leads
+    const source = originFilter === 'todas'
+      ? leads
+      : leads.filter((lead) => originFilter === '__sem_origem__' ? !lead.origem : lead.origem === originFilter);
+    return source
       .map((lead) => normalizeLeadStatus(lead.status))
       .filter((status) => {
         if (!status || seen.has(status)) return false;
@@ -997,7 +1065,7 @@ export default function CrmPage() {
         return true;
       })
       .map((status) => ({ id: status, label: getLeadStatusStyle(status).label, desc: 'Etapa encontrada nos leads' }));
-  }, [leads]);
+  }, [leads, originFilter]);
 
   useEffect(() => {
     if (!kanbanStagesLoaded || !kanbanCorretorId || !canManageKanbanStructure) return;
@@ -1546,7 +1614,7 @@ export default function CrmPage() {
             </select>
             <select
               value={originFilter}
-              onChange={(event) => setOriginFilter(event.target.value)}
+              onChange={(event) => changeOriginFilter(event.target.value)}
               className="w-full rounded-2xl border-none bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500/20 lg:w-[210px] lg:min-w-[210px]"
             >
               <option value="todas">Origem: todas</option>
@@ -2017,8 +2085,8 @@ export default function CrmPage() {
                       <EditField label="E-mail" value={editForm.email} onChange={(value) => setEditForm((prev) => ({ ...prev, email: value }))} />
                       <EditField label="Motivo da busca" value={editForm.motivo_busca} onChange={(value) => setEditForm((prev) => ({ ...prev, motivo_busca: value }))} />
                       <EditField label="Hospital/Região" value={editForm.hospital_preferencia} onChange={(value) => setEditForm((prev) => ({ ...prev, hospital_preferencia: value }))} />
-                      <EditSelect label="Etiqueta" value={editForm.etiqueta} options={['', ...READY_LABELS]} onChange={(value) => {
-                        const etiqueta = value === 'Outra etiqueta' ? (window.prompt('Nome da nova etiqueta', editForm.etiqueta) || '') : value;
+                      <EditSelect label="Etiqueta" value={editForm.etiqueta} options={['', ...availableLabels]} onChange={(value) => {
+                        const etiqueta = !leadSettingsEnabled && value === 'Outra etiqueta' ? (window.prompt('Nome da nova etiqueta', editForm.etiqueta) || '') : value;
                         setEditForm((prev) => ({ ...prev, etiqueta }));
                       }} />
                       <EditField label="Valor negociação" value={editForm.valor_negociacao} onChange={(value) => setEditForm((prev) => ({ ...prev, valor_negociacao: value }))} />

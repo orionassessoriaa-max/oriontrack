@@ -146,6 +146,19 @@ type TeamMember = {
   tipo_usuario?: string | null;
 };
 
+type LeadOriginConfig = {
+  id: string;
+  nome: string;
+  responsavel_membro_id?: string | null;
+  responsavel_profile_id?: string | null;
+  kanban_etapas?: KanbanStage[];
+};
+
+type LeadLabelConfig = {
+  id: string;
+  nome: string;
+};
+
 type ActiveMetaCreative = {
   id: string;
   ad_name: string;
@@ -175,6 +188,8 @@ const EMPTY_MANUAL_LEAD = {
   investimento: '',
   cidade: '',
   origem: 'Manual',
+  origem_config_id: '',
+  etiqueta: '',
   responsavel_membro_id: 'unassigned',
 };
 
@@ -226,6 +241,10 @@ function isConexaoCorretora(value?: string | null) {
     .toUpperCase() === 'CONEXAO CORRETORA';
 }
 
+function isFacilitaCorretora(value?: string | null) {
+  return normalizeText(value).trim() === 'facilita corretora';
+}
+
 export default function BrokerLeadsPage() {
   const { profile, actualProfile, isViewingAsCorretor } = useAuth();
   const { confirmDialog } = useDialog();
@@ -266,6 +285,15 @@ export default function BrokerLeadsPage() {
   const [commercialModalError, setCommercialModalError] = useState<string | null>(null);
   const commercialResolverRef = useRef<((payload: CommercialPayload | null) => void) | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [leadOriginConfigs, setLeadOriginConfigs] = useState<LeadOriginConfig[]>([]);
+  const [leadLabelConfigs, setLeadLabelConfigs] = useState<LeadLabelConfig[]>([]);
+  const [leadSettingsEnabled, setLeadSettingsEnabled] = useState(false);
+  const [showNewOriginForm, setShowNewOriginForm] = useState(false);
+  const [showNewLabelForm, setShowNewLabelForm] = useState(false);
+  const [newOriginName, setNewOriginName] = useState('');
+  const [newOriginResponsible, setNewOriginResponsible] = useState('unassigned');
+  const [newLabelName, setNewLabelName] = useState('');
+  const [savingLeadSetting, setSavingLeadSetting] = useState(false);
   const [resolvedCorretorId, setResolvedCorretorId] = useState<string | null>(null);
   const [resolvedCorretorIds, setResolvedCorretorIds] = useState<string[]>([]);
   const [rankingEnabled, setRankingEnabled] = useState(false);
@@ -274,6 +302,7 @@ export default function BrokerLeadsPage() {
   const activeMetaCreativesRef = useRef<ActiveMetaCreative[] | null>(null);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
   const usesMyLeadsByDefault = isConexaoCorretora(profile?.nome_empresa);
+  const isFacilita = isFacilitaCorretora(profile?.nome_empresa);
   const canAssignTeamLeads = !isTeamMemberProfile && (
     profile?.tipo_usuario === 'admin' ||
     profile?.tipo_usuario === 'corretor' ||
@@ -380,6 +409,89 @@ export default function BrokerLeadsPage() {
     if (response.ok) setKanbanStages(normalizeKanbanStages(payload.stages));
   };
 
+  const fetchLeadSettings = async () => {
+    if (!brokerCorretorId) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return;
+    const response = await fetch(`/api/crm/origins?corretor_id=${encodeURIComponent(brokerCorretorId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error('Erro ao carregar origens e etiquetas:', payload.error || response.statusText);
+      return;
+    }
+    setLeadSettingsEnabled(payload.enabled === true);
+    setLeadOriginConfigs(Array.isArray(payload.origins) ? payload.origins : []);
+    setLeadLabelConfigs(Array.isArray(payload.labels) ? payload.labels : []);
+  };
+
+  const saveLeadSetting = async (action: 'create_origin' | 'create_label') => {
+    if (!brokerCorretorId || savingLeadSetting) return;
+    const nome = action === 'create_origin' ? newOriginName.trim() : newLabelName.trim();
+    if (!nome) {
+      setManualLeadError(action === 'create_origin' ? 'Informe o nome da origem.' : 'Informe o nome da etiqueta.');
+      return;
+    }
+
+    setSavingLeadSetting(true);
+    setManualLeadError(null);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setSavingLeadSetting(false);
+      setManualLeadError('Sessao expirada. Entre novamente.');
+      return;
+    }
+
+    const response = await fetch('/api/crm/origins', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        corretor_id: brokerCorretorId,
+        nome,
+        responsavel_membro_id: action === 'create_origin' ? newOriginResponsible : undefined,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    setSavingLeadSetting(false);
+    if (!response.ok) {
+      setManualLeadError(payload.error || 'Nao foi possivel salvar a configuracao.');
+      return;
+    }
+
+    if (action === 'create_origin' && payload.origin) {
+      setLeadOriginConfigs((current) => [...current, payload.origin].sort((a, b) => a.nome.localeCompare(b.nome)));
+      setManualLeadForm((current) => ({
+        ...current,
+        origem: payload.origin.nome,
+        origem_config_id: payload.origin.id,
+        responsavel_membro_id: payload.origin.responsavel_membro_id || 'unassigned',
+      }));
+      setNewOriginName('');
+      setNewOriginResponsible('unassigned');
+      setShowNewOriginForm(false);
+    }
+    if (action === 'create_label' && payload.label) {
+      setLeadLabelConfigs((current) => [...current, payload.label].sort((a, b) => a.nome.localeCompare(b.nome)));
+      setManualLeadForm((current) => ({ ...current, etiqueta: payload.label.nome }));
+      setNewLabelName('');
+      setShowNewLabelForm(false);
+    }
+  };
+
+  const selectConfiguredOrigin = (originId: string) => {
+    const origin = leadOriginConfigs.find((item) => item.id === originId);
+    setManualLeadForm((current) => ({
+      ...current,
+      origem_config_id: origin?.id || '',
+      origem: origin?.nome || '',
+      responsavel_membro_id: origin?.responsavel_membro_id || 'unassigned',
+    }));
+  };
+
   useEffect(() => {
     if (profile?.id && canAssignTeamLeads) {
       fetchTeamMembers();
@@ -391,6 +503,7 @@ export default function BrokerLeadsPage() {
       fetchLeads(0, false);
       fetchCrmConfig();
       fetchKanbanStages();
+      fetchLeadSettings();
     }
   }, [brokerCorretorId, resolvedCorretorIds.join('|'), profile?.nome_empresa]);
 
@@ -1631,6 +1744,11 @@ export default function BrokerLeadsPage() {
                       <option key={member.id} value={member.id}>{member.nome}</option>
                     ))}
                   </select>
+                  {leadSettingsEnabled && manualLeadForm.origem_config_id && (
+                    <p className="px-1 text-[11px] font-semibold text-cyan-300">
+                      Preenchido pela origem. Voce pode trocar somente para este lead.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Cidade</label>
@@ -1643,13 +1761,116 @@ export default function BrokerLeadsPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Origem</label>
-                  <input
-                    value={manualLeadForm.origem}
-                    onChange={(e) => setManualLeadForm((current) => ({ ...current, origem: e.target.value }))}
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
-                    placeholder="Manual, Orion, Indicacao..."
-                  />
+                  {leadSettingsEnabled || isFacilita ? (
+                    <div className="flex gap-2">
+                      <select
+                        required
+                        value={manualLeadForm.origem_config_id}
+                        onChange={(event) => selectConfiguredOrigin(event.target.value)}
+                        className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
+                      >
+                        <option value="">Selecione a origem</option>
+                        {leadOriginConfigs.map((origin) => (
+                          <option key={origin.id} value={origin.id}>{origin.nome}</option>
+                        ))}
+                      </select>
+                      {canAssignTeamLeads && (
+                        <button
+                          type="button"
+                          onClick={() => setShowNewOriginForm((current) => !current)}
+                          className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 text-xs font-black text-cyan-200 hover:bg-cyan-400/20"
+                        >
+                          <Plus size={16} className="mx-auto" />
+                          Origem
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <input
+                      value={manualLeadForm.origem}
+                      onChange={(e) => setManualLeadForm((current) => ({ ...current, origem: e.target.value }))}
+                      className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
+                      placeholder="Manual, Orion, Indicacao..."
+                    />
+                  )}
                 </div>
+                {(leadSettingsEnabled || isFacilita) && (
+                  <div className="space-y-2">
+                    <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Etiqueta</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={manualLeadForm.etiqueta}
+                        onChange={(event) => setManualLeadForm((current) => ({ ...current, etiqueta: event.target.value }))}
+                        className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-950/60 px-5 py-4 text-sm font-bold text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30"
+                      >
+                        <option value="">Sem etiqueta</option>
+                        {leadLabelConfigs.map((label) => <option key={label.id} value={label.nome}>{label.nome}</option>)}
+                      </select>
+                      {canAssignTeamLeads && (
+                        <button
+                          type="button"
+                          onClick={() => setShowNewLabelForm((current) => !current)}
+                          className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 text-xs font-black text-cyan-200 hover:bg-cyan-400/20"
+                        >
+                          <Plus size={16} className="mx-auto" />
+                          Etiqueta
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {showNewOriginForm && canAssignTeamLeads && (
+                  <div className="space-y-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4 md:col-span-2">
+                    <div>
+                      <p className="text-sm font-black text-white">Nova origem e pipeline</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-400">O responsavel escolhido sera sugerido automaticamente nos proximos leads desta origem.</p>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                      <input
+                        value={newOriginName}
+                        onChange={(event) => setNewOriginName(event.target.value)}
+                        placeholder="Ex: Indicacao Camila"
+                        maxLength={80}
+                        className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-400"
+                      />
+                      <select
+                        value={newOriginResponsible}
+                        onChange={(event) => setNewOriginResponsible(event.target.value)}
+                        className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-400"
+                      >
+                        <option value="unassigned">Sem responsavel padrao</option>
+                        {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.nome}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={savingLeadSetting}
+                        onClick={() => saveLeadSetting('create_origin')}
+                        className="rounded-xl bg-cyan-600 px-5 py-3 text-sm font-black text-white hover:bg-cyan-700 disabled:opacity-50"
+                      >
+                        Salvar origem
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {showNewLabelForm && canAssignTeamLeads && (
+                  <div className="grid gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4 md:col-span-2 md:grid-cols-[1fr_auto]">
+                    <input
+                      value={newLabelName}
+                      onChange={(event) => setNewLabelName(event.target.value)}
+                      placeholder="Nome da etiqueta fixa"
+                      maxLength={60}
+                      className="rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-400"
+                    />
+                    <button
+                      type="button"
+                      disabled={savingLeadSetting}
+                      onClick={() => saveLeadSetting('create_label')}
+                      className="rounded-xl bg-cyan-600 px-5 py-3 text-sm font-black text-white hover:bg-cyan-700 disabled:opacity-50"
+                    >
+                      Salvar etiqueta
+                    </button>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Idade</label>
                   <input

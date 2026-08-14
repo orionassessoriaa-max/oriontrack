@@ -355,7 +355,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
     }
 
-    const rawResponsibleId = String(body.responsavel_membro_id || '');
+    const originConfigId = String(body.origem_config_id || '').trim();
+    let originConfig: {
+      id: string;
+      nome: string;
+      responsavel_membro_id: string | null;
+      responsavel_profile_id: string | null;
+    } | null = null;
+
+    if (originConfigId) {
+      const { data: configuredOrigin } = await supabaseAdmin
+        .from('corretor_lead_origins')
+        .select('id, nome, responsavel_membro_id, responsavel_profile_id')
+        .eq('id', originConfigId)
+        .eq('corretor_id', corretorId)
+        .eq('ativo', true)
+        .maybeSingle();
+      if (!configuredOrigin) {
+        return NextResponse.json({ error: 'A origem selecionada nao pertence a esta concessionaria.' }, { status: 400 });
+      }
+      originConfig = configuredOrigin;
+    }
+
+    const rawResponsibleId = String(
+      body.responsavel_membro_id
+      || originConfig?.responsavel_membro_id
+      || '',
+    );
     const selfAssignedProfileTypes = ['corretor_membro', 'corretor_integrante', 'corretor_parceiro'];
     let responsibleId = selfAssignedProfileTypes.includes(guard.profile.tipo_usuario)
       && (!rawResponsibleId || rawResponsibleId === 'unassigned')
@@ -381,7 +407,7 @@ export async function POST(request: Request) {
     const responsibleMember = responsibleResult.member;
 
     const origem = resolveLeadOrigin({
-      origem: body.origem,
+      origem: originConfig?.nome || body.origem,
       utm_source: body.utm_source,
       utm_medium: body.utm_medium,
       utm_campaign: body.utm_campaign,
@@ -406,7 +432,9 @@ export async function POST(request: Request) {
       cidade: String(body.cidade || ''),
       operadora: body.operadora ? String(body.operadora) : null,
       origem,
+      origem_config_id: originConfig?.id || null,
       utm_source: origem,
+      etiqueta: body.etiqueta ? String(body.etiqueta).slice(0, 60) : null,
       responsavel_membro_id: responsibleMember?.id || null,
       responsavel_profile_id: responsibleMember?.profile_id || null,
       status: normalizeLeadStatus(body.status || 'Aguardando atendimento'),
