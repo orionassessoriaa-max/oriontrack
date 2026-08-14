@@ -30,6 +30,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { useCreativeJobs } from '@/components/creatives/CreativeJobsProvider';
 import { getDefaultCreativePrompt } from '@/lib/creatives/operatorPrompts';
+import OrionCredCard from '@/components/creatives/OrionCredCard';
 
 type LibraryAsset = {
   id: string;
@@ -86,6 +87,15 @@ type CreativeReference = {
   id: string;
   name: string;
   dataUrl: string;
+};
+
+type CreditSnapshot = {
+  available: number;
+  used: number;
+  limit: number;
+  usage_percent: number;
+  cycle_end: string | null;
+  global?: { estimated_image_cost_usd?: number; available_usd?: number };
 };
 
 const FORMATS = [
@@ -157,6 +167,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [size, setSize] = useState<(typeof FORMATS)[number]['value']>('1024x1024');
   const [references, setReferences] = useState<CreativeReference[]>([]);
   const [generatedDataUrl, setGeneratedDataUrl] = useState<string | null>(null);
+  const [generatedCreditReference, setGeneratedCreditReference] = useState<string | null>(null);
   const [savedGeneratedAsset, setSavedGeneratedAsset] = useState<SavedGeneratedAsset | null>(null);
   const [generatedAction, setGeneratedAction] = useState<'save' | 'approval' | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -166,7 +177,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [saving, setSaving] = useState(false);
   const [batchOperator, setBatchOperator] = useState('');
   const [batchRegion, setBatchRegion] = useState('');
-  const [batchQuantity, setBatchQuantity] = useState(4);
+  const [batchQuantity, setBatchQuantity] = useState(2);
   const [queuing, setQueuing] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
@@ -179,6 +190,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
   const [activeCreatives, setActiveCreatives] = useState<ActiveMetaCreative[]>([]);
   const [approvalFeedback, setApprovalFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+  const [creditSnapshot, setCreditSnapshot] = useState<CreditSnapshot | null>(null);
+  const [pendingGeneration, setPendingGeneration] = useState<{ mode: 'single' | 'batch'; quantity: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -211,6 +224,23 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     const timer = window.setTimeout(() => void fetchLibrary(), 0);
     return () => window.clearTimeout(timer);
   }, [fetchLibrary]);
+
+  const fetchCredits = useCallback(async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+    const params = new URLSearchParams();
+    if (gestorId) params.set('gestor_id', gestorId);
+    const response = await fetch(`/api/criativos/credits?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (response.ok) setCreditSnapshot(await response.json());
+  }, [gestorId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void fetchCredits(), 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchCredits, jobsVersion]);
 
   useEffect(() => {
     const sync = () => void fetchLibrary(true);
@@ -347,12 +377,22 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     pathKey(strategy.regiao) === pathKey(batchRegion)
     && pathKey(strategy.operadora) === pathKey(batchOperator)
   )) || null;
+  const similarAssets = useMemo(() => {
+    const terms = prompt.toLocaleLowerCase('pt-BR').split(/[^a-z0-9á-ú]+/i).filter((term) => term.length >= 5);
+    if (!terms.length || !destinationId) return [];
+    const folder = folders.find((item) => item.id === destinationId);
+    return (folder?.assets || []).filter((asset) => {
+      const source = `${asset.titulo} ${asset.prompt || ''} ${asset.descricao || ''}`.toLocaleLowerCase('pt-BR');
+      return terms.filter((term) => source.includes(term)).length >= Math.min(3, terms.length);
+    }).slice(0, 3);
+  }, [destinationId, folders, prompt]);
 
   const resetGenerator = () => {
     setPrompt(selectedStrategy?.creative_prompt || getDefaultCreativePrompt(selectedOperator?.name || ''));
     setSize('1024x1024');
     setReferences([]);
     setGeneratedDataUrl(null);
+    setGeneratedCreditReference(null);
     setSavedGeneratedAsset(null);
     setGeneratedAction(null);
     setGenerationError(null);
@@ -360,7 +400,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     setCreativeName('');
     setBatchOperator(selectedOperator?.name || '');
     setBatchRegion(selectedRegion?.name || '');
-    setBatchQuantity(4);
+    setBatchQuantity(2);
     setSuccessMessage(null);
   };
 
@@ -372,7 +412,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   async function attachReferences(files: File[], fallbackName = 'Imagem de referencia') {
     if (!files.length) return;
     try {
-      const selected = files.slice(0, 5);
+    const selected = files.slice(0, 2);
       if (selected.some((file) => !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
         throw new Error('Use apenas imagens PNG, JPG ou WebP.');
       }
@@ -382,7 +422,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
         name: file.name || fallbackName,
         dataUrl: await readFileAsDataUrl(file),
       })));
-      setReferences((current) => [...current, ...appended].slice(0, 5));
+      setReferences((current) => [...current, ...appended].slice(0, 2));
       setSavedGeneratedAsset(null);
       setGenerationError(null);
     } catch (error: unknown) {
@@ -391,8 +431,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   }
 
   const generateCreative = async () => {
-    if (prompt.trim().length < 12) {
-      setGenerationError('Descreva melhor o criativo antes de gerar.');
+    if (prompt.trim().length < 12 || !destinationId || !batchOperator.trim() || !batchRegion.trim()) {
+      setGenerationError('Escolha a concessionaria, a operadora e a regiao e descreva o criativo antes de gerar.');
       return;
     }
 
@@ -412,15 +452,21 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
           prompt: prompt.trim(),
           size,
           gestor_id: gestorId,
+          corretor_id: destinationId,
+          operadora: batchOperator.trim(),
+          regiao: batchRegion.trim(),
+          confirmed_cost: true,
           reference_data_urls: references.map((reference) => reference.dataUrl),
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel gerar o criativo.');
       setGeneratedDataUrl(payload.image_data_url);
+      setGeneratedCreditReference(String(payload.credit_reference || '') || null);
       setSavedGeneratedAsset(null);
       setCreativeName(prompt.trim().split(/[.!?\n]/)[0].slice(0, 80) || 'Criativo gerado por IA');
       setDestinationId(selectedFolder?.id || '');
+      await fetchCredits();
     } catch (error: unknown) {
       setGenerationError(errorMessage(error, 'Erro ao gerar o criativo.'));
     } finally {
@@ -455,12 +501,14 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
           briefing: prompt.trim(),
           reference_data_urls: references.map((reference) => reference.dataUrl),
           origem: 'criativos',
+          confirmed_cost: true,
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Nao foi possivel iniciar a geracao.');
       setSuccessMessage(payload.message || 'Lote iniciado. Voce pode fechar esta janela e continuar trabalhando.');
       await refreshJobs();
+      await fetchCredits();
       setPrompt('');
       setReferences([]);
     } catch (error: unknown) {
@@ -468,6 +516,36 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     } finally {
       setQueuing(false);
     }
+  };
+
+  const requestGeneration = (mode: 'single' | 'batch') => {
+    const quantity = mode === 'batch' ? batchQuantity : 1;
+    if (!destinationId || !batchOperator.trim() || !batchRegion.trim()) {
+      setGenerationError('Escolha a concessionaria e informe a operadora e a regiao.');
+      return;
+    }
+    if (prompt.trim().length < 12) {
+      setGenerationError('Descreva melhor o criativo antes de gerar.');
+      return;
+    }
+    if (quantity > 2) {
+      setGenerationError('O limite e de 2 imagens por lote.');
+      return;
+    }
+    if (creditSnapshot && creditSnapshot.available < quantity) {
+      setGenerationError('Saldo Orion Cred insuficiente para este pedido.');
+      return;
+    }
+    setGenerationError(null);
+    setPendingGeneration({ mode, quantity });
+  };
+
+  const confirmGeneration = async () => {
+    const pending = pendingGeneration;
+    if (!pending) return;
+    setPendingGeneration(null);
+    if (pending.mode === 'batch') await queueCreativeBatch();
+    else await generateCreative();
   };
 
   const saveCreative = async (sendToApproval = false): Promise<SavedGeneratedAsset | null> => {
@@ -510,6 +588,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
           regiao: batchRegion.trim(),
           image_data_url: generatedDataUrl,
           send_for_approval: sendToApproval,
+          credit_reference: generatedCreditReference,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -518,7 +597,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
       const saved = {
         id: String(payload.asset.id),
         titulo: String(payload.asset.titulo || creativeName.trim()),
-        status: String(payload.asset.status || (sendToApproval ? 'em_aprovacao' : 'rascunho')),
+        status: String(payload.asset.status || (sendToApproval ? 'em_aprovacao' : 'pronto')),
       } as SavedGeneratedAsset;
       setSavedGeneratedAsset(saved);
       setSuccessMessage(sendToApproval
@@ -679,25 +758,8 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     setBatchQuantity(1);
     setEditingAsset(null);
     setGeneratorOpen(true);
-    setGenerating(true);
-    try {
-      const token = await getAuthToken();
-      if (!token) throw new Error('Sessao expirada. Entre novamente.');
-      const response = await fetch('/api/criativos/generate', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: revisedPrompt, size: '1024x1024', gestor_id: gestorId, reference_data_urls: [] }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel refazer o criativo.');
-      setGeneratedDataUrl(payload.image_data_url);
-      setSuccessMessage(`Nova versao de "${sourceAsset.titulo}" criada. O original foi preservado.`);
-    } catch (error: unknown) {
-      setGenerationError(errorMessage(error, 'Erro ao refazer o criativo.'));
-      setSuccessMessage(null);
-    } finally {
-      setGenerating(false);
-    }
+    setSuccessMessage(`Prompt de "${sourceAsset.titulo}" carregado. Confirme o custo para criar a nova versao.`);
+    setPendingGeneration({ mode: 'single', quantity: 1 });
   };
 
   const downloadCreative = async (asset: LibraryAsset) => {
@@ -762,6 +824,18 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
             </button>
           </div>
         </header>
+
+        <div className="mb-8 max-w-md">
+          <OrionCredCard
+            holderName={managerName || 'Gestor Orion'}
+            gestorId={gestorId || undefined}
+            balance={creditSnapshot?.available ?? null}
+            used={creditSnapshot?.used}
+            limit={creditSnapshot?.limit}
+            usagePercent={creditSnapshot?.usage_percent || 0}
+            cycleEnd={creditSnapshot?.cycle_end || undefined}
+          />
+        </div>
 
         {approvalFeedback && (
           <div
@@ -985,7 +1059,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                           {downloadingAssetId === asset.id ? 'Baixando...' : 'Baixar com o nome do criativo'}
                         </button>
                       </div>
-                      {['rascunho', 'revisao'].includes(asset.status) ? (
+                      {['pronto', 'revisao'].includes(asset.status) ? (
                         <button
                           type="button"
                           onClick={() => void sendForApproval(asset)}
@@ -1265,12 +1339,12 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                 <div>
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-black text-slate-200">Imagens de referencia <span className="font-semibold text-slate-600">(opcional)</span></p>
-                    <span className="text-xs font-bold tabular-nums text-slate-500">{references.length}/5</span>
+                    <span className="text-xs font-bold tabular-nums text-slate-500">{references.length}/2</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={references.length >= 5}
+                    disabled={references.length >= 2}
                     className="mt-3 flex min-h-24 w-full items-center gap-4 rounded-2xl border border-dashed border-slate-600 bg-slate-950/35 p-4 text-left transition hover:border-cyan-500/70 hover:bg-cyan-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-cyan-400">
@@ -1344,22 +1418,22 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                     </label>
                     <label className="block sm:col-span-2">
                       <span className="text-xs font-black text-slate-300">Quantidade</span>
-                      <input type="number" min={1} max={20} value={batchQuantity} onChange={(event) => setBatchQuantity(Math.min(20, Math.max(1, Number(event.target.value) || 1)))} className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
+                      <input type="number" min={1} max={2} value={batchQuantity} onChange={(event) => setBatchQuantity(Math.min(2, Math.max(1, Number(event.target.value) || 1)))} className="mt-2 min-h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-base font-bold text-slate-200 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10" />
                     </label>
                   </div>
-                  <button type="button" onClick={queueCreativeBatch} disabled={queuing || prompt.trim().length < 12 || !destinationId || !batchOperator.trim() || !batchRegion.trim()} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-45">
+                  <button type="button" onClick={() => requestGeneration('batch')} disabled={queuing || prompt.trim().length < 12 || !destinationId || !batchOperator.trim() || !batchRegion.trim()} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-45">
                     {queuing ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
                     {queuing ? 'Colocando na fila...' : `Gerar ${batchQuantity} em segundo plano`}
                   </button>
                 </div>
 
                 <div className="flex items-center gap-3 text-xs font-black uppercase tracking-widest text-slate-600">
-                  <span className="h-px flex-1 bg-slate-800" /> ou gerar uma prévia única <span className="h-px flex-1 bg-slate-800" />
+                  <span className="h-px flex-1 bg-slate-800" /> ou gerar uma imagem final <span className="h-px flex-1 bg-slate-800" />
                 </div>
                 <button
                   type="button"
-                  onClick={generateCreative}
-                  disabled={generating || saving || prompt.trim().length < 12}
+                  onClick={() => requestGeneration('single')}
+                  disabled={generating || saving || prompt.trim().length < 12 || !destinationId || !batchOperator.trim() || !batchRegion.trim()}
                   className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {generating ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
@@ -1389,7 +1463,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                       <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-800 text-slate-500">
                         <ImagePlus size={30} />
                       </span>
-                      <h3 className="mt-5 text-lg font-black text-slate-300">A previa aparecera aqui</h3>
+                      <h3 className="mt-5 text-lg font-black text-slate-300">A imagem final aparecera aqui</h3>
                       <p className="mx-auto mt-2 max-w-sm text-sm font-semibold leading-6 text-slate-600">Escreva o briefing, adicione referencias se quiser e clique em gerar.</p>
                     </div>
                   )}
@@ -1474,6 +1548,43 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingGeneration && (
+        <div className="fixed inset-0 z-[170] flex items-center justify-center bg-slate-950/90 p-4" role="dialog" aria-modal="true" aria-labelledby="confirm-generation-title">
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-cyan-400/25 bg-[#081321] shadow-2xl shadow-black/50">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-800 p-6">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-400">Confirmacao obrigatoria</p>
+                <h2 id="confirm-generation-title" className="mt-2 text-2xl font-black text-white">Confirmar criacao final</h2>
+                <p className="mt-2 text-sm font-semibold text-slate-400">Nao existe etapa de rascunho. A geracao abaixo consome Orion Cred.</p>
+              </div>
+              <button type="button" onClick={() => setPendingGeneration(null)} className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700 text-slate-400 hover:text-white" aria-label="Cancelar"><X size={19} /></button>
+            </div>
+            <div className="space-y-4 p-6">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><p className="text-[11px] font-black uppercase text-slate-500">Imagens</p><p className="mt-1 text-xl font-black text-white">{pendingGeneration.quantity}</p></div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><p className="text-[11px] font-black uppercase text-slate-500">Orion Cred</p><p className="mt-1 text-xl font-black text-cyan-300">-{pendingGeneration.quantity}</p></div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><p className="text-[11px] font-black uppercase text-slate-500">Custo estimado</p><p className="mt-1 text-xl font-black text-emerald-300">US$ {((creditSnapshot?.global?.estimated_image_cost_usd || 0.053) * pendingGeneration.quantity).toFixed(3)}</p></div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500">Prompt final</p>
+                <p className="mt-2 max-h-44 overflow-y-auto whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-200">{prompt.trim()}</p>
+              </div>
+              <p className="text-xs font-bold text-slate-400">Destino: {folders.find((item) => item.id === destinationId)?.name || 'Concessionaria'} / {batchRegion} / {batchOperator}. Referencias: {references.length}/2.</p>
+              {similarAssets.length > 0 && (
+                <div className="rounded-2xl border border-amber-300/25 bg-amber-400/[0.07] p-4">
+                  <p className="text-sm font-black text-amber-200">Ja existem criativos parecidos. Reutilizar pode economizar saldo.</p>
+                  <p className="mt-1 text-xs font-semibold text-amber-100/70">{similarAssets.map((asset) => asset.titulo).join(' | ')}</p>
+                </div>
+              )}
+            </div>
+            <div className="grid gap-3 border-t border-slate-800 p-6 sm:grid-cols-2">
+              <button type="button" onClick={() => setPendingGeneration(null)} className="min-h-12 rounded-2xl border border-slate-700 px-5 text-sm font-black text-slate-300 hover:border-slate-500">Cancelar</button>
+              <button type="button" onClick={() => void confirmGeneration()} className="min-h-12 rounded-2xl bg-cyan-400 px-5 text-sm font-black text-slate-950 hover:bg-cyan-300">Confirmar pedido</button>
             </div>
           </div>
         </div>

@@ -18,6 +18,7 @@ import {
   type DriveFolder,
 } from '@/lib/integrations/googleDrive';
 import type { ApiProfile } from '@/lib/api/security';
+import { updateCreditLedgerContext } from '@/lib/creatives/orionCred';
 
 const BUCKET = 'criativos';
 const STAFF_ROLES = ['admin', 'gestor_trafego', 'designer', 'account_manager'] as const;
@@ -36,6 +37,7 @@ type LibraryAsset = {
   created_at: string;
   drive_file_id?: string | null;
   drive_web_view_link?: string | null;
+  prompt?: string | null;
 };
 
 type LibraryStrategy = {
@@ -88,6 +90,14 @@ function driveThumbnailUrl(value?: string | null) {
     .replace(/=w\d+-h\d+$/, '=s1200');
 }
 
+function extractStoredPrompt(description?: string | null, status?: string | null) {
+  const value = String(description || '').trim();
+  const prefix = 'Gerado por IA. Prompt:';
+  if (value.startsWith(prefix)) return value.slice(prefix.length).trim() || null;
+  if (!value || value === 'Gerado por IA no Orion Track.' || status === 'drive') return null;
+  return value;
+}
+
 async function readDriveAssets(folder: ScopedDriveFolder): Promise<LibraryAsset[]> {
   const result: LibraryAsset[] = [];
   const brokerageChildren = await listDriveChildren(folder.drive_folder_id, 1000);
@@ -112,6 +122,7 @@ async function readDriveAssets(folder: ScopedDriveFolder): Promise<LibraryAsset[
         created_at: file.modifiedTime || new Date(0).toISOString(),
         drive_file_id: file.id,
         drive_web_view_link: file.webViewLink || null,
+        prompt: null,
       });
     });
   };
@@ -326,7 +337,10 @@ export async function GET(request: Request) {
       ]);
       if (assetsResult.error) throw assetsResult.error;
       if (strategiesResult.error) throw strategiesResult.error;
-      assets = assetsResult.data || [];
+      assets = (assetsResult.data || []).map((asset) => ({
+        ...asset,
+        prompt: extractStoredPrompt(asset.descricao, asset.status),
+      }));
       strategies = strategiesResult.data || [];
     }
 
@@ -390,6 +404,7 @@ export async function POST(request: Request) {
     const operadora = String(body.operadora || '').trim().slice(0, 120);
     const regiao = String(body.regiao || '').trim().slice(0, 120);
     const imageDataUrl = String(body.image_data_url || '');
+    const creditReference = String(body.credit_reference || '').trim() || null;
     const sendForApproval = body.send_for_approval === true;
 
     if (!corretorId || !driveFolderId || !titulo || !imageDataUrl || !operadora || !regiao) {
@@ -455,7 +470,7 @@ export async function POST(request: Request) {
         descricao: prompt ? `Gerado por IA. Prompt: ${prompt}` : 'Gerado por IA no Orion Track.',
         arquivo_url: publicUrl,
         arquivo_path: path,
-        status: sendForApproval ? 'em_aprovacao' : 'rascunho',
+        status: sendForApproval ? 'em_aprovacao' : 'pronto',
         enviado_por_profile_id: guard.profile.id,
         operadora,
         regiao,
@@ -468,6 +483,18 @@ export async function POST(request: Request) {
       await supabaseAdmin.storage.from(BUCKET).remove([path]);
       await deleteDriveFile(driveFile.id).catch(() => undefined);
       throw insertError;
+    }
+
+    if (creditReference) {
+      await updateCreditLedgerContext(creditReference, {
+        corretorId,
+        concessionaria: destination.name,
+        operadora,
+        regiao,
+        prompt,
+        resultado: 'concluido',
+        assetId: asset.id,
+      });
     }
 
     await writeAuditLog(request, guard.profile, {

@@ -29,6 +29,15 @@ type CreditSummary = {
   usage_percent: number;
 };
 
+type GlobalCreditSummary = {
+  budget_usd: number;
+  spent_usd: number;
+  available_usd: number;
+  daily_limit_usd: number;
+  usage_percent: number;
+  cycle_end: string | null;
+};
+
 export default function AdminGestoresPage() {
   const { startViewingAsGestor } = useAuth();
   const [gestores, setGestores] = useState<Profile[]>([]);
@@ -39,6 +48,8 @@ export default function AdminGestoresPage() {
   const [credits, setCredits] = useState<Record<string, CreditSummary>>({});
   const [creditInputs, setCreditInputs] = useState<Record<string, string>>({});
   const [creditBusy, setCreditBusy] = useState<string | null>(null);
+  const [transferTargets, setTransferTargets] = useState<Record<string, string>>({});
+  const [globalCredits, setGlobalCredits] = useState<GlobalCreditSummary | null>(null);
 
   async function fetchGestores() {
     setLoading(true);
@@ -66,6 +77,7 @@ export default function AdminGestoresPage() {
       const creditsPayload = await creditsResponse.json().catch(() => ({}));
       if (creditsResponse.ok) {
         setCredits(Object.fromEntries((creditsPayload.accounts || []).map((account: CreditSummary & { gestor_id: string }) => [account.gestor_id, account])));
+        setGlobalCredits(creditsPayload.global || null);
       }
     } catch (err: unknown) {
       console.error('Error fetching gestores:', err);
@@ -98,10 +110,14 @@ export default function AdminGestoresPage() {
     alert('ID copiado.');
   }
 
-  async function addCredits(gestorId: string) {
+  async function adjustCredits(gestorId: string, operation: 'add' | 'remove' | 'transfer') {
     const quantity = Math.trunc(Number(creditInputs[gestorId]));
     if (!Number.isFinite(quantity) || quantity < 1) {
-      setError('Informe quantos créditos deseja adicionar.');
+      setError('Informe uma quantidade valida de creditos.');
+      return;
+    }
+    if (operation === 'transfer' && !transferTargets[gestorId]) {
+      setError('Escolha o gestor que recebera os creditos.');
       return;
     }
     setCreditBusy(gestorId);
@@ -111,14 +127,14 @@ export default function AdminGestoresPage() {
       const response = await fetch('/api/criativos/credits', {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gestor_id: gestorId, adicionar_creditos: quantity }),
+        body: JSON.stringify({ gestor_id: gestorId, target_gestor_id: transferTargets[gestorId], quantidade: quantity, operation }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Não foi possível adicionar créditos.');
-      setCredits((current) => ({ ...current, [gestorId]: payload }));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel ajustar os creditos.');
       setCreditInputs((current) => ({ ...current, [gestorId]: '' }));
+      await fetchGestores();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Não foi possível adicionar créditos.');
+      setError(err instanceof Error ? err.message : 'Nao foi possivel ajustar os creditos.');
     } finally {
       setCreditBusy(null);
     }
@@ -139,6 +155,15 @@ export default function AdminGestoresPage() {
           Novo Gestor
         </Link>
       </div>
+
+      {globalCredits && (
+        <section className="orion-panel mb-8 grid gap-4 p-6 md:grid-cols-4" aria-label="Orcamento global de criativos">
+          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Limite global</p><p className="mt-2 text-2xl font-black text-slate-900">US$ {globalCredits.budget_usd.toFixed(2)}</p></div>
+          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Gasto estimado</p><p className="mt-2 text-2xl font-black text-cyan-700">US$ {globalCredits.spent_usd.toFixed(2)}</p></div>
+          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo estimado</p><p className="mt-2 text-2xl font-black text-emerald-700">US$ {globalCredits.available_usd.toFixed(2)}</p></div>
+          <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Limite diario</p><p className="mt-2 text-2xl font-black text-slate-900">US$ {globalCredits.daily_limit_usd.toFixed(2)}</p><p className="mt-1 text-xs font-bold text-slate-500">{globalCredits.usage_percent}% do ciclo usado</p></div>
+        </section>
+      )}
 
       <div className="orion-panel mb-8 space-y-6 p-6 lg:p-8">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -254,7 +279,7 @@ export default function AdminGestoresPage() {
                           <span>{credits[g.id]?.available ?? 0} disponíveis</span>
                           <span>{credits[g.id]?.used ?? 0}/{credits[g.id]?.limit ?? 0} usados</span>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                           <input
                             type="number"
                             min="1"
@@ -267,11 +292,26 @@ export default function AdminGestoresPage() {
                           <button
                             type="button"
                             disabled={creditBusy === g.id}
-                            onClick={() => addCredits(g.id)}
+                            onClick={() => adjustCredits(g.id, 'add')}
                             className="rounded-xl bg-cyan-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
                           >
                             {creditBusy === g.id ? <Loader2 size={15} className="animate-spin" /> : 'Adicionar'}
                           </button>
+                          <button
+                            type="button"
+                            disabled={creditBusy === g.id}
+                            onClick={() => adjustCredits(g.id, 'remove')}
+                            className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <select value={transferTargets[g.id] || ''} onChange={(event) => setTransferTargets((current) => ({ ...current, [g.id]: event.target.value }))} className="orion-control min-w-0 flex-1 px-3 py-2 text-sm">
+                            <option value="">Transferir para...</option>
+                            {gestores.filter((item) => item.id !== g.id).map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+                          </select>
+                          <button type="button" disabled={creditBusy === g.id || !transferTargets[g.id]} onClick={() => adjustCredits(g.id, 'transfer')} className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-black text-white disabled:opacity-50">Transferir</button>
                         </div>
                       </div>
                     </td>

@@ -138,7 +138,7 @@ export async function POST(request: Request) {
       .from('criativo_assets')
       .update({ status: 'em_aprovacao', comentario_corretor: null, updated_at: updatedAt })
       .eq('id', asset.id)
-      .in('status', ['rascunho', 'revisao', 'em_aprovacao'])
+      .in('status', ['pronto', 'revisao', 'em_aprovacao'])
       .select('id, status, updated_at')
       .maybeSingle();
     if (updateError) throw updateError;

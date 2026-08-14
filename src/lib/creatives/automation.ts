@@ -1,7 +1,12 @@
 import 'server-only';
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { releaseOrionCredits, settleOrionCredits } from '@/lib/creatives/orionCred';
+import {
+  endCreativeGeneration,
+  releaseOrionCredits,
+  settleOrionCredits,
+  updateCreditLedgerContext,
+} from '@/lib/creatives/orionCred';
 import {
   extractDriveId,
   findOrCreateDriveFolder,
@@ -333,8 +338,6 @@ export async function processCreativeGenerationJob(jobId: string) {
 
       const variation = variations[index] || fallbackCopies(job)[index % 4];
       const bytes = await generateImage(job, variation, references);
-      await settleOrionCredits(job.gestor_id, 1, `lote:${job.id}`);
-      consumedCredits += 1;
       const { data: jobAfterGeneration } = await supabaseAdmin
         .from('criativo_generation_jobs')
         .select('status')
@@ -367,7 +370,7 @@ export async function processCreativeGenerationJob(jobId: string) {
           descricao: job.briefing || `Gerado automaticamente para ${job.operadora}/${job.regiao}.`,
           arquivo_url: publicUrl,
           arquivo_path: storagePath,
-          status: 'rascunho',
+          status: 'pronto',
           enviado_por_profile_id: job.gestor_id,
           generation_job_id: job.id,
           operadora: job.operadora,
@@ -380,6 +383,17 @@ export async function processCreativeGenerationJob(jobId: string) {
         .select('id')
         .single();
       if (assetError) throw assetError;
+      await settleOrionCredits(job.gestor_id, 1, `lote:${job.id}`);
+      consumedCredits += 1;
+      await updateCreditLedgerContext(`lote:${job.id}`, {
+        corretorId: job.corretor_id,
+        concessionaria: folderPath.concessionariaName,
+        operadora: job.operadora,
+        regiao: job.regiao,
+        prompt: job.briefing,
+        resultado: 'criativo_salvo',
+        assetId: asset.id,
+      });
       results.push({
         asset_id: asset.id,
         drive_file_id: driveFile.id,
@@ -423,5 +437,7 @@ export async function processCreativeGenerationJob(jobId: string) {
       destinatario_profile_id: job.gestor_id,
       destinatario_tipo: 'gestor_trafego',
     });
+  } finally {
+    await endCreativeGeneration(job.gestor_id, `lote:${job.id}`).catch(() => null);
   }
 }

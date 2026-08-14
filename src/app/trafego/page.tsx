@@ -157,7 +157,7 @@ export default function GestorDashboardPage() {
   const [activeCreatives, setActiveCreatives] = useState<ActiveCreative[]>([]);
   const [recomendacoes, setRecomendacoes] = useState<Recomendacao[]>([]);
   const [resumoIa, setResumoIa] = useState('');
-  const [orionCred, setOrionCred] = useState<{ available: number; usage_percent: number; cycle_end: string | null } | null>(null);
+  const [orionCred, setOrionCred] = useState<{ available: number; used: number; limit: number; usage_percent: number; cycle_end: string | null } | null>(null);
   const [analisesHoje, setAnalisesHoje] = useState(0);
   const [ultimaAnalise, setUltimaAnalise] = useState<string | null>(null);
 
@@ -400,6 +400,7 @@ export default function GestorDashboardPage() {
           briefing: `Criativos para substituir o anuncio ${generationOffer.recommendation.alvo_nome || ''}. Criar headline e legenda em novos angulos.`,
           reference_data_url: generationReference,
           origem: 'troca_criativo',
+          confirmed_cost: true,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -557,8 +558,12 @@ export default function GestorDashboardPage() {
         <div className="mb-6 flex justify-end">
           <OrionCredCard
             holderName={profile?.nome || 'Gestor Orion'}
+            gestorId={profile?.id}
             balance={orionCred?.available ?? null}
+            used={orionCred?.used || 0}
+            limit={orionCred?.limit || 0}
             usagePercent={orionCred?.usage_percent || 0}
+            cycleEnd={orionCred?.cycle_end || undefined}
             cycleLabel={orionCred?.cycle_end
               ? `Ciclo até ${new Date(`${orionCred.cycle_end}T12:00:00`).toLocaleDateString('pt-BR')}`
               : 'Ciclo de 20 dias'}

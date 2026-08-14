@@ -4,7 +4,13 @@ import { canUseCreativeFolder } from '@/lib/creatives/access';
 import { processCreativeGenerationJob } from '@/lib/creatives/automation';
 import { mergeCreativeBriefing } from '@/lib/creatives/operatorPrompts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { releaseOrionCredits, reserveOrionCredits } from '@/lib/creatives/orionCred';
+import {
+  beginCreativeGeneration,
+  creativeRequestFingerprint,
+  endCreativeGeneration,
+  releaseOrionCredits,
+  reserveOrionCredits,
+} from '@/lib/creatives/orionCred';
 
 const ROLES = ['admin', 'gestor_trafego'] as const;
 
@@ -102,6 +108,9 @@ export async function POST(request: Request) {
     if (!corretorId || !operadora || !regiao) {
       return NextResponse.json({ error: 'Informe concessionaria, operadora e regiao.' }, { status: 400 });
     }
+    if (body.confirmed_cost !== true) {
+      return NextResponse.json({ error: `Confirme o prompt final e o consumo de ${quantidade} Orion Cred antes de gerar.` }, { status: 409 });
+    }
     if (!(await canUseCreativeFolder(guard.profile, corretorId, requestedGestorId))) {
       return NextResponse.json({ error: 'Concessionaria fora do escopo deste gestor.' }, { status: 403 });
     }
@@ -122,13 +131,13 @@ export async function POST(request: Request) {
     const directReferenceUrls = (Array.isArray(body.referencia_urls) ? body.referencia_urls : [body.referencia_url])
       .map((value: unknown) => clean(value, 1000))
       .filter(Boolean)
-      .slice(0, 5);
+      .slice(0, 2);
     const referenceDataUrls = (Array.isArray(body.reference_data_urls)
       ? body.reference_data_urls
       : body.reference_data_url ? [body.reference_data_url] : [])
       .map((value: unknown) => clean(value, 15_000_000))
       .filter(Boolean)
-      .slice(0, 5 - directReferenceUrls.length);
+      .slice(0, 2 - directReferenceUrls.length);
     const uploadedReferenceUrls = await Promise.all(
       referenceDataUrls.map((dataUrl: string) => saveReference(guard.profile.id, dataUrl)),
     );
@@ -137,28 +146,40 @@ export async function POST(request: Request) {
       ...uploadedReferenceUrls.filter((url): url is string => Boolean(url)),
     ]);
     const jobId = crypto.randomUUID();
-    await reserveOrionCredits(gestorId, quantidade, `lote:${jobId}`);
-    const { data: job, error } = await supabaseAdmin
-      .from('criativo_generation_jobs')
-      .insert({
-        id: jobId,
-        corretor_id: corretorId,
-        gestor_id: gestorId,
-        estrategia_id: body.estrategia_id || strategy?.id || null,
-        recommendation_id: body.recommendation_id || null,
-        operadora,
-        regiao,
-        quantidade,
-        briefing,
-        referencia_url: referenceUrl,
-        origem: ['entrada', 'criativos', 'apolo', 'troca_criativo'].includes(body.origem) ? body.origem : 'criativos',
-        status: 'na_fila',
-        solicitado_por_profile_id: guard.profile.id,
-      })
-      .select('id, status, operadora, regiao, quantidade')
-      .single();
-    if (error) {
-      await releaseOrionCredits(gestorId, quantidade, `lote:${jobId}`).catch(() => null);
+    const jobReference = `lote:${jobId}`;
+    const fingerprint = creativeRequestFingerprint([
+      gestorId, corretorId, operadora, regiao, quantidade, briefing, referenceUrl,
+    ]);
+    await beginCreativeGeneration(gestorId, jobReference, fingerprint);
+    let reserved = false;
+    let job;
+    try {
+      await reserveOrionCredits(gestorId, quantidade, jobReference);
+      reserved = true;
+      const result = await supabaseAdmin
+        .from('criativo_generation_jobs')
+        .insert({
+          id: jobId,
+          corretor_id: corretorId,
+          gestor_id: gestorId,
+          estrategia_id: body.estrategia_id || strategy?.id || null,
+          recommendation_id: body.recommendation_id || null,
+          operadora,
+          regiao,
+          quantidade,
+          briefing,
+          referencia_url: referenceUrl,
+          origem: ['entrada', 'criativos', 'apolo', 'troca_criativo'].includes(body.origem) ? body.origem : 'criativos',
+          status: 'na_fila',
+          solicitado_por_profile_id: guard.profile.id,
+        })
+        .select('id, status, operadora, regiao, quantidade')
+        .single();
+      if (result.error) throw result.error;
+      job = result.data;
+    } catch (error) {
+      if (reserved) await releaseOrionCredits(gestorId, quantidade, jobReference).catch(() => null);
+      await endCreativeGeneration(gestorId, jobReference).catch(() => null);
       throw error;
     }
     after(() => processCreativeGenerationJob(job.id));
@@ -213,6 +234,10 @@ export async function DELETE(request: Request) {
     await Promise.all((data || []).map((job) => releaseOrionCredits(
       job.gestor_id,
       Math.max(Number(job.quantidade || 0) - Number(job.progresso || 0), 0),
+      `lote:${job.id}`,
+    ).catch(() => null)));
+    await Promise.all((data || []).map((job) => endCreativeGeneration(
+      job.gestor_id,
       `lote:${job.id}`,
     ).catch(() => null)));
 

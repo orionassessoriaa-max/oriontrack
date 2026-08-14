@@ -528,6 +528,7 @@ export default function OtimizacoesPage() {
             briefing: request.briefing,
             referencia_url: useReference ? creativeUrl : null,
             origem: 'apolo',
+            confirmed_cost: true,
           }),
         });
         const payload = await response.json().catch(() => ({}));

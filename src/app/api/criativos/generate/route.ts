@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import { requireApiUser, rateLimit, writeAuditLog } from '@/lib/api/security';
-import { releaseOrionCredits, reserveOrionCredits, settleOrionCredits } from '@/lib/creatives/orionCred';
+import {
+  beginCreativeGeneration,
+  creativeRequestFingerprint,
+  endCreativeGeneration,
+  releaseOrionCredits,
+  reserveOrionCredits,
+  settleOrionCredits,
+  updateCreditLedgerContext,
+} from '@/lib/creatives/orionCred';
 
 const ALLOWED_SIZES = new Set(['1024x1024', '1024x1536', '1536x1024']);
 const ALLOWED_REFERENCE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -23,7 +31,7 @@ function parseReference(dataUrl: string) {
 }
 
 function parseReferences(value: unknown) {
-  const dataUrls = Array.isArray(value) ? value.slice(0, 5) : [];
+  const dataUrls = Array.isArray(value) ? value.slice(0, 2) : [];
   return dataUrls.map((dataUrl) => parseReference(String(dataUrl || ''))).filter(Boolean) as NonNullable<ReturnType<typeof parseReference>>[];
 }
 
@@ -59,6 +67,9 @@ export async function POST(request: Request) {
     const gestorId = guard.profile.tipo_usuario === 'gestor_trafego' ? guard.profile.id : requestedGestorId;
     const prompt = String(body.prompt || '').trim();
     const size = String(body.size || '1024x1024');
+    const corretorId = String(body.corretor_id || '').trim() || null;
+    const operadora = String(body.operadora || '').trim().slice(0, 120) || null;
+    const regiao = String(body.regiao || '').trim().slice(0, 120) || null;
     const references = parseReferences(
       Array.isArray(body.reference_data_urls)
         ? body.reference_data_urls
@@ -71,6 +82,9 @@ export async function POST(request: Request) {
     if (!ALLOWED_SIZES.has(size)) {
       return NextResponse.json({ error: 'Formato de criativo invalido.' }, { status: 400 });
     }
+    if (body.confirmed_cost !== true) {
+      return NextResponse.json({ error: 'Confirme o prompt final e o consumo de 1 Orion Cred antes de gerar.' }, { status: 409 });
+    }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -82,9 +96,13 @@ export async function POST(request: Request) {
 
     const model = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
     const creditReference = `geracao-direta:${crypto.randomUUID()}`;
-    await reserveOrionCredits(gestorId, 1, creditReference);
+    const fingerprint = creativeRequestFingerprint([gestorId, corretorId, operadora, regiao, size, prompt, references.length]);
+    await beginCreativeGeneration(gestorId, creditReference, fingerprint);
+    let creditReserved = false;
     let creditSettled = false;
     try {
+      await reserveOrionCredits(gestorId, 1, creditReference);
+      creditReserved = true;
       const fullPrompt = buildCreativePrompt(prompt, references.length);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 150_000);
@@ -146,6 +164,13 @@ export async function POST(request: Request) {
 
       await settleOrionCredits(gestorId, 1, creditReference);
       creditSettled = true;
+      await updateCreditLedgerContext(creditReference, {
+        corretorId,
+        operadora,
+        regiao,
+        prompt,
+        resultado: 'imagem_final_gerada',
+      });
       await writeAuditLog(request, guard.profile, {
         action: 'creative.ai.generate',
         entity_type: 'criativo_asset',
@@ -157,9 +182,12 @@ export async function POST(request: Request) {
         revised_prompt: payload.data?.[0]?.revised_prompt || null,
         model,
         size,
+        credit_reference: creditReference,
+        credits_used: 1,
       });
     } finally {
-      if (!creditSettled) await releaseOrionCredits(gestorId, 1, creditReference).catch(() => null);
+      if (creditReserved && !creditSettled) await releaseOrionCredits(gestorId, 1, creditReference).catch(() => null);
+      await endCreativeGeneration(gestorId, creditReference).catch(() => null);
     }
   } catch (error: unknown) {
     const message = error instanceof Error && error.name === 'AbortError'
