@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckSquare2,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Edit3,
   Plus,
@@ -50,6 +52,9 @@ export default function CommercialLeadsPage() {
   const [sheetLink, setSheetLink] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const sheetRef = useRef<HTMLElement | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   async function startCall(lead: CommercialLead) {
     const digits = String(lead.telefone || "").replace(/\D/g, "");
@@ -114,6 +119,32 @@ export default function CommercialLeadsPage() {
       }),
     [leads, search, status],
   );
+
+  const updateScrollControls = useCallback(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    setCanScrollLeft(sheet.scrollLeft > 2);
+    setCanScrollRight(sheet.scrollLeft + sheet.clientWidth < sheet.scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(updateScrollControls);
+    window.addEventListener("resize", updateScrollControls);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateScrollControls);
+    };
+  }, [updateScrollControls, visible.length, canViewCommercialLeadQualification]);
+
+  function scrollSheet(direction: -1 | 1) {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    sheet.scrollBy({
+      left: direction * Math.max(320, Math.round(sheet.clientWidth * 0.72)),
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }
 
   const columnCount =
     (canViewCommercialLeadQualification ? 16 : 13) -
@@ -351,7 +382,34 @@ export default function CommercialLeadsPage() {
           {visible.length} de {leads.length} leads
         </span>
       </section>
-      <section className="kh-sheet-wrap">
+      <nav className="kh-sheet-scroll-guide" aria-label="Navegação horizontal da planilha">
+        <span>Mais colunas</span>
+        <div>
+          <button
+            type="button"
+            onClick={() => scrollSheet(-1)}
+            disabled={!canScrollLeft}
+            aria-label="Mover planilha para a esquerda"
+          >
+            <ChevronLeft size={17} />
+            Esquerda
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollSheet(1)}
+            disabled={!canScrollRight}
+            aria-label="Mover planilha para a direita"
+          >
+            Direita
+            <ChevronRight size={17} />
+          </button>
+        </div>
+      </nav>
+      <section
+        ref={sheetRef}
+        className={`kh-sheet-wrap${canScrollLeft ? " is-scrolled" : ""}`}
+        onScroll={updateScrollControls}
+      >
         <table className="kh-sheet-table">
           <thead>
             <tr>
