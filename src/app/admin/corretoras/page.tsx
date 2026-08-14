@@ -33,6 +33,7 @@ import { useDialog } from '@/components/providers/DialogProvider';
 import { getGestorConcessionariaNames, isGestorLinkedToConcessionariaCorretor, isGestorLinkedToCorretor, normalizeAccessText } from '@/lib/gestorAccess';
 import { buildOperationalTeamMembers, getTeamMemberAvatar, isTrafficManagerMember, OrionTeamMember } from '@/lib/orionTeam';
 import { generateOrionEmail } from '@/lib/users';
+import LeadSourceRoutingManager from '@/components/admin/LeadSourceRoutingManager';
 import {
   audienceIncludesRole,
   leadDistributionAudienceLabels,
@@ -1472,6 +1473,13 @@ function CorretorasContent() {
                 {/* Lista de Corretores (Expandida) */}
                 {isExpanded && (
                   <div className="border-t border-gray-100/10 bg-slate-950/[0.03] dark:bg-slate-950/40 px-6 py-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                    {isAdmin && c.corretora_id && (
+                      <LeadSourceRoutingManager
+                        corretoraId={c.corretora_id}
+                        corretoraNome={c.nome}
+                        suggestedMetaAccountId={c.meta_ad_account_id}
+                      />
+                    )}
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[700px] text-left border-collapse">
                         <thead>
