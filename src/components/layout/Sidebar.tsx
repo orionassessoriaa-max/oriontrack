@@ -223,15 +223,15 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   }, []);
 
   const adminMenu = [
-    { icon: Home, label: 'Visao Geral', href: '/admin' },
-    { icon: Building2, label: 'Concessionarias', href: '/admin/corretoras' },
-    { icon: Shield, label: 'Usuarios', href: '/admin/usuarios' },
+    { icon: Home, label: 'Visão Geral', href: '/admin' },
+    { icon: Building2, label: 'Concessionárias', href: '/admin/corretoras' },
+    { icon: Shield, label: 'Usuários', href: '/admin/usuarios' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: Cpu, label: 'IA', href: '/admin/ia' },
     { icon: GitBranch, label: 'Bot', href: '/admin/bot' },
     { icon: Sparkles, label: 'Ferramentas', href: '/admin/ferramentas' },
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
-    { icon: UserCog, label: 'Gestores de Trafego', href: '/admin/gestores' },
+    { icon: UserCog, label: 'Gestores de Tráfego', href: '/admin/gestores' },
     { icon: Palette, label: 'Designer', href: '/admin/designers' },
     { icon: MessageSquare, label: 'Account', href: '/admin/accounts' },
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
@@ -241,28 +241,28 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
     { icon: Bot, label: 'Apolo WhatsApp', href: '/admin/configuracoes' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
-    { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
-    { icon: ClipboardList, label: 'Historico Leads', href: '/historico' },
-    { icon: ClipboardList, label: 'Historico', href: '/admin/historico' },
-    { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
-    { icon: HelpCircle, label: 'Solicitacoes de suporte', href: '/admin/suporte' },
+    { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
+    { icon: ClipboardList, label: 'Histórico Leads', href: '/historico' },
+    { icon: ClipboardList, label: 'Histórico', href: '/admin/historico' },
+    { icon: Bell, label: 'Notificações', href: '/notificacoes' },
+    { icon: HelpCircle, label: 'Solicitações de suporte', href: '/admin/suporte' },
     { icon: Settings, label: 'Configurações', href: '/admin/configuracoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
   const trafficMenu = [
     { icon: Home, label: 'Dashboard', href: '/trafego' },
+    { icon: TrendingUp, label: 'Otimizações', href: '/trafego/otimizacoes' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
-    { icon: Building2, label: 'Concessionarias', href: '/admin/corretoras' },
+    { icon: Building2, label: 'Concessionárias', href: '/admin/corretoras' },
     { icon: Palette, label: 'Criativos', href: '/criativos' },
-    { icon: TrendingUp, label: 'Otimizacoes', href: '/trafego/otimizacoes' },
     { icon: FileSearch, label: 'Leads dos corretores', href: '/trafego/leads' },
     { icon: UserPlus, label: 'Entrada', href: '/trafego/entrada' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
-    { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
+    { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
     { icon: Users, label: 'Corretores', href: '/trafego/corretores' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
-    { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
+    { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: HelpCircle, label: 'Ajuda Orion', href: '/ajuda' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
@@ -272,7 +272,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: FileText, label: 'Ofertas', href: '/designer/ofertas' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
-    { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
+    { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
@@ -282,33 +282,33 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Users, label: 'Corretores', href: '/account/corretores' },
     { icon: MessageSquare, label: 'Inbox', href: '/account/inbox' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
-    { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
+    { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
-    { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
+    { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
   const canSeeFerramentas = canUseFerramentasPreview(profile as any);
 
   const corretorMenu = [
-    { icon: Home, label: 'Inicio', href: '/dashboard' },
+    { icon: Home, label: 'Início', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
     { icon: Bot, label: 'IA', href: '/ia' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
-    { icon: Globe, label: 'Minha Pagina', href: '/minha-pagina' },
+    { icon: Globe, label: 'Minha Página', href: '/minha-pagina' },
     { icon: Palette, label: 'Solicitar Criativo', href: '/criativos' },
     ...(canSeeFerramentas ? [{ icon: Sparkles, label: 'Ferramentas', href: '/ferramentas' }] : []),
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Trophy, label: 'Meu time', href: '/time' },
-    { icon: ClipboardList, label: 'Historico', href: '/historico' },
-    { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
+    { icon: ClipboardList, label: 'Histórico', href: '/historico' },
+    { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
   const corretorMemberMenu = [
-    { icon: Home, label: 'Inicio', href: '/dashboard' },
+    { icon: Home, label: 'Início', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
@@ -316,8 +316,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
     ...(canSeeFerramentas ? [{ icon: Sparkles, label: 'Ferramentas', href: '/ferramentas' }] : []),
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
-    { icon: ClipboardList, label: 'Historico', href: '/historico' },
-    { icon: Bell, label: 'Notificacoes', href: '/notificacoes' },
+    { icon: ClipboardList, label: 'Histórico', href: '/historico' },
+    { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
   ];
 
@@ -329,12 +329,12 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
         items = [
           ...base,
           { icon: MessageSquare, label: 'Inbox Account', href: '/account/inbox' },
-          { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
+          { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
         ];
       } else {
         items = [
           ...base,
-          { icon: TrendingUp, label: 'Relatorios', href: '/trafego/relatorios' },
+          { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
         ];
       }
     } else if (profile?.tipo_usuario === 'gestor_trafego') {
@@ -365,7 +365,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const roleLabel = profile?.tipo_usuario === 'admin'
     ? isMasterAdmin ? 'DevOps Manager' : 'Admin Orion'
     : profile?.tipo_usuario === 'gestor_trafego'
-      ? 'Gestor de Trafego'
+      ? 'Gestor de Tráfego'
       : profile?.tipo_usuario === 'designer'
         ? 'Designer'
         : profile?.tipo_usuario === 'account_manager'

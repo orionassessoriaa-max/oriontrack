@@ -879,7 +879,7 @@ export default function OtimizacoesPage() {
                       <div>
                         <h3 className="text-base font-bold">Conversa com o Apolo</h3>
                         <p className="mt-0.5 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>
-                          Converse com o Apolo, corrija a analise e faca um plano de otimizacao. Nada e publicado sem sua aprovacao.
+                          Converse com o Apolo, corrija a análise e faça um plano de otimização. Nada é publicado sem sua aprovação.
                         </p>
                       </div>
                     </div>
@@ -1290,7 +1290,7 @@ export default function OtimizacoesPage() {
                         </li>
                         <li className="flex gap-2">
                           <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-ok)' }} />
-                          Um print anexado entra na analise. O Apolo tambem pode localizar um criativo no Drive quando a integracao estiver configurada.
+                          Um print anexado entra na análise. O Apolo também pode localizar um criativo no Drive quando a integração estiver configurada.
                         </li>
                         <li className="flex gap-2">
                           <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--tf-ok)' }} />

@@ -580,6 +580,7 @@ export default function GestorDashboardPage() {
               subtitle={`Somente contas pré-pagas com saldo de ${formatBRL(TRAFFIC_RULES.lowBalance)} ou menos. Cartão aparece apenas com erro de pagamento.`}
               badge={alertasSaldo.length > 0 ? `${alertasSaldo.length} alerta(s)` : undefined}
               badgeTone={alertasSaldo.some(({ status }) => status.tone === 'red') ? 'red' : 'amber'}
+              collapsedByDefault
             >
               {alertasSaldo.length === 0 ? (
                 <Empty
@@ -615,6 +616,7 @@ export default function GestorDashboardPage() {
               subtitle="Cada item aponta o alvo exato e o número que disparou a regra."
               badge={recomendacoes.length > 0 ? `${recomendacoes.length} na fila` : undefined}
               badgeTone={criticas > 0 ? 'red' : 'slate'}
+              collapsedByDefault
             >
               {recomendacoes.length === 0 ? (
                 <Empty
@@ -1177,6 +1179,7 @@ function Panel({
   badge,
   badgeTone = 'slate',
   className = '',
+  collapsedByDefault = false,
 }: {
   title: string;
   subtitle?: string;
@@ -1184,20 +1187,33 @@ function Panel({
   badge?: string;
   badgeTone?: string;
   className?: string;
+  collapsedByDefault?: boolean;
 }) {
+  const [aberto, setAberto] = useState(!collapsedByDefault);
+
   return (
     <section
-      className={`rounded-2xl border p-5 ${className}`}
+      className={`overflow-hidden rounded-2xl border ${className}`}
       style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-base font-bold">{title}</h2>
-          {subtitle ? <p className="mt-0.5 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{subtitle}</p> : null}
-        </div>
-        {badge ? <Badge tone={badgeTone} label={badge} /> : null}
-      </div>
-      {children}
+      <button
+        type="button"
+        onClick={() => setAberto((valor) => !valor)}
+        className="tf-no-lift flex w-full items-center justify-between gap-3 p-5 text-left"
+        aria-expanded={aberto}
+      >
+        <span className="min-w-0">
+          <span className="block text-base font-bold">{title}</span>
+          {subtitle ? <span className="mt-0.5 block text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{subtitle}</span> : null}
+        </span>
+        <span className="flex shrink-0 items-center gap-3">
+          {badge ? <Badge tone={badgeTone} label={badge} /> : null}
+          {aberto
+            ? <ChevronDown size={17} style={{ color: 'var(--tf-ink-mute)' }} />
+            : <ChevronRight size={17} style={{ color: 'var(--tf-ink-mute)' }} />}
+        </span>
+      </button>
+      {aberto ? <div className="border-t px-5 py-4" style={{ borderColor: 'var(--tf-border)' }}>{children}</div> : null}
     </section>
   );
 }
