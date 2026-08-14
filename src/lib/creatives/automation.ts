@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { releaseOrionCredits, settleOrionCredits } from '@/lib/creatives/orionCred';
 import {
   extractDriveId,
   findOrCreateDriveFolder,
@@ -298,6 +299,7 @@ export async function processCreativeGenerationJob(jobId: string) {
     .maybeSingle();
   if (claimError || !claimed) return;
   const job = claimed as JobRow;
+  let consumedCredits = 0;
   try {
     await ensureBucket();
     const [folderPath, variations, references] = await Promise.all([
@@ -324,16 +326,24 @@ export async function processCreativeGenerationJob(jobId: string) {
         .select('status')
         .eq('id', job.id)
         .maybeSingle();
-      if (currentJob?.status === 'cancelado') return;
+      if (currentJob?.status === 'cancelado') {
+        await releaseOrionCredits(job.gestor_id, Math.max(job.quantidade - consumedCredits, 0), `lote:${job.id}`).catch(() => null);
+        return;
+      }
 
       const variation = variations[index] || fallbackCopies(job)[index % 4];
       const bytes = await generateImage(job, variation, references);
+      await settleOrionCredits(job.gestor_id, 1, `lote:${job.id}`);
+      consumedCredits += 1;
       const { data: jobAfterGeneration } = await supabaseAdmin
         .from('criativo_generation_jobs')
         .select('status')
         .eq('id', job.id)
         .maybeSingle();
-      if (jobAfterGeneration?.status === 'cancelado') return;
+      if (jobAfterGeneration?.status === 'cancelado') {
+        await releaseOrionCredits(job.gestor_id, Math.max(job.quantidade - consumedCredits, 0), `lote:${job.id}`).catch(() => null);
+        return;
+      }
 
       const fileName = `${safeName(job.operadora)}-${safeName(job.regiao)}-${String(index + 1).padStart(2, '0')}.png`;
       const storagePath = `${job.corretor_id}/${safeName(job.regiao)}/${safeName(job.operadora)}/${Date.now()}-${fileName}`;
@@ -402,6 +412,11 @@ export async function processCreativeGenerationJob(jobId: string) {
       .from('criativo_generation_jobs')
       .update({ status: 'falhou', erro: message, finished_at: finishedAt, updated_at: finishedAt })
       .eq('id', job.id);
+    await releaseOrionCredits(
+      job.gestor_id,
+      Math.max(job.quantidade - consumedCredits, 0),
+      `lote:${job.id}`,
+    ).catch(() => null);
     await supabaseAdmin.from('notificacoes').insert({
       titulo: 'Falha ao gerar criativos',
       mensagem: `${job.operadora}/${job.regiao}: ${message}`,

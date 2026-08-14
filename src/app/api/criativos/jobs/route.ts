@@ -4,6 +4,7 @@ import { canUseCreativeFolder } from '@/lib/creatives/access';
 import { processCreativeGenerationJob } from '@/lib/creatives/automation';
 import { mergeCreativeBriefing } from '@/lib/creatives/operatorPrompts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { releaseOrionCredits, reserveOrionCredits } from '@/lib/creatives/orionCred';
 
 const ROLES = ['admin', 'gestor_trafego'] as const;
 
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
       : guard.profile.id;
     const operadora = clean(body.operadora);
     const regiao = clean(body.regiao);
-    const quantidade = Math.min(Math.max(Number(body.quantidade) || 4, 1), 20);
+    const quantidade = Math.min(Math.max(Number(body.quantidade) || 2, 1), 2);
     if (!corretorId || !operadora || !regiao) {
       return NextResponse.json({ error: 'Informe concessionaria, operadora e regiao.' }, { status: 400 });
     }
@@ -135,9 +136,12 @@ export async function POST(request: Request) {
       ...directReferenceUrls,
       ...uploadedReferenceUrls.filter((url): url is string => Boolean(url)),
     ]);
+    const jobId = crypto.randomUUID();
+    await reserveOrionCredits(gestorId, quantidade, `lote:${jobId}`);
     const { data: job, error } = await supabaseAdmin
       .from('criativo_generation_jobs')
       .insert({
+        id: jobId,
         corretor_id: corretorId,
         gestor_id: gestorId,
         estrategia_id: body.estrategia_id || strategy?.id || null,
@@ -153,7 +157,10 @@ export async function POST(request: Request) {
       })
       .select('id, status, operadora, regiao, quantidade')
       .single();
-    if (error) throw error;
+    if (error) {
+      await releaseOrionCredits(gestorId, quantidade, `lote:${jobId}`).catch(() => null);
+      throw error;
+    }
     after(() => processCreativeGenerationJob(job.id));
     return NextResponse.json({
       success: true,
@@ -161,7 +168,8 @@ export async function POST(request: Request) {
       message: `${quantidade} criativos de ${operadora}/${regiao} entraram na fila. Voce pode continuar trabalhando.`,
     }, { status: 202 });
   } catch (error: unknown) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Erro ao criar lote.' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Erro ao criar lote.';
+    return NextResponse.json({ error: message }, { status: /Orion Cred|creditos/i.test(message) ? 402 : 500 });
   }
 }
 
@@ -200,8 +208,13 @@ export async function DELETE(request: Request) {
       .in('id', jobIds)
       .eq('gestor_id', gestorId)
       .in('status', ['na_fila', 'gerando'])
-      .select('id');
+      .select('id, gestor_id, quantidade, progresso');
     if (error) throw error;
+    await Promise.all((data || []).map((job) => releaseOrionCredits(
+      job.gestor_id,
+      Math.max(Number(job.quantidade || 0) - Number(job.progresso || 0), 0),
+      `lote:${job.id}`,
+    ).catch(() => null)));
 
     return NextResponse.json({
       success: true,

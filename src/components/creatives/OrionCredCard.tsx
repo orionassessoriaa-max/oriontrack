@@ -5,6 +5,7 @@ import styles from './OrionCredCard.module.css';
 type Props = {
   holderName: string;
   balance?: number | null;
+  usagePercent?: number;
   cycleLabel?: string;
 };
 
@@ -12,7 +13,7 @@ function formatCredits(value: number) {
   return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(value);
 }
 
-export default function OrionCredCard({ holderName, balance = null, cycleLabel = 'Ciclo de 20 dias' }: Props) {
+export default function OrionCredCard({ holderName, balance = null, usagePercent = 0, cycleLabel = 'Ciclo de 20 dias' }: Props) {
   return (
     <section aria-label="Cartão Orion Cred" className={styles.card}>
       <div className="flex h-full flex-col justify-between p-6 sm:p-7">
@@ -41,6 +42,14 @@ export default function OrionCredCard({ holderName, balance = null, cycleLabel =
           <p className={`${styles.creditValue} mt-1`}>
             {balance === null ? 'Limite em configuração' : `${formatCredits(balance)} créditos`}
           </p>
+          {balance !== null ? (
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10" aria-label={`${usagePercent}% do limite utilizado`}>
+              <div
+                className={`h-full rounded-full ${usagePercent >= 100 ? 'bg-rose-400' : usagePercent >= 80 ? 'bg-amber-300' : 'bg-cyan-400'}`}
+                style={{ width: `${Math.min(Math.max(usagePercent, 0), 100)}%` }}
+              />
+            </div>
+          ) : null}
         </div>
 
         <div className="flex items-end justify-between gap-4">
@@ -54,4 +63,3 @@ export default function OrionCredCard({ holderName, balance = null, cycleLabel =
     </section>
   );
 }
-

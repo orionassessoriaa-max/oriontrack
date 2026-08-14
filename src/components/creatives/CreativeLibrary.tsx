@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   Building2,
   Check,
+  Copy,
   Download,
   Folder,
   FolderOpen,
@@ -44,6 +45,14 @@ type LibraryAsset = {
   created_at: string;
   drive_file_id?: string | null;
   drive_web_view_link?: string | null;
+  prompt?: string | null;
+};
+
+type ActiveMetaCreative = {
+  id: string;
+  ad_name?: string | null;
+  creative_name?: string | null;
+  title?: string | null;
 };
 
 type CreativeStrategy = {
@@ -116,6 +125,16 @@ function pathKey(value?: string | null) {
     .replace(/^-+|-+$/g, '') || 'geral';
 }
 
+function creativeIdentity(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/\.[a-z0-9]{2,5}$/i, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 async function getAuthToken() {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token || null;
@@ -154,6 +173,11 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   const [sendingApprovalId, setSendingApprovalId] = useState<string | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
+  const [downloadingAssetId, setDownloadingAssetId] = useState<string | null>(null);
+  const [editingAsset, setEditingAsset] = useState<LibraryAsset | null>(null);
+  const [editingPrompt, setEditingPrompt] = useState('');
+  const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
+  const [activeCreatives, setActiveCreatives] = useState<ActiveMetaCreative[]>([]);
   const [approvalFeedback, setApprovalFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
@@ -226,11 +250,12 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (expandedUrl) setExpandedUrl(null);
+      else if (editingAsset) setEditingAsset(null);
       else if (generatorOpen && !generating && !saving) setGeneratorOpen(false);
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [expandedUrl, generatorOpen, generating, saving]);
+  }, [editingAsset, expandedUrl, generatorOpen, generating, saving]);
 
   const visibleFolders = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase('pt-BR');
@@ -239,6 +264,44 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
   }, [folders, search]);
 
   const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
+
+  useEffect(() => {
+    if (!selectedFolder) return;
+    let cancelled = false;
+    const loadActiveCreatives = async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const params = new URLSearchParams({ corretor_id: selectedFolder.id });
+        if (gestorId) params.set('gestor_id', gestorId);
+        const response = await fetch(`/api/criativos/ativos-meta?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!cancelled) setActiveCreatives(response.ok ? payload.creatives || [] : []);
+      } catch {
+        if (!cancelled) setActiveCreatives([]);
+      }
+    };
+    void loadActiveCreatives();
+    return () => { cancelled = true; };
+  }, [gestorId, selectedFolder]);
+
+  const activeCreativeNames = useMemo(() => activeCreatives.flatMap((creative) => (
+    [creative.ad_name, creative.creative_name, creative.title]
+      .map(creativeIdentity)
+      .filter((value) => value.length >= 5)
+  )), [activeCreatives]);
+
+  const isAssetActive = useCallback((asset: LibraryAsset) => {
+    const candidates = [asset.titulo, asset.drive_file_id]
+      .map(creativeIdentity)
+      .filter((value) => value.length >= 5);
+    return candidates.some((candidate) => activeCreativeNames.some((activeName) => (
+      activeName === candidate || activeName.includes(candidate) || candidate.includes(activeName)
+    )));
+  }, [activeCreativeNames]);
   const folderHierarchy = useMemo(() => {
     if (!selectedFolder) return [];
     const regions = new Map<string, {
@@ -306,7 +369,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     setGeneratorOpen(true);
   };
 
-  const attachReferences = async (files: File[], fallbackName = 'Imagem de referencia') => {
+  async function attachReferences(files: File[], fallbackName = 'Imagem de referencia') {
     if (!files.length) return;
     try {
       const selected = files.slice(0, 5);
@@ -325,7 +388,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     } catch (error: unknown) {
       setGenerationError(errorMessage(error, 'Nao foi possivel anexar as imagens.'));
     }
-  };
+  }
 
   const generateCreative = async () => {
     if (prompt.trim().length < 12) {
@@ -348,6 +411,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
         body: JSON.stringify({
           prompt: prompt.trim(),
           size,
+          gestor_id: gestorId,
           reference_data_urls: references.map((reference) => reference.dataUrl),
         }),
       });
@@ -575,6 +639,101 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
     promptInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
+  const copyPrompt = async (asset: LibraryAsset, value = asset.prompt) => {
+    const storedPrompt = String(value || '').trim();
+    if (!storedPrompt) {
+      setApprovalFeedback({ tone: 'error', message: `O criativo "${asset.titulo}" nao possui o prompt original registrado.` });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(storedPrompt);
+      setCopiedAssetId(asset.id);
+      window.setTimeout(() => setCopiedAssetId((current) => current === asset.id ? null : current), 1800);
+    } catch {
+      setApprovalFeedback({ tone: 'error', message: 'O navegador nao permitiu copiar o prompt. Selecione o texto no editor e copie manualmente.' });
+    }
+  };
+
+  const openCreativeEditor = (asset: LibraryAsset) => {
+    setEditingAsset(asset);
+    setEditingPrompt(String(asset.prompt || ''));
+  };
+
+  const remakeCreative = async () => {
+    if (!editingAsset || editingPrompt.trim().length < 12) return;
+    const sourceAsset = editingAsset;
+    const revisedPrompt = editingPrompt.trim();
+    const folder = folders.find((item) => item.corretor_ids.includes(editingAsset.corretor_id));
+    setPrompt(revisedPrompt);
+    setSize('1024x1024');
+    setReferences([]);
+    setGeneratedDataUrl(null);
+    setSavedGeneratedAsset(null);
+    setGeneratedAction(null);
+    setGenerationError(null);
+    setSuccessMessage('Prompt carregado. Revise e clique em "Gerar criativo" para criar uma nova versao. O original sera preservado.');
+    setDestinationId(folder?.id || editingAsset.corretor_id);
+    setCreativeName(`${editingAsset.titulo} - nova versao`.slice(0, 160));
+    setBatchOperator(String(editingAsset.operadora || ''));
+    setBatchRegion(String(editingAsset.regiao || ''));
+    setBatchQuantity(1);
+    setEditingAsset(null);
+    setGeneratorOpen(true);
+    setGenerating(true);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const response = await fetch('/api/criativos/generate', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: revisedPrompt, size: '1024x1024', gestor_id: gestorId, reference_data_urls: [] }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Nao foi possivel refazer o criativo.');
+      setGeneratedDataUrl(payload.image_data_url);
+      setSuccessMessage(`Nova versao de "${sourceAsset.titulo}" criada. O original foi preservado.`);
+    } catch (error: unknown) {
+      setGenerationError(errorMessage(error, 'Erro ao refazer o criativo.'));
+      setSuccessMessage(null);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const downloadCreative = async (asset: LibraryAsset) => {
+    setDownloadingAssetId(asset.id);
+    setApprovalFeedback(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+      const params = new URLSearchParams({ asset_id: asset.id, corretor_id: asset.corretor_id });
+      if (gestorId) params.set('gestor_id', gestorId);
+      const response = await fetch(`/api/criativos/download?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Nao foi possivel baixar o criativo.');
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get('content-disposition') || '';
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const filename = encodedName ? decodeURIComponent(encodedName) : `${asset.titulo}.png`;
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error: unknown) {
+      setApprovalFeedback({ tone: 'error', message: errorMessage(error, 'Erro ao baixar o criativo.') });
+    } finally {
+      setDownloadingAssetId(null);
+    }
+  };
+
   return (
     <>
       <div className="mx-auto max-w-[1500px]">
@@ -773,6 +932,12 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                       <span className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950/75 text-white opacity-0 backdrop-blur transition group-hover:opacity-100">
                         <Maximize2 size={16} />
                       </span>
+                      {isAssetActive(asset) && (
+                        <span className="absolute left-3 top-3 inline-flex min-h-9 items-center gap-2 rounded-xl border border-emerald-300/30 bg-emerald-950/90 px-3 text-[11px] font-black uppercase tracking-wide text-emerald-200 shadow-lg shadow-black/20 backdrop-blur">
+                          <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" />
+                          Em uso na Meta
+                        </span>
+                      )}
                     </button>
                     <div className="p-5">
                       <h3 className="truncate text-base font-black text-slate-100">{asset.titulo}</h3>
@@ -781,18 +946,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                       )}
                       <div className="mt-2 flex items-center justify-between gap-3">
                         <p className="text-xs font-bold text-slate-500">{formatDate(asset.created_at)}</p>
-                        <div className="flex flex-wrap items-center justify-end gap-1">
-                          {(asset.drive_web_view_link || asset.arquivo_url) && (
-                            <a
-                              href={asset.drive_web_view_link || asset.arquivo_url || '#'}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-black text-cyan-400 transition hover:bg-cyan-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                            >
-                              <Download size={15} />
-                              {asset.drive_web_view_link ? 'Abrir no Drive' : 'Baixar'}
-                            </a>
-                          )}
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => void deleteCreative(asset)}
@@ -803,6 +957,33 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                             Apagar
                           </button>
                         </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openCreativeEditor(asset)}
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-xs font-black text-slate-200 transition hover:border-cyan-400 hover:text-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                        >
+                          <Pencil size={15} />
+                          Editar criativo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void copyPrompt(asset)}
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950/35 px-3 text-xs font-black text-slate-200 transition hover:border-cyan-400 hover:text-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                        >
+                          {copiedAssetId === asset.id ? <Check size={15} /> : <Copy size={15} />}
+                          {copiedAssetId === asset.id ? 'Prompt copiado' : 'Copiar prompt'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void downloadCreative(asset)}
+                          disabled={downloadingAssetId === asset.id || (!asset.arquivo_url && !asset.drive_file_id)}
+                          className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-cyan-400/25 bg-cyan-400/[0.06] px-3 text-xs font-black text-cyan-300 transition hover:bg-cyan-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {downloadingAssetId === asset.id ? <Loader2 className="animate-spin" size={15} /> : <Download size={15} />}
+                          {downloadingAssetId === asset.id ? 'Baixando...' : 'Baixar com o nome do criativo'}
+                        </button>
                       </div>
                       {['rascunho', 'revisao'].includes(asset.status) ? (
                         <button
@@ -937,6 +1118,78 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
           </section>
         )}
       </div>
+
+      {editingAsset && (
+        <div className="fixed inset-0 z-[130] overflow-y-auto bg-slate-950/85 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="creative-editor-title">
+          <div className="mx-auto my-8 max-w-3xl overflow-hidden rounded-[28px] border border-slate-700 bg-[#08111f] shadow-2xl shadow-black/60">
+            <div className="flex items-start justify-between gap-5 border-b border-slate-800 px-5 py-5 sm:px-7">
+              <div>
+                <div className="flex items-center gap-2 text-cyan-400">
+                  <Pencil size={17} />
+                  <p className="text-xs font-black uppercase tracking-[0.2em]">Editar e refazer</p>
+                </div>
+                <h2 id="creative-editor-title" className="mt-1 text-2xl font-black text-white">{editingAsset.titulo}</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-400">O original fica preservado. A edicao gera uma nova versao para revisao.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingAsset(null)}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 text-slate-400 transition hover:border-slate-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                aria-label="Fechar editor"
+              >
+                <X size={19} />
+              </button>
+            </div>
+            <div className="grid gap-6 p-5 sm:p-7 md:grid-cols-[220px_1fr]">
+              <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950/50">
+                {editingAsset.arquivo_url ? (
+                  <img src={editingAsset.arquivo_url} alt={editingAsset.titulo} className="aspect-square h-full w-full object-contain" />
+                ) : (
+                  <div className="flex aspect-square items-center justify-center text-slate-600"><ImagePlus size={36} /></div>
+                )}
+              </div>
+              <div>
+                <label htmlFor="stored-creative-prompt" className="text-sm font-black text-slate-200">Prompt utilizado</label>
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">Edite as instrucoes abaixo ou copie o texto completo.</p>
+                <textarea
+                  id="stored-creative-prompt"
+                  value={editingPrompt}
+                  onChange={(event) => setEditingPrompt(event.target.value)}
+                  placeholder="Este criativo antigo nao possui o prompt original registrado. Escreva um novo prompt para refazer a imagem."
+                  maxLength={8000}
+                  className="mt-3 min-h-52 w-full resize-y rounded-2xl border border-slate-700 bg-slate-950/60 p-4 text-base font-semibold leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
+                />
+                <p className="mt-1 text-right text-[11px] font-bold text-slate-600">{editingPrompt.length}/8000</p>
+                {!editingAsset.prompt && (
+                  <p className="mt-2 rounded-xl border border-amber-300/20 bg-amber-400/[0.07] p-3 text-xs font-bold leading-5 text-amber-200">
+                    O prompt original nao foi registrado neste arquivo. Digite um novo prompt para criar outra versao.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="grid gap-3 border-t border-slate-800 p-5 sm:grid-cols-2 sm:px-7">
+              <button
+                type="button"
+                onClick={() => void copyPrompt(editingAsset, editingPrompt)}
+                disabled={!editingPrompt.trim()}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-600 bg-slate-900 px-4 py-3 text-sm font-black text-slate-200 transition hover:border-cyan-400 hover:text-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {copiedAssetId === editingAsset.id ? <Check size={17} /> : <Copy size={17} />}
+                {copiedAssetId === editingAsset.id ? 'Prompt copiado' : 'Copiar prompt'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void remakeCreative()}
+                disabled={editingPrompt.trim().length < 12}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <Sparkles size={17} />
+                Refazer imagem com este prompt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {generatorOpen && (
         <div className="fixed inset-0 z-[120] overflow-y-auto bg-slate-950/85 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="creative-generator-title">

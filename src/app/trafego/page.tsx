@@ -157,6 +157,7 @@ export default function GestorDashboardPage() {
   const [activeCreatives, setActiveCreatives] = useState<ActiveCreative[]>([]);
   const [recomendacoes, setRecomendacoes] = useState<Recomendacao[]>([]);
   const [resumoIa, setResumoIa] = useState('');
+  const [orionCred, setOrionCred] = useState<{ available: number; usage_percent: number; cycle_end: string | null } | null>(null);
   const [analisesHoje, setAnalisesHoje] = useState(0);
   const [ultimaAnalise, setUltimaAnalise] = useState<string | null>(null);
 
@@ -187,6 +188,30 @@ export default function GestorDashboardPage() {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token || null;
   }
+
+  useEffect(() => {
+    const targetGestorId = gestorIdParam || (profile?.tipo_usuario === 'gestor_trafego' ? profile.id : null);
+    if (!targetGestorId) {
+      setOrionCred(null);
+      return;
+    }
+    let active = true;
+    const loadCredits = async () => {
+      const token = await getToken();
+      if (!token) return;
+      const url = new URL('/api/criativos/credits', window.location.origin);
+      if (gestorIdParam) url.searchParams.set('gestor_id', gestorIdParam);
+      const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+      const payload = await response.json().catch(() => ({}));
+      if (active && response.ok) setOrionCred(payload);
+    };
+    void loadCredits();
+    const interval = window.setInterval(loadCredits, 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [gestorIdParam, profile?.id, profile?.tipo_usuario]);
 
   async function carregar(
     analisar: boolean,
@@ -530,7 +555,14 @@ export default function GestorDashboardPage() {
         </header>
 
         <div className="mb-6 flex justify-end">
-          <OrionCredCard holderName={profile?.nome || 'Gestor Orion'} />
+          <OrionCredCard
+            holderName={profile?.nome || 'Gestor Orion'}
+            balance={orionCred?.available ?? null}
+            usagePercent={orionCred?.usage_percent || 0}
+            cycleLabel={orionCred?.cycle_end
+              ? `Ciclo até ${new Date(`${orionCred.cycle_end}T12:00:00`).toLocaleDateString('pt-BR')}`
+              : 'Ciclo de 20 dias'}
+          />
         </div>
 
         {aviso ? (

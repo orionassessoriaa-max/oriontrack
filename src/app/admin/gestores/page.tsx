@@ -21,6 +21,14 @@ import Link from 'next/link';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { getTeamMemberPhoto } from '@/lib/orionTeam';
 
+type CreditSummary = {
+  available: number;
+  limit: number;
+  used: number;
+  reserved: number;
+  usage_percent: number;
+};
+
 export default function AdminGestoresPage() {
   const { startViewingAsGestor } = useAuth();
   const [gestores, setGestores] = useState<Profile[]>([]);
@@ -28,6 +36,9 @@ export default function AdminGestoresPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [credits, setCredits] = useState<Record<string, CreditSummary>>({});
+  const [creditInputs, setCreditInputs] = useState<Record<string, string>>({});
+  const [creditBusy, setCreditBusy] = useState<string | null>(null);
 
   async function fetchGestores() {
     setLoading(true);
@@ -48,6 +59,14 @@ export default function AdminGestoresPage() {
 
       const data = await response.json();
       setGestores(data || []);
+      const creditsResponse = await fetch('/api/criativos/credits', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        cache: 'no-store',
+      });
+      const creditsPayload = await creditsResponse.json().catch(() => ({}));
+      if (creditsResponse.ok) {
+        setCredits(Object.fromEntries((creditsPayload.accounts || []).map((account: CreditSummary & { gestor_id: string }) => [account.gestor_id, account])));
+      }
     } catch (err: unknown) {
       console.error('Error fetching gestores:', err);
       setError(err instanceof Error ? err.message : 'Erro ao carregar gestores.');
@@ -77,6 +96,32 @@ export default function AdminGestoresPage() {
   async function copyId(id: string) {
     await navigator.clipboard.writeText(id);
     alert('ID copiado.');
+  }
+
+  async function addCredits(gestorId: string) {
+    const quantity = Math.trunc(Number(creditInputs[gestorId]));
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      setError('Informe quantos créditos deseja adicionar.');
+      return;
+    }
+    setCreditBusy(gestorId);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/criativos/credits', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gestor_id: gestorId, adicionar_creditos: quantity }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível adicionar créditos.');
+      setCredits((current) => ({ ...current, [gestorId]: payload }));
+      setCreditInputs((current) => ({ ...current, [gestorId]: '' }));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Não foi possível adicionar créditos.');
+    } finally {
+      setCreditBusy(null);
+    }
   }
 
   return (
@@ -148,12 +193,13 @@ export default function AdminGestoresPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] border-collapse text-left">
+            <table className="w-full min-w-[1180px] border-collapse text-left">
               <thead>
                 <tr className="bg-gray-50/50">
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Gestor / Time</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cadastro</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
+                  <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Orion Cred</th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
@@ -201,6 +247,33 @@ export default function AdminGestoresPage() {
                       }`}>
                         {(g.status?.toLowerCase() === 'active' || g.status?.toLowerCase() === 'ativo') ? 'Ativo' : 'Inativo'}
                       </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="min-w-[260px]">
+                        <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-slate-600">
+                          <span>{credits[g.id]?.available ?? 0} disponíveis</span>
+                          <span>{credits[g.id]?.used ?? 0}/{credits[g.id]?.limit ?? 0} usados</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="500"
+                            value={creditInputs[g.id] || ''}
+                            onChange={(event) => setCreditInputs((current) => ({ ...current, [g.id]: event.target.value }))}
+                            placeholder="Créditos"
+                            className="orion-control min-w-0 flex-1 px-3 py-2 text-sm"
+                          />
+                          <button
+                            type="button"
+                            disabled={creditBusy === g.id}
+                            onClick={() => addCredits(g.id)}
+                            className="rounded-xl bg-cyan-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+                          >
+                            {creditBusy === g.id ? <Loader2 size={15} className="animate-spin" /> : 'Adicionar'}
+                          </button>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-8 py-6 text-right">
                       <div className="flex items-center justify-end gap-2">

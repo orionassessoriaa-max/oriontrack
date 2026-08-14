@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireApiUser, rateLimit, writeAuditLog } from '@/lib/api/security';
+import { releaseOrionCredits, reserveOrionCredits, settleOrionCredits } from '@/lib/creatives/orionCred';
 
 const ALLOWED_SIZES = new Set(['1024x1024', '1024x1536', '1536x1024']);
 const ALLOWED_REFERENCE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -42,7 +43,7 @@ ${referenceCount ? `- Use as ${referenceCount} imagens anexadas como referencias
 }
 
 export async function POST(request: Request) {
-  const guard = await requireApiUser(request, ['admin', 'gestor_trafego', 'designer', 'account_manager']);
+  const guard = await requireApiUser(request, ['admin', 'gestor_trafego']);
   if ('error' in guard) return guard.error;
 
   const limited = rateLimit(request, 'criativos:generate', {
@@ -54,6 +55,8 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json().catch(() => ({}));
+    const requestedGestorId = String(body.gestor_id || '').trim();
+    const gestorId = guard.profile.tipo_usuario === 'gestor_trafego' ? guard.profile.id : requestedGestorId;
     const prompt = String(body.prompt || '').trim();
     const size = String(body.size || '1024x1024');
     const references = parseReferences(
@@ -73,15 +76,22 @@ export async function POST(request: Request) {
     if (!apiKey) {
       return NextResponse.json({ error: 'OPENAI_API_KEY nao configurada no servidor.' }, { status: 503 });
     }
+    if (!gestorId) {
+      return NextResponse.json({ error: 'Selecione o gestor responsavel pelo Orion Cred.' }, { status: 400 });
+    }
 
     const model = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
-    const fullPrompt = buildCreativePrompt(prompt, references.length);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 150_000);
-    let response: Response;
-
+    const creditReference = `geracao-direta:${crypto.randomUUID()}`;
+    await reserveOrionCredits(gestorId, 1, creditReference);
+    let creditSettled = false;
     try {
-      if (references.length) {
+      const fullPrompt = buildCreativePrompt(prompt, references.length);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 150_000);
+      let response: Response;
+
+      try {
+        if (references.length) {
         const form = new FormData();
         form.append('model', model);
         form.append('prompt', fullPrompt);
@@ -98,8 +108,8 @@ export async function POST(request: Request) {
           body: form,
           signal: controller.signal,
         });
-      } else {
-        response = await fetch('https://api.openai.com/v1/images/generations', {
+        } else {
+          response = await fetch('https://api.openai.com/v1/images/generations', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -113,43 +123,49 @@ export async function POST(request: Request) {
             output_format: 'png',
           }),
           signal: controller.signal,
-        });
+          });
+        }
+      } finally {
+        clearTimeout(timeout);
       }
-    } finally {
-      clearTimeout(timeout);
-    }
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload.error) {
-      const moderationBlocked = payload.error?.code === 'moderation_blocked';
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.error) {
+        const moderationBlocked = payload.error?.code === 'moderation_blocked';
+        return NextResponse.json({
+          error: moderationBlocked
+            ? 'O pedido foi bloqueado pela seguranca da geracao. Ajuste o prompt ou a referencia e tente novamente.'
+            : payload.error?.message || 'A OpenAI nao conseguiu gerar este criativo.',
+        }, { status: response.status >= 400 && response.status < 500 ? 400 : 502 });
+      }
+
+      const base64 = payload.data?.[0]?.b64_json;
+      if (!base64) {
+        return NextResponse.json({ error: 'A geracao terminou sem retornar uma imagem.' }, { status: 502 });
+      }
+
+      await settleOrionCredits(gestorId, 1, creditReference);
+      creditSettled = true;
+      await writeAuditLog(request, guard.profile, {
+        action: 'creative.ai.generate',
+        entity_type: 'criativo_asset',
+        metadata: { model, size, reference_count: references.length, gestor_id: gestorId },
+      });
+
       return NextResponse.json({
-        error: moderationBlocked
-          ? 'O pedido foi bloqueado pela seguranca da geracao. Ajuste o prompt ou a referencia e tente novamente.'
-          : payload.error?.message || 'A OpenAI nao conseguiu gerar este criativo.',
-      }, { status: response.status >= 400 && response.status < 500 ? 400 : 502 });
+        image_data_url: `data:image/png;base64,${base64}`,
+        revised_prompt: payload.data?.[0]?.revised_prompt || null,
+        model,
+        size,
+      });
+    } finally {
+      if (!creditSettled) await releaseOrionCredits(gestorId, 1, creditReference).catch(() => null);
     }
-
-    const base64 = payload.data?.[0]?.b64_json;
-    if (!base64) {
-      return NextResponse.json({ error: 'A geracao terminou sem retornar uma imagem.' }, { status: 502 });
-    }
-
-    await writeAuditLog(request, guard.profile, {
-      action: 'creative.ai.generate',
-      entity_type: 'criativo_asset',
-      metadata: { model, size, reference_count: references.length },
-    });
-
-    return NextResponse.json({
-      image_data_url: `data:image/png;base64,${base64}`,
-      revised_prompt: payload.data?.[0]?.revised_prompt || null,
-      model,
-      size,
-    });
   } catch (error: unknown) {
     const message = error instanceof Error && error.name === 'AbortError'
       ? 'A geracao ultrapassou 2 minutos e 30 segundos. Tente novamente.'
       : errorMessage(error, 'Erro ao gerar o criativo.');
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = /Orion Cred|creditos/i.test(message) ? 402 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
