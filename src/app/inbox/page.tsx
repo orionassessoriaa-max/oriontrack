@@ -1635,21 +1635,26 @@ export default function BrokerInboxPage() {
       return true;
     }
 
-    // Map UI statuses ('espera', 'fechada', 'pausada') to DB statuses ('aguardando', 'resolvida', 'aberta')
-    const dbStatus = newStatus === 'espera' ? 'aguardando' : newStatus === 'fechada' ? 'resolvida' : newStatus === 'pausada' ? 'aberta' : newStatus;
-
-    const { error } = await supabase
-      .from('whatsapp_conversas')
-      .update({ status: dbStatus, updated_at: new Date().toISOString() })
-      .eq('id', conversation.id);
-
-    if (error) {
-      console.error('Erro ao salvar status da conversa no Supabase:', error);
+    const token = await getToken();
+    if (!token) return false;
+    const response = await fetch('/api/inbox/messages', {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversation_id: conversation.id, status: newStatus }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error('Erro ao salvar status da conversa:', payload.error);
       return false;
     }
 
     const updated = { ...conversation, status: newStatus };
-    setConversations((current) => current.map((item) => item.id === conversation.id ? updated : item));
+    const affectedIds = new Set<string>(Array.isArray(payload.conversation_ids)
+      ? payload.conversation_ids.map(String)
+      : [conversation.id]);
+    setConversations((current) => current.map((item) => affectedIds.has(item.id)
+      ? { ...item, status: newStatus }
+      : item));
     clearConversationSelection();
 
     return true;

@@ -582,6 +582,64 @@ export async function GET(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const limited = rateLimit(request, 'inbox:conversation:status', { limit: 30, windowMs: 60_000 });
+    if (limited) return limited;
+
+    const guard = await requireApiUser(request, [...INBOX_ROLES]);
+    if ('error' in guard) return guard.error;
+
+    const body = await request.json().catch(() => ({}));
+    const conversationId = String(body.conversation_id || '').trim();
+    const requestedStatus = String(body.status || '').trim().toLowerCase();
+    const dbStatus = requestedStatus === 'fechada'
+      ? 'resolvida'
+      : requestedStatus === 'espera'
+        ? 'aguardando'
+        : requestedStatus === 'aberta' || requestedStatus === 'pausada'
+          ? 'aberta'
+          : '';
+
+    if (!conversationId || !dbStatus) {
+      return NextResponse.json({ error: 'Conversa ou status invalido.' }, { status: 400 });
+    }
+
+    const conversation = await getConversation(conversationId);
+    if (!(await canAccessConversation(guard.profile, conversation))) {
+      return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
+    }
+
+    // O Inbox consolida conversas do mesmo telefone em uma unica timeline.
+    // O arquivamento precisa acompanhar essa mesma regra para que um registro
+    // duplicado nao devolva o contato para a caixa ativa apos o F5.
+    const conversationIds = await findAccessibleConversationIdsByPhone(guard.profile, conversation);
+    const now = new Date().toISOString();
+    const { data: updated, error } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .update({ status: dbStatus, updated_at: now })
+      .in('id', conversationIds)
+      .select('id');
+
+    if (error) throw error;
+    const updatedIds = (updated || []).map((item) => String(item.id));
+    if (!updatedIds.length) {
+      return NextResponse.json({ error: 'Nenhuma conversa foi atualizada.' }, { status: 409 });
+    }
+
+    await writeAuditLog(request, guard.profile, {
+      action: dbStatus === 'resolvida' ? 'whatsapp.conversation.close' : 'whatsapp.conversation.reopen',
+      entity_type: 'whatsapp_conversa',
+      entity_id: conversationId,
+      metadata: { status: dbStatus, conversation_ids: updatedIds },
+    });
+
+    return NextResponse.json({ success: true, status: dbStatus, conversation_ids: updatedIds });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Nao foi possivel atualizar a conversa.' }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const limited = rateLimit(request, 'inbox:messages:send', { limit: 30, windowMs: 60_000 });
