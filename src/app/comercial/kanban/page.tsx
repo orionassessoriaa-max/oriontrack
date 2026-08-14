@@ -18,6 +18,8 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Check,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
@@ -124,6 +126,12 @@ function getPresetRange(preset: DatePreset) {
     : { start: localDateValue(start), end: localDateValue(end) };
 }
 
+const STAGE_COLORS = ["#2563EB", "#0891B2", "#059669", "#D97706", "#E11D48", "#7C3AED"];
+
+function stageColor(stage: CommercialStage, index: number) {
+  return stage.color || STAGE_COLORS[index % STAGE_COLORS.length];
+}
+
 export default function CommercialKanbanPage() {
   const {
     api,
@@ -155,6 +163,7 @@ export default function CommercialKanbanPage() {
     null,
   );
   const [editingStageName, setEditingStageName] = useState("");
+  const [editingStageColor, setEditingStageColor] = useState("#2563EB");
   const [stageError, setStageError] = useState<string | null>(null);
   const [stageSaving, setStageSaving] = useState(false);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
@@ -496,14 +505,15 @@ export default function CommercialKanbanPage() {
       { id: label, label, desc: "Etapa personalizada", protected: false },
     ]);
   }
-  async function renameStage(event: React.FormEvent) {
+  async function saveStageEdit(event: React.FormEvent) {
     event.preventDefault();
     if (!editingStage) return;
     const label = editingStageName
       .replace(/[<>]/g, "")
       .replace(/\s+/g, " ")
       .trim();
-    if (!label || label === editingStage.label) {
+    if (!label) return;
+    if (label === editingStage.label && editingStageColor === editingStage.color) {
       setEditingStage(null);
       return;
     }
@@ -512,7 +522,7 @@ export default function CommercialKanbanPage() {
     try {
       const payload = await api("/api/comercial/stages", {
         method: "PATCH",
-        body: JSON.stringify({ old_id: editingStage.id, label }),
+        body: JSON.stringify({ old_id: editingStage.id, label, color: editingStageColor }),
       });
       setStages(payload.stages || stages);
       await load();
@@ -521,8 +531,36 @@ export default function CommercialKanbanPage() {
       setStageError(
         error instanceof Error
           ? error.message
-          : "Nao foi possivel renomear a etapa.",
+          : "Nao foi possivel editar a etapa.",
       );
+    } finally {
+      setStageSaving(false);
+    }
+  }
+  async function deleteStage(stage: CommercialStage) {
+    if (stage.protected || stageSaving) return;
+    const fallback = stages.find((item) => item.id !== stage.id);
+    if (!fallback) {
+      setStageError("O funil precisa ter pelo menos uma etapa.");
+      return;
+    }
+    const leadCount = (grouped[stage.id] || []).length;
+    const detail = leadCount
+      ? ` Os ${leadCount} lead${leadCount === 1 ? "" : "s"} desta etapa serao movidos para ${fallback.label}.`
+      : "";
+    if (!window.confirm(`Excluir a etapa ${stage.label}?${detail}`)) return;
+    setStageSaving(true);
+    setStageError(null);
+    try {
+      const payload = await api("/api/comercial/stages", {
+        method: "DELETE",
+        body: JSON.stringify({ id: stage.id, fallback_id: fallback.id }),
+      });
+      setStages(payload.stages || stages.filter((item) => item.id !== stage.id));
+      setEditingStage(null);
+      await load();
+    } catch (error) {
+      setStageError(error instanceof Error ? error.message : "Nao foi possivel excluir a etapa.");
     } finally {
       setStageSaving(false);
     }
@@ -816,7 +854,7 @@ export default function CommercialKanbanPage() {
         </div>
       </header>
       {stageError && (
-        <div className="kh-inline-error kh-stage-error">
+        <div className="kh-inline-error kh-stage-error" role="alert" aria-live="polite">
           {stageError}
           <button
             type="button"
@@ -866,29 +904,6 @@ export default function CommercialKanbanPage() {
           </button>
         </form>
       )}
-      {role === "coordenador" && editingStage && (
-        <form className="kh-stage-add" onSubmit={renameStage}>
-          <input
-            autoFocus
-            className="kh-input"
-            value={editingStageName}
-            onChange={(event) => setEditingStageName(event.target.value)}
-            placeholder="Novo nome da etapa"
-            maxLength={60}
-            required
-          />
-          <button className="kh-button primary" disabled={stageSaving}>
-            Salvar nome
-          </button>
-          <button
-            type="button"
-            className="kh-button"
-            onClick={() => setEditingStage(null)}
-          >
-            Cancelar
-          </button>
-        </form>
-      )}
       <div className="kh-kanban" aria-label="Pipeline comercial">
         {stages.map((stage, index) => {
           const statusLeads = grouped[stage.id] || [];
@@ -900,7 +915,7 @@ export default function CommercialKanbanPage() {
             <section
               key={stage.id}
               className={`kh-kanban-column ${dropStage === stage.id ? "drop-target" : ""} ${stageDragging === stage.id ? "stage-dragging" : ""}`}
-              draggable={canEditCommercial && role === "coordenador"}
+              draggable={canEditCommercial && role === "coordenador" && editingStage?.id !== stage.id}
               onDragStart={(event) => {
                 event.stopPropagation();
                 if (role === "coordenador") setStageDragging(stage.id);
@@ -925,36 +940,80 @@ export default function CommercialKanbanPage() {
               <header
                 style={
                   {
-                    "--stage-hue": `${205 + ((index * 7) % 105)}`,
+                    "--stage-color": editingStage?.id === stage.id
+                      ? editingStageColor
+                      : stageColor(stage, index),
                   } as React.CSSProperties
                 }
               >
-                <div>
-                  <GripVertical size={14} className="kh-stage-grip" />
-                  <strong>{stage.label}</strong>
-                  <b>{statusLeads.length}</b>
-                </div>
-                {canViewCommercialFinancials && (
-                  <small>{currency(total)}</small>
-                )}
-                {role === "coordenador" && (
+                {editingStage?.id === stage.id ? (
+                  <form
+                    className="kh-stage-inline-editor"
+                    onSubmit={saveStageEdit}
+                    onClick={(event) => event.stopPropagation()}
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editingStageName}
+                      onChange={(event) => setEditingStageName(event.target.value)}
+                      maxLength={60}
+                      aria-label="Nome da etapa"
+                      disabled={stage.protected}
+                      required
+                    />
+                    <label title="Cor da etapa">
+                      <input
+                        type="color"
+                        value={editingStageColor}
+                        onChange={(event) => setEditingStageColor(event.target.value.toUpperCase())}
+                        aria-label="Cor da etapa"
+                      />
+                    </label>
+                    <button type="submit" title="Salvar alterações" aria-label="Salvar alterações" disabled={stageSaving}>
+                      <Check size={14} />
+                    </button>
+                    {!stage.protected && <button
+                      type="button"
+                      className="danger"
+                      title="Excluir etapa"
+                      aria-label={`Excluir ${stage.label}`}
+                      disabled={stageSaving}
+                      onClick={() => void deleteStage(stage)}
+                    >
+                      <Trash2 size={14} />
+                    </button>}
+                    <button type="button" title="Cancelar" aria-label="Cancelar edição" onClick={() => setEditingStage(null)}>
+                      <X size={14} />
+                    </button>
+                  </form>
+                ) : <>
+                  <div>
+                    <GripVertical size={14} className="kh-stage-grip" />
+                    <strong>{stage.label}</strong>
+                    <b>{statusLeads.length}</b>
+                  </div>
+                  {canViewCommercialFinancials && (
+                    <small>{currency(total)}</small>
+                  )}
+                </>}
+                {role === "coordenador" && editingStage?.id !== stage.id && (
                   <div className="kh-stage-actions">
-                    {stage.protected ? (
-                      <em>fixa</em>
-                    ) : (
-                      <button
-                        type="button"
-                        title="Renomear etapa"
-                        aria-label={`Renomear ${stage.label}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setEditingStage(stage);
-                          setEditingStageName(stage.label);
-                        }}
-                      >
-                        <Pencil size={12} />
-                      </button>
-                    )}
+                    {stage.protected && <em>fixa</em>}
+                    <button
+                      type="button"
+                      title="Editar etapa"
+                      aria-label={`Editar ${stage.label}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setEditingStage(stage);
+                        setEditingStageName(stage.label);
+                        setEditingStageColor(stageColor(stage, index));
+                      }}
+                    >
+                      <Pencil size={12} />
+                    </button>
                   </div>
                 )}
               </header>

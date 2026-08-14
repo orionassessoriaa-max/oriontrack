@@ -23,6 +23,7 @@ export type CommercialStage = {
   label: string;
   desc?: string;
   protected?: boolean;
+  color?: string;
 };
 export const COMMERCIAL_STAGES: CommercialStage[] = COMMERCIAL_STATUSES.map(
   (label) => ({
