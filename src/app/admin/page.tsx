@@ -280,19 +280,50 @@ export default function AdminCentralPage() {
   }, [alertsList, corretoresList, corretorasList, gestoresList]);
 
   const pendingOnboardingList = useMemo(() => {
-    const rawPending = corretoresList.filter(c => 
-      ['active', 'ativo', 'Ativo'].includes(c.status || '') && 
-      (!c.onboarding_status || c.onboarding_status === 'pendente')
-    );
-    return rawPending.map(c => {
-      const gestorId = inferGestorIdFromTeam(c, gestoresList);
-      const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
-      return {
-        corretor_id: c.id,
-        corretor_nome: c.nome,
-        gestor_nome: gestorNome
-      };
-    });
+    const concessionarias = new Map<string, {
+      id: string;
+      nome: string;
+      corretores: any[];
+    }>();
+
+    corretoresList
+      .filter(c => ['active', 'ativo', 'Ativo'].includes(c.status || ''))
+      .forEach(c => {
+        const nomeEmpresa = String(c.nome_empresa || '').trim();
+        if (!nomeEmpresa) return;
+
+        const key = normalizeText(nomeEmpresa);
+        const grupo = concessionarias.get(key);
+        if (grupo) {
+          grupo.corretores.push(c);
+          return;
+        }
+
+        concessionarias.set(key, {
+          id: key,
+          nome: nomeEmpresa,
+          corretores: [c],
+        });
+      });
+
+    return Array.from(concessionarias.values())
+      .filter(({ corretores }) => corretores.every(c =>
+        !c.onboarding_status || c.onboarding_status === 'pendente'
+      ))
+      .map(({ id, nome, corretores }) => {
+        const corretorComGestor = corretores.find(c => inferGestorIdFromTeam(c, gestoresList));
+        const gestorId = corretorComGestor
+          ? inferGestorIdFromTeam(corretorComGestor, gestoresList)
+          : null;
+        const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
+
+        return {
+          concessionaria_id: id,
+          concessionaria_nome: nome,
+          gestor_nome: gestorNome,
+        };
+      })
+      .sort((a, b) => a.concessionaria_nome.localeCompare(b.concessionaria_nome, 'pt-BR'));
   }, [corretoresList, gestoresList]);
 
   const noBrokerageList = useMemo(() => {
@@ -792,7 +823,7 @@ export default function AdminCentralPage() {
               </p>
             )}
             <p className="text-[10px] font-semibold text-slate-500 mt-2 flex items-center gap-1 group-hover:text-slate-400 transition-colors">
-              Clique para detalhar os corretores e gestores <ArrowRight size={10} />
+              Clique para detalhar as concessionarias e gestores <ArrowRight size={10} />
             </p>
             <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-indigo-500/0 via-indigo-500/40 to-indigo-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
@@ -945,16 +976,16 @@ export default function AdminCentralPage() {
             <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" /> Entradas Pendentes
             </h3>
-            <p className="text-xs font-semibold text-slate-500 mb-6">Processos de onboarding/entrada aguardando preenchimento.</p>
+            <p className="text-xs font-semibold text-slate-500 mb-6">Concessionarias com a entrada aguardando preenchimento.</p>
             
             <div className="max-h-[300px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
               {pendingOnboardingList.length === 0 ? (
                 <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhuma entrada pendente.</p>
               ) : (
                 pendingOnboardingList.map((item) => (
-                  <div key={item.corretor_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
+                  <div key={item.concessionaria_id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
                     <div>
-                      <p className="font-extrabold text-white">{item.corretor_nome}</p>
+                      <p className="font-extrabold text-white">{item.concessionaria_nome}</p>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Gestor: {item.gestor_nome}</p>
                     </div>
                     <span className="text-[9px] font-black text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider">
