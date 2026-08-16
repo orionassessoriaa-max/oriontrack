@@ -76,6 +76,7 @@ type Conversation = {
   notes?: string[];
   source?: string;
   aiActive?: boolean;
+  hasOpenFollowUp?: boolean;
   customFields?: Array<{ key: string; value: string }>;
 };
 
@@ -105,7 +106,13 @@ type SelectedAttachment = {
   preview: string;
 };
 
-type ConversationBox = 'active' | 'closed';
+type ConversationBox = 'active' | 'followup' | 'closed';
+
+function conversationBelongsToBox(conversation: Conversation, box: ConversationBox) {
+  if (box === 'closed') return conversation.status === 'fechada';
+  if (box === 'followup') return conversation.status !== 'fechada' && Boolean(conversation.hasOpenFollowUp);
+  return conversation.status !== 'fechada';
+}
 
 type LeadTask = {
   id: string;
@@ -697,14 +704,33 @@ export default function BrokerInboxPage() {
       }
     }
 
-    setConversations(rows);
+    const leadIds = Array.from(new Set(rows.map((row) => row.lead_id).filter(Boolean))) as string[];
+    const followUpLeadIds = new Set<string>();
+    const followUpBatchSize = 200;
+    for (let from = 0; from < leadIds.length; from += followUpBatchSize) {
+      const batch = leadIds.slice(from, from + followUpBatchSize);
+      const { data: openTasks, error: openTasksError } = await supabase
+        .from('lead_tarefas')
+        .select('lead_id')
+        .in('lead_id', batch)
+        .eq('status', 'pendente');
+      if (openTasksError) throw openTasksError;
+      (openTasks || []).forEach((task) => {
+        if (task.lead_id) followUpLeadIds.add(String(task.lead_id));
+      });
+    }
+
+    const rowsWithFollowUp = rows.map((row) => ({
+      ...row,
+      hasOpenFollowUp: Boolean(row.lead_id && followUpLeadIds.has(String(row.lead_id))),
+    }));
+
+    setConversations(rowsWithFollowUp);
     const previousSelection = selectedConversationRef.current;
     const currentBox = conversationBoxRef.current;
-    const rowsInCurrentBox = rows.filter((row) => currentBox === 'closed'
-      ? row.status === 'fechada'
-      : row.status !== 'fechada');
-    const matchedConversationInCurrentBox = matchedConv && rowsInCurrentBox.some((row) => row.id === matchedConv.id)
-      ? matchedConv
+    const rowsInCurrentBox = rowsWithFollowUp.filter((row) => conversationBelongsToBox(row, currentBox));
+    const matchedConversationInCurrentBox = matchedConv
+      ? rowsInCurrentBox.find((row) => row.id === matchedConv.id) || null
       : null;
     const nextSelection = previousSelection
       ? rowsInCurrentBox.find((row) => row.id === previousSelection.id) || matchedConversationInCurrentBox || rowsInCurrentBox[0] || null
@@ -779,9 +805,7 @@ export default function BrokerInboxPage() {
 
   useEffect(() => {
     if (!selectedConversation) return;
-    const belongsToCurrentBox = conversationBox === 'closed'
-      ? selectedConversation.status === 'fechada'
-      : selectedConversation.status !== 'fechada';
+    const belongsToCurrentBox = conversationBelongsToBox(selectedConversation, conversationBox);
     if (!belongsToCurrentBox) {
       setSelectedConversation(null);
       setMessages([]);
@@ -1819,6 +1843,7 @@ export default function BrokerInboxPage() {
       setTaskPriority('normal');
       setTaskResponsibleProfileId('');
       await fetchLeadDetails(selectedConversation.lead_id);
+      await fetchInbox(true);
     } catch (err: any) {
       console.error('Erro ao agendar tarefa:', err);
       alert('Erro ao agendar tarefa: ' + err.message);
@@ -1854,6 +1879,7 @@ export default function BrokerInboxPage() {
         descricao: task.titulo,
       });
       await fetchLeadDetails(selectedConversation.lead_id);
+      await fetchInbox(true);
     } catch (err: any) {
       console.error('Erro ao concluir lembrete:', err);
       alert('Erro ao concluir lembrete: ' + err.message);
@@ -2142,6 +2168,7 @@ export default function BrokerInboxPage() {
   ).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
   const activeConversationCount = conversations.filter((conversation) => conversation.status !== 'fechada').length;
+  const followUpConversationCount = conversations.filter((conversation) => conversationBelongsToBox(conversation, 'followup')).length;
   const closedConversationCount = conversations.filter((conversation) => conversation.status === 'fechada').length;
 
   const conversationsByResponsible = conversations.filter((conversation) => {
@@ -2160,7 +2187,7 @@ export default function BrokerInboxPage() {
 
     if (stageFilter !== 'todos' && normalizeLeadStatus(c.leadStatus) !== stageFilter) return false;
 
-    return conversationBox === 'closed' ? c.status === 'fechada' : c.status !== 'fechada';
+    return conversationBelongsToBox(c, conversationBox);
   });
 
   const internalNotes = leadActivities
@@ -2385,7 +2412,7 @@ export default function BrokerInboxPage() {
           <div className={`orion-inbox-list border-r border-white/5 ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col bg-slate-900/20 h-full overflow-hidden`}>
             {/* Conversation box and filters */}
             <div className="p-4 border-b border-white/5 space-y-3.5">
-              <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Caixas de conversa">
+              <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Caixas de conversa">
                 <button
                   type="button"
                   role="tab"
@@ -2395,6 +2422,16 @@ export default function BrokerInboxPage() {
                 >
                   <span className="flex items-center gap-2"><MessageSquare size={14} /> Ativas</span>
                   <span className="tabular-nums">{activeConversationCount}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={conversationBox === 'followup'}
+                  onClick={() => { setConversationBox('followup'); setSelectedConversation(null); }}
+                  className={`flex min-h-11 items-center justify-between rounded-xl border px-2 text-[9px] font-black uppercase tracking-wide transition ${conversationBox === 'followup' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-white/5 bg-slate-950 text-slate-500 hover:text-slate-300'}`}
+                >
+                  <span className="flex items-center gap-1.5"><Clock size={13} /> Follow-up</span>
+                  <span className="tabular-nums">{followUpConversationCount}</span>
                 </button>
                 <button
                   type="button"
@@ -2409,7 +2446,11 @@ export default function BrokerInboxPage() {
               </div>
 
               <p className="px-1 text-[10px] font-semibold text-slate-500">
-                {conversationBox === 'active' ? 'Atendimentos em andamento e aguardando resposta.' : 'Histórico preservado. Uma nova resposta do lead reabre a conversa.'}
+                {conversationBox === 'active'
+                  ? 'Atendimentos em andamento e aguardando resposta.'
+                  : conversationBox === 'followup'
+                    ? 'Conversas ativas que possuem uma tarefa de retorno pendente.'
+                    : 'Histórico preservado. Uma nova resposta do lead reabre a conversa.'}
               </p>
 
               {profile?.tipo_usuario !== 'corretor_membro' && (responsibleOptions.length > 1 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
