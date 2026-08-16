@@ -1435,7 +1435,7 @@
 .kh-commercial-leads-page .kh-actions { justify-content: flex-end; }
 .kh-commercial-leads-page .kh-sheet-filters { width: 100%; min-width: 0; grid-template-columns: minmax(240px, 1fr) minmax(150px, 180px) minmax(170px, 220px) max-content; }
 .kh-commercial-leads-page .kh-sheet-filters > * { min-width: 0; }
-.kh-commercial-leads-page .kh-sheet-wrap { width: 100%; min-width: 0; overflow-x: auto; overflow-y: visible; scrollbar-color: auto; scrollbar-width: auto; }
+.kh-commercial-leads-page .kh-sheet-wrap { width: 100%; min-width: 0; max-height: calc(100dvh - 150px); overflow: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--kh-line); scrollbar-color: auto; scrollbar-width: auto; }
 .kh-commercial-leads-page .kh-sheet-table { width: max-content; min-width: 100%; table-layout: auto; }
 .kh-commercial-leads-page .kh-sheet-table th,
 .kh-commercial-leads-page .kh-sheet-table td { width: auto !important; max-width: none; padding-inline: 11px; overflow: visible; overflow-wrap: normal; text-overflow: clip; white-space: nowrap; }
