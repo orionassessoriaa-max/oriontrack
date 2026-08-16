@@ -30,6 +30,7 @@ import {
   canManageCommercialStages,
   COMMERCIAL_STAGES,
   currency,
+  type CommercialContactCadence,
   type CommercialLead,
   type CommercialStage,
 } from "@/lib/comercial";
@@ -97,6 +98,14 @@ function formatDaniloCadence(value: string | null | undefined) {
     Math.floor(Math.max(0, Date.now() - startedAt) / 86400000) + 1,
   );
   return `Cadência: dia ${days}`;
+}
+
+function isContactCadenceStage(value: string | null | undefined) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase() === "tentando contato";
 }
 
 function formatDaniloCnpj(lead: CommercialLead) {
@@ -183,6 +192,15 @@ export default function CommercialKanbanPage() {
   const [interactionFile, setInteractionFile] = useState<File | null>(null);
   const [interactionSaving, setInteractionSaving] = useState(false);
   const [interactionError, setInteractionError] = useState<string | null>(null);
+  const [contactCadence, setContactCadence] =
+    useState<CommercialContactCadence | null>(null);
+  const [contactCadenceLoading, setContactCadenceLoading] = useState(false);
+  const [contactCadenceSavingOrder, setContactCadenceSavingOrder] = useState<
+    number | null
+  >(null);
+  const [contactCadenceError, setContactCadenceError] = useState<string | null>(
+    null,
+  );
   const [meetingMove, setMeetingMove] = useState<{
     leadId: string;
     status: string;
@@ -228,6 +246,8 @@ export default function CommercialKanbanPage() {
   useEffect(() => {
     if (!expandedLeadId) {
       setInteractionError(null);
+      setContactCadence(null);
+      setContactCadenceError(null);
       return;
     }
     const leadId = expandedLeadId;
@@ -247,7 +267,54 @@ export default function CommercialKanbanPage() {
             : "Nao foi possivel carregar os comentarios.",
         );
       });
+    setContactCadenceLoading(true);
+    setContactCadenceError(null);
+    void api(`/api/comercial/leads/${leadId}/cadencia`)
+      .then((payload) => setContactCadence(payload.cadence || null))
+      .catch((error) => {
+        setContactCadence(null);
+        setContactCadenceError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar a cadência.",
+        );
+      })
+      .finally(() => setContactCadenceLoading(false));
   }, [api, expandedLeadId]);
+
+  async function updateContactCadence(
+    order: number,
+    result: "success" | "no_answer",
+  ) {
+    if (!expandedLeadId) return;
+    setContactCadenceSavingOrder(order);
+    setContactCadenceError(null);
+    try {
+      const payload = await api(
+        `/api/comercial/leads/${expandedLeadId}/cadencia`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ ordem: order, result }),
+        },
+      );
+      setContactCadence(payload.cadence || null);
+      const timeline = await api(
+        `/api/comercial/leads/${expandedLeadId}/interactions`,
+      );
+      setInteractionsByLead((current) => ({
+        ...current,
+        [expandedLeadId]: timeline.interactions || [],
+      }));
+    } catch (error) {
+      setContactCadenceError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível registrar a tentativa.",
+      );
+    } finally {
+      setContactCadenceSavingOrder(null);
+    }
+  }
 
   const memberMap = useMemo(
     () => new Map(members.map((member) => [member.profile_id, member])),
@@ -342,6 +409,8 @@ export default function CommercialKanbanPage() {
           ...current,
           [id]: timeline.interactions || [],
         }));
+        const cadence = await api(`/api/comercial/leads/${id}/cadencia`);
+        setContactCadence(cadence.cadence || null);
       }
     } catch {
       await load();
@@ -1075,11 +1144,15 @@ export default function CommercialKanbanPage() {
                         <span className="kh-card-cnpj">
                           {formatDaniloCnpj(lead)}
                         </span>
-                        <div className="kh-card-cadence">
-                          {formatDaniloCadence(
-                            lead.status_started_at || lead.data_entrada,
-                          )}
-                        </div>
+                        {isContactCadenceStage(lead.status) && (
+                          <div className="kh-card-cadence">
+                            {formatDaniloCadence(
+                              lead.contato_cadencia_inicio ||
+                                lead.status_started_at ||
+                                lead.data_entrada,
+                            )}
+                          </div>
+                        )}
                         <div className="kh-card-entry">
                           <CalendarDays size={12} />
                           <span>{formatDaniloEntry(lead.data_entrada)}</span>
@@ -1331,6 +1404,11 @@ export default function CommercialKanbanPage() {
         briefingDownloading={briefingDownloading === expandedLeadId}
         onDownloadBriefing={(leadId) => downloadBriefingPdf(leadId)}
         onStartCall={startTrackedCall}
+        contactCadence={contactCadence}
+        contactCadenceLoading={contactCadenceLoading}
+        contactCadenceSavingOrder={contactCadenceSavingOrder}
+        contactCadenceError={contactCadenceError}
+        onUpdateContactCadence={updateContactCadence}
         stages={stages}
         onMoveStage={(status) => {
           if (expandedLeadId) void moveLead(expandedLeadId, status);

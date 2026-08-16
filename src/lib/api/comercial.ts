@@ -15,7 +15,7 @@ function isAllowedReadOnlyRequest(request: Request) {
     pathname === "/api/comercial/members" ||
     pathname === "/api/comercial/leads" ||
     pathname === "/api/comercial/stages" ||
-    /^\/api\/comercial\/leads\/[^/]+\/interactions$/.test(pathname)
+    /^\/api\/comercial\/leads\/[^/]+\/(interactions|cadencia)$/.test(pathname)
   );
 }
 

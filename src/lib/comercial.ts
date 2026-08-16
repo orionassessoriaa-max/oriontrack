@@ -105,10 +105,43 @@ export type CommercialLead = {
   fechado_at: string | null;
   data_entrada: string;
   status_started_at: string | null;
+  contato_cadencia_ativa?: boolean;
+  contato_cadencia_inicio?: string | null;
   proximo_retorno_at?: string | null;
   proximo_retorno_titulo?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type CommercialCadenceAttemptStatus =
+  | "pendente"
+  | "nao_atendeu"
+  | "sem_resposta"
+  | "atendeu"
+  | "respondeu"
+  | "nao_necessario";
+
+export type CommercialCadenceAttempt = {
+  id: string;
+  lead_id: string;
+  dia: number;
+  ordem: number;
+  canal:
+    | "ligacao_fixo"
+    | "ligacao_whatsapp"
+    | "mensagem_whatsapp"
+    | "audio_whatsapp";
+  titulo: string;
+  status: CommercialCadenceAttemptStatus;
+  concluido_at: string | null;
+};
+
+export type CommercialContactCadence = {
+  active: boolean;
+  day: number;
+  started_at: string | null;
+  completed: boolean;
+  attempts: CommercialCadenceAttempt[];
 };
 
 export type CommercialTask = {

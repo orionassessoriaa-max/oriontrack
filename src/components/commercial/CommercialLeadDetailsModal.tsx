@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import type {
+  CommercialContactCadence,
   CommercialLead,
   CommercialMember,
   CommercialStage,
@@ -74,6 +75,14 @@ type Props = {
   onDownloadBriefing?: (leadId: string) => Promise<void>;
   briefingDownloading?: boolean;
   onStartCall?: (lead: CommercialLead) => Promise<void>;
+  contactCadence?: CommercialContactCadence | null;
+  contactCadenceLoading?: boolean;
+  contactCadenceSavingOrder?: number | null;
+  contactCadenceError?: string | null;
+  onUpdateContactCadence?: (
+    order: number,
+    result: "success" | "no_answer",
+  ) => Promise<void>;
 };
 
 type EditableLead = {
@@ -140,13 +149,25 @@ function displayValue(value: unknown) {
     : String(value);
 }
 
-function elapsedLabel(value: string | null) {
-  if (!value) return "Sem contato registrado";
+function stageAgeLabel(value: string | null) {
+  if (!value) return "Tempo na etapa não informado";
   const elapsed = Math.max(0, Date.now() - new Date(value).getTime());
+  const hours = Math.floor(elapsed / 3_600_000);
   const days = Math.floor(elapsed / 86_400_000);
-  if (days === 0) return "Contato hoje";
-  return `${days} ${days === 1 ? "dia" : "dias"} sem contato`;
+  if (days === 0 && hours === 0) return "Lead está há menos de 1 hora nesta etapa";
+  if (days === 0)
+    return `Lead está há ${hours} ${hours === 1 ? "hora" : "horas"} nesta etapa`;
+  return `Lead está há ${days} ${days === 1 ? "dia" : "dias"} nesta etapa`;
 }
+
+const cadenceStatusLabels: Record<string, string> = {
+  pendente: "Pendente",
+  nao_atendeu: "Não atendeu",
+  sem_resposta: "Sem resposta",
+  atendeu: "Atendeu",
+  respondeu: "Respondeu",
+  nao_necessario: "Não necessário",
+};
 
 function initials(name: string) {
   return (
@@ -304,6 +325,11 @@ export default function CommercialLeadDetailsModal({
   onDownloadBriefing,
   briefingDownloading = false,
   onStartCall,
+  contactCadence = null,
+  contactCadenceLoading = false,
+  contactCadenceSavingOrder = null,
+  contactCadenceError = null,
+  onUpdateContactCadence,
 }: Props) {
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(
     null,
@@ -351,8 +377,6 @@ export default function CommercialLeadDetailsModal({
     "Sem closer",
   );
   const sellerName = memberName(lead.vendedor_id || lead.closer_id, "Nao informado");
-  const lastActivity =
-    lead.ultimo_contato_at || interactions[0]?.created_at || lead.data_entrada;
   const internalNotes = freeNotes(lead.observacoes);
   const decisionMaker = noteField(lead.observacoes, [
     "decisor",
@@ -663,7 +687,7 @@ export default function CommercialLeadDetailsModal({
             )}
             <span className="stage">{lead.status}</span>
             <span className="elapsed">
-              <Clock3 size={13} /> {elapsedLabel(lastActivity)}
+              <Clock3 size={13} /> {stageAgeLabel(lead.status_started_at)}
             </span>
             {editing ? (
               <>
@@ -820,7 +844,70 @@ export default function CommercialLeadDetailsModal({
         )}
 
         <div className="kh-lead-reference-body">
-          <section className="kh-lead-history">
+          <div className="kh-lead-main-stack">
+            {contactCadence?.active && (
+              <section className="kh-contact-cadence" aria-label={`Cadência do dia ${contactCadence.day}`}>
+                <header>
+                  <div>
+                    <strong>Cadência — Dia {contactCadence.day}</strong>
+                    <small>Checklist de contato em Tentando contato</small>
+                  </div>
+                  <span>
+                    {contactCadence.attempts.filter((attempt) => attempt.status !== "pendente").length}/8
+                  </span>
+                </header>
+                {contactCadenceError && (
+                  <div className="kh-inline-error" role="alert">{contactCadenceError}</div>
+                )}
+                <div className="kh-cadence-attempts">
+                  {contactCadence.attempts.map((attempt) => {
+                    const pending = attempt.status === "pendente";
+                    const saving = contactCadenceSavingOrder === attempt.ordem;
+                    return (
+                      <div className={`kh-cadence-attempt status-${attempt.status}`} key={attempt.id}>
+                        <span className="kh-cadence-check" aria-hidden="true">
+                          {pending ? "" : "✓"}
+                        </span>
+                        <div>
+                          <strong>{attempt.ordem}. {attempt.titulo}</strong>
+                          <small>{cadenceStatusLabels[attempt.status] || attempt.status}</small>
+                        </div>
+                        {pending && !readOnly && onUpdateContactCadence && (
+                          <div className="kh-cadence-actions">
+                            <button
+                              type="button"
+                              onClick={() => void onUpdateContactCadence(attempt.ordem, "no_answer")}
+                              disabled={saving || contactCadenceSavingOrder !== null}
+                            >
+                              Sem resposta
+                            </button>
+                            <button
+                              type="button"
+                              className="success"
+                              onClick={() => void onUpdateContactCadence(attempt.ordem, "success")}
+                              disabled={saving || contactCadenceSavingOrder !== null}
+                            >
+                              {saving
+                                ? "Salvando..."
+                                : attempt.canal.startsWith("ligacao")
+                                  ? "Atendeu"
+                                  : "Respondeu"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {contactCadenceLoading && !contactCadence.attempts.length && (
+                    <span className="kh-cadence-loading">Carregando checklist...</span>
+                  )}
+                </div>
+              </section>
+            )}
+            {contactCadenceLoading && !contactCadence && (
+              <section className="kh-contact-cadence is-loading">Carregando cadência...</section>
+            )}
+            <section className="kh-lead-history">
             <div className="kh-section-title">
               <div>
                 <FileText size={16} />
@@ -957,7 +1044,8 @@ export default function CommercialLeadDetailsModal({
                 <span>Nenhuma interação registrada.</span>
               )}
             </div>
-          </section>
+            </section>
+          </div>
 
           <aside className="kh-lead-data-stack">
             <section className="kh-lead-qualification">
