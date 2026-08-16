@@ -1,11 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   CheckSquare2,
-  ChevronLeft,
-  ChevronRight,
   Download,
   Edit3,
   Plus,
@@ -77,11 +75,6 @@ export default function CommercialLeadsPage() {
   const [sheetLink, setSheetLink] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const sheetRef = useRef<HTMLElement | null>(null);
-  const sheetGuideRef = useRef<HTMLDivElement | null>(null);
-  const [sheetContentWidth, setSheetContentWidth] = useState(0);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
 
   async function startCall(lead: CommercialLead) {
     const digits = String(lead.telefone || "").replace(/\D/g, "");
@@ -150,57 +143,6 @@ export default function CommercialLeadsPage() {
       }),
     [leads, search, status, dateStart, dateEnd],
   );
-
-  const updateScrollControls = useCallback(() => {
-    const sheet = sheetRef.current;
-    if (!sheet) return;
-    setSheetContentWidth(sheet.scrollWidth);
-    setCanScrollLeft(sheet.scrollLeft > 2);
-    setCanScrollRight(sheet.scrollLeft + sheet.clientWidth < sheet.scrollWidth - 2);
-  }, []);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(updateScrollControls);
-    const sheet = sheetRef.current;
-    const table = sheet?.querySelector("table");
-    const observer = new ResizeObserver(updateScrollControls);
-    if (sheet) observer.observe(sheet);
-    if (table) observer.observe(table);
-    window.addEventListener("resize", updateScrollControls);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener("resize", updateScrollControls);
-    };
-  }, [updateScrollControls, visible.length, canViewCommercialLeadQualification]);
-
-  function syncGuideFromSheet() {
-    const sheet = sheetRef.current;
-    const guide = sheetGuideRef.current;
-    if (sheet && guide && Math.abs(guide.scrollLeft - sheet.scrollLeft) > 1) {
-      guide.scrollLeft = sheet.scrollLeft;
-    }
-    updateScrollControls();
-  }
-
-  function syncSheetFromGuide() {
-    const sheet = sheetRef.current;
-    const guide = sheetGuideRef.current;
-    if (sheet && guide && Math.abs(sheet.scrollLeft - guide.scrollLeft) > 1) {
-      sheet.scrollLeft = guide.scrollLeft;
-    }
-    updateScrollControls();
-  }
-
-  function scrollSheet(direction: -1 | 1) {
-    const sheet = sheetRef.current;
-    if (!sheet) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    sheet.scrollBy({
-      left: direction * Math.max(320, Math.round(sheet.clientWidth * 0.72)),
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
-  }
 
   const columnCount =
     (canViewCommercialLeadQualification ? 16 : 13) -
@@ -472,46 +414,7 @@ export default function CommercialLeadsPage() {
           {visible.length} de {leads.length} leads
         </span>
       </section>
-      <nav className="kh-sheet-scroll-guide" aria-label="Navegação horizontal da planilha">
-        <div className="kh-sheet-scroll-guide-head">
-          <span>Arraste a barra para ver mais colunas</span>
-          <div>
-            <button
-              type="button"
-              onClick={() => scrollSheet(-1)}
-              disabled={!canScrollLeft}
-              aria-label="Mover planilha para a esquerda"
-            >
-              <ChevronLeft size={17} />
-              Esquerda
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollSheet(1)}
-              disabled={!canScrollRight}
-              aria-label="Mover planilha para a direita"
-            >
-              Direita
-              <ChevronRight size={17} />
-            </button>
-          </div>
-        </div>
-        <div
-          ref={sheetGuideRef}
-          className="kh-sheet-scrollbar"
-          onScroll={syncSheetFromGuide}
-          role="region"
-          aria-label="Barra de rolagem horizontal da planilha"
-          tabIndex={0}
-        >
-          <div style={{ width: Math.max(sheetContentWidth, 1) }} />
-        </div>
-      </nav>
-      <section
-        ref={sheetRef}
-        className={`kh-sheet-wrap${canScrollLeft ? " is-scrolled" : ""}`}
-        onScroll={syncGuideFromSheet}
-      >
+      <section className="kh-sheet-wrap">
         <table className="kh-sheet-table">
           <thead>
             <tr>

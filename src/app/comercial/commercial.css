@@ -1435,24 +1435,7 @@
 .kh-commercial-leads-page .kh-actions { justify-content: flex-end; }
 .kh-commercial-leads-page .kh-sheet-filters { width: 100%; min-width: 0; grid-template-columns: minmax(240px, 1fr) minmax(150px, 180px) minmax(170px, 220px) max-content; }
 .kh-commercial-leads-page .kh-sheet-filters > * { min-width: 0; }
-.kh-commercial-leads-page .kh-sheet-scroll-guide { display: grid; gap: 7px; border: 1px solid var(--kh-line); border-bottom: 0; background: var(--kh-surface); padding: 7px 8px 5px 12px; }
-.kh-commercial-leads-page .kh-sheet-scroll-guide-head { min-height: 36px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
-.kh-commercial-leads-page .kh-sheet-scroll-guide-head > span { margin-right: auto; color: #9fb0c4; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.kh-commercial-leads-page .kh-sheet-scroll-guide-head > div { display: flex; gap: 8px; }
-.kh-commercial-leads-page .kh-sheet-scroll-guide button { min-width: 112px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #2c3a4c; border-radius: 6px; background: var(--kh-surface-2); color: var(--kh-text); padding: 0 12px; font-size: 11px; font-weight: 800; cursor: pointer; transition: border-color 180ms ease, background 180ms ease, color 180ms ease, opacity 180ms ease; }
-.kh-commercial-leads-page .kh-sheet-scroll-guide button:hover:not(:disabled) { border-color: var(--kh-cyan); background: #142231; }
-.kh-commercial-leads-page .kh-sheet-scroll-guide button:focus-visible { outline: 2px solid var(--kh-cyan); outline-offset: 2px; }
-.kh-commercial-leads-page .kh-sheet-scroll-guide button:disabled { cursor: not-allowed; opacity: .38; }
-.kh-commercial-leads-page .kh-sheet-scrollbar { width: 100%; height: 18px; overflow-x: scroll; overflow-y: hidden; border-radius: 999px; scrollbar-color: #26b7df #101b27; scrollbar-width: auto; }
-.kh-commercial-leads-page .kh-sheet-scrollbar > div { height: 1px; }
-.kh-commercial-leads-page .kh-sheet-scrollbar::-webkit-scrollbar,
-.kh-commercial-leads-page .kh-sheet-wrap::-webkit-scrollbar { height: 12px; }
-.kh-commercial-leads-page .kh-sheet-scrollbar::-webkit-scrollbar-track,
-.kh-commercial-leads-page .kh-sheet-wrap::-webkit-scrollbar-track { border-radius: 999px; background: #101b27; }
-.kh-commercial-leads-page .kh-sheet-scrollbar::-webkit-scrollbar-thumb,
-.kh-commercial-leads-page .kh-sheet-wrap::-webkit-scrollbar-thumb { min-width: 80px; border: 2px solid #101b27; border-radius: 999px; background: #26b7df; }
-.kh-commercial-leads-page .kh-sheet-scrollbar:focus-visible { outline: 2px solid var(--kh-cyan); outline-offset: 2px; }
-.kh-commercial-leads-page .kh-sheet-wrap { width: 100%; min-width: 0; overflow-x: auto; overflow-y: visible; scrollbar-gutter: stable; }
+.kh-commercial-leads-page .kh-sheet-wrap { width: 100%; min-width: 0; overflow-x: auto; overflow-y: visible; scrollbar-color: auto; scrollbar-width: auto; }
 .kh-commercial-leads-page .kh-sheet-table { width: max-content; min-width: 100%; table-layout: auto; }
 .kh-commercial-leads-page .kh-sheet-table th,
 .kh-commercial-leads-page .kh-sheet-table td { width: auto !important; max-width: none; padding-inline: 11px; overflow: visible; overflow-wrap: normal; text-overflow: clip; white-space: nowrap; }
@@ -1476,7 +1459,7 @@
 .kh-commercial-leads-page.kh-read-only .kh-sheet-table .date { left: 48px; }
 .kh-commercial-leads-page.kh-read-only .kh-sheet-table .name { left: 160px; }
 .kh-commercial-leads-page .kh-sheet-table .name { border-right-color: #33465c; }
-.kh-commercial-leads-page .kh-sheet-wrap.is-scrolled .kh-sheet-table .name { box-shadow: 9px 0 14px -12px rgba(69,199,235,.95); }
+.kh-commercial-leads-page .kh-sheet-table .name { box-shadow: 9px 0 14px -12px rgba(69,199,235,.75); }
 .kh-commercial-leads-page .kh-sheet-table tr:hover td.select,
 .kh-commercial-leads-page .kh-sheet-table tr:hover td.index,
 .kh-commercial-leads-page .kh-sheet-table tr:hover td.date,
@@ -1502,7 +1485,4 @@
   .kh-period-popover { position: fixed; inset: 76px 12px auto; grid-template-columns: 1fr; width: auto; max-height: calc(100dvh - 92px); overflow: auto; }
   .kh-period-quick { border-right: 0; border-bottom: 1px solid var(--kh-line); padding: 0 0 14px; }
   .kh-period-custom { padding: 14px 0 0; }
-  .kh-commercial-leads-page .kh-sheet-scroll-guide-head > span { display: none; }
-  .kh-commercial-leads-page .kh-sheet-scroll-guide-head > div { width: 100%; }
-  .kh-commercial-leads-page .kh-sheet-scroll-guide button { min-height: 44px; flex: 1; }
 }
