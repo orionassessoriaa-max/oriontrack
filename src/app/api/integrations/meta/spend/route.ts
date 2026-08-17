@@ -92,7 +92,29 @@ async function resolveBrokerageMetaAccount(corretor: any, gestorProfile?: any) {
     ? (metaOwners || []).filter((item) => isGestorLinkedToConcessionariaCorretor(item, gestorProfile))
     : (metaOwners || []);
 
-  return scopedOwners[0] || corretor;
+  if (scopedOwners[0]) {
+    return scopedOwners[0];
+  }
+
+  // A conta Meta pertence à concessionária. Cadastros antigos podem ter o
+  // vínculo somente em `corretoras`, sem repeti-lo no corretor principal.
+  const { data: concessionaria } = await supabaseAdmin
+    .from('corretoras')
+    .select('meta_ad_account_id, meta_ad_account_name')
+    .ilike('nome', corretoraNome)
+    .not('meta_ad_account_id', 'is', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (concessionaria?.meta_ad_account_id) {
+    return {
+      ...corretor,
+      meta_ad_account_id: concessionaria.meta_ad_account_id,
+      meta_ad_account_name: concessionaria.meta_ad_account_name,
+    };
+  }
+
+  return corretor;
 }
 
 export async function POST(request: Request) {
