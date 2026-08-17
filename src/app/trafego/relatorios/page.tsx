@@ -12,12 +12,10 @@ import {
   Loader2, 
   Check, 
   FileText,
-  Eye,
   ShieldAlert,
   RefreshCw,
   CalendarDays,
-  Send,
-  MessageCircle
+  Send
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -87,6 +85,8 @@ export default function TrafficReportsPage() {
   const [weeklyError, setWeeklyError] = useState<string | null>(null);
   const [weeklySending, setWeeklySending] = useState(false);
   const [weeklySendMessage, setWeeklySendMessage] = useState<string | null>(null);
+  const [weeklyCopiedTarget, setWeeklyCopiedTarget] = useState<string | null>(null);
+  const [savedCopiedId, setSavedCopiedId] = useState<string | null>(null);
   const [weeklyRange, setWeeklyRange] = useState(() => {
     const end = new Date();
     const start = new Date();
@@ -407,12 +407,17 @@ export default function TrafficReportsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const copySavedReport = (report: TrafficReport) => {
+  const copySavedReport = async (report: TrafficReport) => {
     const valorFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.valor_investido);
     const cplFmt = report.cpl ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.cpl) : 'Indisponível';
     const text = `📊 *Relatório de Leads - Orion Track*\n\nCliente: ${report.corretores?.nome || 'N/A'}\nPeríodo: ${format(new Date(report.data_inicio), 'dd/MM/yyyy')} a ${format(new Date(report.data_fim), 'dd/MM/yyyy')}\nLeads Gerados: ${report.quantidade_leads}\nInvestimento Meta: ${valorFmt}\nCPL Médio: ${cplFmt}`;
-    navigator.clipboard.writeText(text);
-    alert('Relatório copiado!');
+    try {
+      await navigator.clipboard.writeText(text);
+      setSavedCopiedId(report.id);
+      setTimeout(() => setSavedCopiedId((current) => current === report.id ? null : current), 2000);
+    } catch {
+      alert('Não foi possível copiar o relatório. Verifique a permissão da área de transferência.');
+    }
   };
 
   const generateWeeklyReport = async () => {
@@ -473,11 +478,26 @@ export default function TrafficReportsPage() {
     }
   };
 
-  const copyWeeklyReport = () => {
+  const copyWeeklyReport = async () => {
     if (!weeklyPreview) return;
     const text = weeklyPreview.map((item) => `${item.concessionaria}\n${item.mensagem}`).join('\n\n--------------------\n\n');
-    navigator.clipboard.writeText(text);
-    alert('Relatórios semanais copiados.');
+    try {
+      await navigator.clipboard.writeText(text);
+      setWeeklyCopiedTarget('all');
+      setTimeout(() => setWeeklyCopiedTarget((current) => current === 'all' ? null : current), 2000);
+    } catch {
+      setWeeklyError('Não foi possível copiar os relatórios. Verifique a permissão da área de transferência.');
+    }
+  };
+
+  const copyWeeklyItem = async (item: WeeklyReportItem) => {
+    try {
+      await navigator.clipboard.writeText(`${item.concessionaria}\n\n${item.mensagem}`);
+      setWeeklyCopiedTarget(item.corretor_id);
+      setTimeout(() => setWeeklyCopiedTarget((current) => current === item.corretor_id ? null : current), 2000);
+    } catch {
+      setWeeklyError(`Não foi possível copiar o relatório de ${item.concessionaria}.`);
+    }
   };
 
   const saveDestination = async (event: React.FormEvent) => {
@@ -533,14 +553,29 @@ export default function TrafficReportsPage() {
               <button type="button" onClick={sendWeeklyToAccount} disabled={weeklySending || !weeklyReportId} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
                 {weeklySending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Enviar para Account Manager
               </button>
-              <button type="button" onClick={copyWeeklyReport} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"><Copy size={16} /> Copiar prévia</button>
+              <button type="button" onClick={copyWeeklyReport} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50" aria-live="polite">
+                {weeklyCopiedTarget === 'all' ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
+                {weeklyCopiedTarget === 'all' ? 'Tudo copiado' : 'Copiar todos'}
+              </button>
             </div>
           </div>
           {weeklySendMessage && <p className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{weeklySendMessage}</p>}
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {weeklyPreview.map((item) => (
               <article key={item.corretor_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-black text-slate-900">{item.concessionaria}</h3><p className="mt-1 text-xs font-bold uppercase tracking-wider text-slate-400">{item.meta_ad_account_name || 'Conta Meta não identificada'}</p></div><MessageCircle className="text-blue-600" size={20} /></div>
+                <div className="flex items-start justify-between gap-4">
+                  <div><h3 className="text-lg font-black text-slate-900">{item.concessionaria}</h3><p className="mt-1 text-xs font-bold uppercase tracking-wider text-slate-400">{item.meta_ad_account_name || 'Conta Meta não identificada'}</p></div>
+                  <button
+                    type="button"
+                    onClick={() => copyWeeklyItem(item)}
+                    className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                    aria-label={`Copiar relatório de ${item.concessionaria}`}
+                    aria-live="polite"
+                  >
+                    {weeklyCopiedTarget === item.corretor_id ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
+                    {weeklyCopiedTarget === item.corretor_id ? 'Copiado' : 'Copiar'}
+                  </button>
+                </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-white p-3"><b className="block text-lg text-slate-900">{item.leads === null ? 'N/A' : item.leads}</b><span className="text-[10px] font-black uppercase text-slate-400">Leads</span></div><div className="rounded-xl bg-white p-3"><b className="block text-sm text-slate-900">{item.investimento === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.investimento)}</b><span className="text-[10px] font-black uppercase text-slate-400">Investimento</span></div><div className="rounded-xl bg-white p-3"><b className="block text-sm text-slate-900">{item.cpl === null ? 'N/A' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.cpl)}</b><span className="text-[10px] font-black uppercase text-slate-400">CPL</span></div></div>
                 {(item.erro_leads || item.erro_investimento) && (
                   <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
@@ -825,9 +860,12 @@ export default function TrafficReportsPage() {
                       <td className="px-8 py-5 text-right">
                         <button
                           onClick={() => copySavedReport(r)}
-                          className="inline-flex items-center gap-2 rounded-xl p-2 text-xs font-black text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                          className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-xs font-black text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                          aria-label={`Copiar relatório de ${r.corretores?.nome_empresa || r.corretores?.nome || 'concessionária'}`}
+                          aria-live="polite"
                         >
-                          <Eye size={18} /> Copiar
+                          {savedCopiedId === r.id ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} />}
+                          {savedCopiedId === r.id ? 'Copiado' : 'Copiar'}
                         </button>
                       </td>
                     </tr>
