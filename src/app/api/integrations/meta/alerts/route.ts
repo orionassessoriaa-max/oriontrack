@@ -176,35 +176,53 @@ async function fetchSheetLeads(corretor: CorretorMeta, since: string, until: str
  * periodo. E o que separa "ainda nao integrei" de "integrei e quebrou". Uma
  * consulta so para toda a carteira, apoiada no indice de leads.origem.
  */
-async function fetchCorretoresComHistoricoOrion(corretorIds: string[]) {
-  if (corretorIds.length === 0) return new Set<string>();
+type OrionTrackingSummary = {
+  everHadLead: boolean;
+  lastLeadAt: string | null;
+};
 
-  const { data, error } = await supabaseAdmin.rpc('get_corretores_com_historico_orion', {
+async function fetchCorretoresComHistoricoOrion(corretorIds: string[]) {
+  if (corretorIds.length === 0) return new Map<string, OrionTrackingSummary>();
+
+  const { data, error } = await supabaseAdmin.rpc('get_corretores_rastreio_orion', {
     p_corretor_ids: corretorIds,
   });
 
   if (!error) {
-    const historico = (data || []) as Array<{ corretor_id?: string | null }>;
-    return new Set(historico.map((row) => String(row.corretor_id || '')).filter(Boolean));
+    const historico = (data || []) as Array<{ corretor_id?: string | null; ultimo_lead_at?: string | null }>;
+    return new Map(historico
+      .map((row) => {
+        const corretorId = String(row.corretor_id || '');
+        return [corretorId, { everHadLead: true, lastLeadAt: row.ultimo_lead_at || null }] as const;
+      })
+      .filter(([corretorId]) => Boolean(corretorId)));
   }
 
   // Compatibilidade durante o deploy: se a migration ainda nao foi aplicada,
   // consulta apenas a existencia por corretor. Nao baixa milhares de leads e
   // nao sofre o corte de 10.000 linhas que causava falsos "sem integracao".
-  const encontrados = new Set<string>();
+  const encontrados = new Map<string, OrionTrackingSummary>();
   for (let index = 0; index < corretorIds.length; index += 10) {
     const lote = corretorIds.slice(index, index + 10);
     const resultados = await Promise.all(lote.map(async (corretorId) => {
       const consulta = await supabaseAdmin
         .from('leads')
-        .select('corretor_id')
+        .select('corretor_id, data_entrada')
         .eq('corretor_id', corretorId)
         .ilike('origem', 'orion')
+        .order('data_entrada', { ascending: false })
         .limit(1);
-      return consulta.error ? null : consulta.data?.[0]?.corretor_id || null;
+      const lead = consulta.error ? null : consulta.data?.[0] || null;
+      return lead ? {
+        corretorId: String(lead.corretor_id),
+        lastLeadAt: lead.data_entrada ? String(lead.data_entrada) : null,
+      } : null;
     }));
-    resultados.forEach((corretorId) => {
-      if (corretorId) encontrados.add(String(corretorId));
+    resultados.forEach((resultado) => {
+      if (resultado) encontrados.set(resultado.corretorId, {
+        everHadLead: true,
+        lastLeadAt: resultado.lastLeadAt,
+      });
     });
   }
 
@@ -834,9 +852,14 @@ export async function POST(request: Request) {
       .map((result, index) => {
         const corretor = filtered[index];
         const groupIds = corretor.scoped_corretor_ids || [corretor.id];
-        const everHadOrionLead = historicoOrion === null
-          ? (leadsByCorretor.get(corretor.id) || []).length > 0
-          : groupIds.some((id) => historicoOrion.has(id));
+        const groupTracking = groupIds
+          .map((id) => historicoOrion.get(id))
+          .filter((item): item is OrionTrackingSummary => Boolean(item));
+        const everHadOrionLead = groupTracking.length > 0;
+        const lastOrionLeadAt = groupTracking
+          .map((item) => item.lastLeadAt)
+          .filter((value): value is string => Boolean(value))
+          .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
 
         if (result.status === 'fulfilled') {
           const cumulative = cumulativeByCorretor.get(corretor.id);
@@ -849,6 +872,7 @@ export async function POST(request: Request) {
             everHadOrionLead,
             spend,
             leadsInPeriod: leads.length,
+            lastOrionLeadAt,
           });
           return {
             ...result.value,

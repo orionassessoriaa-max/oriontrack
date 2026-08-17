@@ -111,26 +111,39 @@ export function formatPercent(value: number | null | undefined) {
  * `explicitStatus` vem da coluna corretores.rastreio_status, preenchida pelo
  * admin. Quando ela ainda nao foi marcada, cai na heuristica: concessionaria
  * que nunca teve nenhum lead Orion no CRM esta aguardando integracao; a que ja
- * teve e zerou no periodo tem rastreio quebrado.
+ * teve e permanece por pelo menos 24 horas sem um novo lead, com investimento,
+ * tem rastreio quebrado.
  */
 export function resolveTrackingStatus(input: {
   explicitStatus?: string | null;
   everHadOrionLead: boolean;
   spend: number;
   leadsInPeriod: number;
+  lastOrionLeadAt?: string | null;
+  now?: string | Date;
+  staleAfterHours?: number;
 }): TrackingStatus {
   const explicit = String(input.explicitStatus || '').trim();
+  const staleAfterHours = input.staleAfterHours ?? 24;
+  const now = input.now instanceof Date ? input.now : new Date(input.now || Date.now());
+  const lastLeadAt = input.lastOrionLeadAt ? new Date(input.lastOrionLeadAt) : null;
+  const lastLeadTimestamp = lastLeadAt?.getTime() ?? Number.NaN;
+  const hasReliableLastLead = Number.isFinite(lastLeadTimestamp);
+  const hoursWithoutLead = hasReliableLastLead
+    ? Math.max(0, (now.getTime() - lastLeadTimestamp) / 3_600_000)
+    : 0;
+  const isStale = input.spend > 0 && hasReliableLastLead && hoursWithoutLead >= staleAfterHours;
 
   if (explicit === 'nao_configurado') return 'aguardando_integracao';
   if (explicit === 'planilha_importada') {
     return input.leadsInPeriod > 0 ? 'ativo' : 'aguardando_integracao';
   }
   if (explicit === 'automacao_ativa') {
-    return input.spend > 0 && input.leadsInPeriod === 0 ? 'rastreio_quebrado' : 'ativo';
+    return isStale ? 'rastreio_quebrado' : 'ativo';
   }
 
   if (!input.everHadOrionLead) return 'aguardando_integracao';
-  if (input.spend > 0 && input.leadsInPeriod === 0) return 'rastreio_quebrado';
+  if (isStale) return 'rastreio_quebrado';
   return 'ativo';
 }
 
@@ -174,7 +187,7 @@ export function classifyAccount(account: AccountLike): AccountStatus {
     return {
       label: 'Rastreio quebrado',
       tone: 'blue',
-      detail: 'Esta conta já recebeu leads Orion antes, mas está zerada no período com investimento ativo. Conferir webhook e UTM antes de mexer na campanha.',
+      detail: 'Esta conta está há mais de 24 horas sem receber um novo lead Orion, apesar de possuir investimento. Conferir webhook e UTM antes de mexer na campanha.',
     };
   }
 

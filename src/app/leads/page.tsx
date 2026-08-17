@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import InternalLayout from '@/components/layout/InternalLayout';
 import {
   Search,
@@ -374,6 +375,22 @@ export default function BrokerLeadsPage() {
       });
     }
   }
+
+  useEffect(() => {
+    if (!adPreview) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAdPreview(null);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [adPreview]);
 
   useEffect(() => {
     const urlStatus = new URLSearchParams(window.location.search).get('status');
@@ -2006,7 +2023,7 @@ export default function BrokerLeadsPage() {
         </div>
       )}
 
-      {adPreview && (
+      {adPreview && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
           role="dialog"
@@ -2088,7 +2105,8 @@ export default function BrokerLeadsPage() {
               ) : null}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {commercialModal && (
