@@ -302,6 +302,7 @@ export default function BrokerInboxPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const sendInFlightRef = useRef(false);
 
   // File states
   const [selectedAttachments, setSelectedAttachments] = useState<SelectedAttachment[]>([]);
@@ -1332,10 +1333,14 @@ export default function BrokerInboxPage() {
     if (!selectedConversation) return;
     const finalMsg = textOverride || messageText.trim();
     if (!finalMsg && selectedAttachments.length === 0 && !isAudio) return;
+    if (sendInFlightRef.current) return;
 
-    const token = await getToken();
+    sendInFlightRef.current = true;
+
+    const token = await getToken().catch(() => null);
     if (!token) {
       setSendError('Sessao expirada. Entre novamente.');
+      sendInFlightRef.current = false;
       return;
     }
 
@@ -1351,6 +1356,7 @@ export default function BrokerInboxPage() {
     setSendError(null);
     const isNew = selectedConversation.id.startsWith('new-');
     const hasAudioData = isAudio && audioBase64Override;
+    const clientSendId = crypto.randomUUID();
 
     try {
       const jobs = hasAudioData
@@ -1379,6 +1385,7 @@ export default function BrokerInboxPage() {
           },
           body: JSON.stringify({
             conversation_id: realConversation?.id || selectedConversation.id,
+            client_message_id: `${clientSendId}:${index}`,
             mensagem: job.isAudio ? '[Audio Gravado]' : (index === 0 ? finalMsg : ''),
             ...(isNew && !realConversation ? {
               telefone: selectedConversation.telefone,
@@ -1468,6 +1475,7 @@ export default function BrokerInboxPage() {
         setSelectedAttachments(originalAttachments);
       }
     } finally {
+      sendInFlightRef.current = false;
       setSendingMessage(false);
     }
   }

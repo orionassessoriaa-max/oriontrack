@@ -107,7 +107,6 @@ async function sendTextWithSequenceFallback(instance: string, phone: string, tex
 
 function dedupeMessages(messages: any[]) {
   const seenProviderIds = new Set<string>();
-  const seenRecentContent = new Set<string>();
   const result: any[] = [];
 
   for (const message of messages || []) {
@@ -116,18 +115,6 @@ function dedupeMessages(messages: any[]) {
       if (seenProviderIds.has(providerId)) continue;
       seenProviderIds.add(providerId);
     }
-
-    const createdAt = message?.created_at ? new Date(message.created_at).getTime() : 0;
-    const bucket = createdAt ? Math.floor(createdAt / 30_000) : 0;
-    const contentKey = [
-      message?.direction || '',
-      message?.remetente || '',
-      String(message?.mensagem || '').trim(),
-      bucket,
-    ].join('|');
-
-    if (contentKey.trim() && seenRecentContent.has(contentKey)) continue;
-    seenRecentContent.add(contentKey);
     result.push(message);
   }
 
@@ -641,6 +628,8 @@ export async function PATCH(request: Request) {
 }
 
 export async function POST(request: Request) {
+  let reservedMessageId: string | null = null;
+
   try {
     const limited = rateLimit(request, 'inbox:messages:send', { limit: 30, windowMs: 60_000 });
     if (limited) return limited;
@@ -654,6 +643,9 @@ export async function POST(request: Request) {
     const phoneParam = String(body.telefone || '').trim();
     const leadIdParam = String(body.lead_id || '').trim();
     const nameParam = String(body.nome_contato || '').trim();
+    const clientMessageId = String(body.client_message_id || '')
+      .replace(/[^a-zA-Z0-9:_-]/g, '')
+      .slice(0, 160);
 
     // Novas propriedades de mídia
     const mediaBase64 = String(body.media || '').trim();
@@ -794,6 +786,52 @@ export async function POST(request: Request) {
     }
 
     const instance = uazapiInstanceName(senderProfileId);
+    const reservationProviderId = clientMessageId ? `orion-client:${clientMessageId}` : null;
+    let messageTextDb = text;
+    if (mediaBase64) {
+      const typeLabel = mediatype === 'image' ? '📷 Imagem' : mediatype === 'audio' ? '🎤 Mensagem de voz' : mediatype === 'video' ? '🎥 Vídeo' : '📎 Arquivo';
+      messageTextDb = text ? `${typeLabel}: ${text}` : `${typeLabel} (${fileName})`;
+    }
+
+    if (reservationProviderId) {
+      const { data: reserved, error: reservationError } = await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .insert([{
+          conversa_id: conversationId,
+          direction: 'outbound',
+          remetente: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
+          mensagem: messageTextDb,
+          provider_message_id: reservationProviderId,
+          metadata: {
+            instance,
+            client_message_id: clientMessageId,
+            send_status: 'sending',
+            sender_profile_id: senderProfileId,
+            sender_name: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
+            sender_type: 'human',
+          },
+        }])
+        .select('*')
+        .single();
+
+      if (reservationError?.code === '23505') {
+        const { data: existing } = await supabaseAdmin
+          .from('whatsapp_mensagens')
+          .select('*')
+          .eq('conversa_id', conversationId)
+          .eq('provider_message_id', reservationProviderId)
+          .maybeSingle();
+
+        return NextResponse.json({
+          success: true,
+          message: existing,
+          conversation,
+          deduplicated: true,
+        });
+      }
+      if (reservationError) throw reservationError;
+      reservedMessageId = reserved.id;
+    }
     
     let payload: any = null;
     let outboundMediaMetadata: Record<string, any> = {};
@@ -857,33 +895,69 @@ export async function POST(request: Request) {
       payload?.id ||
       null;
 
-    let messageTextDb = text;
-    if (mediaBase64) {
-      const typeLabel = mediatype === 'image' ? '📷 Imagem' : mediatype === 'audio' ? '🎤 Mensagem de voz' : mediatype === 'video' ? '🎥 Vídeo' : '📎 Arquivo';
-      messageTextDb = text ? `${typeLabel}: ${text}` : `${typeLabel} (${fileName})`;
+    const persistedMessage = {
+      mensagem: messageTextDb,
+      provider_message_id: providerId || reservationProviderId,
+      metadata: {
+        ...(payload || {}),
+        ...outboundMediaMetadata,
+        instance,
+        client_message_id: clientMessageId || null,
+        send_status: 'sent',
+        sender_profile_id: senderProfileId,
+        sender_name: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
+        sender_type: 'human',
+      },
+    };
+
+    const persistenceResult = reservedMessageId
+      ? await supabaseAdmin
+          .from('whatsapp_mensagens')
+          .update(persistedMessage)
+          .eq('id', reservedMessageId)
+          .select('*')
+          .single()
+      : await supabaseAdmin
+          .from('whatsapp_mensagens')
+          .insert([{
+            conversa_id: conversationId,
+            direction: 'outbound',
+            remetente: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
+            ...persistedMessage,
+          }])
+          .select('*')
+          .single();
+
+    let inserted = persistenceResult.data;
+    let insertError = persistenceResult.error;
+
+    // O webhook do provedor pode registrar a mensagem antes de a resposta do
+    // envio voltar. Nesse caso, mantém o registro do webhook e remove apenas
+    // a reserva local, sem informar falha para uma mensagem que já foi enviada.
+    if (insertError?.code === '23505' && providerId) {
+      if (reservedMessageId) {
+        await supabaseAdmin
+          .from('whatsapp_mensagens')
+          .delete()
+          .eq('id', reservedMessageId);
+      }
+
+      const { data: providerMessage } = await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .select('*')
+        .eq('conversa_id', conversationId)
+        .eq('provider_message_id', providerId)
+        .maybeSingle();
+
+      if (providerMessage) {
+        inserted = providerMessage;
+        insertError = null;
+        reservedMessageId = null;
+      }
     }
 
-    const { data: inserted, error: insertError } = await supabaseAdmin
-      .from('whatsapp_mensagens')
-      .insert([{
-        conversa_id: conversationId,
-        direction: 'outbound',
-        remetente: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
-        mensagem: messageTextDb,
-        provider_message_id: providerId,
-        metadata: {
-          ...(payload || {}),
-          ...outboundMediaMetadata,
-          instance,
-          sender_profile_id: senderProfileId,
-          sender_name: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
-          sender_type: 'human',
-        },
-      }])
-      .select('*')
-      .single();
-
     if (insertError) throw insertError;
+    reservedMessageId = null;
 
     await supabaseAdmin
       .from('whatsapp_conversas')
@@ -899,6 +973,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, message: inserted, conversation });
   } catch (error: any) {
+    if (reservedMessageId) {
+      await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .delete()
+        .eq('id', reservedMessageId);
+    }
     console.error('[POST /api/inbox/messages] ERROR:', error);
     const rawMessage = String(error?.message || '');
     if (WHATSAPP_REJECTION_RE.test(rawMessage)) {
