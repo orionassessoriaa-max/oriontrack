@@ -2167,9 +2167,6 @@ export default function BrokerInboxPage() {
     ).values()
   ).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
-  const activeConversationCount = conversations.filter((conversation) => conversation.status !== 'fechada').length;
-  const followUpConversationCount = conversations.filter((conversation) => conversationBelongsToBox(conversation, 'followup')).length;
-  const closedConversationCount = conversations.filter((conversation) => conversation.status === 'fechada').length;
 
   const conversationsByResponsible = conversations.filter((conversation) => {
     if (responsibleFilter === 'todos') return true;
@@ -2412,36 +2409,42 @@ export default function BrokerInboxPage() {
           <div className={`orion-inbox-list border-r border-white/5 ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col bg-slate-900/20 h-full overflow-hidden`}>
             {/* Conversation box and filters */}
             <div className="p-4 border-b border-white/5 space-y-3.5">
-              <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Caixas de conversa">
+              <div className="orion-inbox-box-tabs" role="tablist" aria-label="Caixas de conversa">
                 <button
                   type="button"
                   role="tab"
                   aria-selected={conversationBox === 'active'}
+                  aria-label="Conversas ativas"
+                  title="Conversas ativas"
                   onClick={() => { setConversationBox('active'); setSelectedConversation(null); }}
-                  className={`flex min-h-11 items-center justify-between rounded-xl border px-3 text-[10px] font-black uppercase tracking-wider transition ${conversationBox === 'active' ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' : 'border-white/5 bg-slate-950 text-slate-500 hover:text-slate-300'}`}
+                  className="orion-inbox-box-tab"
                 >
-                  <span className="flex items-center gap-2"><MessageSquare size={14} /> Ativas</span>
-                  <span className="tabular-nums">{activeConversationCount}</span>
+                  <MessageSquare size={19} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="sr-only">Conversas ativas</span>
                 </button>
                 <button
                   type="button"
                   role="tab"
                   aria-selected={conversationBox === 'followup'}
+                  aria-label="Conversas em follow-up"
+                  title="Conversas em follow-up"
                   onClick={() => { setConversationBox('followup'); setSelectedConversation(null); }}
-                  className={`flex min-h-11 items-center justify-between rounded-xl border px-2 text-[9px] font-black uppercase tracking-wide transition ${conversationBox === 'followup' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-white/5 bg-slate-950 text-slate-500 hover:text-slate-300'}`}
+                  className="orion-inbox-box-tab"
                 >
-                  <span className="flex items-center gap-1.5"><Clock size={13} /> Follow-up</span>
-                  <span className="tabular-nums">{followUpConversationCount}</span>
+                  <Clock size={19} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="sr-only">Conversas em follow-up</span>
                 </button>
                 <button
                   type="button"
                   role="tab"
                   aria-selected={conversationBox === 'closed'}
+                  aria-label="Conversas encerradas"
+                  title="Conversas encerradas"
                   onClick={() => { setConversationBox('closed'); setSelectedConversation(null); }}
-                  className={`flex min-h-11 items-center justify-between rounded-xl border px-3 text-[10px] font-black uppercase tracking-wider transition ${conversationBox === 'closed' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-white/5 bg-slate-950 text-slate-500 hover:text-slate-300'}`}
+                  className="orion-inbox-box-tab"
                 >
-                  <span className="flex items-center gap-2"><Archive size={14} /> Encerradas</span>
-                  <span className="tabular-nums">{closedConversationCount}</span>
+                  <Archive size={19} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="sr-only">Conversas encerradas</span>
                 </button>
               </div>
 
@@ -2524,7 +2527,7 @@ export default function BrokerInboxPage() {
                       <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex justify-between items-baseline">
                           <span className="text-xs font-black text-white truncate block">{cleanInboxDisplayName(c.nome_contato, c.telefone)}</span>
-                          <span className="text-[9px] font-bold text-slate-500 shrink-0">
+                          <span className="orion-inbox-conversation-time text-[9px] font-bold text-slate-500 shrink-0">
                             {c.ultima_mensagem_at ? formatHour(c.ultima_mensagem_at) : ''}
                           </span>
                         </div>
@@ -2724,7 +2727,7 @@ export default function BrokerInboxPage() {
                         <div key={message.id} className="space-y-4">
                           {showDaySeparator && (
                             <div className="flex justify-center">
-                              <span className="rounded-lg border border-white/10 bg-slate-800/90 px-3 py-1 text-[10px] font-bold text-slate-200 shadow-lg">
+                              <span className="orion-inbox-day-separator rounded-lg border border-white/10 bg-slate-800/90 px-3 py-1 text-[10px] font-bold text-slate-200 shadow-lg">
                                 {formatMessageDay(message.created_at)}
                               </span>
                             </div>
@@ -2815,7 +2818,7 @@ export default function BrokerInboxPage() {
                                       Faça ligações com o app para Windows
                                     </p>
                                   )}
-                                  <p className={`text-[8px] font-semibold mt-0.5 ${isMine ? 'text-emerald-200/60' : 'text-slate-500'}`}>
+                                  <p className={`orion-inbox-message-time text-[8px] font-semibold mt-0.5 ${isMine ? 'text-emerald-200/60' : 'text-slate-500'}`}>
                                     {formatHour(message.created_at)}
                                   </p>
                                 </div>
@@ -2898,7 +2901,7 @@ export default function BrokerInboxPage() {
                               <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>
                                 {cleanInboxDisplayName(message.remetente || selectedConversation.nome_contato, selectedConversation.telefone)}
                               </span>
-                              <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>
+                              <span className={`orion-inbox-message-time ${isMine ? 'text-cyan-200' : 'text-slate-500'}`}>
                                 {formatHour(message.created_at)}
                               </span>
                             </div>

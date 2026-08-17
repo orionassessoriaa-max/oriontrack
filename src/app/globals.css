@@ -4347,3 +4347,149 @@ html.theme-noturno .orion-trafego {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Inbox navigation and timestamps: compact, legible and WhatsApp-like. */
+.orion-inbox-box-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.72);
+}
+
+.orion-inbox-box-tab {
+  display: flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.orion-inbox-box-tab:hover {
+  background: rgba(148, 163, 184, 0.09);
+  color: #cbd5e1;
+}
+
+.orion-inbox-box-tab[aria-selected='true'] {
+  border-color: rgba(37, 211, 102, 0.24);
+  background: rgba(37, 211, 102, 0.12);
+  color: #34d399;
+  box-shadow: 0 1px 3px rgba(2, 6, 23, 0.18);
+}
+
+.orion-inbox-box-tab:focus-visible {
+  outline: 3px solid rgba(34, 211, 238, 0.28);
+  outline-offset: 2px;
+}
+
+.theme-claro .orion-inbox-box-tabs {
+  border-color: #d8dee4 !important;
+  background: #f0f2f5 !important;
+}
+
+.theme-claro .orion-inbox-box-tab {
+  min-height: 44px !important;
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: #54656f !important;
+}
+
+.theme-claro .orion-inbox-box-tab:hover {
+  background: rgba(255, 255, 255, 0.72) !important;
+  color: #26343d !important;
+}
+
+.theme-claro .orion-inbox-box-tab[aria-selected='true'] {
+  border-color: #d9e5e2 !important;
+  background: #ffffff !important;
+  color: #008069 !important;
+  box-shadow: 0 1px 3px rgba(11, 20, 26, 0.12) !important;
+}
+
+.theme-claro .orion-inbox-day-separator {
+  border-color: #cbd5dc !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  box-shadow: 0 1px 2px rgba(11, 20, 26, 0.12) !important;
+}
+
+.theme-claro .orion-inbox-conversation-time,
+.theme-claro .orion-inbox-message-time {
+  color: #475569 !important;
+  -webkit-text-fill-color: #475569 !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-end .orion-inbox-message-time {
+  color: #0f5f59 !important;
+  -webkit-text-fill-color: #0f5f59 !important;
+}
+
+/* Message area follows the restrained WhatsApp visual language in both themes. */
+.orion-inbox-messages {
+  background-color: #0b141a !important;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.018) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 80% 60%, rgba(255, 255, 255, 0.014) 0 1px, transparent 1.5px) !important;
+  background-size: 28px 28px, 34px 34px !important;
+}
+
+.orion-inbox-messages .justify-start > div {
+  background: #202c33 !important;
+  border-color: #202c33 !important;
+}
+
+.orion-inbox-messages .justify-end > div {
+  background: #005c4b !important;
+  border-color: #005c4b !important;
+}
+
+.theme-claro .orion-inbox-messages {
+  background-color: #efeae2 !important;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(84, 101, 111, 0.045) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 80% 60%, rgba(84, 101, 111, 0.035) 0 1px, transparent 1.5px) !important;
+  background-size: 28px 28px, 34px 34px !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-start > div {
+  border-color: #e1e6e8 !important;
+  background: #ffffff !important;
+  color: #111b21 !important;
+  box-shadow: 0 1px 1px rgba(11, 20, 26, 0.08) !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-end > div {
+  border-color: #d9fdd3 !important;
+  background: #d9fdd3 !important;
+  color: #111b21 !important;
+  box-shadow: 0 1px 1px rgba(11, 20, 26, 0.08) !important;
+}
+
+.theme-claro .orion-inbox-messages .justify-end span:not(.orion-inbox-day-separator) {
+  color: #3b4a54 !important;
+  -webkit-text-fill-color: #3b4a54 !important;
+}
+
+.theme-claro .orion-inbox-composer {
+  border-top-color: #d8dee4 !important;
+  background: #f0f2f5 !important;
+}
+
+.theme-claro .orion-inbox-composer button[class*='bg-cyan'] {
+  background: #00a884 !important;
+  box-shadow: none !important;
+}
+
+.theme-claro .orion-inbox-list .flex-1.overflow-y-auto > button[aria-current='true'] {
+  border-left-color: #00a884 !important;
+  background: #f0f2f5 !important;
+}
