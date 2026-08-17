@@ -179,15 +179,36 @@ async function fetchSheetLeads(corretor: CorretorMeta, since: string, until: str
 async function fetchCorretoresComHistoricoOrion(corretorIds: string[]) {
   if (corretorIds.length === 0) return new Set<string>();
 
-  const { data, error } = await supabaseAdmin
-    .from('leads')
-    .select('corretor_id')
-    .in('corretor_id', corretorIds)
-    .eq('origem', 'Orion')
-    .limit(10000);
+  const { data, error } = await supabaseAdmin.rpc('get_corretores_com_historico_orion', {
+    p_corretor_ids: corretorIds,
+  });
 
-  if (error) return null;
-  return new Set((data || []).map((row: any) => String(row.corretor_id)).filter(Boolean));
+  if (!error) {
+    const historico = (data || []) as Array<{ corretor_id?: string | null }>;
+    return new Set(historico.map((row) => String(row.corretor_id || '')).filter(Boolean));
+  }
+
+  // Compatibilidade durante o deploy: se a migration ainda nao foi aplicada,
+  // consulta apenas a existencia por corretor. Nao baixa milhares de leads e
+  // nao sofre o corte de 10.000 linhas que causava falsos "sem integracao".
+  const encontrados = new Set<string>();
+  for (let index = 0; index < corretorIds.length; index += 10) {
+    const lote = corretorIds.slice(index, index + 10);
+    const resultados = await Promise.all(lote.map(async (corretorId) => {
+      const consulta = await supabaseAdmin
+        .from('leads')
+        .select('corretor_id')
+        .eq('corretor_id', corretorId)
+        .ilike('origem', 'orion')
+        .limit(1);
+      return consulta.error ? null : consulta.data?.[0]?.corretor_id || null;
+    }));
+    resultados.forEach((corretorId) => {
+      if (corretorId) encontrados.add(String(corretorId));
+    });
+  }
+
+  return encontrados;
 }
 
 function normalizeKey(value?: string | null) {
