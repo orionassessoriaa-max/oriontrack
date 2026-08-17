@@ -73,10 +73,11 @@ function TrendChart({ rows }: { rows: Overview['trend'] }) {
 
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 function startOfMonth() { const date = new Date(); return isoDate(new Date(date.getFullYear(), date.getMonth(), 1)); }
-type DatePreset = 'todos' | 'hoje' | 'ontem' | '7dias' | '30dias' | 'mes' | 'mes_passado' | 'personalizado';
+type DatePreset = 'todos' | 'hoje' | 'ontem' | '4dias' | '7dias' | '30dias' | 'mes' | 'mes_passado' | 'personalizado';
 function getPresetRange(preset: DatePreset) {
   const today = new Date(); const start = new Date(today); const end = new Date(today);
   if (preset === 'ontem') { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); }
+  if (preset === '4dias') start.setDate(start.getDate() - 3);
   if (preset === '7dias') start.setDate(start.getDate() - 6);
   if (preset === '30dias') start.setDate(start.getDate() - 29);
   if (preset === 'mes') start.setDate(1);
@@ -167,7 +168,7 @@ export default function CommercialDashboardPage() {
     setDatePreset(draftPreset); setStart(draftStart); setEnd(draftEnd); setPeriodOpen(false);
   }
 
-  const periodText = datePreset === 'todos' ? 'Todo o periodo' : `${({ hoje: 'Hoje', ontem: 'Ontem', '7dias': 'Ultimos 7 dias', '30dias': 'Ultimos 30 dias', mes: 'Este mes', mes_passado: 'Mes passado', personalizado: 'Periodo personalizado', todos: 'Todo o periodo' } as Record<DatePreset, string>)[datePreset]} (${shortDate(start)} a ${shortDate(end)})`;
+  const periodText = datePreset === 'todos' ? 'Todo o periodo' : `${({ hoje: 'Hoje', ontem: 'Ontem', '4dias': 'Ultimos 4 dias', '7dias': 'Ultimos 7 dias', '30dias': 'Ultimos 30 dias', mes: 'Este mes', mes_passado: 'Mes passado', personalizado: 'Periodo personalizado', todos: 'Todo o periodo' } as Record<DatePreset, string>)[datePreset]} (${shortDate(start)} a ${shortDate(end)})`;
 
   function toggleCampaign(campaign: string) {
     setSelectedCampaigns((current) => current.includes(campaign) ? current.filter((item) => item !== campaign) : [...current, campaign]);
@@ -206,7 +207,7 @@ export default function CommercialDashboardPage() {
             <div className="kh-period-control">
               <button type="button" className="kh-period-trigger" onClick={openPeriod} aria-expanded={periodOpen}><CalendarDays size={15} /><strong>{periodText}</strong><ChevronDown size={14} /></button>
               {periodOpen && <div className="kh-period-popover">
-                <div className="kh-period-quick"><span>Atalhos rapidos</span>{([['todos', 'Todo o periodo'], ['hoje', 'Hoje'], ['ontem', 'Ontem'], ['7dias', 'Ultimos 7 dias'], ['30dias', 'Ultimos 30 dias'], ['mes', 'Este mes'], ['mes_passado', 'Mes passado']] as Array<[DatePreset, string]>).map(([value, label]) => <button type="button" key={value} className={draftPreset === value ? 'active' : ''} onClick={() => choosePreset(value)}>{label}</button>)}</div>
+                <div className="kh-period-quick"><span>Atalhos rapidos</span>{([['todos', 'Todo o periodo'], ['hoje', 'Hoje'], ['ontem', 'Ontem'], ['4dias', 'Ultimos 4 dias'], ['7dias', 'Ultimos 7 dias'], ['30dias', 'Ultimos 30 dias'], ['mes', 'Este mes'], ['mes_passado', 'Mes passado']] as Array<[DatePreset, string]>).map(([value, label]) => <button type="button" key={value} className={draftPreset === value ? 'active' : ''} onClick={() => choosePreset(value)}>{label}</button>)}</div>
                 <div className="kh-period-custom"><span>Periodo personalizado</span><label>Data de inicio<input type="date" value={draftStart} onChange={(event) => { setDraftPreset('personalizado'); setDraftStart(event.target.value); }} /></label><label>Data de fim<input type="date" value={draftEnd} onChange={(event) => { setDraftPreset('personalizado'); setDraftEnd(event.target.value); }} /></label><div className="kh-period-footer"><button type="button" onClick={() => setPeriodOpen(false)}>Cancelar</button><button type="button" className="primary" onClick={applyPeriod}>Aplicar</button></div></div>
               </div>}
             </div>
