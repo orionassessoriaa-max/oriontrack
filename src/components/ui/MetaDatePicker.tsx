@@ -98,6 +98,11 @@ export default function MetaDatePicker({
         end = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
         label = 'Ontem';
         break;
+      case '4dias':
+        start = addDays(d, -3);
+        end = new Date(d);
+        label = 'Últimos 4 dias';
+        break;
       case '7dias':
         end = getYesterday();
         start = addDays(end, -6);
@@ -167,6 +172,7 @@ export default function MetaDatePicker({
               { id: 'todo_periodo', label: 'Todo o período' },
               { id: 'hoje', label: 'Hoje' },
               { id: 'ontem', label: 'Ontem' },
+              { id: '4dias', label: 'Últimos 4 dias' },
               { id: '7dias', label: 'Últimos 7 dias' },
               { id: '30dias', label: 'Últimos 30 dias' },
               { id: 'este_mes', label: 'Este mês' },
