@@ -2741,7 +2741,7 @@ export default function BrokerInboxPage() {
                             </div>
                           )}
                           <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
-                          <div className={`relative max-w-[86%] sm:max-w-[75%] rounded-[1.25rem] sm:rounded-[1.5rem] p-3 sm:p-3.5 shadow-lg space-y-1.5 ${
+                          <div className={`orion-inbox-message-bubble relative max-w-[86%] sm:max-w-[75%] rounded-[1.25rem] sm:rounded-[1.5rem] p-3 sm:p-3.5 shadow-lg space-y-1.5 ${
                             mediaKind === 'call'
                               ? isMine
                                 ? 'bg-emerald-600 text-white rounded-tr-none'
@@ -2903,7 +2903,7 @@ export default function BrokerInboxPage() {
                                 <Download size={14} className="shrink-0 opacity-80" />
                               </button>
                             ) : (
-                              <p className="text-xs font-bold leading-normal whitespace-pre-wrap">{message.mensagem}</p>
+                              <p className="orion-inbox-message-body text-xs font-bold leading-normal whitespace-pre-wrap">{message.mensagem}</p>
                             )}
                             <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-wider">
                               <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>

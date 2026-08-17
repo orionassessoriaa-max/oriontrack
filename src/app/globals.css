@@ -4474,6 +4474,14 @@ html.theme-noturno .orion-trafego {
   box-shadow: 0 1px 1px rgba(11, 20, 26, 0.08) !important;
 }
 
+/* Keep WhatsApp-like outgoing bubbles readable after the global primary-button
+   color rules run. The pale green surface requires dark foreground text. */
+.theme-claro .orion-inbox-messages .justify-end > .orion-inbox-message-bubble p,
+.theme-claro .orion-inbox-messages .justify-end > .orion-inbox-message-bubble .orion-inbox-message-body {
+  color: #111b21 !important;
+  -webkit-text-fill-color: #111b21 !important;
+}
+
 .theme-claro .orion-inbox-messages .justify-end span:not(.orion-inbox-day-separator) {
   color: #3b4a54 !important;
   -webkit-text-fill-color: #3b4a54 !important;
