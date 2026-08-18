@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const WHATSAPP_REJECTION_RE = /whatsapp server rejected|rejected this message|not an internal api error|server rejected/i;
@@ -110,7 +111,7 @@ function dedupeMessages(messages: any[]) {
   const result: any[] = [];
 
   for (const message of messages || []) {
-    const providerId = String(message?.provider_message_id || '').trim();
+    const providerId = normalizeWhatsAppMessageId(message?.provider_message_id);
     if (providerId) {
       if (seenProviderIds.has(providerId)) continue;
       seenProviderIds.add(providerId);

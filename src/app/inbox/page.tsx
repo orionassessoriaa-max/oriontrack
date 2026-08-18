@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
+import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 import { getLeadStatusStyle, normalizeLeadStatus } from '@/lib/leadStatus';
 import { DEFAULT_KANBAN_STAGES, KanbanStage, getKanbanStageLabel, normalizeKanbanStages } from '@/lib/kanbanStages';
 import { 
@@ -258,7 +259,7 @@ function getMessageExternalIds(message: InboxMessage) {
     metadata.id,
   ].filter(Boolean).flatMap((value) => {
     const id = String(value);
-    return [id, id.replace(/^.*?:/, '')];
+    return [id, normalizeWhatsAppMessageId(id)];
   });
 }
 
@@ -843,6 +844,12 @@ export default function BrokerInboxPage() {
             };
             setMessages((prev) => {
               if (prev.some((m) => m.id === mappedMsg.id)) {
+                return prev;
+              }
+              const mappedProviderId = normalizeWhatsAppMessageId(mappedMsg.provider_message_id);
+              if (mappedProviderId && prev.some((message) => (
+                normalizeWhatsAppMessageId(message.provider_message_id) === mappedProviderId
+              ))) {
                 return prev;
               }
               const newMessageTime = mappedMsg.created_at ? new Date(mappedMsg.created_at).getTime() : Date.now();

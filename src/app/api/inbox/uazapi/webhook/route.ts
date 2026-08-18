@@ -5,6 +5,7 @@ import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, s
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { continueCommercialSdrFromIncoming } from '@/lib/commercialSdrAgent';
 import { ensureCommercialConversation, findCommercialConversation } from '@/lib/commercialInbox';
+import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 
 function readText(body: any) {
   return pickString(
@@ -1075,6 +1076,29 @@ async function hasRecentDuplicateMessage(conversationId: string, direction: 'inb
   return Boolean(data?.id);
 }
 
+async function hasDuplicateProviderMessageId(providerId: string) {
+  const normalizedProviderId = normalizeWhatsAppMessageId(providerId);
+  if (!normalizedProviderId) return false;
+
+  const recentWindow = new Date(Date.now() - 5 * 60_000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('provider_message_id')
+    .not('provider_message_id', 'is', null)
+    .gte('created_at', recentWindow)
+    .order('created_at', { ascending: false })
+    .limit(250);
+
+  if (error) {
+    console.error('[uazapi_webhook] Failed checking normalized provider message id:', error);
+    return false;
+  }
+
+  return (data || []).some((row) => (
+    normalizeWhatsAppMessageId(row.provider_message_id) === normalizedProviderId
+  ));
+}
+
 function readConnectionState(body: any) {
   const connected = [
     body?.connected,
@@ -1258,14 +1282,8 @@ export async function POST(request: Request) {
     let audioTranscriptionFailed = false;
     let aiCustomerMessage = message;
 
-    if (providerId) {
-      const { data: existing } = await supabaseAdmin
-        .from('whatsapp_mensagens')
-        .select('id')
-        .eq('provider_message_id', providerId)
-        .limit(1)
-        .maybeSingle();
-      if (existing) return NextResponse.json({ ok: true, duplicated: true });
+    if (providerId && await hasDuplicateProviderMessageId(providerId)) {
+      return NextResponse.json({ ok: true, duplicated: true, reason: 'normalized_provider_message_id' });
     }
 
     let mediaMetadata = readUazapiMediaMetadata(body);
