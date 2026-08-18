@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarPlus,
+  CircleDollarSign,
   ChevronDown,
   ChevronUp,
   Download,
@@ -108,6 +109,14 @@ function isContactCadenceStage(value: string | null | undefined) {
     .toLowerCase() === "tentando contato";
 }
 
+function normalizeStageForCard(value: string | null | undefined) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function formatDaniloCnpj(lead: CommercialLead) {
   const cnpjLead = lead as CommercialLead & { possui_cnpj?: string | null };
   const value = String(cnpjLead.possui_cnpj || "")
@@ -207,6 +216,9 @@ export default function CommercialKanbanPage() {
   } | null>(null);
   const [meetingAt, setMeetingAt] = useState("");
   const [meetingSaving, setMeetingSaving] = useState(false);
+  const [negotiationMove, setNegotiationMove] = useState<{ leadId: string; status: string } | null>(null);
+  const [negotiationValue, setNegotiationValue] = useState("");
+  const [negotiationSaving, setNegotiationSaving] = useState(false);
   const [saleMove, setSaleMove] = useState<{ leadId: string; status: string } | null>(null);
   const [saleSellerId, setSaleSellerId] = useState("");
   const [saleMeetingLink, setSaleMeetingLink] = useState("");
@@ -367,6 +379,13 @@ export default function CommercialKanbanPage() {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase();
+    if (normalizedStatus.trim() === "em negociacao") {
+      const lead = leads.find((item) => item.id === id);
+      setNegotiationMove({ leadId: id, status });
+      setNegotiationValue(Number(lead?.valor_negociacao || 0) > 0 ? String(lead?.valor_negociacao) : "");
+      setStageError(null);
+      return;
+    }
     if (normalizedStatus.trim() === "negocio fechado") {
       const lead = leads.find((item) => item.id === id);
       const currentUserCanSell = role === "closer" || currentProfileId === "a12b63f9-4c72-4a92-a99a-98c020723a06";
@@ -415,6 +434,38 @@ export default function CommercialKanbanPage() {
     } catch {
       await load();
     } finally {
+      setMovingId(null);
+    }
+  }
+  async function confirmNegotiationMove(event: React.FormEvent) {
+    event.preventDefault();
+    if (!negotiationMove) return;
+    const value = Number(negotiationValue);
+    if (!Number.isFinite(value) || value <= 0) {
+      setStageError("Informe um valor de negociação maior que zero.");
+      return;
+    }
+    setNegotiationSaving(true);
+    setMovingId(negotiationMove.leadId);
+    setStageError(null);
+    try {
+      const payload = await api("/api/comercial/leads", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: negotiationMove.leadId,
+          status: negotiationMove.status,
+          valor_negociacao: value,
+        }),
+      });
+      if (payload.lead) {
+        setLeads((current) => current.map((lead) => lead.id === negotiationMove.leadId ? payload.lead : lead));
+      }
+      setNegotiationMove(null);
+      setNegotiationValue("");
+    } catch (error) {
+      setStageError(error instanceof Error ? error.message : "Não foi possível mover o lead para negociação.");
+    } finally {
+      setNegotiationSaving(false);
       setMovingId(null);
     }
   }
@@ -1144,6 +1195,12 @@ export default function CommercialKanbanPage() {
                         <span className="kh-card-cnpj">
                           {formatDaniloCnpj(lead)}
                         </span>
+                        {(Number(lead.valor_negociacao || 0) > 0 || normalizeStageForCard(lead.status) === "em negociacao") && (
+                          <div className="kh-card-negotiation-value">
+                            <CircleDollarSign size={12} />
+                            <span>{currency(Number(lead.valor_negociacao || 0))}</span>
+                          </div>
+                        )}
                         {isContactCadenceStage(lead.status) && (
                           <div className="kh-card-cadence">
                             {formatDaniloCadence(
@@ -1387,6 +1444,26 @@ export default function CommercialKanbanPage() {
               ) : (
                 <button type="submit" className="kh-button primary" disabled={saleSaving || !saleSellerId || !saleMeetingLink.trim() || !saleClosedAt || !saleAmountPaid || !salePaymentModel}>{saleSaving ? <RefreshCw size={15} className="kh-spin" /> : <UserRound size={15} />} {saleSaving ? "Gerando briefing..." : "Salvar e gerar briefing"}</button>
               )}
+            </footer>
+          </form>
+        </div>
+      )}
+      {negotiationMove && (
+        <div className="kh-modal" role="dialog" aria-modal="true" aria-labelledby="negotiation-title">
+          <button className="kh-modal-scrim" type="button" onClick={() => setNegotiationMove(null)} aria-label="Fechar" />
+          <form className="kh-modal-sheet kh-meeting-modal" onSubmit={confirmNegotiationMove}>
+            <header>
+              <div><span>Etapa comercial</span><h2 id="negotiation-title">Informar valor da negociação</h2></div>
+              <button type="button" aria-label="Fechar" onClick={() => setNegotiationMove(null)}><X size={18} /></button>
+            </header>
+            <div className="kh-meeting-form">
+              <p>O lead só pode entrar em negociação depois que o valor estimado for registrado.</p>
+              <label><span>Valor da negociação *</span><input className="kh-input" type="number" min="0.01" step="0.01" value={negotiationValue} onChange={(event) => setNegotiationValue(event.target.value)} placeholder="0,00" required autoFocus /></label>
+              {stageError && <div className="kh-inline-error" role="alert">{stageError}</div>}
+            </div>
+            <footer>
+              <button type="button" className="kh-button" onClick={() => setNegotiationMove(null)}>Cancelar</button>
+              <button type="submit" className="kh-button primary" disabled={negotiationSaving || Number(negotiationValue) <= 0}>{negotiationSaving ? "Salvando..." : "Confirmar negociação"}</button>
             </footer>
           </form>
         </div>

@@ -26,6 +26,10 @@ function isClosedStage(value: unknown) {
   return normalizeStage(value).trim() === 'negocio fechado';
 }
 
+function isNegotiationStage(value: unknown) {
+  return normalizeStage(value).trim() === 'em negociacao';
+}
+
 const PEDRO_GHISOLFI_PROFILE_ID = 'a12b63f9-4c72-4a92-a99a-98c020723a06';
 const MEETING_LINK_LABEL = 'Link da reunião';
 
@@ -57,7 +61,9 @@ function validMeetingLink(value: unknown) {
 function redactFinancialFields<T extends Record<string, unknown>>(lead: T, canView: boolean) {
   if (canView) return lead;
   const sanitized = { ...lead };
-  for (const field of ['valor_negociacao', 'valor_fechado', 'valor_pago', 'modelo_pagamento']) delete sanitized[field];
+  // O valor em negociação faz parte da operação diária do SDR e precisa aparecer
+  // no card. Dados do fechamento continuam restritos aos perfis financeiros.
+  for (const field of ['valor_fechado', 'valor_pago', 'modelo_pagamento']) delete sanitized[field];
   return sanitized;
 }
 
@@ -198,6 +204,13 @@ export async function PATCH(request: Request) {
     'valor_pago', 'modelo_pagamento', 'reuniao_link',
   ];
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const enteringNegotiation = isNegotiationStage(targetStatus) && !isNegotiationStage(allowed.status);
+  const negotiationValue = Object.prototype.hasOwnProperty.call(body, 'valor_negociacao')
+    ? Number(body.valor_negociacao)
+    : Number(allowed.valor_negociacao || 0);
+  if (enteringNegotiation && (!Number.isFinite(negotiationValue) || negotiationValue <= 0)) {
+    return NextResponse.json({ error: 'Informe um valor de negociação maior que zero antes de mover o lead.' }, { status: 400 });
+  }
   const closingSale = isClosedStage(targetStatus) && !isClosedStage(allowed.status);
   const editingSaleFields = Object.prototype.hasOwnProperty.call(body, 'vendedor_id')
     || Object.prototype.hasOwnProperty.call(body, 'reuniao_link')
@@ -208,10 +221,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Somente o administrador pode editar os dados de uma venda concluida.' }, { status: 403 });
   }
   for (const field of allowedFields) {
-    if (!guard.canViewCommercialFinancials && ['valor_negociacao', 'valor_fechado', 'valor_pago', 'modelo_pagamento'].includes(field)) continue;
+    if (!guard.canViewCommercialFinancials && ['valor_fechado', 'valor_pago', 'modelo_pagamento'].includes(field)) continue;
+    if (!guard.canViewCommercialFinancials && field === 'valor_negociacao' && !enteringNegotiation) continue;
     if (guard.commercialRole === 'sdr' && ['sdr_id', 'closer_id'].includes(field)) continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
   }
+  if (enteringNegotiation) update.valor_negociacao = negotiationValue;
   if (closingSale) {
     const automaticSellerId = guard.commercialRole === 'closer' || guard.profile.id === PEDRO_GHISOLFI_PROFILE_ID
       ? guard.profile.id

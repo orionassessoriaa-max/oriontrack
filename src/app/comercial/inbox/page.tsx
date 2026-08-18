@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -49,6 +49,7 @@ type Conversation = {
     ja_investiu_trafego: string | null;
     faturamento_mensal: string | null;
     investimento: string | null;
+    valor_negociacao: number | null;
     data_entrada: string;
     ultimo_contato_at: string | null;
     utm_source: string | null;
@@ -88,6 +89,20 @@ const time = (value?: string | null) => value
   ? new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   : '';
 const normalizePhone = (value: string) => value.replace(/\D/g, '').replace(/^55/, '');
+const calendarDay = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+const whatsappDay = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return 'Hoje';
+  if (date.toDateString() === yesterday.toDateString()) return 'Ontem';
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
 const formatDuration = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
 
 function isAudioMessage(message: Message) {
@@ -157,6 +172,8 @@ export default function CommercialInboxPage() {
   const [movingStage, setMovingStage] = useState(false);
   const [meetingStage, setMeetingStage] = useState('');
   const [meetingAt, setMeetingAt] = useState('');
+  const [negotiationStage, setNegotiationStage] = useState('');
+  const [negotiationValue, setNegotiationValue] = useState('');
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -291,11 +308,17 @@ export default function CommercialInboxPage() {
       setMeetingAt('');
       return;
     }
+    if (normalized.trim() === 'em negociacao') {
+      setMeetingStage('');
+      setNegotiationStage(status);
+      setNegotiationValue(Number(selected?.commercial_lead.valor_negociacao || 0) > 0 ? String(selected?.commercial_lead.valor_negociacao) : '');
+      return;
+    }
     setMeetingStage('');
     void moveSelectedLead(status);
   }
 
-  async function moveSelectedLead(status: string, scheduledAt?: string) {
+  async function moveSelectedLead(status: string, scheduledAt?: string, negotiationAmount?: number) {
     if (!selected || !status || status === selected.commercial_lead.status || movingStage) return;
     setMovingStage(true);
     setNotice('');
@@ -306,6 +329,7 @@ export default function CommercialInboxPage() {
           id: selected.commercial_lead.id,
           status,
           ...(scheduledAt ? { reuniao_agendada_at: new Date(scheduledAt).toISOString() } : {}),
+          ...(negotiationAmount ? { valor_negociacao: negotiationAmount } : {}),
         }),
       });
       const updatedLead = payload.lead || { ...selected.commercial_lead, status };
@@ -317,6 +341,8 @@ export default function CommercialInboxPage() {
         : current);
       setMeetingStage('');
       setMeetingAt('');
+      setNegotiationStage('');
+      setNegotiationValue('');
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Não foi possível mover o lead de etapa.');
     } finally {
@@ -560,7 +586,7 @@ export default function CommercialInboxPage() {
             {selected ? <><button type="button" className="kh-chat-back" onClick={() => setSelected(null)} aria-label="Voltar para as conversas"><ArrowLeft size={20} /></button><div className="kh-avatar">{(selected.nome_contato || selected.commercial_lead.nome).slice(0, 2).toUpperCase()}</div><div><strong>{selected.nome_contato || selected.commercial_lead.nome}</strong><span>{selected.telefone} · {selected.commercial_lead.status}</span></div></> : <><MessageSquare size={22} /><div><strong>Orion WhatsApp</strong><span>Selecione uma conversa para iniciar o atendimento.</span></div></>}
           </div>
           <div className="kh-chat-messages">
-            {messages.map((message) => {
+            {messages.map((message, index) => {
               const mediaKind = getMessageMediaKind(message);
               const media = messageMedia[message.id];
               const isMediaLoading = loadingMediaId === message.id;
@@ -582,8 +608,11 @@ export default function CommercialInboxPage() {
                     ? selected?.nome_contato || selected?.commercial_lead.nome || 'Lead'
                     : 'Equipe comercial');
               const senderLabel = senderName;
+              const showDay = index === 0 || calendarDay(messages[index - 1].created_at) !== calendarDay(message.created_at);
               return (
-                <div key={message.id} className={`kh-chat-bubble ${message.direction === 'outbound' ? 'outbound' : 'inbound'} ${mediaKind === 'audio' ? 'audio' : ''}`}>
+                <Fragment key={message.id}>
+                {showDay && <div className="kh-chat-date-separator"><span>{whatsappDay(message.created_at)}</span></div>}
+                <div className={`kh-chat-bubble ${message.direction === 'outbound' ? 'outbound' : 'inbound'} ${mediaKind === 'audio' ? 'audio' : ''}`}>
                   {mediaKind === 'audio' ? media ? (
                     <div className="kh-audio-message"><Volume2 size={17} aria-hidden="true" /><audio controls preload="metadata" src={media.url}>Seu navegador não suporta áudio.</audio></div>
                   ) : (
@@ -615,6 +644,7 @@ export default function CommercialInboxPage() {
                     <time>{time(message.created_at)}</time>
                   </div>
                 </div>
+                </Fragment>
               );
             })}
             {selected && !messages.length && <div className="kh-inbox-empty">Nenhuma mensagem registrada.</div>}
@@ -652,7 +682,7 @@ export default function CommercialInboxPage() {
             const closerName = memberMap.get(lead.closer_id || '')?.nome || 'Sem closer';
             return <>
               <header><div><span>Dados do lead</span><h2>{lead.nome}</h2></div><em>{lead.status}</em></header>
-              <label className="kh-inbox-stage-move"><span>Mover para outra etapa</span><select value={meetingStage || lead.status} onChange={(event) => selectLeadStage(event.target.value)} disabled={movingStage}>{funnelStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select></label>
+              <label className="kh-inbox-stage-move"><span>Mover para outra etapa</span><select value={negotiationStage || meetingStage || lead.status} onChange={(event) => selectLeadStage(event.target.value)} disabled={movingStage}>{funnelStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select></label>
               {meetingStage && <div className="kh-inbox-meeting-move"><label><span>Data e hora da reunião</span><input type="datetime-local" value={meetingAt} onChange={(event) => setMeetingAt(event.target.value)} /></label><div><button type="button" className="kh-button primary" disabled={!meetingAt || movingStage} onClick={() => void moveSelectedLead(meetingStage, meetingAt)}>Confirmar</button><button type="button" className="kh-button" onClick={() => { setMeetingStage(''); setMeetingAt(''); }}>Cancelar</button></div></div>}
               <dl>
                 <div><dt>Responsável atual</dt><dd>{lead.sdr_id ? sdrName : closerName}</dd></div>
@@ -676,6 +706,16 @@ export default function CommercialInboxPage() {
           })() : <div className="kh-inbox-empty"><ClipboardList size={24} /> Selecione uma conversa para ver os dados do lead.</div>}
         </aside>
       </section>
+      {negotiationStage && selected && (
+        <div className="kh-modal" role="dialog" aria-modal="true" aria-labelledby="inbox-negotiation-title">
+          <button type="button" className="kh-modal-scrim" onClick={() => setNegotiationStage('')} aria-label="Fechar" />
+          <form className="kh-modal-sheet kh-meeting-modal" onSubmit={(event) => { event.preventDefault(); void moveSelectedLead(negotiationStage, undefined, Number(negotiationValue)); }}>
+            <header><div><span>Etapa comercial</span><h2 id="inbox-negotiation-title">Informar valor da negociação</h2></div><button type="button" onClick={() => setNegotiationStage('')} aria-label="Fechar"><X size={18} /></button></header>
+            <div className="kh-meeting-form"><p>Registre o valor estimado antes de mover este lead para negociação.</p><label><span>Valor da negociação *</span><input className="kh-input" type="number" min="0.01" step="0.01" value={negotiationValue} onChange={(event) => setNegotiationValue(event.target.value)} placeholder="0,00" required autoFocus /></label></div>
+            <footer><button type="button" className="kh-button" onClick={() => setNegotiationStage('')}>Cancelar</button><button type="submit" className="kh-button primary" disabled={movingStage || Number(negotiationValue) <= 0}>{movingStage ? 'Salvando...' : 'Confirmar negociação'}</button></footer>
+          </form>
+        </div>
+      )}
       {mediaPreview && (
         <div className="kh-media-viewer" role="dialog" aria-modal="true" aria-label={`Visualizar ${mediaPreview.fileName}`}>
           <button type="button" className="kh-media-viewer-scrim" onClick={() => setMediaPreview(null)} aria-label="Fechar visualização" />
