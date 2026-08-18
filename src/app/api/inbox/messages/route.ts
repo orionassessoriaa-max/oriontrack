@@ -259,7 +259,7 @@ async function syncProviderHistory(conversation: any) {
           }, { instanceName: instance });
           const messages = providerMessages(payload);
           for (const message of messages) {
-            const providerId = String(message?.messageid || message?.id || '').trim();
+            const providerId = normalizeWhatsAppMessageId(message?.messageid || message?.id);
             if (providerId) collected.set(providerId, { message: { ...message, orionSenderName: senderName }, instance });
           }
           const hasMore = payload?.hasMore === true || payload?.data?.hasMore === true;
@@ -277,16 +277,21 @@ async function syncProviderHistory(conversation: any) {
   }));
 
   if (!collected.size) return;
-  const providerIds = [...collected.keys()];
   const existingIds = new Set<string>();
-  for (let index = 0; index < providerIds.length; index += 500) {
-    const chunk = providerIds.slice(index, index + 500);
-    const { data, error } = await supabaseAdmin
+  const existingPageSize = 1000;
+  for (let from = 0; ; from += existingPageSize) {
+    const { data: page, error } = await supabaseAdmin
       .from('whatsapp_mensagens')
       .select('provider_message_id')
-      .in('provider_message_id', chunk);
+      .eq('conversa_id', conversation.id)
+      .not('provider_message_id', 'is', null)
+      .range(from, from + existingPageSize - 1);
     if (error) throw error;
-    (data || []).forEach((row) => existingIds.add(String(row.provider_message_id)));
+    (page || []).forEach((row) => {
+      const providerId = normalizeWhatsAppMessageId(row.provider_message_id);
+      if (providerId) existingIds.add(providerId);
+    });
+    if (!page || page.length < existingPageSize) break;
   }
 
   const rows = [...collected.entries()]
