@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { continueCommercialSdrFromIncoming } from '@/lib/commercialSdrAgent';
+import { stopCommercialAiForHumanTakeover } from '@/lib/commercialSdrSession';
 import { ensureCommercialConversation, findCommercialConversation } from '@/lib/commercialInbox';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 
@@ -1494,10 +1495,15 @@ export async function POST(request: Request) {
       conversation = { ...conversation, status: 'aberta' };
     }
 
-    if (fromMe && lead?.id && !commercialMode) {
+    if (fromMe && lead?.id) {
       after(async () => {
         try {
-          await stopLeadAiForHumanTakeover(lead.id, profile?.nome);
+          // O eco das mensagens da propria IA ja saiu antes, no isAiOutbound,
+          // entao um fromMe que chega aqui e alguem do time respondendo pelo
+          // inbox de verdade. No comercial isso encerra a sessao em definitivo:
+          // antes a IA voltava a escrever por cima do SDR depois de 90s.
+          if (commercialMode) await stopCommercialAiForHumanTakeover(lead.id, profile?.nome);
+          else await stopLeadAiForHumanTakeover(lead.id, profile?.nome);
         } catch (takeoverError) {
           console.error('[uazapi_webhook] Failed stopping AI after human takeover:', takeoverError);
         }

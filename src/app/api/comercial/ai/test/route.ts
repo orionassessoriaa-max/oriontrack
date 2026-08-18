@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
-import { DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
-import { ensureCommercialConversation, insertCommercialAiMessage, normalizeSdrText } from '@/lib/commercialInbox';
-import { registerAiOutbound } from '@/lib/leadAiAgent';
+import { COMMERCIAL_MASTER_INSTANCE, normalizePhone } from '@/lib/uazapi';
 import { startCommercialBotIfEligible } from '@/lib/commercialBot';
+import { startCommercialSdrOpeningIfEligible } from '@/lib/commercialSdrAgent';
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request, true);
@@ -24,57 +22,18 @@ export async function POST(request: Request) {
     const lives = String(body.vidas || '').trim().slice(0, 160) || null;
     if (!phone || phone.length < 12) return NextResponse.json({ error: 'Informe um WhatsApp valido com DDD.' }, { status: 400 });
 
-    const { data: config, error: configError } = await supabaseAdmin.from('comercial_config').select('ia_sdr_ativa,ia_sdr_prompt,bot_comercial_ativo,bot_comercial_prompt').eq('id', 1).maybeSingle();
+    const { data: config, error: configError } = await supabaseAdmin
+      .from('comercial_config')
+      .select('ia_sdr_ativa,bot_comercial_ativo')
+      .eq('id', 1)
+      .maybeSingle();
     if (configError) throw new Error(`Configuracao comercial indisponivel: ${configError.message}`);
     if (!config) return NextResponse.json({ error: 'A configuracao comercial ainda nao foi criada no banco.' }, { status: 503 });
-    if (testMode === 'bot' && config?.bot_comercial_ativo !== true) return NextResponse.json({ error: 'O Bot esta desativado para esta operacao.' }, { status: 409 });
-    if (testMode === 'ia' && config?.ia_sdr_ativa === false) return NextResponse.json({ error: 'A IA SDR esta desativada para esta operacao.' }, { status: 409 });
-
-    if (testMode === 'bot') {
-      const now = new Date().toISOString();
-      const { data: testLead, error: testLeadError } = await supabaseAdmin.from('comercial_leads').insert({
-        nome: name,
-        telefone: phone,
-        email,
-        idades: ages,
-        origem: 'Teste Bot comercial',
-        status: 'Oportunidade',
-        observacoes: 'Lead criado pelo teste do Bot comercial.',
-        created_by: guard.profile.id,
-        data_entrada: now,
-        sdr_id: guard.profile.id,
-      }).select('id,nome,telefone').single();
-      if (testLeadError) throw testLeadError;
-      const botResult = await startCommercialBotIfEligible(testLead.id);
-      if (!botResult.started) return NextResponse.json({ error: `O Bot nao enviou: ${botResult.reason}.` }, { status: 502 });
-      return NextResponse.json({ ok: true, lead: testLead, mode: 'bot' });
-    }
-
-    const prompt = String(config?.ia_sdr_prompt || DEFAULT_COMMERCIAL_SDR_PROMPT);
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: 'OPENAI_API_KEY nao configurada.' }, { status: 503 });
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini',
-        temperature: 0.55,
-        messages: [
-          { role: 'system', content: `${prompt}\n\nPara este teste, gere as duas mensagens da abertura e separe-as exatamente com o marcador [[NOVA_MENSAGEM]]. Nao mencione que e um teste, IA ou sistema.` },
-          { role: 'user', content: `Nome: ${name}\nIdades: ${ages}\nE-mail: ${email || 'nao informado'}\nJa investiu em trafego: ${traffic || 'nao informado'}\nFaturamento mensal: ${revenue || 'nao informado'}\nInvestimento mensal: ${investment || 'nao informado'}\nPrioridade: ${priority || 'nao informada'}\nVidas/leads por mes: ${lives || 'nao informado'}\nEscreva a abertura do atendimento.` },
-        ],
-      }),
-    });
-    const aiPayload = await aiResponse.json().catch(() => ({}));
-    if (!aiResponse.ok) return NextResponse.json({ error: aiPayload?.error?.message || 'A IA nao conseguiu gerar a mensagem.' }, { status: 502 });
-    const rawMessage = normalizeSdrText(String(aiPayload?.choices?.[0]?.message?.content || ''));
-    // O prompt salvo no banco vem com CRLF, entao a IA devolve \r\n\r\n e o
-    // separador precisa aceitar as duas quebras, senao a abertura sai num balao unico.
-    const outboundMessages = rawMessage.split(/\s*\[\[NOVA_MENSAGEM\]\]\s*|(?:\r?\n){2,}/i).map((item: string) => item.trim()).filter(Boolean).slice(0, 2);
-    const message = outboundMessages.join('\n\n');
-    if (!message) return NextResponse.json({ error: 'A IA nao retornou uma mensagem.' }, { status: 502 });
+    if (testMode === 'bot' && config.bot_comercial_ativo !== true) return NextResponse.json({ error: 'O Bot esta desativado para esta operacao.' }, { status: 409 });
+    if (testMode === 'ia' && config.ia_sdr_ativa === false) return NextResponse.json({ error: 'A IA SDR esta desativada para esta operacao.' }, { status: 409 });
 
     const now = new Date().toISOString();
+    const origem = testMode === 'bot' ? 'Teste Bot comercial' : 'Teste IA SDR';
     const leadData = {
       nome: name,
       telefone: phone,
@@ -85,17 +44,22 @@ export async function POST(request: Request) {
       investimento: investment,
       prioridade: priority,
       vidas: lives,
-      origem: 'Teste IA SDR',
+      origem,
       status: 'Oportunidade',
-      observacoes: 'Lead criado pelo teste da IA SDR.',
+      observacoes: `Lead criado pelo teste do ${testMode === 'bot' ? 'Bot' : 'IA SDR'} comercial.`,
       created_by: guard.profile.id,
       data_entrada: now,
       sdr_id: guard.profile.id,
     };
-    let { data: lead, error: leadError } = await supabaseAdmin.from('comercial_leads').insert(leadData).select('id,nome,telefone').single();
+
+    let { data: lead, error: leadError } = await supabaseAdmin
+      .from('comercial_leads')
+      .insert(leadData)
+      .select('id,nome,telefone')
+      .single();
     if (leadError && /column .*schema cache|could not find the .* column/i.test(leadError.message)) {
       const fallbackNotes = [
-        'Lead criado pelo teste da IA SDR.',
+        `Lead criado pelo teste do ${testMode === 'bot' ? 'Bot' : 'IA SDR'} comercial.`,
         `Idades: ${ages}`,
         email ? `E-mail: ${email}` : '',
         traffic ? `Tráfego pago: ${traffic}` : '',
@@ -107,7 +71,7 @@ export async function POST(request: Request) {
       const fallback = await supabaseAdmin.from('comercial_leads').insert({
         nome: name,
         telefone: phone,
-        origem: 'Teste IA SDR',
+        origem,
         status: 'Oportunidade',
         observacoes: fallbackNotes,
         created_by: guard.profile.id,
@@ -118,24 +82,29 @@ export async function POST(request: Request) {
       leadError = fallback.error;
     }
     if (leadError) throw leadError;
+    if (!lead?.id) return NextResponse.json({ error: 'Nao consegui criar o lead de teste.' }, { status: 500 });
 
-    // A abertura precisa ficar registrada na conversa: e desse historico que a
-    // IA parte quando o lead responde, e e o que aparece no inbox comercial.
-    const conversation = await ensureCommercialConversation(phone, lead?.nome || name);
-    const providers = [];
-    for (const text of outboundMessages) {
-      registerAiOutbound(phone, text);
-      const providerPayload = await uazapiFetch('/send/text', { method: 'POST', body: JSON.stringify({ number: phone, text, delay: 1200 }) }, { instanceName: COMMERCIAL_MASTER_INSTANCE });
-      providers.push(providerPayload);
-      await insertCommercialAiMessage(conversation.id, text, { ...(providerPayload || {}), instance: COMMERCIAL_MASTER_INSTANCE });
+    // O teste chama exatamente o mesmo caminho que o webhook do funil usa. Antes
+    // esta rota tinha uma implementacao propria da abertura, entao um teste
+    // verde nao provava que o fluxo real funcionava.
+    if (testMode === 'bot') {
+      const botResult = await startCommercialBotIfEligible(lead.id);
+      if (!botResult.started) return NextResponse.json({ error: `O Bot nao enviou: ${botResult.reason}.` }, { status: 502 });
+      return NextResponse.json({ ok: true, lead, mode: 'bot', sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE } });
     }
-    const sentAt = new Date().toISOString();
-    await Promise.all([
-      supabaseAdmin.from('whatsapp_conversas').update({ ultima_mensagem_at: sentAt, updated_at: sentAt }).eq('id', conversation.id),
-      lead?.id ? supabaseAdmin.from('comercial_leads').update({ ultimo_contato_at: sentAt, updated_at: sentAt }).eq('id', lead.id) : Promise.resolve(),
-    ]);
-    return NextResponse.json({ ok: true, lead, message, sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE }, provider: providers });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || 'Nao foi possivel enviar o teste da IA.' }, { status: 502 });
+
+    const aiResult = await startCommercialSdrOpeningIfEligible(lead.id);
+    if (!aiResult.started) return NextResponse.json({ error: `A IA nao enviou: ${aiResult.reason}.` }, { status: 502 });
+    return NextResponse.json({
+      ok: true,
+      lead,
+      mode: 'ia',
+      messages: aiResult.messages,
+      message: (aiResult.messages || []).join('\n\n'),
+      sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Nao foi possivel enviar o teste da IA.';
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

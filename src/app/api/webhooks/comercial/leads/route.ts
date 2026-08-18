@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { COMMERCIAL_STATUSES } from '@/lib/comercial';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { startCommercialBotIfEligible } from '@/lib/commercialBot';
+import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
 import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
 import { isCommercialMql } from '@/lib/commercialQualification';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
@@ -349,9 +349,9 @@ export async function POST(request: Request) {
 
       const sheet = await sendLeadToSheet(data, rawPayload);
       try {
-        await startCommercialBotIfEligible(data.id);
+        await startCommercialFirstContact(data.id);
       } catch (botError) {
-        console.error('commercial_bot_first_message_failed', botError);
+        console.error('commercial_first_contact_failed', botError);
       }
       await writeAuditLog(request, null, {
         action: 'commercial.lead.webhook_duplicate',
@@ -375,9 +375,9 @@ export async function POST(request: Request) {
 
     const sheet = await sendLeadToSheet(data, rawPayload);
     try {
-      await startCommercialBotIfEligible(data.id);
+      await startCommercialFirstContact(data.id);
     } catch (botError) {
-      console.error('commercial_bot_first_message_failed', botError);
+      console.error('commercial_first_contact_failed', botError);
     }
     await writeAuditLog(request, null, {
       action: 'commercial.lead.create_webhook',

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
 import { ensureCommercialConversation, normalizeSdrText } from '@/lib/commercialInbox';
 
 const DEFAULT_MESSAGE = 'Ola, {primeiro_nome}! Tudo bem?\n\nVi que voce acabou de preencher nosso formulario. Vou te fazer algumas perguntas bem rapidinhas para entender seu momento e te direcionar melhor, tudo bem?';
@@ -47,7 +47,10 @@ export async function startCommercialBotIfEligible(leadId: string) {
 
     const phone = normalizePhone(lead.telefone);
     const message = renderMessage(config.bot_comercial_prompt, lead.nome);
-    const instance = lead.sdr_id ? uazapiInstanceName(lead.sdr_id) : COMMERCIAL_MASTER_INSTANCE;
+    // Sempre o WhatsApp oficial da Orion. Antes caia na instancia pessoal do
+    // SDR sempre que o rodizio tinha atribuido alguem, o que era o caso de
+    // praticamente todo lead que entra pelo funil.
+    const instance = COMMERCIAL_MASTER_INSTANCE;
     const providerPayload = await uazapiFetch('/send/text', {
       method: 'POST',
       body: JSON.stringify({ number: phone, text: message, delay: 1200 }),

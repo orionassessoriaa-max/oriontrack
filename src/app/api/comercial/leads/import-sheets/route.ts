@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { startCommercialBotIfEligible } from '@/lib/commercialBot';
+import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
 import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
 
 function key(value: string) {
@@ -111,9 +111,9 @@ export async function POST(request: Request) {
       if (!error && inserted?.id) {
         created += 1;
         try {
-          await startCommercialBotIfEligible(inserted.id);
+          await startCommercialFirstContact(inserted.id);
         } catch (botError) {
-          console.error('commercial_bot_first_message_failed', botError);
+          console.error('commercial_first_contact_failed', botError);
         }
       }
     }

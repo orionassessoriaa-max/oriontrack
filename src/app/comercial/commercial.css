@@ -269,6 +269,10 @@
 .kh-sdr-prompt > span { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: var(--kh-text); font-size: 11px; font-weight: 800; }
 .kh-sdr-prompt textarea { width: 100%; min-height: 230px !important; line-height: 1.55; }
 .kh-sdr-prompt small { display: block; margin-top: 7px; color: var(--kh-muted); font-size: 10px; }
+/* O prompt fica salvo no banco, entao um prompt antigo editado a mao esconde o
+   padrao novo. Este atalho traz o padrao de volta sem precisar colar texto. */
+.kh-prompt-reset { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--kh-line); background: transparent; padding: 3px 8px; color: var(--kh-muted); font-size: 10px; font-weight: 700; cursor: pointer; }
+.kh-prompt-reset:hover { border-color: var(--kh-blue); color: var(--kh-text); }
 .kh-sdr-config-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; margin-top: 12px; }
 .kh-sdr-config-footer > span { color: var(--kh-green); font-size: 11px; }
 .kh-sdr-followup { margin-top: 16px; }
