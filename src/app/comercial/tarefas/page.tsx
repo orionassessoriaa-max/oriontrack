@@ -153,6 +153,7 @@ export default function CommercialTasksPage() {
         canViewFinancials={canViewCommercialFinancials}
         readOnly={!canEditCommercial}
         canEditSale={role === 'coordenador' || isDevOps}
+        canEditEntryDate={role === 'coordenador' || isDevOps}
         stages={stages}
         onMoveStage={(status) => { void moveExpandedLead(status); }}
         interactions={interactions}

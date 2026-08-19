@@ -1478,6 +1478,7 @@ export default function CommercialKanbanPage() {
         canViewFinancials={canViewCommercialFinancials}
         readOnly={!canEditCommercial}
         canEditSale={role === "coordenador" || isDevOps}
+        canEditEntryDate={role === "coordenador" || isDevOps}
         briefingDownloading={briefingDownloading === expandedLeadId}
         onDownloadBriefing={(leadId) => downloadBriefingPdf(leadId)}
         onStartCall={startTrackedCall}

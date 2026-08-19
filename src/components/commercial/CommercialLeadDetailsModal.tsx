@@ -56,6 +56,7 @@ type Props = {
   canViewQualification?: boolean;
   readOnly?: boolean;
   canEditSale?: boolean;
+  canEditEntryDate?: boolean;
   stages: CommercialStage[];
   onMoveStage: (status: string) => void;
   interactions: LeadInteraction[];
@@ -86,6 +87,7 @@ type Props = {
 };
 
 type EditableLead = {
+  data_entrada: string;
   nome: string;
   telefone: string;
   email: string;
@@ -263,6 +265,7 @@ function withStructuredNote(notes: string, label: string, value: string) {
 
 function editableLead(lead: CommercialLead): EditableLead {
   return {
+    data_entrada: dateTimeInput(lead.data_entrada),
     nome: lead.nome || "",
     telefone: lead.telefone || "",
     email: lead.email || "",
@@ -306,6 +309,7 @@ export default function CommercialLeadDetailsModal({
   canViewQualification = true,
   readOnly = false,
   canEditSale = false,
+  canEditEntryDate = false,
   stages,
   onMoveStage,
   interactions,
@@ -466,12 +470,23 @@ export default function CommercialLeadDetailsModal({
 
   async function saveEditing() {
     if (!effective.nome.trim() || editSaving) return;
+    if (
+      canEditEntryDate &&
+      (!effective.data_entrada ||
+        Number.isNaN(new Date(effective.data_entrada).getTime()))
+    ) {
+      setEditError("Informe uma data de entrada válida.");
+      return;
+    }
     setEditSaving(true);
     setEditError(null);
     try {
-      const { decisor, vendedor_id, reuniao_link, fechado_at, valor_pago, modelo_pagamento, ...leadFields } = effective;
+      const { data_entrada, decisor, vendedor_id, reuniao_link, fechado_at, valor_pago, modelo_pagamento, ...leadFields } = effective;
       await onSave({
         ...leadFields,
+        ...(canEditEntryDate ? {
+          data_entrada: new Date(data_entrada).toISOString(),
+        } : {}),
         ...(canEditSale ? {
           vendedor_id,
           reuniao_link,
@@ -611,7 +626,12 @@ export default function CommercialLeadDetailsModal({
     ],
   ];
   const controlRows: Array<[string, React.ReactNode]> = [
-    ["Entrada", dateTime(lead.data_entrada)],
+    [
+      "Entrada",
+      editing && canEditEntryDate
+        ? inlineInput("data_entrada", "Data de entrada", "datetime-local")
+        : dateTime(lead.data_entrada),
+    ],
     ["Último contato", dateTime(lead.ultimo_contato_at)],
     ["Reunião agendada", dateTime(lead.reuniao_agendada_at)],
     ["Reunião realizada", dateTime(lead.reuniao_realizada_at)],

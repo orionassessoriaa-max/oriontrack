@@ -220,6 +220,18 @@ export async function PATCH(request: Request) {
   if (editingSaleFields && !closingSale && guard.commercialRole !== 'coordenador') {
     return NextResponse.json({ error: 'Somente o administrador pode editar os dados de uma venda concluida.' }, { status: 403 });
   }
+  const editingEntryDate = Object.prototype.hasOwnProperty.call(body, 'data_entrada');
+  let parsedEntryDate: Date | null = null;
+  if (editingEntryDate) {
+    if (guard.commercialRole !== 'coordenador') {
+      return NextResponse.json({ error: 'Somente o administrador pode editar a data de entrada do lead.' }, { status: 403 });
+    }
+    parsedEntryDate = new Date(String(body.data_entrada || ''));
+    if (Number.isNaN(parsedEntryDate.getTime())) {
+      return NextResponse.json({ error: 'Informe uma data de entrada valida.' }, { status: 400 });
+    }
+    update.data_entrada = parsedEntryDate.toISOString();
+  }
   for (const field of allowedFields) {
     if (!guard.canViewCommercialFinancials && ['valor_fechado', 'valor_pago', 'modelo_pagamento'].includes(field)) continue;
     if (!guard.canViewCommercialFinancials && field === 'valor_negociacao' && !enteringNegotiation) continue;
@@ -372,7 +384,9 @@ export async function PATCH(request: Request) {
     action: 'commercial.lead.update', entity_type: 'commercial_lead', entity_id: id, metadata: { fields: Object.keys(update) },
   });
   const changedFields = Object.keys(update).filter((field) => field !== 'updated_at');
-  const timelineDescription = statusChanged
+  const timelineDescription = editingEntryDate && !statusChanged
+    ? `Alterou a data de entrada do lead de ${new Date(allowed.data_entrada).toLocaleString('pt-BR')} para ${parsedEntryDate?.toLocaleString('pt-BR')}.`
+    : statusChanged
     ? isNoShowStage(targetStatus)
       ? `Moveu o lead de ${allowed.status} para ${targetStatus}. No-show ${Number(data.no_show_count || 0)} registrado.`
       : isScheduledMeetingStage(allowed.status) && !isScheduledMeetingStage(targetStatus)
