@@ -236,7 +236,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Palette, label: 'Designer', href: '/admin/designers' },
     { icon: MessageSquare, label: 'Account', href: '/admin/accounts' },
     { icon: FileSearch, label: 'Todos os Leads', href: '/admin/leads' },
-    { icon: CheckCircle2, label: 'Tarefas Apollo', href: '/equipe/apollo/tarefas' },
+    { icon: CheckCircle2, label: 'Tarefas', href: '/equipe/apollo/tarefas' },
     { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: Globe, label: 'Paginas', href: '/admin/paginas' },
     { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
@@ -259,7 +259,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Palette, label: 'Criativos', href: '/criativos' },
     { icon: FileSearch, label: 'Leads dos corretores', href: '/trafego/leads' },
     { icon: UserPlus, label: 'Entrada', href: '/trafego/entrada' },
-    { icon: CheckCircle2, label: 'Tarefas Apollo', href: '/equipe/apollo/tarefas' },
+    { icon: CheckCircle2, label: 'Tarefas', href: '/equipe/apollo/tarefas' },
     { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
     { icon: Users, label: 'Corretores', href: '/trafego/corretores' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
@@ -272,7 +272,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Palette, label: 'Designer', href: '/designer' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: FileText, label: 'Ofertas', href: '/designer/ofertas' },
-    { icon: CheckCircle2, label: 'Tarefas Apollo', href: '/equipe/apollo/tarefas' },
+    { icon: CheckCircle2, label: 'Tarefas', href: '/equipe/apollo/tarefas' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
     { icon: Bell, label: 'Notificações', href: '/notificacoes' },
     { icon: User, label: 'Perfil', href: '/perfil' },
@@ -283,7 +283,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: Users, label: 'Corretores', href: '/account/corretores' },
     { icon: MessageSquare, label: 'Inbox', href: '/account/inbox' },
-    { icon: CheckCircle2, label: 'Tarefas Apollo', href: '/equipe/apollo/tarefas' },
+    { icon: CheckCircle2, label: 'Tarefas', href: '/equipe/apollo/tarefas' },
     { icon: TrendingUp, label: 'Relatórios', href: '/trafego/relatorios' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
     { icon: Bell, label: 'Notificações', href: '/notificacoes' },
@@ -439,7 +439,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
               const pinnedSettings = profile?.tipo_usuario === 'admin'
                 ? menuItems.find((item) => item.href === '/admin/configuracoes')
                 : undefined;
-              const pinnedItems = [pinnedMeta, pinnedSettings].filter(
+              const pinnedTasks = menuItems.find((item) => item.href === '/equipe/apollo/tarefas');
+              const pinnedItems = [pinnedTasks, pinnedMeta, pinnedSettings].filter(
                 (item): item is NonNullable<typeof item> => Boolean(item)
               );
               const menuWithoutPinned = pinnedItems.length
