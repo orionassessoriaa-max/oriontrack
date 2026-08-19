@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 type TaskStatus = 'a_fazer' | 'fazendo' | 'feito';
+type TaskPriority = 'baixa' | 'normal' | 'alta' | 'urgente';
 
 type Member = {
   id: string;
@@ -35,6 +36,7 @@ type ApolloTask = {
   titulo: string;
   prazo: string;
   status: TaskStatus;
+  prioridade: TaskPriority;
   responsavel_profile_id: string;
   criado_por_profile_id: string;
   concluida_em: string | null;
@@ -87,6 +89,15 @@ const columns: Array<{
   },
 ];
 
+const priorityOptions: Array<{ value: TaskPriority; label: string; className: string }> = [
+  { value: 'urgente', label: 'Urgente', className: 'border-rose-500/30 bg-rose-500/10 text-rose-300' },
+  { value: 'alta', label: 'Alta', className: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
+  { value: 'normal', label: 'Normal', className: 'border-sky-500/30 bg-sky-500/10 text-sky-300' },
+  { value: 'baixa', label: 'Baixa', className: 'border-slate-600 bg-slate-800 text-slate-300' },
+];
+
+const priorityWeight: Record<TaskPriority, number> = { baixa: 0, normal: 1, alta: 2, urgente: 3 };
+
 function defaultDeadline() {
   const date = new Date();
   date.setDate(date.getDate() + 1);
@@ -132,6 +143,7 @@ export default function ApolloTasksPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [titulo, setTitulo] = useState('');
   const [prazo, setPrazo] = useState(defaultDeadline);
+  const [prioridade, setPrioridade] = useState<TaskPriority>('normal');
   const [assigneeId, setAssigneeId] = useState('');
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
@@ -177,7 +189,12 @@ export default function ApolloTasksPage() {
 
   const tasksByStatus = useMemo(() => {
     return columns.reduce<Record<TaskStatus, ApolloTask[]>>((result, column) => {
-      result[column.status] = tasks.filter((task) => task.status === column.status);
+      result[column.status] = tasks
+        .filter((task) => task.status === column.status)
+        .sort((a, b) => {
+          const priorityDifference = priorityWeight[b.prioridade || 'normal'] - priorityWeight[a.prioridade || 'normal'];
+          return priorityDifference || new Date(a.prazo).getTime() - new Date(b.prazo).getTime();
+        });
       return result;
     }, { a_fazer: [], fazendo: [], feito: [] });
   }, [tasks]);
@@ -193,11 +210,13 @@ export default function ApolloTasksPage() {
           action: 'create',
           titulo,
           prazo: new Date(prazo).toISOString(),
+          prioridade,
           responsavel_profile_id: canManageAll ? assigneeId : currentProfileId,
         }),
       });
       setTitulo('');
       setPrazo(defaultDeadline());
+      setPrioridade('normal');
       setAssigneeId(currentProfileId);
       setModalOpen(false);
       await loadTasks(view);
@@ -330,6 +349,7 @@ export default function ApolloTasksPage() {
                     <div className="space-y-3">
                       {columnTasks.map((task) => {
                         const deadline = deadlineState(task);
+                        const priority = priorityOptions.find((option) => option.value === (task.prioridade || 'normal')) || priorityOptions[2];
                         const index = columns.findIndex((item) => item.status === task.status);
                         return (
                           <article
@@ -343,9 +363,14 @@ export default function ApolloTasksPage() {
                             <div className="pl-2">
                               <div className="mb-4 flex items-start justify-between gap-3">
                                 <h3 className="text-sm font-extrabold leading-5 text-slate-100">{task.titulo}</h3>
-                                <span className={`shrink-0 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${deadline.className}`}>
-                                  {deadline.label}
-                                </span>
+                                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                                  <span className={`rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${priority.className}`}>
+                                    {priority.label}
+                                  </span>
+                                  <span className={`rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${deadline.className}`}>
+                                    {deadline.label}
+                                  </span>
+                                </div>
                               </div>
 
                               <div className="space-y-2 border-t border-slate-800 pt-3 text-xs">
@@ -440,6 +465,21 @@ export default function ApolloTasksPage() {
                     required
                     className="h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 text-sm font-semibold text-white outline-none transition focus:border-cyan-500 [color-scheme:dark]"
                   />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Prioridade</span>
+                  <select
+                    value={prioridade}
+                    onChange={(event) => setPrioridade(event.target.value as TaskPriority)}
+                    required
+                    className="h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 text-sm font-semibold text-white outline-none transition focus:border-cyan-500"
+                  >
+                    {priorityOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <span className="mt-2 block text-[11px] text-slate-500">Urgentes e altas aparecem primeiro no quadro.</span>
                 </label>
 
                 {canManageAll && (

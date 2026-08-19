@@ -5,6 +5,8 @@ import { isDevOpsManagerProfile, isOperationalCoordinatorProfile } from '@/lib/u
 
 const APOLLO_ROLES = ['admin', 'gestor_trafego', 'designer', 'account_manager'] as const;
 const TASK_STATUSES = new Set(['a_fazer', 'fazendo', 'feito']);
+const TASK_PRIORITIES = new Set(['baixa', 'normal', 'alta', 'urgente']);
+const PRIORITY_WEIGHT: Record<string, number> = { baixa: 0, normal: 1, alta: 2, urgente: 3 };
 
 type ApolloMember = {
   id: string;
@@ -76,7 +78,7 @@ export async function GET(request: Request) {
     const members = await loadApolloMembers();
     let tasksQuery = supabaseAdmin
       .from('apollo_tasks')
-      .select('id, titulo, prazo, status, responsavel_profile_id, criado_por_profile_id, concluida_em, created_at, updated_at')
+      .select('id, titulo, prazo, status, prioridade, responsavel_profile_id, criado_por_profile_id, concluida_em, created_at, updated_at')
       .eq('equipe', 'apollo')
       .order('prazo', { ascending: true })
       .limit(500);
@@ -89,11 +91,16 @@ export async function GET(request: Request) {
     if (error) throw error;
 
     const memberById = new Map(members.map((member) => [member.id, member]));
-    const hydratedTasks = (tasks || []).map((task) => ({
-      ...task,
-      responsavel: memberById.get(task.responsavel_profile_id) || null,
-      criado_por: memberById.get(task.criado_por_profile_id) || null,
-    }));
+    const hydratedTasks = (tasks || [])
+      .map((task) => ({
+        ...task,
+        responsavel: memberById.get(task.responsavel_profile_id) || null,
+        criado_por: memberById.get(task.criado_por_profile_id) || null,
+      }))
+      .sort((a, b) => {
+        const priorityDifference = (PRIORITY_WEIGHT[b.prioridade] ?? 1) - (PRIORITY_WEIGHT[a.prioridade] ?? 1);
+        return priorityDifference || new Date(a.prazo).getTime() - new Date(b.prazo).getTime();
+      });
 
     return NextResponse.json({
       tasks: hydratedTasks,
@@ -134,6 +141,7 @@ export async function POST(request: Request) {
     if (action === 'create') {
       const titulo = String(body.titulo || '').trim();
       const prazo = new Date(String(body.prazo || ''));
+      const prioridade = String(body.prioridade || 'normal');
       const requestedAssignee = String(body.responsavel_profile_id || guard.profile.id);
       const responsavelProfileId = manager ? requestedAssignee : guard.profile.id;
 
@@ -142,6 +150,9 @@ export async function POST(request: Request) {
       }
       if (Number.isNaN(prazo.getTime())) {
         return NextResponse.json({ error: 'Informe uma data e hora de entrega validas.' }, { status: 400 });
+      }
+      if (!TASK_PRIORITIES.has(prioridade)) {
+        return NextResponse.json({ error: 'Informe uma prioridade valida.' }, { status: 400 });
       }
 
       const members = await loadApolloMembers();
@@ -156,10 +167,11 @@ export async function POST(request: Request) {
           titulo,
           prazo: prazo.toISOString(),
           status: 'a_fazer',
+          prioridade,
           responsavel_profile_id: responsavelProfileId,
           criado_por_profile_id: guard.profile.id,
         })
-        .select('id, titulo, prazo, status, responsavel_profile_id, criado_por_profile_id, concluida_em, created_at, updated_at')
+        .select('id, titulo, prazo, status, prioridade, responsavel_profile_id, criado_por_profile_id, concluida_em, created_at, updated_at')
         .single();
       if (error) throw error;
 
@@ -167,7 +179,7 @@ export async function POST(request: Request) {
         action: 'apollo.task.create',
         entity_type: 'apollo_task',
         entity_id: task.id,
-        metadata: { titulo, prazo: prazo.toISOString(), responsavel_profile_id: responsavelProfileId },
+        metadata: { titulo, prazo: prazo.toISOString(), prioridade, responsavel_profile_id: responsavelProfileId },
       });
 
       return NextResponse.json({ task }, { status: 201 });
@@ -199,7 +211,7 @@ export async function POST(request: Request) {
           updated_at: now,
         })
         .eq('id', taskId)
-        .select('id, titulo, prazo, status, responsavel_profile_id, criado_por_profile_id, concluida_em, created_at, updated_at')
+        .select('id, titulo, prazo, status, prioridade, responsavel_profile_id, criado_por_profile_id, concluida_em, created_at, updated_at')
         .single();
       if (error) throw error;
 
