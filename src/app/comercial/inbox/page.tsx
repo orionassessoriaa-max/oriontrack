@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   FileText,
   Image as ImageIcon,
@@ -13,11 +14,13 @@ import {
   MessageSquare,
   Mic,
   Paperclip,
+  Pencil,
   RefreshCw,
   Search,
   Send,
   Smartphone,
   Square,
+  Save,
   Trash2,
   Video,
   Volume2,
@@ -75,6 +78,27 @@ type WhatsappState = {
   connected: boolean;
   state: 'open' | 'connecting' | 'close';
   targetProfile?: { id?: string; nome?: string | null } | null;
+};
+
+type LeadDraft = {
+  nome: string;
+  telefone: string;
+  email: string;
+  empresa: string;
+  estado: string;
+  faturamento_mensal: string;
+  investimento: string;
+  prioridade: string;
+  vidas: string;
+  origem: string;
+  campanha: string;
+  sdr_id: string;
+  closer_id: string;
+};
+
+const emptyLeadDraft: LeadDraft = {
+  nome: '', telefone: '', email: '', empresa: '', estado: '', faturamento_mensal: '', investimento: '',
+  prioridade: '', vidas: '', origem: '', campanha: '', sdr_id: '', closer_id: '',
 };
 
 type MessageMediaKind = 'audio' | 'image' | 'video' | 'file' | null;
@@ -178,6 +202,10 @@ export default function CommercialInboxPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState('');
+  const [leadPanelExpanded, setLeadPanelExpanded] = useState(false);
+  const [editingLead, setEditingLead] = useState(false);
+  const [savingLead, setSavingLead] = useState(false);
+  const [leadDraft, setLeadDraft] = useState<LeadDraft>(emptyLeadDraft);
   const [qr, setQr] = useState<string | null>(null);
   const [whatsapp, setWhatsapp] = useState<WhatsappState>({ configured: false, connected: false, state: 'close' });
   const [messageMedia, setMessageMedia] = useState<Record<string, MessageMedia>>({});
@@ -250,6 +278,27 @@ export default function CommercialInboxPage() {
   }, [loadMessages, selected]);
 
   useEffect(() => {
+    const lead = selected?.commercial_lead;
+    setLeadPanelExpanded(false);
+    setEditingLead(false);
+    setLeadDraft(lead ? {
+      nome: lead.nome || '',
+      telefone: lead.telefone || selected?.telefone || '',
+      email: lead.email || '',
+      empresa: lead.empresa || '',
+      estado: lead.estado || '',
+      faturamento_mensal: lead.faturamento_mensal || '',
+      investimento: lead.investimento || '',
+      prioridade: lead.prioridade || '',
+      vidas: lead.vidas || '',
+      origem: lead.origem || lead.utm_source || '',
+      campanha: lead.campanha || lead.utm_campaign || '',
+      sdr_id: lead.sdr_id || '',
+      closer_id: lead.closer_id || '',
+    } : emptyLeadDraft);
+  }, [selected?.commercial_lead.id]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' });
   }, [messages]);
 
@@ -299,6 +348,48 @@ export default function CommercialInboxPage() {
   function openLeadHistory() {
     if (!selected) return;
     router.push(`/comercial/historico?lead_id=${encodeURIComponent(selected.commercial_lead.id)}`);
+  }
+
+  function cancelLeadEditing() {
+    if (!selected) return;
+    const lead = selected.commercial_lead;
+    setLeadDraft({
+      nome: lead.nome || '', telefone: lead.telefone || selected.telefone || '', email: lead.email || '',
+      empresa: lead.empresa || '', estado: lead.estado || '', faturamento_mensal: lead.faturamento_mensal || '',
+      investimento: lead.investimento || '', prioridade: lead.prioridade || '', vidas: lead.vidas || '',
+      origem: lead.origem || lead.utm_source || '', campanha: lead.campanha || lead.utm_campaign || '',
+      sdr_id: lead.sdr_id || '', closer_id: lead.closer_id || '',
+    });
+    setEditingLead(false);
+  }
+
+  async function saveLeadDetails() {
+    if (!selected || savingLead || !leadDraft.nome.trim()) return;
+    setSavingLead(true);
+    setNotice('');
+    try {
+      const { sdr_id, closer_id, ...details } = leadDraft;
+      const payload = await api('/api/comercial/leads', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          id: selected.commercial_lead.id,
+          ...details,
+          ...(role === 'coordenador' ? { sdr_id, closer_id } : {}),
+        }),
+      });
+      const updatedLead = payload.lead || { ...selected.commercial_lead, ...leadDraft };
+      setConversations((current) => current.map((conversation) => conversation.commercial_lead.id === updatedLead.id
+        ? { ...conversation, nome_contato: updatedLead.nome, telefone: updatedLead.telefone || conversation.telefone, commercial_lead: { ...conversation.commercial_lead, ...updatedLead } }
+        : conversation));
+      setSelected((current) => current && current.commercial_lead.id === updatedLead.id
+        ? { ...current, nome_contato: updatedLead.nome, telefone: updatedLead.telefone || current.telefone, commercial_lead: { ...current.commercial_lead, ...updatedLead } }
+        : current);
+      setEditingLead(false);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Não foi possível salvar os dados do lead.');
+    } finally {
+      setSavingLead(false);
+    }
   }
 
   function selectLeadStage(status: string) {
@@ -675,16 +766,44 @@ export default function CommercialInboxPage() {
           </form>
         </main>
 
-        <aside className="kh-panel kh-inbox-lead-panel">
+        <aside className={`kh-panel kh-inbox-lead-panel ${leadPanelExpanded ? 'expanded' : 'collapsed'}`}>
           {selected ? (() => {
             const lead = selected.commercial_lead;
             const sdrName = memberMap.get(lead.sdr_id || '')?.nome || 'Sem SDR';
             const closerName = memberMap.get(lead.closer_id || '')?.nome || 'Sem closer';
             return <>
-              <header><div><span>Dados do lead</span><h2>{lead.nome}</h2></div><em>{lead.status}</em></header>
+              <header>
+                <button type="button" className="kh-inbox-lead-toggle" onClick={() => setLeadPanelExpanded((current) => !current)} aria-expanded={leadPanelExpanded}>
+                  <div><span>Dados do lead</span><h2>{lead.nome}</h2></div><ChevronDown size={17} />
+                </button>
+                <em>{lead.status}</em>
+              </header>
+              {leadPanelExpanded && <div className="kh-inbox-lead-content">
+              <div className="kh-inbox-lead-edit-actions">
+                {editingLead ? <>
+                  <button type="button" className="kh-button" onClick={cancelLeadEditing} disabled={savingLead}><X size={14} /> Cancelar</button>
+                  <button type="button" className="kh-button primary" onClick={() => void saveLeadDetails()} disabled={savingLead || !leadDraft.nome.trim()}>{savingLead ? <Loader2 size={14} className="kh-spin" /> : <Save size={14} />} Salvar</button>
+                </> : <button type="button" className="kh-button" onClick={() => setEditingLead(true)}><Pencil size={14} /> Editar dados</button>}
+              </div>
               <label className="kh-inbox-stage-move"><span>Mover para outra etapa</span><select value={negotiationStage || meetingStage || lead.status} onChange={(event) => selectLeadStage(event.target.value)} disabled={movingStage}>{funnelStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select></label>
               {meetingStage && <div className="kh-inbox-meeting-move"><label><span>Data e hora da reunião</span><input type="datetime-local" value={meetingAt} onChange={(event) => setMeetingAt(event.target.value)} /></label><div><button type="button" className="kh-button primary" disabled={!meetingAt || movingStage} onClick={() => void moveSelectedLead(meetingStage, meetingAt)}>Confirmar</button><button type="button" className="kh-button" onClick={() => { setMeetingStage(''); setMeetingAt(''); }}>Cancelar</button></div></div>}
-              <dl>
+              {editingLead ? <div className="kh-inbox-lead-form">
+                <label className="wide"><span>Nome</span><input value={leadDraft.nome} onChange={(event) => setLeadDraft((current) => ({ ...current, nome: event.target.value }))} /></label>
+                <label><span>Telefone</span><input value={leadDraft.telefone} onChange={(event) => setLeadDraft((current) => ({ ...current, telefone: event.target.value }))} /></label>
+                <label><span>E-mail</span><input type="email" value={leadDraft.email} onChange={(event) => setLeadDraft((current) => ({ ...current, email: event.target.value }))} /></label>
+                <label><span>Empresa</span><input value={leadDraft.empresa} onChange={(event) => setLeadDraft((current) => ({ ...current, empresa: event.target.value }))} /></label>
+                <label><span>Estado</span><input value={leadDraft.estado} onChange={(event) => setLeadDraft((current) => ({ ...current, estado: event.target.value }))} /></label>
+                <label><span>Faturamento</span><input value={leadDraft.faturamento_mensal} onChange={(event) => setLeadDraft((current) => ({ ...current, faturamento_mensal: event.target.value }))} /></label>
+                <label><span>Investimento</span><input value={leadDraft.investimento} onChange={(event) => setLeadDraft((current) => ({ ...current, investimento: event.target.value }))} /></label>
+                <label><span>Prioridade</span><input value={leadDraft.prioridade} onChange={(event) => setLeadDraft((current) => ({ ...current, prioridade: event.target.value }))} /></label>
+                <label><span>Vidas</span><input value={leadDraft.vidas} onChange={(event) => setLeadDraft((current) => ({ ...current, vidas: event.target.value }))} /></label>
+                <label><span>Origem</span><input value={leadDraft.origem} onChange={(event) => setLeadDraft((current) => ({ ...current, origem: event.target.value }))} /></label>
+                <label><span>Campanha</span><input value={leadDraft.campanha} onChange={(event) => setLeadDraft((current) => ({ ...current, campanha: event.target.value }))} /></label>
+                {role === 'coordenador' && <>
+                  <label><span>SDR</span><select value={leadDraft.sdr_id} onChange={(event) => setLeadDraft((current) => ({ ...current, sdr_id: event.target.value }))}><option value="">Sem SDR</option>{members.filter((member) => member.ativo && member.papel === 'sdr').map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
+                  <label><span>Closer</span><select value={leadDraft.closer_id} onChange={(event) => setLeadDraft((current) => ({ ...current, closer_id: event.target.value }))}><option value="">Sem closer</option>{members.filter((member) => member.ativo && member.papel === 'closer').map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
+                </>}
+              </div> : <dl>
                 <div><dt>Responsável atual</dt><dd>{lead.sdr_id ? sdrName : closerName}</dd></div>
                 <div><dt>SDR</dt><dd>{sdrName}</dd></div>
                 <div><dt>Closer</dt><dd>{closerName}</dd></div>
@@ -697,11 +816,12 @@ export default function CommercialInboxPage() {
                 <div><dt>Vidas</dt><dd>{lead.vidas || 'Não informado'}</dd></div>
                 <div><dt>Origem</dt><dd>{lead.origem || lead.utm_source || 'Não informada'}</dd></div>
                 <div><dt>Campanha</dt><dd>{lead.campanha || lead.utm_campaign || 'Não informada'}</dd></div>
-              </dl>
+              </dl>}
               <div className="kh-inbox-lead-actions">
                 <button type="button" className="kh-button primary" onClick={scheduleLeadReturn}><CalendarClock size={15} /> Agendar retorno</button>
                 <button type="button" className="kh-button" onClick={openLeadHistory}><ClipboardList size={15} /> Ver histórico</button>
               </div>
+              </div>}
             </>;
           })() : <div className="kh-inbox-empty"><ClipboardList size={24} /> Selecione uma conversa para ver os dados do lead.</div>}
         </aside>
