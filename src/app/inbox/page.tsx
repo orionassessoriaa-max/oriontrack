@@ -126,7 +126,10 @@ type LeadTask = {
 };
 
 function isOpenLeadTask(task: Pick<LeadTask, 'status'>) {
-  const status = String(task.status || '').toLowerCase();
+  const status = String(task.status || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
   return status !== 'concluida' && status !== 'concluido' && status !== 'cancelada' && status !== 'cancelado';
 }
 
@@ -3245,7 +3248,7 @@ export default function BrokerInboxPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-[8px] font-black uppercase tracking-widest text-cyan-300">
-                            {highlightedTask.status && !['concluida', 'concluído', 'concluido', 'cancelada', 'cancelado'].includes(highlightedTask.status.toLowerCase()) ? 'Tarefa ativa' : 'Última tarefa'}
+                            {isOpenLeadTask(highlightedTask) ? 'Tarefa ativa' : 'Última tarefa'}
                           </p>
                           <p className="mt-1 truncate text-xs font-black text-white">{highlightedTask.titulo}</p>
                           <p className="mt-1 text-[9px] font-bold text-slate-500">
@@ -3253,30 +3256,18 @@ export default function BrokerInboxPage() {
                             {highlightedTask.prioridade ? ` · ${highlightedTask.prioridade}` : ''}
                           </p>
                         </div>
-                        <div className="flex shrink-0 flex-col gap-1.5">
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                           <button type="button" onClick={() => openTaskEditor(highlightedTask)} className="rounded-lg border border-cyan-500/20 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-cyan-300 hover:bg-cyan-500/10" title="Editar tarefa">Editar</button>
-                          {!highlightedTask.status && isOpenLeadTask(highlightedTask) && (
+                          {isOpenLeadTask(highlightedTask) && (
                             <button
                               type="button"
                               onClick={() => void completeReminder(highlightedTask)}
                               disabled={savingTask}
-                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-emerald-300 transition hover:bg-emerald-500/25 disabled:opacity-50"
                               title="Concluir tarefa"
                             >
                               {savingTask ? <Loader2 size={9} className="animate-spin" /> : <CheckCircle2 size={9} />}
-                              Concluir
-                            </button>
-                          )}
-                          {highlightedTask.status && !['concluida', 'concluÃ­do', 'concluido', 'cancelada', 'cancelado'].includes(highlightedTask.status.toLowerCase()) && (
-                            <button
-                              type="button"
-                              onClick={() => void completeReminder(highlightedTask)}
-                              disabled={savingTask}
-                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
-                              title="Concluir lembrete"
-                            >
-                              {savingTask ? <Loader2 size={9} className="animate-spin" /> : <CheckCircle2 size={9} />}
-                              Concluir lembrete
+                              Marcar concluído
                             </button>
                           )}
                         </div>
