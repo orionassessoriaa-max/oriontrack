@@ -262,6 +262,17 @@ while true; do
     } > "$incident_file"
   fi
 
+  if [ "$state" = "UP" ]; then
+    cron_token="${CRON_SECRET:-${UAZAPI_GLOBAL_TOKEN:-${EVOLUTION_API_KEY:-}}}"
+    if [ -n "$cron_token" ]; then
+      curl -sS --connect-timeout 5 --max-time 45 \
+        -X POST \
+        -H "Authorization: Bearer ${cron_token}" \
+        -o /dev/null \
+        "${BASE_URL}/api/inbox/uazapi/cron-lead-bots" || true
+    fi
+  fi
+
   printf '%s' "$state" > "$STATE_FILE"
   rm -f "$health_body" "$deep_body"
   sleep "$INTERVAL_SECONDS"
