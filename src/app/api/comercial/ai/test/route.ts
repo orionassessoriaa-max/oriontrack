@@ -29,8 +29,6 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (configError) throw new Error(`Configuracao comercial indisponivel: ${configError.message}`);
     if (!config) return NextResponse.json({ error: 'A configuracao comercial ainda nao foi criada no banco.' }, { status: 503 });
-    if (testMode === 'bot' && config.bot_comercial_ativo !== true) return NextResponse.json({ error: 'O Bot esta desativado para esta operacao.' }, { status: 409 });
-    if (testMode === 'ia' && config.ia_sdr_ativa === false) return NextResponse.json({ error: 'A IA SDR esta desativada para esta operacao.' }, { status: 409 });
 
     const now = new Date().toISOString();
     const origem = testMode === 'bot' ? 'Teste Bot comercial' : 'Teste IA SDR';
@@ -88,17 +86,18 @@ export async function POST(request: Request) {
     // esta rota tinha uma implementacao propria da abertura, entao um teste
     // verde nao provava que o fluxo real funcionava.
     if (testMode === 'bot') {
-      const botResult = await startCommercialBotIfEligible(lead.id);
+      const botResult = await startCommercialBotIfEligible(lead.id, { ignoreConfig: true });
       if (!botResult.started) return NextResponse.json({ error: `O Bot nao enviou: ${botResult.reason}.` }, { status: 502 });
-      return NextResponse.json({ ok: true, lead, mode: 'bot', sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE } });
+      return NextResponse.json({ ok: true, lead, mode: 'bot', liveMode: config.bot_comercial_ativo === true ? 'bot' : (config.ia_sdr_ativa === false ? 'nenhum' : 'ia'), sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE } });
     }
 
-    const aiResult = await startCommercialSdrOpeningIfEligible(lead.id);
+    const aiResult = await startCommercialSdrOpeningIfEligible(lead.id, { ignoreConfig: true });
     if (!aiResult.started) return NextResponse.json({ error: `A IA nao enviou: ${aiResult.reason}.` }, { status: 502 });
     return NextResponse.json({
       ok: true,
       lead,
       mode: 'ia',
+      liveMode: config.bot_comercial_ativo === true ? 'bot' : (config.ia_sdr_ativa === false ? 'nenhum' : 'ia'),
       messages: aiResult.messages,
       message: (aiResult.messages || []).join('\n\n'),
       sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE },

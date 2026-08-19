@@ -36,7 +36,7 @@ export default function CommercialAiPage() {
   const [testInvestment, setTestInvestment] = useState('');
   const [testPriority, setTestPriority] = useState('');
   const [testLives, setTestLives] = useState('');
-  const [testing, setTesting] = useState(false);
+  const [testing, setTesting] = useState<'ia' | 'bot' | null>(null);
   const [testResult, setTestResult] = useState('');
 
   const loadConfig = useCallback(async () => {
@@ -84,21 +84,30 @@ export default function CommercialAiPage() {
     }
   }
 
-  async function sendTest(event: React.FormEvent) {
-    event.preventDefault();
-    setTesting(true);
+  async function sendTest(mode: 'ia' | 'bot') {
+    const digits = testPhone.replace(/\D/g, '');
+    if (digits.length < 12) {
+      setNotice('Informe o WhatsApp com DDI e DDD. Ex.: 5561999999999');
+      return;
+    }
+    setTesting(mode);
     setTestResult('');
     setNotice('');
     try {
       const payload = await api('/api/comercial/ai/test', {
         method: 'POST',
-        body: JSON.stringify({ mode: botActive ? 'bot' : 'ia', telefone: testPhone, nome: testName, idades: testAges, email: testEmail, ja_investiu_trafego: testTraffic, faturamento_mensal: testRevenue, investimento: testInvestment, prioridade: testPriority, vidas: testLives }),
+        body: JSON.stringify({ mode, telefone: testPhone, nome: testName, idades: testAges, email: testEmail, ja_investiu_trafego: testTraffic, faturamento_mensal: testRevenue, investimento: testInvestment, prioridade: testPriority, vidas: testLives }),
       });
-      setTestResult(`${botActive ? 'Bot' : 'IA'} enviado para ${payload.lead?.nome || testName}.`);
+      const label = mode === 'bot' ? 'Bot' : 'IA';
+      const sent = payload.message ? ` Mensagem enviada: "${String(payload.message).slice(0, 220)}"` : '';
+      const warning = payload.liveMode && payload.liveMode !== mode
+        ? ` Atencao: no ar quem atende os leads reais e ${payload.liveMode === 'nenhum' ? 'ninguem' : payload.liveMode === 'bot' ? 'o Bot' : 'a IA'}.`
+        : '';
+      setTestResult(`${label} enviado para ${payload.lead?.nome || testName}.${sent}${warning}`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Nao foi possivel enviar o teste.');
     } finally {
-      setTesting(false);
+      setTesting(null);
     }
   }
 
@@ -155,7 +164,32 @@ export default function CommercialAiPage() {
       </div>
     </section>
 
-    {canEdit && <section className="kh-panel kh-sdr-test"><div className="kh-panel-header"><div><span>Validacao da operacao</span><h2>Testar {botActive ? 'Bot' : 'IA SDR'}</h2></div><span className="kh-badge blue"><Send size={12} /> WhatsApp</span></div><p className="kh-sdr-test-copy">Preencha os mesmos dados do funil para testar o envio pelo numero oficial da Orion.</p><form className="kh-sdr-test-grid" onSubmit={(event) => void sendTest(event)}><label><span>WhatsApp destino</span><input className="kh-input" value={testPhone} onChange={(event) => setTestPhone(event.target.value)} placeholder="Ex.: 5561999999999" required /></label><label><span>Nome do lead</span><input className="kh-input" value={testName} onChange={(event) => setTestName(event.target.value)} required /></label><label><span>E-mail</span><input className="kh-input" type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} /></label><label><span>Idades</span><input className="kh-input" value={testAges} onChange={(event) => setTestAges(event.target.value)} /></label><label className="kh-test-wide"><span>Ja investiu em trafego pago?</span><select className="kh-select" value={testTraffic} onChange={(event) => setTestTraffic(event.target.value)}><option value="">Selecione uma opcao</option><option>Ja contratei uma agencia no passado</option><option>Nunca fiz anuncios</option><option>Ja fiz anuncios por conta propria</option></select></label><label className="kh-test-wide"><span>Faturamento mensal</span><select className="kh-select" value={testRevenue} onChange={(event) => setTestRevenue(event.target.value)}><option value="">Selecione uma faixa</option><option>Abaixo de R$10 mil</option><option>R$10 mil a R$20 mil</option><option>R$20 mil a R$50 mil</option><option>Acima de R$50 mil</option></select></label><label><span>Investimento mensal</span><select className="kh-select" value={testInvestment} onChange={(event) => setTestInvestment(event.target.value)}><option value="">Selecione uma faixa</option><option>Ate 1500</option><option>Ate 2500</option><option>Ate 5000</option><option>Mais de 5000</option></select></label><label><span>Prioridade</span><select className="kh-select" value={testPriority} onChange={(event) => setTestPriority(event.target.value)}><option value="">Selecione uma opcao</option><option>Baixa</option><option>Media</option><option>Alta</option></select></label><label><span>Vidas por mes</span><select className="kh-select" value={testLives} onChange={(event) => setTestLives(event.target.value)}><option value="">Selecione uma faixa</option><option>Ate 10</option><option>De 10 a 30</option><option>De 30 a 100</option><option>Mais de 100</option></select></label><button className="kh-button primary" disabled={testing || (!active && !botActive)}>{testing ? <Loader2 size={15} className="kh-spin" /> : <Send size={15} />}{testing ? 'Enviando...' : `Testar ${botActive ? 'Bot' : 'IA'}`}</button></form>{testResult && <p className="kh-sdr-test-success">{testResult}</p>}</section>}
+    {canEdit && <section className="kh-panel kh-sdr-test">
+      <div className="kh-panel-header"><div><span>Validacao da operacao</span><h2>Testar envio</h2></div><span className="kh-badge blue"><Send size={12} /> WhatsApp</span></div>
+      <p className="kh-sdr-test-copy">Coloque o WhatsApp de destino e dispare. O envio sai pelo numero oficial da Orion e funciona mesmo com a IA ou o Bot desligados: o teste ignora a chave de ativacao para provar que o envio esta de pe.</p>
+      <form className="kh-sdr-test-grid" onSubmit={(event) => { event.preventDefault(); void sendTest(botActive ? 'bot' : 'ia'); }}>
+        <label className="kh-test-wide"><span>WhatsApp destino</span><input className="kh-input" value={testPhone} onChange={(event) => setTestPhone(event.target.value)} placeholder="Ex.: 5561999999999" inputMode="numeric" required /></label>
+        <label className="kh-test-wide"><span>Nome do lead (opcional)</span><input className="kh-input" value={testName} onChange={(event) => setTestName(event.target.value)} placeholder="Teste IA" /></label>
+        <div className="kh-test-actions">
+          <button type="button" className="kh-button primary" onClick={() => void sendTest('ia')} disabled={testing !== null}>{testing === 'ia' ? <Loader2 size={15} className="kh-spin" /> : <Bot size={15} />}{testing === 'ia' ? 'Enviando...' : 'Testar IA'}</button>
+          <button type="button" className="kh-button" onClick={() => void sendTest('bot')} disabled={testing !== null}>{testing === 'bot' ? <Loader2 size={15} className="kh-spin" /> : <Send size={15} />}{testing === 'bot' ? 'Enviando...' : 'Testar Bot'}</button>
+        </div>
+        <details className="kh-test-details">
+          <summary>Dados do funil (opcional, so mudam o que a IA sabe do lead)</summary>
+          <div className="kh-test-details-grid">
+            <label><span>E-mail</span><input className="kh-input" type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} /></label>
+            <label><span>Idades</span><input className="kh-input" value={testAges} onChange={(event) => setTestAges(event.target.value)} /></label>
+            <label><span>Ja investiu em trafego pago?</span><select className="kh-select" value={testTraffic} onChange={(event) => setTestTraffic(event.target.value)}><option value="">Selecione uma opcao</option><option>Ja contratei uma agencia no passado</option><option>Nunca fiz anuncios</option><option>Ja fiz anuncios por conta propria</option></select></label>
+            <label><span>Faturamento mensal</span><select className="kh-select" value={testRevenue} onChange={(event) => setTestRevenue(event.target.value)}><option value="">Selecione uma faixa</option><option>Abaixo de R$10 mil</option><option>R$10 mil a R$20 mil</option><option>R$20 mil a R$50 mil</option><option>Acima de R$50 mil</option></select></label>
+            <label><span>Investimento mensal</span><select className="kh-select" value={testInvestment} onChange={(event) => setTestInvestment(event.target.value)}><option value="">Selecione uma faixa</option><option>Ate 1500</option><option>Ate 2500</option><option>Ate 5000</option><option>Mais de 5000</option></select></label>
+            <label><span>Prioridade</span><select className="kh-select" value={testPriority} onChange={(event) => setTestPriority(event.target.value)}><option value="">Selecione uma opcao</option><option>Baixa</option><option>Media</option><option>Alta</option></select></label>
+            <label><span>Vidas por mes</span><select className="kh-select" value={testLives} onChange={(event) => setTestLives(event.target.value)}><option value="">Selecione uma faixa</option><option>Ate 10</option><option>De 10 a 30</option><option>De 30 a 100</option><option>Mais de 100</option></select></label>
+          </div>
+        </details>
+      </form>
+      {testResult && <p className="kh-sdr-test-success">{testResult}</p>}
+      <p className="kh-sdr-test-copy">Cada teste cria um lead no Kanban com origem &quot;Teste IA SDR&quot; ou &quot;Teste Bot comercial&quot;. Apague depois, mas so quando terminar a conversa: sem o lead, a IA nao reconhece o numero e para de responder.</p>
+    </section>}
 
     <footer className="kh-sdr-config-footer kh-commercial-ai-save">{notice && <span>{notice}</span>}{canEdit && <button className="kh-button primary" onClick={() => void saveConfig()} disabled={saving}><Save size={15} /> {saving ? 'Salvando...' : 'Salvar configuracao'}</button>}</footer>
   </div>;

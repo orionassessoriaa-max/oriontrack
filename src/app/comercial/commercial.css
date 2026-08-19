@@ -229,6 +229,14 @@
 .kh-sdr-test-grid label { display: grid; gap: 5px; }
 .kh-sdr-test-grid label span { color: var(--kh-muted); font-size: 10px; font-weight: 700; }
 .kh-sdr-test-success { margin: 0 16px 16px; color: #20d49b; font-size: 11px; font-weight: 700; }
+.kh-test-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
+.kh-test-details { grid-column: 1 / -1; border: 1px solid var(--kh-line); padding: 10px 12px; }
+.kh-test-details summary { color: var(--kh-muted); font-size: 11px; font-weight: 700; cursor: pointer; }
+.kh-test-details-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.kh-test-details-grid label { display: grid; gap: 5px; }
+.kh-test-details-grid label span { color: var(--kh-muted); font-size: 10px; font-weight: 700; }
+@media (max-width: 1000px) { .kh-test-details-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .kh-test-details-grid { grid-template-columns: 1fr; }.kh-test-actions button { width: 100%; } }
 @media (max-width: 1000px) { .kh-sdr-test-grid { grid-template-columns: 1fr 1fr; }.kh-sdr-test-grid .kh-test-wide { grid-column: span 2; } }
 @media (max-width: 600px) { .kh-sdr-test-grid { grid-template-columns: 1fr; }.kh-sdr-test-grid .kh-test-wide { grid-column: span 1; }.kh-sdr-test-grid button { width: 100%; } }
 @media (max-width: 1180px) { .kh-inbox-layout { grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); }.kh-inbox-lead-panel { grid-column: 1 / -1; }.kh-inbox-lead-panel dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; } }

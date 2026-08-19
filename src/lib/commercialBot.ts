@@ -15,8 +15,13 @@ function renderMessage(template: string, name: unknown) {
     .replace(/\{nome\}/gi, String(name || ''));
 }
 
+type CommercialStartOptions = {
+  /** Teste manual do coordenador: dispara mesmo com a chave de ativacao desligada. */
+  ignoreConfig?: boolean;
+};
+
 /** Envia somente a abertura do bot comercial para leads novos. */
-export async function startCommercialBotIfEligible(leadId: string) {
+export async function startCommercialBotIfEligible(leadId: string, options: CommercialStartOptions = {}) {
   if (locks.has(leadId)) return { started: false, reason: 'duplicate_locked' };
   locks.add(leadId);
 
@@ -32,7 +37,7 @@ export async function startCommercialBotIfEligible(leadId: string) {
     if (configError) throw new Error(`Nao consegui ler a configuracao do bot: ${configError.message}`);
     if (!lead?.id || !normalizePhone(lead.telefone)) return { started: false, reason: 'lead_without_phone' };
     if (!config) return { started: false, reason: 'bot_config_not_found' };
-    if (config.bot_comercial_ativo !== true) return { started: false, reason: 'bot_disabled' };
+    if (!options.ignoreConfig && config.bot_comercial_ativo !== true) return { started: false, reason: 'bot_disabled' };
 
     const conversation = await ensureCommercialConversation(lead.telefone, lead.nome);
     const { data: existing } = await supabaseAdmin

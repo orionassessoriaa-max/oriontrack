@@ -167,7 +167,12 @@ async function loadCommercialAiConfig() {
  * ligar a IA SDR deixava o lead sem nenhuma mensagem e a IA so acordava se o
  * proprio lead escrevesse primeiro.
  */
-export async function startCommercialSdrOpeningIfEligible(leadId: string) {
+export type CommercialOpeningOptions = {
+  /** Teste manual do coordenador: dispara mesmo com o Bot ativo ou a IA desligada. */
+  ignoreConfig?: boolean;
+};
+
+export async function startCommercialSdrOpeningIfEligible(leadId: string, options: CommercialOpeningOptions = {}) {
   const [{ data: lead }, config] = await Promise.all([
     supabaseAdmin.from('comercial_leads').select('*').eq('id', leadId).maybeSingle(),
     loadCommercialAiConfig(),
@@ -175,8 +180,10 @@ export async function startCommercialSdrOpeningIfEligible(leadId: string) {
 
   if (!lead?.id) return { started: false, reason: 'commercial_lead_not_found' };
   if (!config) return { started: false, reason: 'commercial_config_not_found' };
-  if (config.bot_comercial_ativo === true) return { started: false, reason: 'commercial_bot_enabled' };
-  if (config.ia_sdr_ativa === false) return { started: false, reason: 'commercial_ai_disabled' };
+  if (!options.ignoreConfig) {
+    if (config.bot_comercial_ativo === true) return { started: false, reason: 'commercial_bot_enabled' };
+    if (config.ia_sdr_ativa === false) return { started: false, reason: 'commercial_ai_disabled' };
+  }
 
   const phone = normalizePhone(lead.telefone);
   if (!phone) return { started: false, reason: 'lead_without_phone' };
