@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import {
   listUazapiInstanceConnections,
+  normalizePhone,
+  uazapiFetch,
   uazapiAiInstanceName,
   uazapiInstanceName,
 } from '@/lib/uazapi';
@@ -265,6 +267,88 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('[api_admin_bot] POST error:', error);
     return NextResponse.json({ error: error?.message || 'Erro ao salvar configuracao do bot.' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const guard = await requireApiUser(request, ['admin']);
+    if ('error' in guard) return guard.error;
+
+    const limited = rateLimit(request, 'admin:bot:test', { limit: 10, windowMs: 60_000 });
+    if (limited) return limited;
+
+    const body = await request.json().catch(() => ({}));
+    const corretoraId = String(body.corretora_id || '').trim();
+    const requestedMode = ['profile', 'dedicated'].includes(String(body.sender_mode || ''))
+      ? String(body.sender_mode) as 'profile' | 'dedicated'
+      : null;
+    const senderProfileId = body.sender_profile_id ? String(body.sender_profile_id) : null;
+    const dedicatedInstanceName = body.dedicated_instance_name ? String(body.dedicated_instance_name) : null;
+    const phone = normalizePhone(String(body.telefone || ''));
+    const message = String(body.mensagem || '').trim();
+
+    if (!corretoraId || !requestedMode || !phone || !message) {
+      return NextResponse.json(
+        { error: 'Escolha o WhatsApp do bot e informe o telefone e a mensagem de teste.' },
+        { status: 400 }
+      );
+    }
+
+    const { data: corretora, error: corretoraError } = await supabaseAdmin
+      .from('corretoras')
+      .select('id, nome, status')
+      .eq('id', corretoraId)
+      .single();
+    if (corretoraError || !corretora) {
+      return NextResponse.json({ error: 'Concessionaria nao encontrada.' }, { status: 404 });
+    }
+
+    const context = await loadSenderContext([corretora as CorretoraRow]);
+    const senderData = buildSenderData([], [corretora as CorretoraRow], context);
+    const selectedSender = (senderData.senderOptionsByCorretora[corretoraId] || []).find((option: any) =>
+      option.mode === requestedMode
+      && (requestedMode === 'profile'
+        ? option.profile_id === senderProfileId
+        : option.instance_name === dedicatedInstanceName)
+    );
+
+    if (!selectedSender) {
+      return NextResponse.json(
+        { error: 'O WhatsApp escolhido desconectou ou nao pertence a esta concessionaria.' },
+        { status: 400 }
+      );
+    }
+
+    const payload = await uazapiFetch('/send/text', {
+      method: 'POST',
+      body: JSON.stringify({ number: phone, text: message }),
+    }, { instanceName: selectedSender.instance_name });
+
+    await writeAuditLog(request, guard.profile, {
+      action: 'test_bot_sender',
+      entity_type: 'corretora_bot_configs',
+      entity_id: corretoraId,
+      metadata: {
+        corretora_id: corretoraId,
+        sender_mode: selectedSender.mode,
+        sender_profile_id: selectedSender.profile_id,
+        recipient: phone,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      sender: {
+        owner_name: selectedSender.owner_name,
+        phone: selectedSender.phone,
+        source: selectedSender.source,
+      },
+      payload,
+    });
+  } catch (error: any) {
+    console.error('[api_admin_bot] PUT test error:', error);
+    return NextResponse.json({ error: error?.message || 'Erro ao testar o bot.' }, { status: 500 });
   }
 }
 

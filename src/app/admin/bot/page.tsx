@@ -455,6 +455,10 @@ export default function AdminBotPage() {
       setFeedback({ type: 'error', message: 'Informe o WhatsApp de destino para o teste.' });
       return;
     }
+    if (!selectedSender || !selectedItem?.id) {
+      setFeedback({ type: 'error', message: 'Escolha primeiro o WhatsApp conectado que o bot vai usar.' });
+      return;
+    }
 
     setTesting(true);
     setFeedback(null);
@@ -467,25 +471,30 @@ export default function AdminBotPage() {
         return;
       }
 
-      const response = await fetch('/api/admin/configuracoes/evolution/test', {
-        method: 'POST',
+      const response = await fetch('/api/admin/bot', {
+        method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          corretora_id: selectedItem.id,
           telefone: testPhone,
           mensagem: previewPrompt(form.prompt, selectedItem),
+          sender_mode: selectedSender.mode,
+          sender_profile_id: selectedSender.profile_id,
+          dedicated_instance_name: selectedSender.mode === 'dedicated' ? selectedSender.instance_name : null,
         }),
       });
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setFeedback({ type: 'error', message: data.error || 'Erro ao enviar teste pelo Apolo.' });
+        setFeedback({ type: 'error', message: data.error || 'Erro ao enviar o teste pelo WhatsApp escolhido.' });
         return;
       }
 
-      setFeedback({ type: 'success', message: 'Teste enviado pelo Apolo com o prompt atual.' });
+      const senderLabel = data.sender?.owner_name || selectedSender.owner_name;
+      setFeedback({ type: 'success', message: `Teste enviado pelo WhatsApp de ${senderLabel}.` });
     } catch (error: any) {
       setFeedback({ type: 'error', message: error?.message || 'Erro ao testar bot.' });
     } finally {
@@ -781,6 +790,39 @@ export default function AdminBotPage() {
                       </span>
                     </div>
 
+                    <div className="mb-5 rounded-[22px] border border-cyan-400/40 bg-cyan-500/10 p-5 shadow-lg shadow-cyan-950/20">
+                      <div className="mb-3 flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/15 text-cyan-200">
+                          <Smartphone className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200">Numero de envio</p>
+                          <p className="mt-1 text-sm font-bold text-slate-300">Escolha o WhatsApp que vai enviar a mensagem do bot e os testes.</p>
+                        </div>
+                      </div>
+                      <select
+                        value={form.senderKey}
+                        onChange={(event) => setFormField('senderKey', event.target.value)}
+                        className="w-full rounded-2xl border border-cyan-400/40 bg-slate-950 px-4 py-4 text-sm font-black text-white outline-none focus:border-cyan-300"
+                      >
+                        <option value="">Selecione um numero conectado</option>
+                        {selectedSenderOptions.map((option) => (
+                          <option key={option.key} value={option.key}>
+                            {option.owner_name} - {option.phone || 'numero conectado'} - {option.source === 'ai' ? 'Pagina IA' : 'Inbox'}
+                          </option>
+                        ))}
+                      </select>
+                      {!selectedSenderOptions.length ? (
+                        <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200">
+                          Nenhum WhatsApp conectado foi encontrado para esta concessionaria.
+                        </p>
+                      ) : selectedSender ? (
+                        <p className="mt-3 text-xs font-bold text-emerald-300">
+                          Conectado: {selectedSender.owner_name} - {selectedSender.phone || 'numero identificado'}.
+                        </p>
+                      ) : null}
+                    </div>
+
                     <div className="grid gap-4 lg:grid-cols-[1fr_180px]">
                       <label>
                         <span className="mb-2 block text-xs font-black uppercase tracking-[0.24em] text-slate-400">Nome do modelo</span>
@@ -803,35 +845,6 @@ export default function AdminBotPage() {
                         </select>
                       </label>
                     </div>
-
-                    <label className="mt-4 block">
-                      <span className="mb-2 block text-xs font-black uppercase tracking-[0.24em] text-slate-400">
-                        WhatsApp que o bot vai usar
-                      </span>
-                      <div className="relative">
-                        <Smartphone className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
-                        <select
-                          value={form.senderKey}
-                          onChange={(event) => setFormField('senderKey', event.target.value)}
-                          className="w-full rounded-2xl border border-slate-700 bg-slate-950 py-4 pl-11 pr-4 text-sm font-black text-white outline-none focus:border-cyan-400"
-                        >
-                          <option value="">Selecione um numero conectado</option>
-                          {selectedSenderOptions.map((option) => (
-                            <option key={option.key} value={option.key}>
-                              {option.owner_name} - {option.phone || 'numero conectado'} - {option.source === 'ai' ? 'Pagina IA' : 'Inbox'}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
-                        Aparecem apenas numeros conectados desta concessionaria, seja pelo Inbox ou pela pagina IA.
-                      </p>
-                      {!selectedSenderOptions.length && (
-                        <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200">
-                          Nenhum WhatsApp conectado foi encontrado. Conecte um numero no Inbox ou na pagina IA antes de ativar.
-                        </p>
-                      )}
-                    </label>
 
                     <label className="mt-4 block">
                       <span className="mb-2 block text-xs font-black uppercase tracking-[0.24em] text-slate-400">Categoria</span>
@@ -877,7 +890,13 @@ export default function AdminBotPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setShowTest((current) => !current)}
+                          onClick={() => {
+                            if (!selectedSender) {
+                              setFeedback({ type: 'error', message: 'Escolha primeiro o WhatsApp conectado que o bot vai usar.' });
+                              return;
+                            }
+                            setShowTest((current) => !current);
+                          }}
                           className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/40 px-5 py-4 text-sm font-black text-emerald-200 transition hover:bg-emerald-500/10"
                         >
                           <MessageSquare className="h-4 w-4" />
@@ -930,8 +949,13 @@ export default function AdminBotPage() {
                           className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-70"
                         >
                           {testing && <Loader2 className="h-4 w-4 animate-spin" />}
-                          Enviar teste pelo Apolo
+                          Enviar pelo numero selecionado
                         </button>
+                        {selectedSender && (
+                          <p className="mt-3 text-xs font-bold text-emerald-300">
+                            O teste sera enviado por {selectedSender.owner_name} - {selectedSender.phone || 'numero conectado'}.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
