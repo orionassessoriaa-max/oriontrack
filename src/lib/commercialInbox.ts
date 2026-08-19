@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { normalizePhone } from '@/lib/uazapi';
+import { normalizePhone, phoneMatchKey } from '@/lib/uazapi';
 
 // A operacao comercial nao pertence a nenhuma corretora: as conversas da IA SDR
 // ficam com corretor_id nulo e lead_id nulo (o lead_id de whatsapp_conversas
@@ -19,7 +19,8 @@ export async function findCommercialConversation(phone: string) {
     .order('ultima_mensagem_at', { ascending: false, nullsFirst: false })
     .limit(20);
 
-  return (data || []).find((row) => normalizePhone(row?.telefone) === digits) || null;
+  const key = phoneMatchKey(digits);
+  return (data || []).find((row) => phoneMatchKey(row?.telefone) === key) || null;
 }
 
 export async function ensureCommercialConversation(phone: string, contactName?: string | null) {

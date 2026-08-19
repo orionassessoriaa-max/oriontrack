@@ -398,6 +398,22 @@ export async function ensureUazapiWebhookConfigured(instanceName: string, maxAge
   webhookConfigurationTimes.set(key, Date.now());
 }
 
+/**
+ * Chave canonica de telefone brasileiro: DDI fora, DDD + 8 digitos finais.
+ * Serve para casar o numero gravado no CRM com o JID que a UAZAPI entrega,
+ * que nem sempre traz o nono digito.
+ */
+export function phoneMatchKey(value?: string | null) {
+  const digits = normalizePhone(value);
+  if (!digits) return '';
+  const local = digits.startsWith('55') ? digits.slice(2) : digits;
+  if (local.length < 10) return local;
+  const ddd = local.slice(0, 2);
+  const rest = local.slice(2);
+  const subscriber = rest.length === 9 && rest.startsWith('9') ? rest.slice(1) : rest;
+  return `${ddd}${subscriber}`;
+}
+
 export function normalizePhone(value?: string | null) {
   let digits = String(value || '').replace(/\D/g, '');
   if (!digits) return '';

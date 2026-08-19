@@ -1,5 +1,5 @@
 import { after, NextResponse } from 'next/server';
-import { normalizePhone, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
+import { normalizePhone, phoneMatchKey, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
@@ -994,7 +994,8 @@ async function findCommercialLead(phone: string) {
   const { data } = await supabaseAdmin.from('comercial_leads').select('*')
     .or(`telefone.ilike.%${last8},telefone.ilike.%${last8WithHyphen}`)
     .order('data_entrada', { ascending: false }).limit(30);
-  return (data || []).find((row) => normalizePhone(row?.telefone) === digits) || null;
+  const key = phoneMatchKey(digits);
+  return (data || []).find((row) => phoneMatchKey(row?.telefone) === key) || null;
 }
 
 async function findProfileById(profileId?: string | null) {
