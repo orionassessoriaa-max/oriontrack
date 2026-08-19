@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Plus,
   Save,
+  Smartphone,
   Sparkles,
   Wand2,
 } from 'lucide-react';
@@ -41,6 +42,9 @@ interface BotConfig {
   primeira_mensagem: string;
   fluxo?: BotPromptMeta | unknown;
   status: string;
+  sender_mode?: 'automatic' | 'profile' | 'dedicated' | null;
+  sender_profile_id?: string | null;
+  dedicated_instance_name?: string | null;
   created_at?: string;
   updated_at?: string;
   corretoras?: { nome?: string | null } | { nome?: string | null }[] | null;
@@ -66,6 +70,28 @@ interface BotFormState {
   categoria: string;
   prompt: string;
   status: 'ativo' | 'inativo';
+  senderKey: string;
+}
+
+interface BotSenderOption {
+  key: string;
+  mode: 'profile' | 'dedicated';
+  profile_id: string | null;
+  instance_name: string;
+  source: 'inbox' | 'ai';
+  owner_name: string;
+  phone: string;
+  connected: boolean;
+  state: string;
+}
+
+interface BotHealth {
+  healthy: boolean;
+  state: string;
+  instance_name?: string | null;
+  phone?: string | null;
+  owner_name?: string | null;
+  sender_mode?: string | null;
 }
 
 type WorkspaceMode = 'empty' | 'summary' | 'editor';
@@ -137,6 +163,11 @@ function buildForm(config?: BotConfig): BotFormState {
     categoria: meta.categoria || 'Atendimento',
     prompt: config?.primeira_mensagem || DEFAULT_PROMPT,
     status: config?.status === 'ativo' ? 'ativo' : 'inativo',
+    senderKey: config?.sender_mode === 'profile' && config.sender_profile_id
+      ? `profile:${config.sender_profile_id}`
+      : config?.sender_mode === 'dedicated' && config.dedicated_instance_name
+        ? `dedicated:${config.dedicated_instance_name}`
+        : '',
   };
 }
 
@@ -211,6 +242,8 @@ function previewPrompt(prompt: string, selectedItem?: BotWorkspaceItem) {
 export default function AdminBotPage() {
   const { actualProfile } = useAuth();
   const [items, setItems] = useState<BotWorkspaceItem[]>([]);
+  const [senderOptionsByCorretora, setSenderOptionsByCorretora] = useState<Record<string, BotSenderOption[]>>({});
+  const [botHealthByCorretora, setBotHealthByCorretora] = useState<Record<string, BotHealth>>({});
   const [selectedId, setSelectedId] = useState('');
   const [form, setForm] = useState<BotFormState>(() => buildForm());
   const [savedSnapshot, setSavedSnapshot] = useState(() => snapshot(buildForm()));
@@ -228,6 +261,9 @@ export default function AdminBotPage() {
 
   const isAdmin = actualProfile?.tipo_usuario === 'admin';
   const selectedItem = items.find((item) => item.id === selectedId);
+  const selectedSenderOptions = senderOptionsByCorretora[selectedId] || [];
+  const selectedSender = selectedSenderOptions.find((option) => option.key === form.senderKey);
+  const selectedHealth = selectedId ? botHealthByCorretora[selectedId] : undefined;
   const hasUnsavedChanges = snapshot(form) !== savedSnapshot;
 
   const setFormField = <K extends keyof BotFormState>(key: K, value: BotFormState[K]) => {
@@ -263,6 +299,8 @@ export default function AdminBotPage() {
       }
 
       const activeConfigs: BotConfig[] = data.activeConfigs || [];
+      setSenderOptionsByCorretora(data.senderOptionsByCorretora || {});
+      setBotHealthByCorretora(data.botHealthByCorretora || {});
       const activeItems: BotWorkspaceItem[] = activeConfigs.map((config) => ({
         id: config.corretora_id,
         nome: getConfigCorretoraName(config),
@@ -363,6 +401,7 @@ export default function AdminBotPage() {
       categoria: 'Atendimento',
       prompt: '',
       status: 'inativo',
+      senderKey: '',
     });
     setWorkspaceMode('editor');
     setBotBrief('');
@@ -467,6 +506,11 @@ export default function AdminBotPage() {
       return;
     }
 
+    if (form.status === 'ativo' && !selectedSender) {
+      setFeedback({ type: 'error', message: 'Escolha um WhatsApp conectado antes de ativar o bot.' });
+      return;
+    }
+
     setSaving(true);
     setFeedback(null);
 
@@ -497,6 +541,9 @@ export default function AdminBotPage() {
             prompt_version: 'prompt-v1',
           },
           status: form.status,
+          sender_mode: selectedSender?.mode || null,
+          sender_profile_id: selectedSender?.profile_id || null,
+          dedicated_instance_name: selectedSender?.mode === 'dedicated' ? selectedSender.instance_name : null,
         }),
       });
       const data = await response.json();
@@ -758,6 +805,35 @@ export default function AdminBotPage() {
                     </div>
 
                     <label className="mt-4 block">
+                      <span className="mb-2 block text-xs font-black uppercase tracking-[0.24em] text-slate-400">
+                        WhatsApp que o bot vai usar
+                      </span>
+                      <div className="relative">
+                        <Smartphone className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
+                        <select
+                          value={form.senderKey}
+                          onChange={(event) => setFormField('senderKey', event.target.value)}
+                          className="w-full rounded-2xl border border-slate-700 bg-slate-950 py-4 pl-11 pr-4 text-sm font-black text-white outline-none focus:border-cyan-400"
+                        >
+                          <option value="">Selecione um numero conectado</option>
+                          {selectedSenderOptions.map((option) => (
+                            <option key={option.key} value={option.key}>
+                              {option.owner_name} - {option.phone || 'numero conectado'} - {option.source === 'ai' ? 'Pagina IA' : 'Inbox'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
+                        Aparecem apenas numeros conectados desta concessionaria, seja pelo Inbox ou pela pagina IA.
+                      </p>
+                      {!selectedSenderOptions.length && (
+                        <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200">
+                          Nenhum WhatsApp conectado foi encontrado. Conecte um numero no Inbox ou na pagina IA antes de ativar.
+                        </p>
+                      )}
+                    </label>
+
+                    <label className="mt-4 block">
                       <span className="mb-2 block text-xs font-black uppercase tracking-[0.24em] text-slate-400">Categoria</span>
                       <input
                         value={form.categoria}
@@ -907,6 +983,27 @@ export default function AdminBotPage() {
                               <Plus className="h-4 w-4" />
                               Criar novo
                             </button>
+                          </div>
+                        </div>
+                        <div className={`mt-4 flex items-start gap-3 rounded-2xl border p-4 ${
+                          selectedHealth?.healthy
+                            ? 'border-emerald-500/30 bg-emerald-500/10'
+                            : 'border-amber-500/30 bg-amber-500/10'
+                        }`}>
+                          <Smartphone className={`mt-0.5 h-5 w-5 shrink-0 ${selectedHealth?.healthy ? 'text-emerald-300' : 'text-amber-300'}`} />
+                          <div>
+                            <p className={`text-xs font-black uppercase tracking-[0.18em] ${selectedHealth?.healthy ? 'text-emerald-200' : 'text-amber-200'}`}>
+                              {selectedHealth?.healthy ? 'WhatsApp conectado' : 'WhatsApp precisa de verificacao'}
+                            </p>
+                            <p className="mt-1 text-sm font-bold text-slate-300">
+                              {selectedHealth?.owner_name || 'Remetente automatico atual'}
+                              {selectedHealth?.phone ? ` - ${selectedHealth.phone}` : ''}
+                            </p>
+                            {selectedHealth?.sender_mode === 'automatic' && (
+                              <p className="mt-1 text-xs font-bold text-slate-500">
+                                Bot legado preservado. Ao editar, escolha explicitamente o numero que ele deve usar.
+                              </p>
+                            )}
                           </div>
                         </div>
                         <pre className="mt-5 whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm font-bold leading-6 text-slate-200">

@@ -48,6 +48,9 @@ type BotConfig = {
   primeira_mensagem: string;
   fluxo?: unknown;
   status: string;
+  sender_mode?: 'automatic' | 'profile' | 'dedicated' | null;
+  sender_profile_id?: string | null;
+  dedicated_instance_name?: string | null;
   corretoras?: { nome: string } | { nome: string }[] | null;
 };
 
@@ -169,10 +172,22 @@ async function findBotConfig(nomeEmpresa?: string | null) {
 
 async function findBotSender(params: {
   responsavelProfileId?: string | null;
+  configuredProfileId?: string | null;
   corretorId?: string | null;
   nomeEmpresa?: string | null;
 }) {
-  const { responsavelProfileId, corretorId, nomeEmpresa } = params;
+  const { responsavelProfileId, configuredProfileId, corretorId, nomeEmpresa } = params;
+
+  if (configuredProfileId) {
+    const { data: configuredProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nome, email, tipo_usuario, telefone, corretor_id, nome_empresa, status')
+      .eq('id', configuredProfileId)
+      .in('status', ['active', 'ativo', 'Ativo'])
+      .maybeSingle();
+    if (configuredProfile?.id) return configuredProfile as ProfileRow;
+    return null;
+  }
 
   if (responsavelProfileId) {
     const { data: responsibleProfile } = await supabaseAdmin
@@ -267,7 +282,13 @@ async function alreadySentFirstContact(conversationId: string) {
   return (data || []).some((message: any) => message.metadata?.bot_first_contact === true);
 }
 
-async function insertMessage(conversation: ConversationRow, text: string, sender: ProfileRow, providerPayload: any) {
+async function insertMessage(
+  conversation: ConversationRow,
+  text: string,
+  sender: ProfileRow,
+  providerPayload: any,
+  instanceName: string
+) {
   const providerId =
     providerPayload?.messageId ||
     providerPayload?.id ||
@@ -286,6 +307,7 @@ async function insertMessage(conversation: ConversationRow, text: string, sender
       metadata: {
         bot_first_contact: true,
         bot_sender_profile_id: sender.id,
+        bot_sender_instance_name: instanceName,
         provider: 'uazapi',
         raw: providerPayload,
       },
@@ -302,8 +324,7 @@ async function insertMessage(conversation: ConversationRow, text: string, sender
     .eq('id', conversation.id);
 }
 
-async function sendBotText(sender: ProfileRow, phone: string, text: string) {
-  const instanceName = uazapiInstanceName(sender.id);
+async function sendBotText(instanceName: string, phone: string, text: string) {
   await configureUazapiWebhook(instanceName);
 
   return uazapiFetch('/send/text', {
@@ -334,10 +355,16 @@ export async function startLeadBotIfEligible(leadId: string) {
 
   const sender = await findBotSender({
     responsavelProfileId: lead.responsavel_profile_id,
+    configuredProfileId: config.sender_mode === 'profile' ? config.sender_profile_id : null,
     corretorId: lead.corretor_id,
     nomeEmpresa: broker?.nome_empresa,
   });
   if (!sender?.id) return { eligible: false, started: false, reason: 'Admin do bot nao encontrado.' };
+
+  const instanceName = config.sender_mode === 'dedicated'
+    ? String(config.dedicated_instance_name || '').trim()
+    : uazapiInstanceName(sender.id);
+  if (!instanceName) return { eligible: false, started: false, reason: 'WhatsApp do bot nao configurado.' };
 
   const conversation = await getOrCreateConversation(lead as LeadRow);
   if (!conversation?.id) return { eligible: false, started: false, reason: 'Conversa nao criada.' };
@@ -347,14 +374,15 @@ export async function startLeadBotIfEligible(leadId: string) {
   }
 
   const message = renderBotMessage(config.primeira_mensagem, lead as LeadRow, readCorretoraName(config));
-  const providerPayload = await sendBotText(sender, lead.telefone, message);
-  await insertMessage(conversation, message, sender, providerPayload);
+  const providerPayload = await sendBotText(instanceName, lead.telefone, message);
+  await insertMessage(conversation, message, sender, providerPayload, instanceName);
 
   return {
     eligible: true,
     started: true,
     conversation_id: conversation.id,
     sender_profile_id: sender.id,
+    sender_instance_name: instanceName,
     config_id: config.id,
   };
 }

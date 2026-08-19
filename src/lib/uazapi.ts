@@ -40,11 +40,29 @@ function readInstanceName(instance: any) {
   return String(
     instance?.name ||
     instance?.instanceName ||
+    instance?.instance?.name ||
+    instance?.instance?.instanceName ||
     instance?.instance ||
     instance?.session ||
     instance?.sessionkey ||
     ''
   );
+}
+
+function readInstancePhone(instance: any) {
+  const raw = String(
+    instance?.phone ||
+    instance?.number ||
+    instance?.owner ||
+    instance?.ownerJid ||
+    instance?.jid ||
+    instance?.me?.id ||
+    instance?.instance?.phone ||
+    instance?.instance?.number ||
+    instance?.instance?.owner ||
+    ''
+  );
+  return raw.split('@')[0].replace(/\D/g, '');
 }
 
 function readInstanceToken(instance: any) {
@@ -78,6 +96,40 @@ export type UazapiInstanceConnection = {
   connected: boolean;
   state: string;
 };
+
+export type UazapiInstanceSummary = UazapiInstanceConnection & {
+  name: string;
+  phone: string;
+};
+
+export async function listUazapiInstanceConnections(): Promise<UazapiInstanceSummary[]> {
+  const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
+  const grouped = new Map<string, UazapiInstanceSummary>();
+
+  for (const item of asArray(payload)) {
+    const name = readInstanceName(item).trim();
+    if (!name || name === '[object Object]') continue;
+    const state = String(
+      item?.status ||
+      item?.state ||
+      item?.connectionStatus ||
+      item?.instance?.status ||
+      'unknown'
+    ).trim().toLowerCase();
+    const summary = {
+      name,
+      phone: readInstancePhone(item),
+      found: true,
+      connected: isConnectedUazapiInstance(item),
+      state,
+    };
+    const key = name.toLowerCase();
+    const current = grouped.get(key);
+    if (!current || (!current.connected && summary.connected)) grouped.set(key, summary);
+  }
+
+  return Array.from(grouped.values());
+}
 
 export async function getUazapiInstanceConnection(instanceName: string): Promise<UazapiInstanceConnection> {
   const normalizedName = String(instanceName || '').trim().toLowerCase();
