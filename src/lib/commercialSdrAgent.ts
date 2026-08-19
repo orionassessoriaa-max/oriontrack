@@ -168,8 +168,12 @@ async function loadCommercialAiConfig() {
  * proprio lead escrevesse primeiro.
  */
 export type CommercialOpeningOptions = {
-  /** Teste manual do coordenador: dispara mesmo com o Bot ativo ou a IA desligada. */
-  ignoreConfig?: boolean;
+  /**
+   * Disparo manual do coordenador pelo botao de teste: ignora a chave de
+   * ativacao e a trava de abertura ja enviada, para dar para repetir o teste
+   * no mesmo numero.
+   */
+  manualTest?: boolean;
 };
 
 export async function startCommercialSdrOpeningIfEligible(leadId: string, options: CommercialOpeningOptions = {}) {
@@ -180,7 +184,7 @@ export async function startCommercialSdrOpeningIfEligible(leadId: string, option
 
   if (!lead?.id) return { started: false, reason: 'commercial_lead_not_found' };
   if (!config) return { started: false, reason: 'commercial_config_not_found' };
-  if (!options.ignoreConfig) {
+  if (!options.manualTest) {
     if (config.bot_comercial_ativo === true) return { started: false, reason: 'commercial_bot_enabled' };
     if (config.ia_sdr_ativa === false) return { started: false, reason: 'commercial_ai_disabled' };
   }
@@ -192,8 +196,10 @@ export async function startCommercialSdrOpeningIfEligible(leadId: string, option
 
   try {
     const session = await getCommercialAiSession(leadId);
-    if (session?.abertura_enviada_at) return { started: false, reason: 'opening_already_sent' };
-    if (!canCommercialAiSpeak(session)) return { started: false, reason: `session_${session?.status}` };
+    if (!options.manualTest) {
+      if (session?.abertura_enviada_at) return { started: false, reason: 'opening_already_sent' };
+      if (!canCommercialAiSpeak(session)) return { started: false, reason: `session_${session?.status}` };
+    }
 
     const conversation = await ensureCommercialConversation(lead.telefone, lead.nome);
 
@@ -207,7 +213,7 @@ export async function startCommercialSdrOpeningIfEligible(leadId: string, option
       .eq('direction', 'outbound')
       .limit(30);
     const sentRows = (alreadySent || []) as Array<{ metadata: Record<string, unknown> | null }>;
-    if (sentRows.some((item) => item.metadata?.commercial_ai_first_contact === true)) {
+    if (!options.manualTest && sentRows.some((item) => item.metadata?.commercial_ai_first_contact === true)) {
       return { started: false, reason: 'opening_already_sent' };
     }
 

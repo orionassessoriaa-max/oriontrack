@@ -86,12 +86,12 @@ export async function POST(request: Request) {
     // esta rota tinha uma implementacao propria da abertura, entao um teste
     // verde nao provava que o fluxo real funcionava.
     if (testMode === 'bot') {
-      const botResult = await startCommercialBotIfEligible(lead.id, { ignoreConfig: true });
+      const botResult = await startCommercialBotIfEligible(lead.id, { manualTest: true });
       if (!botResult.started) return NextResponse.json({ error: `O Bot nao enviou: ${botResult.reason}.` }, { status: 502 });
       return NextResponse.json({ ok: true, lead, mode: 'bot', liveMode: config.bot_comercial_ativo === true ? 'bot' : (config.ia_sdr_ativa === false ? 'nenhum' : 'ia'), sender: { nome: 'Orion', instance: COMMERCIAL_MASTER_INSTANCE } });
     }
 
-    const aiResult = await startCommercialSdrOpeningIfEligible(lead.id, { ignoreConfig: true });
+    const aiResult = await startCommercialSdrOpeningIfEligible(lead.id, { manualTest: true });
     if (!aiResult.started) return NextResponse.json({ error: `A IA nao enviou: ${aiResult.reason}.` }, { status: 502 });
     return NextResponse.json({
       ok: true,

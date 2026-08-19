@@ -16,8 +16,11 @@ function renderMessage(template: string, name: unknown) {
 }
 
 type CommercialStartOptions = {
-  /** Teste manual do coordenador: dispara mesmo com a chave de ativacao desligada. */
-  ignoreConfig?: boolean;
+  /**
+   * Disparo manual do coordenador pelo botao de teste: ignora a chave de
+   * ativacao e a trava de primeira mensagem ja enviada.
+   */
+  manualTest?: boolean;
 };
 
 /** Envia somente a abertura do bot comercial para leads novos. */
@@ -37,7 +40,7 @@ export async function startCommercialBotIfEligible(leadId: string, options: Comm
     if (configError) throw new Error(`Nao consegui ler a configuracao do bot: ${configError.message}`);
     if (!lead?.id || !normalizePhone(lead.telefone)) return { started: false, reason: 'lead_without_phone' };
     if (!config) return { started: false, reason: 'bot_config_not_found' };
-    if (!options.ignoreConfig && config.bot_comercial_ativo !== true) return { started: false, reason: 'bot_disabled' };
+    if (!options.manualTest && config.bot_comercial_ativo !== true) return { started: false, reason: 'bot_disabled' };
 
     const conversation = await ensureCommercialConversation(lead.telefone, lead.nome);
     const { data: existing } = await supabaseAdmin
@@ -46,7 +49,7 @@ export async function startCommercialBotIfEligible(leadId: string, options: Comm
       .eq('conversa_id', conversation.id)
       .eq('direction', 'outbound')
       .limit(30);
-    if ((existing || []).some((item: any) => item.metadata?.commercial_bot_first_contact === true)) {
+    if (!options.manualTest && (existing || []).some((item: any) => item.metadata?.commercial_bot_first_contact === true)) {
       return { started: false, reason: 'first_message_already_sent' };
     }
 
