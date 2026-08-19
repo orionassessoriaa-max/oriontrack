@@ -65,7 +65,7 @@ export async function startCommercialBotIfEligible(leadId: string) {
       metadata: { commercial_bot_first_contact: true, ai_agent: 'commercial_bot', provider: 'uazapi', instance, sdr_id: lead.sdr_id },
     });
     if (messageError) throw new Error(`Mensagem enviada, mas nao foi registrada no Inbox: ${messageError.message}`);
-    const { error: conversationError } = await supabaseAdmin.from('whatsapp_conversas').update({ ultima_mensagem: message, ultima_mensagem_at: new Date().toISOString() }).eq('id', conversation.id);
+    const { error: conversationError } = await supabaseAdmin.from('whatsapp_conversas').update({ ultima_mensagem_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', conversation.id);
     if (conversationError) throw new Error(`Mensagem enviada, mas nao foi atualizada no Inbox: ${conversationError.message}`);
     return { started: true, conversation_id: conversation.id };
   } finally {

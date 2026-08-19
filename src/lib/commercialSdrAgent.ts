@@ -140,11 +140,10 @@ async function sendCommercialMessages(
   }
 }
 
-async function touchConversation(conversationId: string, leadId: string, lastMessage?: string) {
+async function touchConversation(conversationId: string, leadId: string) {
   const now = new Date().toISOString();
   await Promise.all([
     supabaseAdmin.from('whatsapp_conversas').update({
-      ...(lastMessage ? { ultima_mensagem: lastMessage } : {}),
       ultima_mensagem_at: now,
       updated_at: now,
     }).eq('id', conversationId),
@@ -227,7 +226,7 @@ Nao existe historico: esta e a primeira abordagem. Escreva a ABERTURA em tres me
       perguntas_feitas: 1,
       motivo: null,
     });
-    await touchConversation(conversation.id, leadId, messages[messages.length - 1]);
+    await touchConversation(conversation.id, leadId);
 
     return { started: true, conversation_id: conversation.id, messages };
   } catch (error) {
@@ -306,7 +305,7 @@ Responda com uma unica mensagem, sem repetir a abertura, sem inventar dados e se
         ultima_mensagem_ia_at: new Date().toISOString(),
         perguntas_feitas: asked + (reply.includes('?') ? 1 : 0),
       });
-      await touchConversation(options.conversationId, options.leadId, reply);
+      await touchConversation(options.conversationId, options.leadId);
     }
 
     if (parsed.repassar) {

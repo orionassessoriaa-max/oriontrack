@@ -318,7 +318,6 @@ async function insertMessage(
   await supabaseAdmin
     .from('whatsapp_conversas')
     .update({
-      ultima_mensagem: text,
       ultima_mensagem_at: new Date().toISOString(),
     })
     .eq('id', conversation.id);
