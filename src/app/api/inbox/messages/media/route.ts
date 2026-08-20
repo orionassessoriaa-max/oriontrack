@@ -6,7 +6,10 @@ import { evolutionFetch, getEvolutionInstanceApiKey } from '@/lib/evolution';
 import { createDecipheriv, hkdfSync } from 'crypto';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
-const MAX_CACHE_BASE64_BYTES = Number(process.env.INBOX_MEDIA_CACHE_MAX_BYTES || 15 * 1024 * 1024);
+// Teto de arquivo guardado dentro da linha da mensagem. Era 15 MB, e foi o que
+// levou whatsapp_mensagens a 970 MB num banco de 1 GB. Arquivo grande fica no
+// Storage; o banco guarda so a URL.
+const MAX_CACHE_BASE64_BYTES = Number(process.env.INBOX_MEDIA_CACHE_MAX_BYTES || 256 * 1024);
 const MAX_PROXY_MEDIA_BYTES = Number(process.env.INBOX_MEDIA_PROXY_MAX_BYTES || 25 * 1024 * 1024);
 
 function canProxyMediaUrl(value?: string | null) {
@@ -397,7 +400,11 @@ function base64ByteLength(base64: string) {
 
 async function cacheRecoveredMedia(message: any, payload: { base64?: string | null; url?: string | null; mimeType?: string | null; fileName?: string | null }) {
   const base64 = stripDataUrl(payload.base64);
-  const shouldCacheBase64 = base64 && base64ByteLength(base64) <= MAX_CACHE_BASE64_BYTES;
+  // Arquivo que ja tem URL nao volta para dentro do banco. Sem esta guarda, abrir
+  // a midia no inbox regravava o base64 na linha e a tabela inchava de novo:
+  // whatsapp_mensagens sozinha ja chegou a 970 MB por causa disso.
+  const alreadyStored = Boolean(pickMediaUrl(message.metadata) || payload.url);
+  const shouldCacheBase64 = !alreadyStored && base64 && base64ByteLength(base64) <= MAX_CACHE_BASE64_BYTES;
   const metadata = {
     ...(message.metadata || {}),
     ...(shouldCacheBase64 ? { media_base64: base64 } : {}),
