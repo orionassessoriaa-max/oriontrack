@@ -138,7 +138,7 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 - Nao use ponto de exclamacao em toda mensagem.
 - Depois da primeira confirmacao da cotacao/idades, confirme se a simulacao sera empresarial (CNPJ/MEI) ou pelo CPF antes de perguntar hospital/regiao.
 - Pedido de valores/precos: nao diga que nao pode enviar no WhatsApp. Diga que os valores dependem da cotacao e que pode chamar um especialista para passar certinho.
-- Situações sensíveis: se o cliente disser que perdeu alguem, esta doente, internado, com dor, em cirurgia ou cuidando de familiar, acolha primeiro. Exemplo de tom: "Sinto muito por isso. Espero que fique tudo bem por ai. Se estiver tudo bem para voce, posso continuar a cotacao?"
+- Situacoes pessoais dificeis: se o cliente contar que perdeu alguem, que esta doente ou que tem familiar internado, reconheca em uma frase com as palavras daquele momento e pergunte se ele quer seguir agora. Nunca use frase pronta de pesame. Pedir cobertura de internacao, cirurgia ou urgencia nao e relato pessoal: nesse caso siga a cotacao sem lamentar nada.
 
 == HANDOFF (Transferencia para Especialista) ==
 - Agendamento so e concluido com DIA e HORARIO ESPECIFICOS (ex: "amanha as 14h", "quinta as 10h").
@@ -574,11 +574,6 @@ function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode, pessoa
   return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Um especialista da nossa equipe vai entrar em contato para enviar a cotacao e prosseguir com seu atendimento. Obrigada!`);
 }
 
-function isSensitivePersonalSituation(text?: string | null) {
-  const normalized = normalizeAiText(text);
-  return /\b(perdi minha mae|perdi meu pai|perdi minha esposa|perdi meu marido|falecimento|faleceu|luto|morreu|doente|doenca|internad|internacao|hospitalizad|cirurgia|cancer|quimio|dor|acidente|uti|emergencia na familia)\b/.test(normalized);
-}
-
 function isCnpjConfirmationQuestion(text?: string | null) {
   const normalized = normalizeAiText(text);
   return (
@@ -762,33 +757,6 @@ async function finalizeScheduledHandoff(params: {
   const identity = aiIdentity(aiConfig, '');
   const reply = handoffScheduleReply(lead, handoffContactMode(lead, adminProfile, identity), identity.displayName);
 
-  if (incomingWasAudio) {
-    try {
-      registerAiOutbound(lead.telefone || '', 'Mensagem de voz');
-      const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', reply);
-      await insertMessage(conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
-        ...(payload || {}),
-        instance: aiInstanceName(adminProfile),
-        provider_message_id: providerMessageId(payload),
-        ai_agent: aiConfig.persona,
-        ai_text: reply,
-        messageType: 'audioMessage',
-        mediaType: 'audio',
-        mediatype: 'audio',
-        mimetype: 'audio/mpeg',
-        fileName: 'aline-resposta.mp3',
-      });
-    } catch (audioErr) {
-      console.error('[lead_ai_agent] Failed sending scheduled handoff audio, falling back to text:', audioErr);
-      registerAiOutbound(lead.telefone || '', reply);
-      const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
-      await insertMessage(conversationId, 'outbound', aiConfig.persona, reply, {
-        ...(payload || {}),
-        instance: aiInstanceName(adminProfile),
-        ai_agent: aiConfig.persona,
-      });
-    }
-  } else {
     registerAiOutbound(lead.telefone || '', reply);
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
     await insertMessage(conversationId, 'outbound', aiConfig.persona, reply, {
@@ -796,7 +764,6 @@ async function finalizeScheduledHandoff(params: {
       instance: aiInstanceName(adminProfile),
       ai_agent: aiConfig.persona,
     });
-  }
 
   await supabaseAdmin
     .from('lead_ai_sessions')
@@ -1208,48 +1175,6 @@ async function textToSpeechBase64(text: string) {
   throw new Error('ElevenLabs indisponivel para gerar audio. Verifique ELEVENLABS_API_KEY e ORION_LEAD_AI_ELEVEN_VOICE_ID.');
 }
 
-async function sendAiAdminAudio(adminProfile: ProfileRow, phone: string, text: string) {
-  const instance = aiInstanceName(adminProfile);
-  const { audio, provider, speechText } = await textToSpeechBase64(text);
-  const cleanAudioBase64 = audio.includes(';base64,') ? audio.split(';base64,')[1] : audio;
-
-  const dataUrl = `data:audio/mpeg;base64,${cleanAudioBase64}`;
-  const number = normalizePhone(phone);
-  const recordingDelay = Math.min(Math.max(speechText.length * 45, 1800), 8000);
-
-  try {
-    await uazapiFetch('/message/presence', {
-      method: 'POST',
-      body: JSON.stringify({
-        number,
-        presence: 'recording',
-        delay: recordingDelay,
-      }),
-    }, { instanceName: instance });
-  } catch (presenceErr) {
-    console.warn('[lead_ai_agent] Failed sending recording presence before audio:', presenceErr);
-  }
-
-  const payload = await uazapiFetch('/send/media', {
-    method: 'POST',
-    body: JSON.stringify({
-      number,
-      file: dataUrl,
-      type: 'ptt',
-      mimetype: 'audio/mpeg',
-      delay: recordingDelay,
-    }),
-  }, { instanceName: instance });
-
-  return {
-    ...(payload || {}),
-    tts_provider: provider,
-    tts_text: speechText,
-    media_base64: cleanAudioBase64,
-    media_mimetype: 'audio/mpeg',
-    media_file_name: 'aline-resposta.mp3',
-  };
-}
 
 function extractSummaryField(summary: string, key: string) {
   const labels = [
@@ -1805,33 +1730,6 @@ export async function continueLeadAiFromIncoming(options: {
     }
 
     const reply = customerReplyForFollowUp(nextQuestionAfterCnpjConfirmation(lead), lead, Boolean(previousOutboundText));
-    if (options.incomingWasAudio) {
-      try {
-        registerAiOutbound(lead.telefone || '', 'Mensagem de voz');
-        const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', reply);
-        await insertMessage(options.conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
-          ...(payload || {}),
-          instance: aiInstanceName(adminProfile),
-          provider_message_id: providerMessageId(payload),
-          ai_agent: aiConfig.persona,
-          ai_text: reply,
-          messageType: 'audioMessage',
-          mediaType: 'audio',
-          mediatype: 'audio',
-          mimetype: 'audio/mpeg',
-          fileName: 'aline-resposta.mp3',
-        });
-      } catch (audioErr) {
-        console.error('[lead_ai_agent] Failed sending CNPJ confirmation audio, falling back to text:', audioErr);
-        registerAiOutbound(lead.telefone || '', reply);
-        const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
-        await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
-          ...(payload || {}),
-          instance: aiInstanceName(adminProfile),
-          ai_agent: aiConfig.persona,
-        });
-      }
-    } else {
       registerAiOutbound(lead.telefone || '', reply);
       const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
       await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
@@ -1839,7 +1737,6 @@ export async function continueLeadAiFromIncoming(options: {
         instance: aiInstanceName(adminProfile),
         ai_agent: aiConfig.persona,
       });
-    }
 
     await supabaseAdmin
       .from('lead_ai_sessions')
@@ -1886,12 +1783,6 @@ export async function continueLeadAiFromIncoming(options: {
       reply: 'Consigo pedir para um especialista te passar os valores certinhos, porque isso depende da cotacao, da rede escolhida e dos dados do perfil. Vou chamar ele para te orientar melhor.',
       summary: appendSummaryLine(session.summary || leadFacts(lead), `IA encerrada: cliente pediu valores. Especialista deve assumir e apresentar a cotacao.`),
     };
-  } else if (isSensitivePersonalSituation(options.customerMessage)) {
-    ai = {
-      handoff: false,
-      reply: 'Sinto muito por isso. Espero que as coisas fiquem mais leves por ai. Se estiver tudo bem para voce, posso continuar a cotacao com calma?',
-      summary: appendSummaryLine(session.summary || leadFacts(lead), `Observacao sensivel do lead: ${options.customerMessage.trim()}`),
-    };
   } else {
     try {
       ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName, contactMode, contactIdentity.displayName);
@@ -1933,27 +1824,6 @@ export async function continueLeadAiFromIncoming(options: {
       return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
     }
 
-    if (options.incomingWasAudio) {
-      try {
-        registerAiOutbound(lead.telefone || '', '🎤 Mensagem de voz');
-        const payload = await sendAiAdminAudio(adminProfile, lead.telefone || '', part);
-        await insertMessage(options.conversationId, 'outbound', aiConfig.persona, 'Mensagem de voz', {
-          ...(payload || {}),
-          instance: aiInstanceName(adminProfile),
-          provider_message_id: providerMessageId(payload),
-          ai_agent: aiConfig.persona,
-          ai_text: part,
-          messageType: 'audioMessage',
-          mediaType: 'audio',
-          mediatype: 'audio',
-          mimetype: 'audio/mpeg',
-          fileName: 'aline-resposta.mp3',
-        });
-        continue;
-      } catch (audioErr) {
-        console.error('[lead_ai_agent] Failed sending audio reply, falling back to text:', audioErr);
-      }
-    }
 
     registerAiOutbound(lead.telefone || '', part);
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part);
