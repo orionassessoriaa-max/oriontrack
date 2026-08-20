@@ -25,6 +25,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
+# Scripts de manutencao rodam dentro do container: a VPS nao tem Node instalado,
+# e aqui ja existem node_modules e as variaveis de ambiente do stack.
+COPY --from=builder /app/scripts ./scripts
 
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1

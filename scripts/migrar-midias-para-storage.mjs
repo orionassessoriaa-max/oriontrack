@@ -17,10 +17,18 @@
  */
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.production') });
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+// Dentro do container as variaveis ja vem do stack; fora dele, le do arquivo.
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const dotenv = await import('dotenv');
+  dotenv.default.config({ path: path.resolve(process.cwd(), '.env.production') });
+  dotenv.default.config({ path: path.resolve(process.cwd(), '.env.local') });
+}
+
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('Faltam NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no ambiente.');
+  process.exit(1);
+}
 
 const BUCKET = 'inbox-media';
 const LOTE = 5;
