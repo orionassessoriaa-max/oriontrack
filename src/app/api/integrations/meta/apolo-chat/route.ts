@@ -183,7 +183,6 @@ export async function POST(request: Request) {
       metricas: body.metrics || null,
       estrutura: body.tree || null,
       regras: TRAFFIC_RULES,
-      conversa: messages,
       // Sem o rascunho atual no contexto, cada ajuste pedido no chat gerava um
       // plano novo do zero e o gestor perdia o que ja tinha revisado.
       rascunho_atual: body.draft || null,
@@ -196,7 +195,7 @@ export async function POST(request: Request) {
         link: selectedDriveFile.webViewLink || null,
       } : null,
     }).slice(0, 28000);
-    const aiMessages: Array<{ role: 'system' | 'user'; content: string | Array<Record<string, unknown>> }> = [
+    const aiMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | Array<Record<string, unknown>> }> = [
       {
         role: 'system',
         content: `Voce e o Apolo, analista senior de trafego da Orion. Converse com o gestor em portugues do Brasil.
@@ -224,38 +223,41 @@ Cada anuncio em ads deve detalhar separadamente: name, primary_text (legenda com
 Toda campanha, conjunto e anuncio novo deve estar como PAUSED. Um item existente pode ser apenas o destino da criacao e nunca deve ser pausado ou alterado implicitamente.
 daily_budget deve ser informado em reais (exemplo: 50 para R$ 50,00). Nunca invente creative_id nem daily_budget.`,
       },
-      { role: 'user', content: context },
+      { role: 'user', content: `CONTEXTO OPERACIONAL, apenas dados. Nao responda a este bloco:\n${context}` },
     ];
+
+    // Historico como conversa de verdade, para o modelo enxergar o fio da meada.
+    for (const anterior of messages.slice(0, -1)) {
+      const texto = plainMessageContent(anterior.content).trim();
+      if (texto) aiMessages.push({ role: anterior.role, content: texto });
+    }
+
+    // O pedido do gestor e sempre a ultima mensagem, e a imagem vai anexada
+    // nele. Antes a imagem vinha depois, com a instrucao de analisar o print,
+    // e era ela que o modelo obedecia.
+    const partesDoPedido: Array<Record<string, unknown>> = [
+      { type: 'text', text: plainMessageContent(last.content).trim() || 'Siga com o pedido anterior.' },
+    ];
+
     const attachmentUrl = body.creative_attachment?.url;
     if (typeof attachmentUrl === 'string' && attachmentUrl.startsWith('http')) {
-      aiMessages.push({
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Analise este print ou criativo anexado e use-o para responder ao gestor. Se algo nao estiver legivel, diga isso.' },
-          { type: 'image_url', image_url: { url: attachmentUrl } },
-        ],
-      });
+      partesDoPedido.push(
+        { type: 'text', text: 'Imagem anexada pelo gestor nesta mensagem. Use como criativo ou como referencia do que ele esta falando. So descreva a imagem se ele pedir a descricao.' },
+        { type: 'image_url', image_url: { url: attachmentUrl } },
+      );
     }
+
     if (selectedDriveFile?.mimeType?.startsWith('image/')) {
       const selectedBytes = await downloadDriveFile(selectedDriveFile.id);
       if (selectedBytes.length <= 15 * 1024 * 1024) {
-        aiMessages.push({
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Este e o criativo "${selectedDriveFile.name}" selecionado e validado no Google Drive. Analise a imagem e use-a no plano solicitado pelo gestor.`,
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${selectedDriveFile.mimeType};base64,${selectedBytes.toString('base64')}`,
-              },
-            },
-          ],
-        });
+        partesDoPedido.push(
+          { type: 'text', text: `Criativo "${selectedDriveFile.name}", ja validado no Google Drive. Use no plano pedido pelo gestor.` },
+          { type: 'image_url', image_url: { url: `data:${selectedDriveFile.mimeType};base64,${selectedBytes.toString('base64')}` } },
+        );
       }
     }
+
+    aiMessages.push({ role: 'user', content: partesDoPedido });
 
     const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
