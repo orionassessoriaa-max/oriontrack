@@ -208,7 +208,7 @@ type LeadRow = {
   responsavel_profile_id?: string | null;
 };
 
-type HandoffContactMode = 'same_whatsapp' | 'different_responsible' | 'unassigned';
+type HandoffContactMode = 'self_service' | 'same_whatsapp' | 'different_responsible' | 'unassigned';
 
 function sameBrokerage(value?: string | null) {
   return String(value || '').trim().toUpperCase() === AI_TEST_BROKERAGE;
@@ -266,7 +266,10 @@ function adName(lead: LeadRow) {
   return plain(lead.utm_content || lead.utm_term || lead.utm_campaign || lead.utm_medium || lead.utm_source);
 }
 
-function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow): HandoffContactMode {
+function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow, selfService = false): HandoffContactMode {
+  // A corretora que atende sozinha nao tem para quem repassar: a persona da IA
+  // e a propria dona, entao o encerramento e "vou montar seu estudo".
+  if (selfService) return 'self_service';
   if (!lead.responsavel_profile_id) return 'unassigned';
   if (adminProfile.ai_instance_name) return 'different_responsible';
   return lead.responsavel_profile_id === adminProfile.id
@@ -275,6 +278,14 @@ function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow): HandoffCon
 }
 
 function handoffContactRule(mode: HandoffContactMode) {
+  if (mode === 'self_service') {
+    return [
+      'Regra obrigatoria para o encerramento deste lead:',
+      '- Voce e a propria responsavel pelo atendimento. Nao existe outro especialista nem outra equipe.',
+      '- Ao terminar de coletar os dados, diga que vai montar o estudo com as opcoes e retornar aqui mesmo.',
+      '- Nunca diga que um especialista vai entrar em contato, nao fale em equipe e nao fale em outro numero.',
+    ].join('\n');
+  }
   if (mode === 'same_whatsapp') {
     return [
       'Regra obrigatoria para o encerramento deste lead:',
@@ -513,6 +524,9 @@ function isCallRefusal(text?: string | null, previousOutboundText?: string | nul
 }
 
 function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode) {
+  if (mode === 'self_service') {
+    return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Vou montar seu estudo com as opcoes e te retorno por aqui mesmo. Obrigada!`);
+  }
   if (mode === 'different_responsible') {
     return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Um especialista da nossa equipe vai entrar em contato por outro numero para enviar a cotacao e prosseguir com seu atendimento. Obrigada!`);
   }
@@ -673,6 +687,9 @@ function looksLikeScheduleAnswer(text?: string | null) {
 }
 
 function handoffScheduleReply(lead: LeadRow, mode: HandoffContactMode) {
+  if (mode === 'self_service') {
+    return polishAiReply(`Perfeito, ${leadFirstName(lead)}. Vou montar seu estudo e te confirmo por aqui. Obrigada pelo atendimento.`);
+  }
   if (mode === 'different_responsible') {
     return polishAiReply(`Perfeito, ${leadFirstName(lead)}. Um especialista vai entrar em contato por outro numero para confirmar esse agendamento. Obrigada pelo atendimento.`);
   }
@@ -699,7 +716,7 @@ async function finalizeScheduledHandoff(params: {
   const { session, lead, conversationId, adminProfile, aiConfig, customerMessage, incomingWasAudio } = params;
   let summary = appendSummaryLine(session.summary || leadFacts(lead), `*Agendado*: ${customerMessage.trim()}`);
   summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
-  const reply = handoffScheduleReply(lead, handoffContactMode(lead, adminProfile));
+  const reply = handoffScheduleReply(lead, handoffContactMode(lead, adminProfile, aiConfig?.atende_sozinho === true));
 
   if (incomingWasAudio) {
     try {
@@ -1517,7 +1534,9 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   const intro = fixPortugueseMojibake([
     `Olá, ${leadFirstName(lead)}! Tudo bem?`,
-    `Me chamo ${aiConfig.persona}, da ${formattedBrokerageName}.`,
+    aiConfig.atende_sozinho === true
+      ? `Aqui é a ${aiConfig.persona}.`
+      : `Me chamo ${aiConfig.persona}, da ${formattedBrokerageName}.`,
     interestText,
     initialLeadQuestion(lead),
   ].join('\n\n'));
@@ -1639,7 +1658,7 @@ export async function continueLeadAiFromIncoming(options: {
   if (aiConfig.sender_mode === 'dedicated') {
     adminProfile.ai_instance_name = aiConfig.dedicated_instance_name || uazapiAiInstanceName(corretora.id);
   }
-  const contactMode = handoffContactMode(lead, adminProfile);
+  const contactMode = handoffContactMode(lead, adminProfile, aiConfig?.atende_sozinho === true);
 
   const { data: recentHistory } = await supabaseAdmin
     .from('whatsapp_mensagens')
