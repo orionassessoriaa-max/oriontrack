@@ -10,10 +10,16 @@ import {
   CheckCircle2,
   CircleDashed,
   Clock3,
+  ExternalLink,
+  FileImage,
+  Filter,
   LayoutDashboard,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
+  Save,
+  Trash2,
   UserRound,
   UsersRound,
   X,
@@ -34,11 +40,15 @@ type Member = {
 type ApolloTask = {
   id: string;
   titulo: string;
+  descricao: string;
   prazo: string;
   status: TaskStatus;
   prioridade: TaskPriority;
   responsavel_profile_id: string;
   criado_por_profile_id: string;
+  anexo_path: string | null;
+  anexo_nome: string | null;
+  anexo_url: string | null;
   concluida_em: string | null;
   created_at: string;
   updated_at: string;
@@ -119,6 +129,12 @@ function deadlineLabel(value: string) {
   }).format(new Date(value));
 }
 
+function deadlineInputValue(value: string) {
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
 function deadlineState(task: ApolloTask) {
   if (task.status === 'feito') return { label: 'Concluida', className: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20' };
   const deadline = new Date(task.prazo).getTime();
@@ -141,20 +157,28 @@ export default function ApolloTasksPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<ApolloTask | null>(null);
+  const [deleteTask, setDeleteTask] = useState<ApolloTask | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [titulo, setTitulo] = useState('');
+  const [descricao, setDescricao] = useState('');
   const [prazo, setPrazo] = useState(defaultDeadline);
   const [prioridade, setPrioridade] = useState<TaskPriority>('normal');
   const [assigneeId, setAssigneeId] = useState('');
+  const [assigneeFilter, setAssigneeFilter] = useState('all');
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [removeAttachment, setRemoveAttachment] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const apiRequest = useCallback(async (url: string, init?: RequestInit) => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) throw new Error('Sessao expirada. Entre novamente.');
+    const formDataRequest = init?.body instanceof FormData;
     const response = await fetch(url, {
       ...init,
       headers: {
-        'Content-Type': 'application/json',
+        ...(!formDataRequest ? { 'Content-Type': 'application/json' } : {}),
         Authorization: `Bearer ${token}`,
         ...(init?.headers || {}),
       },
@@ -184,46 +208,122 @@ export default function ApolloTasksPage() {
   }, [apiRequest]);
 
   useEffect(() => {
-    void loadTasks('mine');
+    const frame = window.requestAnimationFrame(() => void loadTasks('mine'));
+    return () => window.cancelAnimationFrame(frame);
   }, [loadTasks]);
 
   const tasksByStatus = useMemo(() => {
     return columns.reduce<Record<TaskStatus, ApolloTask[]>>((result, column) => {
       result[column.status] = tasks
-        .filter((task) => task.status === column.status)
+        .filter((task) => task.status === column.status
+          && (assigneeFilter === 'all' || task.responsavel_profile_id === assigneeFilter))
         .sort((a, b) => {
           const priorityDifference = priorityWeight[b.prioridade || 'normal'] - priorityWeight[a.prioridade || 'normal'];
           return priorityDifference || new Date(a.prazo).getTime() - new Date(b.prazo).getTime();
         });
       return result;
     }, { a_fazer: [], fazendo: [], feito: [] });
-  }, [tasks]);
+  }, [assigneeFilter, tasks]);
 
-  async function createTask(event: React.FormEvent) {
+  function closeTaskModal() {
+    setModalOpen(false);
+    setEditingTask(null);
+    setAttachment(null);
+    setRemoveAttachment(false);
+  }
+
+  function openCreateTask() {
+    setEditingTask(null);
+    setTitulo('');
+    setDescricao('');
+    setPrazo(defaultDeadline());
+    setPrioridade('normal');
+    setAssigneeId(currentProfileId);
+    setAttachment(null);
+    setRemoveAttachment(false);
+    setModalOpen(true);
+  }
+
+  function openEditTask(task: ApolloTask) {
+    setEditingTask(task);
+    setTitulo(task.titulo);
+    setDescricao(task.descricao || '');
+    setPrazo(deadlineInputValue(task.prazo));
+    setPrioridade(task.prioridade || 'normal');
+    setAssigneeId(task.responsavel_profile_id);
+    setAttachment(null);
+    setRemoveAttachment(false);
+    setModalOpen(true);
+  }
+
+  async function uploadTaskAttachment(taskId: string, file: File) {
+    const form = new FormData();
+    form.set('task_id', taskId);
+    form.set('file', file);
+    await apiRequest('/api/equipe/apollo/tasks/attachment', { method: 'POST', body: form });
+  }
+
+  async function saveTask(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
     setError('');
     try {
-      await apiRequest('/api/equipe/apollo/tasks', {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'create',
-          titulo,
-          prazo: new Date(prazo).toISOString(),
-          prioridade,
-          responsavel_profile_id: canManageAll ? assigneeId : currentProfileId,
-        }),
-      });
-      setTitulo('');
-      setPrazo(defaultDeadline());
-      setPrioridade('normal');
-      setAssigneeId(currentProfileId);
-      setModalOpen(false);
+      const payload = editingTask
+        ? await apiRequest('/api/equipe/apollo/tasks', {
+            method: 'PATCH',
+            body: JSON.stringify({
+              task_id: editingTask.id,
+              titulo,
+              descricao,
+              prazo: new Date(prazo).toISOString(),
+              prioridade,
+              responsavel_profile_id: assigneeId,
+              remove_attachment: removeAttachment && !attachment,
+            }),
+          })
+        : await apiRequest('/api/equipe/apollo/tasks', {
+            method: 'POST',
+            body: JSON.stringify({
+              action: 'create',
+              titulo,
+              descricao,
+              prazo: new Date(prazo).toISOString(),
+              prioridade,
+              responsavel_profile_id: canManageAll ? assigneeId : currentProfileId,
+            }),
+          });
+      const taskId = editingTask?.id || String(payload.task?.id || '');
+      if (attachment && taskId) {
+        try {
+          await uploadTaskAttachment(taskId, attachment);
+        } catch (uploadError) {
+          if (!editingTask) {
+            await apiRequest(`/api/equipe/apollo/tasks?task_id=${encodeURIComponent(taskId)}`, { method: 'DELETE' }).catch(() => undefined);
+          }
+          throw uploadError;
+        }
+      }
+      closeTaskModal();
       await loadTasks(view);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Nao foi possivel criar a tarefa.');
+      setError(cause instanceof Error ? cause.message : 'Nao foi possivel salvar a tarefa.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function confirmDeleteTask() {
+    if (!deleteTask) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await apiRequest(`/api/equipe/apollo/tasks?task_id=${encodeURIComponent(deleteTask.id)}`, { method: 'DELETE' });
+      setTasks((current) => current.filter((task) => task.id !== deleteTask.id));
+      setDeleteTask(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Nao foi possivel excluir a tarefa.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -243,6 +343,7 @@ export default function ApolloTasksPage() {
 
   function switchView(nextView: 'mine' | 'all') {
     if (nextView === view) return;
+    if (nextView === 'mine') setAssigneeFilter('all');
     setView(nextView);
     void loadTasks(nextView);
   }
@@ -283,6 +384,23 @@ export default function ApolloTasksPage() {
                   </button>
                 </div>
               )}
+              {canManageAll && view === 'all' && (
+                <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/80 px-3 text-slate-400 focus-within:border-cyan-500">
+                  <Filter size={15} className="shrink-0 text-cyan-400" />
+                  <span className="sr-only">Filtrar por responsavel Apollo</span>
+                  <select
+                    value={assigneeFilter}
+                    onChange={(event) => setAssigneeFilter(event.target.value)}
+                    className="min-w-40 bg-transparent text-xs font-bold text-slate-200 outline-none"
+                    aria-label="Filtrar por responsavel Apollo"
+                  >
+                    <option value="all">Todos os responsaveis</option>
+                    {members.map((member) => (
+                      <option key={member.id} value={member.id}>{displayName(member)}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <button
                 type="button"
                 onClick={() => void loadTasks(view)}
@@ -293,10 +411,7 @@ export default function ApolloTasksPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setAssigneeId(currentProfileId);
-                  setModalOpen(true);
-                }}
+                onClick={openCreateTask}
                 className="flex h-11 items-center gap-2 rounded-xl bg-cyan-500 px-5 text-sm font-black text-slate-950 shadow-[0_0_30px_rgba(6,182,212,0.18)] transition hover:bg-cyan-300"
               >
                 <Plus size={18} /> Nova tarefa
@@ -373,6 +488,27 @@ export default function ApolloTasksPage() {
                                 </div>
                               </div>
 
+                              {task.descricao && (
+                                <p className="mb-3 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-slate-400" title={task.descricao}>
+                                  {task.descricao}
+                                </p>
+                              )}
+
+                              {task.anexo_url && (
+                                <a
+                                  href={task.anexo_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mb-3 flex min-h-11 items-center justify-between gap-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs font-bold text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/10"
+                                >
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <FileImage size={16} className="shrink-0" />
+                                    <span className="truncate">{task.anexo_nome || 'Print da tarefa'}</span>
+                                  </span>
+                                  <ExternalLink size={14} className="shrink-0" />
+                                </a>
+                              )}
+
                               <div className="space-y-2 border-t border-slate-800 pt-3 text-xs">
                                 <div className="flex items-center gap-2 text-slate-300">
                                   <CalendarClock size={14} className="text-cyan-400" />
@@ -387,12 +523,31 @@ export default function ApolloTasksPage() {
                                 )}
                               </div>
 
+                              {canManageAll && (
+                                <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-800 pt-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditTask(task)}
+                                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 text-[10px] font-black uppercase tracking-wider text-slate-300 transition hover:border-cyan-500 hover:text-cyan-300"
+                                  >
+                                    <Pencil size={14} /> Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteTask(task)}
+                                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-rose-500/25 text-[10px] font-black uppercase tracking-wider text-rose-300 transition hover:border-rose-400 hover:bg-rose-500/10"
+                                  >
+                                    <Trash2 size={14} /> Excluir
+                                  </button>
+                                </div>
+                              )}
+
                               <div className="mt-4 flex items-center justify-between gap-2">
                                 <button
                                   type="button"
                                   disabled={index === 0}
                                   onClick={() => index > 0 && void moveTask(task.id, columns[index - 1].status)}
-                                  className="flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400 transition hover:border-cyan-500 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-20"
+                                  className="flex min-h-11 items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400 transition hover:border-cyan-500 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-20"
                                 >
                                   <ArrowLeft size={13} /> Voltar
                                 </button>
@@ -400,7 +555,7 @@ export default function ApolloTasksPage() {
                                   type="button"
                                   disabled={index === columns.length - 1}
                                   onClick={() => index < columns.length - 1 && void moveTask(task.id, columns[index + 1].status)}
-                                  className="flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-2 text-[10px] font-black uppercase tracking-wider text-slate-300 transition hover:border-cyan-500 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-20"
+                                  className="flex min-h-11 items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-2 text-[10px] font-black uppercase tracking-wider text-slate-300 transition hover:border-cyan-500 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-20"
                                 >
                                   Avancar <ArrowRight size={13} />
                                 </button>
@@ -427,17 +582,19 @@ export default function ApolloTasksPage() {
         </div>
 
         {modalOpen && (
-          <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && setModalOpen(false)}>
-            <form onSubmit={createTask} className="w-full max-w-lg rounded-2xl border border-slate-700 bg-[#081522] p-6 shadow-2xl sm:p-7">
+          <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && closeTaskModal()}>
+            <form onSubmit={saveTask} className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-700 bg-[#081522] p-6 shadow-2xl sm:p-7" aria-labelledby="apollo-task-modal-title">
               <div className="mb-6 flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-400">Nova entrega</p>
-                  <h2 className="mt-2 text-2xl font-black">Criar tarefa</h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-400">{editingTask ? 'Gestao da entrega' : 'Nova entrega'}</p>
+                  <h2 id="apollo-task-modal-title" className="mt-2 text-2xl font-black">{editingTask ? 'Editar tarefa' : 'Criar tarefa'}</h2>
                   <p className="mt-2 text-xs text-slate-400">
-                    {canManageAll ? 'Defina o responsavel e o prazo da entrega.' : `A tarefa sera criada para ${displayName(currentMember)}.`}
+                    {editingTask
+                      ? 'Atualize os detalhes, o responsavel e o print da entrega.'
+                      : canManageAll ? 'Defina o responsavel, os detalhes e o prazo da entrega.' : `A tarefa sera criada para ${displayName(currentMember)}.`}
                   </p>
                 </div>
-                <button type="button" onClick={() => setModalOpen(false)} className="grid h-9 w-9 place-items-center rounded-lg border border-slate-700 text-slate-400 hover:text-white" aria-label="Fechar">
+                <button type="button" onClick={closeTaskModal} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 hover:text-white" aria-label="Fechar">
                   <X size={17} />
                 </button>
               </div>
@@ -454,6 +611,19 @@ export default function ApolloTasksPage() {
                     placeholder="Ex: Revisar relatorio da concessionaria"
                     className="h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 text-sm font-semibold outline-none transition placeholder:text-slate-700 focus:border-cyan-500"
                   />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Descricao</span>
+                  <textarea
+                    value={descricao}
+                    onChange={(event) => setDescricao(event.target.value)}
+                    maxLength={4000}
+                    rows={5}
+                    placeholder="Detalhe o que precisa ser feito, criterios e links importantes."
+                    className="w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold leading-6 outline-none transition placeholder:text-slate-700 focus:border-cyan-500"
+                  />
+                  <span className="mt-2 block text-right text-[10px] text-slate-600">{descricao.length}/4000</span>
                 </label>
 
                 <label className="block">
@@ -483,19 +653,47 @@ export default function ApolloTasksPage() {
                 </label>
 
                 {canManageAll && (
-                  <label className="block">
-                    <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Responsavel</span>
-                    <select
-                      value={assigneeId}
-                      onChange={(event) => setAssigneeId(event.target.value)}
-                      required
-                      className="h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 text-sm font-semibold text-white outline-none transition focus:border-cyan-500"
-                    >
-                      {members.map((member) => (
-                        <option key={member.id} value={member.id}>{displayName(member)}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <>
+                    <label className="block">
+                      <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Responsavel Apollo</span>
+                      <select
+                        value={assigneeId}
+                        onChange={(event) => setAssigneeId(event.target.value)}
+                        required
+                        className="h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 text-sm font-semibold text-white outline-none transition focus:border-cyan-500"
+                      >
+                        {members.map((member) => (
+                          <option key={member.id} value={member.id}>{displayName(member)}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Print da tarefa</span>
+                      <span className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-slate-600 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-400 transition hover:border-cyan-500 hover:text-cyan-200">
+                        <FileImage size={18} className="shrink-0 text-cyan-400" />
+                        <span className="truncate">{attachment?.name || 'Selecionar imagem de ate 8 MB'}</span>
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => setAttachment(event.target.files?.[0] || null)}
+                        className="sr-only"
+                      />
+                    </label>
+
+                    {editingTask?.anexo_path && !attachment && (
+                      <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-xs font-bold text-rose-200">
+                        <input
+                          type="checkbox"
+                          checked={removeAttachment}
+                          onChange={(event) => setRemoveAttachment(event.target.checked)}
+                          className="h-4 w-4 accent-rose-500"
+                        />
+                        Remover o print atual ao salvar
+                      </label>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -504,10 +702,46 @@ export default function ApolloTasksPage() {
                 disabled={saving || !titulo.trim() || !prazo}
                 className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 text-sm font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
-                Criar tarefa
+                {saving ? <Loader2 size={17} className="animate-spin" /> : editingTask ? <Save size={17} /> : <Plus size={17} />}
+                {saving ? 'Salvando...' : editingTask ? 'Salvar alteracoes' : 'Criar tarefa'}
               </button>
             </form>
+          </div>
+        )}
+
+        {deleteTask && (
+          <div
+            className="fixed inset-0 z-[130] grid place-items-center bg-slate-950/85 p-4 backdrop-blur-sm"
+            onMouseDown={(event) => event.target === event.currentTarget && !deleting && setDeleteTask(null)}
+          >
+            <div role="alertdialog" aria-modal="true" aria-labelledby="delete-task-title" className="w-full max-w-md rounded-2xl border border-rose-500/30 bg-[#0b1622] p-6 shadow-2xl sm:p-7">
+              <div className="grid h-12 w-12 place-items-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300">
+                <Trash2 size={21} />
+              </div>
+              <h2 id="delete-task-title" className="mt-5 text-xl font-black">Excluir tarefa?</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-400">
+                A tarefa <strong className="text-slate-200">{deleteTask.titulo}</strong> e seu print serao removidos definitivamente.
+              </p>
+              <div className="mt-7 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTask(null)}
+                  disabled={deleting}
+                  className="min-h-11 rounded-xl border border-slate-700 text-sm font-black text-slate-300 transition hover:border-slate-500 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmDeleteTask()}
+                  disabled={deleting}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rose-500 text-sm font-black text-white transition hover:bg-rose-400 disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  {deleting ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </main>
