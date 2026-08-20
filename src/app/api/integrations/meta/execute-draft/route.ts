@@ -501,11 +501,14 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const accountId = normalizeAccountId(body.account_id);
     const level = String(body.level || '');
+    // O mesmo endpoint liga e desliga. Sem status no corpo assume ACTIVE, que
+    // era o comportamento anterior.
+    const status = String(body.status || 'ACTIVE').toUpperCase() === 'PAUSED' ? 'PAUSED' : 'ACTIVE';
     if (!accountId || !body.confirmar || !body.object_id || !['campaign', 'adset', 'ad'].includes(level)) return NextResponse.json({ error: 'Dados de ativacao incompletos.' }, { status: 400 });
     const account = await allowedAccount(access.profile, accountId, body.equipe ? String(body.equipe) : null, body.gestor_id ? String(body.gestor_id) : null);
     if (!account) return NextResponse.json({ error: 'Conta fora do escopo deste gestor.' }, { status: 403 });
-    await graphPost(String(body.object_id), { status: 'ACTIVE' }, 'a ativacao solicitada');
-    return NextResponse.json({ success: true, object_id: String(body.object_id), level, status: 'ACTIVE' });
+    await graphPost(String(body.object_id), { status }, status === 'PAUSED' ? 'a pausa solicitada' : 'a ativacao solicitada');
+    return NextResponse.json({ success: true, object_id: String(body.object_id), level, status });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel ativar o item na Meta.' }, { status: 502 });
   }

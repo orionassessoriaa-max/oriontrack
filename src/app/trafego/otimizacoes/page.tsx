@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { ArrowLeft, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, ExternalLink, FileImage, FilePlus2, FileVideo2, Folder, HardDrive, Layers3, Loader2, Maximize2, Megaphone, Pencil, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
+import { ArrowLeft, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, ExternalLink, FileImage, FilePlus2, FileVideo2, Folder, HardDrive, Layers3, Loader2, Maximize2, Megaphone, Pause, Pencil, Play, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
 import { TRAFFIC_RULES, formatBRL, formatPercent } from '@/lib/trafego/rules';
 import { normalizeOptimizationDraft, type NormalizedOptimizationDraft } from '@/lib/trafego/optimizationDraft';
 
@@ -125,6 +125,8 @@ export default function OtimizacoesPage() {
   const [selected, setSelected] = useState<AccountOption | null>(null);
   const [total, setTotal] = useState<Metrics | null>(null);
   const [tree, setTree] = useState<CampaignNode[]>([]);
+  const [statusBusy, setStatusBusy] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [dateStart, setDateStart] = useState(daysAgo(30));
   const [dateEnd, setDateEnd] = useState(todayLocal());
@@ -610,6 +612,66 @@ export default function OtimizacoesPage() {
     }
   }
 
+  /**
+   * Liga e desliga campanha, conjunto ou anuncio direto na tabela. A Meta so
+   * aceita ACTIVE ou PAUSED, e a confirmacao existe porque pausar campanha
+   * ativa e decisao com custo.
+   */
+  async function toggleMetaStatus(level: 'campaign' | 'adset' | 'ad', objectId: string, statusAtual?: string) {
+    if (!selected?.meta_ad_account_id) return;
+    const ativo = String(statusAtual || '').toUpperCase() === 'ACTIVE';
+    const proximo = ativo ? 'PAUSED' : 'ACTIVE';
+    const rotulo = level === 'campaign' ? 'a campanha' : level === 'adset' ? 'o conjunto' : 'o anuncio';
+    if (!window.confirm(`${ativo ? 'Pausar' : 'Ativar'} ${rotulo} na Meta agora?`)) return;
+
+    const contextAccountId = accountKey(selected);
+    setStatusBusy(objectId);
+    setStatusError(null);
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setStatusError('Sessao expirada.');
+      setStatusBusy(null);
+      return;
+    }
+    const response = await fetch('/api/integrations/meta/execute-draft', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        account_id: selected.meta_ad_account_id,
+        object_id: objectId,
+        level,
+        status: proximo,
+        confirmar: true,
+        equipe: selectedOperationalTeam(),
+        gestor_id: gestorIdParam,
+      }),
+    });
+    const payload = await response.json();
+    if (accountContextRef.current !== contextAccountId) return;
+    setStatusBusy(null);
+    if (!response.ok) {
+      setStatusError(payload.error || 'Nao foi possivel alterar o status na Meta.');
+      return;
+    }
+    // Atualiza so o item mexido, sem recarregar a conta inteira.
+    setTree((atual) => atual.map((campanha) => {
+      if (level === 'campaign' && campanha.id === objectId) return { ...campanha, status: proximo, effective_status: proximo };
+      return {
+        ...campanha,
+        adsets: campanha.adsets.map((conjunto) => {
+          if (level === 'adset' && conjunto.id === objectId) return { ...conjunto, status: proximo, effective_status: proximo };
+          return {
+            ...conjunto,
+            ads: conjunto.ads.map((anuncio) => (level === 'ad' && anuncio.id === objectId
+              ? { ...anuncio, status: proximo, effective_status: proximo }
+              : anuncio)),
+          };
+        }),
+      };
+    }));
+  }
+
   async function activateDraftItem(item: DraftExecutionItem) {
     if (!selected?.meta_ad_account_id || item.status === 'ACTIVE') return;
     const contextAccountId = accountKey(selected);
@@ -760,6 +822,19 @@ export default function OtimizacoesPage() {
               </div>
             ) : null}
 
+            {statusError ? (
+              <div
+                className="mb-4 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm"
+                style={{ background: 'var(--tf-crit-soft)', borderColor: 'var(--tf-crit-border)', color: 'var(--tf-crit)' }}
+              >
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <span className="flex-1">{statusError}</span>
+                <button type="button" onClick={() => setStatusError(null)} className="tf-no-lift shrink-0 font-bold">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : null}
+
             {loading ? (
               <div className="grid h-[480px] place-items-center">
                 <Loader2 className="animate-spin" size={34} style={{ color: 'var(--tf-accent)' }} />
@@ -834,13 +909,14 @@ export default function OtimizacoesPage() {
                           <th className="px-3 py-3 text-right">CPC</th>
                           <th className="px-3 py-3 text-right">CPM</th>
                           <th className="px-3 py-3 text-right">CTR</th>
-                          <th className="px-3 py-3 pr-5 text-right">Freq.</th>
+                          <th className="px-3 py-3 text-right">Freq.</th>
+                          <th className="px-3 py-3 pr-5 text-right">Ação</th>
                         </tr>
                       </thead>
                       <tbody>
                         {tree.length === 0 ? (
                           <tr>
-                            <td colSpan={10} className="px-5 py-10 text-center text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
+                            <td colSpan={11} className="px-5 py-10 text-center text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
                               Nenhuma campanha com entrega no período.
                             </td>
                           </tr>
@@ -855,6 +931,8 @@ export default function OtimizacoesPage() {
                             setExpandedAdsets={setExpandedAdsets}
                             setExpandedAds={setExpandedAds}
                             onOpenCreative={setFullscreenCreative}
+                            onToggleStatus={toggleMetaStatus}
+                            statusBusy={statusBusy}
                           />
                         ))}
                       </tbody>
@@ -1693,6 +1771,8 @@ function CampaignRows({
   setExpandedAdsets,
   setExpandedAds,
   onOpenCreative,
+  onToggleStatus,
+  statusBusy,
 }: {
   campaign: CampaignNode;
   expandedCampaigns: Record<string, boolean>;
@@ -1702,6 +1782,8 @@ function CampaignRows({
   setExpandedAdsets: (value: Record<string, boolean> | ((current: Record<string, boolean>) => Record<string, boolean>)) => void;
   setExpandedAds: (value: Record<string, boolean> | ((current: Record<string, boolean>) => Record<string, boolean>)) => void;
   onOpenCreative: (ad: AdNode) => void;
+  onToggleStatus: (level: 'campaign' | 'adset' | 'ad', objectId: string, statusAtual?: string) => void;
+  statusBusy: string | null;
 }) {
   const campaignOpen = Boolean(expandedCampaigns[campaign.id]);
   return (
@@ -1717,6 +1799,8 @@ function CampaignRows({
         open={campaignOpen}
         hasChildren={campaign.adsets.length > 0}
         onToggle={() => setExpandedCampaigns((current) => ({ ...current, [campaign.id]: !current[campaign.id] }))}
+        onToggleStatus={() => onToggleStatus('campaign', campaign.id, campaign.effective_status || campaign.status)}
+        busy={statusBusy === campaign.id}
       />
       {campaignOpen && campaign.adsets.map((adset) => {
         const adsetOpen = Boolean(expandedAdsets[adset.id]);
@@ -1734,6 +1818,8 @@ function CampaignRows({
               open={adsetOpen}
               hasChildren={adset.ads.length > 0}
               onToggle={() => setExpandedAdsets((current) => ({ ...current, [adset.id]: !current[adset.id] }))}
+              onToggleStatus={() => onToggleStatus('adset', adset.id, adset.effective_status || adset.status)}
+              busy={statusBusy === adset.id}
             />
             {adsetOpen && adset.ads.map((ad) => {
               const adOpen = Boolean(expandedAds[ad.id]);
@@ -1752,6 +1838,8 @@ function CampaignRows({
                     open={adOpen}
                     hasChildren={hasPreview}
                     onToggle={() => setExpandedAds((current) => ({ ...current, [ad.id]: !current[ad.id] }))}
+                    onToggleStatus={() => onToggleStatus('ad', ad.id, ad.effective_status || ad.status)}
+                    busy={statusBusy === ad.id}
                   />
                   {adOpen && hasPreview ? <CreativeRow ad={ad} onOpenCreative={onOpenCreative} /> : null}
                 </Fragment>
@@ -1764,7 +1852,7 @@ function CampaignRows({
   );
 }
 
-function MetricRow({ name, level, status, metrics, budgetType, budgetAmount, budgetPeriod, indent = '', open = false, hasChildren = false, onToggle }: {
+function MetricRow({ name, level, status, metrics, budgetType, budgetAmount, budgetPeriod, indent = '', open = false, hasChildren = false, onToggle, onToggleStatus, busy = false }: {
   name: string;
   level: string;
   status?: string;
@@ -1776,7 +1864,10 @@ function MetricRow({ name, level, status, metrics, budgetType, budgetAmount, bud
   open?: boolean;
   hasChildren?: boolean;
   onToggle?: () => void;
+  onToggleStatus?: () => void;
+  busy?: boolean;
 }) {
+  const ativo = String(status || '').toUpperCase() === 'ACTIVE';
   return (
     <tr className="border-t" style={{ borderColor: 'var(--tf-border)' }}>
       <td className={`max-w-[420px] py-3 pr-4 ${indent || 'pl-5'}`}>
@@ -1826,7 +1917,26 @@ function MetricRow({ name, level, status, metrics, budgetType, budgetAmount, bud
       <DataCell value={formatBRL(metrics.cpc, metrics.currency)} alert={Number(metrics.cpc || 0) > TRAFFIC_RULES.cpcMax} />
       <DataCell value={formatBRL(metrics.cpm, metrics.currency)} />
       <DataCell value={formatPercent(metrics.ctr)} alert={Number(metrics.ctr || 0) < TRAFFIC_RULES.ctrMin} />
-      <DataCell value={Number(metrics.frequency || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} last />
+      <DataCell value={Number(metrics.frequency || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} />
+      <td className="px-3 py-3 pr-5 text-right">
+        {onToggleStatus ? (
+          <button
+            type="button"
+            onClick={onToggleStatus}
+            disabled={busy}
+            title={ativo ? `Pausar ${level.toLowerCase()} na Meta` : `Ativar ${level.toLowerCase()} na Meta`}
+            className="tf-no-lift inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              background: ativo ? 'var(--tf-warn-soft)' : 'var(--tf-accent-soft)',
+              borderColor: ativo ? 'var(--tf-warn-border)' : 'var(--tf-accent-border)',
+              color: ativo ? 'var(--tf-warn)' : 'var(--tf-accent-ink)',
+            }}
+          >
+            {busy ? <Loader2 className="animate-spin" size={13} /> : ativo ? <Pause size={13} /> : <Play size={13} />}
+            {busy ? '...' : ativo ? 'Pausar' : 'Ativar'}
+          </button>
+        ) : null}
+      </td>
     </tr>
   );
 }
@@ -1836,7 +1946,7 @@ function CreativeRow({ ad, onOpenCreative }: { ad: AdNode; onOpenCreative: (ad: 
   const previewImage = bestCreativeImage(creative);
   return (
     <tr style={{ background: 'var(--tf-surface-2)' }}>
-      <td colSpan={10} className="px-5 py-4">
+      <td colSpan={11} className="px-5 py-4">
         <div className="grid gap-4 border-l-2 pl-4 sm:grid-cols-[130px_1fr]" style={{ borderColor: 'var(--tf-accent-border)' }}>
           {previewImage ? (
             <div className="relative h-24 w-32 overflow-hidden rounded-lg border" style={{ borderColor: 'var(--tf-border)' }}>
