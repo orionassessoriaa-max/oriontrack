@@ -38,7 +38,7 @@ type CommercialLeadRow = {
 // Espaco entre os baloes da rajada de abertura. Tres mensagens colando uma na
 // outra no mesmo segundo entregam automacao na hora.
 const BURST_GAP_MS = 1_500;
-const MAX_QUESTIONS = 4;
+const MAX_QUESTIONS = 7;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
