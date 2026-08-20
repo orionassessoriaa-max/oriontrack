@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const BUCKET = 'trafego-draft-creatives';
+// Imagem serve para analise e para anuncio. Video quase sempre estoura 30 MB,
+// que era o limite unico anterior e travava o criativo em video.
+const IMAGE_LIMIT_BYTES = 30 * 1024 * 1024;
+const VIDEO_LIMIT_BYTES = 100 * 1024 * 1024;
 
 function safeFileName(name: string) {
   return name
@@ -35,11 +39,23 @@ export async function POST(request: Request) {
   if (!/^image\/(jpeg|png|webp|gif)|^video\/(mp4|quicktime|webm)$/.test(file.type)) {
     return NextResponse.json({ error: 'Use uma imagem ou video compativel.' }, { status: 400 });
   }
-  if (file.size > 30 * 1024 * 1024) return NextResponse.json({ error: 'O arquivo deve ter no maximo 30 MB.' }, { status: 400 });
+  const isVideo = file.type.startsWith('video/');
+  const limit = isVideo ? VIDEO_LIMIT_BYTES : IMAGE_LIMIT_BYTES;
+  if (file.size > limit) {
+    return NextResponse.json({ error: `O arquivo deve ter no maximo ${Math.round(limit / (1024 * 1024))} MB.` }, { status: 400 });
+  }
 
   const { data: buckets } = await supabaseAdmin.storage.listBuckets();
   if (!buckets?.some((bucket) => bucket.name === BUCKET)) {
-    await supabaseAdmin.storage.createBucket(BUCKET, { public: true, fileSizeLimit: 30 * 1024 * 1024 });
+    await supabaseAdmin.storage.createBucket(BUCKET, { public: true, fileSizeLimit: VIDEO_LIMIT_BYTES });
+  } else if (isVideo) {
+    // O bucket antigo nasceu com teto de 30 MB. Sem subir esse teto o video
+    // e recusado pelo proprio Storage antes de chegar na Meta.
+    try {
+      await supabaseAdmin.storage.updateBucket(BUCKET, { public: true, fileSizeLimit: VIDEO_LIMIT_BYTES });
+    } catch {
+      // Projeto com limite global menor: o proprio upload abaixo devolve o erro.
+    }
   }
 
   const path = `${user.id}/${Date.now()}-${safeFileName(file.name)}`;

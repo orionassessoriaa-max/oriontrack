@@ -75,6 +75,15 @@ function requestsAdInExistingDestination(messages: ChatMessage[]) {
   return asksForAd && mentionsExistingDestination;
 }
 
+/**
+ * Um anexo so vira criativo publicavel quando o gestor esta pedindo anuncio.
+ * Print de metrica anexado para analise nunca pode virar arquivo de anuncio.
+ */
+function requestsAdCreation(messages: ChatMessage[]) {
+  return /(?:criar|subir|sobe|publicar|adicionar|colocar|lancar).{0,60}(?:anuncio|anúncio|criativo|video|vídeo|campanha|conjunto)/i
+    .test(recentUserRequest(messages));
+}
+
 function hasExistingDestination(draft: any) {
   if (!draft?.campaign?.existing_id) return false;
   return Array.isArray(draft.adsets) && draft.adsets.some((adset: any) => adset?.existing_id || adset?.adset_id);
@@ -175,6 +184,9 @@ export async function POST(request: Request) {
       estrutura: body.tree || null,
       regras: TRAFFIC_RULES,
       conversa: messages,
+      // Sem o rascunho atual no contexto, cada ajuste pedido no chat gerava um
+      // plano novo do zero e o gestor perdia o que ja tinha revisado.
+      rascunho_atual: body.draft || null,
       anexo: body.creative_attachment || null,
       criativo_drive_selecionado: selectedDriveFile ? {
         id: selectedDriveFile.id,
@@ -201,7 +213,10 @@ O Google Drive esta disponivel para buscar arquivos quando estiver configurado n
 Quando "criativo_drive_selecionado" estiver preenchido, o arquivo ja foi validado pelo servidor. Use obrigatoriamente esse criativo no plano solicitado e nunca diga que falta uma imagem ou referencia.
 Quando o gestor ja tiver pedido para criar ou subir um anuncio, nunca pergunte novamente qual acao ele deseja realizar. Se o criativo estiver selecionado e faltar o destino, pergunte somente o nome exato da campanha e do conjunto. Nao crie campanha ou conjunto novo para completar essa informacao.
 O gestor tambem pode pedir a criacao de uma ou varias pastas/lotes de criativos. Quando houver dados suficientes, liste cada pedido em creative_requests com operadora, regiao, quantidade e briefing. Quantidade padrao 4 e maxima 20. Nao gere nem publique ainda: a interface perguntara se ele possui um modelo de referencia.
-Responda sempre em JSON valido neste formato: {"reply":"resposta curta e clara","draft":null,"creative_requests":[]}.
+Quando "rascunho_atual" vier preenchido e o gestor pedir um ajuste (verba, publico, texto, nome, criativo), devolva o MESMO plano com a alteracao aplicada, preservando ids existentes e o que nao foi questionado. So monte um plano do zero quando ele pedir algo novo.
+Quando "anexo" vier preenchido e o gestor estiver pedindo para subir anuncio, esse arquivo e o criativo do anuncio: nao peca outro arquivo nem diga que falta criativo. Anexo de video nao pode ser assistido por voce, entao descreva o plano sem inventar o conteudo visual.
+Preencha "sugestoes" com ate tres proximos passos curtos, em primeira pessoa do gestor, prontos para virar clique. Ex.: "Aumentar a verba para R$ 80/dia", "Duplicar o conjunto para Curitiba". Nunca sugira ativar campanha.
+Responda sempre em JSON valido neste formato: {"reply":"resposta curta e clara","draft":null,"creative_requests":[],"sugestoes":[]}.
 Quando o gestor pedir uma acao concreta, preencha draft com campaign, adsets, ads, actions, missing_info e human_review_checklist.
 campaign deve ser sempre um objeto, nunca texto: {"name":"...","objective":"...","buying_type":"AUCTION","special_ad_categories":[],"status":"PAUSED"}.
 adsets e ads devem ser arrays de objetos separados. Nunca coloque ads dentro do conjunto nem transforme um anuncio inteiro em texto.
@@ -280,6 +295,26 @@ daily_budget deve ser informado em reais (exemplo: 50 para R$ 50,00). Nunca inve
       parsed.reply = `Entendi: criar um anuncio pausado usando o criativo "${selectedDriveFile.name}" em uma estrutura existente. Informe o nome exato da campanha e do conjunto de destino.`;
       parsed.draft = null;
     }
+    // O upload feito na tela vive no Storage da Orion. O publicador aceita essa
+    // URL do mesmo jeito que aceita um arquivo do Drive.
+    const attachment = body.creative_attachment;
+    const attachmentType = String(attachment?.type || '');
+    const attachmentIsCreative = Boolean(attachment?.url)
+      && (attachmentType.startsWith('image/') || attachmentType.startsWith('video/'))
+      && requestsAdCreation(messages);
+    if (attachmentIsCreative && !selectedDriveFile && parsed.draft) {
+      const ads = Array.isArray(parsed.draft.ads) && parsed.draft.ads.length ? parsed.draft.ads : [{}];
+      parsed.draft = {
+        ...parsed.draft,
+        ads: ads.map((ad: any) => (ad?.drive_file_id || ad?.creative_id ? ad : {
+          ...ad,
+          upload_url: String(attachment.url),
+          upload_name: String(attachment.name || 'criativo'),
+          upload_mime: attachmentType,
+        })),
+      };
+    }
+
     let drive: any = { configured: isGoogleDriveConfigured(), status: 'not_requested' };
     const prompt = String(last.content || '');
     const fileUrl = prompt.match(/https?:\/\/drive\.google\.com\/file\/d\/[^\s)]+/i)?.[0] || null;
@@ -320,7 +355,22 @@ daily_budget deve ser informado em reais (exemplo: 50 para R$ 50,00). Nunca inve
       ? enforceExistingDestination(parsed.draft, body.tree, messages)
       : null;
     const normalizedDraft = destinationSafeDraft ? normalizeOptimizationDraft(destinationSafeDraft) : null;
-    return NextResponse.json({ success: true, reply: String(parsed.reply || 'Analise concluida.'), draft: normalizedDraft, creative_requests: creativeRequests, drive_connected: drive.configured === true, drive });
+    const sugestoes = (Array.isArray(parsed.sugestoes) ? parsed.sugestoes : [])
+      .map((item: unknown) => String(item || '').trim().slice(0, 90))
+      .filter(Boolean)
+      .slice(0, 3);
+    return NextResponse.json({
+      success: true,
+      reply: String(parsed.reply || 'Analise concluida.'),
+      draft: normalizedDraft,
+      creative_requests: creativeRequests,
+      sugestoes,
+      creative_source: normalizedDraft
+        ? (selectedDriveFile ? 'drive' : attachmentIsCreative ? 'upload' : null)
+        : null,
+      drive_connected: drive.configured === true,
+      drive,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao conversar com o Apolo.' }, { status: 500 });
   }

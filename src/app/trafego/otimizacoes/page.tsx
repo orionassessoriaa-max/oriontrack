@@ -155,6 +155,7 @@ export default function OtimizacoesPage() {
   const [activationBusy, setActivationBusy] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [apoloMessages, setApoloMessages] = useState<ApoloMessage[]>(initialApoloMessages());
+  const [apoloSuggestions, setApoloSuggestions] = useState<string[]>([]);
   const [apoloInput, setApoloInput] = useState('');
   const [apoloBusy, setApoloBusy] = useState(false);
   const [adOrderOpen, setAdOrderOpen] = useState(false);
@@ -201,6 +202,7 @@ export default function OtimizacoesPage() {
     setActivationBusy(null);
     setDraftError(null);
     setApoloMessages(initialApoloMessages(brokerage));
+    setApoloSuggestions([]);
     setApoloInput('');
     setApoloBusy(false);
     setAdOrderOpen(false);
@@ -417,6 +419,7 @@ export default function OtimizacoesPage() {
     setDraftError(null);
     const nextMessages = [...apoloMessages, { role: 'user' as const, content: text }];
     setApoloMessages(nextMessages);
+    setApoloSuggestions([]);
     setApoloInput('');
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -462,6 +465,7 @@ export default function OtimizacoesPage() {
         metrics: metricsSnapshot,
         tree: treeSnapshot,
         messages: nextMessages,
+        draft: optimizationDraft,
         gestor_id: gestorIdParam,
         drive_file_id: selectedDriveFile?.id || null,
         drive_file_name: selectedDriveFile?.name || null,
@@ -480,6 +484,7 @@ export default function OtimizacoesPage() {
     }
     setApoloMessages((current) => [...current, { role: 'assistant', content: payload.reply }]);
     setPendingCreativeRequests(Array.isArray(payload.creative_requests) ? payload.creative_requests : []);
+    setApoloSuggestions(Array.isArray(payload.sugestoes) ? payload.sugestoes.filter(Boolean).slice(0, 3) : []);
     if (payload.draft) setOptimizationDraft(normalizeOptimizationDraft(payload.draft));
   }
 
@@ -965,6 +970,21 @@ export default function OtimizacoesPage() {
                               </button>
                             </div>
                             {!creativeUrl ? <p className="mt-2 text-[11px] font-semibold" style={{ color: 'var(--tf-warn)' }}>Para usar um modelo, cole a imagem com Ctrl+V e envie ao Apolo.</p> : null}
+                          </div>
+                        ) : null}
+                        {apoloSuggestions.length > 0 && !apoloBusy ? (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {apoloSuggestions.map((suggestion) => (
+                              <button
+                                key={suggestion}
+                                type="button"
+                                onClick={() => void sendApoloMessage(suggestion)}
+                                className="tf-no-lift inline-flex min-h-8 items-center rounded-full border px-3 text-[11px] font-bold"
+                                style={{ borderColor: 'var(--tf-accent-border)', color: 'var(--tf-accent-ink)', background: 'var(--tf-surface)' }}
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
                           </div>
                         ) : null}
                         {apoloBusy ? <Loader2 className="animate-spin" size={15} style={{ color: 'var(--tf-accent-ink)' }} /> : null}

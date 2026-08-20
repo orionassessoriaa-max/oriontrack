@@ -186,6 +186,106 @@ async function existingAdsetDeliveryConfig(accountPath: string, requestedGoal: s
   } satisfies AdsetDeliveryConfig;
 }
 
+type CreativeSource = {
+  bytes: Buffer;
+  mime: string;
+  name: string;
+  origin: 'drive' | 'upload';
+};
+
+const IMAGE_LIMIT_BYTES = 30 * 1024 * 1024;
+const VIDEO_LIMIT_BYTES = 200 * 1024 * 1024;
+const VIDEO_READY_TIMEOUT_MS = 150_000;
+const VIDEO_POLL_INTERVAL_MS = 5_000;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Criativo enviado pela tela vive no Storage publico do Supabase. Buscar
+ * qualquer URL aqui seria SSRF, entao so o host do proprio projeto passa.
+ */
+function isAllowedUploadUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') return false;
+    const supabaseHost = new URL(String(process.env.NEXT_PUBLIC_SUPABASE_URL || '')).host;
+    return Boolean(supabaseHost) && url.host === supabaseHost;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * O criativo pode chegar de duas portas: Google Drive, como sempre foi, ou
+ * upload direto feito na tela. As duas continuam valendo.
+ */
+async function resolveCreativeSource(ad: any, draft: any): Promise<CreativeSource | null> {
+  const driveFileId = String(ad?.drive_file_id || '').trim();
+  if (driveFileId) {
+    const driveFile = await getDriveFile(driveFileId);
+    const bytes = await downloadDriveFile(driveFile.id);
+    return { bytes, mime: driveFile.mimeType, name: driveFile.name, origin: 'drive' };
+  }
+
+  const uploadUrl = String(ad?.upload_url || ad?.file_url || draft?.upload_url || '').trim();
+  if (!uploadUrl) return null;
+  if (!isAllowedUploadUrl(uploadUrl)) {
+    throw new Error('O criativo enviado nao esta no armazenamento da Orion. Reenvie o arquivo pela tela.');
+  }
+  const response = await fetch(uploadUrl, { cache: 'no-store' });
+  if (!response.ok) throw new Error('Nao consegui baixar o criativo enviado pela tela.');
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const mime = String(ad?.upload_mime || ad?.file_type || response.headers.get('content-type') || '').split(';')[0].trim();
+  const name = String(ad?.upload_name || ad?.file_name || uploadUrl.split('/').pop() || 'criativo').slice(0, 120);
+  return { bytes, mime, name, origin: 'upload' };
+}
+
+async function uploadImageHash(accountPath: string, source: CreativeSource) {
+  const form = new FormData();
+  form.append('filename', new Blob([new Uint8Array(source.bytes)], { type: source.mime }), source.name);
+  const result = await graphPostForm(`${accountPath}/adimages`, form, `o upload da imagem "${source.name}"`);
+  const uploaded = Object.values(result.images || {})[0] as { hash?: string } | undefined;
+  return String(uploaded?.hash || '');
+}
+
+/**
+ * Video na Meta e assincrono: sobe, processa e so depois pode virar criativo.
+ * Sem esperar o "ready" a criacao do anuncio falha com erro generico.
+ */
+async function uploadVideoId(accountPath: string, source: CreativeSource) {
+  const form = new FormData();
+  form.append('source', new Blob([new Uint8Array(source.bytes)], { type: source.mime }), source.name);
+  form.append('name', source.name);
+  const result = await graphPostForm(`${accountPath}/advideos`, form, `o upload do video "${source.name}"`);
+  const videoId = String(result.id || '');
+  if (!videoId) throw new Error('A Meta nao retornou o id do video enviado.');
+
+  const deadline = Date.now() + VIDEO_READY_TIMEOUT_MS;
+  let lastStatus = 'processing';
+  while (Date.now() < deadline) {
+    const status = await graphGet(videoId, { fields: 'status' });
+    lastStatus = String(status?.status?.video_status || 'processing');
+    if (lastStatus === 'ready') break;
+    if (lastStatus === 'error') throw new Error(`A Meta recusou o video "${source.name}" no processamento.`);
+    await wait(VIDEO_POLL_INTERVAL_MS);
+  }
+  if (lastStatus !== 'ready') {
+    throw new Error(`O video "${source.name}" ainda esta processando na Meta. Tente publicar de novo em alguns minutos.`);
+  }
+
+  // A Meta exige capa no criativo de video. A propria plataforma gera as
+  // miniaturas durante o processamento.
+  let thumbnailUrl = '';
+  try {
+    const thumbs = await graphGet(`${videoId}/thumbnails`, { fields: 'uri,is_preferred' });
+    const list: Array<{ uri?: string; is_preferred?: boolean }> = Array.isArray(thumbs?.data) ? thumbs.data : [];
+    thumbnailUrl = String((list.find((item) => item?.is_preferred) || list[0])?.uri || '');
+  } catch {
+    thumbnailUrl = '';
+  }
+  return { videoId, thumbnailUrl };
+}
+
 async function createPaused(accountId: string, draft: any) {
   const normalizedDraft = normalizeOptimizationDraft(draft);
   const created: any[] = [];
@@ -271,59 +371,90 @@ async function createPaused(accountId: string, draft: any) {
   for (const ad of ads) {
     let creativeId = ad.creative_id || ad.meta_creative_id;
     const adsetId = String(ad.adset_id || ad.existing_adset_id || availableAdsetIds[0] || '').trim();
-    if (!creativeId && ad.drive_file_id) {
-      const driveFile = await getDriveFile(String(ad.drive_file_id));
-      if (!driveFile.mimeType.startsWith('image/')) {
-        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'A primeira versao aceita criativos de imagem do Drive. Videos precisam do fluxo de upload de video da Meta.' });
+    if (!creativeId) {
+      let source: CreativeSource | null = null;
+      try {
+        source = await resolveCreativeSource(ad, normalizedDraft);
+      } catch (error) {
+        skipped.push({ level: 'ad', name: ad.name || 'Anuncio', reason: error instanceof Error ? error.message : 'Nao consegui ler o criativo informado.' });
         continue;
       }
-      const content = await downloadDriveFile(driveFile.id);
-      if (content.byteLength > 30 * 1024 * 1024) {
-        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'A imagem do Drive excede o limite de 30 MB.' });
-        continue;
-      }
-      const imageForm = new FormData();
-      imageForm.append('filename', new Blob([content], { type: driveFile.mimeType }), driveFile.name);
-      const imageResult = await graphPostForm(`${accountPath}/adimages`, imageForm, `o upload da imagem "${driveFile.name}"`);
-      const images = imageResult.images || {};
-      const uploaded = Object.values(images)[0] as any;
-      const imageHash = uploaded?.hash;
-      if (!imageHash) {
-        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'A Meta nao retornou o hash da imagem enviada.' });
-        continue;
-      }
-      let pageId = String(ad.page_id || normalizedDraft.page_id || process.env.META_DEFAULT_PAGE_ID || '').trim();
-      let link = String(ad.link_url || normalizedDraft.link_url || process.env.META_DEFAULT_LEAD_LINK || '').trim();
-      if ((!pageId || !link) && adsetId) {
-        const existingConfig = await existingAdsetCreativeConfig(adsetId);
-        pageId ||= existingConfig.pageId;
-        link ||= existingConfig.link;
-      }
-      if (!pageId || !link) {
-        skipped.push({ level: 'ad', name: ad.name || driveFile.name, reason: 'Nao foi possivel reaproveitar a Pagina da Meta e o link de destino dos anuncios do conjunto. Configure esses dados na concessionaria.' });
-        continue;
-      }
-      const creativeResult = await graphPost(`${accountPath}/adcreatives`, {
-        name: String(ad.creative_name || `${ad.name || driveFile.name} | Orion Creative`),
-        object_story_spec: JSON.stringify({
-          page_id: pageId,
-          link_data: {
-            image_hash: imageHash,
-            link,
-            message: String(ad.primary_text || normalizedDraft.primary_text || 'Conheca nossas solucoes.'),
-            name: String(ad.headline || normalizedDraft.headline || driveFile.name),
-            description: String(ad.description || ''),
-            call_to_action: {
-              type: normalizeCallToAction(ad.call_to_action),
-              value: { link },
+      if (source) {
+        const isImage = source.mime.startsWith('image/');
+        const isVideo = source.mime.startsWith('video/');
+        if (!isImage && !isVideo) {
+          skipped.push({ level: 'ad', name: ad.name || source.name, reason: `Formato "${source.mime || 'desconhecido'}" nao e aceito pela Meta como criativo.` });
+          continue;
+        }
+        const limit = isVideo ? VIDEO_LIMIT_BYTES : IMAGE_LIMIT_BYTES;
+        if (source.bytes.byteLength > limit) {
+          skipped.push({ level: 'ad', name: ad.name || source.name, reason: `O arquivo excede o limite de ${Math.round(limit / (1024 * 1024))} MB.` });
+          continue;
+        }
+
+        let pageId = String(ad.page_id || normalizedDraft.page_id || process.env.META_DEFAULT_PAGE_ID || '').trim();
+        let link = String(ad.link_url || normalizedDraft.link_url || process.env.META_DEFAULT_LEAD_LINK || '').trim();
+        if ((!pageId || !link) && adsetId) {
+          const existingConfig = await existingAdsetCreativeConfig(adsetId);
+          pageId ||= existingConfig.pageId;
+          link ||= existingConfig.link;
+        }
+        if (!pageId || !link) {
+          skipped.push({ level: 'ad', name: ad.name || source.name, reason: 'Nao foi possivel reaproveitar a Pagina da Meta e o link de destino dos anuncios do conjunto. Configure esses dados na concessionaria.' });
+          continue;
+        }
+
+        const message = String(ad.primary_text || normalizedDraft.primary_text || 'Conheca nossas solucoes.');
+        const headline = String(ad.headline || normalizedDraft.headline || source.name);
+        const description = String(ad.description || '');
+        const callToAction = { type: normalizeCallToAction(ad.call_to_action), value: { link } };
+        let storySpec: Record<string, unknown>;
+
+        if (isImage) {
+          const imageHash = await uploadImageHash(accountPath, source);
+          if (!imageHash) {
+            skipped.push({ level: 'ad', name: ad.name || source.name, reason: 'A Meta nao retornou o hash da imagem enviada.' });
+            continue;
+          }
+          storySpec = {
+            page_id: pageId,
+            link_data: { image_hash: imageHash, link, message, name: headline, description, call_to_action: callToAction },
+          };
+        } else {
+          let video: { videoId: string; thumbnailUrl: string };
+          try {
+            video = await uploadVideoId(accountPath, source);
+          } catch (error) {
+            skipped.push({ level: 'ad', name: ad.name || source.name, reason: error instanceof Error ? error.message : 'Falha ao enviar o video para a Meta.' });
+            continue;
+          }
+          if (!video.thumbnailUrl) {
+            skipped.push({ level: 'ad', name: ad.name || source.name, reason: 'A Meta nao gerou capa para o video. Publique de novo em alguns minutos.' });
+            continue;
+          }
+          storySpec = {
+            page_id: pageId,
+            video_data: {
+              video_id: video.videoId,
+              image_url: video.thumbnailUrl,
+              message,
+              title: headline,
+              link_description: description,
+              call_to_action: callToAction,
             },
-          },
-        }),
-      }, `a criacao do criativo "${String(ad.name || driveFile.name)}"`);
-      creativeId = String(creativeResult.id || '');
+          };
+          warnings.push(`O video "${source.name}" foi enviado e processado na Meta antes de virar anuncio.`);
+        }
+
+        const creativeResult = await graphPost(`${accountPath}/adcreatives`, {
+          name: String(ad.creative_name || `${ad.name || source.name} | Orion Creative`),
+          object_story_spec: JSON.stringify(storySpec),
+        }, `a criacao do criativo "${String(ad.name || source.name)}"`);
+        creativeId = String(creativeResult.id || '');
+      }
     }
     if (!creativeId || !adsetId) {
-      skipped.push({ level: 'ad', name: ad.name || 'Anuncio', reason: creativeId ? 'Nenhum conjunto criado para vincular o anuncio.' : 'Informe um creative_id da Meta ou resolva um arquivo de imagem do Drive.' });
+      skipped.push({ level: 'ad', name: ad.name || 'Anuncio', reason: creativeId ? 'Nenhum conjunto criado para vincular o anuncio.' : 'Informe um creative_id da Meta, um arquivo do Drive ou envie o criativo pela tela.' });
       continue;
     }
     const result = await graphPost(`${accountPath}/ads`, {
