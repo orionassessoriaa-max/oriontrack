@@ -72,6 +72,30 @@ function messageSignature(text: string) {
   return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+/**
+ * O outbound recebido pelo webhook e apenas o eco de uma mensagem que a IA
+ * comercial acabou de enviar? Serve para nao confundir o proprio robo com um
+ * humano assumindo a conversa pelo inbox.
+ */
+export async function isCommercialAiEcho(conversationId: string, text: string, windowMs = 300_000) {
+  const signature = messageSignature(text);
+  if (!signature) return false;
+  const { data } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('mensagem,metadata,created_at')
+    .eq('conversa_id', conversationId)
+    .eq('direction', 'outbound')
+    .gte('created_at', new Date(Date.now() - windowMs).toISOString())
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  return (data || []).some((row) => {
+    const agent = (row?.metadata as Record<string, unknown> | null)?.ai_agent;
+    if (agent !== COMMERCIAL_AI_AGENT && agent !== 'commercial_bot') return false;
+    return messageSignature(row.mensagem || '') === signature;
+  });
+}
+
 // A UAZAPI devolve por webhook as mensagens que a propria IA enviou (fromMe),
 // e elas entram como outbound. Sem separar isso, qualquer resposta rapida do
 // lead cai na trava de "alguem acabou de responder" e a IA fica muda.

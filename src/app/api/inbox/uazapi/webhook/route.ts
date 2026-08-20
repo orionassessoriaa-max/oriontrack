@@ -5,7 +5,7 @@ import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, s
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { continueCommercialSdrFromIncoming } from '@/lib/commercialSdrAgent';
 import { stopCommercialAiForHumanTakeover } from '@/lib/commercialSdrSession';
-import { ensureCommercialConversation, findCommercialConversation } from '@/lib/commercialInbox';
+import { ensureCommercialConversation, findCommercialConversation, isCommercialAiEcho } from '@/lib/commercialInbox';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 
 function readText(body: any) {
@@ -1503,7 +1503,14 @@ export async function POST(request: Request) {
           // entao um fromMe que chega aqui e alguem do time respondendo pelo
           // inbox de verdade. No comercial isso encerra a sessao em definitivo:
           // antes a IA voltava a escrever por cima do SDR depois de 90s.
-          if (commercialMode) await stopCommercialAiForHumanTakeover(lead.id, profile?.nome);
+          // O isAiOutbound cobre o eco quando o envio saiu deste mesmo
+          // processo. Com mais de um container, ou apos restart, o Set em
+          // memoria nao ajuda, entao confirmamos pela mensagem gravada.
+          if (commercialMode) {
+            if (!await isCommercialAiEcho(conversation.id, message)) {
+              await stopCommercialAiForHumanTakeover(lead.id, profile?.nome);
+            }
+          }
           else await stopLeadAiForHumanTakeover(lead.id, profile?.nome);
         } catch (takeoverError) {
           console.error('[uazapi_webhook] Failed stopping AI after human takeover:', takeoverError);

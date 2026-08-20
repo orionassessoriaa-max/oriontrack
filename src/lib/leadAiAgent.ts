@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { configureUazapiWebhook, getUazapiInstanceConnection, uazapiFetch, uazapiAiInstanceName, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
+import { configureUazapiWebhook, getUazapiInstanceConnection, normalizePhone, phoneMatchKey, uazapiAiInstanceName, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
@@ -16,7 +16,7 @@ function cleanSignatureText(text: string) {
 }
 
 export function registerAiOutbound(phone: string, text: string) {
-  const signature = `${normalizePhone(phone)}:${cleanSignatureText(text)}`;
+  const signature = `${phoneMatchKey(phone)}:${cleanSignatureText(text)}`;
   recentAiOutboundMessages.add(signature);
   
   if (recentAiOutboundMessages.size > 200) {
@@ -26,7 +26,7 @@ export function registerAiOutbound(phone: string, text: string) {
 }
 
 export function isAiOutbound(phone: string, text: string) {
-  const signature = `${normalizePhone(phone)}:${cleanSignatureText(text)}`;
+  const signature = `${phoneMatchKey(phone)}:${cleanSignatureText(text)}`;
   return recentAiOutboundMessages.has(signature);
 }
 
