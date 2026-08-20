@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Kripto Hunters | Painel da Sala</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#01040c;
+    --deep:#030b1a;
+    --hull:#0a1526;
+    --hull-2:#071122;
+    --rim:#7cc9ff;
+    --rim-dim:rgba(124,201,255,.28);
+    --gold:#ffd479;
+    --ink:#dcecff;
+    --dim:rgba(200,224,255,.55);
+    --danger:#ff7a7a;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+    --display:'Archivo','IBM Plex Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    width:1920px;height:1080px;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 50% -10%, rgba(12,34,64,.55) 0%, transparent 60%),
+      radial-gradient(90% 70% at 50% 0%, rgba(64,156,255,.14) 0%, transparent 55%),
+      linear-gradient(180deg,var(--deep) 0%,var(--void) 60%);
+    color:var(--ink);font-family:var(--sans);
+    display:grid;grid-template-rows:86px 1fr 366px;
+  }
+  /* legendas de instrumento */
+  .legend{
+    font-family:var(--mono);font-size:15px;font-weight:600;
+    letter-spacing:.22em;text-transform:uppercase;color:var(--dim);
+  }
+
+  /* ---------- barra superior ---------- */
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 48px;border-bottom:1px solid var(--rim-dim);
+    background:linear-gradient(180deg,rgba(10,21,38,.9),rgba(3,11,26,0));
+  }
+  .brand{display:flex;align-items:center;gap:18px}
+  .sigil{
+    width:44px;height:44px;display:grid;place-items:center;
+    border:1px solid var(--rim-dim);border-radius:10px;
+    font-family:var(--display);font-weight:800;font-size:22px;color:var(--rim);
+    background:rgba(124,201,255,.07);
+  }
+  .brand b{font-size:21px;letter-spacing:.02em}
+  .brand span{display:block;margin-top:2px}
+  .live{display:flex;align-items:center;gap:12px}
+  .dot{width:11px;height:11px;border-radius:50%;background:var(--danger);box-shadow:0 0 14px var(--danger)}
+  .clock{font-family:var(--mono);font-size:19px;color:var(--ink);letter-spacing:.08em}
+
+  /* ---------- placar ---------- */
+  main{padding:0 48px;display:grid;align-content:center;gap:44px}
+  .scoreboard{display:grid;grid-template-columns:1fr 620px;gap:48px;align-items:end}
+  .amount{
+    font-family:var(--display);font-variation-settings:'wdth' 118,'wght' 800;
+    font-size:172px;line-height:.84;letter-spacing:-.02em;color:var(--rim);
+    font-variant-numeric:tabular-nums;text-shadow:0 0 60px rgba(124,201,255,.28);
+  }
+  .amount small{font-size:64px;font-variation-settings:'wdth' 110,'wght' 700;color:var(--rim);opacity:.75;margin-right:12px}
+  .of{font-family:var(--display);font-variation-settings:'wdth' 112,'wght' 600;font-size:40px;color:var(--dim);margin-top:16px;font-variant-numeric:tabular-nums}
+  .gap{
+    border-left:1px solid var(--rim-dim);padding-left:36px;
+  }
+  .gap .value{
+    font-family:var(--display);font-variation-settings:'wdth' 118,'wght' 800;
+    font-size:78px;line-height:.92;white-space:nowrap;color:var(--gold);font-variant-numeric:tabular-nums;
+    text-shadow:0 0 44px rgba(255,212,121,.22);
+  }
+  .gap .value small{font-size:.5em;font-variation-settings:'wdth' 110,'wght' 700;opacity:.8}
+  .gap .note{margin-top:16px;font-size:22px;color:var(--dim);line-height:1.45}
+  .gap .note b{color:var(--ink);font-weight:700}
+
+  /* ---------- assinatura: horizonte de meta ---------- */
+  .horizon{position:relative;padding-top:16px}
+  .track{position:relative;height:26px;border:1px solid var(--rim-dim);background:rgba(7,17,34,.9)}
+  .fill{position:absolute;inset:0 auto 0 0;width:38.5%;background:linear-gradient(90deg,rgba(124,201,255,.35),var(--rim))}
+  .pace{position:absolute;top:-16px;bottom:-16px;left:61%;width:2px;background:var(--gold)}
+  .pace::after{
+    content:'';position:absolute;top:-7px;left:-6px;width:14px;height:14px;
+    background:var(--gold);clip-path:polygon(50% 100%,0 0,100% 0);
+  }
+  .pace-label{
+    position:absolute;top:-30px;left:61%;transform:translateX(-50%);
+    font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--gold);white-space:nowrap;
+  }
+  .scale{display:flex;justify-content:space-between;margin-top:14px}
+
+  /* ---------- rodape: ranking + feed ---------- */
+  footer{display:grid;grid-template-columns:1fr 596px;gap:44px;padding:28px 48px 32px;border-top:1px solid var(--rim-dim)}
+  .panel-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse}
+  td{padding:15px 0;border-bottom:1px solid rgba(124,201,255,.12);vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  .pos{font-family:var(--display);font-variation-settings:'wdth' 118,'wght' 800;font-size:34px;color:var(--dim);width:64px}
+  tr.lead .pos{color:var(--gold)}
+  .who{display:flex;align-items:center;gap:16px}
+  .face{
+    width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
+    font-family:var(--display);font-variation-settings:'wght' 700;font-size:20px;
+    background:rgba(124,201,255,.12);border:1px solid var(--rim-dim);color:var(--rim);
+  }
+  tr.lead .face{background:rgba(255,212,121,.14);border-color:rgba(255,212,121,.4);color:var(--gold)}
+  .name{font-size:26px;font-weight:700;letter-spacing:.01em}
+  .role{font-family:var(--mono);font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-top:3px}
+  .num{
+    font-family:var(--display);font-variation-settings:'wdth' 112,'wght' 700;
+    font-size:34px;text-align:right;font-variant-numeric:tabular-nums;
+  }
+  tr.lead .num{color:var(--gold)}
+  .sub{font-family:var(--mono);font-size:15px;color:var(--dim);text-align:right;width:180px}
+  .sub b{color:var(--ink);font-weight:600;font-size:18px}
+
+  .feed{display:flex;flex-direction:column;gap:11px}
+  .event{display:grid;grid-template-columns:74px 1fr;gap:16px;align-items:baseline;padding:11px 16px;background:var(--hull-2);border-left:2px solid var(--rim-dim)}
+  .event.win{border-left-color:var(--gold);background:rgba(255,212,121,.07)}
+  .event time{font-family:var(--mono);font-size:15px;color:var(--dim)}
+  .event p{font-size:19px;line-height:1.35}
+  .event.win p b{color:var(--gold)}
+  .event p b{font-weight:700}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="sigil">K</div>
+    <div>
+      <b>KRIPTO HUNTERS</b>
+      <span class="legend">Orion Assessoria · Sala comercial</span>
+    </div>
+  </div>
+  <div class="live">
+    <span class="dot"></span>
+    <span class="legend">Ao vivo</span>
+    <span class="clock">Qui, 20 ago · 14:32</span>
+  </div>
+</header>
+
+<main>
+  <section class="scoreboard">
+    <div>
+      <p class="legend">Fechado em agosto</p>
+      <p class="amount"><small>R$</small>288.400</p>
+      <p class="of">de R$ 750.000 · 47 vidas</p>
+    </div>
+    <div class="gap">
+      <p class="legend">Falta para bater</p>
+      <p class="value"><small>R$</small> 461.600</p>
+      <p class="note">8 dias úteis restantes.<br><b>R$ 57.700 por dia</b> para fechar o mês.</p>
+    </div>
+  </section>
+
+  <section class="horizon">
+    <span class="pace-label">Ritmo do dia 14 ▸ R$ 457.500</span>
+    <div class="track">
+      <div class="fill"></div>
+      <div class="pace"></div>
+    </div>
+    <div class="scale">
+      <span class="legend">01 ago</span>
+      <span class="legend">Vocês estão 22 pontos atrás do ritmo</span>
+      <span class="legend">31 ago</span>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <section>
+    <div class="panel-head">
+      <p class="legend">Ranking do mês</p>
+      <p class="legend">Fechado · ligações hoje</p>
+    </div>
+    <table>
+      <tr class="lead">
+        <td class="pos">1</td>
+        <td><div class="who"><div class="face">RB</div><div><div class="name">Renan Barreto</div><div class="role">SDR</div></div></div></td>
+        <td class="num">R$ 126.900</td>
+        <td class="sub"><b>38</b> ligações</td>
+      </tr>
+      <tr>
+        <td class="pos">2</td>
+        <td><div class="who"><div class="face">TV</div><div><div class="name">Talita Vargas</div><div class="role">Closer</div></div></div></td>
+        <td class="num">R$ 98.200</td>
+        <td class="sub"><b>24</b> ligações</td>
+      </tr>
+      <tr>
+        <td class="pos">3</td>
+        <td><div class="who"><div class="face">LC</div><div><div class="name">Leonardo Cruz</div><div class="role">Closer</div></div></div></td>
+        <td class="num">R$ 63.300</td>
+        <td class="sub"><b>19</b> ligações</td>
+      </tr>
+    </table>
+  </section>
+
+  <section>
+    <div class="panel-head">
+      <p class="legend">Acontecendo agora</p>
+      <p class="legend">Últimos 40 min</p>
+    </div>
+    <div class="feed">
+      <div class="event win">
+        <time>14:29</time>
+        <p><b>Talita fechou</b> Celebre Corretora · 32 vidas · R$ 41.800</p>
+      </div>
+      <div class="event">
+        <time>14:21</time>
+        <p>Reunião marcada para amanhã, 10h · <b>Renan</b></p>
+      </div>
+      <div class="event">
+        <time>14:08</time>
+        <p>Lead novo em Curitiba · carteira de 30 a 100 vidas</p>
+      </div>
+      <div class="event">
+        <time>13:56</time>
+        <p>Aline qualificou e repassou <b>Ricardo Salles</b></p>
+      </div>
+    </div>
+  </section>
+</footer>
+
+</body>
+</html>

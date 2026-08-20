@@ -1,0 +1,182 @@
+/* Painel de parede da sala comercial. Feito para leitura a tres metros, numa
+   TV 1920x1080, sem menu e sem interacao. Herda a paleta da cabine da Sala. */
+.tv-root {
+  --void: #01040c;
+  --deep: #030b1a;
+  --hull-2: #071122;
+  --rim: #7cc9ff;
+  --rim-dim: rgba(124, 201, 255, 0.28);
+  --gold: #ffd479;
+  --ink: #dcecff;
+  --dim: rgba(200, 224, 255, 0.55);
+  --danger: #ff7a7a;
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 86px 1fr 366px;
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(12, 34, 64, 0.55) 0%, transparent 60%),
+    radial-gradient(90% 70% at 50% 0%, rgba(64, 156, 255, 0.14) 0%, transparent 55%),
+    linear-gradient(180deg, var(--deep) 0%, var(--void) 60%);
+  color: var(--ink);
+  font-family: var(--font-tv-sans), system-ui, sans-serif;
+}
+
+.tv-legend {
+  font-family: var(--font-tv-mono), ui-monospace, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.tv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 48px;
+  border-bottom: 1px solid var(--rim-dim);
+  background: linear-gradient(180deg, rgba(10, 21, 38, 0.9), rgba(3, 11, 26, 0));
+}
+.tv-brand { display: flex; align-items: center; gap: 18px; }
+.tv-sigil {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border: 1px solid var(--rim-dim); border-radius: 10px;
+  font-family: var(--font-tv-display), system-ui, sans-serif;
+  font-weight: 800; font-size: 22px; color: var(--rim);
+  background: rgba(124, 201, 255, 0.07);
+}
+.tv-brand b { font-size: 21px; letter-spacing: 0.02em; }
+.tv-brand span { display: block; margin-top: 2px; }
+.tv-live { display: flex; align-items: center; gap: 12px; }
+.tv-dot {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--danger); box-shadow: 0 0 14px var(--danger);
+  animation: tv-pulse 2.4s ease-in-out infinite;
+}
+@keyframes tv-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.tv-clock {
+  font-family: var(--font-tv-mono), ui-monospace, monospace;
+  font-size: 19px; color: var(--ink); letter-spacing: 0.08em;
+}
+
+.tv-main { padding: 0 48px; display: grid; align-content: center; gap: 44px; }
+.tv-scoreboard { display: grid; grid-template-columns: 1fr 620px; gap: 48px; align-items: end; }
+
+.tv-amount {
+  font-family: var(--font-tv-display), system-ui, sans-serif;
+  font-variation-settings: 'wdth' 118, 'wght' 800;
+  font-weight: 800;
+  font-size: 172px; line-height: 0.84; letter-spacing: -0.02em;
+  color: var(--rim); font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 60px rgba(124, 201, 255, 0.28);
+}
+.tv-amount small {
+  font-size: 64px; font-variation-settings: 'wdth' 110, 'wght' 700;
+  color: var(--rim); opacity: 0.75; margin-right: 12px;
+}
+.tv-of {
+  font-family: var(--font-tv-display), system-ui, sans-serif;
+  font-variation-settings: 'wdth' 112, 'wght' 600;
+  font-size: 40px; color: var(--dim); margin-top: 16px; font-variant-numeric: tabular-nums;
+}
+.tv-gap { border-left: 1px solid var(--rim-dim); padding-left: 36px; }
+.tv-gap-value {
+  font-family: var(--font-tv-display), system-ui, sans-serif;
+  font-variation-settings: 'wdth' 118, 'wght' 800;
+  font-weight: 800;
+  font-size: 78px; line-height: 0.92; white-space: nowrap;
+  color: var(--gold); font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 44px rgba(255, 212, 121, 0.22);
+}
+.tv-gap-value small { font-size: 0.5em; font-variation-settings: 'wdth' 110, 'wght' 700; opacity: 0.8; }
+.tv-note { margin-top: 16px; font-size: 22px; color: var(--dim); line-height: 1.45; }
+.tv-note b { color: var(--ink); font-weight: 700; }
+
+/* Regua de ritmo: a barra mostra onde estamos, o marcador dourado mostra onde
+   deveriamos estar hoje. O vao entre os dois e a mensagem do painel. */
+.tv-horizon { position: relative; padding-top: 16px; }
+.tv-track { position: relative; height: 26px; border: 1px solid var(--rim-dim); background: rgba(7, 17, 34, 0.9); }
+.tv-fill {
+  position: absolute; inset: 0 auto 0 0;
+  background: linear-gradient(90deg, rgba(124, 201, 255, 0.35), var(--rim));
+  transition: width 0.8s ease;
+}
+.tv-pace { position: absolute; top: -16px; bottom: -16px; width: 2px; background: var(--gold); }
+.tv-pace::after {
+  content: ''; position: absolute; top: -7px; left: -6px; width: 14px; height: 14px;
+  background: var(--gold); clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+.tv-pace-label {
+  position: absolute; top: -30px; transform: translateX(-50%);
+  font-family: var(--font-tv-mono), ui-monospace, monospace;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--gold); white-space: nowrap;
+}
+.tv-scale { display: flex; justify-content: space-between; margin-top: 14px; }
+
+.tv-footer {
+  display: grid; grid-template-columns: 1fr 596px; gap: 44px;
+  padding: 28px 48px 32px; border-top: 1px solid var(--rim-dim);
+}
+.tv-panel-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+.tv-table { width: 100%; border-collapse: collapse; }
+.tv-table td { padding: 15px 0; border-bottom: 1px solid rgba(124, 201, 255, 0.12); vertical-align: middle; }
+.tv-table tr:last-child td { border-bottom: 0; }
+.tv-pos {
+  font-family: var(--font-tv-display), system-ui, sans-serif;
+  font-variation-settings: 'wdth' 118, 'wght' 800; font-weight: 800;
+  font-size: 34px; color: var(--dim); width: 64px;
+}
+.tv-table tr.tv-lead .tv-pos { color: var(--gold); }
+.tv-who { display: flex; align-items: center; gap: 16px; }
+.tv-face {
+  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--font-tv-display), system-ui, sans-serif; font-weight: 700; font-size: 20px;
+  background: rgba(124, 201, 255, 0.12); border: 1px solid var(--rim-dim); color: var(--rim);
+}
+.tv-table tr.tv-lead .tv-face { background: rgba(255, 212, 121, 0.14); border-color: rgba(255, 212, 121, 0.4); color: var(--gold); }
+.tv-name { font-size: 26px; font-weight: 700; letter-spacing: 0.01em; }
+.tv-role {
+  font-family: var(--font-tv-mono), ui-monospace, monospace;
+  font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin-top: 3px;
+}
+.tv-num {
+  font-family: var(--font-tv-display), system-ui, sans-serif;
+  font-variation-settings: 'wdth' 112, 'wght' 700; font-weight: 700;
+  font-size: 34px; text-align: right; font-variant-numeric: tabular-nums;
+}
+.tv-table tr.tv-lead .tv-num { color: var(--gold); }
+.tv-sub {
+  font-family: var(--font-tv-mono), ui-monospace, monospace;
+  font-size: 15px; color: var(--dim); text-align: right; width: 180px;
+}
+.tv-sub b { color: var(--ink); font-weight: 600; font-size: 18px; }
+
+.tv-feed { display: flex; flex-direction: column; gap: 11px; }
+.tv-event {
+  display: grid; grid-template-columns: 74px 1fr; gap: 16px; align-items: baseline;
+  padding: 11px 16px; background: var(--hull-2); border-left: 2px solid var(--rim-dim);
+}
+.tv-event.tv-win { border-left-color: var(--gold); background: rgba(255, 212, 121, 0.07); }
+.tv-event time { font-family: var(--font-tv-mono), ui-monospace, monospace; font-size: 15px; color: var(--dim); }
+.tv-event p { font-size: 19px; line-height: 1.35; }
+.tv-event.tv-win p { color: var(--gold); font-weight: 700; }
+
+.tv-warn {
+  font-family: var(--font-tv-mono), ui-monospace, monospace;
+  font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--gold); border: 1px solid rgba(255, 212, 121, 0.4);
+  padding: 4px 10px; border-radius: 999px; max-width: 620px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.tv-empty { font-size: 19px; color: var(--dim); padding: 14px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-dot { animation: none; }
+  .tv-fill { transition: none; }
+}
