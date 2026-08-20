@@ -264,7 +264,8 @@ export default function CommercialInboxPage() {
       void load();
       void loadWhatsapp();
     }, 0);
-    const timer = window.setInterval(() => void loadWhatsapp(), 15000);
+    // 15s vezes o numero de abas abertas era varredura demais no banco.
+    const timer = window.setInterval(() => void loadWhatsapp(), 45000);
     return () => {
       window.clearTimeout(initialTimer);
       window.clearInterval(timer);

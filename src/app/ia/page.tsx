@@ -57,7 +57,7 @@ export default function AiConnectionPage() {
 
   useEffect(() => {
     if (!qr && connection.state !== 'connecting') return;
-    const interval = window.setInterval(() => void load(), 5000);
+    const interval = window.setInterval(() => void load(), 20000);
     return () => window.clearInterval(interval);
   }, [connection.state, load, qr]);
 

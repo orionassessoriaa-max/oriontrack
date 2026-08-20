@@ -208,7 +208,31 @@ type LeadRow = {
   responsavel_profile_id?: string | null;
 };
 
-type HandoffContactMode = 'self_service' | 'same_whatsapp' | 'different_responsible' | 'unassigned';
+type HandoffContactMode = 'self_service' | 'team_person' | 'same_whatsapp' | 'different_responsible' | 'unassigned';
+
+export type AiIdentityMode = 'equipe' | 'equipe_pessoa' | 'propria';
+
+type AiIdentity = { mode: AiIdentityMode; displayName: string };
+
+/**
+ * Como a concessionaria se apresenta. O booleano atende_sozinho veio antes da
+ * coluna modo_identidade e continua valendo enquanto a migration nao roda.
+ */
+function aiIdentity(aiConfig: any, brokerageName: string): AiIdentity {
+  const stored = String(aiConfig?.modo_identidade || '').trim();
+  const mode: AiIdentityMode = stored === 'propria' || stored === 'equipe_pessoa' || stored === 'equipe'
+    ? stored
+    : aiConfig?.atende_sozinho === true ? 'propria' : 'equipe';
+  const displayName = String(aiConfig?.nome_exibicao || '').trim() || brokerageName;
+  return { mode, displayName };
+}
+
+/** Frase de apresentacao da primeira mensagem, por modo. */
+function aiIntroLine(identity: AiIdentity, persona: string) {
+  if (identity.mode === 'propria') return `Aqui é a ${persona}.`;
+  if (identity.mode === 'equipe_pessoa') return `Me chamo ${persona}, faço parte da equipe da ${identity.displayName}.`;
+  return `Me chamo ${persona}, da ${identity.displayName}.`;
+}
 
 function sameBrokerage(value?: string | null) {
   return String(value || '').trim().toUpperCase() === AI_TEST_BROKERAGE;
@@ -266,10 +290,13 @@ function adName(lead: LeadRow) {
   return plain(lead.utm_content || lead.utm_term || lead.utm_campaign || lead.utm_medium || lead.utm_source);
 }
 
-function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow, selfService = false): HandoffContactMode {
+function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow, identity?: AiIdentity): HandoffContactMode {
   // A corretora que atende sozinha nao tem para quem repassar: a persona da IA
   // e a propria dona, entao o encerramento e "vou montar seu estudo".
-  if (selfService) return 'self_service';
+  if (identity?.mode === 'propria') return 'self_service';
+  // Corretora com nome de gente: prometer "um especialista" soa falso, porque
+  // quem vai responder e a propria pessoa do nome.
+  if (identity?.mode === 'equipe_pessoa') return 'team_person';
   if (!lead.responsavel_profile_id) return 'unassigned';
   if (adminProfile.ai_instance_name) return 'different_responsible';
   return lead.responsavel_profile_id === adminProfile.id
@@ -277,7 +304,15 @@ function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow, selfService
     : 'different_responsible';
 }
 
-function handoffContactRule(mode: HandoffContactMode) {
+function handoffContactRule(mode: HandoffContactMode, pessoa?: string) {
+  if (mode === 'team_person' && pessoa) {
+    return [
+      'Regra obrigatoria para o encerramento deste lead:',
+      `- Quem vai assumir o atendimento e a ${pessoa}, e ela responde neste mesmo WhatsApp.`,
+      `- Diga que a ${pessoa} vai te chamar aqui para seguir com o estudo. Chame pelo nome, nao diga "um especialista".`,
+      '- Nao fale em outro numero.',
+    ].join('\n');
+  }
   if (mode === 'self_service') {
     return [
       'Regra obrigatoria para o encerramento deste lead:',
@@ -523,7 +558,10 @@ function isCallRefusal(text?: string | null, previousOutboundText?: string | nul
   return asksForMaterialFirst || /^(nao precisa|deixa pra la|deixa assim|prefiro por aqui|por mensagem)$/.test(normalized);
 }
 
-function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode) {
+function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode, pessoa?: string) {
+  if (mode === 'team_person' && pessoa) {
+    return polishAiReply(`Sem problema, ${leadFirstName(lead)}. A ${pessoa} vai te chamar por aqui com o estudo e as opcoes. Obrigada!`);
+  }
   if (mode === 'self_service') {
     return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Vou montar seu estudo com as opcoes e te retorno por aqui mesmo. Obrigada!`);
   }
@@ -686,7 +724,10 @@ function looksLikeScheduleAnswer(text?: string | null) {
   return hasDay && hasTime;
 }
 
-function handoffScheduleReply(lead: LeadRow, mode: HandoffContactMode) {
+function handoffScheduleReply(lead: LeadRow, mode: HandoffContactMode, pessoa?: string) {
+  if (mode === 'team_person' && pessoa) {
+    return polishAiReply(`Perfeito, ${leadFirstName(lead)}. A ${pessoa} vai confirmar esse agendamento por aqui. Obrigada pelo atendimento.`);
+  }
   if (mode === 'self_service') {
     return polishAiReply(`Perfeito, ${leadFirstName(lead)}. Vou montar seu estudo e te confirmo por aqui. Obrigada pelo atendimento.`);
   }
@@ -716,7 +757,10 @@ async function finalizeScheduledHandoff(params: {
   const { session, lead, conversationId, adminProfile, aiConfig, customerMessage, incomingWasAudio } = params;
   let summary = appendSummaryLine(session.summary || leadFacts(lead), `*Agendado*: ${customerMessage.trim()}`);
   summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
-  const reply = handoffScheduleReply(lead, handoffContactMode(lead, adminProfile, aiConfig?.atende_sozinho === true));
+  // Aqui so existe o aiConfig: sem o nome_exibicao preenchido, o modo pessoa
+  // nao tem nome para citar e o texto cai no generico.
+  const identity = aiIdentity(aiConfig, '');
+  const reply = handoffScheduleReply(lead, handoffContactMode(lead, adminProfile, identity), identity.displayName);
 
   if (incomingWasAudio) {
     try {
@@ -1341,7 +1385,8 @@ async function askAline(
   customerMessage: string,
   aiConfig: { persona: string; system_prompt: string },
   corretoraNome: string,
-  contactMode: HandoffContactMode
+  contactMode: HandoffContactMode,
+  pessoa?: string
 ) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
@@ -1386,7 +1431,7 @@ async function askAline(
     '- Nunca use nome completo falando com o cliente.',
     '- O nome completo so deve aparecer em resumo interno, banco de dados ou notificacao para o responsavel.',
   ].join('\n');
-  const system = `${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}\n\n${nameRule}\n\n${handoffContactRule(contactMode)}`;
+  const system = `${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}\n\n${nameRule}\n\n${handoffContactRule(contactMode, pessoa)}`;
   const lastMessage = messages[messages.length - 1];
   const alreadyHasCustomerMessage =
     lastMessage?.role === 'user' &&
@@ -1532,11 +1577,10 @@ export async function startLeadAiIfEligible(leadId: string) {
     ? `Você clicou em um anúncio nosso e preencheu o formulário de interesse da ${opName}.`
     : 'Você clicou em um anúncio nosso e preencheu o formulário de interesse em nossos planos de saúde.';
 
+  const introIdentity = aiIdentity(aiConfig, formattedBrokerageName);
   const intro = fixPortugueseMojibake([
     `Olá, ${leadFirstName(lead)}! Tudo bem?`,
-    aiConfig.atende_sozinho === true
-      ? `Aqui é a ${aiConfig.persona}.`
-      : `Me chamo ${aiConfig.persona}, da ${formattedBrokerageName}.`,
+    aiIntroLine(introIdentity, aiConfig.persona),
     interestText,
     initialLeadQuestion(lead),
   ].join('\n\n'));
@@ -1658,7 +1702,8 @@ export async function continueLeadAiFromIncoming(options: {
   if (aiConfig.sender_mode === 'dedicated') {
     adminProfile.ai_instance_name = aiConfig.dedicated_instance_name || uazapiAiInstanceName(corretora.id);
   }
-  const contactMode = handoffContactMode(lead, adminProfile, aiConfig?.atende_sozinho === true);
+  const contactIdentity = aiIdentity(aiConfig, formatAiBrokerageDisplayName(corretora.nome || ''));
+  const contactMode = handoffContactMode(lead, adminProfile, contactIdentity);
 
   const { data: recentHistory } = await supabaseAdmin
     .from('whatsapp_mensagens')
@@ -1829,7 +1874,7 @@ export async function continueLeadAiFromIncoming(options: {
   if (isCallRefusal(options.customerMessage, previousOutboundText)) {
     ai = {
       handoff: true,
-      reply: callRefusalHandoffReply(lead, contactMode),
+      reply: callRefusalHandoffReply(lead, contactMode, contactIdentity.displayName),
       summary: appendSummaryLine(
         session.summary || leadFacts(lead),
         'IA encerrada: cliente recusou ligacao/reuniao e pediu continuidade sem chamada. Especialista deve assumir o atendimento.'
@@ -1849,7 +1894,7 @@ export async function continueLeadAiFromIncoming(options: {
     };
   } else {
     try {
-      ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName, contactMode);
+      ai = await askAline(lead, history || [], options.customerMessage, aiConfig, formattedBrokerageName, contactMode, contactIdentity.displayName);
     } catch (error) {
       console.error('[lead_ai_agent] IA falhou ao continuar atendimento. Usando fluxo de contingencia:', error);
       ai = fallbackLeadAiContinuation({
@@ -1867,7 +1912,7 @@ export async function continueLeadAiFromIncoming(options: {
 
   if (scheduleConfirmed) {
     handoff = true;
-    reply = customerReplyForFollowUp(handoffScheduleReply(lead, contactMode), lead, Boolean(previousOutboundText));
+    reply = customerReplyForFollowUp(handoffScheduleReply(lead, contactMode, contactIdentity.displayName), lead, Boolean(previousOutboundText));
     summary = appendSummaryLine(summary || leadFacts(lead), `*Agendado*: ${options.customerMessage.trim()}`);
     summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
   }

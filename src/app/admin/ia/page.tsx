@@ -34,6 +34,8 @@ interface AiConfig {
   id: string;
   corretora_id: string;
   persona: string;
+  modo_identidade?: string | null;
+  nome_exibicao?: string | null;
   system_prompt: string;
   sender_profile_id?: string | null;
   sender_mode?: 'profile' | 'dedicated';
@@ -240,6 +242,8 @@ export default function AdminIaPage() {
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [selectedCorretoraId, setSelectedCorretoraId] = useState('');
   const [persona, setPersona] = useState(DEFAULT_LEAD_AI_PERSONA);
+  const [modoIdentidade, setModoIdentidade] = useState<'equipe' | 'equipe_pessoa' | 'propria'>('equipe');
+  const [nomeExibicao, setNomeExibicao] = useState('');
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
   const [senderProfilesByCorretora, setSenderProfilesByCorretora] = useState<Record<string, SenderProfile[]>>({});
   const [selectedSenderProfileId, setSelectedSenderProfileId] = useState('');
@@ -342,6 +346,8 @@ export default function AdminIaPage() {
     setIsAddingNew(false);
     setSelectedCorretoraId(config.corretora_id);
     setPersona(config.persona);
+    setModoIdentidade(config.modo_identidade === 'propria' || config.modo_identidade === 'equipe_pessoa' ? config.modo_identidade : 'equipe');
+    setNomeExibicao(config.nome_exibicao || '');
     setSystemPrompt(config.system_prompt);
     setSelectedSenderProfileId(config.sender_mode === 'dedicated' ? '__dedicated__' : (config.sender_profile_id || ''));
     setSelectedPromptModelId(findPromptModelId(config.system_prompt, promptModels));
@@ -456,6 +462,8 @@ export default function AdminIaPage() {
         body: JSON.stringify({
           corretora_id: selectedCorretoraId,
           persona: persona.trim(),
+          modo_identidade: modoIdentidade,
+          nome_exibicao: nomeExibicao.trim(),
           system_prompt: systemPrompt.trim(),
           use_default_model: isAddingNew && selectedPromptModelId === 'builtin-danilo',
           sender_profile_id: selectedSenderProfileId && selectedSenderProfileId !== '__dedicated__' ? selectedSenderProfileId : null,
@@ -899,6 +907,46 @@ export default function AdminIaPage() {
                       required
                       className="w-full px-3 py-3 rounded-xl border border-slate-800 bg-slate-900/60 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
                     />
+                  </div>
+
+                  {/* Como a IA se apresenta */}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                        Como a IA se apresenta
+                      </label>
+                      <select
+                        value={modoIdentidade}
+                        onChange={(e) => setModoIdentidade(e.target.value as 'equipe' | 'equipe_pessoa' | 'propria')}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-800 bg-slate-900/60 text-xs font-bold text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+                      >
+                        <option value="equipe">Equipe da corretora</option>
+                        <option value="equipe_pessoa">Equipe de uma pessoa</option>
+                        <option value="propria">A própria pessoa atende</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                        Nome que o cliente lê
+                      </label>
+                      <input
+                        type="text"
+                        value={nomeExibicao}
+                        onChange={(e) => setNomeExibicao(e.target.value)}
+                        placeholder="Ex.: Michele"
+                        className="w-full px-3 py-3 rounded-xl border border-slate-800 bg-slate-900/60 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+                      />
+                    </div>
+                    <p className="md:col-span-2 text-[9px] font-bold leading-relaxed text-slate-500">
+                      {modoIdentidade === 'propria'
+                        ? `Abertura: "Aqui é a ${persona || 'persona'}." No fim ela diz que vai montar o estudo e retornar, sem prometer especialista.`
+                        : modoIdentidade === 'equipe_pessoa'
+                          ? `Abertura: "Me chamo ${persona || 'persona'}, faço parte da equipe da ${nomeExibicao || 'nome'}." No fim ela promete que ${nomeExibicao || 'a pessoa'} vai chamar.`
+                          : `Abertura: "Me chamo ${persona || 'persona'}, da ${nomeExibicao || 'corretora'}." No fim ela promete um especialista da equipe.`}
+                      {modoIdentidade === 'propria' && nomeExibicao.trim() && persona.trim() && nomeExibicao.trim().toLowerCase() !== persona.trim().toLowerCase()
+                        ? ` Atenção: a persona é "${persona}" e o nome que o cliente lê é "${nomeExibicao}". Nesse modo os dois deveriam ser a mesma pessoa.`
+                        : ''}
+                    </p>
                   </div>
 
                   {/* Behavior/System Prompt */}

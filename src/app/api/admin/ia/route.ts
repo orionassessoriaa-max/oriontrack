@@ -105,6 +105,9 @@ export async function POST(request: Request) {
       ? DEFAULT_LEAD_AI_SYSTEM_PROMPT
       : requestedPrompt;
     const requestedStatus = String(body.status || 'ativo').trim() || 'ativo';
+    const requestedMode = String(body.modo_identidade || '').trim();
+    const modo_identidade = ['equipe', 'equipe_pessoa', 'propria'].includes(requestedMode) ? requestedMode : 'equipe';
+    const nome_exibicao = String(body.nome_exibicao || '').trim() || null;
     const sender_profile_id = body.sender_profile_id ? String(body.sender_profile_id) : null;
     const sender_mode = body.sender_mode === 'dedicated' ? 'dedicated' : 'profile';
     const status = sender_mode === 'dedicated' && requestedStatus === 'ativo' ? 'aguardando_conexao' : requestedStatus;
@@ -119,6 +122,8 @@ export async function POST(request: Request) {
         corretora_id,
         persona,
         system_prompt,
+        modo_identidade,
+        nome_exibicao,
         sender_profile_id,
         sender_mode,
         dedicated_instance_name: sender_mode === 'dedicated' ? uazapiAiInstanceName(corretora_id) : null,
@@ -137,6 +142,7 @@ export async function POST(request: Request) {
       metadata: {
         corretora_id,
         persona,
+        modo_identidade,
         status,
         sender_profile_id,
         sender_mode,

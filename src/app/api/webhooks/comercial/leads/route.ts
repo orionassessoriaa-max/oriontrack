@@ -199,15 +199,27 @@ async function findExistingCommercialLead(telefone: string | null, email: string
   if (!telefone && !email) return null;
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const phoneDigits = normalizePhone(telefone);
+  const emailKey = normalizeText(email).toLowerCase();
+
+  // Filtro no banco em vez de varrer os ultimos mil leads a cada lead que
+  // entra: o funil dispara isso em rajada e a varredura pesava no Postgres.
+  const filters: string[] = [];
+  if (phoneDigits.length >= 8) {
+    const last8 = phoneDigits.slice(-8);
+    filters.push(`telefone.ilike.%${last8}`, `telefone.ilike.%${last8.slice(0, 4)}-${last8.slice(4)}`);
+  }
+  if (emailKey) filters.push(`email.ilike.${emailKey}`);
+  if (!filters.length) return null;
+
   const { data } = await supabaseAdmin
     .from('comercial_leads')
     .select('*')
     .gte('data_entrada', since)
+    .or(filters.join(','))
     .order('data_entrada', { ascending: false })
-    .limit(1000);
+    .limit(50);
 
-  const phoneDigits = normalizePhone(telefone);
-  const emailKey = normalizeText(email).toLowerCase();
   return (data || []).find((lead) => {
     const samePhone = phoneDigits && normalizePhone(lead.telefone).endsWith(phoneDigits.slice(-10));
     const sameEmail = emailKey && normalizeText(lead.email).toLowerCase() === emailKey;
