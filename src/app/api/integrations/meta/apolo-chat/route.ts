@@ -271,7 +271,19 @@ daily_budget deve ser informado em reais (exemplo: 50 para R$ 50,00). Nunca inve
       }),
     });
 
-    if (!response.ok) return NextResponse.json({ error: 'O Apolo nao respondeu. Tente novamente em alguns segundos.' }, { status: 502 });
+    if (!response.ok) {
+      // Sem isso o gestor via "tente novamente" e ninguem descobria a causa:
+      // contexto grande demais, imagem pesada, modelo indisponivel.
+      const detalhe = await response.text().catch(() => '');
+      console.error('[apolo_chat] OpenAI recusou:', response.status, detalhe.slice(0, 600));
+      let motivo = '';
+      try { motivo = String(JSON.parse(detalhe)?.error?.message || ''); } catch { motivo = ''; }
+      return NextResponse.json({
+        error: motivo
+          ? `O Apolo nao respondeu: ${motivo.slice(0, 220)}`
+          : `O Apolo nao respondeu (erro ${response.status}). Tente novamente em alguns segundos.`,
+      }, { status: 502 });
+    }
     const payload = await response.json();
     const content = payload.choices?.[0]?.message?.content;
     if (!content) return NextResponse.json({ error: 'Resposta vazia do Apolo.' }, { status: 502 });

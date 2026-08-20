@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { ArrowLeft, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, ExternalLink, FileImage, FilePlus2, FileVideo2, Folder, HardDrive, Layers3, Loader2, Maximize2, Megaphone, Pause, Pencil, Play, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
+import { ArrowLeft, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, CircleDollarSign, ExternalLink, FileImage, FilePlus2, FileVideo2, Folder, HardDrive, Layers3, Loader2, Maximize2, Megaphone, Pencil, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
 import { TRAFFIC_RULES, formatBRL, formatPercent } from '@/lib/trafego/rules';
 import { normalizeOptimizationDraft, type NormalizedOptimizationDraft } from '@/lib/trafego/optimizationDraft';
 
@@ -126,6 +126,8 @@ export default function OtimizacoesPage() {
   const [total, setTotal] = useState<Metrics | null>(null);
   const [tree, setTree] = useState<CampaignNode[]>([]);
   const [statusBusy, setStatusBusy] = useState<string | null>(null);
+  // null = ordem que a Meta devolveu. 'ativos' = ligados em cima. 'pausados' = ligados embaixo.
+  const [statusSort, setStatusSort] = useState<'ativos' | 'pausados' | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [dateStart, setDateStart] = useState(daysAgo(30));
@@ -178,6 +180,27 @@ export default function OtimizacoesPage() {
     [tree]
   );
   const adOrderCampaign = tree.find((campaign) => campaign.id === adOrderCampaignId) || null;
+
+  /**
+   * Ordena por ligado/desligado nos tres niveis, igual ao gerenciador da Meta.
+   * Um clique traz os ativos para cima, o segundo joga para baixo, o terceiro
+   * volta para a ordem original da conta.
+   */
+  const treeOrdenada = useMemo(() => {
+    if (!statusSort) return tree;
+    const ligado = (item: { status?: string; effective_status?: string }) =>
+      String(item.effective_status || item.status || '').toUpperCase() === 'ACTIVE' ? 1 : 0;
+    const ordenar = <T extends { status?: string; effective_status?: string }>(lista: T[]) =>
+      [...lista].sort((a, b) => (statusSort === 'ativos' ? ligado(b) - ligado(a) : ligado(a) - ligado(b)));
+
+    return ordenar(tree).map((campanha) => ({
+      ...campanha,
+      adsets: ordenar(campanha.adsets).map((conjunto) => ({
+        ...conjunto,
+        ads: ordenar(conjunto.ads),
+      })),
+    }));
+  }, [tree, statusSort]);
   const adOrderAdsets = adOrderCampaign?.adsets || [];
 
   function chooseApoloAction(prompt: string) {
@@ -910,17 +933,27 @@ export default function OtimizacoesPage() {
                           <th className="px-3 py-3 text-right">CPM</th>
                           <th className="px-3 py-3 text-right">CTR</th>
                           <th className="px-3 py-3 text-right">Freq.</th>
-                          <th className="px-3 py-3 pr-5 text-right">Ação</th>
+                          <th className="px-3 py-3 pr-5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setStatusSort((atual) => (atual === 'ativos' ? 'pausados' : atual === 'pausados' ? null : 'ativos'))}
+                              title={statusSort === 'ativos' ? 'Ativos primeiro. Clique para inverter.' : statusSort === 'pausados' ? 'Ativos por ultimo. Clique para voltar a ordem da conta.' : 'Clique para trazer os ativos para cima.'}
+                              className="tf-no-lift inline-flex items-center gap-1 text-inherit"
+                            >
+                              Ativado
+                              {statusSort === 'ativos' ? <ChevronUp size={13} /> : statusSort === 'pausados' ? <ChevronDown size={13} /> : <ChevronsUpDown size={13} style={{ opacity: 0.45 }} />}
+                            </button>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {tree.length === 0 ? (
+                        {treeOrdenada.length === 0 ? (
                           <tr>
                             <td colSpan={11} className="px-5 py-10 text-center text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
                               Nenhuma campanha com entrega no período.
                             </td>
                           </tr>
-                        ) : tree.map((campaign) => (
+                        ) : treeOrdenada.map((campaign) => (
                           <CampaignRows
                             key={campaign.id}
                             campaign={campaign}
@@ -1922,18 +1955,24 @@ function MetricRow({ name, level, status, metrics, budgetType, budgetAmount, bud
         {onToggleStatus ? (
           <button
             type="button"
+            role="switch"
+            aria-checked={ativo}
+            aria-label={`${ativo ? 'Desativar' : 'Ativar'} ${level.toLowerCase()} na Meta`}
             onClick={onToggleStatus}
             disabled={busy}
-            title={ativo ? `Pausar ${level.toLowerCase()} na Meta` : `Ativar ${level.toLowerCase()} na Meta`}
-            className="tf-no-lift inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+            title={ativo ? `Desativar ${level.toLowerCase()} na Meta` : `Ativar ${level.toLowerCase()} na Meta`}
+            className="tf-no-lift relative inline-flex h-5 w-9 items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-50"
             style={{
-              background: ativo ? 'var(--tf-warn-soft)' : 'var(--tf-accent-soft)',
-              borderColor: ativo ? 'var(--tf-warn-border)' : 'var(--tf-accent-border)',
-              color: ativo ? 'var(--tf-warn)' : 'var(--tf-accent-ink)',
+              background: ativo ? 'var(--tf-accent)' : 'var(--tf-border)',
+              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
             }}
           >
-            {busy ? <Loader2 className="animate-spin" size={13} /> : ativo ? <Pause size={13} /> : <Play size={13} />}
-            {busy ? '...' : ativo ? 'Pausar' : 'Ativar'}
+            <span
+              className="absolute grid h-4 w-4 place-items-center rounded-full bg-white transition-all"
+              style={{ left: ativo ? '18px' : '2px', boxShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
+            >
+              {busy ? <Loader2 className="animate-spin" size={10} style={{ color: 'var(--tf-accent)' }} /> : null}
+            </span>
           </button>
         ) : null}
       </td>
