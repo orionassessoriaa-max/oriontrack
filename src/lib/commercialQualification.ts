@@ -44,6 +44,20 @@ export function getCommercialMqlLevel(faturamento: unknown, investimento: unknow
   return hasCommercialInvestment(investimento) ? 'B' : 'C';
 }
 
-export function isCommercialMql(faturamento: unknown, investimento: unknown) {
-  return getCommercialMqlLevel(faturamento, investimento) !== 'C';
+export function isCommercialMql(faturamento: unknown, _investimento?: unknown) {
+  void _investimento;
+  const revenueLabel = String(faturamento ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  if (!revenueLabel || /\b(?:nao informado|sem informacao)\b/.test(revenueLabel)) return false;
+
+  const tokens = revenueLabel.match(/-?\d+(?:[.,]\d+)*/g) || [];
+  if (!tokens.length) return false;
+  if (tokens.length === 1 && /\b(?:abaixo|menos)\s+de\b|\bate\b/.test(revenueLabel)) return false;
+
+  const multiplier = /(?:\bmil\b|\bk\b)/i.test(revenueLabel) ? 1000 : 1;
+  const revenues = tokens.map((token) => parseCommercialToken(token) * multiplier);
+
+  // Faixas representam uma promessa de faturamento minimo. Ex.: "R$ 10 mil a
+  // R$ 20 mil" nao garante o corte, enquanto "R$ 20 mil a R$ 50 mil" garante.
+  const minimumRevenue = revenues.length > 1 ? Math.min(...revenues) : revenues[0];
+  return minimumRevenue >= 20_000;
 }

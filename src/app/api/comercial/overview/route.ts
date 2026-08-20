@@ -147,7 +147,7 @@ export async function GET(request: Request) {
   const closed = leads.filter((lead) => lead.status === 'Negócio fechado' || Number(lead.valor_fechado || 0) > 0);
   const revenue = closed.reduce((sum, lead) => sum + Number(lead.valor_fechado || 0), 0);
   const negotiation = leads
-    .filter((lead) => !['Perdido', 'Desqualificado', 'Fora do MQL', 'Negócio fechado'].includes(lead.status))
+    .filter((lead) => normalized(lead.status) === 'em negociacao')
     .reduce((sum, lead) => sum + Number(lead.valor_negociacao || 0), 0);
   const closeTimes = closed
     .map((lead) => {

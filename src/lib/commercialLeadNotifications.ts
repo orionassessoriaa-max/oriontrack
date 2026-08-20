@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
-import { getCommercialMqlLevel } from '@/lib/commercialQualification';
+import { isCommercialMql } from '@/lib/commercialQualification';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 type CommercialLeadNotification = {
@@ -123,7 +123,7 @@ export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotific
   const targets = await loadCommercialNotificationProfiles(sdrId);
   if (!targets.sdr) return { sdr: [], coordinators: [] };
 
-  const outsideMql = getCommercialMqlLevel(lead.faturamento_mensal, lead.investimento) === 'C';
+  const outsideMql = !isCommercialMql(lead.faturamento_mensal, lead.investimento);
   const motivation = await generateMotivation(targets.sdr.nome || 'SDR', outsideMql);
   const sdrMessage = [
     'Um novo lead entrou no seu rodizio.',
