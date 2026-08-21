@@ -406,7 +406,19 @@ function fixPortugueseMojibake(text: string) {
 }
 
 function polishAiReply(text: string) {
-  let polished = fixPortugueseMojibake(text)
+  // E-mail e link saem de cena antes da pontuacao ser arrumada: as regras de
+  // "espaco depois do ponto" e "maiuscula depois do ponto" transformavam
+  // ms.isabelopes@gmail.com em "ms. Isabelopes@gmail. Com".
+  const protegidos: string[] = [];
+  const comMascara = String(text || '').replace(
+    /(https?:\/\/\S+|[\w.+-]+@[\w-]+\.[\w.-]+)/g,
+    (achado) => {
+      protegidos.push(achado);
+      return `@@PROTEGIDO${protegidos.length - 1}@@`;
+    },
+  );
+
+  let polished = fixPortugueseMojibake(comMascara)
     .replace(/\bvoce\b/gi, 'você')
     .replace(/\bcotacao\b/gi, 'cotação')
     .replace(/\bsimulacao\b/gi, 'simulação')
@@ -455,7 +467,7 @@ function polishAiReply(text: string) {
   polished = polished.replace(/(^|[.!?]\s+)([a-záàâãéêíóôõúç])/g, (_full, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
   if (!/[.!?)]$/.test(polished)) polished += '.';
 
-  return polished;
+  return polished.replace(/@@PROTEGIDO(\d+)@@/g, (_todo, indice) => protegidos[Number(indice)] ?? '');
 }
 
 function parseAiJson(raw: string) {
@@ -661,7 +673,7 @@ function fallbackLeadAiContinuation(params: {
   if (!hasKnownValue(lead.hospital_preferencia) && !hasKnownValue(hospital)) {
     reply = 'Entendi. Tem algum hospital ou clinica de preferencia na sua regiao?';
   } else if (!hasKnownValue(lead.motivo_busca) && !hasKnownValue(motive)) {
-    reply = 'Anotado. E qual e o principal motivo para buscar um novo plano: economia, rede de atendimento ou alguma necessidade especifica?';
+    reply = 'Anotado. E qual e o principal motivo para buscar um novo plano: reducao de custo, rede de atendimento ou alguma necessidade especifica?';
   } else if (!hasKnownValue(lead.email) && !hasKnownValue(email)) {
     reply = 'Certo. Qual e o melhor e-mail para eu deixar a proposta organizada?';
   } else {
