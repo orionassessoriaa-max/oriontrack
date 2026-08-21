@@ -212,7 +212,7 @@ type HandoffContactMode = 'self_service' | 'team_person' | 'same_whatsapp' | 'di
 
 export type AiIdentityMode = 'equipe' | 'equipe_pessoa' | 'propria';
 
-type AiIdentity = { mode: AiIdentityMode; displayName: string };
+type AiIdentity = { mode: AiIdentityMode; displayName: string; brokerageName: string };
 
 /**
  * Como a concessionaria se apresenta. O booleano atende_sozinho veio antes da
@@ -224,12 +224,30 @@ export function aiIdentity(aiConfig: any, brokerageName: string): AiIdentity {
     ? stored
     : aiConfig?.atende_sozinho === true ? 'propria' : 'equipe';
   const displayName = String(aiConfig?.nome_exibicao || '').trim() || brokerageName;
-  return { mode, displayName };
+  return { mode, displayName, brokerageName };
+}
+
+function mesmoNome(esquerda?: string | null, direita?: string | null) {
+  const limpar = (valor?: string | null) => String(valor || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase();
+  const a = limpar(esquerda);
+  const b = limpar(direita);
+  return Boolean(a) && Boolean(b) && (a === b || a.includes(b) || b.includes(a));
 }
 
 /** Frase de apresentacao da primeira mensagem, por modo. */
 export function aiIntroLine(identity: AiIdentity, persona: string) {
-  if (identity.mode === 'propria') return `Aqui é a ${persona}.`;
+  if (identity.mode === 'propria') {
+    // A corretora que leva o nome da dona ficaria com "Aqui e a Roniele, da
+    // Roniele". Quando o nome da corretora e outro, dizer de onde ela fala
+    // ajuda o cliente a lembrar do anuncio.
+    return mesmoNome(identity.brokerageName, persona)
+      ? `Aqui é a ${persona}.`
+      : `Aqui é a ${persona}, da ${identity.brokerageName}.`;
+  }
   if (identity.mode === 'equipe_pessoa') return `Me chamo ${persona}, faço parte da equipe da ${identity.displayName}.`;
   return `Me chamo ${persona}, da ${identity.displayName}.`;
 }
@@ -379,10 +397,21 @@ function splitReply(text: string) {
     .slice(0, 4);
 }
 
-function stripPersonaPrefix(text: string) {
-  return text
-    .replace(/^\s*(?:aline|aline\s+ia|ia\s+aline)\s*[:\-–—]\s*/i, '')
-    .trim();
+function escaparRegex(valor: string) {
+  return valor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// O modelo as vezes devolve "Rafaela: bom dia". O prefixo tem que sair seja
+// qual for a persona da corretora, nao so quando ela se chama Aline.
+function stripPersonaPrefix(text: string, persona?: string) {
+  const nomes = ['aline', 'aline ia', 'ia aline'];
+  const daCorretora = String(persona || '').trim().toLowerCase();
+  if (daCorretora) nomes.push(daCorretora, `ia ${daCorretora}`);
+  const alternativas = nomes
+    .map((nome) => escaparRegex(nome).replace(/\s+/g, '\\s+'))
+    .join('|');
+  const prefixo = new RegExp('^\\s*(?:' + alternativas + ')\\s*[:\\-–—]\\s*', 'i');
+  return text.replace(prefixo, '').trim();
 }
 
 function fixPortugueseMojibake(text: string) {
@@ -470,16 +499,16 @@ function polishAiReply(text: string) {
   return polished.replace(/@@PROTEGIDO(\d+)@@/g, (_todo, indice) => protegidos[Number(indice)] ?? '');
 }
 
-function parseAiJson(raw: string) {
+function parseAiJson(raw: string, persona?: string) {
   const clean = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
   try {
     const parsed = JSON.parse(clean);
     return {
       ...parsed,
-      reply: polishAiReply(stripPersonaPrefix(String(parsed?.reply || ''))),
+      reply: polishAiReply(stripPersonaPrefix(String(parsed?.reply || ''), persona)),
     };
   } catch {
-    return { reply: polishAiReply(stripPersonaPrefix(clean)), handoff: false, summary: '' };
+    return { reply: polishAiReply(stripPersonaPrefix(clean, persona)), handoff: false, summary: '' };
   }
 }
 
@@ -585,6 +614,23 @@ function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode, pessoa
     return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Nossa equipe continuara seu atendimento em breve. Obrigada!`);
   }
   return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Um especialista da nossa equipe vai entrar em contato para enviar a cotacao e prosseguir com seu atendimento. Obrigada!`);
+}
+
+// O pedido de valor tinha resposta fixa prometendo "um especialista". Na
+// corretora que atende sozinha (modo propria) nao existe outra pessoa para
+// chamar, e a frase soava falsa para o cliente.
+export function valueRequestHandoffReply(mode: HandoffContactMode, pessoa?: string) {
+  const base = 'Os valores dependem da cotacao, da rede escolhida e dos dados do perfil.';
+  if (mode === 'team_person' && pessoa) {
+    return polishAiReply(`${base} A ${pessoa} vai te passar os numeros certinhos por aqui.`);
+  }
+  if (mode === 'self_service') {
+    return polishAiReply(`${base} Vou levantar os valores certinhos e te retorno por aqui mesmo.`);
+  }
+  if (mode === 'different_responsible') {
+    return polishAiReply(`${base} Um especialista da nossa equipe vai te passar os numeros por outro numero.`);
+  }
+  return polishAiReply(`${base} Vou pedir para um especialista te passar os numeros certinhos.`);
 }
 
 function isCnpjConfirmationQuestion(text?: string | null) {
@@ -1408,7 +1454,7 @@ export async function askAline(
 
       const payload = await response.json().catch(() => ({}));
       if (response.ok) {
-        return parseAiJson(payload?.choices?.[0]?.message?.content || '');
+        return parseAiJson(payload?.choices?.[0]?.message?.content || '', aiConfig.persona);
       }
 
       const requestError = new Error(payload?.error?.message || `Erro HTTP ${response.status} ao chamar IA do lead.`);
@@ -1795,7 +1841,7 @@ export async function continueLeadAiFromIncoming(options: {
   } else if (isValueRequest(options.customerMessage)) {
     ai = {
       handoff: true,
-      reply: 'Consigo pedir para um especialista te passar os valores certinhos, porque isso depende da cotacao, da rede escolhida e dos dados do perfil. Vou chamar ele para te orientar melhor.',
+      reply: valueRequestHandoffReply(contactMode, contactIdentity.displayName),
       summary: appendSummaryLine(session.summary || leadFacts(lead), `IA encerrada: cliente pediu valores. Especialista deve assumir e apresentar a cotacao.`),
     };
   } else {

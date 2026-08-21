@@ -273,6 +273,18 @@ export default function AdminIaPage() {
   const canSavePromptModel = systemPrompt.trim().length > 0 && (selectedPromptModelId === 'custom' || promptEditedFromModel);
   const availableSenderProfiles = senderProfilesByCorretora[selectedCorretoraId] || [];
 
+  // Espelha aiIntroLine() do leadAiAgent: no modo propria a IA so cita a
+  // corretora quando o nome dela nao e o da propria pessoa.
+  const nomeCorretora = selectedConfig?.corretoras?.nome
+    || inactiveCorretoras.find((item) => item.id === selectedCorretoraId)?.nome
+    || '';
+  const aberturaPropria = (() => {
+    const pessoa = persona.trim() || 'persona';
+    const marca = nomeCorretora.replace(/\bcorretora\b/gi, '').trim();
+    const igual = marca && pessoa.toLowerCase().includes(marca.toLowerCase());
+    return marca && !igual ? `Aqui é a ${pessoa}, da ${marca}.` : `Aqui é a ${pessoa}.`;
+  })();
+
   async function loadData() {
     if (!isAdmin) {
       setLoading(false);
@@ -939,7 +951,7 @@ export default function AdminIaPage() {
                     </div>
                     <p className="md:col-span-2 text-[9px] font-bold leading-relaxed text-slate-500">
                       {modoIdentidade === 'propria'
-                        ? `Abertura: "Aqui é a ${persona || 'persona'}." No fim ela diz que vai montar o estudo e retornar, sem prometer especialista.`
+                        ? `Abertura: "${aberturaPropria}" No fim ela diz que vai montar o estudo e retornar, sem prometer especialista.`
                         : modoIdentidade === 'equipe_pessoa'
                           ? `Abertura: "Me chamo ${persona || 'persona'}, faço parte da equipe da ${nomeExibicao || 'nome'}." No fim ela promete que ${nomeExibicao || 'a pessoa'} vai chamar.`
                           : `Abertura: "Me chamo ${persona || 'persona'}, da ${nomeExibicao || 'corretora'}." No fim ela promete um especialista da equipe.`}

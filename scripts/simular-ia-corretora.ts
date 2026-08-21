@@ -23,6 +23,7 @@ import {
   initialLeadQuestion,
   isCallRefusal,
   isValueRequest,
+  valueRequestHandoffReply,
   leadFirstName,
 } from '../src/lib/leadAiAgent';
 
@@ -108,21 +109,29 @@ async function main() {
   if (!aiConfig) throw new Error(`Corretora "${alvo}" nao tem configuracao de IA.`);
 
   const nomeExibicao = formatAiBrokerageDisplayName(corretora.nome);
-  const identidade = aiIdentity(aiConfig, nomeExibicao);
+  // SIMULA_PERSONA e SIMULA_MODO permitem ver como ficaria uma mudanca de
+  // identidade antes de rodar o SQL que a aplica de verdade.
+  const configSimulada = {
+    ...aiConfig,
+    persona: process.env.SIMULA_PERSONA || aiConfig.persona,
+    modo_identidade: process.env.SIMULA_MODO || aiConfig.modo_identidade,
+    nome_exibicao: process.env.SIMULA_NOME_EXIBICAO || aiConfig.nome_exibicao,
+  };
+  const identidade = aiIdentity(configSimulada, nomeExibicao);
   const adminProfile: any = {
     id: aiConfig.sender_profile_id || null,
     ai_instance_name: aiConfig.sender_mode === 'dedicated' ? aiConfig.dedicated_instance_name : null,
   };
   const modoContato = handoffContactMode(LEAD_FALSO, adminProfile, identidade);
 
-  bloco(`${corretora.nome} | persona ${aiConfig.persona} | status ${aiConfig.status}`);
+  bloco(`${corretora.nome} | persona ${configSimulada.persona} | status ${aiConfig.status}`);
   console.log(`identidade: ${identidade.mode} (${identidade.displayName})`);
   console.log(`encerramento: ${modoContato}`);
   console.log(`prompt do banco: ${(aiConfig.system_prompt || '').length} caracteres`);
 
   const abertura = [
     `Olá, ${leadFirstName(LEAD_FALSO)}! Tudo bem?`,
-    aiIntroLine(identidade, aiConfig.persona),
+    aiIntroLine(identidade, configSimulada.persona),
     'Você clicou em um anúncio nosso e preencheu o formulário de interesse da Amil.',
     initialLeadQuestion(LEAD_FALSO),
   ].join('\n\n');
@@ -130,7 +139,7 @@ async function main() {
   bloco('MENSAGEM DE ABERTURA (texto fixo do codigo, nao passa pela IA)');
   console.log(abertura);
 
-  const historico: any[] = [{ direction: 'outbound', remetente: aiConfig.persona, mensagem: abertura, metadata: {} }];
+  const historico: any[] = [{ direction: 'outbound', remetente: configSimulada.persona, mensagem: abertura, metadata: {} }];
   let ultimaSaida = abertura;
 
   bloco('CONVERSA');
@@ -144,7 +153,7 @@ async function main() {
     }
     if (isValueRequest(fala)) {
       console.log('[interceptado pelo codigo: pedido de valor -> handoff, sem chamar a IA]');
-      console.log('IA: Consigo pedir para um especialista te passar os valores certinhos, porque isso depende da cotacao, da rede escolhida e dos dados do perfil. Vou chamar ele para te orientar melhor.');
+      console.log(`IA: ${valueRequestHandoffReply(modoContato, identidade.displayName)}`);
       break;
     }
 
@@ -152,7 +161,7 @@ async function main() {
       LEAD_FALSO,
       historico,
       fala,
-      { persona: aiConfig.persona, system_prompt: aiConfig.system_prompt },
+      { persona: configSimulada.persona, system_prompt: aiConfig.system_prompt },
       nomeExibicao,
       modoContato,
       identidade.displayName,
@@ -160,7 +169,7 @@ async function main() {
     ultimaSaida = String(resposta?.reply || '');
     console.log(`IA: ${ultimaSaida}`);
     if (resposta?.handoff) console.log('[a IA pediu handoff: o especialista assume daqui]');
-    historico.push({ direction: 'outbound', remetente: aiConfig.persona, mensagem: ultimaSaida, metadata: { ai_text: ultimaSaida } });
+    historico.push({ direction: 'outbound', remetente: configSimulada.persona, mensagem: ultimaSaida, metadata: { ai_text: ultimaSaida } });
     if (resposta?.handoff) break;
   }
   console.log('');
