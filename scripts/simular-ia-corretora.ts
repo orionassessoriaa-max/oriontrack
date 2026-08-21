@@ -4,10 +4,11 @@
  * lido de corretora_ai_configs, para que o que aparece aqui seja o que o lead
  * receberia de verdade.
  *
- *   node tmp/simulador.mjs "SOMA CORRETORA"
+ *   npm run simular-ia -- "SOMA CORRETORA"
+ *   npm run simular-ia -- "SOMA CORRETORA" "sim" "sou mei" "tenho 40 anos"
  *
- * As falas do cliente ficam em ROTEIRO_PADRAO e podem ser trocadas por um
- * arquivo .json passado como segundo argumento.
+ * Sem falas informadas usa ROTEIRO_PADRAO. Tambem aceita um arquivo .json com
+ * a lista de falas do cliente.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,16 +56,33 @@ const LEAD_FALSO: any = {
   corretor_id: null,
 };
 
+function normalizarNome(valor: unknown) {
+  return String(valor ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim();
+}
+
 function bloco(titulo: string) {
   console.log(`\n${'='.repeat(72)}\n${titulo}\n${'='.repeat(72)}`);
 }
 
 async function main() {
-  const alvo = (process.argv[2] || 'SOMA CORRETORA').toUpperCase();
-  const arquivoRoteiro = process.argv[3];
-  const roteiro: string[] = arquivoRoteiro
-    ? JSON.parse(fs.readFileSync(arquivoRoteiro, 'utf8'))
-    : ROTEIRO_PADRAO;
+  // O npm no Windows entrega argumentos com espaco escapados com "^"
+  // ("SOMA CORRETORA" chega como ^SOMA^ CORRETORA^). Limpar aqui evita ter que
+  // lembrar de nao usar espaco na linha de comando.
+  const limpar = (valor: string) => valor.replace(/\^/g, '').trim();
+  const alvo = normalizarNome(limpar(process.argv[2] || 'SOMA CORRETORA'));
+  const resto = process.argv.slice(3).map(limpar).filter(Boolean);
+  // Aceita tres formas: sem argumento (roteiro padrao), um arquivo .json com a
+  // lista de falas, ou as falas do cliente digitadas direto na linha de comando.
+  const roteiro: string[] = resto.length === 0
+    ? ROTEIRO_PADRAO
+    : resto.length === 1 && resto[0].toLowerCase().endsWith('.json')
+      ? JSON.parse(fs.readFileSync(resto[0], 'utf8'))
+      : resto;
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,8 +91,14 @@ async function main() {
   );
 
   const { data: corretoras } = await supabase.from('corretoras').select('id,nome');
-  const corretora = (corretoras || []).find((item) => String(item.nome || '').toUpperCase() === alvo);
-  if (!corretora) throw new Error(`Corretora "${alvo}" nao encontrada.`);
+  const candidatas = (corretoras || []).filter((item) => normalizarNome(item.nome).includes(alvo));
+  if (candidatas.length === 0) {
+    throw new Error(`Corretora "${alvo}" nao encontrada. Existem: ${(corretoras || []).map((item) => item.nome).join(', ')}`);
+  }
+  if (candidatas.length > 1) {
+    throw new Error(`"${alvo}" casa com mais de uma: ${candidatas.map((item) => item.nome).join(', ')}. Seja mais especifico.`);
+  }
+  const corretora = candidatas[0];
 
   const { data: aiConfig } = await supabase
     .from('corretora_ai_configs')

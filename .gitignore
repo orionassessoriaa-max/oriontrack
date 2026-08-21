@@ -50,3 +50,6 @@ next-env.d.ts
 # open-next
 .open-next
 .wrangler
+
+# arquivos de trabalho locais
+tmp/
