@@ -5,6 +5,7 @@ import {
 } from "@/lib/api/comercial";
 import { recordCommercialTimelineEvent } from "@/lib/commercialTimeline";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { cadenceDayFromStage } from "@/lib/comercialCadencia";
 
 const attemptTemplate = [
   { ordem: 1, canal: "ligacao_fixo", titulo: "Ligação (fixo)" },
@@ -23,14 +24,6 @@ function normalize(value: unknown) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
-}
-
-function cadenceDayFromStage(value: unknown) {
-  const normalized = normalize(value);
-  const match = normalized.match(/^dia\s*(10|[1-9])$/);
-  if (match) return Number(match[1]);
-  if (/^1[º°o]?\s*dia$/.test(normalized)) return 1;
-  return null;
 }
 
 async function allowedLead(

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { cadenceDayFromStage, isContactCadenceStage } from "@/lib/comercialCadencia";
 import {
   CalendarClock,
   CalendarDays,
@@ -92,21 +93,6 @@ function formatDaniloEntry(value: string | null | undefined) {
   return `${date.toLocaleDateString("pt-BR")} às ${date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-function cadenceDayFromStage(value: string | null | undefined) {
-  const normalized = String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-  const match = normalized.match(/^dia\s*(10|[1-9])$/);
-  if (match) return Number(match[1]);
-  if (/^1[º°o]?\s*dia$/.test(normalized)) return 1;
-  return null;
-}
-
-function isContactCadenceStage(value: string | null | undefined) {
-  return cadenceDayFromStage(value) !== null;
-}
 
 function localSaoPauloDay(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
@@ -189,6 +175,8 @@ export default function CommercialKanbanPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [initialStatus, setInitialStatus] = useState("Oportunidade");
   const [dragging, setDragging] = useState<string | null>(null);
+  const draggingRef = useRef<string | null>(null);
+  draggingRef.current = dragging;
   const [dropStage, setDropStage] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
   const [stageDragging, setStageDragging] = useState<string | null>(null);
@@ -273,6 +261,7 @@ export default function CommercialKanbanPage() {
     void load();
     void loadStages();
   }, [load, loadStages]);
+
   useEffect(() => {
     const channel = supabase
       .channel(`commercial-kanban-${currentProfileId || "current"}`)
@@ -280,8 +269,12 @@ export default function CommercialKanbanPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "comercial_leads" },
         () => {
+          // Recarregar no meio de um arrasto faz o card voltar para a coluna
+          // antiga na mao do usuario. Espera ele soltar.
+          if (draggingRef.current) return;
           if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
           realtimeRefreshTimer.current = setTimeout(() => {
+            if (draggingRef.current) return;
             void load(true).catch(() => undefined);
           }, 250);
         },
