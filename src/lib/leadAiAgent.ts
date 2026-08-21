@@ -35,7 +35,7 @@ const AI_PERSONA = 'Aline';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
 const DEFAULT_ELEVENLABS_FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
 
-function formatAiBrokerageDisplayName(name?: string | null) {
+export function formatAiBrokerageDisplayName(name?: string | null) {
   const rawName = String(name || '').trim();
   const cleanName = rawName.replace(/\bcorretora\b/gi, '').replace(/\s+/g, ' ').trim();
 
@@ -218,7 +218,7 @@ type AiIdentity = { mode: AiIdentityMode; displayName: string };
  * Como a concessionaria se apresenta. O booleano atende_sozinho veio antes da
  * coluna modo_identidade e continua valendo enquanto a migration nao roda.
  */
-function aiIdentity(aiConfig: any, brokerageName: string): AiIdentity {
+export function aiIdentity(aiConfig: any, brokerageName: string): AiIdentity {
   const stored = String(aiConfig?.modo_identidade || '').trim();
   const mode: AiIdentityMode = stored === 'propria' || stored === 'equipe_pessoa' || stored === 'equipe'
     ? stored
@@ -228,7 +228,7 @@ function aiIdentity(aiConfig: any, brokerageName: string): AiIdentity {
 }
 
 /** Frase de apresentacao da primeira mensagem, por modo. */
-function aiIntroLine(identity: AiIdentity, persona: string) {
+export function aiIntroLine(identity: AiIdentity, persona: string) {
   if (identity.mode === 'propria') return `Aqui é a ${persona}.`;
   if (identity.mode === 'equipe_pessoa') return `Me chamo ${persona}, faço parte da equipe da ${identity.displayName}.`;
   return `Me chamo ${persona}, da ${identity.displayName}.`;
@@ -243,7 +243,7 @@ function plain(value?: unknown, fallback = 'Nao informado') {
   return text || fallback;
 }
 
-function leadFirstName(lead: LeadRow, fallback = 'tudo bem') {
+export function leadFirstName(lead: LeadRow, fallback = 'tudo bem') {
   const fullName = plain(lead.nome, fallback).replace(/\s+/g, ' ').trim();
   const first = fullName.split(/\s+/)[0]?.trim();
   return first || fallback;
@@ -291,7 +291,7 @@ function adName(lead: LeadRow) {
   return plain(lead.utm_content || lead.utm_term || lead.utm_campaign || lead.utm_medium || lead.utm_source);
 }
 
-function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow, identity?: AiIdentity): HandoffContactMode {
+export function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow, identity?: AiIdentity): HandoffContactMode {
   // A corretora que atende sozinha nao tem para quem repassar: a persona da IA
   // e a propria dona, entao o encerramento e "vou montar seu estudo".
   if (identity?.mode === 'propria') return 'self_service';
@@ -363,7 +363,7 @@ function leadFacts(lead: LeadRow) {
   ].filter(Boolean).join('\n');
 }
 
-function initialLeadQuestion(lead: LeadRow) {
+export function initialLeadQuestion(lead: LeadRow) {
   if (hasKnownValue(lead.idades)) {
     return `Você gostaria de receber uma cotação para as idades ${plain(lead.idades, '')}, correto?`;
   }
@@ -539,7 +539,7 @@ function isGreetingOnly(text?: string | null) {
   return /^(oi|ola|ol[aá]|bom dia|boa tarde|boa noite|e ai|eae|opa)( tudo bem| tudo bom| tudo certo| beleza)?$/.test(normalized);
 }
 
-function isValueRequest(text?: string | null) {
+export function isValueRequest(text?: string | null) {
   const normalized = normalizeAiText(text);
   return (
     /\b(valor|valores|preco|precos|preco exato|mensalidade|tabela|quanto custa|quanto fica|quanto sai|qual o valor|passa o valor|me passa o valor|manda o valor|simulacao pronta)\b/.test(normalized) ||
@@ -547,7 +547,7 @@ function isValueRequest(text?: string | null) {
   );
 }
 
-function isCallRefusal(text?: string | null, previousOutboundText?: string | null) {
+export function isCallRefusal(text?: string | null, previousOutboundText?: string | null) {
   const normalized = normalizeAiText(text)
     .replace(/[!?.,;:]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -1317,7 +1317,9 @@ async function notifyResponsible(lead: LeadRow, summary: string) {
   }
 }
 
-async function askAline(
+// Exportada para o simulador (scripts/simular-ia-corretora.ts) poder rodar a
+// mesma geracao usada em producao, sem enviar nada no WhatsApp.
+export async function askAline(
   lead: LeadRow, 
   history: Array<{ direction: string; remetente?: string | null; mensagem: string; metadata?: any }>, 
   customerMessage: string,
