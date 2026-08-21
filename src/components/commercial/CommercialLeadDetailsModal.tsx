@@ -360,6 +360,8 @@ export default function CommercialLeadDetailsModal({
 
   useEffect(() => {
     if (!lead) return;
+    // A different lead starts a fresh editing session in the same modal.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEditForm(editableLead(lead));
     setEditing(false);
     setEditError(null);
@@ -870,7 +872,7 @@ export default function CommercialLeadDetailsModal({
                 <header>
                   <div>
                     <strong>Cadência — Dia {contactCadence.day}</strong>
-                    <small>Checklist de contato em Tentando contato</small>
+                    <small>Checklist exclusivo desta etapa</small>
                   </div>
                   <span>
                     {contactCadence.attempts.filter((attempt) => attempt.status !== "pendente").length}/8
@@ -922,6 +924,27 @@ export default function CommercialLeadDetailsModal({
                     <span className="kh-cadence-loading">Carregando checklist...</span>
                   )}
                 </div>
+                {(contactCadence.history || []).length > 0 && (
+                  <div className="kh-cadence-history">
+                    <strong>Checklists anteriores</strong>
+                    {(contactCadence.history || []).map((historyDay) => (
+                      <details key={historyDay.day}>
+                        <summary>
+                          Dia {historyDay.day}
+                          <span>{historyDay.completed_attempts}/8 registrados</span>
+                        </summary>
+                        <div className="kh-cadence-history-attempts">
+                          {historyDay.attempts.map((attempt) => (
+                            <div key={attempt.id}>
+                              <span>{attempt.ordem}. {attempt.titulo}</span>
+                              <small>{cadenceStatusLabels[attempt.status] || attempt.status}</small>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                )}
               </section>
             )}
             {contactCadenceLoading && !contactCadence && (

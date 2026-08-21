@@ -606,6 +606,16 @@
 .kh-cadence-actions button:hover:not(:disabled) { filter: brightness(1.12); }
 .kh-cadence-actions button:focus-visible { outline: 2px solid #ff93d2; outline-offset: 2px; }
 .kh-cadence-actions button:disabled { cursor: wait; opacity: .55; }
+.kh-cadence-history { display: grid; gap: 7px; border-top: 1px solid #1b384b; padding: 11px 14px 14px; }
+.kh-cadence-history > strong { color: #b9cad6; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.kh-cadence-history details { overflow: hidden; border: 1px solid #29485c; border-radius: 7px; background: #081722; }
+.kh-cadence-history summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #e8f2f8; padding: 8px 10px; font-size: 10px; font-weight: 850; cursor: pointer; }
+.kh-cadence-history summary:focus-visible { outline: 2px solid #ff93d2; outline-offset: -2px; }
+.kh-cadence-history summary span { color: #8da8bb; font-size: 9px; font-weight: 700; }
+.kh-cadence-history-attempts { display: grid; border-top: 1px solid #203d50; padding: 5px 10px 8px; }
+.kh-cadence-history-attempts > div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid rgba(32, 61, 80, .7); padding: 5px 0; color: #c7d6df; font-size: 9px; }
+.kh-cadence-history-attempts > div:last-child { border-bottom: 0; }
+.kh-cadence-history-attempts small { color: #7896aa; font-size: 8px; text-transform: uppercase; }
 .kh-lead-history, .kh-lead-qualification, .kh-lead-accordion { border: 1px solid #21445c; border-radius: 10px; background: #0b1b28; }
 .kh-lead-history { min-width: 0; padding: 14px; }
 .kh-section-title { min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -1267,6 +1277,11 @@
   background: #07111b !important;
   padding: 9px 10px 12px !important;
 }
+.kh-danilo-card.is-cadence-overdue {
+  border-color: #f43f5e !important;
+  background: linear-gradient(145deg, rgba(127, 29, 29, .34), #07111b 58%) !important;
+  box-shadow: inset 3px 0 0 #fb7185, 0 0 18px rgba(244, 63, 94, .2);
+}
 .kh-danilo-card .kh-card-top { min-height: 13px; gap: 5px; }
 .kh-danilo-card .kh-card-top small { color: #8aa0b7; font-size: 8px; letter-spacing: .05em; }
 .kh-card-mql { --mql-color: #ff5571; --mql-bg: rgba(181,25,54,.27); --mql-glow: rgba(255,73,103,.27); display: inline-flex; align-items: center; border: 1px solid var(--mql-color); border-radius: 999px; background: var(--mql-bg); box-shadow: 0 0 12px var(--mql-glow); color: var(--mql-color); padding: 2px 6px; font-size: 7px; font-weight: 950; letter-spacing: .03em; white-space: nowrap; }
@@ -1280,6 +1295,8 @@
 .kh-danilo-card .kh-card-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kh-danilo-card .kh-card-cnpj { display: inline-flex; max-width: 100%; margin-top: 5px; overflow: hidden; border: 1px solid #087b59; border-radius: 999px; background: #062b26; color: #13d89a; padding: 2px 6px; font-size: 7px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .kh-danilo-card .kh-card-cadence { display: block; width: 100%; max-width: none; box-sizing: border-box; margin-top: 5px; overflow: hidden; border: 1px solid #ff70c4; border-radius: 999px; background: #d31f8c; box-shadow: 0 5px 16px rgba(211,31,140,.22); color: #fff; padding: 4px 7px; font-size: 8px; font-weight: 850; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.kh-danilo-card .kh-card-cadence-alert { display: flex; align-items: center; gap: 5px; margin-top: 6px; border: 1px solid rgba(251, 113, 133, .65); border-radius: 5px; background: rgba(159, 18, 57, .36); color: #fecdd3; padding: 5px 7px; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: .025em; }
+.kh-danilo-card .kh-card-cadence-alert svg { flex: 0 0 auto; }
 .kh-danilo-card .kh-card-entry { margin-top: 5px; color: #b8c8d8; }
 .kh-danilo-card .kh-card-return { display: flex; align-items: center; gap: 5px; margin-top: 6px; border: 1px solid rgba(0, 187, 255, .38); border-radius: 6px; background: rgba(0, 139, 207, .16); color: #78ddff; padding: 5px 7px; font-size: 8px; font-weight: 850; }.kh-danilo-card .kh-card-return svg { flex: 0 0 auto; }
 .kh-danilo-card .kh-card-negotiation-value { display: flex; align-items: center; gap: 5px; margin-top: 6px; border: 1px solid rgba(16, 185, 129, .42); border-radius: 6px; background: rgba(5, 150, 105, .16); color: #6ee7b7; padding: 5px 7px; font-size: 9px; font-weight: 900; }.kh-danilo-card .kh-card-negotiation-value svg { flex: 0 0 auto; }

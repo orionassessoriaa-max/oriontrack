@@ -8,6 +8,7 @@ import { isCommercialMql } from '@/lib/commercialQualification';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { generateOnboardingBriefing } from '@/lib/commercialOnboardingBriefing';
+import { canAssignCommercialResponsible } from '@/lib/comercial';
 
 function normalizeStage(value: unknown) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -121,9 +122,15 @@ export async function POST(request: Request) {
   if (!nome) return NextResponse.json({ error: 'Nome do lead e obrigatorio.' }, { status: 400 });
 
   const status = String(body.status || 'Oportunidade').trim().slice(0, 80) || 'Oportunidade';
+  const canAssignResponsible = guard.isDevOps || canAssignCommercialResponsible(
+    guard.commercialRole,
+    guard.profile.id,
+  );
   const assignedSdrId = guard.commercialRole === 'sdr'
     ? guard.profile.id
-    : body.sdr_id || await assignNextCommercialSdr();
+    : canAssignResponsible && body.sdr_id
+      ? body.sdr_id
+      : await assignNextCommercialSdr();
   const payload = {
     nome,
     telefone: String(body.telefone || '').trim() || null,
@@ -204,6 +211,10 @@ export async function PATCH(request: Request) {
     'valor_pago', 'modelo_pagamento', 'reuniao_link',
   ];
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const canAssignResponsible = guard.isDevOps || canAssignCommercialResponsible(
+    guard.commercialRole,
+    guard.profile.id,
+  );
   const enteringNegotiation = isNegotiationStage(targetStatus) && !isNegotiationStage(allowed.status);
   const negotiationValue = Object.prototype.hasOwnProperty.call(body, 'valor_negociacao')
     ? Number(body.valor_negociacao)
@@ -235,7 +246,8 @@ export async function PATCH(request: Request) {
   for (const field of allowedFields) {
     if (!guard.canViewCommercialFinancials && ['valor_fechado', 'valor_pago', 'modelo_pagamento'].includes(field)) continue;
     if (!guard.canViewCommercialFinancials && field === 'valor_negociacao' && !enteringNegotiation) continue;
-    if (guard.commercialRole === 'sdr' && ['sdr_id', 'closer_id'].includes(field)) continue;
+    if (field === 'sdr_id' && !canAssignResponsible) continue;
+    if (guard.commercialRole === 'sdr' && field === 'closer_id') continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
   }
   if (enteringNegotiation) update.valor_negociacao = negotiationValue;

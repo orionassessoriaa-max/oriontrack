@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
   CalendarDays,
   CalendarPlus,
+  AlertTriangle,
   CircleDollarSign,
   ChevronDown,
   ChevronUp,
@@ -28,6 +29,7 @@ import { useCommercial } from "@/components/commercial/CommercialShell";
 import CommercialLeadModal from "@/components/commercial/CommercialLeadModal";
 import CommercialLeadDetailsModal from "@/components/commercial/CommercialLeadDetailsModal";
 import {
+  canAssignCommercialResponsible,
   canManageCommercialStages,
   COMMERCIAL_STAGES,
   currency,
@@ -90,23 +92,37 @@ function formatDaniloEntry(value: string | null | undefined) {
   return `${date.toLocaleDateString("pt-BR")} às ${date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-function formatDaniloCadence(value: string | null | undefined) {
-  if (!value) return "Cadência: dia 1";
-  const startedAt = new Date(value).getTime();
-  if (Number.isNaN(startedAt)) return "Cadência: dia 1";
-  const days = Math.max(
-    1,
-    Math.floor(Math.max(0, Date.now() - startedAt) / 86400000) + 1,
-  );
-  return `Cadência: dia ${days}`;
-}
-
-function isContactCadenceStage(value: string | null | undefined) {
-  return String(value || "")
+function cadenceDayFromStage(value: string | null | undefined) {
+  const normalized = String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
-    .toLowerCase() === "tentando contato";
+    .toLowerCase();
+  const match = normalized.match(/^dia\s*(10|[1-9])$/);
+  if (match) return Number(match[1]);
+  if (/^1[º°o]?\s*dia$/.test(normalized)) return 1;
+  return null;
+}
+
+function isContactCadenceStage(value: string | null | undefined) {
+  return cadenceDayFromStage(value) !== null;
+}
+
+function localSaoPauloDay(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function isCadenceStageOverdue(lead: CommercialLead) {
+  if (!isContactCadenceStage(lead.status) || !lead.status_started_at) return false;
+  const enteredDay = localSaoPauloDay(lead.status_started_at);
+  return Boolean(enteredDay) && enteredDay < localSaoPauloDay(new Date());
 }
 
 function normalizeStageForCard(value: string | null | undefined) {
@@ -232,14 +248,15 @@ export default function CommercialKanbanPage() {
   const [assignmentChoice, setAssignmentChoice] = useState<
     Record<string, string>
   >({});
+  const realtimeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const payload = await api("/api/comercial/leads");
       setLeads(payload.leads || []);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [api]);
   const loadStages = useCallback(async () => {
@@ -250,13 +267,36 @@ export default function CommercialKanbanPage() {
       /* fallback ate a migration ser aplicada */
     }
   }, [api]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
+    // Initial data synchronization for this client-only Kanban.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     void loadStages();
   }, [load, loadStages]);
   useEffect(() => {
+    const channel = supabase
+      .channel(`commercial-kanban-${currentProfileId || "current"}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "comercial_leads" },
+        () => {
+          if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
+          realtimeRefreshTimer.current = setTimeout(() => {
+            void load(true).catch(() => undefined);
+          }, 250);
+        },
+      )
+      .subscribe();
+    return () => {
+      if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
+      realtimeRefreshTimer.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [currentProfileId, load]);
+  useEffect(() => {
     if (!expandedLeadId) {
+      // Reset the modal-bound state when there is no selected lead.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInteractionError(null);
       setContactCadence(null);
       setContactCadenceError(null);
@@ -340,7 +380,7 @@ export default function CommercialKanbanPage() {
     () => members.filter((member) => member.ativo && (member.papel === "closer" || member.profile_id === "a12b63f9-4c72-4a92-a99a-98c020723a06")),
     [members],
   );
-  const canAssignSdr = isDevOps || role === "coordenador";
+  const canAssignSdr = isDevOps || canAssignCommercialResponsible(role, currentProfileId);
   const canManageStages = canManageCommercialStages(role, currentProfileId);
   const visible = useMemo(
     () =>
@@ -411,7 +451,11 @@ export default function CommercialKanbanPage() {
     }
     setMovingId(id);
     setLeads((current) =>
-      current.map((lead) => (lead.id === id ? { ...lead, status } : lead)),
+      current.map((lead) =>
+        lead.id === id
+          ? { ...lead, status, status_started_at: new Date().toISOString() }
+          : lead,
+      ),
     );
     try {
       const payload = await api("/api/comercial/leads", {
@@ -1152,6 +1196,8 @@ export default function CommercialKanbanPage() {
                       lead.faturamento_mensal,
                       lead.investimento,
                     );
+                    const cadenceDay = cadenceDayFromStage(lead.status);
+                    const cadenceOverdue = isCadenceStageOverdue(lead);
                     return (
                       <article
                         key={lead.id}
@@ -1173,7 +1219,7 @@ export default function CommercialKanbanPage() {
                         }}
                         tabIndex={0}
                         role="button"
-                        className={`kh-danilo-card ${dragging === lead.id ? "dragging" : ""}`}
+                        className={`kh-danilo-card ${dragging === lead.id ? "dragging" : ""} ${cadenceOverdue ? "is-cadence-overdue" : ""}`}
                       >
                         <div className="kh-card-top">
                           <span
@@ -1203,11 +1249,12 @@ export default function CommercialKanbanPage() {
                         )}
                         {isContactCadenceStage(lead.status) && (
                           <div className="kh-card-cadence">
-                            {formatDaniloCadence(
-                              lead.contato_cadencia_inicio ||
-                                lead.status_started_at ||
-                                lead.data_entrada,
-                            )}
+                            Cadência: Dia {cadenceDay}
+                          </div>
+                        )}
+                        {cadenceOverdue && (
+                          <div className="kh-card-cadence-alert" role="status">
+                            <AlertTriangle size={12} /> Mover para o próximo dia
                           </div>
                         )}
                         <div className="kh-card-entry">

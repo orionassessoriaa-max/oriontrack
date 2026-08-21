@@ -6,8 +6,6 @@ import {
 import { recordCommercialTimelineEvent } from "@/lib/commercialTimeline";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-const CONTACT_STAGE = "tentando contato";
-const DAY_MS = 86_400_000;
 const attemptTemplate = [
   { ordem: 1, canal: "ligacao_fixo", titulo: "Ligação (fixo)" },
   { ordem: 2, canal: "ligacao_fixo", titulo: "Ligação (fixo)" },
@@ -27,10 +25,12 @@ function normalize(value: unknown) {
     .toLowerCase();
 }
 
-function cadenceDay(startedAt: string | null) {
-  const timestamp = startedAt ? new Date(startedAt).getTime() : Date.now();
-  if (Number.isNaN(timestamp)) return 1;
-  return Math.min(10, Math.max(1, Math.floor((Date.now() - timestamp) / DAY_MS) + 1));
+function cadenceDayFromStage(value: unknown) {
+  const normalized = normalize(value);
+  const match = normalized.match(/^dia\s*(10|[1-9])$/);
+  if (match) return Number(match[1]);
+  if (/^1[º°o]?\s*dia$/.test(normalized)) return 1;
+  return null;
 }
 
 async function allowedLead(
@@ -41,7 +41,7 @@ async function allowedLead(
   let query = supabaseAdmin
     .from("comercial_leads")
     .select(
-      "id,status,sdr_id,closer_id,contato_cadencia_ativa,contato_cadencia_inicio",
+      "id,status,sdr_id,closer_id,status_started_at,contato_cadencia_ativa,contato_cadencia_inicio",
     )
     .eq("id", id);
   if (guard.commercialRole !== "coordenador")
@@ -72,36 +72,42 @@ async function ensureDay(leadId: string, day: number) {
 async function cadencePayload(lead: {
   id: string;
   status: string;
+  status_started_at: string | null;
   contato_cadencia_ativa: boolean;
   contato_cadencia_inicio: string | null;
 }) {
-  const active =
-    normalize(lead.status) === CONTACT_STAGE && lead.contato_cadencia_ativa;
-  const day = cadenceDay(lead.contato_cadencia_inicio);
-  if (!active)
-    return {
-      active: false,
-      day,
-      started_at: lead.contato_cadencia_inicio,
-      completed: false,
-      attempts: [],
-    };
-
-  await ensureDay(lead.id, day);
+  const stageDay = cadenceDayFromStage(lead.status);
+  const active = stageDay !== null;
+  const day = stageDay || 1;
+  if (active) await ensureDay(lead.id, day);
   const { data, error } = await supabaseAdmin
     .from("comercial_cadencia_tentativas")
     .select("id,lead_id,dia,ordem,canal,titulo,status,concluido_at")
     .eq("lead_id", lead.id)
-    .eq("dia", day)
+    .order("dia", { ascending: true })
     .order("ordem", { ascending: true });
   if (error) throw error;
-  const attempts = data || [];
+  const rows = data || [];
+  const attempts = active ? rows.filter((item) => item.dia === day) : [];
+  const historyDays = [...new Set(rows.map((item) => Number(item.dia)))]
+    .filter((historyDay) => !active || historyDay !== day)
+    .sort((left, right) => right - left);
   return {
-    active: true,
+    active,
     day,
-    started_at: lead.contato_cadencia_inicio,
+    started_at: lead.status_started_at,
     completed: attempts.length > 0 && attempts.every((item) => item.status !== "pendente"),
     attempts,
+    history: historyDays.map((historyDay) => {
+      const historyAttempts = rows.filter((item) => item.dia === historyDay);
+      const completedAttempts = historyAttempts.filter((item) => item.status !== "pendente").length;
+      return {
+        day: historyDay,
+        completed: historyAttempts.length > 0 && completedAttempts === historyAttempts.length,
+        completed_attempts: completedAttempts,
+        attempts: historyAttempts,
+      };
+    }),
   };
 }
 
@@ -135,12 +141,10 @@ export async function PATCH(
   const lead = await allowedLead(id, guard);
   if (!lead)
     return NextResponse.json({ error: "Lead sem permissão." }, { status: 403 });
-  if (
-    normalize(lead.status) !== CONTACT_STAGE ||
-    !lead.contato_cadencia_ativa
-  )
+  const day = cadenceDayFromStage(lead.status);
+  if (day === null)
     return NextResponse.json(
-      { error: "A cadência só pode ser registrada em Tentando contato." },
+      { error: "A cadência só pode ser registrada nas etapas Dia 1 a Dia 10." },
       { status: 409 },
     );
 
@@ -153,7 +157,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Resultado inválido." }, { status: 400 });
 
   try {
-    const day = cadenceDay(lead.contato_cadencia_inicio);
     await ensureDay(id, day);
     const { data: attempt, error: attemptError } = await supabaseAdmin
       .from("comercial_cadencia_tentativas")

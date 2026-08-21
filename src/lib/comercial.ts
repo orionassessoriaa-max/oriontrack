@@ -1,7 +1,15 @@
 export const COMMERCIAL_STATUSES = [
   "Oportunidade",
-  "1º dia",
-  "Tentando contato",
+  "Dia 1",
+  "Dia 2",
+  "Dia 3",
+  "Dia 4",
+  "Dia 5",
+  "Dia 6",
+  "Dia 7",
+  "Dia 8",
+  "Dia 9",
+  "Dia 10",
   "Plano de saúde",
   "Fora do ICP com recurso",
   "Dentro do ICP sem recurso",
@@ -45,6 +53,16 @@ export const LEO_COMMERCIAL_CLOSER_PROFILE_ID =
   "97558b76-425a-42b7-900b-46830f2c28d3";
 
 export function canManageCommercialStages(
+  role?: CommercialRole | null,
+  profileId?: string | null,
+) {
+  return (
+    role === "coordenador" ||
+    (role === "closer" && profileId === LEO_COMMERCIAL_CLOSER_PROFILE_ID)
+  );
+}
+
+export function canAssignCommercialResponsible(
   role?: CommercialRole | null,
   profileId?: string | null,
 ) {
@@ -142,6 +160,12 @@ export type CommercialContactCadence = {
   started_at: string | null;
   completed: boolean;
   attempts: CommercialCadenceAttempt[];
+  history: Array<{
+    day: number;
+    completed: boolean;
+    completed_attempts: number;
+    attempts: CommercialCadenceAttempt[];
+  }>;
 };
 
 export type CommercialTask = {

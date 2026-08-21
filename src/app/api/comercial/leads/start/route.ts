@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
+import { canAssignCommercialResponsible } from '@/lib/comercial';
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request);
@@ -13,7 +14,10 @@ export async function POST(request: Request) {
   const id = String(body.id || '').trim();
   if (!id) return NextResponse.json({ error: 'Lead obrigatorio.' }, { status: 400 });
 
-  const canAssignAnySdr = guard.isDevOps || guard.commercialRole === 'coordenador';
+  const canAssignAnySdr = guard.isDevOps || canAssignCommercialResponsible(
+    guard.commercialRole,
+    guard.profile.id,
+  );
   const hasRequestedAssignee = Object.prototype.hasOwnProperty.call(body, 'sdr_id');
   const requestedSdrId = body.sdr_id === null || body.sdr_id === '' ? null : String(body.sdr_id || '').trim();
 
@@ -76,6 +80,6 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    error: 'A atribuicao e feita pelo rodizio. Somente coordenadores podem alterar o responsavel.',
+    error: 'A atribuicao e feita pelo rodizio. Seu perfil nao pode alterar o responsavel.',
   }, { status: 403 });
 }
