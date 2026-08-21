@@ -5,6 +5,7 @@
  *
  *   npm run testar-voip -- 61999990000 61988880000
  *   npm run testar-voip -- 61999990000 61988880000 2      (forca o device_id 2)
+ *   npm run testar-voip -- 61999990000 61988880000 scan   (procura o device_id)
  *
  * ATENCAO: isto faz o telefone tocar de verdade. Use dois numeros seus.
  */
@@ -43,25 +44,49 @@ if (!src || !dst) {
   console.error('Uso: npm run testar-voip -- <numero-do-operador> <numero-de-destino> [device_id]');
   process.exit(1);
 }
-if (src === String(deviceId)) {
+if (String(deviceId).toLowerCase() !== 'scan' && src === String(deviceId)) {
   console.error('Regra do manual: o ramal em src nao pode ser igual ao device_id.');
+  process.exit(1);
+}
+const endpoint = `https://${dominio}/api/click2Call/${encodeURIComponent(token)}/${encodeURIComponent(key)}`;
+
+async function chamar(id) {
+  const resposta = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: Number(id), src, dst }),
+  });
+  const corpo = await resposta.text();
+  let json = null;
+  try { json = JSON.parse(corpo); } catch { /* resposta fora do padrao */ }
+  return { status: resposta.status, corpo, json };
+}
+
+// A central valida na ordem src, dst e device_id. Id errado responde
+// DEVICE_NOT_FOUND sem discar, entao a varredura so faz o telefone tocar
+// quando encontra o id certo.
+if (String(deviceId).toLowerCase() === 'scan') {
+  console.log(`procurando o device_id | src ${src} | dst ${dst}`);
+  console.log('id errado nao disca; quando o telefone tocar, achamos.\n');
+  for (let id = 1; id <= 20; id += 1) {
+    const { json, corpo } = await chamar(id);
+    const motivo = json ? (json.reason || json.message || corpo) : corpo.slice(0, 80);
+    if (json && Number(json.error) === 0) {
+      console.log(`\n>>> device_id ${id} ACEITO: ${json.message || 'chamada em processamento'}`);
+      console.log('Coloque este valor em VOIP_CLICK2CALL_DEVICE_ID.');
+      process.exit(0);
+    }
+    console.log(`    device_id ${String(id).padStart(2)} | ${motivo}`);
+  }
+  console.log('\nNenhum id de 1 a 20 foi aceito. Peca o device_id ao suporte.');
   process.exit(1);
 }
 
 console.log(`device_id ${deviceId} | src ${src} | dst ${dst}`);
 console.log('a central liga primeiro para o src...');
-
-const resposta = await fetch(`https://${dominio}/api/click2Call/${encodeURIComponent(token)}/${encodeURIComponent(key)}`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ device_id: Number(deviceId), src, dst }),
-});
-const corpo = await resposta.text();
-console.log(`\nHTTP ${resposta.status}`);
+const { status, corpo, json } = await chamar(deviceId);
+console.log(`\nHTTP ${status}`);
 console.log(corpo);
-try {
-  const json = JSON.parse(corpo);
-  console.log(Number(json.error) === 0 ? '\nOK: a central aceitou. Se o telefone nao tocar, o device_id ou a linha estao errados.' : `\nRECUSADO: ${json.reason || json.message || 'sem motivo'}`);
-} catch {
-  console.log('\nA resposta nao veio em JSON. Confira o dominio.');
-}
+if (!json) console.log('\nA resposta nao veio em JSON. Confira o dominio.');
+else if (Number(json.error) === 0) console.log('\nOK: a central aceitou e vai ligar para o src primeiro.');
+else console.log(`\nRECUSADO: ${json.reason || json.message || 'sem motivo'}`);
