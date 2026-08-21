@@ -301,7 +301,7 @@ _Por favor, acesse o painel Orion Track em https://oriontrack.com.br/trafego/avi
 
           sendResults.push({ gestor_id: gestor.id, status: 'success', phone: normalizedPhone });
         } catch (err: any) {
-          console.error(`Erro ao disparar WhatsApp de alerta para gestor ${gestor.id}:`, err);
+          console.error('Erro ao disparar WhatsApp de alerta para gestor %s:', gestor.id, err);
           sendResults.push({ gestor_id: gestor.id, status: 'failed', reason: err.message || 'Erro Evolution API' });
         }
       }

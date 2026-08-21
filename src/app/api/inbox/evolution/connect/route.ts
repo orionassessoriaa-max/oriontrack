@@ -77,7 +77,7 @@ async function fetchEvolutionInstanceState(instance: string) {
     const statePayload = await evolutionFetch(`/instance/connectionState/${instance}`, { method: 'GET' }, instanceApiKey);
     return readEvolutionState(statePayload);
   } catch (error) {
-    console.warn(`[GET /api/inbox/evolution/connect] connectionState failed for ${instance}. Trying fetchInstances fallback.`, error);
+    console.warn('[GET /api/inbox/evolution/connect] connectionState failed for %s. Trying fetchInstances fallback.', instance, error);
   }
 
   const instancesPayload = await evolutionFetch(`/instance/fetchInstances?instanceName=${encodeURIComponent(instance)}`, { method: 'GET' }, instanceApiKey);
@@ -254,14 +254,14 @@ export async function DELETE(request: Request) {
     try {
       await evolutionFetch(`/instance/logout/${instance}`, { method: 'DELETE' }, instanceApiKey);
     } catch (e) {
-      console.warn(`[DELETE /api/inbox/evolution/connect] Logout failed or already logged out for ${instance}:`, e);
+      console.warn('[DELETE /api/inbox/evolution/connect] Logout failed or already logged out for %s:', instance, e);
     }
 
     // 2. Exclui a instância
     try {
       await evolutionFetch(`/instance/delete/${instance}`, { method: 'DELETE' }, instanceApiKey);
     } catch (e) {
-      console.warn(`[DELETE /api/inbox/evolution/connect] Delete failed or already deleted for ${instance}:`, e);
+      console.warn('[DELETE /api/inbox/evolution/connect] Delete failed or already deleted for %s:', instance, e);
     }
 
     await writeAuditLog(request, guard.profile, {

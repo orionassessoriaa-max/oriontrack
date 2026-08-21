@@ -152,7 +152,7 @@ function companyFolderKey(value?: string | null) {
   const normalized = normalizeFolderName(value);
   const withoutPhrases = [...ignored]
     .sort((a, b) => b.length - a.length)
-    .reduce((current, phrase) => current.replace(new RegExp(`\\b${phrase}\\b`, 'g'), ' '), normalized);
+    .reduce((current, phrase) => current.replace(new RegExp(`\\b${phrase}\\b`, 'g'), ' '), normalized); // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- phrase vem do Set fixo `ignored`
   return withoutPhrases.replace(/\s+/g, ' ').trim() || normalized;
 }
 

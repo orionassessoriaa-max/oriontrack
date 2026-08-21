@@ -601,10 +601,14 @@ function statusFromSheet(value: string) {
 async function resolveSheetName(editUrl: string, gid: string) {
   if (!editUrl || !gid) return '';
 
+  // O gid vem da URL colada pelo usuario, entao precisa ser escapado antes de virar regex.
+  const safeGid = gid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   try {
     const response = await fetch(editUrl, { cache: 'no-store' });
     const html = await response.text();
-    const tabEntry = html.match(new RegExp(String.raw`\[\d+,0,\\\"${gid}\\\",[\s\S]{0,600}?\[0,0,\\\"([^\\\"]+)\\\"`));
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- gid escapado acima
+    const tabEntry = html.match(new RegExp(String.raw`\[\d+,0,\\\"${safeGid}\\\",[\s\S]{0,600}?\[0,0,\\\"([^\\\"]+)\\\"`));
     if (tabEntry?.[1]) return tabEntry[1];
 
     const marker = `\\"${gid}\\"`;

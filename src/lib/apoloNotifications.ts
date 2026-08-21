@@ -84,7 +84,7 @@ export async function sendApoloWhatsApp({ type, title, message, profiles, respec
        }, { instanceName: APOLO_MASTER_INSTANCE });
        results.push({ profile_id: profile.id, status: 'success', phone });
      } catch (err: any) {
-       console.error(`[Apolo notifications] send failed for ${profile.id}:`, err);
+       console.error('[Apolo notifications] send failed for %s:', profile.id, err);
        results.push({ profile_id: profile.id, status: 'failed', reason: err.message || 'Erro UAZAPI' });
      }
    }

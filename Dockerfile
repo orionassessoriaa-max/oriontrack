@@ -20,14 +20,19 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder --chown=node:node /app/package*.json ./
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/.next ./.next
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/next.config.ts ./next.config.ts
 # Scripts de manutencao rodam dentro do container: a VPS nao tem Node instalado,
 # e aqui ja existem node_modules e as variaveis de ambiente do stack.
-COPY --from=builder /app/scripts ./scripts
+COPY --from=builder --chown=node:node /app/scripts ./scripts
+
+# Sem USER o processo roda como root dentro do container. O diretorio de trabalho fica
+# com o usuario 'node' para que o cache do Next e os scripts de manutencao continuem escrevendo em /app.
+RUN chown node:node /app
+USER node
 
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1

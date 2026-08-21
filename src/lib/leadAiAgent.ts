@@ -258,6 +258,7 @@ function customerFacingNameOnly(text: string, lead: LeadRow) {
   const firstName = leadFirstName(lead, '');
   if (!fullName || !firstName || fullName.toLowerCase() === firstName.toLowerCase()) return text;
 
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- nome passa por escapeRegExp()
   return text.replace(new RegExp(escapeRegExp(fullName), 'gi'), firstName);
 }
 
@@ -267,9 +268,9 @@ function removeLeadVocative(text: string, lead: LeadRow) {
 
   const escaped = escapeRegExp(firstName);
   return text
-    .replace(new RegExp(`(^|[.!?]\\s+)${escaped}[,!:.]?\\s+`, 'gi'), '$1')
-    .replace(new RegExp(`,\\s*${escaped}([!.?])`, 'gi'), '$1')
-    .replace(new RegExp(`\\b(Perfeito|Legal|Boa|Show|Otimo|Ótimo|Certo|Entendi),\\s*${escaped}([!.?])`, 'gi'), '$1$2')
+    .replace(new RegExp(`(^|[.!?]\\s+)${escaped}[,!:.]?\\s+`, 'gi'), '$1') // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- primeiro nome passa por escapeRegExp()
+    .replace(new RegExp(`,\\s*${escaped}([!.?])`, 'gi'), '$1') // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- primeiro nome passa por escapeRegExp()
+    .replace(new RegExp(`\\b(Perfeito|Legal|Boa|Show|Otimo|Ótimo|Certo|Entendi),\\s*${escaped}([!.?])`, 'gi'), '$1$2') // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- primeiro nome passa por escapeRegExp()
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
@@ -1207,7 +1208,7 @@ function extractSummaryField(summary: string, key: string) {
     'Erro IA',
   ].join('|');
   const normalized = String(summary || '').replace(/\\r\\n|\\n|\\r/g, '\n');
-  const regex = new RegExp(`(?:\\*?(?:${key})\\*?\\s*:\\s*)([\\s\\S]*?)(?=(?:\\s|\\\\n|\\\\r)*\\*?(?:${labels})\\*?\\s*:|$)`, 'i');
+  const regex = new RegExp(`(?:\\*?(?:${key})\\*?\\s*:\\s*)([\\s\\S]*?)(?=(?:\\s|\\\\n|\\\\r)*\\*?(?:${labels})\\*?\\s*:|$)`, 'i'); // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- key e labels sao literais do proprio modulo
   const match = normalized.match(regex);
   return match?.[1]?.trim() || '';
 }
@@ -1469,7 +1470,7 @@ export async function startLeadAiIfEligible(leadId: string) {
 
   const senderInstance = aiInstanceName(adminProfile);
   const connection = await getUazapiInstanceConnection(senderInstance).catch((error) => {
-    console.error(`[lead_ai_agent] Failed checking instance ${senderInstance}:`, error);
+    console.error('[lead_ai_agent] Failed checking instance %s:', senderInstance, error);
     return { found: false, connected: false, state: 'check_failed' };
   });
   if (!connection.connected) {
@@ -2098,7 +2099,7 @@ async function recoverStalledLeadAiSessions() {
       });
       if (result.handled) recovered += 1;
     } catch (recoveryError) {
-      console.error(`[lead_ai_recovery] Failed recovering lead ${session.lead_id}:`, recoveryError);
+      console.error('[lead_ai_recovery] Failed recovering lead %s:', session.lead_id, recoveryError);
     }
   }
 
@@ -2185,7 +2186,7 @@ function parseScheduledTextToDate(scheduledText: string, reference = new Date())
       sexta: 5,
       sabado: 6,
     };
-    const weekDayKey = Object.keys(weekDays).find((key) => new RegExp(`\\b${key}\\b`).test(normalized));
+    const weekDayKey = Object.keys(weekDays).find((key) => new RegExp(`\\b${key}\\b`).test(normalized)); // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- key vem do objeto fixo weekDays
     if (weekDayKey) {
       const currentDate = saoPauloDateAt(today.year, today.month, today.day, 12, 0);
       const currentWeekDay = currentDate.getUTCDay();
@@ -2282,6 +2283,7 @@ async function updateLeadFromSummary(leadId: string, summary?: string | null) {
     const normalizedSummary = String(summary).replace(/\\r\\n|\\n|\\r/g, '\n');
     
     const getValue = (key: string) => {
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- so recebe literais definidos abaixo
       const regex = new RegExp(`(?:\\*?(?:${key})\\*?\\s*:\\s*)([\\s\\S]*?)(?=(?:\\s|\\\\n|\\\\r)*\\*?(?:${knownSummaryLabels})\\*?\\s*:|$)`, 'i');
       const match = normalizedSummary.match(regex);
       if (match && match[1]) {
@@ -2348,7 +2350,7 @@ async function updateLeadFromSummary(leadId: string, summary?: string | null) {
         .update(updates)
         .eq('id', leadId);
       if (error) throw error;
-      console.log(`[lead_ai_agent] Updated lead ${leadId} from summary:`, updates);
+      console.log('[lead_ai_agent] Updated lead %s from summary:', leadId, updates);
     }
   } catch (err) {
     console.error('[lead_ai_agent] Failed to update lead from summary:', err);

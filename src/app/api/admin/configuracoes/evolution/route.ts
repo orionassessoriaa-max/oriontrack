@@ -193,14 +193,14 @@ export async function DELETE(request: Request) {
       try {
         await uazapiFetch('/instance/logout', { method: 'DELETE' }, { instanceName: MASTER_INSTANCE });
       } catch (fallbackError) {
-        console.warn(`Logout failed or already logged out for ${MASTER_INSTANCE}:`, fallbackError);
+        console.warn('Logout failed or already logged out for %s:', MASTER_INSTANCE, fallbackError);
       }
     }
 
     try {
       await uazapiFetch('/instance/delete', { method: 'DELETE' }, { useAdminAuth: true, instanceName: MASTER_INSTANCE });
     } catch (e) {
-      console.warn(`Delete failed or already deleted for ${MASTER_INSTANCE}:`, e);
+      console.warn('Delete failed or already deleted for %s:', MASTER_INSTANCE, e);
     }
 
     await writeAuditLog(request, guard.profile, {

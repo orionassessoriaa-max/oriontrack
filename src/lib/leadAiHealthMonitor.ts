@@ -159,7 +159,7 @@ export async function checkLeadAiInstanceHealth(options: MonitorOptions = {}) {
         connection = await getUazapiInstanceConnection(instance);
         recovered = connection.connected;
       } catch (error) {
-        console.warn(`[lead_ai_health] Automatic reconnect failed for ${instance}:`, error);
+        console.warn('[lead_ai_health] Automatic reconnect failed for %s:', instance, error);
       }
     }
 
@@ -167,7 +167,7 @@ export async function checkLeadAiInstanceHealth(options: MonitorOptions = {}) {
       summary.connected += 1;
       if (recovered) summary.recovered += 1;
       await ensureUazapiWebhookConfigured(instance).catch((webhookError) => {
-        console.error(`[lead_ai_health] Failed refreshing webhook for ${instance}:`, webhookError);
+        console.error('[lead_ai_health] Failed refreshing webhook for %s:', instance, webhookError);
       });
       if (mutate && config.status !== 'ativo') {
         await supabaseAdmin.from('corretora_ai_configs').update({ status: 'ativo', updated_at: new Date().toISOString() }).eq('id', config.id);

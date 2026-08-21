@@ -78,7 +78,7 @@ export async function evolutionFetch(path: string, init: RequestInit = {}, apiKe
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    console.error(`[evolutionFetch ERROR] Path: ${path} | Status: ${response.status}`, {
+    console.error('[evolutionFetch ERROR] Path: %s | Status: %s', path, response.status, {
       payload: JSON.stringify(payload, null, 2),
       headers: response.headers
     });
@@ -143,7 +143,7 @@ export async function configureEvolutionWebhook(instance: string, instanceApiKey
       }),
     }, instanceApiKey);
   } catch (err: any) {
-    console.error(`[configureEvolutionWebhook ERROR] Failed to set webhook for ${instance}:`, err.message);
+    console.error('[configureEvolutionWebhook ERROR] Failed to set webhook for %s:', instance, err.message);
   }
 }
 

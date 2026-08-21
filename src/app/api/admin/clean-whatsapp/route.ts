@@ -34,7 +34,7 @@ export async function POST(request: Request) {
           try {
             await evolutionFetch(`/instance/logout/${name}`, { method: 'DELETE' });
           } catch (e) {
-            console.warn(`[Clean WhatsApp] Logout failed for ${name}:`, e);
+            console.warn('[Clean WhatsApp] Logout failed for %s:', name, e);
           }
 
           // Excluir a instância do servidor
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
             await evolutionFetch(`/instance/delete/${name}`, { method: 'DELETE' });
             deletedInstances.push(name);
           } catch (e) {
-            console.warn(`[Clean WhatsApp] Delete failed for ${name}:`, e);
+            console.warn('[Clean WhatsApp] Delete failed for %s:', name, e);
           }
         }
       }

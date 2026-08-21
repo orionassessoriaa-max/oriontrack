@@ -92,7 +92,7 @@ export async function GET(request: Request) {
         try {
           await ensureUazapiWebhookConfigured(context.instance);
         } catch (webhookError) {
-          console.error(`[GET /api/ia/whatsapp] Failed refreshing webhook for ${context.instance}:`, webhookError);
+          console.error('[GET /api/ia/whatsapp] Failed refreshing webhook for %s:', context.instance, webhookError);
         }
       });
     }

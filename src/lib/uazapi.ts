@@ -263,7 +263,7 @@ export async function uazapiFetch(
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    console.error(`[uazapiFetch ERROR] Path: ${path} | Status: ${response.status}`, {
+    console.error('[uazapiFetch ERROR] Path: %s | Status: %s', path, response.status, {
       payload: JSON.stringify(payload, null, 2),
     });
 
@@ -377,7 +377,7 @@ export async function configureUazapiWebhook(instanceName: string) {
       return;
     } catch (error) {
       lastError = error;
-      console.error(`[configureUazapiWebhook] Attempt ${attempt}/3 failed for ${instanceName}:`, error);
+      console.error('[configureUazapiWebhook] Attempt %s/3 failed for %s:', attempt, instanceName, error);
       if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 300));
     }
   }

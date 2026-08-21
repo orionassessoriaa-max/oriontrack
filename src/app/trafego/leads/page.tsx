@@ -49,7 +49,7 @@ function cnpjCategory(value?: string | null) {
 
 function noteValue(lead: Lead, key: string) {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = String(lead.observacoes || '').match(new RegExp(`${escaped}:\\s*([^|]+)`, 'i'));
+  const match = String(lead.observacoes || '').match(new RegExp(`${escaped}:\\s*([^|]+)`, 'i')); // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- key escapado na linha anterior
   return match?.[1]?.trim() || '';
 }
 

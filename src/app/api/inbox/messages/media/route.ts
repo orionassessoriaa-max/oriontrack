@@ -627,7 +627,7 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log(`[Media API] Instancias para tentar download UAZAPI da mensagem ${messageId}:`, instancesToTry);
+    console.log('[Media API] Instancias para tentar download UAZAPI da mensagem %s:', messageId, instancesToTry);
 
     for (const inst of instancesToTry) {
       const attempts = buildUazapiDownloadPayloads(providerId, mediaMessage).map((body) => ({
@@ -668,7 +668,7 @@ export async function GET(request: Request) {
             }
           }
         } catch (uazapiErr: any) {
-          console.warn(`[Media API] UAZAPI nao retornou midia via ${attempt.path} na instancia ${inst}:`, uazapiErr?.message || uazapiErr);
+          console.warn('[Media API] UAZAPI nao retornou midia via %s na instancia %s:', attempt.path, inst, uazapiErr?.message || uazapiErr);
         }
       }
     }

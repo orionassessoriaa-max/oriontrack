@@ -269,11 +269,11 @@ async function fetchUazapiInstanceState(instance: string): Promise<UazapiConnect
     // Antes de mostrar desconectado, confirme na lista geral de instancias.
     return await fetchUazapiInstanceStateFromList(instance);
   } catch (error) {
-    console.warn(`[GET /api/inbox/uazapi/connect] status check failed for ${instance}. Trying instance/all fallback.`, error);
+    console.warn('[GET /api/inbox/uazapi/connect] status check failed for %s. Trying instance/all fallback.', instance, error);
     try {
       return await fetchUazapiInstanceStateFromList(instance);
     } catch (fallbackError) {
-      console.warn(`[GET /api/inbox/uazapi/connect] instance/all fallback failed for ${instance}. returning close.`, fallbackError);
+      console.warn('[GET /api/inbox/uazapi/connect] instance/all fallback failed for %s. returning close.', instance, fallbackError);
       return { state: 'close', qrcode: null, disconnectReason: '' };
     }
   }
@@ -406,7 +406,7 @@ export async function GET(request: Request) {
           try {
             await ensureUazapiWebhookConfigured(instance);
           } catch (webhookError) {
-            console.error(`[GET /api/inbox/uazapi/connect] Failed refreshing webhook for ${instance}:`, webhookError);
+            console.error('[GET /api/inbox/uazapi/connect] Failed refreshing webhook for %s:', instance, webhookError);
           }
         });
       }
@@ -450,7 +450,7 @@ export async function DELETE(request: Request) {
     const instance = uazapiInstanceName(targetProfile.id);
     const disconnectResults = await disconnectUazapiInstanceEverywhere(instance);
     const finalSnapshot = await fetchUazapiInstanceStateFromList(instance).catch((error) => {
-      console.warn(`[DELETE /api/inbox/uazapi/connect] Status check failed after disconnect for ${instance}:`, error);
+      console.warn('[DELETE /api/inbox/uazapi/connect] Status check failed after disconnect for %s:', instance, error);
       return { state: 'unknown', qrcode: null, disconnectReason: '' };
     });
 
