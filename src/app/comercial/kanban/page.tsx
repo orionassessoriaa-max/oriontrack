@@ -586,11 +586,13 @@ export default function CommercialKanbanPage() {
     if (!digits) return;
     setStageError(null);
     try {
-      await api("/api/comercial/calls", {
+      // A central liga primeiro para o operador e depois para o lead. Quando ela
+      // assume a discagem, abrir o tel: faria o aparelho tocar duas vezes.
+      const resposta = (await api("/api/comercial/calls", {
         method: "POST",
         body: JSON.stringify({ lead_id: lead.id, sdr_id: lead.sdr_id }),
-      });
-      window.location.href = `tel:${digits}`;
+      })) as { discagem?: { originada?: boolean } } | null;
+      if (!resposta?.discagem?.originada) window.location.href = `tel:${digits}`;
     } catch (callError) {
       setStageError(callError instanceof Error ? callError.message : "Não foi possível registrar a ligação.");
     }
