@@ -6,6 +6,7 @@ import {
 import { recordCommercialTimelineEvent } from "@/lib/commercialTimeline";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { cadenceDayFromStage } from "@/lib/comercialCadencia";
+import { commercialCadenceMaxDay } from "@/lib/commercialQualification";
 
 const attemptTemplate = [
   { ordem: 1, canal: "ligacao_fixo", titulo: "Ligação (fixo)" },
@@ -18,14 +19,6 @@ const attemptTemplate = [
   { ordem: 8, canal: "mensagem_whatsapp", titulo: "Mensagem (WhatsApp)" },
 ] as const;
 
-function normalize(value: unknown) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-}
-
 async function allowedLead(
   id: string,
   guard: Awaited<ReturnType<typeof requireCommercialUser>>,
@@ -34,7 +27,7 @@ async function allowedLead(
   let query = supabaseAdmin
     .from("comercial_leads")
     .select(
-      "id,status,sdr_id,closer_id,status_started_at,contato_cadencia_ativa,contato_cadencia_inicio",
+      "id,status,sdr_id,closer_id,faturamento_mensal,investimento,status_started_at,contato_cadencia_ativa,contato_cadencia_inicio",
     )
     .eq("id", id);
   if (guard.commercialRole !== "coordenador")
@@ -65,12 +58,16 @@ async function ensureDay(leadId: string, day: number) {
 async function cadencePayload(lead: {
   id: string;
   status: string;
+  faturamento_mensal: string | null;
+  investimento: string | null;
   status_started_at: string | null;
   contato_cadencia_ativa: boolean;
   contato_cadencia_inicio: string | null;
 }) {
   const stageDay = cadenceDayFromStage(lead.status);
-  const active = stageDay !== null;
+  const maxDay = commercialCadenceMaxDay(lead.faturamento_mensal, lead.investimento);
+  const limitReached = stageDay !== null && stageDay > maxDay;
+  const active = stageDay !== null && !limitReached;
   const day = stageDay || 1;
   if (active) await ensureDay(lead.id, day);
   const { data, error } = await supabaseAdmin
@@ -88,6 +85,8 @@ async function cadencePayload(lead: {
   return {
     active,
     day,
+    max_day: maxDay,
+    limit_reached: limitReached,
     started_at: lead.status_started_at,
     completed: attempts.length > 0 && attempts.every((item) => item.status !== "pendente"),
     attempts,
@@ -138,6 +137,12 @@ export async function PATCH(
   if (day === null)
     return NextResponse.json(
       { error: "A cadência só pode ser registrada nas etapas Dia 1 a Dia 10." },
+      { status: 409 },
+    );
+  const maxDay = commercialCadenceMaxDay(lead.faturamento_mensal, lead.investimento);
+  if (day > maxDay)
+    return NextResponse.json(
+      { error: `A cadência deste lead termina no Dia ${maxDay}. Mova-o para uma etapa fora da cadência.` },
       { status: 409 },
     );
 

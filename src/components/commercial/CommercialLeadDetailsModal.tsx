@@ -29,6 +29,7 @@ import {
   getCommercialMqlLevel,
   type CommercialMqlLevel,
 } from "@/lib/commercialQualification";
+import { cadenceDayFromStage } from "@/lib/comercialCadencia";
 
 type LeadInteraction = {
   id: string;
@@ -779,7 +780,10 @@ export default function CommercialLeadDetailsModal({
                 onChange={(event) => onMoveStage(event.target.value)}
                 aria-label="Mudar etapa do lead"
               >
-                {stages.map((stage) => (
+                {stages.filter((stage) => {
+                  const day = cadenceDayFromStage(stage.id);
+                  return mqlLevel !== "C" || day === null || day <= 2 || stage.id === lead.status;
+                }).map((stage) => (
                   <option key={stage.id} value={stage.id}>
                     {stage.label}
                   </option>
@@ -867,22 +871,37 @@ export default function CommercialLeadDetailsModal({
 
         <div className="kh-lead-reference-body">
           <div className="kh-lead-main-stack">
-            {contactCadence?.active && (
+            {(contactCadence?.active || contactCadence?.limit_reached) && (
               <section className="kh-contact-cadence" aria-label={`Cadência do dia ${contactCadence.day}`}>
                 <header>
                   <div>
-                    <strong>Cadência — Dia {contactCadence.day}</strong>
-                    <small>Checklist exclusivo desta etapa</small>
+                    <strong>
+                      {contactCadence.limit_reached
+                        ? `Cadência encerrada no Dia ${contactCadence.max_day}`
+                        : `Cadência — Dia ${contactCadence.day}`}
+                    </strong>
+                    <small>
+                      {contactCadence.max_day === 2
+                        ? "MQL C: ciclo máximo de 2 dias"
+                        : "Checklist exclusivo desta etapa"}
+                    </small>
                   </div>
-                  <span>
-                    {contactCadence.attempts.filter((attempt) => attempt.status !== "pendente").length}/8
-                  </span>
+                  {contactCadence.active && (
+                    <span>
+                      {contactCadence.attempts.filter((attempt) => attempt.status !== "pendente").length}/8
+                    </span>
+                  )}
                 </header>
+                {contactCadence.limit_reached && (
+                  <div className="kh-cadence-limit-warning" role="alert">
+                    Este lead é MQL C e não deve continuar nas etapas Dia 3 a Dia 10. Mova-o para uma etapa fora da cadência.
+                  </div>
+                )}
                 {contactCadenceError && (
                   <div className="kh-inline-error" role="alert">{contactCadenceError}</div>
                 )}
                 <div className="kh-cadence-attempts">
-                  {contactCadence.attempts.map((attempt) => {
+                  {contactCadence.active && contactCadence.attempts.map((attempt) => {
                     const pending = attempt.status === "pendente";
                     const saving = contactCadenceSavingOrder === attempt.ordem;
                     return (
@@ -920,7 +939,7 @@ export default function CommercialLeadDetailsModal({
                       </div>
                     );
                   })}
-                  {contactCadenceLoading && !contactCadence.attempts.length && (
+                  {contactCadence.active && contactCadenceLoading && !contactCadence.attempts.length && (
                     <span className="kh-cadence-loading">Carregando checklist...</span>
                   )}
                 </div>

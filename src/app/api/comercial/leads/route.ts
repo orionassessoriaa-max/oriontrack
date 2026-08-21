@@ -4,7 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
 import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
 import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
-import { isCommercialMql } from '@/lib/commercialQualification';
+import { commercialCadenceMaxDay, isCommercialMql } from '@/lib/commercialQualification';
+import { cadenceDayFromStage } from '@/lib/comercialCadencia';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { generateOnboardingBriefing } from '@/lib/commercialOnboardingBriefing';
@@ -196,6 +197,17 @@ export async function PATCH(request: Request) {
   if (!allowed) return NextResponse.json({ error: 'Lead nao encontrado ou sem permissao.' }, { status: 404 });
 
   const targetStatus = String(body.status || '').trim();
+  const targetCadenceDay = cadenceDayFromStage(targetStatus);
+  const cadenceMaxDay = commercialCadenceMaxDay(
+    Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') ? body.faturamento_mensal : allowed.faturamento_mensal,
+    Object.prototype.hasOwnProperty.call(body, 'investimento') ? body.investimento : allowed.investimento,
+  );
+  if (targetCadenceDay !== null && targetCadenceDay > cadenceMaxDay) {
+    return NextResponse.json(
+      { error: `Lead MQL C possui cadência máxima de ${cadenceMaxDay} dias. Encerre a cadência após o Dia ${cadenceMaxDay}.` },
+      { status: 400 },
+    );
+  }
   const isScheduledStage = isScheduledMeetingStage(targetStatus);
   const scheduledAt = body.reuniao_agendada_at ? new Date(String(body.reuniao_agendada_at)) : null;
   if (isScheduledStage && (!scheduledAt || Number.isNaN(scheduledAt.getTime()))) {

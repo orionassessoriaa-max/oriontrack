@@ -44,6 +44,10 @@ export function getCommercialMqlLevel(faturamento: unknown, investimento: unknow
   return hasCommercialInvestment(investimento) ? 'B' : 'C';
 }
 
+export function commercialCadenceMaxDay(faturamento: unknown, investimento: unknown) {
+  return getCommercialMqlLevel(faturamento, investimento) === 'C' ? 2 : 10;
+}
+
 export function isCommercialMql(faturamento: unknown, _investimento?: unknown) {
   void _investimento;
   const revenueLabel = String(faturamento ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();

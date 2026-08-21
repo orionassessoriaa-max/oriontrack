@@ -157,6 +157,8 @@ export type CommercialCadenceAttempt = {
 export type CommercialContactCadence = {
   active: boolean;
   day: number;
+  max_day: number;
+  limit_reached: boolean;
   started_at: string | null;
   completed: boolean;
   attempts: CommercialCadenceAttempt[];

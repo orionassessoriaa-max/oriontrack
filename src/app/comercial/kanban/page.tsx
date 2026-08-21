@@ -176,7 +176,6 @@ export default function CommercialKanbanPage() {
   const [initialStatus, setInitialStatus] = useState("Oportunidade");
   const [dragging, setDragging] = useState<string | null>(null);
   const draggingRef = useRef<string | null>(null);
-  draggingRef.current = dragging;
   const [dropStage, setDropStage] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
   const [stageDragging, setStageDragging] = useState<string | null>(null);
@@ -408,6 +407,17 @@ export default function CommercialKanbanPage() {
   );
 
   async function moveLead(id: string, status: string) {
+    const leadToMove = leads.find((item) => item.id === id);
+    const targetCadenceDay = cadenceDayFromStage(status);
+    if (
+      leadToMove &&
+      getCommercialMqlLevel(leadToMove.faturamento_mensal, leadToMove.investimento) === "C" &&
+      targetCadenceDay !== null &&
+      targetCadenceDay > 2
+    ) {
+      setStageError("Lead MQL C possui cadência máxima de 2 dias. Encerre a cadência após o Dia 2.");
+      return;
+    }
     const normalizedStatus = status
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -468,7 +478,12 @@ export default function CommercialKanbanPage() {
         const cadence = await api(`/api/comercial/leads/${id}/cadencia`);
         setContactCadence(cadence.cadence || null);
       }
-    } catch {
+    } catch (error) {
+      setStageError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível mover o lead. Tente novamente.",
+      );
       await load();
     } finally {
       setMovingId(null);
@@ -1091,6 +1106,7 @@ export default function CommercialKanbanPage() {
                 if (stageDragging && canManageStages)
                   reorderStages(stage.id);
                 else if (dragging) void moveLead(dragging, stage.id);
+                draggingRef.current = null;
                 setDragging(null);
                 setStageDragging(null);
                 setDropStage(null);
@@ -1190,16 +1206,22 @@ export default function CommercialKanbanPage() {
                       lead.investimento,
                     );
                     const cadenceDay = cadenceDayFromStage(lead.status);
-                    const cadenceOverdue = isCadenceStageOverdue(lead);
+                    const isMqlC = mqlLevel === "C";
+                    const cadenceLimitReached = isMqlC && cadenceDay !== null && cadenceDay > 2;
+                    const cadenceOverdue = cadenceLimitReached || isCadenceStageOverdue(lead);
                     return (
                       <article
                         key={lead.id}
                         draggable={canEditCommercial}
                         onDragStart={(event) => {
                           event.stopPropagation();
-                          if (canEditCommercial) setDragging(lead.id);
+                          if (canEditCommercial) {
+                            draggingRef.current = lead.id;
+                            setDragging(lead.id);
+                          }
                         }}
                         onDragEnd={() => {
+                          draggingRef.current = null;
                           setDragging(null);
                           setDropStage(null);
                         }}
@@ -1242,12 +1264,22 @@ export default function CommercialKanbanPage() {
                         )}
                         {isContactCadenceStage(lead.status) && (
                           <div className="kh-card-cadence">
-                            Cadência: Dia {cadenceDay}
+                            {isMqlC
+                              ? cadenceLimitReached
+                                ? "Cadência MQL C encerrada no Dia 2"
+                                : `Cadência MQL C: Dia ${cadenceDay} de 2`
+                              : `Cadência: Dia ${cadenceDay}`}
                           </div>
+                        )}
+                        {isMqlC && cadenceDay === 2 && !cadenceOverdue && (
+                          <div className="kh-card-cadence-limit">Último dia da cadência MQL C</div>
                         )}
                         {cadenceOverdue && (
                           <div className="kh-card-cadence-alert" role="status">
-                            <AlertTriangle size={12} /> Mover para o próximo dia
+                            <AlertTriangle size={12} />
+                            {isMqlC && cadenceDay !== null && cadenceDay >= 2
+                              ? "Encerrar cadência MQL C"
+                              : "Mover para o próximo dia"}
                           </div>
                         )}
                         <div className="kh-card-entry">
