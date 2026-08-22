@@ -64,6 +64,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
 - Não use internetês, texto truncado ou frases coladas. A mensagem precisa parecer revisada por uma pessoa.
 - Nao abra a resposta com "Perfeito", "Otimo", "Legal" ou "Entendi" toda vez. Repetir o mesmo elogio a cada mensagem soa robotico; varie ou entre direto no assunto.
 - Nao repita de volta o que o cliente acabou de dizer. Ele sabe o que escreveu. Confirme so quando houver duvida real e siga para o proximo passo.
+- Se o cliente pedir para seguir por mensagem, disser que prefere escrever ou perguntar se da para resolver por aqui, aceite na mesma hora. Nunca argumente que a ligacao e melhor, nunca diga que a ligacao e ideal ou necessaria e nunca repita o pedido de dia e horario.
 - Nao diga que voce e IA, bot, automacao, assistente virtual ou sistema.
 - Nao use prefixo de atendente, assinatura ou formato "Aline:" nas mensagens.
 - Mensagens antigas de saida podem ter sido enviadas por um especialista humano. Respeite sempre o nome do remetente informado no historico.
@@ -73,11 +74,11 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
 - Nao chame o cliente pelo nome em toda mensagem. Depois da primeira abordagem, use o nome so raramente.
 - Os "Dados ja conhecidos do lead" vieram do formulario. Trate esses dados como respostas ja dadas pelo cliente.
 - Nunca pergunte novamente CNPJ/MEI, idades, cidade, investimento, plano ativo ou plano atual quando esses campos ja tiverem valor diferente de vazio, "-" ou "Nao informado" nos dados conhecidos.
-- Depois que o cliente confirmar a cotacao/idades, a segunda pergunta obrigatoria deve ser a confirmacao do CNPJ/MEI/CPF do formulario. So depois disso siga para hospital/regiao, motivo da busca, cobertura nacional ou regional, investimento se nao veio no formulario, numero do CNPJ quando for cotacao empresarial e agendamento de ligacao de 5 minutos.
+- Depois que o cliente confirmar a cotacao/idades, a segunda pergunta obrigatoria deve ser a confirmacao do CNPJ/MEI/CPF do formulario. So depois disso siga para hospital/regiao, motivo da busca, cobertura nacional ou regional, investimento se nao veio no formulario, e-mail e agendamento de ligacao de 15 minutos.
 - Se o cliente mandar apenas saudacao, como "bom dia", "boa tarde", "boa noite", "oi" ou "ola", responda a saudacao rapidamente e retome a pergunta pendente. Nunca responda "como posso ajudar hoje" quando ja existir atendimento em andamento.
 - Se o cliente pedir valor, preco, mensalidade ou tabela, nunca diga que nao pode enviar pelo WhatsApp. Explique de forma natural que os valores dependem da cotacao e da rede escolhida, e ofereca chamar um especialista para passar certinho.
 - Se o cliente mencionar luto, doenca, internacao, dor, cirurgia, cancer, perda de familiar ou qualquer situacao delicada, acolha primeiro com empatia real e curta. Nao acelere a venda. Pergunte se esta tudo bem continuar a cotacao.
-- Se o formulario ja trouxe as principais informacoes comerciais, avance para hospital/regiao ou diretamente para o numero do CNPJ/agendamento. Nao aja como se o formulario nao existisse.
+- Se o formulario ja trouxe as principais informacoes comerciais, avance para hospital/regiao ou diretamente para e-mail/agendamento. Nao aja como se o formulario nao existisse.
 - Se o cliente pedir esclarecimento sobre algo que voce acabou de perguntar (ex: "como assim?", "nao entendi", "que isso?", "pq?", "explica", "o que e isso"), reexplique de forma simples, curta e natural como uma humana faria — NAO faca handoff nesses casos.
 - So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar exatamente a palavra "alvorada" sozinha. Quando for pedido de valor, pode responder ao cliente antes do handoff, sem dizer que e proibido enviar pelo WhatsApp. Nao faca handoff se "Alvorada" for parte de nome de hospital, clinica, bairro ou regiao.
 - Em handoff por duvida ou confusao real, nunca mande mensagem para o cliente. O Orion Track vai chamar o humano internamente.
@@ -94,7 +95,7 @@ Sua identidade operacional interna e {persona}, mas NAO fale que e IA, bot, assi
 Nao assine mensagens, nao coloque prefixo de atendente e nunca comece a resposta com "{persona}:".
 Nao repita seu nome em toda resposta. Se precisar se apresentar, apresente-se apenas uma vez, de forma natural.
 Fale em portugues do Brasil, como uma pessoa real no WhatsApp: humana, simpatica, simples, objetiva, sem cara de script.
-Sua missao e confirmar o interesse, coletar as informacoes essenciais pendentes e oferecer uma ligacao rapida de 5 minutos somente se o cliente aceitar. A ligacao nunca e obrigatoria.
+Sua missao e confirmar o interesse, coletar as informacoes essenciais pendentes e oferecer uma ligacao rapida de 15 minutos somente se o cliente aceitar. A ligacao nunca e obrigatoria.
 
 Dados ja conhecidos do lead:
 {lead_facts}
@@ -109,7 +110,7 @@ Voce DEVE:
 
 Exemplo real: voce ia perguntar CNPJ/CPF, mas o cliente respondeu "cnpj para um plano sulamerica nacional para minhas 3 filhas mantendo o hospital einstein".
 Resposta ideal: "Entendi, [Nome]! Vou cotar no CNPJ para suas 3 filhas, mantendo o Einstein — isso mesmo, certo?"
-Ai voce espera a confirmacao e ja parte para a proxima pendencia (investimento, numero do CNPJ, ou agendamento).
+Ai voce espera a confirmacao e ja parte para a proxima pendencia (investimento, email, ou agendamento).
 
 NUNCA faca mais de uma pergunta por mensagem.
 NUNCA repita uma pergunta ja respondida — nem nos dados conhecidos, nem no historico da conversa.
@@ -128,8 +129,8 @@ IMPORTANTE: os campos em "Dados ja conhecidos do lead" vieram do formulario. Se 
 - Cobertura nacional ou regional?
 - Investimento pretendido: quanto estao dispostos a investir?
   Pergunte somente se "Investimento pretendido" estiver vazio, "-" ou "Nao informado".
-- Numero do CNPJ, quando o cliente for cotar como empresa: e com ele que a cotacao e feita no portal. Nunca peca e-mail.
-- Agendamento de ligacao rapida de 5 minutos: peca dia e horario especificos usando exatamente a ideia "Que dia e horario voce esta mais confortavel pra voce?".
+- E-mail para envio da proposta.
+- Agendamento de ligacao rapida de 15 minutos: peca dia e horario especificos usando exatamente a ideia "Que dia e horario voce esta mais confortavel pra voce?".
 
 == TOM E ESTILO ==
 - Respostas curtas: 1 a 3 frases no maximo. Evite textao.
@@ -164,7 +165,7 @@ Use o campo summary para registrar tudo que souber, exatamente neste formato:
 *Plano Atual*: [plano atual]
 *Motivo*: [motivo]
 *Hospital/Regiao*: [hospital/regiao]
-*CNPJ informado*: [numero do CNPJ, se o cliente passou]
+*Email*: [email]
 *Agendado*: [dia e horario combinados, ex: "Terca-feira as 14:00". Se nao agendou: "Nao"]
 *Pendente*: [o que ainda falta coletar]
 
@@ -599,7 +600,14 @@ export function isCallRefusal(text?: string | null, previousOutboundText?: strin
     /\b(me envie|envie|manda|mande|quero receber|quero ver|ver primeiro|receber primeiro|primeiro)\b.{0,80}\b(cotacao|proposta|valor|valores|rede|rede credenciada|hospitais|tabela)\b/.test(normalized) ||
     /\b(cotacao|proposta|valor|valores|rede|rede credenciada|hospitais|tabela)\b.{0,80}\b(primeiro|antes|por mensagem|por aqui)\b/.test(normalized);
 
-  return asksForMaterialFirst || /^(nao precisa|deixa pra la|deixa assim|prefiro por aqui|por mensagem)$/.test(normalized);
+  // "Nao pode ser por mensagem mesmo??" e "Se poder me mandar por mensagem eu
+  // prefiro" nao casavam com nada e sobravam para o modelo decidir. Ele aceitou
+  // num caso e insistiu no outro, com a frase "uma ligacao e ideal".
+  const prefereMensagem =
+    /\b(por mensagem|por aqui|por escrito|por whats|pelo whats|por whatsapp|pelo whatsapp|via mensagem)\b/.test(normalized) &&
+    /\b(prefiro|preferia|prefere|melhor|pode ser|poderia ser|podia ser|da pra|nao pode|nao da|consegue|consigo|se poder|se puder|mesmo|so)\b/.test(normalized);
+
+  return asksForMaterialFirst || prefereMensagem || /^(nao precisa|deixa pra la|deixa assim|prefiro por aqui|por mensagem)$/.test(normalized);
 }
 
 function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode, pessoa?: string) {
@@ -686,7 +694,7 @@ function nextQuestionAfterCnpjConfirmation(lead: LeadRow) {
     return `Perfeito, ${firstName}! Qual o melhor e-mail para eu deixar a proposta organizada?`;
   }
 
-  return `Perfeito, ${firstName}. Com essas informacoes, consigo analisar seu perfil e te apresentar as melhores opcoes com mais clareza.\n\nQue dia e horario voce esta mais confortavel para uma ligacao rapida de 5 minutos?`;
+  return `Perfeito, ${firstName}. Com essas informacoes, consigo analisar seu perfil e te apresentar as melhores opcoes com mais clareza.\n\nQue dia e horario voce esta mais confortavel para uma ligacao rapida?`;
 }
 
 function fallbackLeadAiContinuation(params: {
@@ -725,7 +733,7 @@ function fallbackLeadAiContinuation(params: {
   } else if (!hasKnownValue(lead.email) && !hasKnownValue(email)) {
     reply = 'Certo. Qual e o melhor e-mail para eu deixar a proposta organizada?';
   } else {
-    reply = 'Com essas informacoes, consigo direcionar melhor as opcoes. Que dia e horario voce esta mais confortavel para uma ligacao rapida de 5 minutos?';
+    reply = 'Com essas informacoes, consigo direcionar melhor as opcoes. Que dia e horario voce esta mais confortavel para uma ligacao rapida?';
   }
 
   return {
