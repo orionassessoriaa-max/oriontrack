@@ -1,0 +1,230 @@
+/* Visual das listas de tarefas, no formato do Google Tasks: painel por lista,
+   circulo de concluir na esquerda, prazo atrasado em vermelho e as concluidas
+   recolhidas no rodape. Escuro, para acompanhar as telas onde e usado. */
+.gt-board {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(292px, 1fr));
+  align-items: start;
+}
+
+.gt-list {
+  --gt-superficie: #1e1f20;
+  --gt-borda: #2f3133;
+  --gt-texto: #e8eaed;
+  --gt-suave: #9aa0a6;
+  --gt-azul: #8ab4f8;
+  --gt-vermelho: #f28b82;
+
+  display: flex;
+  flex-direction: column;
+  background: var(--gt-superficie);
+  border: 1px solid var(--gt-borda);
+  border-radius: 16px;
+  padding: 14px 8px 8px;
+  color: var(--gt-texto);
+  min-height: 168px;
+}
+
+.gt-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 6px;
+}
+
+.gt-list-head h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0;
+  color: var(--gt-texto);
+  text-transform: none;
+}
+
+.gt-list-count {
+  font-size: 12px;
+  color: var(--gt-suave);
+  font-variant-numeric: tabular-nums;
+}
+
+.gt-add {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--gt-azul);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.gt-add:hover {
+  background: rgba(138, 180, 248, 0.1);
+}
+
+.gt-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.gt-item {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: start;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+  font: inherit;
+}
+
+.gt-item:hover {
+  background: rgba(232, 234, 237, 0.06);
+}
+
+.gt-check {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 999px;
+  border: 2px solid var(--gt-suave);
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  color: var(--gt-superficie);
+  flex: none;
+}
+
+.gt-check:hover {
+  border-color: var(--gt-texto);
+  background: rgba(232, 234, 237, 0.12);
+}
+
+.gt-check.done {
+  background: var(--gt-azul);
+  border-color: var(--gt-azul);
+}
+
+.gt-item-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.gt-item-title {
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--gt-texto);
+  overflow-wrap: anywhere;
+}
+
+.gt-item.done .gt-item-title {
+  color: var(--gt-suave);
+  text-decoration: line-through;
+}
+
+.gt-item-note {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--gt-suave);
+  overflow-wrap: anywhere;
+}
+
+.gt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(154, 160, 166, 0.4);
+  font-size: 11px;
+  color: var(--gt-suave);
+  white-space: nowrap;
+}
+
+.gt-chip.late {
+  color: var(--gt-vermelho);
+  border-color: rgba(242, 139, 130, 0.5);
+}
+
+.gt-item-side {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--gt-suave);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+.gt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 26px 12px 30px;
+  text-align: center;
+}
+
+.gt-empty strong {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gt-texto);
+}
+
+.gt-empty span {
+  font-size: 12px;
+  color: var(--gt-suave);
+}
+
+.gt-done-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 10px;
+  border: 0;
+  border-top: 1px solid var(--gt-borda);
+  border-radius: 0 0 10px 10px;
+  background: transparent;
+  color: var(--gt-suave);
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.gt-done-toggle:hover {
+  color: var(--gt-texto);
+}
+
+.gt-caret {
+  transition: transform 120ms ease;
+}
+
+.gt-caret.open {
+  transform: rotate(90deg);
+}
+
+.gt-list-head-side {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

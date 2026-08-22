@@ -5,7 +5,7 @@ import Link from 'next/link';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { getLeadStatusStyle } from '@/lib/leadStatus';
+import GoogleTaskList from '@/components/tasks/GoogleTaskList';
 import { LeadTarefa } from '@/types';
 import { ArrowLeft, CalendarDays, CheckCircle2, Clock, Loader2, Pencil, RefreshCw, Save, Search, UserRound, X } from 'lucide-react';
 
@@ -107,7 +107,6 @@ export default function TarefasPage() {
   const [responsibleFilter, setResponsibleFilter] = useState<ResponsibleFilter>('todos');
   const [editingTask, setEditingTask] = useState<LeadTarefa | null>(null);
   const [editForm, setEditForm] = useState({ titulo: '', descricao: '', vencimento: '', responsavel_profile_id: '' });
-  const canManageTaskResponsible = ['admin', 'dev', 'corretor_admin'].includes(profile?.tipo_usuario || '');
 
   async function resolveBrokerScope() {
     const simulatedId = typeof window !== 'undefined' ? window.sessionStorage.getItem('orion:viewing_corretor_id') : null;
@@ -286,21 +285,6 @@ export default function TarefasPage() {
     await fetchTasks();
   }
 
-  async function handleUpdateResponsible(taskId: string, newProfileId: string | null) {
-    setSavingId(taskId);
-    const { error: updateError } = await supabase
-      .from('lead_tarefas')
-      .update({ responsavel_profile_id: newProfileId, updated_at: new Date().toISOString() })
-      .eq('id', taskId);
-    setSavingId(null);
-
-    if (updateError) {
-      alert('Erro ao atualizar responsável: ' + updateError.message);
-      return;
-    }
-    await fetchTasks();
-  }
-
   function openTaskEditor(task: LeadTarefa) {
     const lead = leadsById[task.lead_id];
     setEditingTask(task);
@@ -403,6 +387,60 @@ export default function TarefasPage() {
     });
   }, [tasksByResponsible, leadsById, brokersById, profilesById, filter, search]);
 
+  const taskLists = useMemo(() => {
+    // Mesmos baldes do filtro de status, agora como listas lado a lado.
+    const balde = (task: LeadTarefa) => {
+      if (task.status === 'concluida' || task.status === 'cancelada') return 'concluidas';
+      const rotulo = getTaskBadge(task).label;
+      if (rotulo === 'Atrasada') return 'atrasadas';
+      if (rotulo === 'Hoje') return 'hoje';
+      return 'proximas';
+    };
+    const paraItem = (task: LeadTarefa) => {
+      const lead = leadsById[task.lead_id];
+      const broker = task.corretor_id ? brokersById[task.corretor_id] : null;
+      const responsibleId = getTaskResponsibleId(task);
+      const responsible = responsibleId ? profilesById[responsibleId] : null;
+      return {
+        id: task.id,
+        titulo: task.titulo,
+        nota: [lead?.nome, broker?.nome_empresa || broker?.nome].filter(Boolean).join(' - ') || 'Sem lead',
+        prazo: task.vencimento ? formatDateTime(task.vencimento) : null,
+        atrasada: getTaskBadge(task).label === 'Atrasada',
+        concluida: task.status === 'concluida' || task.status === 'cancelada',
+        lateral: (
+          <>
+            <span>{(responsible?.nome || 'Sem dono').split(' ')[0]}</span>
+            <button
+              type="button"
+              title="Editar tarefa"
+              aria-label={`Editar ${task.titulo}`}
+              className="rounded-lg p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
+              onClick={(event) => {
+                event.stopPropagation();
+                openTaskEditor(task);
+              }}
+            >
+              <Pencil size={13} />
+            </button>
+          </>
+        ),
+      };
+    };
+    const definicao = [
+      { key: 'atrasadas', title: 'Atrasadas', vazio: { titulo: 'Nada atrasado', descricao: 'Bom trabalho!' } },
+      { key: 'hoje', title: 'Hoje', vazio: { titulo: 'Nada para hoje', descricao: 'Bom trabalho!' } },
+      { key: 'proximas', title: 'Proximas', vazio: { titulo: 'Nenhuma tarefa agendada', descricao: 'Crie um follow up dentro do lead.' } },
+      { key: 'concluidas', title: 'Concluidas', vazio: { titulo: 'Nada concluido ainda', descricao: 'As tarefas fechadas aparecem aqui.' } },
+    ] as const;
+    return definicao.map((item) => ({
+      ...item,
+      itens: visibleTasks.filter((task) => balde(task) === item.key).map(paraItem),
+    }));
+    // openTaskEditor e estavel dentro do componente e nao entra nas dependencias
+    // de proposito: ela so chama setState.
+  }, [brokersById, leadsById, profilesById, visibleTasks]);
+
   return (
     <InternalLayout>
       <div className="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
@@ -466,133 +504,35 @@ export default function TarefasPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/40 shadow-2xl">
-        <div className="grid grid-cols-[42px_minmax(260px,1.4fr)_120px_170px_190px_minmax(190px,1fr)_140px] border-b border-white/10 bg-slate-900/80 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-          <span />
-          <span>Tarefa</span>
-          <span>Status</span>
-          <span>Data e hora</span>
-          <span>Responsavel</span>
-          <span>Negociacao</span>
-          <span>Acao</span>
+      {loading ? (
+        <div className="flex h-72 items-center justify-center rounded-[1.75rem] border border-white/10 bg-slate-950/40">
+          <Loader2 className="animate-spin text-cyan-400" size={38} />
         </div>
-
-        {loading ? (
-          <div className="flex h-72 items-center justify-center">
-            <Loader2 className="animate-spin text-cyan-400" size={38} />
-          </div>
-        ) : error ? (
-          <div className="p-10 text-center">
-            <p className="text-lg font-black text-rose-400">Erro ao carregar tarefas.</p>
-            <p className="mt-2 text-sm font-bold text-slate-400">{error}</p>
-          </div>
-        ) : visibleTasks.length === 0 ? (
-          <div className="p-12 text-center">
-            <CalendarDays className="mx-auto mb-4 text-slate-600" size={42} />
-            <p className="text-lg font-black text-white">Nenhuma tarefa encontrada</p>
-            <p className="mt-2 text-sm font-bold text-slate-500">Ajuste os filtros ou crie um follow up dentro do lead.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-white/10">
-            {visibleTasks.map((task) => {
-              const lead = leadsById[task.lead_id];
-              const broker = task.corretor_id ? brokersById[task.corretor_id] : null;
-              const responsibleId = getTaskResponsibleId(task);
-              const responsible = responsibleId ? profilesById[responsibleId] : null;
-              const badge = getTaskBadge(task);
-              const leadStage = getLeadStatusStyle(lead?.status);
-
-              return (
-                <div
-                  key={task.id}
-                  onClick={() => {
-                    if (task.lead_id) window.location.href = `/crm?lead=${task.lead_id}`;
-                  }}
-                  className="grid cursor-pointer grid-cols-[42px_minmax(260px,1.4fr)_120px_170px_190px_minmax(190px,1fr)_140px] items-center px-4 py-4 text-sm transition hover:bg-white/5"
-                >
-                  <div>
-                    <span className="block h-4 w-4 rounded border border-slate-600 bg-slate-950" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-black text-cyan-300">{task.titulo}</p>
-                    <p className="mt-1 truncate text-xs font-bold text-slate-500">
-                      {broker?.nome_empresa || broker?.nome || 'Sem concessionaria'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className={`inline-flex rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border ${badge.className}`}>
-                      {badge.label}
-                    </span>
-                  </div>
-                  <p className="font-black text-white">{formatDateTime(task.vencimento)}</p>
-                  <div className="flex min-w-0 items-center gap-2" onClick={(event) => event.stopPropagation()}>
-                    {canManageTaskResponsible ? (
-                      <select
-                        value={task.responsavel_profile_id || lead?.responsavel_profile_id || ''}
-                        disabled={savingId === task.id}
-                        onChange={(event) => {
-                          void handleUpdateResponsible(task.id, event.target.value || null);
-                        }}
-                        className="w-[180px] max-w-full truncate rounded-xl border border-white/10 bg-slate-900 px-3 py-1.5 text-xs font-black text-white outline-none focus:border-cyan-400/70"
-                      >
-                        <option value="">Sem responsável</option>
-                        {availableProfiles.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nome || p.email || 'Sem nome'}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <>
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[10px] font-black text-cyan-200">
-                          {(responsible?.nome || 'NA').slice(0, 2).toUpperCase()}
-                        </span>
-                        <span className="truncate font-bold text-slate-300">{responsible?.nome || 'Sem responsavel'}</span>
-                      </>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-black text-cyan-300">{lead?.nome || 'Lead nao encontrado'}</p>
-                    <p className="mt-1 truncate text-xs font-bold text-slate-500">{lead?.telefone || lead?.cidade || '-'}</p>
-                    <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-300">
-                      <span className={`h-1.5 w-1.5 rounded-full ${leadStage.dot}`} />
-                      Etapa: {leadStage.label}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-start gap-2">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openTaskEditor(task);
-                      }}
-                      className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-cyan-300 transition hover:bg-cyan-500/20"
-                    >
-                      <Pencil size={12} /> Editar
-                    </button>
-                    {task.status === 'pendente' ? (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void completeTask(task.id);
-                        }}
-                        disabled={savingId === task.id}
-                        className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
-                      >
-                        {savingId === task.id ? <Loader2 className="animate-spin" size={13} /> : <CheckCircle2 size={13} />}
-                        Concluir
-                      </button>
-                    ) : (
-                      <span className="text-xs font-black text-slate-500">Finalizada</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      ) : error ? (
+        <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/40 p-10 text-center">
+          <p className="text-lg font-black text-rose-400">Erro ao carregar tarefas.</p>
+          <p className="mt-2 text-sm font-bold text-slate-400">{error}</p>
+        </div>
+      ) : (
+        <div className="gt-board">
+          {taskLists.map((list) => (
+            <GoogleTaskList
+              key={list.key}
+              titulo={list.title}
+              itens={list.itens}
+              onAlternar={(item) => {
+                const task = tasks.find((current) => current.id === item.id);
+                if (task && task.status === 'pendente') void completeTask(task.id);
+              }}
+              onAbrir={(item) => {
+                const task = tasks.find((current) => current.id === item.id);
+                if (task?.lead_id) window.location.href = `/crm?lead=${task.lead_id}`;
+              }}
+              vazio={list.vazio}
+            />
+          ))}
+        </div>
+      )}
 
       {editingTask && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="edit-task-title">

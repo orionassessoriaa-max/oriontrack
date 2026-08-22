@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
+import GoogleTaskList from '@/components/tasks/GoogleTaskList';
 import { supabase } from '@/lib/supabase/client';
 import {
   ArrowLeft,
   ArrowRight,
-  CalendarClock,
   CheckCircle2,
   CircleDashed,
   Clock3,
@@ -434,10 +434,10 @@ export default function ApolloTasksPage() {
               </div>
             </div>
           ) : (
-            <section className="grid gap-4 xl:grid-cols-3">
+            <section className="gt-board">
               {columns.map((column) => {
-                const Icon = column.icon;
                 const columnTasks = tasksByStatus[column.status];
+                const index = columns.findIndex((item) => item.status === column.status);
                 return (
                   <div
                     key={column.status}
@@ -446,134 +446,65 @@ export default function ApolloTasksPage() {
                       if (draggingId) void moveTask(draggingId, column.status);
                       setDraggingId(null);
                     }}
-                    className="min-h-[500px] rounded-2xl border border-slate-800 bg-[#071321] p-3 sm:p-4"
                   >
-                    <div className="mb-4 flex items-start justify-between gap-4 px-1 py-1">
-                      <div className="flex items-start gap-3">
-                        <div className={`grid h-10 w-10 place-items-center rounded-xl border border-slate-700 bg-slate-950 ${column.tone}`}>
-                          <Icon size={19} />
-                        </div>
-                        <div>
-                          <h2 className="text-base font-black">{column.title}</h2>
-                          <p className="mt-1 text-xs text-slate-500">{column.description}</p>
-                        </div>
-                      </div>
-                      <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-slate-300">{columnTasks.length}</span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {columnTasks.map((task) => {
+                    <GoogleTaskList
+                      titulo={column.title}
+                      itens={columnTasks.map((task) => {
                         const deadline = deadlineState(task);
                         const priority = priorityOptions.find((option) => option.value === (task.prioridade || 'normal')) || priorityOptions[2];
-                        const index = columns.findIndex((item) => item.status === task.status);
-                        return (
-                          <article
-                            key={task.id}
-                            draggable
-                            onDragStart={() => setDraggingId(task.id)}
-                            onDragEnd={() => setDraggingId(null)}
-                            className="group relative overflow-hidden rounded-xl border border-slate-800 bg-[#0a1929] p-4 transition hover:-translate-y-0.5 hover:border-slate-600"
-                          >
-                            <span className={`absolute inset-y-0 left-0 w-1 ${column.rail}`} />
-                            <div className="pl-2">
-                              <div className="mb-4 flex items-start justify-between gap-3">
-                                <h3 className="text-sm font-extrabold leading-5 text-slate-100">{task.titulo}</h3>
-                                <div className="flex shrink-0 flex-col items-end gap-1.5">
-                                  <span className={`rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${priority.className}`}>
-                                    {priority.label}
-                                  </span>
-                                  <span className={`rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${deadline.className}`}>
-                                    {deadline.label}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {task.descricao && (
-                                <p className="mb-3 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-slate-400" title={task.descricao}>
-                                  {task.descricao}
-                                </p>
-                              )}
-
+                        return {
+                          id: task.id,
+                          titulo: task.titulo,
+                          nota: [displayName(task.responsavel), task.descricao].filter(Boolean).join(' - ') || null,
+                          prazo: deadlineLabel(task.prazo),
+                          atrasada: deadline.label.toLowerCase().includes('atras'),
+                          concluida: task.status === 'feito',
+                          lateral: priority.value === 'normal' ? null : <span className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase ${priority.className}`}>{priority.label}</span>,
+                          extra: (
+                            <div className="mt-1 flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
                               {task.anexo_url && (
-                                <a
-                                  href={task.anexo_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="mb-3 flex min-h-11 items-center justify-between gap-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs font-bold text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/10"
-                                >
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <FileImage size={16} className="shrink-0" />
-                                    <span className="truncate">{task.anexo_nome || 'Print da tarefa'}</span>
-                                  </span>
-                                  <ExternalLink size={14} className="shrink-0" />
+                                <a href={task.anexo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-cyan-500/25 px-2 py-1 text-[10px] font-bold text-cyan-300 hover:bg-cyan-500/10">
+                                  <FileImage size={11} /> {task.anexo_nome || 'Print'} <ExternalLink size={10} />
                                 </a>
                               )}
-
-                              <div className="space-y-2 border-t border-slate-800 pt-3 text-xs">
-                                <div className="flex items-center gap-2 text-slate-300">
-                                  <CalendarClock size={14} className="text-cyan-400" />
-                                  <span className="font-bold">{deadlineLabel(task.prazo)}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-slate-400">
-                                  <UserRound size={14} />
-                                  <span>{displayName(task.responsavel)}</span>
-                                </div>
-                                {view === 'all' && task.criado_por_profile_id !== task.responsavel_profile_id && (
-                                  <div className="text-[10px] text-slate-600">Criada por {displayName(task.criado_por)}</div>
-                                )}
-                              </div>
-
-                              {canManageAll && (
-                                <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-800 pt-3">
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditTask(task)}
-                                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 text-[10px] font-black uppercase tracking-wider text-slate-300 transition hover:border-cyan-500 hover:text-cyan-300"
-                                  >
-                                    <Pencil size={14} /> Editar
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeleteTask(task)}
-                                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-rose-500/25 text-[10px] font-black uppercase tracking-wider text-rose-300 transition hover:border-rose-400 hover:bg-rose-500/10"
-                                  >
-                                    <Trash2 size={14} /> Excluir
-                                  </button>
-                                </div>
+                              {index > 0 && (
+                                <button type="button" onClick={() => void moveTask(task.id, columns[index - 1].status)} className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-400 hover:text-cyan-300">
+                                  <ArrowLeft size={11} /> Voltar
+                                </button>
                               )}
-
-                              <div className="mt-4 flex items-center justify-between gap-2">
-                                <button
-                                  type="button"
-                                  disabled={index === 0}
-                                  onClick={() => index > 0 && void moveTask(task.id, columns[index - 1].status)}
-                                  className="flex min-h-11 items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-2 text-[10px] font-black uppercase tracking-wider text-slate-400 transition hover:border-cyan-500 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-20"
-                                >
-                                  <ArrowLeft size={13} /> Voltar
+                              {index < columns.length - 1 && (
+                                <button type="button" onClick={() => void moveTask(task.id, columns[index + 1].status)} className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-300 hover:text-cyan-300">
+                                  Avancar <ArrowRight size={11} />
                                 </button>
-                                <button
-                                  type="button"
-                                  disabled={index === columns.length - 1}
-                                  onClick={() => index < columns.length - 1 && void moveTask(task.id, columns[index + 1].status)}
-                                  className="flex min-h-11 items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-2 text-[10px] font-black uppercase tracking-wider text-slate-300 transition hover:border-cyan-500 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-20"
-                                >
-                                  Avancar <ArrowRight size={13} />
-                                </button>
-                              </div>
+                              )}
+                              {canManageAll && (
+                                <>
+                                  <button type="button" onClick={() => openEditTask(task)} className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-300 hover:text-cyan-300">
+                                    <Pencil size={11} /> Editar
+                                  </button>
+                                  <button type="button" onClick={() => setDeleteTask(task)} className="inline-flex items-center gap-1 rounded-md border border-rose-500/25 px-2 py-1 text-[10px] font-bold text-rose-300 hover:bg-rose-500/10">
+                                    <Trash2 size={11} /> Excluir
+                                  </button>
+                                </>
+                              )}
                             </div>
-                          </article>
-                        );
+                          ),
+                        };
                       })}
-
-                      {columnTasks.length === 0 && (
-                        <div className="grid min-h-36 place-items-center rounded-xl border border-dashed border-slate-800 bg-slate-950/20 px-5 text-center">
-                          <div>
-                            <Icon size={22} className={`mx-auto mb-2 opacity-50 ${column.tone}`} />
-                            <p className="text-xs font-bold text-slate-600">Nenhuma tarefa nesta etapa</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                      onAlternar={(item) => {
+                        const task = columnTasks.find((current) => current.id === item.id);
+                        if (task) void moveTask(task.id, task.status === 'feito' ? 'a_fazer' : 'feito');
+                      }}
+                      onAbrir={canManageAll ? (item) => {
+                        const task = columnTasks.find((current) => current.id === item.id);
+                        if (task) openEditTask(task);
+                      } : undefined}
+                      onAdicionar={column.status === "a_fazer" ? openCreateTask : undefined}
+                      vazio={{ titulo: 'Nenhuma tarefa nesta etapa', descricao: column.description }}
+                      arrastavel
+                      aoIniciarArraste={(item) => setDraggingId(item.id)}
+                      aoTerminarArraste={() => setDraggingId(null)}
+                    />
                   </div>
                 );
               })}
