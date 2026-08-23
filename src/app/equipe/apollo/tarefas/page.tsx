@@ -180,6 +180,7 @@ export default function ApolloTasksPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ApolloTask | null>(null);
   const [deleteTask, setDeleteTask] = useState<ApolloTask | null>(null);
+  const [checklistNovo, setChecklistNovo] = useState<string[]>([]);
   const [presetAberto, setPresetAberto] = useState<ApolloTaskPreset | null>(null);
   const [presetNome, setPresetNome] = useState('');
   const [presetSalvando, setPresetSalvando] = useState(false);
@@ -257,6 +258,7 @@ export default function ApolloTasksPage() {
     setEditingTask(null);
     setAttachment(null);
     setRemoveAttachment(false);
+    setChecklistNovo([]);
   }
 
   function openCreateTask() {
@@ -268,6 +270,7 @@ export default function ApolloTasksPage() {
     setAssigneeId(currentProfileId);
     setAttachment(null);
     setRemoveAttachment(false);
+    setChecklistNovo([]);
     setModalOpen(true);
   }
 
@@ -280,6 +283,7 @@ export default function ApolloTasksPage() {
     setAssigneeId(task.responsavel_profile_id);
     setAttachment(null);
     setRemoveAttachment(false);
+    setChecklistNovo([]);
     setModalOpen(true);
   }
 
@@ -317,6 +321,7 @@ export default function ApolloTasksPage() {
               prazo: new Date(prazo).toISOString(),
               prioridade,
               responsavel_profile_id: canManageAll ? assigneeId : currentProfileId,
+              checklist: checklistNovo.map((item) => item.trim()).filter(Boolean),
             }),
           });
       const taskId = editingTask?.id || String(payload.task?.id || '');
@@ -721,6 +726,47 @@ export default function ApolloTasksPage() {
                   />
                   <span className="mt-2 block text-right text-[10px] text-slate-600">{descricao.length}/4000</span>
                 </label>
+
+                {!editingTask && (
+                  <div className="block">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                      Checklist da tarefa
+                    </span>
+                    <div className="flex flex-col gap-2">
+                      {checklistNovo.map((item, indice) => (
+                        <div key={indice} className="flex items-center gap-2">
+                          <span className="h-4 w-4 shrink-0 rounded border border-slate-600" />
+                          <input
+                            value={item}
+                            onChange={(event) => setChecklistNovo((atual) => atual.map((valor, i) => i === indice ? event.target.value : valor))}
+                            maxLength={180}
+                            placeholder={`Item ${indice + 1}`}
+                            className="h-11 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm font-semibold outline-none transition placeholder:text-slate-700 focus:border-cyan-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setChecklistNovo((atual) => atual.filter((_, i) => i !== indice))}
+                            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-700 text-slate-400 transition hover:border-rose-400 hover:text-rose-300"
+                            aria-label={`Remover item ${indice + 1}`}
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setChecklistNovo((atual) => atual.length >= 20 ? atual : [...atual, ''])}
+                        disabled={checklistNovo.length >= 20}
+                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-dashed border-slate-700 text-xs font-black uppercase tracking-wider text-slate-400 transition hover:border-cyan-500 hover:text-cyan-300 disabled:opacity-40"
+                      >
+                        <Plus size={14} /> Adicionar item
+                      </button>
+                    </div>
+                    <span className="mt-2 block text-[10px] text-slate-600">
+                      Opcional. O responsavel marca cada item dentro da tarefa.
+                    </span>
+                  </div>
+                )}
 
                 <label className="block">
                   <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Prazo de entrega</span>

@@ -240,9 +240,17 @@ export async function POST(request: Request) {
         .single();
       if (error) throw error;
 
-      if (preset?.checklist.length) {
+      // Checklist vem da predefinicao ou do que a pessoa digitou no formulario.
+      const checklistManual = Array.isArray(body.checklist)
+        ? (body.checklist as unknown[])
+            .map((item) => String(item || '').trim())
+            .filter((item) => item.length > 0 && item.length <= 180)
+            .slice(0, 20)
+        : [];
+      const checklist = preset?.checklist.length ? preset.checklist : checklistManual;
+      if (checklist.length) {
         const { error: itensError } = await supabaseAdmin.from('apollo_task_itens').insert(
-          preset.checklist.map((item, indice) => ({ task_id: task.id, ordem: indice, titulo: item })),
+          checklist.map((item, indice) => ({ task_id: task.id, ordem: indice, titulo: item })),
         );
         if (itensError) throw itensError;
       }
