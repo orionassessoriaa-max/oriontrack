@@ -1534,3 +1534,24 @@
   .kh-period-quick { border-right: 0; border-bottom: 1px solid var(--kh-line); padding: 0 0 14px; }
   .kh-period-custom { padding: 14px 0 0; }
 }
+
+/* Quadro de tarefas no formato kanban: uma coluna por etapa, com a lista
+   rolando dentro da caixa. Antes eram duas colunas e a lista descia pela
+   pagina inteira, entao "Atrasadas" com oito itens empurrava tudo para baixo. */
+.kh-task-board { grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); align-items: start; }
+.kh-task-section { display: flex; flex-direction: column; max-height: 560px; }
+.kh-task-section > div { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2b3a4d transparent; }
+.kh-task-section > div::-webkit-scrollbar { width: 8px; }
+.kh-task-section > div::-webkit-scrollbar-thumb { border-radius: 999px; background: #2b3a4d; }
+.kh-task-section > div::-webkit-scrollbar-track { background: transparent; }
+
+/* Em coluna estreita a linha nao cabe em seis colunas fixas: titulo em cima,
+   responsavel, prazo e prioridade embaixo. */
+.kh-task-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-height: 0; padding: 10px 10px 10px 14px; }
+.kh-task-row > .kh-task-check { order: 1; flex: 0 0 auto; }
+.kh-task-row > div:not(.kh-task-owner) { order: 2; flex: 1 1 calc(100% - 82px); min-width: 0; }
+.kh-task-row > .kh-icon-button { order: 3; flex: 0 0 auto; }
+.kh-task-row > .kh-task-owner { order: 4; margin-left: 26px; }
+.kh-task-row > time { order: 5; }
+.kh-task-row > .kh-priority { order: 6; margin-left: auto; text-align: right; }
+.kh-task-row p { white-space: normal; }
