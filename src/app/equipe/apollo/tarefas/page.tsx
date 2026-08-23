@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import GoogleTaskList from '@/components/tasks/GoogleTaskList';
+import { APOLLO_TASK_PRESETS, type ApolloTaskPreset } from '@/lib/apolloTaskPresets';
 import { supabase } from '@/lib/supabase/client';
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
   CheckCircle2,
   CircleDashed,
   Clock3,
@@ -56,6 +58,15 @@ type ApolloTask = {
   responsavel: Member | null;
   criado_por: Member | null;
   revisoes?: TaskRevision[];
+  itens?: TaskItem[];
+  predefinicao?: string | null;
+};
+
+type TaskItem = {
+  id: string;
+  ordem: number;
+  titulo: string;
+  concluido: boolean;
 };
 
 type TaskRevision = {
@@ -169,6 +180,9 @@ export default function ApolloTasksPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ApolloTask | null>(null);
   const [deleteTask, setDeleteTask] = useState<ApolloTask | null>(null);
+  const [presetAberto, setPresetAberto] = useState<ApolloTaskPreset | null>(null);
+  const [presetNome, setPresetNome] = useState('');
+  const [presetSalvando, setPresetSalvando] = useState(false);
   const [reviewTask, setReviewTask] = useState<ApolloTask | null>(null);
   const [reviewForm, setReviewForm] = useState({ titulo: '', comentario: '' });
   const [reviewSaving, setReviewSaving] = useState(false);
@@ -354,6 +368,48 @@ export default function ApolloTasksPage() {
     }
   }
 
+  async function criarPelaPredefinicao(event: React.FormEvent) {
+    event.preventDefault();
+    if (!presetAberto || presetNome.trim().length < 2) return;
+    setPresetSalvando(true);
+    try {
+      await apiRequest('/api/equipe/apollo/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'create',
+          predefinicao: presetAberto.chave,
+          nome_demanda: presetNome.trim(),
+          prioridade: 'normal',
+          responsavel_profile_id: currentProfileId,
+        }),
+      });
+      setPresetAberto(null);
+      setPresetNome('');
+      await loadTasks(view);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Nao foi possivel criar a tarefa.');
+    } finally {
+      setPresetSalvando(false);
+    }
+  }
+
+  async function alternarItem(taskId: string, itemId: string) {
+    const anterior = tasks;
+    setTasks((atual) => atual.map((task) => task.id !== taskId ? task : {
+      ...task,
+      itens: (task.itens || []).map((item) => item.id === itemId ? { ...item, concluido: !item.concluido } : item),
+    }));
+    try {
+      await apiRequest('/api/equipe/apollo/tasks', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'toggle_item', item_id: itemId }),
+      });
+    } catch (cause) {
+      setTasks(anterior);
+      setError(cause instanceof Error ? cause.message : 'Nao foi possivel marcar o item.');
+    }
+  }
+
   async function sendReview(event: React.FormEvent) {
     event.preventDefault();
     if (!reviewTask || reviewForm.titulo.trim().length < 2) return;
@@ -471,6 +527,21 @@ export default function ApolloTasksPage() {
               </div>
             </div>
           ) : (
+            <>
+            <section className="mb-4 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Predefinicoes</span>
+              {APOLLO_TASK_PRESETS.map((preset) => (
+                <button
+                  key={preset.chave}
+                  type="button"
+                  onClick={() => { setPresetAberto(preset); setPresetNome(''); }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/5 px-3 py-1.5 text-xs font-bold text-cyan-200 transition hover:bg-cyan-500/15"
+                >
+                  <Plus size={13} /> {preset.rotulo}
+                </button>
+              ))}
+            </section>
+
             <section className="gt-board">
               {columns.map((column) => {
                 const columnTasks = tasksByStatus[column.status];
@@ -496,6 +567,23 @@ export default function ApolloTasksPage() {
                           detalhe: (
                             <>
                               {task.descricao && <p className="text-xs leading-5 text-slate-300">{task.descricao}</p>}
+                              {(task.itens || []).length > 0 && (
+                                <div className="flex flex-col gap-1">
+                                  {(task.itens || []).map((item) => (
+                                    <button
+                                      key={item.id}
+                                      type="button"
+                                      onClick={() => void alternarItem(task.id, item.id)}
+                                      className="flex items-center gap-2 rounded-md px-1 py-1 text-left text-xs text-slate-200 hover:bg-white/5"
+                                    >
+                                      <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${item.concluido ? 'border-cyan-400 bg-cyan-400 text-slate-950' : 'border-slate-500'}`}>
+                                        {item.concluido && <Check size={11} strokeWidth={3} />}
+                                      </span>
+                                      <span className={item.concluido ? 'text-slate-500 line-through' : ''}>{item.titulo}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                               {(task.revisoes || []).length > 0 && (
                                 <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2">
                                   <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Revisoes pedidas</p>
@@ -515,7 +603,18 @@ export default function ApolloTasksPage() {
                           prazo: deadlineLabel(task.prazo),
                           atrasada: deadline.label.toLowerCase().includes('atras'),
                           concluida: task.status === 'feito',
-                          lateral: priority.value === 'normal' ? null : <span className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase ${priority.className}`}>{priority.label}</span>,
+                          lateral: (
+                            <>
+                              {(task.itens || []).length > 0 && (
+                                <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-black text-slate-300">
+                                  {(task.itens || []).filter((item) => item.concluido).length}/{(task.itens || []).length}
+                                </span>
+                              )}
+                              {priority.value !== 'normal' && (
+                                <span className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase ${priority.className}`}>{priority.label}</span>
+                              )}
+                            </>
+                          ),
                           extra: (
                             <div className="mt-1 flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
                               {task.anexo_url && (
@@ -574,6 +673,7 @@ export default function ApolloTasksPage() {
                 );
               })}
             </section>
+            </>
           )}
         </div>
 
@@ -705,6 +805,53 @@ export default function ApolloTasksPage() {
           </div>
         )}
 
+        {presetAberto && (
+          <div className="fixed inset-0 z-[130] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && setPresetAberto(null)}>
+            <form onSubmit={criarPelaPredefinicao} className="w-full max-w-md rounded-2xl border border-cyan-500/30 bg-[#081522] p-6 shadow-2xl">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-400">Predefinicao</p>
+                  <h2 className="mt-2 text-xl font-black">{presetAberto.rotulo}</h2>
+                  <p className="mt-2 text-xs text-slate-400">
+                    A tarefa nasce em A fazer como &quot;{presetAberto.prefixoTitulo} {presetNome.trim() || '...'}&quot;.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setPresetAberto(null)} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 hover:text-white" aria-label="Fechar">
+                  <X size={16} />
+                </button>
+              </div>
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">
+                {presetAberto.rotuloCampo}
+                <input
+                  required
+                  autoFocus
+                  value={presetNome}
+                  onChange={(event) => setPresetNome(event.target.value)}
+                  placeholder={presetAberto.exemplo}
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-cyan-400"
+                />
+              </label>
+              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Checklist que vem junto</p>
+                <ul className="mt-2 space-y-1">
+                  {presetAberto.checklist.map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-xs text-slate-300">
+                      <span className="h-3.5 w-3.5 rounded border border-slate-600" /> {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button type="button" onClick={() => setPresetAberto(null)} className="min-h-11 rounded-xl border border-slate-700 text-xs font-black uppercase tracking-wider text-slate-300">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={presetSalvando || presetNome.trim().length < 2} className="min-h-11 rounded-xl bg-cyan-500 text-xs font-black uppercase tracking-wider text-slate-950 disabled:opacity-40">
+                  {presetSalvando ? 'Criando...' : 'Criar tarefa'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
         {reviewTask && (
           <div className="fixed inset-0 z-[130] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && setReviewTask(null)}>
             <form onSubmit={sendReview} className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#081522] p-6 shadow-2xl">

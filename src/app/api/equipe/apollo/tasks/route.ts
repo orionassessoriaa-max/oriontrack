@@ -8,12 +8,13 @@ import {
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { notificarAndamentoTarefa, notificarRevisaoTarefa, notificarTarefaAtribuida } from '@/lib/taskNotifications';
+import { encontrarPreset } from '@/lib/apolloTaskPresets';
 import { isDevOpsManagerProfile } from '@/lib/users';
 
 const TASK_STATUSES = new Set(['a_fazer', 'fazendo', 'feito']);
 const TASK_PRIORITIES = new Set(['baixa', 'normal', 'alta', 'urgente']);
 const PRIORITY_WEIGHT: Record<string, number> = { baixa: 0, normal: 1, alta: 2, urgente: 3 };
-const TASK_SELECT = 'id, titulo, descricao, prazo, status, prioridade, responsavel_profile_id, criado_por_profile_id, anexo_path, anexo_nome, iniciada_em, concluida_em, created_at, updated_at';
+const TASK_SELECT = 'id, titulo, descricao, prazo, status, prioridade, responsavel_profile_id, criado_por_profile_id, anexo_path, anexo_nome, iniciada_em, concluida_em, predefinicao, created_at, updated_at';
 
 type ApolloMember = {
   id: string;
@@ -124,6 +125,20 @@ export async function GET(request: Request) {
       revisoesPorTarefa.set(revisao.task_id, lista);
     }
 
+    const { data: itens } = taskIds.length
+      ? await supabaseAdmin
+          .from('apollo_task_itens')
+          .select('id, task_id, ordem, titulo, concluido, concluido_em')
+          .in('task_id', taskIds)
+          .order('ordem', { ascending: true })
+      : { data: [] };
+    const itensPorTarefa = new Map<string, typeof itens>();
+    for (const item of itens || []) {
+      const lista = itensPorTarefa.get(item.task_id) || [];
+      lista.push(item);
+      itensPorTarefa.set(item.task_id, lista);
+    }
+
     const hydratedTasks = (tasks || [])
       .map((task) => ({
         ...task,
@@ -131,6 +146,7 @@ export async function GET(request: Request) {
         responsavel: memberById.get(task.responsavel_profile_id) || null,
         criado_por: memberById.get(task.criado_por_profile_id) || null,
         revisoes: revisoesPorTarefa.get(task.id) || [],
+        itens: itensPorTarefa.get(task.id) || [],
       }))
       .sort((a, b) => {
         const priorityDifference = (PRIORITY_WEIGHT[b.prioridade] ?? 1) - (PRIORITY_WEIGHT[a.prioridade] ?? 1);
@@ -174,9 +190,17 @@ export async function POST(request: Request) {
 
   try {
     if (action === 'create') {
-      const titulo = String(body.titulo || '').trim();
+      // A predefinicao manda: o titulo vira "Criar funil {nome}" e o checklist
+      // vem do catalogo do servidor, nao do que o navegador enviar.
+      const preset = encontrarPreset(String(body.predefinicao || ''));
+      const nomeDemanda = String(body.nome_demanda || '').trim();
+      const titulo = preset && nomeDemanda
+        ? `${preset.prefixoTitulo} ${nomeDemanda}`.trim()
+        : String(body.titulo || '').trim();
       const descricao = String(body.descricao || '').trim();
-      const prazo = new Date(String(body.prazo || ''));
+      const prazo = preset && !body.prazo
+        ? new Date(Date.now() + preset.prazoHoras * 3600_000)
+        : new Date(String(body.prazo || ''));
       const prioridade = String(body.prioridade || 'normal');
       const requestedAssignee = String(body.responsavel_profile_id || guard.profile.id);
       const responsavelProfileId = manager ? requestedAssignee : guard.profile.id;
@@ -210,10 +234,18 @@ export async function POST(request: Request) {
           prioridade,
           responsavel_profile_id: responsavelProfileId,
           criado_por_profile_id: guard.profile.id,
+          predefinicao: preset?.chave || null,
         })
         .select(TASK_SELECT)
         .single();
       if (error) throw error;
+
+      if (preset?.checklist.length) {
+        const { error: itensError } = await supabaseAdmin.from('apollo_task_itens').insert(
+          preset.checklist.map((item, indice) => ({ task_id: task.id, ordem: indice, titulo: item })),
+        );
+        if (itensError) throw itensError;
+      }
 
       // Notificar nao pode derrubar a criacao: se o WhatsApp falhar, a tarefa
       // continua criada e o erro fica no log.
@@ -291,6 +323,38 @@ export async function POST(request: Request) {
       });
 
       return NextResponse.json({ task });
+    }
+
+    if (action === 'toggle_item') {
+      const itemId = String(body.item_id || '').trim();
+      if (!itemId) return NextResponse.json({ error: 'Informe o item.' }, { status: 400 });
+
+      const { data: item, error: itemError } = await supabaseAdmin
+        .from('apollo_task_itens')
+        .select('id, task_id, concluido')
+        .eq('id', itemId)
+        .maybeSingle();
+      if (itemError) throw itemError;
+      if (!item) return NextResponse.json({ error: 'Item nao encontrado.' }, { status: 404 });
+
+      // Marcar item e do responsavel pela tarefa, ou da coordenacao.
+      const { data: dona } = await supabaseAdmin
+        .from('apollo_tasks')
+        .select('id, responsavel_profile_id')
+        .eq('id', item.task_id)
+        .maybeSingle();
+      if (!manager && dona?.responsavel_profile_id !== guard.profile.id) {
+        return NextResponse.json({ error: 'Apenas o responsavel marca o checklist.' }, { status: 403 });
+      }
+
+      const concluido = !item.concluido;
+      const { error: updateError } = await supabaseAdmin
+        .from('apollo_task_itens')
+        .update({ concluido, concluido_em: concluido ? new Date().toISOString() : null })
+        .eq('id', itemId);
+      if (updateError) throw updateError;
+
+      return NextResponse.json({ item_id: itemId, concluido });
     }
 
     if (action === 'revisar') {
