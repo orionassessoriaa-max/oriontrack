@@ -49,11 +49,21 @@ type ApolloTask = {
   anexo_path: string | null;
   anexo_nome: string | null;
   anexo_url: string | null;
+  iniciada_em: string | null;
   concluida_em: string | null;
   created_at: string;
   updated_at: string;
   responsavel: Member | null;
   criado_por: Member | null;
+  revisoes?: TaskRevision[];
+};
+
+type TaskRevision = {
+  id: string;
+  titulo: string;
+  comentario: string | null;
+  created_at: string;
+  autor: Member | null;
 };
 
 type TasksPayload = {
@@ -159,6 +169,9 @@ export default function ApolloTasksPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ApolloTask | null>(null);
   const [deleteTask, setDeleteTask] = useState<ApolloTask | null>(null);
+  const [reviewTask, setReviewTask] = useState<ApolloTask | null>(null);
+  const [reviewForm, setReviewForm] = useState({ titulo: '', comentario: '' });
+  const [reviewSaving, setReviewSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -341,6 +354,30 @@ export default function ApolloTasksPage() {
     }
   }
 
+  async function sendReview(event: React.FormEvent) {
+    event.preventDefault();
+    if (!reviewTask || reviewForm.titulo.trim().length < 2) return;
+    setReviewSaving(true);
+    try {
+      await apiRequest('/api/equipe/apollo/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'revisar',
+          task_id: reviewTask.id,
+          titulo: reviewForm.titulo.trim(),
+          comentario: reviewForm.comentario.trim(),
+        }),
+      });
+      setReviewTask(null);
+      setReviewForm({ titulo: '', comentario: '' });
+      await loadTasks(view);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Nao foi possivel pedir a revisao.');
+    } finally {
+      setReviewSaving(false);
+    }
+  }
+
   function switchView(nextView: 'mine' | 'all') {
     if (nextView === view) return;
     if (nextView === 'mine') setAssigneeFilter('all');
@@ -455,7 +492,26 @@ export default function ApolloTasksPage() {
                         return {
                           id: task.id,
                           titulo: task.titulo,
-                          nota: [displayName(task.responsavel), task.descricao].filter(Boolean).join(' - ') || null,
+                          nota: `Responsavel: ${displayName(task.responsavel)}`,
+                          detalhe: (
+                            <>
+                              {task.descricao && <p className="text-xs leading-5 text-slate-300">{task.descricao}</p>}
+                              {(task.revisoes || []).length > 0 && (
+                                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2">
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">Revisoes pedidas</p>
+                                  {(task.revisoes || []).map((revisao) => (
+                                    <div key={revisao.id} className="mt-1.5">
+                                      <p className="text-xs font-bold text-amber-100">{revisao.titulo}</p>
+                                      {revisao.comentario && <p className="text-[11px] leading-4 text-slate-300">{revisao.comentario}</p>}
+                                      <p className="text-[10px] text-slate-500">
+                                        {displayName(revisao.autor)} - {new Date(revisao.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          ),
                           prazo: deadlineLabel(task.prazo),
                           atrasada: deadline.label.toLowerCase().includes('atras'),
                           concluida: task.status === 'feito',
@@ -475,6 +531,15 @@ export default function ApolloTasksPage() {
                               {index < columns.length - 1 && (
                                 <button type="button" onClick={() => void moveTask(task.id, columns[index + 1].status)} className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-300 hover:text-cyan-300">
                                   Avancar <ArrowRight size={11} />
+                                </button>
+                              )}
+                              {task.status === 'feito' && (canManageAll || task.criado_por_profile_id === currentProfileId) && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setReviewTask(task); setReviewForm({ titulo: '', comentario: '' }); }}
+                                  className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-1 text-[10px] font-bold text-amber-300 hover:bg-amber-500/10"
+                                >
+                                  <RefreshCw size={11} /> Pedir revisao
                                 </button>
                               )}
                               {canManageAll && (
@@ -640,6 +705,51 @@ export default function ApolloTasksPage() {
           </div>
         )}
 
+        {reviewTask && (
+          <div className="fixed inset-0 z-[130] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && setReviewTask(null)}>
+            <form onSubmit={sendReview} className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#081522] p-6 shadow-2xl">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-400">Devolver para ajuste</p>
+                  <h2 className="mt-2 text-xl font-black">Pedir revisao</h2>
+                  <p className="mt-2 text-xs text-slate-400">{reviewTask.titulo}</p>
+                </div>
+                <button type="button" onClick={() => setReviewTask(null)} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 hover:text-white" aria-label="Fechar">
+                  <X size={16} />
+                </button>
+              </div>
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">
+                Titulo da revisao
+                <input
+                  required
+                  autoFocus
+                  value={reviewForm.titulo}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, titulo: event.target.value }))}
+                  placeholder="Nao gostei do corte da imagem"
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-amber-400"
+                />
+              </label>
+              <label className="mt-4 block text-xs font-black uppercase tracking-wider text-slate-400">
+                O que precisa mudar
+                <textarea
+                  rows={4}
+                  value={reviewForm.comentario}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, comentario: event.target.value }))}
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-amber-400"
+                />
+              </label>
+              <p className="mt-3 text-[11px] text-slate-500">A tarefa volta para Fazendo e o responsavel recebe no WhatsApp.</p>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button type="button" onClick={() => setReviewTask(null)} className="min-h-11 rounded-xl border border-slate-700 text-xs font-black uppercase tracking-wider text-slate-300">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={reviewSaving || reviewForm.titulo.trim().length < 2} className="min-h-11 rounded-xl bg-amber-500 text-xs font-black uppercase tracking-wider text-slate-950 disabled:opacity-40">
+                  {reviewSaving ? 'Enviando...' : 'Enviar revisao'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
         {deleteTask && (
           <div
             className="fixed inset-0 z-[130] grid place-items-center bg-slate-950/85 p-4 backdrop-blur-sm"

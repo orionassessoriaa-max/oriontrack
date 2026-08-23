@@ -317,8 +317,28 @@ export default function TarefasPage() {
       alert('Erro ao editar tarefa: ' + updateError.message);
       return;
     }
+    // Trocar o responsavel avisa a pessoa no WhatsApp. O envio sai do servidor,
+    // que rele a tarefa do banco antes de mandar.
+    if (editForm.responsavel_profile_id && editForm.responsavel_profile_id !== editingTask.responsavel_profile_id) {
+      void notificarTarefa(editingTask.id);
+    }
     setEditingTask(null);
     await fetchTasks();
+  }
+
+  async function notificarTarefa(tarefaId: string) {
+    try {
+      const { data: sessao } = await supabase.auth.getSession();
+      const token = sessao.session?.access_token;
+      if (!token) return;
+      await fetch('/api/tarefas/notificar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tarefa_id: tarefaId }),
+      });
+    } catch (erro) {
+      console.error('[tarefas] aviso no WhatsApp falhou:', erro);
+    }
   }
 
   function getTaskResponsibleId(task: LeadTarefa) {
@@ -408,21 +428,27 @@ export default function TarefasPage() {
         prazo: task.vencimento ? formatDateTime(task.vencimento) : null,
         atrasada: getTaskBadge(task).label === 'Atrasada',
         concluida: task.status === 'concluida' || task.status === 'cancelada',
-        lateral: (
+        detalhe: (
           <>
-            <span>{(responsible?.nome || 'Sem dono').split(' ')[0]}</span>
-            <button
-              type="button"
-              title="Editar tarefa"
-              aria-label={`Editar ${task.titulo}`}
-              className="rounded-lg p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
-              onClick={(event) => {
-                event.stopPropagation();
-                openTaskEditor(task);
-              }}
-            >
-              <Pencil size={13} />
-            </button>
+            {task.descricao && <p className="text-xs leading-5 text-slate-300">{task.descricao}</p>}
+            <p className="text-[11px] text-slate-500">Responsavel: {responsible?.nome || 'Sem responsavel'}</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => openTaskEditor(task)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-300 transition hover:border-cyan-500 hover:text-cyan-300"
+              >
+                <Pencil size={12} /> Editar
+              </button>
+              {task.lead_id && (
+                <a
+                  href={`/crm?lead=${task.lead_id}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-cyan-300 transition hover:bg-cyan-500/20"
+                >
+                  <UserRound size={12} /> Abrir lead
+                </a>
+              )}
+            </div>
           </>
         ),
       };

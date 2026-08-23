@@ -7,12 +7,13 @@ import {
 } from '@/lib/apolloTasks';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { notificarAndamentoTarefa, notificarRevisaoTarefa, notificarTarefaAtribuida } from '@/lib/taskNotifications';
 import { isDevOpsManagerProfile } from '@/lib/users';
 
 const TASK_STATUSES = new Set(['a_fazer', 'fazendo', 'feito']);
 const TASK_PRIORITIES = new Set(['baixa', 'normal', 'alta', 'urgente']);
 const PRIORITY_WEIGHT: Record<string, number> = { baixa: 0, normal: 1, alta: 2, urgente: 3 };
-const TASK_SELECT = 'id, titulo, descricao, prazo, status, prioridade, responsavel_profile_id, criado_por_profile_id, anexo_path, anexo_nome, concluida_em, created_at, updated_at';
+const TASK_SELECT = 'id, titulo, descricao, prazo, status, prioridade, responsavel_profile_id, criado_por_profile_id, anexo_path, anexo_nome, iniciada_em, concluida_em, created_at, updated_at';
 
 type ApolloMember = {
   id: string;
@@ -97,12 +98,39 @@ export async function GET(request: Request) {
       .filter((attachment) => attachment.path && attachment.signedUrl)
       .map((attachment) => [attachment.path as string, attachment.signedUrl as string]));
     const memberById = new Map(members.map((member) => [member.id, member]));
+
+    // Revisoes pedidas por quem criou a tarefa, para aparecerem no detalhe.
+    const taskIds = (tasks || []).map((task) => task.id);
+    const { data: revisoes } = taskIds.length
+      ? await supabaseAdmin
+          .from('apollo_task_revisoes')
+          .select('id, task_id, autor_profile_id, titulo, comentario, created_at')
+          .in('task_id', taskIds)
+          .order('created_at', { ascending: false })
+      : { data: [] };
+    type RevisaoHidratada = {
+      id: string;
+      task_id: string;
+      autor_profile_id: string | null;
+      titulo: string;
+      comentario: string | null;
+      created_at: string;
+      autor: ApolloMember | null;
+    };
+    const revisoesPorTarefa = new Map<string, RevisaoHidratada[]>();
+    for (const revisao of revisoes || []) {
+      const lista = revisoesPorTarefa.get(revisao.task_id) || [];
+      lista.push({ ...revisao, autor: memberById.get(revisao.autor_profile_id) || null });
+      revisoesPorTarefa.set(revisao.task_id, lista);
+    }
+
     const hydratedTasks = (tasks || [])
       .map((task) => ({
         ...task,
         anexo_url: task.anexo_path ? attachmentUrlByPath.get(task.anexo_path) || null : null,
         responsavel: memberById.get(task.responsavel_profile_id) || null,
         criado_por: memberById.get(task.criado_por_profile_id) || null,
+        revisoes: revisoesPorTarefa.get(task.id) || [],
       }))
       .sort((a, b) => {
         const priorityDifference = (PRIORITY_WEIGHT[b.prioridade] ?? 1) - (PRIORITY_WEIGHT[a.prioridade] ?? 1);
@@ -187,6 +215,17 @@ export async function POST(request: Request) {
         .single();
       if (error) throw error;
 
+      // Notificar nao pode derrubar a criacao: se o WhatsApp falhar, a tarefa
+      // continua criada e o erro fica no log.
+      void notificarTarefaAtribuida({
+        titulo,
+        descricao,
+        prazo: prazo.toISOString(),
+        responsavelProfileId,
+        autorProfileId: guard.profile.id,
+        origem: 'apollo',
+      }).catch((erro) => console.error('[apollo tasks] notificacao falhou:', erro));
+
       await writeAuditLog(request, guard.profile, {
         action: 'apollo.task.create',
         entity_type: 'apollo_task',
@@ -206,7 +245,7 @@ export async function POST(request: Request) {
 
       let ownershipQuery = supabaseAdmin
         .from('apollo_tasks')
-        .select('id, responsavel_profile_id, status')
+        .select('id, titulo, status, responsavel_profile_id, criado_por_profile_id, iniciada_em')
         .eq('id', taskId)
         .eq('equipe', 'apollo');
       if (!manager) ownershipQuery = ownershipQuery.eq('responsavel_profile_id', guard.profile.id);
@@ -215,10 +254,14 @@ export async function POST(request: Request) {
       if (!currentTask) return NextResponse.json({ error: 'Tarefa nao encontrada.' }, { status: 404 });
 
       const now = new Date().toISOString();
+      // O relogio da entrega comeca na primeira vez que a tarefa vai para
+      // "fazendo" e nao reinicia se ela voltar e avancar de novo.
+      const iniciadaEm = status === 'fazendo' ? currentTask.iniciada_em || now : currentTask.iniciada_em;
       const { data: task, error } = await supabaseAdmin
         .from('apollo_tasks')
         .update({
           status,
+          iniciada_em: status === 'a_fazer' ? null : iniciadaEm,
           concluida_em: status === 'feito' ? now : null,
           updated_at: now,
         })
@@ -227,11 +270,85 @@ export async function POST(request: Request) {
         .single();
       if (error) throw error;
 
+      // Quem criou a tarefa acompanha: aviso ao iniciar e ao entregar.
+      if (currentTask.status !== status && (status === 'fazendo' || status === 'feito')) {
+        void notificarAndamentoTarefa({
+          titulo: currentTask.titulo,
+          status,
+          criadorProfileId: currentTask.criado_por_profile_id,
+          responsavelProfileId: currentTask.responsavel_profile_id,
+          quemMoveuProfileId: guard.profile.id,
+          iniciadaEm,
+          concluidaEm: status === 'feito' ? now : null,
+        }).catch((erro) => console.error('[apollo tasks] aviso de andamento falhou:', erro));
+      }
+
       await writeAuditLog(request, guard.profile, {
         action: 'apollo.task.status.update',
         entity_type: 'apollo_task',
         entity_id: taskId,
         metadata: { de: currentTask.status, para: status },
+      });
+
+      return NextResponse.json({ task });
+    }
+
+    if (action === 'revisar') {
+      const taskId = String(body.task_id || '').trim();
+      const tituloRevisao = String(body.titulo || '').trim();
+      const comentario = String(body.comentario || '').trim();
+      if (!taskId || tituloRevisao.length < 2) {
+        return NextResponse.json({ error: 'Informe a tarefa e um titulo para a revisao.' }, { status: 400 });
+      }
+      if (comentario.length > 2000) {
+        return NextResponse.json({ error: 'O comentario deve ter no maximo 2000 caracteres.' }, { status: 400 });
+      }
+
+      const { data: alvo, error: alvoError } = await supabaseAdmin
+        .from('apollo_tasks')
+        .select('id, titulo, responsavel_profile_id, criado_por_profile_id')
+        .eq('id', taskId)
+        .eq('equipe', 'apollo')
+        .maybeSingle();
+      if (alvoError) throw alvoError;
+      if (!alvo) return NextResponse.json({ error: 'Tarefa nao encontrada.' }, { status: 404 });
+
+      // Revisao e do dono da demanda: quem pediu a tarefa, ou a coordenacao.
+      if (!manager && alvo.criado_por_profile_id !== guard.profile.id) {
+        return NextResponse.json({ error: 'Apenas quem criou a tarefa pode pedir revisao.' }, { status: 403 });
+      }
+
+      const { error: revisaoError } = await supabaseAdmin.from('apollo_task_revisoes').insert({
+        task_id: taskId,
+        autor_profile_id: guard.profile.id,
+        titulo: tituloRevisao,
+        comentario: comentario || null,
+      });
+      if (revisaoError) throw revisaoError;
+
+      // A tarefa volta para "fazendo": entregue com pendencia nao e entregue.
+      const agora = new Date().toISOString();
+      const { data: task, error: statusError } = await supabaseAdmin
+        .from('apollo_tasks')
+        .update({ status: 'fazendo', concluida_em: null, updated_at: agora })
+        .eq('id', taskId)
+        .select(TASK_SELECT)
+        .single();
+      if (statusError) throw statusError;
+
+      void notificarRevisaoTarefa({
+        tituloTarefa: alvo.titulo,
+        tituloRevisao,
+        comentario,
+        responsavelProfileId: alvo.responsavel_profile_id,
+        autorProfileId: guard.profile.id,
+      }).catch((erro) => console.error('[apollo tasks] aviso de revisao falhou:', erro));
+
+      await writeAuditLog(request, guard.profile, {
+        action: 'apollo.task.revisao',
+        entity_type: 'apollo_task',
+        entity_id: taskId,
+        metadata: { titulo: tituloRevisao, tem_comentario: Boolean(comentario) },
       });
 
       return NextResponse.json({ task });
@@ -295,7 +412,7 @@ export async function PATCH(request: Request) {
 
     const { data: currentTask, error: currentError } = await supabaseAdmin
       .from('apollo_tasks')
-      .select('id, titulo, anexo_path')
+      .select('id, titulo, anexo_path, responsavel_profile_id')
       .eq('id', taskId)
       .eq('equipe', 'apollo')
       .maybeSingle();
@@ -324,6 +441,19 @@ export async function PATCH(request: Request) {
       .select(TASK_SELECT)
       .single();
     if (error) throw error;
+
+    // Trocar o dono da tarefa avisa quem passou a ser responsavel. Editar
+    // titulo ou prazo sem trocar o dono nao dispara nada.
+    if (currentTask.responsavel_profile_id !== responsavelProfileId) {
+      void notificarTarefaAtribuida({
+        titulo,
+        descricao,
+        prazo: prazo.toISOString(),
+        responsavelProfileId,
+        autorProfileId: guard.profile.id,
+        origem: 'apollo',
+      }).catch((erro) => console.error('[apollo tasks] notificacao falhou:', erro));
+    }
 
     if (removeAttachment && currentTask.anexo_path) {
       const { error: storageError } = await supabaseAdmin.storage
@@ -379,7 +509,7 @@ export async function DELETE(request: Request) {
   try {
     const { data: currentTask, error: currentError } = await supabaseAdmin
       .from('apollo_tasks')
-      .select('id, titulo, anexo_path')
+      .select('id, titulo, anexo_path, responsavel_profile_id')
       .eq('id', taskId)
       .eq('equipe', 'apollo')
       .maybeSingle();

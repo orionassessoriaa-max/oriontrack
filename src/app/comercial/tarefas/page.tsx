@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarClock, CheckCircle2, Circle, Clock3, Plus, RefreshCw, UserRound, X } from 'lucide-react';
-import GoogleTaskList, { type GoogleTaskItem } from '@/components/tasks/GoogleTaskList';
+import { CalendarClock, Check, CheckCircle2, Circle, Clock3, Edit3, Plus, RefreshCw, UserRound, X } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import CommercialLeadDetailsModal from '@/components/commercial/CommercialLeadDetailsModal';
 import { COMMERCIAL_STAGES, type CommercialLead, type CommercialStage, type CommercialTask } from '@/lib/comercial';
@@ -146,29 +145,7 @@ export default function CommercialTasksPage() {
     <div>
       <header className="kh-page-head"><div><div className="kh-eyebrow">Rotina comercial</div><h1>Tarefas</h1><p>{role === 'coordenador' ? 'Acompanhe as entregas do Léo, do Renan e da coordenação.' : 'Organize seus contatos, reuniões e próximos passos.'}</p></div><div className="kh-actions"><button className="kh-icon-button" onClick={() => void load()} aria-label="Atualizar"><RefreshCw size={17} className={loading ? 'kh-spin' : ''} /></button><button className="kh-button primary" onClick={openNewTask}><Plus size={17} /> Nova tarefa</button></div></header>
       <section className="kh-task-summary">{sections.map((section) => <div key={section.key} className={section.tone}><section.icon size={17} /><span>{section.title}</span><strong>{groups[section.key].length}</strong></div>)}</section>
-      <section className="gt-board">{sections.map((section) => {
-        const itens: GoogleTaskItem[] = groups[section.key].map((task) => ({
-          id: task.id,
-          titulo: task.titulo,
-          nota: task.lead?.nome || task.descricao || 'Tarefa interna',
-          prazo: task.vencimento ? new Date(task.vencimento).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null,
-          atrasada: dueState(task) === 'late',
-          concluida: task.status === 'concluida',
-          lateral: <><UserRound size={12} /> {memberMap.get(task.responsavel_id)?.nome?.split(' ')[0] || 'Sem dono'}</>,
-        }));
-        const original = (id: string) => groups[section.key].find((task) => task.id === id);
-        return (
-          <GoogleTaskList
-            key={section.key}
-            titulo={section.title}
-            itens={itens}
-            onAdicionar={section.key === 'done' ? undefined : openNewTask}
-            onAlternar={(item) => { const task = original(item.id); if (task) void complete(task); }}
-            onAbrir={(item) => { const task = original(item.id); if (task) openLead(task); }}
-            vazio={section.key === 'late' ? { titulo: 'Nada atrasado', descricao: 'Bom trabalho!' } : section.key === 'done' ? { titulo: 'Nada concluído ainda', descricao: 'As tarefas fechadas aparecem aqui.' } : undefined}
-          />
-        );
-      })}</section>
+      <section className="kh-task-board">{sections.map((section) => <article key={section.key} className={`kh-task-section ${section.tone}`}><header><div><span className="kh-task-section-icon"><section.icon size={16} /></span><h2>{section.title}</h2></div><span>{groups[section.key].length}</span></header><div>{groups[section.key].map((task) => <div key={task.id} className="kh-task-row" role="button" tabIndex={0} onClick={() => openLead(task)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') openLead(task); }}><button type="button" className={`kh-task-check ${task.status === 'concluida' ? 'done' : ''}`} aria-label={task.status === 'concluida' ? `Reabrir ${task.titulo}` : `Concluir ${task.titulo}`} onClick={(event) => { event.stopPropagation(); void complete(task); }}>{task.status === 'concluida' && <Check size={13} />}</button><div><strong>{task.titulo}</strong><p>{task.lead?.nome || task.descricao || 'Tarefa interna'}</p></div><div className="kh-task-owner"><UserRound size={13} /><span>{memberMap.get(task.responsavel_id)?.nome || 'Responsável'}</span></div><time>{task.vencimento ? new Date(task.vencimento).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Sem prazo'}</time><span className={`kh-priority ${task.prioridade}`}>{task.prioridade}</span><button type="button" className="kh-icon-button" title="Editar tarefa" aria-label={`Editar ${task.titulo}`} onClick={(event) => { event.stopPropagation(); openTaskEditor(task); }}><Edit3 size={14} /></button></div>)}{!groups[section.key].length && <div className="kh-task-empty">Nenhuma tarefa nesta seção.</div>}</div></article>)}</section>
       {open && <div className="kh-modal" role="dialog" aria-modal="true"><button className="kh-modal-scrim" onClick={() => { setOpen(false); setEditingTask(null); }} aria-label="Fechar" /><form className="kh-modal-sheet kh-task-modal" onSubmit={create}><header><div><span>Rotina comercial</span><h2>{editingTask ? 'Editar tarefa' : 'Nova tarefa'}</h2></div><button type="button" onClick={() => { setOpen(false); setEditingTask(null); }} aria-label="Fechar"><X size={20} /></button></header><div className="kh-form-grid"><label className="wide"><span>Título</span><input className="kh-input" value={form.titulo} onChange={(event) => setForm({ ...form, titulo: event.target.value })} required /></label><label><span>Responsável</span><select className="kh-select" value={form.responsavel_id} onChange={(event) => setForm({ ...form, responsavel_id: event.target.value })} disabled={role !== 'coordenador'}>{members.filter((member) => member.ativo).map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label><label><span>Lead relacionado</span><select className="kh-select" value={form.lead_id} onChange={(event) => setForm({ ...form, lead_id: event.target.value })}><option value="">Tarefa interna</option>{leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.nome}</option>)}</select></label><label><span>Prazo</span><input className="kh-input" type="datetime-local" value={form.vencimento} onChange={(event) => setForm({ ...form, vencimento: event.target.value })} /></label><label><span>Prioridade</span><select className="kh-select" value={form.prioridade} onChange={(event) => setForm({ ...form, prioridade: event.target.value })}><option value="baixa">Baixa</option><option value="normal">Normal</option><option value="alta">Alta</option></select></label><label className="wide"><span>Descrição</span><textarea className="kh-textarea" value={form.descricao} onChange={(event) => setForm({ ...form, descricao: event.target.value })} /></label></div><footer><button type="button" className="kh-button" onClick={() => { setOpen(false); setEditingTask(null); }}>Cancelar</button><button className="kh-button primary" disabled={saving}>{saving ? 'Salvando...' : editingTask ? 'Salvar alterações' : 'Criar tarefa'}</button></footer></form></div>}
       <CommercialLeadDetailsModal
         lead={expandedLeadId ? leads.find((lead) => lead.id === expandedLeadId) || null : null}

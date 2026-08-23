@@ -1841,10 +1841,29 @@ export default function BrokerInboxPage() {
         vencimento: vencimentoDate ? vencimentoDate.toISOString() : null,
         prioridade: taskPriority,
       };
-      const { error } = editingTaskId
-        ? await supabase.from('lead_tarefas').update(taskData).eq('id', editingTaskId)
-        : await supabase.from('lead_tarefas').insert([{ ...taskData, status: 'pendente' }]);
+      const { data: tarefaSalva, error } = editingTaskId
+        ? await supabase.from('lead_tarefas').update(taskData).eq('id', editingTaskId).select('id').maybeSingle()
+        : await supabase.from('lead_tarefas').insert([{ ...taskData, status: 'pendente' }]).select('id').maybeSingle();
       if (error) throw error;
+
+      // Tarefa criada para outra pessoa vira aviso no WhatsApp dela. O servidor
+      // decide o envio; aqui so avisamos qual tarefa foi salva.
+      if (tarefaSalva?.id && responsibleProfileId && responsibleProfileId !== profile?.id) {
+        void (async () => {
+          try {
+            const { data: sessao } = await supabase.auth.getSession();
+            const token = sessao.session?.access_token;
+            if (!token) return;
+            await fetch('/api/tarefas/notificar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ tarefa_id: tarefaSalva.id }),
+            });
+          } catch (erro) {
+            console.error('[inbox] aviso de tarefa falhou:', erro);
+          }
+        })();
+      }
 
       await logLeadActivity({
         tipo: 'tarefa',

@@ -18,6 +18,8 @@ export type GoogleTaskItem = {
   lateral?: ReactNode;
   /** Conteudo extra embaixo da nota: anexo, botoes de mover, o que a tela usar. */
   extra?: ReactNode;
+  /** Descricao e acoes que so aparecem quando a linha e aberta. */
+  detalhe?: ReactNode;
 };
 
 type Props = {
@@ -45,6 +47,8 @@ function Linha({
   arrastavel,
   aoIniciarArraste,
   aoTerminarArraste,
+  aberta,
+  aoAlternarAbertura,
 }: {
   item: GoogleTaskItem;
   onAlternar?: (item: GoogleTaskItem) => void;
@@ -52,22 +56,31 @@ function Linha({
   arrastavel?: boolean;
   aoIniciarArraste?: (item: GoogleTaskItem) => void;
   aoTerminarArraste?: () => void;
+  aberta?: boolean;
+  aoAlternarAbertura?: (item: GoogleTaskItem) => void;
 }) {
+  // A linha fechada mostra so titulo e prazo, como no Google Tasks. Descricao,
+  // anexo e botoes aparecem ao abrir.
+  const podeAbrir = Boolean(item.detalhe || item.extra) || Boolean(onAbrir);
+  const acionar = () => {
+    if (item.detalhe || item.extra) aoAlternarAbertura?.(item);
+    else onAbrir?.(item);
+  };
   return (
     <div
       draggable={arrastavel}
       onDragStart={arrastavel ? () => aoIniciarArraste?.(item) : undefined}
       onDragEnd={arrastavel ? () => aoTerminarArraste?.() : undefined}
-      className={`gt-item ${item.concluida ? 'done' : ''}`}
-      role={onAbrir ? 'button' : undefined}
-      tabIndex={onAbrir ? 0 : undefined}
-      onClick={onAbrir ? () => onAbrir(item) : undefined}
+      className={`gt-item ${item.concluida ? 'done' : ''} ${aberta ? 'open' : ''}`}
+      role={podeAbrir ? 'button' : undefined}
+      tabIndex={podeAbrir ? 0 : undefined}
+      onClick={podeAbrir ? acionar : undefined}
       onKeyDown={
-        onAbrir
+        podeAbrir
           ? (event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
-                onAbrir(item);
+                acionar();
               }
             }
           : undefined
@@ -88,13 +101,18 @@ function Linha({
 
       <div className="gt-item-body">
         <span className="gt-item-title">{item.titulo}</span>
-        {item.nota && <span className="gt-item-note">{item.nota}</span>}
         {item.prazo && (
           <span className={`gt-chip ${item.atrasada ? 'late' : ''}`}>
             <Clock3 size={11} /> {item.prazo}
           </span>
         )}
-        {item.extra}
+        {aberta && (
+          <div className="gt-item-detail" onClick={(event) => event.stopPropagation()}>
+            {item.nota && <p className="gt-item-note">{item.nota}</p>}
+            {item.detalhe}
+            {item.extra}
+          </div>
+        )}
       </div>
 
       {item.lateral && <div className="gt-item-side">{item.lateral}</div>}
@@ -118,6 +136,9 @@ export default function GoogleTaskList({
   aoTerminarArraste,
 }: Props) {
   const [mostrarConcluidas, setMostrarConcluidas] = useState(false);
+  const [abertaId, setAbertaId] = useState<string | null>(null);
+  const alternarAbertura = (item: GoogleTaskItem) =>
+    setAbertaId((atual) => (atual === item.id ? null : item.id));
 
   return (
     <section className="gt-list">
@@ -145,6 +166,8 @@ export default function GoogleTaskList({
             arrastavel={arrastavel}
             aoIniciarArraste={aoIniciarArraste}
             aoTerminarArraste={aoTerminarArraste}
+            aberta={abertaId === item.id}
+            aoAlternarAbertura={alternarAbertura}
           />
         ))}
       </div>
@@ -171,7 +194,14 @@ export default function GoogleTaskList({
           {mostrarConcluidas && (
             <div className="gt-items">
               {concluidas.map((item) => (
-                <Linha key={item.id} item={item} onAlternar={onAlternar} onAbrir={onAbrir} />
+                <Linha
+                  key={item.id}
+                  item={item}
+                  onAlternar={onAlternar}
+                  onAbrir={onAbrir}
+                  aberta={abertaId === item.id}
+                  aoAlternarAbertura={alternarAbertura}
+                />
               ))}
             </div>
           )}

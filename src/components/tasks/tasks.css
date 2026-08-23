@@ -72,6 +72,43 @@
 .gt-items {
   display: flex;
   flex-direction: column;
+  /* A lista rola dentro do painel, como no Google Tasks: cerca de dez linhas
+     visiveis em vez de crescer sem fim pela pagina. */
+  max-height: 470px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #4a4d50 transparent;
+}
+
+.gt-items::-webkit-scrollbar {
+  width: 8px;
+}
+
+.gt-items::-webkit-scrollbar-thumb {
+  background: #4a4d50;
+  border-radius: 999px;
+}
+
+.gt-items::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gt-item-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--gt-borda);
+}
+
+.gt-item-detail p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.gt-item.open {
+  background: rgba(232, 234, 237, 0.06);
 }
 
 .gt-item {
