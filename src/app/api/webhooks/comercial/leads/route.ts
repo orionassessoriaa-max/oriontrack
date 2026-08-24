@@ -3,9 +3,9 @@ import { COMMERCIAL_STATUSES } from '@/lib/comercial';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
-import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
+import { donoAutomaticoDoLead } from '@/lib/commercialDistribution';
 import { getCommercialMqlLevel, isCommercialMql } from '@/lib/commercialQualification';
-import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
+import { notifyCommercialLeadAssignment, notifyCommercialLeadPool } from '@/lib/commercialLeadNotifications';
 
 type CommercialLeadPayload = Record<string, unknown>;
 
@@ -376,7 +376,7 @@ export async function POST(request: Request) {
     }
 
     if (!incoming.sdr_id) {
-      incoming.sdr_id = await assignNextCommercialSdr(getCommercialMqlLevel(incoming.faturamento_mensal, incoming.investimento));
+      incoming.sdr_id = await donoAutomaticoDoLead(getCommercialMqlLevel(incoming.faturamento_mensal, incoming.investimento));
     }
 
     const { data, error } = await supabaseAdmin
@@ -400,7 +400,10 @@ export async function POST(request: Request) {
       metadata: { origem: incoming.origem, campanha: incoming.campanha, sheet },
     });
     try {
-      await notifyCommercialLeadAssignment(data);
+      // Com dono definido na entrada, que hoje e so o S do Leo, o aviso vai para
+      // ele. Sem dono, o lead entra na fila e todos os SDRs sao chamados.
+      if (data.sdr_id) await notifyCommercialLeadAssignment(data);
+      else await notifyCommercialLeadPool(data);
     } catch (notificationError) {
       console.error('commercial_lead_assignment_notification_failed', notificationError);
     }

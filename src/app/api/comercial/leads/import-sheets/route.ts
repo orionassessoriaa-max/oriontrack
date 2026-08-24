@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
-import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
+import { donoAutomaticoDoLead } from '@/lib/commercialDistribution';
 import { getCommercialMqlLevel } from '@/lib/commercialQualification';
 
 function key(value: string) {
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         if (Object.keys(update).length > 1) { await supabaseAdmin.from('comercial_leads').update(update).eq('id', existing.id); enriched += 1; }
         continue;
       }
-      const sdrId = await assignNextCommercialSdr(getCommercialMqlLevel(lead.faturamento_mensal, lead.investimento));
+      const sdrId = await donoAutomaticoDoLead(getCommercialMqlLevel(lead.faturamento_mensal, lead.investimento));
       const { data: inserted, error } = await supabaseAdmin
         .from('comercial_leads')
         .insert({ ...lead, sdr_id: sdrId })

@@ -79,7 +79,54 @@ export async function POST(request: Request) {
     return NextResponse.json({ lead: data, sdr_id: requestedSdrId });
   }
 
-  return NextResponse.json({
-    error: 'A atribuicao e feita pelo rodizio. Seu perfil nao pode alterar o responsavel.',
-  }, { status: 403 });
+  // Fila comum: o lead novo chega sem dono e quem apertar Start primeiro fica
+  // com ele. Ninguem toma lead de ninguem, entao so vale para lead sem dono.
+  if (guard.commercialRole !== 'sdr') {
+    return NextResponse.json({
+      error: 'Apenas SDR assume lead pela fila. A coordenacao atribui pelo seletor.',
+    }, { status: 403 });
+  }
+
+  const { data: alvo, error: alvoError } = await supabaseAdmin
+    .from('comercial_leads')
+    .select('id, nome, telefone, sdr_id, faturamento_mensal, investimento')
+    .eq('id', id)
+    .maybeSingle();
+  if (alvoError) return NextResponse.json({ error: alvoError.message }, { status: 500 });
+  if (!alvo) return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
+
+  if (alvo.sdr_id && alvo.sdr_id !== guard.profile.id) {
+    return NextResponse.json({ error: 'Outro SDR assumiu este lead primeiro.' }, { status: 409 });
+  }
+  if (alvo.sdr_id === guard.profile.id) {
+    return NextResponse.json({ lead: alvo, sdr_id: guard.profile.id });
+  }
+
+  // A condicao no update e a trava de corrida: se dois SDRs clicarem no mesmo
+  // instante, o segundo nao encontra a linha e recebe o aviso de que perdeu.
+  const { data: assumido, error: assumirError } = await supabaseAdmin
+    .from('comercial_leads')
+    .update({ sdr_id: guard.profile.id, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('sdr_id', null)
+    .select('*')
+    .maybeSingle();
+  if (assumirError) return NextResponse.json({ error: assumirError.message }, { status: 500 });
+  if (!assumido) return NextResponse.json({ error: 'Outro SDR assumiu este lead primeiro.' }, { status: 409 });
+
+  await writeAuditLog(request, guard.profile, {
+    action: 'commercial.lead.claim',
+    entity_type: 'commercial_lead',
+    entity_id: id,
+    metadata: { sdr_id: guard.profile.id },
+  });
+  await recordCommercialTimelineEvent({
+    leadId: id,
+    actorId: guard.profile.id,
+    type: 'sdr_assigned',
+    description: `${guard.profile.nome || 'SDR'} assumiu o lead na fila.`,
+    metadata: { sdr_id: guard.profile.id, origem: 'fila' },
+  });
+
+  return NextResponse.json({ lead: assumido, sdr_id: guard.profile.id });
 }

@@ -122,6 +122,47 @@ async function loadCommercialNotificationProfiles(sdrId: string) {
   };
 }
 
+/**
+ * Lead novo caiu na fila comum: todos os SDRs sao avisados e quem apertar Start
+ * primeiro fica com ele. Sem dono definido, nao existe "agora e sua vez".
+ */
+export async function notifyCommercialLeadPool(lead: CommercialLeadNotification) {
+  const { data: membros, error } = await supabaseAdmin
+    .from('comercial_membros')
+    .select('profile_id, papel, ativo')
+    .eq('papel', 'sdr')
+    .eq('ativo', true);
+  if (error) throw error;
+
+  const ids = (membros || []).map((membro) => membro.profile_id);
+  if (!ids.length) return [];
+
+  const { data: perfis } = await supabaseAdmin
+    .from('profiles')
+    .select('id,nome,email,tipo_usuario,telefone')
+    .in('id', ids)
+    .in('status', ['active', 'ativo', 'Ativo']);
+
+  const mensagem = [
+    'Lead novo no CRM. Quem pegar primeiro fica com a oportunidade.',
+    '',
+    `Nome: ${plain(lead.nome)}`,
+    `Telefone: ${plain(lead.telefone)}`,
+    `Faturamento: ${plain(lead.faturamento_mensal)}`,
+    `Investimento: ${plain(lead.investimento)}`,
+    '',
+    'Abra o kanban e aperte Start para assumir.',
+  ].join('\n');
+
+  return sendApoloWhatsApp({
+    type: 'novo_lead',
+    title: 'Lead novo na fila',
+    message: mensagem,
+    profiles: (perfis || []) as NotificationProfile[],
+    respectPreferences: false,
+  });
+}
+
 export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotification) {
   const sdrId = String(lead.sdr_id || '').trim();
   if (!sdrId) return { sdr: [], coordinators: [] };
