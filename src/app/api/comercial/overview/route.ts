@@ -144,7 +144,9 @@ export async function GET(request: Request) {
   const qualifiedMeetings = leads.filter((lead) => lead.reuniao_realizada_at && lead.reuniao_qualificada === true).length;
   const disqualifiedMeetings = leads.filter((lead) => lead.reuniao_realizada_at && lead.reuniao_qualificada === false).length;
   const noShow = leads.reduce((total, lead) => total + Number(lead.no_show_count || (lead.no_show || lead.status === 'No-show' ? 1 : 0)), 0);
-  const closed = leads.filter((lead) => lead.status === 'Negócio fechado' || Number(lead.valor_fechado || 0) > 0);
+  // So conta como venda quem esta na etapa de venda. Lead estornado volta de
+  // etapa mas mantem o valor no campo, e antes continuava somando no relatorio.
+  const closed = leads.filter((lead) => lead.status === 'Negócio fechado');
   const revenue = closed.reduce((sum, lead) => sum + Number(lead.valor_fechado || 0), 0);
   const negotiation = leads
     .filter((lead) => normalized(lead.status) === 'em negociacao')
@@ -169,7 +171,7 @@ export async function GET(request: Request) {
       const meetingDay = ensureDay(String(lead.reuniao_agendada_at).slice(0, 10));
       meetingDay.meetings += 1;
     }
-    if (lead.status === 'Negócio fechado' || Number(lead.valor_fechado || 0) > 0) {
+    if (lead.status === 'Negócio fechado') {
       day.sales += 1;
       day.revenue += Number(lead.valor_fechado || 0);
     }
@@ -183,7 +185,7 @@ export async function GET(request: Request) {
   const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
   const team = (memberResult.data || []).map((member) => {
     const owned = leads.filter((lead) => member.papel === 'sdr' ? lead.sdr_id === member.profile_id : member.papel === 'closer' ? lead.closer_id === member.profile_id : false);
-    const sold = leads.filter((lead) => (lead.status === 'Negócio fechado' || Number(lead.valor_fechado || 0) > 0)
+    const sold = leads.filter((lead) => lead.status === 'Negócio fechado'
       && lead.closer_id === member.profile_id);
     return {
       id: member.profile_id,
@@ -254,7 +256,7 @@ export async function GET(request: Request) {
     supabaseAdmin.from('comercial_leads').select('id', { count: 'exact', head: true }).not('status', 'in', `(${ETAPAS_ENCERRADAS.map((etapa) => `"${etapa}"`).join(',')})`),
     supabaseAdmin.from('whatsapp_conversas').select('id', { count: 'exact', head: true }).is('corretor_id', null).gte('ultima_mensagem_at', inicioDoDia),
     supabaseAdmin.from('comercial_metas').select('meta_valor,meta_vendas,meta_calls').eq('mes', primeiroDoMes).maybeSingle(),
-    supabaseAdmin.from('comercial_leads').select('valor_fechado').gte('fechado_at', `${primeiroDoMes}T00:00:00-03:00`).gt('valor_fechado', 0),
+    supabaseAdmin.from('comercial_leads').select('valor_fechado').eq('status', 'Negócio fechado').gte('fechado_at', `${primeiroDoMes}T00:00:00-03:00`).gt('valor_fechado', 0),
   ]);
 
   const faturadoNoMes = (vendasDoMes.data || []).reduce((total: number, lead: { valor_fechado: number | null }) => total + Number(lead.valor_fechado || 0), 0);

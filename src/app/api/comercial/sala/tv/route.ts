@@ -33,8 +33,13 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '??';
 }
 
+/**
+ * Venda e o que esta em etapa de venda. Antes bastava ter valor gravado, e o
+ * lead estornado continuava somando: o Vinicius voltou para Follow MRR com os
+ * R$ 3.000 do fechamento ainda no campo e seguia contando na parede.
+ */
 function isClosed(lead: { status?: string | null; valor_fechado?: number | null }) {
-  return CLOSED_STATES.has(normalized(lead.status)) || Number(lead.valor_fechado || 0) > 0;
+  return CLOSED_STATES.has(normalized(lead.status));
 }
 
 /** Data em que a venda entra no mes: fechado_at quando existe, senao a ultima alteracao. */

@@ -12,7 +12,9 @@ function inPeriod(value: unknown, start: string, end: string) {
 }
 
 function isClosed(lead: Record<string, unknown>) {
-  return normalized(lead.status) === "negocio fechado" || Number(lead.valor_fechado || lead.valor_pago || 0) > 0;
+  // Venda e o que esta na etapa de venda. Lead estornado volta de etapa e mantem
+  // o valor no campo; contar pelo valor fazia ele seguir somando no relatorio.
+  return normalized(lead.status) === "negocio fechado";
 }
 
 export async function GET(request: Request) {
