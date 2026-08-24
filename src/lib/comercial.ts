@@ -79,7 +79,20 @@ export type CommercialMember = {
   nome: string;
   email: string | null;
   foto_url?: string | null;
+  /** Participa do rodizio de leads, mesmo sem ser SDR. */
+  distribuicao_ativa?: boolean | null;
+  /** Limitado a um nivel de MQL. Nulo recebe qualquer lead. */
+  recebe_apenas_mql?: string | null;
 };
+
+/**
+ * Quem pode aparecer como responsavel de lead: os SDRs e quem mais participa do
+ * rodizio. O Leo e closer e recebe lead S, entao precisa entrar nas listas sem
+ * virar SDR.
+ */
+export function recebeLeadNoRodizio(member: CommercialMember) {
+  return Boolean(member.ativo) && (member.papel === 'sdr' || member.distribuicao_ativa === true);
+}
 
 export type CommercialLead = {
   id: string;

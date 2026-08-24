@@ -27,7 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
-import type { CommercialStage } from '@/lib/comercial';
+import { recebeLeadNoRodizio, type CommercialStage } from '@/lib/comercial';
 
 type Conversation = {
   id: string;
@@ -902,7 +902,7 @@ export default function CommercialInboxPage() {
                 <label><span>Origem</span><input value={leadDraft.origem} onChange={(event) => setLeadDraft((current) => ({ ...current, origem: event.target.value }))} /></label>
                 <label><span>Campanha</span><input value={leadDraft.campanha} onChange={(event) => setLeadDraft((current) => ({ ...current, campanha: event.target.value }))} /></label>
                 {role === 'coordenador' && <>
-                  <label><span>SDR</span><select value={leadDraft.sdr_id} onChange={(event) => setLeadDraft((current) => ({ ...current, sdr_id: event.target.value }))}><option value="">Sem SDR</option>{members.filter((member) => member.ativo && member.papel === 'sdr').map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
+                  <label><span>SDR</span><select value={leadDraft.sdr_id} onChange={(event) => setLeadDraft((current) => ({ ...current, sdr_id: event.target.value }))}><option value="">Sem SDR</option>{members.filter(recebeLeadNoRodizio).map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
                   <label><span>Closer</span><select value={leadDraft.closer_id} onChange={(event) => setLeadDraft((current) => ({ ...current, closer_id: event.target.value }))}><option value="">Sem closer</option>{members.filter((member) => member.ativo && member.papel === 'closer').map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}</select></label>
                 </>}
               </div> : <dl>

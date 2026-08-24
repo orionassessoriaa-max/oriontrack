@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { COMMERCIAL_STAGES, type CommercialLead, type CommercialMember, type CommercialStage } from '@/lib/comercial';
+import { COMMERCIAL_STAGES, recebeLeadNoRodizio, type CommercialLead, type CommercialMember, type CommercialStage } from '@/lib/comercial';
 import { getCommercialMqlLevel } from '@/lib/commercialQualification';
 
 type Props = {
@@ -43,7 +43,7 @@ export default function CommercialLeadModal({ open, members, canViewFinancials, 
     catch (err) { setError(err instanceof Error ? err.message : 'Erro ao salvar lead.'); }
     finally { setSaving(false); }
   }
-  const sdrs = members.filter((member) => member.papel === 'sdr' && member.ativo);
+  const sdrs = members.filter(recebeLeadNoRodizio);
   const closers = members.filter((member) => member.papel === 'closer' && member.ativo);
   const mqlLevel = getCommercialMqlLevel(form.faturamento_mensal, form.investimento);
   return (

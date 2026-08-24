@@ -9,7 +9,7 @@ export async function GET(request: Request) {
 
   const { data: rows, error } = await supabaseAdmin
     .from("comercial_membros")
-    .select("profile_id,papel,ativo")
+    .select("*")
     .order("papel");
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });

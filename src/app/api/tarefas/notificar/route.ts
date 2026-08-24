@@ -17,13 +17,29 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const tarefaId = String(body.tarefa_id || '').trim();
-  if (!tarefaId) return NextResponse.json({ error: 'Informe a tarefa.' }, { status: 400 });
+  const leadId = String(body.lead_id || '').trim();
+  const responsavelId = String(body.responsavel_profile_id || '').trim();
+  if (!tarefaId && !(leadId && responsavelId)) {
+    return NextResponse.json({ error: 'Informe a tarefa ou o lead e o responsavel.' }, { status: 400 });
+  }
 
-  const { data: tarefa, error } = await supabaseAdmin
+  // A tela grava a tarefa com a chave publica e nao recebe o id de volta: pedir
+  // a linha de volta esbarra na politica de leitura. Entao aqui achamos a
+  // tarefa recem-criada pelo par lead + responsavel.
+  let consulta = supabaseAdmin
     .from('lead_tarefas')
     .select('id, titulo, descricao, vencimento, responsavel_profile_id, lead_id, corretor_id')
-    .eq('id', tarefaId)
-    .maybeSingle();
+    .order('created_at', { ascending: false })
+    .limit(1);
+  consulta = tarefaId
+    ? consulta.eq('id', tarefaId)
+    : consulta
+        .eq('lead_id', leadId)
+        .eq('responsavel_profile_id', responsavelId)
+        .gte('created_at', new Date(Date.now() - 5 * 60_000).toISOString());
+
+  const { data: encontradas, error } = await consulta;
+  const tarefa = encontradas?.[0];
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!tarefa) return NextResponse.json({ error: 'Tarefa nao encontrada.' }, { status: 404 });
 

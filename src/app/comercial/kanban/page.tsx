@@ -31,6 +31,7 @@ import CommercialLeadModal from "@/components/commercial/CommercialLeadModal";
 import CommercialLeadDetailsModal from "@/components/commercial/CommercialLeadDetailsModal";
 import {
   canAssignCommercialResponsible,
+  recebeLeadNoRodizio,
   canManageCommercialStages,
   COMMERCIAL_STAGES,
   currency,
@@ -366,7 +367,7 @@ export default function CommercialKanbanPage() {
     [members],
   );
   const sdrMembers = useMemo(
-    () => members.filter((member) => member.ativo && member.papel === "sdr"),
+    () => members.filter(recebeLeadNoRodizio),
     [members],
   );
   const saleSellerMembers = useMemo(

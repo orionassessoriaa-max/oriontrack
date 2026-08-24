@@ -1841,14 +1841,18 @@ export default function BrokerInboxPage() {
         vencimento: vencimentoDate ? vencimentoDate.toISOString() : null,
         prioridade: taskPriority,
       };
-      const { data: tarefaSalva, error } = editingTaskId
-        ? await supabase.from('lead_tarefas').update(taskData).eq('id', editingTaskId).select('id').maybeSingle()
-        : await supabase.from('lead_tarefas').insert([{ ...taskData, status: 'pendente' }]).select('id').maybeSingle();
+      // Sem .select() de proposito: pedir a linha de volta faz o PostgREST
+      // aplicar a politica de leitura, que barra quando a tarefa fica no nome de
+      // outro corretor da mesma empresa. Isso derrubou a criacao de tarefa em
+      // producao; o aviso identifica a tarefa pelo lead e pelo responsavel.
+      const { error } = editingTaskId
+        ? await supabase.from('lead_tarefas').update(taskData).eq('id', editingTaskId)
+        : await supabase.from('lead_tarefas').insert([{ ...taskData, status: 'pendente' }]);
       if (error) throw error;
 
       // Tarefa criada para outra pessoa vira aviso no WhatsApp dela. O servidor
       // decide o envio; aqui so avisamos qual tarefa foi salva.
-      if (tarefaSalva?.id && responsibleProfileId && responsibleProfileId !== profile?.id) {
+      if (!editingTaskId && responsibleProfileId && responsibleProfileId !== profile?.id) {
         void (async () => {
           try {
             const { data: sessao } = await supabase.auth.getSession();
@@ -1857,7 +1861,10 @@ export default function BrokerInboxPage() {
             await fetch('/api/tarefas/notificar', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ tarefa_id: tarefaSalva.id }),
+              body: JSON.stringify({
+                lead_id: selectedConversation.lead_id,
+                responsavel_profile_id: responsibleProfileId,
+              }),
             });
           } catch (erro) {
             console.error('[inbox] aviso de tarefa falhou:', erro);
