@@ -172,6 +172,18 @@ function longToNumber(value: any) {
   return undefined;
 }
 
+/**
+ * Base64 gravado exatamente no teto e arquivo cortado, nao arquivo pequeno.
+ * O audio do Sandro de 24/08 chegou com 262.144 bytes cravados e tocava so o
+ * comeco. Nesses casos vale mais buscar de novo na central do que servir o
+ * pedaco que esta no banco.
+ */
+function base64Truncado(base64?: string | null) {
+  if (!base64) return false;
+  const bytes = base64ByteLength(base64);
+  return bytes >= MAX_CACHE_BASE64_BYTES;
+}
+
 function pickMediaBase64(metadata: any) {
   const mediaMessage = pickMediaMessage(metadata);
   return stripDataUrl(pickString(
@@ -548,7 +560,10 @@ export async function GET(request: Request) {
       null;
 
     const directBase64 = pickMediaBase64(message.metadata);
-    if (directBase64 && (!forceRefresh || !message.provider_message_id)) {
+    // Arquivo cortado no teto nao serve: melhor tentar baixar inteiro da
+    // central e so cair para o pedaco se nao houver outro caminho.
+    const cortado = base64Truncado(directBase64);
+    if (directBase64 && !cortado && (!forceRefresh || !message.provider_message_id)) {
       return NextResponse.json({ base64: directBase64, mimeType, fileName });
     }
 
