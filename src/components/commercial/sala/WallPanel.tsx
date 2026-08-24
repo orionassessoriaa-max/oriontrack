@@ -206,8 +206,8 @@ export default function WallPanel() {
       <footer className="tv-footer">
         <section>
           <div className="tv-panel-head">
-            <p className="tv-legend">Ranking do mes</p>
-            <p className="tv-legend">Fechado e reunioes no mes · ligacoes e atendidas de hoje</p>
+            <p className="tv-legend">Ranking de hoje</p>
+            <p className="tv-legend">Fechado · reunioes · ligacoes · atendidas</p>
           </div>
           {data?.ranking.length ? (
             <table className="tv-table">
@@ -225,12 +225,12 @@ export default function WallPanel() {
                       </div>
                     </td>
                     <td className="tv-num">R$ {money(row.fechado)}</td>
-                    <td className="tv-sub"><b>{row.reunioes}</b> reunioes no mes</td>
+                    <td className="tv-sub"><b>{row.reunioes}</b> reunioes</td>
                     <td className="tv-sub">
                       <b className={row.ligacoes >= (data?.ligacoes?.meta_por_sdr || 100) ? 'tv-calls-ok' : undefined}>{row.ligacoes}</b>
-                      /{data?.ligacoes?.meta_por_sdr || 100} ligacoes hoje
+                      /{data?.ligacoes?.meta_por_sdr || 100} ligacoes
                     </td>
-                    <td className="tv-sub"><b className="tv-calls-ok">{row.atendidas}</b> atendidas hoje</td>
+                    <td className="tv-sub"><b className="tv-calls-ok">{row.atendidas}</b> atendidas</td>
                   </tr>
                 ))}
               </tbody>

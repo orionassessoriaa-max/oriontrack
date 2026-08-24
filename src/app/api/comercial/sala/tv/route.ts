@@ -150,10 +150,13 @@ export async function GET(request: Request) {
     .filter((member) => String(member.papel || '') === 'sdr' && member.ativo !== false)
     .map((member) => member.profile_id as string);
   for (const id of sdrIds) bump(id);
+  // O placar da sala e do turno: tudo que aparece na linha do SDR e de hoje. O
+  // numero grande do topo continua sendo o mes, porque a meta e mensal.
   for (const lead of monthClosed) {
-    // A venda pertence a quem fechou. Sem closer, fica com o SDR que trouxe.
     const ownerId = (lead.closer_id || lead.sdr_id) as string | null;
     if (!ownerId) continue;
+    const quando = String(closedAt(lead) || '').slice(0, 10);
+    if (quando !== today) continue;
     const row = bump(ownerId);
     row.fechado += Number(lead.valor_fechado || lead.valor_negociacao || 0);
     row.vendas += 1;
@@ -170,10 +173,10 @@ export async function GET(request: Request) {
     linha.ligacoes += 1;
     if (tentativa.status === 'atendeu') linha.atendidas += 1;
   }
-  // Reuniao marcada no mes, contada para o SDR que trouxe o lead.
+  // Reuniao marcada hoje, para o SDR que trouxe o lead.
   for (const lead of leads) {
     const marcada = lead.reuniao_agendada_at;
-    if (!marcada || String(marcada).slice(0, 7) !== month) continue;
+    if (!marcada || String(marcada).slice(0, 10) !== today) continue;
     const dono = (lead.sdr_id || lead.closer_id) as string | null;
     if (dono) bump(dono).reunioes += 1;
   }
