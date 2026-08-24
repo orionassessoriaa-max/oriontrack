@@ -3218,19 +3218,19 @@ export default function BrokerInboxPage() {
 
                     {leadDetailsOpen && (
                       <div className="mt-3 grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <EditableLeadInfoCard label="Idade" field="idades" value={leadInfo.idades || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard label="Plano ativo" field="tem_plano_ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Nao informado']} />
-                        <EditableLeadInfoCard label="Possui CNPJ?" field="possui_cnpj" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Tenho MEI', 'Nao informado']} />
-                        <EditableLeadInfoCard label="CNPJ" field="cnpj" value={leadInfo.cnpj || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard label="Plano atual" field="plano_atual" value={leadInfo.plano_atual || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard label="Investimento" field="investimento" value={leadInfo.investimento || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard label="Cidade" field="cidade" value={leadInfo.cidade || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard label="Pagina" field="operadora" value={leadInfo.operadora || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard label="Origem" field="origem" value={leadInfo.origem || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard label="E-mail" field="email" value={leadInfo.email || ''} onSave={handleUpdateLeadField} className="col-span-2" />
-                        <EditableLeadInfoCard label="Motivo da busca" field="motivo_busca" value={leadInfo.motivo_busca || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
-                        <EditableLeadInfoCard label="Hospital/Regiao" field="hospital_preferencia" value={leadInfo.hospital_preferencia || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
-                        <EditableLeadInfoCard label="Observacoes" field="observacoes" value={leadInfo.observacoes || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-idades`} label="Idade" field="idades" value={leadInfo.idades || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-tem_plano_ativo`} label="Plano ativo" field="tem_plano_ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Nao informado']} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-possui_cnpj`} label="Possui CNPJ?" field="possui_cnpj" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Tenho MEI', 'Nao informado']} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-cnpj`} label="CNPJ" field="cnpj" value={leadInfo.cnpj || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-plano_atual`} label="Plano atual" field="plano_atual" value={leadInfo.plano_atual || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-investimento`} label="Investimento" field="investimento" value={leadInfo.investimento || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-cidade`} label="Cidade" field="cidade" value={leadInfo.cidade || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-operadora`} label="Pagina" field="operadora" value={leadInfo.operadora || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-origem`} label="Origem" field="origem" value={leadInfo.origem || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-email`} label="E-mail" field="email" value={leadInfo.email || ''} onSave={handleUpdateLeadField} className="col-span-2" />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-motivo_busca`} label="Motivo da busca" field="motivo_busca" value={leadInfo.motivo_busca || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-hospital_preferencia`} label="Hospital/Regiao" field="hospital_preferencia" value={leadInfo.hospital_preferencia || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-observacoes`} label="Observacoes" field="observacoes" value={leadInfo.observacoes || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
                       </div>
                     )}
                   </div>
@@ -4327,6 +4327,10 @@ function EditableLeadInfoCard({
 }) {
   const [draft, setDraft] = useState(value || '');
 
+  // O efeito so dispara quando o valor muda. Se o campo estava vazio nos dois
+  // leads, o texto digitado e nao salvo continuava na tela do lead seguinte, e
+  // ao sair do campo era gravado nele tambem. Por isso cada campo recebe uma
+  // chave com o id do lead: trocando de conversa, o componente monta de novo.
   useEffect(() => {
     setDraft(value || '');
   }, [value]);
