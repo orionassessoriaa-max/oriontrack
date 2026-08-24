@@ -121,6 +121,12 @@ async function readLeads(corretorIds: string[], since: string, until: string) {
   return (data || []).filter(isOrionLead).length;
 }
 
+/** 2026-08-17 vira 17/08, do jeito que o gestor escreve no grupo. */
+function diaMes(iso: string) {
+  const [, mes, dia] = String(iso || '').split('-');
+  return dia && mes ? `${dia}/${mes}` : iso;
+}
+
 export async function POST(request: Request) {
   try {
     const guard = await requireAccess(request);
@@ -176,7 +182,16 @@ export async function POST(request: Request) {
       const cpl = investimento !== null && leads !== null && leads > 0 ? investimento / leads : null;
       const metaAviso = spendResult.status === 'rejected' ? ` Investimento: ${spendResult.reason?.message || 'indisponível'}` : '';
       const leadsAviso = leadsResult.status === 'rejected' ? ` Leads: ${leadsResult.reason?.message || 'indisponíveis'}` : '';
-      const mensagem = `Olá, time! Segue o relatório da semana.\n\nLeads: ${leads === null ? 'N/A' : leads}\nInvestimento: ${brl(investimento)}\nCusto por lead: ${brl(cpl)}${leadsAviso}${metaAviso}`;
+      // Formato que o gestor ja usa no WhatsApp, com o periodo no cabecalho:
+      // sem a data, quem recebia nao sabia de qual semana era o numero.
+      const mensagem = [
+        `Logo abaixo estou deixando os dados das nossas campanhas (${diaMes(dataInicio)} até ${diaMes(dataFim)}): ⤵️`,
+        '',
+        '📈 CAMPANHAS PLANO DE SAÚDE:',
+        `💸 Investimento: ${brl(investimento)}`,
+        `✅ Nº Leads: ${leads === null ? 'N/A' : leads}`,
+        `✅ Custo médio por Lead: ${brl(cpl)}`,
+      ].join('\n') + `${leadsAviso}${metaAviso}`;
       return {
         corretor_id: metaOwner.id,
         corretor_ids: group.map((item) => item.id),
