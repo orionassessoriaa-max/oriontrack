@@ -6,6 +6,7 @@
  *   npm run testar-voip -- 61999990000 61988880000
  *   npm run testar-voip -- 61999990000 61988880000 2      (forca o device_id 2)
  *   npm run testar-voip -- 61999990000 61988880000 scan   (procura o device_id)
+ *   npm run testar-voip -- 61999990000 61988880000 scan 9171025 9171026
  *
  * ATENCAO: isto faz o telefone tocar de verdade. Use dois numeros seus.
  */
@@ -66,9 +67,15 @@ async function chamar(id) {
 // DEVICE_NOT_FOUND sem discar, entao a varredura so faz o telefone tocar
 // quando encontra o id certo.
 if (String(deviceId).toLowerCase() === 'scan') {
+  // O manual diz que o device_id e o ID da linha, e o exemplo usa 1. Em algumas
+  // contas esse ID e o proprio numero da linha, entao a varredura tenta os ids
+  // pequenos e tambem o que voce passar depois de 'scan'.
+  const extras = process.argv.slice(5).map(limpar).filter(Boolean);
+  const candidatos = [...Array.from({ length: 20 }, (_, i) => i + 1), ...extras];
   console.log(`procurando o device_id | src ${src} | dst ${dst}`);
+  console.log(`candidatos: 1 a 20${extras.length ? ' e ' + extras.join(', ') : ''}`);
   console.log('id errado nao disca; quando o telefone tocar, achamos.\n');
-  for (let id = 1; id <= 20; id += 1) {
+  for (const id of candidatos) {
     const { json, corpo } = await chamar(id);
     const motivo = json ? (json.reason || json.message || corpo) : corpo.slice(0, 80);
     if (json && Number(json.error) === 0) {
@@ -78,7 +85,7 @@ if (String(deviceId).toLowerCase() === 'scan') {
     }
     console.log(`    device_id ${String(id).padStart(2)} | ${motivo}`);
   }
-  console.log('\nNenhum id de 1 a 20 foi aceito. Peca o device_id ao suporte.');
+  console.log('\nNenhum candidato foi aceito. Peca o device_id ao suporte.');
   process.exit(1);
 }
 
