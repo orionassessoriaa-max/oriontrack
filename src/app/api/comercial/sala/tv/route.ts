@@ -52,7 +52,7 @@ export async function GET(request: Request) {
   const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
   const monthEnd = `${month}-${String(lastDay).padStart(2, '0')}`;
 
-  const [metaResult, leadsResult, callsResult, meetingsResult, interactionsResult] = await Promise.all([
+  const [metaResult, leadsResult, callsResult, meetingsResult, interactionsResult, whatsappCallsResult] = await Promise.all([
     supabaseAdmin.from('comercial_metas').select('meta_valor,meta_vendas,ticket_medio').eq('mes', `${monthStart}`).maybeSingle(),
     // Janela larga: uma venda pode ter entrado como lead em meses anteriores.
     supabaseAdmin
@@ -77,6 +77,16 @@ export async function GET(request: Request) {
       .select('lead_id,tipo,comentario,created_at')
       .order('created_at', { ascending: false })
       .limit(20),
+    // Ligacao por WhatsApp nao passa pela central: fica registrada como
+    // tentativa da cadencia. Sem isso o painel mostrava so metade do esforco.
+    supabaseAdmin
+      .from('comercial_cadencia_tentativas')
+      .select('autor_id,canal,status,concluido_at')
+      .eq('canal', 'ligacao_whatsapp')
+      .neq('status', 'pendente')
+      .gte('concluido_at', `${today}T00:00:00-03:00`)
+      .lte('concluido_at', `${today}T23:59:59-03:00`)
+      .limit(2000),
   ]);
 
   if (leadsResult.error) return NextResponse.json({ error: leadsResult.error.message }, { status: 500 });
@@ -106,22 +116,33 @@ export async function GET(request: Request) {
 
   const ownerIds = Array.from(new Set(monthClosed.flatMap((lead) => [lead.closer_id, lead.sdr_id]).filter(Boolean) as string[]));
   const callIds = Array.from(new Set((callsResult.data || []).map((call) => call.sdr_id).filter(Boolean) as string[]));
-  const profileIds = Array.from(new Set([...ownerIds, ...callIds]));
-  const [{ data: profiles }, { data: members }] = await Promise.all([
-    profileIds.length
-      ? supabaseAdmin.from('profiles').select('id,nome').in('id', profileIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; nome: string | null }> }),
-    supabaseAdmin.from('comercial_membros').select('profile_id,papel,ativo'),
-  ]);
+  const { data: members } = await supabaseAdmin.from('comercial_membros').select('profile_id,papel,ativo');
+  // O nome de todo membro do time entra na busca, senao o SDR zerado apareceria
+  // sem nome no painel.
+  const profileIds = Array.from(new Set([
+    ...ownerIds,
+    ...callIds,
+    ...(members || []).map((member) => member.profile_id as string),
+  ]));
+  const { data: profiles } = profileIds.length
+    ? await supabaseAdmin.from('profiles').select('id,nome').in('id', profileIds)
+    : { data: [] as Array<{ id: string; nome: string | null }> };
   const nameById = new Map((profiles || []).map((profile) => [profile.id, profile.nome || 'Sem nome']));
   const roleById = new Map((members || []).map((member) => [member.profile_id, String(member.papel || '')]));
 
-  const board = new Map<string, { id: string; fechado: number; vendas: number; ligacoes: number }>();
+  const board = new Map<string, { id: string; fechado: number; vendas: number; ligacoes: number; reunioes: number }>();
   const bump = (id: string) => {
-    const current = board.get(id) || { id, fechado: 0, vendas: 0, ligacoes: 0 };
+    const current = board.get(id) || { id, fechado: 0, vendas: 0, ligacoes: 0, reunioes: 0 };
     board.set(id, current);
     return current;
   };
+
+  // O placar e dos SDRs, e todos aparecem mesmo zerados: quem nao fechou e nao
+  // ligou sumia da parede, que e justamente quem precisa ser visto.
+  const sdrIds = (members || [])
+    .filter((member) => String(member.papel || '') === 'sdr' && member.ativo !== false)
+    .map((member) => member.profile_id as string);
+  for (const id of sdrIds) bump(id);
   for (const lead of monthClosed) {
     // A venda pertence a quem fechou. Sem closer, fica com o SDR que trouxe.
     const ownerId = (lead.closer_id || lead.sdr_id) as string | null;
@@ -134,8 +155,20 @@ export async function GET(request: Request) {
     if (!call.sdr_id) continue;
     bump(call.sdr_id).ligacoes += 1;
   }
+  for (const tentativa of whatsappCallsResult.data || []) {
+    if (!tentativa.autor_id) continue;
+    bump(tentativa.autor_id).ligacoes += 1;
+  }
+  // Reuniao marcada no mes, contada para o SDR que trouxe o lead.
+  for (const lead of leads) {
+    const marcada = lead.reuniao_agendada_at;
+    if (!marcada || String(marcada).slice(0, 7) !== month) continue;
+    const dono = (lead.sdr_id || lead.closer_id) as string | null;
+    if (dono) bump(dono).reunioes += 1;
+  }
 
   const ranking = Array.from(board.values())
+    .filter((row) => sdrIds.includes(row.id))
     .map((row) => {
       const nome = nameById.get(row.id) || 'Sem nome';
       const papel = roleById.get(row.id) || '';
@@ -147,10 +180,11 @@ export async function GET(request: Request) {
         fechado: row.fechado,
         vendas: row.vendas,
         ligacoes: row.ligacoes,
+        reunioes: row.reunioes,
       };
     })
-    .sort((a, b) => b.fechado - a.fechado || b.ligacoes - a.ligacoes)
-    .slice(0, 5);
+    .sort((a, b) => b.fechado - a.fechado || b.reunioes - a.reunioes || b.ligacoes - a.ligacoes)
+    .slice(0, 6);
 
   const leadNameById = new Map(leads.map((lead) => [lead.id, lead.nome || 'Lead']));
   const feed = [

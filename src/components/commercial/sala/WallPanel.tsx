@@ -12,6 +12,7 @@ type RankingRow = {
   fechado: number;
   vendas: number;
   ligacoes: number;
+  reunioes: number;
 };
 
 type FeedRow = { at: string; tipo: 'venda' | 'reuniao' | 'lead' | 'ia'; texto: string };
@@ -45,9 +46,8 @@ const DEMO: TvPayload = {
   dias_uteis_restantes: 8,
   por_dia: 57700,
   ranking: [
-    { id: '1', nome: 'Renan Barreto', iniciais: 'RB', papel: 'SDR', fechado: 126900, vendas: 5, ligacoes: 38 },
-    { id: '2', nome: 'Talita Vargas', iniciais: 'TV', papel: 'Closer', fechado: 98200, vendas: 4, ligacoes: 24 },
-    { id: '3', nome: 'Leonardo Cruz', iniciais: 'LC', papel: 'Closer', fechado: 63300, vendas: 3, ligacoes: 19 },
+    { id: '1', nome: 'Talita Vargas', iniciais: 'TV', papel: 'SDR', fechado: 126900, vendas: 5, ligacoes: 38, reunioes: 9 },
+    { id: '2', nome: 'Carlos Eduardo', iniciais: 'CE', papel: 'SDR', fechado: 98200, vendas: 4, ligacoes: 24, reunioes: 6 },
   ],
   feed: [
     { at: '2026-08-20T17:29:00-03:00', tipo: 'venda', texto: 'Talita fechou Celebre Corretora · R$ 41.800' },
@@ -178,12 +178,12 @@ export default function WallPanel() {
         <section>
           <div className="tv-panel-head">
             <p className="tv-legend">Ranking do mes</p>
-            <p className="tv-legend">Fechado · ligacoes hoje</p>
+            <p className="tv-legend">Fechado · reunioes no mes · ligacoes hoje</p>
           </div>
           {data?.ranking.length ? (
             <table className="tv-table">
               <tbody>
-                {data.ranking.slice(0, 3).map((row, index) => (
+                {data.ranking.slice(0, 4).map((row, index) => (
                   <tr key={row.id} className={index === 0 ? 'tv-lead' : undefined}>
                     <td className="tv-pos">{index + 1}</td>
                     <td>
@@ -196,13 +196,14 @@ export default function WallPanel() {
                       </div>
                     </td>
                     <td className="tv-num">R$ {money(row.fechado)}</td>
+                    <td className="tv-sub"><b>{row.reunioes}</b> reunioes</td>
                     <td className="tv-sub"><b>{row.ligacoes}</b> ligacoes</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <p className="tv-empty">Nenhuma venda registrada neste mes ainda.</p>
+            <p className="tv-empty">Nenhum SDR ativo no time.</p>
           )}
         </section>
 
