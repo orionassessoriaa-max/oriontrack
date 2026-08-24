@@ -94,13 +94,19 @@ async function generateMotivation(sdrName: string, outsideMql: boolean) {
 }
 
 async function loadCommercialNotificationProfiles(sdrId: string) {
+  // select('*') de proposito: recebe_notificacoes so existe depois da migration
+  // de 23/08, e pedir a coluna pelo nome quebraria a notificacao antes dela.
   const { data: members, error: memberError } = await supabaseAdmin
     .from('comercial_membros')
-    .select('profile_id,papel,ativo')
+    .select('*')
     .eq('ativo', true);
   if (memberError) throw memberError;
 
-  const coordinatorIds = (members || []).filter((member) => member.papel === 'coordenador').map((member) => member.profile_id);
+  // O coordenador pode acompanhar o time sem receber cada lead no WhatsApp:
+  // quem responde pela operacao comercial hoje e so o Pedro.
+  const coordinatorIds = (members || [])
+    .filter((member) => member.papel === 'coordenador' && member.recebe_notificacoes !== false)
+    .map((member) => member.profile_id);
   const profileIds = Array.from(new Set([sdrId, ...coordinatorIds]));
   const { data: profiles, error: profileError } = await supabaseAdmin
     .from('profiles')
