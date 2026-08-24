@@ -27,15 +27,31 @@ export async function POST(request: Request) {
   // o coordenador pode disparar uma ligacao no lugar do SDR.
   const { data: operador } = await supabaseAdmin
     .from("profiles")
-    .select("id,nome,telefone,voip_ramal")
+    .select("id,nome,telefone,voip_ramal,voip_device_id")
     .eq("id", ownerId)
     .maybeSingle();
 
   const numeroOperador = formatarNumeroVoip(operador?.voip_ramal || operador?.telefone);
   const numeroLead = formatarNumeroVoip(lead.telefone);
-  const discagem = voipConfigurado()
-    ? await originarClick2Call({ src: numeroOperador, dst: numeroLead })
+  const centralConfigurada = voipConfigurado();
+  const discagem = centralConfigurada
+    // Cada linha atende uma chamada por vez. Com um device por operador, Talita
+    // e Cadu discam ao mesmo tempo sem uma travar a outra. Sem device proprio,
+    // cai na linha padrao do ambiente.
+    ? await originarClick2Call({ src: numeroOperador, dst: numeroLead, deviceId: operador?.voip_device_id || undefined })
     : { originada: false, motivo: "Discagem automatica nao configurada." };
+
+  // Se a central esta ativa, uma recusa precisa chegar ao usuario como erro.
+  // Abrir tel: neste caso mascararia a falha e poderia provocar duas chamadas.
+  if (centralConfigurada && !discagem.originada) {
+    return NextResponse.json(
+      {
+        error: `A central VoIP não iniciou a ligação: ${discagem.motivo || "motivo não informado."}`,
+        code: "VOIP_ORIGIN_FAILED",
+      },
+      { status: 502 },
+    );
+  }
 
   const { data, error } = await supabaseAdmin.from("comercial_ligacoes").insert({
     lead_id: leadId,
@@ -56,7 +72,15 @@ export async function POST(request: Request) {
       : `${guard.profile.nome || "Equipe comercial"} iniciou uma ligação pelo CRM.`,
     metadata: { call_id: data.id, sdr_id: ownerId, origem: discagem.originada ? "click2call" : "manual" },
   });
-  return NextResponse.json({ call: data, discagem }, { status: 201 });
+  return NextResponse.json({
+    call: data,
+    discagem: {
+      ...discagem,
+      mensagem: discagem.originada
+        ? "Central acionada. Atenda seu telefone; depois ela ligará para o lead."
+        : "Ligação registrada. O aparelho abrirá a discagem manual.",
+    },
+  }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {

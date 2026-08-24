@@ -58,6 +58,10 @@ export async function originarClick2Call(options: {
   }
   if (!options.src) return { originada: false, motivo: 'Operador sem telefone ou ramal cadastrado.' };
   if (!options.dst) return { originada: false, motivo: 'Lead sem telefone valido.' };
+  const deviceIdNumerico = Number(deviceId);
+  if (!Number.isInteger(deviceIdNumerico) || deviceIdNumerico <= 0) {
+    return { originada: false, motivo: 'Device ID da central invalido.' };
+  }
   // Regra critica do manual: ramal do src precisa ser diferente do device_id.
   if (options.src === String(deviceId)) {
     return { originada: false, motivo: 'O ramal do operador nao pode ser o mesmo da linha de origem.' };
@@ -71,7 +75,7 @@ export async function originarClick2Call(options: {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id: Number(deviceId), src: options.src, dst: options.dst }),
+        body: JSON.stringify({ device_id: deviceIdNumerico, src: options.src, dst: options.dst }),
         signal: controller.signal,
       },
     );
@@ -84,8 +88,8 @@ export async function originarClick2Call(options: {
       };
     }
     return { originada: true, resposta: payload };
-  } catch (error: any) {
-    const abortou = error?.name === 'AbortError';
+  } catch (error: unknown) {
+    const abortou = error instanceof Error && error.name === 'AbortError';
     return { originada: false, motivo: abortou ? 'Tempo esgotado ao falar com a central telefonica.' : 'Falha ao falar com a central telefonica.' };
   } finally {
     clearTimeout(timeout);
