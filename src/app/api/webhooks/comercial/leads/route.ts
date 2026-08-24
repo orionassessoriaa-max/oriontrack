@@ -4,7 +4,7 @@ import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
 import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
-import { isCommercialMql } from '@/lib/commercialQualification';
+import { getCommercialMqlLevel, isCommercialMql } from '@/lib/commercialQualification';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 
 type CommercialLeadPayload = Record<string, unknown>;
@@ -375,7 +375,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, duplicated: true, lead: data, sheet });
     }
 
-    if (!incoming.sdr_id) incoming.sdr_id = await assignNextCommercialSdr();
+    if (!incoming.sdr_id) {
+      incoming.sdr_id = await assignNextCommercialSdr(getCommercialMqlLevel(incoming.faturamento_mensal, incoming.investimento));
+    }
 
     const { data, error } = await supabaseAdmin
       .from('comercial_leads')

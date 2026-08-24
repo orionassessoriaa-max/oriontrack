@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
 import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
 import { assignNextCommercialSdr } from '@/lib/commercialDistribution';
-import { commercialCadenceMaxDay, isCommercialMql } from '@/lib/commercialQualification';
+import { commercialCadenceMaxDay, getCommercialMqlLevel, isCommercialMql } from '@/lib/commercialQualification';
 import { cadenceDayFromStage } from '@/lib/comercialCadencia';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
     ? guard.profile.id
     : canAssignResponsible && body.sdr_id
       ? body.sdr_id
-      : await assignNextCommercialSdr();
+      : await assignNextCommercialSdr(getCommercialMqlLevel(body.faturamento_mensal, body.investimento));
   const payload = {
     nome,
     telefone: String(body.telefone || '').trim() || null,

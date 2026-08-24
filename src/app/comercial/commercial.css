@@ -1594,3 +1594,20 @@
 .kh-dash-card.alerta strong { color: #ff6b7d; }
 
 @media (max-width: 1080px) { .kh-dash-top { grid-template-columns: 1fr; } }
+
+/* Conexoes do time no inbox: quem esta com o WhatsApp ligado e com qual numero.
+   O aviso de numero diferente do cadastro existe porque o chip do Renan ficou
+   conectado na instancia do Leo sem ninguem perceber. */
+.kh-inbox-conexoes { margin: 0 0 12px; border: 1px solid var(--kh-line); border-radius: 10px; background: var(--kh-surface); }
+.kh-inbox-conexoes > summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px; color: #b8c6d6; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.kh-inbox-conexoes > summary b { color: var(--kh-cyan); font-size: 10px; }
+.kh-inbox-conexoes > div { display: grid; gap: 1px; border-top: 1px solid var(--kh-line); }
+.kh-inbox-conexoes > div > div { display: flex; align-items: center; gap: 10px; background: #0b131c; padding: 9px 14px; }
+.kh-inbox-conexoes > div > div > div { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 7px; }
+.kh-inbox-conexoes strong { color: var(--kh-text); font-size: 11px; }
+.kh-inbox-conexoes small { color: var(--kh-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+.kh-conexao-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: #46586d; }
+.kh-inbox-conexoes .open .kh-conexao-dot { background: var(--kh-green); box-shadow: 0 0 0 3px rgba(52, 199, 123, .16); }
+.kh-inbox-conexoes .connecting .kh-conexao-dot { background: var(--kh-yellow); }
+.kh-conexao-numero { color: #9fb0c2; font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kh-inbox-conexoes em { border: 1px solid rgba(255, 159, 28, .4); border-radius: 5px; background: rgba(255, 159, 28, .1); color: var(--kh-yellow); padding: 3px 7px; font-size: 9px; font-style: normal; font-weight: 700; white-space: nowrap; }

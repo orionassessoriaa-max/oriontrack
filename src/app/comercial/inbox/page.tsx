@@ -73,12 +73,36 @@ type Message = {
   metadata?: MessageMetadata | null;
 };
 
+type ConexaoDoTime = {
+  profile_id: string;
+  nome: string;
+  papel: string;
+  telefone_cadastrado: string | null;
+  state: 'open' | 'connecting' | 'close';
+  numero: string | null;
+  perfil_whatsapp: string | null;
+};
+
 type WhatsappState = {
   configured: boolean;
   connected: boolean;
   state: 'open' | 'connecting' | 'close';
+  numero?: string | null;
+  perfil_whatsapp?: string | null;
+  equipe?: ConexaoDoTime[] | null;
   targetProfile?: { id?: string; nome?: string | null } | null;
 };
+
+/** 556195754328 vira (61) 9575-4328, do jeito que a pessoa reconhece. */
+function numeroLegivel(valor?: string | null) {
+  const digitos = String(valor || '').replace(/\D/g, '');
+  if (!digitos) return null;
+  const local = digitos.startsWith('55') ? digitos.slice(2) : digitos;
+  if (local.length < 10) return digitos;
+  const ddd = local.slice(0, 2);
+  const resto = local.slice(2);
+  return `(${ddd}) ${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}`;
+}
 
 type LeadDraft = {
   nome: string;
@@ -624,7 +648,14 @@ export default function CommercialInboxPage() {
         </div>
         <div className={`kh-whatsapp-status ${whatsapp.state}`}>
           <span className="kh-whatsapp-status-dot" />
-          <div><strong>{connectionLabel}</strong><span>{whatsapp.state === 'open' ? `${whatsapp.targetProfile?.nome || 'Seu usuário'} está pronto para atender.` : whatsapp.state === 'connecting' ? 'Leia o QR Code para ativar.' : 'Reconecte para enviar mensagens.'}</span></div>
+          <div>
+            <strong>{connectionLabel}</strong>
+            <span>
+              {whatsapp.state === 'open'
+                ? `${whatsapp.perfil_whatsapp || whatsapp.targetProfile?.nome || 'Seu usuário'}${numeroLegivel(whatsapp.numero) ? ` · ${numeroLegivel(whatsapp.numero)}` : ''}`
+                : whatsapp.state === 'connecting' ? 'Leia o QR Code para ativar.' : 'Reconecte para enviar mensagens.'}
+            </span>
+          </div>
           {whatsapp.state === 'open' && <CheckCircle2 size={16} />}
         </div>
         <div className="kh-actions">
@@ -636,6 +667,38 @@ export default function CommercialInboxPage() {
           </button>
         </div>
       </header>
+
+      {Boolean(whatsapp.equipe?.length) && (
+        <details className="kh-inbox-conexoes">
+          <summary>
+            Conexoes do time
+            <b>{(whatsapp.equipe || []).filter((membro) => membro.state === 'open').length}/{(whatsapp.equipe || []).length} conectados</b>
+          </summary>
+          <div>
+            {(whatsapp.equipe || []).map((membro) => {
+              const numero = numeroLegivel(membro.numero);
+              const cadastrado = numeroLegivel(membro.telefone_cadastrado);
+              // Chip diferente do telefone do cadastro costuma ser aparelho de
+              // outra pessoa: foi assim que o Leo apareceu com o chip do Renan.
+              const divergente = Boolean(numero && cadastrado && numero !== cadastrado);
+              return (
+                <div key={membro.profile_id} className={membro.state}>
+                  <span className="kh-conexao-dot" />
+                  <div>
+                    <strong>{membro.nome}</strong>
+                    <small>{membro.papel}</small>
+                  </div>
+                  <span className="kh-conexao-numero">
+                    {membro.state === 'open' ? (numero || 'sem numero') : membro.state === 'connecting' ? 'lendo QR' : 'desconectado'}
+                    {membro.perfil_whatsapp ? ` · ${membro.perfil_whatsapp}` : ''}
+                  </span>
+                  {divergente && <em title={`Cadastro: ${cadastrado}`}>numero diferente do cadastro</em>}
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      )}
 
       {notice && <div className="kh-inline-error">{notice}<button aria-label="Fechar aviso" onClick={() => setNotice('')}><X size={14} /></button></div>}
       {qr && (
