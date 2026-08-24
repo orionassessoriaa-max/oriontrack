@@ -1619,3 +1619,11 @@
 
 .kh-qr-timer { margin-top: 6px !important; color: var(--kh-yellow) !important; font-size: 10px !important; font-variant-numeric: tabular-nums; }
 .kh-whatsapp-qr .kh-button { margin-top: 10px; }
+
+/* Titulo do Kripto com o mesmo peso da marca: grosso, apertado e em caixa alta
+   onde couber. Antes cada tela usava um peso diferente e o cabecalho sumia. */
+.kh h1, .kh-page-head h1 { font-weight: 900 !important; letter-spacing: -0.02em; }
+.kh h2, .kh-panel-header h2, .kh-task-section h2, .kh-dash-side header h3 { font-weight: 850 !important; letter-spacing: -0.01em; }
+.kh-eyebrow, .kh-legend, .kh-panel-header span, .kh-dash-hero > span { font-weight: 900 !important; letter-spacing: 0.18em; }
+.kh-kpi span, .kh-dash-card span, .kh-dash-today span { font-weight: 800 !important; }
+.kh-kpi strong, .kh-dash-card strong, .kh-dash-today strong, .kh-dash-hero h2 { font-weight: 900 !important; }

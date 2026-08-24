@@ -235,8 +235,11 @@ export async function GET(request: Request) {
   // Meta de ligacao do dia: vale por SDR. Fica em comercial_metas.meta_calls e,
   // enquanto ninguem preencher, usa 100, que e o combinado do time.
   const metaLigacoesDia = Number(metaResult.data?.meta_calls || 0) || 100;
-  const ligacoesTime = Array.from(board.values()).reduce((total, linha) => total + linha.ligacoes, 0);
-  const atendidasTime = Array.from(board.values()).reduce((total, linha) => total + linha.atendidas, 0);
+  // So os SDRs entram na conta, porque a meta do dia tambem e por SDR. Ligacao
+  // do closer aparece no historico do lead, nao na barra da parede.
+  const linhasSdr = Array.from(board.values()).filter((linha) => sdrIds.includes(linha.id));
+  const ligacoesTime = linhasSdr.reduce((total, linha) => total + linha.ligacoes, 0);
+  const atendidasTime = linhasSdr.reduce((total, linha) => total + linha.atendidas, 0);
 
   return NextResponse.json({
     mes: month,
