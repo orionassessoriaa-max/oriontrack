@@ -373,6 +373,8 @@ export default function CrmPage() {
     status: 'Aguardando atendimento' as LeadStatus,
   });
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
+  const draggedLeadIdRef = useRef<string | null>(null);
+  draggedLeadIdRef.current = draggedLeadId;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -533,10 +535,12 @@ export default function CrmPage() {
     }
   }, [metricsStartDate, metricsEndDate]);
 
-  async function fetchCrm() {
+  async function fetchCrm(silencioso = false) {
     if (!profile?.id) return;
 
-    setLoading(true);
+    // Recarga disparada pelo realtime nao mostra "carregando": a tela do
+    // corretor nao pode piscar toda vez que o admin mexe em alguma coisa.
+    if (!silencioso) setLoading(true);
     setError(null);
 
     try {
@@ -699,7 +703,7 @@ export default function CrmPage() {
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar CRM.');
     } finally {
-      setLoading(false);
+      if (!silencioso) setLoading(false);
     }
   }
 
@@ -790,6 +794,37 @@ export default function CrmPage() {
   useEffect(() => {
     void fetchCrm();
   }, [profile?.id, profile?.tipo_usuario, profile?.corretor_id]);
+  // O admin apaga um lead ou troca as etapas e a tela do corretor continuava
+  // mostrando o antigo ate alguem apertar F5. Agora o banco avisa e a tela se
+  // atualiza sozinha, do lado de quem estiver olhando.
+  useEffect(() => {
+    if (!profile?.id) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const recarregar = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      // Recarregar no meio de um arrasto devolve o card para a coluna antiga.
+      if (draggedLeadIdRef.current) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (draggedLeadIdRef.current) return;
+        void fetchCrm(true);
+      }, 600);
+    };
+
+    const canal = supabase
+      .channel('realtime:crm_corretora')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, recarregar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'corretores' }, recarregar)
+      .subscribe();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      void supabase.removeChannel(canal);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id, profile?.tipo_usuario, profile?.corretor_id]);
+
 
   useEffect(() => {
     const leadId = new URLSearchParams(window.location.search).get('lead');
@@ -814,6 +849,13 @@ export default function CrmPage() {
   useEffect(() => {
     if (selectedLead?.id) {
       void fetchTimeline(selectedLead.id);
+      // Os formularios sao um so para todos os leads. Sem limpar na troca, a
+      // observacao digitada e nao salva num lead continuava na tela do
+      // seguinte, e bastava clicar em salvar para ela ir parar no lead errado.
+      setNote('');
+      setTaskTitle('');
+      setTaskDueDate('');
+      setTaskDueTime('09:00');
       setEditForm({
         nome: selectedLead.nome || '',
         telefone: selectedLead.telefone || '',
@@ -1637,7 +1679,7 @@ export default function CrmPage() {
                 ))}
               </select>
             )}
-            <button onClick={fetchCrm} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md lg:w-[170px]">
+            <button onClick={() => void fetchCrm()} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md lg:w-[170px]">
               {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Atualizar
             </button>
           </div>
