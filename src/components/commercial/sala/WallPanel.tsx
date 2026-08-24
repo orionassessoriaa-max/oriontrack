@@ -12,6 +12,7 @@ type RankingRow = {
   fechado: number;
   vendas: number;
   ligacoes: number;
+  atendidas: number;
   reunioes: number;
 };
 
@@ -27,6 +28,7 @@ type TvPayload = {
   ritmo: { esperado: number; percentual: number; pontos_atras: number; dia_util: number };
   dias_uteis_restantes: number;
   por_dia: number;
+  ligacoes?: { meta_por_sdr: number; meta_time: number; realizadas: number; atendidas: number; taxa_atendimento: number };
   ranking: RankingRow[];
   feed: FeedRow[];
 };
@@ -45,9 +47,10 @@ const DEMO: TvPayload = {
   ritmo: { esperado: 457500, percentual: 0.61, pontos_atras: 22, dia_util: 14 },
   dias_uteis_restantes: 8,
   por_dia: 57700,
+  ligacoes: { meta_por_sdr: 100, meta_time: 200, realizadas: 122, atendidas: 7, taxa_atendimento: 0.057 },
   ranking: [
-    { id: '1', nome: 'Talita Vargas', iniciais: 'TV', papel: 'SDR', fechado: 126900, vendas: 5, ligacoes: 38, reunioes: 9 },
-    { id: '2', nome: 'Carlos Eduardo', iniciais: 'CE', papel: 'SDR', fechado: 98200, vendas: 4, ligacoes: 24, reunioes: 6 },
+    { id: '1', nome: 'Talita Vargas', iniciais: 'TV', papel: 'SDR', fechado: 126900, vendas: 5, ligacoes: 38, atendidas: 9, reunioes: 9 },
+    { id: '2', nome: 'Carlos Eduardo', iniciais: 'CE', papel: 'SDR', fechado: 98200, vendas: 4, ligacoes: 24, atendidas: 5, reunioes: 6 },
   ],
   feed: [
     { at: '2026-08-20T17:29:00-03:00', tipo: 'venda', texto: 'Talita fechou Celebre Corretora · R$ 41.800' },
@@ -117,6 +120,9 @@ export default function WallPanel() {
   const pacePct = data ? Math.min(100, data.ritmo.percentual * 100) : 0;
   const paceLabelPct = Math.min(92, Math.max(8, pacePct));
   const atras = data ? data.ritmo.pontos_atras : 0;
+  // Meta de ligacao vem do banco; 100 por SDR e o combinado enquanto ninguem
+  // preencher outro numero em comercial_metas.
+  const ligacoes = data?.ligacoes || { meta_por_sdr: 100, meta_time: 100, realizadas: 0, atendidas: 0, taxa_atendimento: 0 };
 
   return (
     <div className="tv-root">
@@ -172,13 +178,36 @@ export default function WallPanel() {
             <span className="tv-legend">Fim do mes</span>
           </div>
         </section>
+
+        <section className="tv-calls">
+          <div>
+            <p className="tv-legend">Ligacoes hoje</p>
+            <p className="tv-calls-value">
+              {ligacoes.realizadas}
+              <small> de {ligacoes.meta_time}</small>
+            </p>
+            <div className="tv-calls-track">
+              <div className="tv-calls-fill" style={{ width: `${Math.min(100, ligacoes.meta_time ? (ligacoes.realizadas / ligacoes.meta_time) * 100 : 0)}%` }} />
+            </div>
+          </div>
+          <div>
+            <p className="tv-legend">Atendidas</p>
+            <p className="tv-calls-value tv-calls-ok">{ligacoes.atendidas}</p>
+            <p className="tv-legend">{(ligacoes.taxa_atendimento * 100).toFixed(0)}% de atendimento</p>
+          </div>
+          <div>
+            <p className="tv-legend">Meta por SDR</p>
+            <p className="tv-calls-value">{ligacoes.meta_por_sdr}</p>
+            <p className="tv-legend">ligacoes por dia</p>
+          </div>
+        </section>
       </main>
 
       <footer className="tv-footer">
         <section>
           <div className="tv-panel-head">
             <p className="tv-legend">Ranking do mes</p>
-            <p className="tv-legend">Fechado · reunioes no mes · ligacoes hoje</p>
+            <p className="tv-legend">Fechado · reunioes · ligacoes hoje · atendidas</p>
           </div>
           {data?.ranking.length ? (
             <table className="tv-table">
@@ -197,7 +226,11 @@ export default function WallPanel() {
                     </td>
                     <td className="tv-num">R$ {money(row.fechado)}</td>
                     <td className="tv-sub"><b>{row.reunioes}</b> reunioes</td>
-                    <td className="tv-sub"><b>{row.ligacoes}</b> ligacoes</td>
+                    <td className="tv-sub">
+                      <b className={row.ligacoes >= (data?.ligacoes?.meta_por_sdr || 100) ? 'tv-calls-ok' : undefined}>{row.ligacoes}</b>
+                      /{data?.ligacoes?.meta_por_sdr || 100} ligacoes
+                    </td>
+                    <td className="tv-sub"><b className="tv-calls-ok">{row.atendidas}</b> atendidas</td>
                   </tr>
                 ))}
               </tbody>

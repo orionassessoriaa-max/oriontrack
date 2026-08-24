@@ -180,3 +180,72 @@
   .tv-dot { animation: none; }
   .tv-fill { transition: none; }
 }
+
+/* Faixa de ligacoes do dia: realizadas contra a meta e quantas foram atendidas.
+   A meta padrao e 100 por SDR, o combinado do time. */
+.tv-calls {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 40px;
+  align-items: end;
+  margin-top: 34px;
+  padding-top: 26px;
+  border-top: 1px solid rgba(124, 201, 255, 0.14);
+}
+.tv-calls-value {
+  margin: 10px 0 0;
+  font-size: 58px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-variation-settings: 'wdth' 110, 'wght' 700;
+}
+.tv-calls-value small { font-size: 0.42em; color: var(--dim); font-weight: 600; }
+.tv-calls-ok { color: #6ee7a8; }
+.tv-calls-track {
+  height: 10px;
+  margin-top: 16px;
+  border-radius: 999px;
+  background: rgba(124, 201, 255, 0.12);
+  overflow: hidden;
+}
+.tv-calls-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #7cc9ff, #6ee7a8); }
+
+/* ===== Responsivo =====
+   O painel nasceu para uma TV 1920x1080 a tres metros. Estas faixas deixam ele
+   utilizavel no notebook e no celular, sem mexer no que ja funciona na parede. */
+@media (max-width: 1500px) {
+  .tv-root { grid-template-rows: 78px 1fr auto; }
+  .tv-scoreboard { grid-template-columns: 1fr 420px; gap: 30px; }
+  .tv-value { font-size: clamp(72px, 9vw, 172px); }
+  .tv-value small { font-size: clamp(28px, 3.4vw, 64px); }
+  .tv-sub { font-size: clamp(18px, 2vw, 40px); }
+  .tv-gap-value { font-size: clamp(38px, 4.6vw, 78px); }
+  .tv-calls-value { font-size: clamp(30px, 3.4vw, 58px); }
+  .tv-footer { grid-template-columns: 1fr 380px; gap: 26px; }
+}
+
+@media (max-width: 1000px) {
+  /* Fora da TV o painel vira pagina normal: rola, empilha e cabe na mao. */
+  .tv-root {
+    position: static;
+    inset: auto;
+    min-height: 100dvh;
+    overflow: auto;
+    grid-template-rows: auto;
+    grid-auto-rows: min-content;
+  }
+  .tv-header { flex-wrap: wrap; gap: 10px; padding: 16px 20px; }
+  .tv-scoreboard { grid-template-columns: 1fr; gap: 18px; align-items: start; }
+  .tv-calls { grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; padding-top: 18px; }
+  .tv-footer { grid-template-columns: 1fr; gap: 20px; padding: 20px; }
+  .tv-legend { font-size: 11px; letter-spacing: 0.16em; }
+  .tv-note { font-size: 14px; margin-top: 10px; }
+  .tv-table td { padding: 10px 0; font-size: 14px; }
+  .tv-pos { font-size: 20px !important; width: 34px !important; }
+}
+
+@media (max-width: 560px) {
+  .tv-calls { grid-template-columns: 1fr; }
+  .tv-scale span:nth-child(2) { display: none; }
+  .tv-table .tv-sub:last-child { display: none; }
+}

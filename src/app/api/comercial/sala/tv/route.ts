@@ -53,7 +53,7 @@ export async function GET(request: Request) {
   const monthEnd = `${month}-${String(lastDay).padStart(2, '0')}`;
 
   const [metaResult, leadsResult, callsResult, meetingsResult, interactionsResult, whatsappCallsResult] = await Promise.all([
-    supabaseAdmin.from('comercial_metas').select('meta_valor,meta_vendas,ticket_medio').eq('mes', `${monthStart}`).maybeSingle(),
+    supabaseAdmin.from('comercial_metas').select('meta_valor,meta_vendas,meta_calls,ticket_medio').eq('mes', `${monthStart}`).maybeSingle(),
     // Janela larga: uma venda pode ter entrado como lead em meses anteriores.
     supabaseAdmin
       .from('comercial_leads')
@@ -77,16 +77,18 @@ export async function GET(request: Request) {
       .select('lead_id,tipo,comentario,created_at')
       .order('created_at', { ascending: false })
       .limit(20),
-    // Ligacao por WhatsApp nao passa pela central: fica registrada como
-    // tentativa da cadencia. Sem isso o painel mostrava so metade do esforco.
+    // Ligacao feita pelo aparelho ou pelo WhatsApp nao passa pela central: fica
+    // registrada como tentativa da cadencia. Sem isso o painel via so metade do
+    // esforco. "nao_necessario" fica de fora porque e tentativa que nem chegou
+    // a acontecer: o dia foi fechado antes.
     supabaseAdmin
       .from('comercial_cadencia_tentativas')
       .select('autor_id,canal,status,concluido_at')
-      .eq('canal', 'ligacao_whatsapp')
-      .neq('status', 'pendente')
+      .like('canal', 'ligacao%')
+      .in('status', ['atendeu', 'nao_atendeu'])
       .gte('concluido_at', `${today}T00:00:00-03:00`)
       .lte('concluido_at', `${today}T23:59:59-03:00`)
-      .limit(2000),
+      .limit(4000),
   ]);
 
   if (leadsResult.error) return NextResponse.json({ error: leadsResult.error.message }, { status: 500 });
@@ -130,9 +132,9 @@ export async function GET(request: Request) {
   const nameById = new Map((profiles || []).map((profile) => [profile.id, profile.nome || 'Sem nome']));
   const roleById = new Map((members || []).map((member) => [member.profile_id, String(member.papel || '')]));
 
-  const board = new Map<string, { id: string; fechado: number; vendas: number; ligacoes: number; reunioes: number }>();
+  const board = new Map<string, { id: string; fechado: number; vendas: number; ligacoes: number; atendidas: number; reunioes: number }>();
   const bump = (id: string) => {
-    const current = board.get(id) || { id, fechado: 0, vendas: 0, ligacoes: 0, reunioes: 0 };
+    const current = board.get(id) || { id, fechado: 0, vendas: 0, ligacoes: 0, atendidas: 0, reunioes: 0 };
     board.set(id, current);
     return current;
   };
@@ -153,11 +155,15 @@ export async function GET(request: Request) {
   }
   for (const call of callsResult.data || []) {
     if (!call.sdr_id) continue;
-    bump(call.sdr_id).ligacoes += 1;
+    const linha = bump(call.sdr_id);
+    linha.ligacoes += 1;
+    if (call.status === 'atendida' || call.status === 'concluida') linha.atendidas += 1;
   }
   for (const tentativa of whatsappCallsResult.data || []) {
     if (!tentativa.autor_id) continue;
-    bump(tentativa.autor_id).ligacoes += 1;
+    const linha = bump(tentativa.autor_id);
+    linha.ligacoes += 1;
+    if (tentativa.status === 'atendeu') linha.atendidas += 1;
   }
   // Reuniao marcada no mes, contada para o SDR que trouxe o lead.
   for (const lead of leads) {
@@ -180,6 +186,7 @@ export async function GET(request: Request) {
         fechado: row.fechado,
         vendas: row.vendas,
         ligacoes: row.ligacoes,
+        atendidas: row.atendidas,
         reunioes: row.reunioes,
       };
     })
@@ -220,12 +227,25 @@ export async function GET(request: Request) {
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
     .slice(0, 4);
 
+  // Meta de ligacao do dia: vale por SDR. Fica em comercial_metas.meta_calls e,
+  // enquanto ninguem preencher, usa 100, que e o combinado do time.
+  const metaLigacoesDia = Number(metaResult.data?.meta_calls || 0) || 100;
+  const ligacoesTime = Array.from(board.values()).reduce((total, linha) => total + linha.ligacoes, 0);
+  const atendidasTime = Array.from(board.values()).reduce((total, linha) => total + linha.atendidas, 0);
+
   return NextResponse.json({
     mes: month,
     hoje: today,
     fechado,
     meta,
     falta,
+    ligacoes: {
+      meta_por_sdr: metaLigacoesDia,
+      meta_time: metaLigacoesDia * Math.max(1, sdrIds.length),
+      realizadas: ligacoesTime,
+      atendidas: atendidasTime,
+      taxa_atendimento: ligacoesTime ? atendidasTime / ligacoesTime : 0,
+    },
     vendas: monthClosed.length,
     progresso: progress,
     ritmo: {
