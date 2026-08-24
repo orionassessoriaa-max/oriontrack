@@ -1627,3 +1627,25 @@
 .kh-eyebrow, .kh-legend, .kh-panel-header span, .kh-dash-hero > span { font-weight: 900 !important; letter-spacing: 0.18em; }
 .kh-kpi span, .kh-dash-card span, .kh-dash-today span { font-weight: 800 !important; }
 .kh-kpi strong, .kh-dash-card strong, .kh-dash-today strong, .kh-dash-hero h2 { font-weight: 900 !important; }
+
+/* Relatorio do SDR: filtros, ranking e gravacoes. */
+.kh-relatorio-filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 14px; }
+.kh-relatorio-atalhos { display: flex; flex-wrap: wrap; gap: 8px; margin-right: auto; }
+.kh-relatorio-filtros label { display: flex; flex-direction: column; gap: 6px; }
+.kh-relatorio-filtros label span { color: var(--kh-muted); font-size: 9px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.kh-relatorio-kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important; }
+.kh-relatorio-tabela { margin-top: 14px; overflow-x: auto; }
+.kh-relatorio-grade { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.kh-relatorio-grade th { border-bottom: 1px solid var(--kh-line); color: var(--kh-muted); font-size: 9px; font-weight: 900; letter-spacing: .1em; text-align: left; text-transform: uppercase; padding: 10px 12px; white-space: nowrap; }
+.kh-relatorio-grade td { border-bottom: 1px solid #16202c; color: var(--kh-text); font-size: 11px; padding: 11px 12px; white-space: nowrap; }
+.kh-relatorio-grade tr:last-child td { border-bottom: 0; }
+.kh-relatorio-grade tbody tr:hover { background: #0e1924; }
+.kh-relatorio-grade b { font-size: 13px; font-weight: 900; }
+.kh-relatorio-ok { color: var(--kh-green); font-weight: 800; }
+.kh-relatorio-meta { position: relative; min-width: 132px; height: 20px; border-radius: 6px; background: #101b26; overflow: hidden; }
+.kh-relatorio-meta i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, var(--kh-cyan), var(--kh-green)); opacity: .32; }
+.kh-relatorio-meta span { position: relative; display: block; line-height: 20px; text-align: center; font-size: 10px; font-weight: 800; }
+.kh-relatorio-vazio { color: var(--kh-muted); text-align: center; padding: 26px 12px !important; }
+.kh-relatorio-aviso { margin: 12px 14px; border: 1px solid rgba(255, 159, 28, .35); border-radius: 8px; background: rgba(255, 159, 28, .08); color: var(--kh-yellow); padding: 11px 13px; font-size: 10px; font-weight: 700; line-height: 1.5; }
+.kh-relatorio-audio { height: 30px; max-width: 220px; }
+.kh-relatorio-sem-audio { color: #5c6c80; font-size: 10px; }
