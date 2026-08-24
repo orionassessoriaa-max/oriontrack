@@ -1611,3 +1611,11 @@
 .kh-inbox-conexoes .connecting .kh-conexao-dot { background: var(--kh-yellow); }
 .kh-conexao-numero { color: #9fb0c2; font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .kh-inbox-conexoes em { border: 1px solid rgba(255, 159, 28, .4); border-radius: 5px; background: rgba(255, 159, 28, .1); color: var(--kh-yellow); padding: 3px 7px; font-size: 9px; font-style: normal; font-weight: 700; white-space: nowrap; }
+
+/* Desfazer marcacao errada na cadencia. Fica discreto porque o caminho normal
+   e marcar, nao voltar atras. */
+.kh-cadence-actions .desfazer { border-color: #3a4658 !important; color: #93a3b7 !important; }
+.kh-cadence-actions .desfazer:hover { border-color: var(--kh-yellow) !important; color: var(--kh-yellow) !important; }
+
+.kh-qr-timer { margin-top: 6px !important; color: var(--kh-yellow) !important; font-size: 10px !important; font-variant-numeric: tabular-nums; }
+.kh-whatsapp-qr .kh-button { margin-top: 10px; }

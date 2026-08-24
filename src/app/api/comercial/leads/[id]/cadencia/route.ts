@@ -151,7 +151,7 @@ export async function PATCH(
   const result = String(body.result || "");
   if (!Number.isInteger(order) || order < 1 || order > 8)
     return NextResponse.json({ error: "Tentativa inválida." }, { status: 400 });
-  if (result !== "success" && result !== "no_answer")
+  if (result !== "success" && result !== "no_answer" && result !== "undo")
     return NextResponse.json({ error: "Resultado inválido." }, { status: 400 });
 
   try {
@@ -164,6 +164,34 @@ export async function PATCH(
       .eq("ordem", order)
       .single();
     if (attemptError) throw attemptError;
+
+    // Desmarcar: quem clicou errado precisa poder voltar atras. Quando o dia
+    // tinha sido fechado por um "atendeu", as tentativas seguintes viraram
+    // "nao_necessario" e voltam a ficar pendentes junto.
+    if (result === "undo") {
+      if (attempt.status === "pendente")
+        return NextResponse.json({ error: "Esta tentativa ainda não foi marcada." }, { status: 409 });
+
+      const agora = new Date().toISOString();
+      const { error: desfazerError } = await supabaseAdmin
+        .from("comercial_cadencia_tentativas")
+        .update({ status: "pendente", autor_id: null, concluido_at: null, updated_at: agora })
+        .eq("lead_id", id)
+        .eq("dia", day)
+        .or(`id.eq.${attempt.id},status.eq.nao_necessario`);
+      if (desfazerError) throw desfazerError;
+
+      await recordCommercialTimelineEvent({
+        leadId: id,
+        actorId: guard.profile.id,
+        type: "cadencia_contato",
+        description: `${order}. ${attempt.titulo} — marcação desfeita.`,
+        metadata: { day, order, channel: attempt.canal, status: "pendente", desfeito: true },
+      });
+
+      return NextResponse.json({ cadence: await cadencePayload(lead) });
+    }
+
     if (attempt.status !== "pendente")
       return NextResponse.json(
         { error: "Esta tentativa já foi concluída." },

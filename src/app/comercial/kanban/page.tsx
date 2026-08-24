@@ -187,6 +187,7 @@ export default function CommercialKanbanPage() {
   const [editingStageName, setEditingStageName] = useState("");
   const [editingStageColor, setEditingStageColor] = useState("#2563EB");
   const [stageError, setStageError] = useState<string | null>(null);
+  const [callNotice, setCallNotice] = useState<string | null>(null);
   const [stageSaving, setStageSaving] = useState(false);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({
@@ -328,7 +329,7 @@ export default function CommercialKanbanPage() {
 
   async function updateContactCadence(
     order: number,
-    result: "success" | "no_answer",
+    result: "success" | "no_answer" | "undo",
   ) {
     if (!expandedLeadId) return;
     setContactCadenceSavingOrder(order);
@@ -585,14 +586,19 @@ export default function CommercialKanbanPage() {
     const digits = String(lead.telefone || "").replace(/\D/g, "");
     if (!digits) return;
     setStageError(null);
+    setCallNotice(null);
     try {
       // A central liga primeiro para o operador e depois para o lead. Quando ela
       // assume a discagem, abrir o tel: faria o aparelho tocar duas vezes.
       const resposta = (await api("/api/comercial/calls", {
         method: "POST",
         body: JSON.stringify({ lead_id: lead.id, sdr_id: lead.sdr_id }),
-      })) as { discagem?: { originada?: boolean } } | null;
-      if (!resposta?.discagem?.originada) window.location.href = `tel:${digits}`;
+      })) as { discagem?: { originada?: boolean; mensagem?: string } } | null;
+      if (!resposta?.discagem?.originada) {
+        window.location.href = `tel:${digits}`;
+        return;
+      }
+      setCallNotice(resposta.discagem.mensagem || "Central acionada. Atenda seu telefone.");
     } catch (callError) {
       setStageError(callError instanceof Error ? callError.message : "Não foi possível registrar a ligação.");
     }
@@ -1036,6 +1042,18 @@ export default function CommercialKanbanPage() {
             type="button"
             aria-label="Fechar aviso"
             onClick={() => setStageError(null)}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      {callNotice && (
+        <div className="kh-inline-notice" role="status" aria-live="polite">
+          {callNotice}
+          <button
+            type="button"
+            aria-label="Fechar aviso"
+            onClick={() => setCallNotice(null)}
           >
             <X size={15} />
           </button>

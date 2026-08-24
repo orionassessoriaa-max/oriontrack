@@ -73,6 +73,9 @@ type Message = {
   metadata?: MessageMetadata | null;
 };
 
+/** O QR da UAZAPI expira perto dos tres minutos; renovamos antes disso. */
+const QR_SEGUNDOS = 100;
+
 type ConexaoDoTime = {
   profile_id: string;
   nome: string;
@@ -232,6 +235,7 @@ export default function CommercialInboxPage() {
   const [leadDraft, setLeadDraft] = useState<LeadDraft>(emptyLeadDraft);
   const [qr, setQr] = useState<string | null>(null);
   const [whatsapp, setWhatsapp] = useState<WhatsappState>({ configured: false, connected: false, state: 'close' });
+  const [qrExpiraEm, setQrExpiraEm] = useState(QR_SEGUNDOS);
   const [messageMedia, setMessageMedia] = useState<Record<string, MessageMedia>>({});
   const [loadingMediaId, setLoadingMediaId] = useState<string | null>(null);
   const [mediaPreview, setMediaPreview] = useState<MessageMedia | null>(null);
@@ -466,19 +470,48 @@ export default function CommercialInboxPage() {
     }
   }
 
-  async function connectWhatsapp() {
+  const connectWhatsapp = useCallback(async (silencioso = false) => {
     try {
       const payload = await api('/api/comercial/inbox/whatsapp', {
         method: 'POST',
         body: JSON.stringify({ accepted_terms: true, terms_version: 'commercial-inbox-v1' }),
       });
       setQr(payload.qrcode || null);
+      setQrExpiraEm(QR_SEGUNDOS);
       setWhatsapp((current) => ({ ...current, configured: true, state: 'connecting', connected: false }));
-      setNotice(payload.qrcode ? 'Escaneie o QR Code com o WhatsApp.' : 'Conexão iniciada.');
+      if (!silencioso) setNotice(payload.qrcode ? 'Escaneie o QR Code com o WhatsApp.' : 'Conexão iniciada.');
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Falha ao conectar WhatsApp.');
     }
-  }
+  }, [api]);
+
+  // O QR da UAZAPI morre em cerca de tres minutos e a tela continuava mostrando
+  // o codigo velho: foi o que aconteceu com o Cadu, com "QR Code timeout" no log
+  // da central. Aqui o codigo se renova sozinho e o estado e consultado ate
+  // conectar, quando o QR some da tela.
+  useEffect(() => {
+    if (!qr) return;
+    const contador = window.setInterval(() => {
+      setQrExpiraEm((restante) => {
+        if (restante > 1) return restante - 1;
+        void connectWhatsapp(true);
+        return QR_SEGUNDOS;
+      });
+    }, 1000);
+    const consulta = window.setInterval(() => {
+      void api('/api/comercial/inbox/whatsapp')
+        .then((payload) => {
+          setWhatsapp(payload);
+          // Conectou: o QR sai da tela sozinho, sem a pessoa ficar adivinhando.
+          if (payload?.state === 'open') {
+            setQr(null);
+            setNotice('WhatsApp conectado.');
+          }
+        })
+        .catch(() => undefined);
+    }, 5000);
+    return () => { window.clearInterval(contador); window.clearInterval(consulta); };
+  }, [api, connectWhatsapp, qr]);
 
   async function sendMessage(event: React.FormEvent) {
     event.preventDefault();
@@ -703,7 +736,12 @@ export default function CommercialInboxPage() {
       {notice && <div className="kh-inline-error">{notice}<button aria-label="Fechar aviso" onClick={() => setNotice('')}><X size={14} /></button></div>}
       {qr && (
         <div className="kh-panel kh-whatsapp-qr">
-          <div><strong>Conecte o WhatsApp</strong><p>Abra o WhatsApp no celular e escaneie o código.</p></div>
+          <div>
+            <strong>Conecte o WhatsApp</strong>
+            <p>Abra o WhatsApp no celular, em Aparelhos conectados, e escaneie o código.</p>
+            <p className="kh-qr-timer">Este código expira em {qrExpiraEm}s e se renova sozinho.</p>
+            <button type="button" className="kh-button" onClick={() => void connectWhatsapp()}>Gerar outro código</button>
+          </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`} alt="QR Code para conectar WhatsApp" />
           <button className="kh-icon-button" onClick={() => setQr(null)} aria-label="Fechar QR Code"><X size={16} /></button>

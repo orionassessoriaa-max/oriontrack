@@ -83,7 +83,7 @@ type Props = {
   contactCadenceError?: string | null;
   onUpdateContactCadence?: (
     order: number,
-    result: "success" | "no_answer",
+    result: "success" | "no_answer" | "undo",
   ) => Promise<void>;
 };
 
@@ -913,6 +913,19 @@ export default function CommercialLeadDetailsModal({
                           <strong>{attempt.ordem}. {attempt.titulo}</strong>
                           <small>{cadenceStatusLabels[attempt.status] || attempt.status}</small>
                         </div>
+                        {!pending && !readOnly && onUpdateContactCadence && (
+                          <div className="kh-cadence-actions">
+                            <button
+                              type="button"
+                              className="desfazer"
+                              onClick={() => void onUpdateContactCadence(attempt.ordem, "undo")}
+                              disabled={saving || contactCadenceSavingOrder !== null}
+                              title="Voltar esta tentativa para pendente"
+                            >
+                              {saving ? "Salvando..." : "Desfazer"}
+                            </button>
+                          </div>
+                        )}
                         {pending && !readOnly && onUpdateContactCadence && (
                           <div className="kh-cadence-actions">
                             <button
