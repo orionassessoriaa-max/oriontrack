@@ -238,7 +238,54 @@ export async function GET(request: Request) {
       sales: row.sales,
     });
 
+  // Painel do topo: o que aconteceu hoje e como o mes esta contra a meta. Sao
+  // contagens com head: true, sem trazer linha nenhuma, porque esta instancia ja
+  // derrubou o PostgREST puxando coluna larga.
+  const agora = new Date();
+  const inicioDoDia = `${new Date(agora.getTime() - 3 * 3600_000).toISOString().slice(0, 10)}T00:00:00-03:00`;
+  const primeiroDoMes = `${agora.toISOString().slice(0, 7)}-01`;
+  const ETAPAS_ENCERRADAS = ['Negócio fechado', 'Perdido', 'Desqualificado', 'BLOQUEADOS', 'Fora do MQL'];
+
+  const [leadsHoje, ligacoesHoje, reunioesHoje, tarefasAtrasadas, kanbanAtivos, conversasHoje, metaDoMes, vendasDoMes] = await Promise.all([
+    supabaseAdmin.from('comercial_leads').select('id', { count: 'exact', head: true }).gte('created_at', inicioDoDia),
+    supabaseAdmin.from('comercial_ligacoes').select('id', { count: 'exact', head: true }).gte('iniciada_at', inicioDoDia),
+    supabaseAdmin.from('comercial_leads').select('id', { count: 'exact', head: true }).gte('reuniao_agendada_at', inicioDoDia),
+    supabaseAdmin.from('comercial_tarefas').select('id', { count: 'exact', head: true }).neq('status', 'concluida').lt('vencimento', agora.toISOString()),
+    supabaseAdmin.from('comercial_leads').select('id', { count: 'exact', head: true }).not('status', 'in', `(${ETAPAS_ENCERRADAS.map((etapa) => `"${etapa}"`).join(',')})`),
+    supabaseAdmin.from('whatsapp_conversas').select('id', { count: 'exact', head: true }).is('corretor_id', null).gte('ultima_mensagem_at', inicioDoDia),
+    supabaseAdmin.from('comercial_metas').select('meta_valor,meta_vendas,meta_calls').eq('mes', primeiroDoMes).maybeSingle(),
+    supabaseAdmin.from('comercial_leads').select('valor_fechado').gte('fechado_at', `${primeiroDoMes}T00:00:00-03:00`).gt('valor_fechado', 0),
+  ]);
+
+  const faturadoNoMes = (vendasDoMes.data || []).reduce((total: number, lead: { valor_fechado: number | null }) => total + Number(lead.valor_fechado || 0), 0);
+  const metaValor = Number(metaDoMes.data?.meta_valor || 0);
+  const ultimoDiaDoMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0).getDate();
+
+  const panorama = {
+    hoje: {
+      leads: leadsHoje.count || 0,
+      ligacoes: ligacoesHoje.count || 0,
+      reunioes: reunioesHoje.count || 0,
+      conversas: conversasHoje.count || 0,
+    },
+    meta: {
+      valor: metaValor,
+      faturado: faturadoNoMes,
+      restante: Math.max(0, metaValor - faturadoNoMes),
+      progresso: metaValor ? Math.min(100, (faturadoNoMes / metaValor) * 100) : 0,
+      dias_restantes: Math.max(0, ultimoDiaDoMes - agora.getDate()),
+      meta_vendas: Number(metaDoMes.data?.meta_vendas || 0),
+      meta_calls: Number(metaDoMes.data?.meta_calls || 0),
+      vendas_no_mes: (vendasDoMes.data || []).length,
+    },
+    cards: {
+      kanban_ativos: kanbanAtivos.count || 0,
+      tarefas_atrasadas: tarefasAtrasadas.count || 0,
+    },
+  };
+
   return NextResponse.json({
+    panorama,
     metrics,
     trend,
     weeklyMeetings: (weeklyMeetingRows || []).reduce((rows: Array<{ date: string; meetings: number }>, lead: { reuniao_agendada_at: string | null }) => {

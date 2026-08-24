@@ -1,11 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleDollarSign, RefreshCw, Target, UsersRound, WalletCards } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, ArrowUpRight, CalendarDays, Check, ChevronDown, ChevronRight, CircleDollarSign, KanbanSquare, ListChecks, MessagesSquare, PhoneCall, RefreshCw, Target, Trophy, UsersRound, WalletCards } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import { currency, percent } from '@/lib/comercial';
 
+type Panorama = {
+  hoje: { leads: number; ligacoes: number; reunioes: number; conversas: number };
+  meta: { valor: number; faturado: number; restante: number; progresso: number; dias_restantes: number; meta_vendas: number; meta_calls: number; vendas_no_mes: number };
+  cards: { kanban_ativos: number; tarefas_atrasadas: number };
+};
+
 type Overview = {
+  panorama?: Panorama;
   metrics: Record<string, number>;
   trend: Array<{ date: string; leads: number; mql: number; meetings: number; sales: number; revenue: number; investment: number }>;
   weeklyMeetings?: Array<{ date: string; meetings: number }>;
@@ -175,6 +183,11 @@ export default function CommercialDashboardPage() {
   }
 
   const m = data?.metrics || {};
+  const panorama: Panorama = data?.panorama || {
+    hoje: { leads: 0, ligacoes: 0, reunioes: 0, conversas: 0 },
+    meta: { valor: 0, faturado: 0, restante: 0, progresso: 0, dias_restantes: 0, meta_vendas: 0, meta_calls: 0, vendas_no_mes: 0 },
+    cards: { kanban_ativos: 0, tarefas_atrasadas: 0 },
+  };
   const selectedStateData = data?.states?.find((item) => item.state === selectedState);
   const primary = [
     ...(canViewCommercialFinancials ? [{ label: 'Investimento', value: currency(m.investment), helper: 'No período selecionado', icon: WalletCards, tone: 'blue' }] : []),
@@ -216,6 +229,78 @@ export default function CommercialDashboardPage() {
         </div>
       </header>
       {error && <div className="kh-inline-error">{error}</div>}
+
+      <div className="kh-dash">
+        <section className="kh-dash-top">
+          <article className="kh-dash-hero">
+            <div>
+              <span>Meta de {new Date().toLocaleDateString('pt-BR', { month: 'long' })}</span>
+              <h2>
+                {loading ? '—' : currency(panorama.meta.faturado)}
+                <small>
+                  {panorama.meta.valor
+                    ? `de ${currency(panorama.meta.valor)} - faltam ${currency(panorama.meta.restante)}`
+                    : 'Nenhuma meta cadastrada para este mes.'}
+                </small>
+              </h2>
+            </div>
+
+            <div className="kh-dash-progress" role="img" aria-label={`Meta do mes em ${Math.round(panorama.meta.progresso)} por cento`}>
+              <i style={{ width: `${Math.max(panorama.meta.progresso ? 2 : 0, panorama.meta.progresso)}%` }} />
+            </div>
+
+            <div className="kh-dash-hero-foot">
+              <div><span>Progresso</span><strong>{percent(panorama.meta.progresso)}</strong></div>
+              <div><span>Vendas no mes</span><strong>{panorama.meta.vendas_no_mes}</strong></div>
+              <div><span>Dias restantes</span><strong>{panorama.meta.dias_restantes}</strong></div>
+              <Link href="/comercial/kanban" className="kh-dash-cta"><KanbanSquare size={16} /> Abrir kanban</Link>
+            </div>
+          </article>
+
+          <aside className="kh-dash-side">
+            <header>
+              <h3>Hoje</h3>
+              <span>{new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+            </header>
+            <div className="kh-dash-today">
+              <div><span><UsersRound size={12} /> Leads</span><strong>{panorama.hoje.leads}</strong></div>
+              <div><span><PhoneCall size={12} /> Ligacoes</span><strong>{panorama.hoje.ligacoes}</strong></div>
+              <div><span><CalendarDays size={12} /> Reunioes</span><strong>{panorama.hoje.reunioes}</strong></div>
+              <div><span><MessagesSquare size={12} /> Conversas</span><strong>{panorama.hoje.conversas}</strong></div>
+            </div>
+            <Link href="/comercial/tarefas" className="kh-dash-cta" style={{ marginLeft: 0, justifyContent: 'center' }}>
+              <ListChecks size={16} /> Minhas tarefas
+            </Link>
+          </aside>
+        </section>
+
+        <section className="kh-dash-cards">
+          <Link href="/comercial/kanban" className="kh-dash-card">
+            <span>Kanban</span>
+            <strong>{panorama.cards.kanban_ativos}</strong>
+            <small>leads em andamento</small>
+            <ChevronRight size={16} className="kh-dash-card-arrow" />
+          </Link>
+          <Link href="/comercial/inbox" className="kh-dash-card">
+            <span>Inbox</span>
+            <strong>{panorama.hoje.conversas}</strong>
+            <small>conversas movimentadas hoje</small>
+            <ChevronRight size={16} className="kh-dash-card-arrow" />
+          </Link>
+          <Link href="/comercial/tarefas" className={`kh-dash-card ${panorama.cards.tarefas_atrasadas ? 'alerta' : ''}`}>
+            <span>Tarefas</span>
+            <strong>{panorama.cards.tarefas_atrasadas}</strong>
+            <small>atrasadas</small>
+            <ChevronRight size={16} className="kh-dash-card-arrow" />
+          </Link>
+          <Link href="/comercial/sala" className="kh-dash-card">
+            <span>Sala</span>
+            <strong>{(data?.team || []).filter((member) => member.role === 'sdr').length}</strong>
+            <small>SDRs no ranking</small>
+            <Trophy size={16} className="kh-dash-card-arrow" />
+          </Link>
+        </section>
+      </div>
       {data?.meta_error && <div className="kh-inline-error">{data.meta_error}</div>}
 
       <section className={`kh-kpi-grid ${canViewCommercialFinancials ? '' : 'restricted'}`} aria-label="Indicadores principais">

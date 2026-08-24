@@ -1555,3 +1555,42 @@
 .kh-task-row > time { order: 5; }
 .kh-task-row > .kh-priority { order: 6; margin-left: auto; text-align: right; }
 .kh-task-row p { white-space: normal; }
+
+/* ===== Painel do topo da dashboard =====
+   Fundo quase preto so nesta tela, acento ciano que ja identifica o Kripto.
+   A ideia veio de um painel de app de voo: um bloco grande com a meta, uma
+   coluna com o desafio do dia e uma fileira de atalhos com numero. */
+.kh-dash { --dash-bg: #050608; --dash-card: #0c0f13; --dash-line: #1a1f26; --dash-accent: #22d3ee; --dash-muted: #8b98a8; background: var(--dash-bg); margin: -18px -18px 0; padding: 18px; }
+.kh-dash-top { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, .85fr); gap: 14px; margin-bottom: 14px; }
+.kh-dash-hero { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; gap: 20px; min-height: 244px; border: 1px solid var(--dash-line); border-radius: 18px; background: radial-gradient(120% 140% at 100% 0%, rgba(34, 211, 238, .16), transparent 58%), var(--dash-card); padding: 26px 28px; }
+.kh-dash-hero > span { color: var(--dash-accent); font-size: 10px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; }
+.kh-dash-hero h2 { margin: 10px 0 0; color: #f4f8fc; font-size: clamp(30px, 3.4vw, 44px); line-height: 1.05; letter-spacing: -.02em; }
+.kh-dash-hero h2 small { display: block; margin-top: 8px; color: var(--dash-muted); font-size: 13px; font-weight: 600; letter-spacing: 0; }
+.kh-dash-progress { height: 8px; border-radius: 999px; background: #161b22; overflow: hidden; }
+.kh-dash-progress i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #22d3ee, #0ea5e9); }
+.kh-dash-hero-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+.kh-dash-hero-foot > div { display: flex; flex-direction: column; gap: 3px; }
+.kh-dash-hero-foot span { color: var(--dash-muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.kh-dash-hero-foot strong { color: #eaf2f8; font-size: 15px; font-variant-numeric: tabular-nums; }
+.kh-dash-cta { margin-left: auto; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; background: var(--dash-accent); color: #04212a; padding: 0 20px; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-decoration: none; text-transform: uppercase; }
+.kh-dash-cta:hover { background: #67e8f9; }
+
+.kh-dash-side { display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--dash-line); border-radius: 18px; background: var(--dash-card); padding: 20px; }
+.kh-dash-side header { display: flex; align-items: center; justify-content: space-between; }
+.kh-dash-side header h3 { margin: 0; color: #eaf2f8; font-size: 14px; }
+.kh-dash-side header span { color: var(--dash-muted); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.kh-dash-today { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.kh-dash-today > div { border: 1px solid var(--dash-line); border-radius: 12px; background: #0a0d11; padding: 11px 12px; }
+.kh-dash-today span { display: flex; align-items: center; gap: 6px; color: var(--dash-muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.kh-dash-today strong { display: block; margin-top: 6px; color: #f2f8fd; font-size: 22px; font-variant-numeric: tabular-nums; }
+
+.kh-dash-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.kh-dash-card { position: relative; display: flex; flex-direction: column; gap: 4px; min-height: 104px; border: 1px solid var(--dash-line); border-radius: 16px; background: var(--dash-card); padding: 16px 18px; color: inherit; text-decoration: none; }
+.kh-dash-card:hover { border-color: rgba(34, 211, 238, .45); background: #0f141a; }
+.kh-dash-card span { color: #dbe6f0; font-size: 12px; font-weight: 700; }
+.kh-dash-card strong { color: #f4f9fd; font-size: 26px; font-variant-numeric: tabular-nums; }
+.kh-dash-card small { color: var(--dash-muted); font-size: 10px; }
+.kh-dash-card svg.kh-dash-card-arrow { position: absolute; right: 14px; bottom: 14px; color: var(--dash-accent); opacity: .7; }
+.kh-dash-card.alerta strong { color: #ff6b7d; }
+
+@media (max-width: 1080px) { .kh-dash-top { grid-template-columns: 1fr; } }
