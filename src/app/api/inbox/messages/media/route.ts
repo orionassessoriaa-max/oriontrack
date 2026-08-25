@@ -615,11 +615,16 @@ export async function GET(request: Request) {
     const profileInstances = Array.from(relatedProfileIds).map((profileId) => uazapiInstanceName(profileId));
     const currentActiveInstance = metadataInstances[0] || profileInstances[0] || null;
 
+    // A instancia certa e a que o webhook gravou na mensagem. As dos colegas
+    // entram so como plano B, e no maximo quatro: uma corretora com cem perfis
+    // gerava cem chamadas por midia aberta. Foram 17 mil chamadas em tres horas,
+    // o que derrubava a abertura e ainda fazia a central bloquear por excesso.
+    // apolo_master_sender saiu da lista: e o numero do notificador, nunca teve
+    // midia de conversa.
     const instancesToTry = Array.from(new Set([
       ...metadataInstances,
       ...profileInstances,
-      'apolo_master_sender'
-    ].filter(Boolean) as string[]));
+    ].filter(Boolean) as string[])).slice(0, 4);
 
     const isEvolution =
       message.metadata?.event === 'messages.upsert' ||
