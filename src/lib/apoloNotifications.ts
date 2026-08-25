@@ -70,7 +70,10 @@ export async function sendApoloWhatsApp({ type, title, message, profiles, respec
        continue;
      }
  
-     const phone = normalizePhone(pref.telefone || profile.telefone);
+     // pref pode nao existir: quem nunca abriu a tela de notificacoes nao tem
+     // linha em notificacao_preferencias. Sem o ?., o aviso de lead novo
+     // estourava e ninguem recebia, nem o coordenador.
+     const phone = normalizePhone(pref?.telefone || profile.telefone);
      if (!phone) {
        results.push({ profile_id: profile.id, status: 'failed', reason: 'Telefone não informado.' });
        continue;
