@@ -379,38 +379,45 @@ export default function TrafficReportsPage() {
     }
   };
 
+  // O gestor manda esse bloco no grupo do cliente. Antes saia um resumo em
+  // prosa, que ninguem colava: agora a previa e o texto copiado sao o mesmo
+  // formato de campanha usado no relatorio semanal.
+  const mensagemCampanha = () => {
+    if (!preview) return '';
+    const brl = (valor: number | null) => (valor === null
+      ? 'N/A'
+      : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor));
+    const diaMes = (iso: string) => format(new Date(`${iso}T12:00:00`), 'dd/MM');
+    return [
+      `Logo abaixo estou deixando os dados das nossas campanhas (${diaMes(formData.data_inicio)} até ${diaMes(formData.data_fim)}): ⤵️`,
+      '',
+      '📈 CAMPANHAS PLANO DE SAÚDE:',
+      `💸 Investimento: ${brl(preview.valorInvestido)}`,
+      `✅ Nº Leads: ${preview.leads}`,
+      `✅ Custo médio por Lead: ${brl(preview.cpl)}`,
+    ].join('\n');
+  };
+
   const copyToClipboard = () => {
     if (!preview) return;
-    
-    const dataInicioFmt = format(new Date(formData.data_inicio), 'dd/MM/yyyy');
-    const dataFimFmt = format(new Date(formData.data_fim), 'dd/MM/yyyy');
-    const valorFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.valorInvestido);
-    const cplFmt = preview.cpl ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.cpl) : 'Indisponível';
-
-    let text = `📊 *Relatório de Leads - Orion Track*\n\n`;
-    text += `Cliente: ${preview.corretor.nome}\n`;
-    text += `Período: ${dataInicioFmt} a ${dataFimFmt}\n`;
-    text += `Leads Gerados: ${preview.leads}\n`;
-    text += `Investimento Meta: ${valorFmt}\n`;
-    text += `CPL Médio: ${cplFmt}\n\n`;
-    
-    const origemLeads = preview.fonteLeads === 'manual' ? 'informados manualmente' : 'registrados no Orion Track';
-
-    if (preview.leads > 0) {
-      text += `Resumo: Durante o período, foram ${origemLeads} ${preview.leads} leads para ${preview.corretor.nome}. O investimento informado no Meta Ads foi de ${valorFmt}, resultando em um CPL médio de ${cplFmt}.`;
-    } else {
-      text += `Resumo: Durante o período, não foram ${origemLeads} leads para ${preview.corretor.nome}. O investimento informado foi de ${valorFmt}, mas o CPL não pôde ser calculado por ausência de leads no período.`;
-    }
-
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(mensagemCampanha());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const copySavedReport = async (report: TrafficReport) => {
-    const valorFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.valor_investido);
-    const cplFmt = report.cpl ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(report.cpl) : 'Indisponível';
-    const text = `📊 *Relatório de Leads - Orion Track*\n\nCliente: ${report.corretores?.nome || 'N/A'}\nPeríodo: ${format(new Date(report.data_inicio), 'dd/MM/yyyy')} a ${format(new Date(report.data_fim), 'dd/MM/yyyy')}\nLeads Gerados: ${report.quantidade_leads}\nInvestimento Meta: ${valorFmt}\nCPL Médio: ${cplFmt}`;
+    const brl = (valor: number | null) => (valor === null
+      ? 'N/A'
+      : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor));
+    const diaMes = (iso: string) => format(new Date(iso), 'dd/MM');
+    const text = [
+      `Logo abaixo estou deixando os dados das nossas campanhas (${diaMes(report.data_inicio)} até ${diaMes(report.data_fim)}): ⤵️`,
+      '',
+      '📈 CAMPANHAS PLANO DE SAÚDE:',
+      `💸 Investimento: ${brl(report.valor_investido)}`,
+      `✅ Nº Leads: ${report.quantidade_leads}`,
+      `✅ Custo médio por Lead: ${brl(report.cpl)}`,
+    ].join('\n');
     try {
       await navigator.clipboard.writeText(text);
       setSavedCopiedId(report.id);
@@ -751,13 +758,8 @@ export default function TrafficReportsPage() {
                 </div>
 
                 <div className="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-200 mb-8">
-                  <p className="text-sm text-gray-600 leading-relaxed font-medium italic">
-                    Durante o período de {format(new Date(formData.data_inicio), 'dd/MM/yyyy')} até {format(new Date(formData.data_fim), 'dd/MM/yyyy')}, 
-                    {preview.leads > 0 
-                      ? ` foram ${preview.fonteLeads === 'manual' ? 'informados manualmente' : 'registrados no Orion Track'} ${preview.leads} leads para ${preview.corretor.nome}. O investimento informado no Meta Ads foi de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.valorInvestido)}, resultando em um CPL médio de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.cpl!)}.`
-                      : ` não foram ${preview.fonteLeads === 'manual' ? 'informados manualmente' : 'registrados no Orion Track'} leads para ${preview.corretor.nome}. O investimento informado foi de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.valorInvestido)}, mas o CPL não pôde ser calculado por ausência de leads no período.`
-                    }
-                  </p>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Mensagem que vai para o cliente</p>
+                  <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-gray-700">{mensagemCampanha()}</pre>
                 </div>
 
                 <div className="flex flex-col md:flex-row gap-4">
