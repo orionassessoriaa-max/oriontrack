@@ -530,64 +530,58 @@ export default function BrokerInboxPage() {
 
     let idsToFetch = [profile.corretor_id];
     const isTeamMember = profile.tipo_usuario === 'corretor_membro';
-    if (!isTeamMember && profile.nome_empresa) {
-      const { data: siblings } = await supabase
-        .from('corretores')
-        .select('id')
-        .eq('nome_empresa', profile.nome_empresa);
-      if (siblings && siblings.length > 0) {
-        idsToFetch = siblings.map((s) => s.id);
+    let assignedLeadIds: string[] = [];
+    const data: any[] = [];
+    let followUpLoadedByApi = false;
+
+    if (isTeamMember) {
+      // Integrantes continuam sujeitos ao filtro exclusivo do proprio lead.
+      const conversationPageSize = 500;
+      for (let from = 0; ; from += conversationPageSize) {
+        let conversationsQuery = supabase
+          .from('whatsapp_conversas')
+          .select('*,leads!inner(id,nome,status,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))')
+          .order('ultima_mensagem_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, from + conversationPageSize - 1)
+          .in('corretor_id', idsToFetch);
+
+        conversationsQuery = conversationsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
+
+        const { data: page, error } = await conversationsQuery;
+        if (error) throw error;
+        data.push(...(page || []));
+        if (!page || page.length < conversationPageSize) break;
       }
+    } else {
+      // A listagem passa pelo backend para respeitar a conta visualizada pelo
+      // admin e nao depender das politicas RLS da sessao original do navegador.
+      const token = await getToken();
+      if (!token) throw new Error('Sessao expirada. Entre novamente.');
+
+      const response = await fetch('/api/inbox/conversations', {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-orion-view-profile-id': profile.id,
+        },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Nao foi possivel carregar as conversas.');
+      }
+
+      idsToFetch = Array.isArray(payload.corretorIds) && payload.corretorIds.length
+        ? payload.corretorIds.map(String)
+        : idsToFetch;
+      assignedLeadIds = Array.isArray(payload.assignedLeadIds)
+        ? payload.assignedLeadIds.map(String)
+        : [];
+      data.push(...(Array.isArray(payload.conversations) ? payload.conversations : []));
+      followUpLoadedByApi = true;
     }
     inboxCorretorIdsRef.current = new Set(idsToFetch);
-
-    // A conversa pode ter sido criada com o corretor-base de outro integrante,
-    // mas ainda pertencer ao responsável atual do lead. Incluímos esses leads
-    // para que o responsável não perca o histórico no Inbox.
-    let assignedLeadIds: string[] = [];
-    if (!isTeamMember) {
-      const pageSize = 1000;
-      for (let from = 0; ; from += pageSize) {
-        const { data: assignedLeads, error } = await supabase
-          .from('leads')
-          .select('id')
-          .eq('responsavel_profile_id', profile.id)
-          .range(from, from + pageSize - 1);
-        if (error) throw error;
-        assignedLeadIds.push(...(assignedLeads || []).map((lead) => String(lead.id)).filter(Boolean));
-        if (!assignedLeads || assignedLeads.length < pageSize) break;
-      }
-    }
-
-    // Carrega a lista completa em paginas. Um limite fixo faz conversas mais
-    // antigas, mas ainda ativas, desaparecerem do Inbox.
-    const data: any[] = [];
-    const conversationPageSize = 500;
-    for (let from = 0; ; from += conversationPageSize) {
-      let conversationsQuery = supabase
-        .from('whatsapp_conversas')
-        .select(`*, ${isTeamMember ? 'leads!inner' : 'leads'}(id, nome, status, responsavel_profile_id, responsavel_membro:responsavel_membro_id(id, nome))`)
-        .order('ultima_mensagem_at', { ascending: false })
-        .order('id', { ascending: true })
-        .range(from, from + conversationPageSize - 1);
-
-      if (assignedLeadIds.length > 0) {
-        conversationsQuery = conversationsQuery.or(
-          `corretor_id.in.(${idsToFetch.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
-        );
-      } else {
-        conversationsQuery = conversationsQuery.in('corretor_id', idsToFetch);
-      }
-
-      if (isTeamMember) {
-        conversationsQuery = conversationsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
-      }
-
-      const { data: page, error } = await conversationsQuery;
-      if (error) throw error;
-      data.push(...(page || []));
-      if (!page || page.length < conversationPageSize) break;
-    }
 
     const rows = (data || []).map((row: any) => {
       const lead = row.leads as any;
@@ -709,26 +703,29 @@ export default function BrokerInboxPage() {
       }
     }
 
-    const leadIds = Array.from(new Set(rows.map((row) => row.lead_id).filter(Boolean))) as string[];
-    const followUpLeadIds = new Set<string>();
-    const followUpBatchSize = 200;
-    for (let from = 0; from < leadIds.length; from += followUpBatchSize) {
-      const batch = leadIds.slice(from, from + followUpBatchSize);
-      const { data: openTasks, error: openTasksError } = await supabase
-        .from('lead_tarefas')
-        .select('lead_id')
-        .in('lead_id', batch)
-        .eq('status', 'pendente');
-      if (openTasksError) throw openTasksError;
-      (openTasks || []).forEach((task) => {
-        if (task.lead_id) followUpLeadIds.add(String(task.lead_id));
-      });
-    }
+    let rowsWithFollowUp = rows;
+    if (!followUpLoadedByApi) {
+      const leadIds = Array.from(new Set(rows.map((row) => row.lead_id).filter(Boolean))) as string[];
+      const followUpLeadIds = new Set<string>();
+      const followUpBatchSize = 200;
+      for (let from = 0; from < leadIds.length; from += followUpBatchSize) {
+        const batch = leadIds.slice(from, from + followUpBatchSize);
+        const { data: openTasks, error: openTasksError } = await supabase
+          .from('lead_tarefas')
+          .select('lead_id')
+          .in('lead_id', batch)
+          .eq('status', 'pendente');
+        if (openTasksError) throw openTasksError;
+        (openTasks || []).forEach((task) => {
+          if (task.lead_id) followUpLeadIds.add(String(task.lead_id));
+        });
+      }
 
-    const rowsWithFollowUp = rows.map((row) => ({
-      ...row,
-      hasOpenFollowUp: Boolean(row.lead_id && followUpLeadIds.has(String(row.lead_id))),
-    }));
+      rowsWithFollowUp = rows.map((row) => ({
+        ...row,
+        hasOpenFollowUp: Boolean(row.lead_id && followUpLeadIds.has(String(row.lead_id))),
+      }));
+    }
 
     setConversations(rowsWithFollowUp);
     const previousSelection = selectedConversationRef.current;
