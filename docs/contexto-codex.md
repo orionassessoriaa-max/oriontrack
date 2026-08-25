@@ -1,8 +1,11 @@
 # Orion Track — contexto completo para continuar o trabalho
 
-Escrito em 23/08/2026. Cole este arquivo inteiro no começo da conversa.
+Atualizado em 25/08/2026. Cole este arquivo inteiro no começo da conversa.
 Ele descreve o sistema, o que foi feito nos últimos dias, o que está pendente e
 as armadilhas que já custaram tempo.
+
+Volume atual: 18.774 leads das corretoras, 290 leads comerciais, 29.409
+mensagens de WhatsApp em 1.245 conversas. Último commit em produção: `22d5026`.
 
 ---
 
@@ -159,6 +162,129 @@ SIMULA_PERSONA=Rafaela SIMULA_MODO=propria npm.cmd run simular-ia -- soma
 
 ---
 
+## 4b. O que foi feito em 24 e 25/08
+
+### Inbox: mensagem que aparece mas não chega
+
+Três defeitos diferentes produziam o mesmo sintoma — o corretor via a mensagem
+na tela e o cliente nunca recebia. Todos corrigidos:
+
+1. **Balão inventado pela tela.** Quando o servidor respondia OK sem devolver a
+   linha gravada, `src/app/inbox/page.tsx` criava um `local_<timestamp>` com o
+   texto digitado. Sumia no F5 e nunca existiu no banco. Agora a conversa é
+   relida.
+2. **Reserva órfã.** A linha é gravada antes de chamar o provedor e apagada se o
+   envio falha; se o processo morre no meio (deploy, restart), ela ficava com
+   cara de enviada. O GET de mensagens apaga reservas `orion-client:%` paradas há
+   mais de 3 minutos (o provedor tem timeout de 15s).
+3. **Eco do provedor duplicando.** O CRM guardava o id curto da resposta do envio
+   (`3A87…`) e o webhook devolvia o mesmo envio prefixado
+   (`5511989057745:3A87…`). Sem normalizar, as strings não batiam e a mesma
+   mensagem entrava duas vezes. É o "chat bugado" que a equipe relatava.
+
+### Inbox: recibo de entrega
+
+Antes **nenhuma** mensagem enviada pelo CRM tinha confirmação: as 57 enviadas em
+96h estavam todas com `status: Pending`, que é só a resposta síncrona da API. O
+`messages_update` está assinado nas instâncias, mas **a UAZAPI não manda esse
+evento** (meia hora de produção, zero eventos).
+
+Solução em duas camadas:
+
+- `src/lib/whatsappRecibo.ts` — escala única de estados
+  (`pending → sent → server → delivered → read → played`), porque o evento fala
+  `DELIVERY_ACK` e o histórico fala `Delivered`.
+- O webhook trata o evento se ele chegar; e o `syncProviderHistory` do
+  `GET /api/inbox/messages`, que já consulta `/message/find` ao abrir a conversa,
+  grava o recibo real de cada mensagem (até 40 por abertura).
+- Na bolha aparece `enviada` / `entregue` / `lida`. O que saiu pelo CRM e passou
+  5 minutos sem recibo aparece em âmbar como `! sem confirmacao`. Mensagem
+  digitada no celular não recebe selo, porque chega pelo webhook e não teria
+  recibo.
+
+**Ferramenta de diagnóstico:** `POST {UAZAPI}/message/find` com `{id}` devolve o
+status real de qualquer mensagem. Foi assim que se provou que a mensagem que o
+corretor jurava não ter saído estava como `Read`.
+
+### Inbox: mídia e áudio
+
+- Abrir mídia varria todas as instâncias da corretora: 17.310 chamadas à UAZAPI
+  em 3 horas. Hoje o leque é limitado a 4 instâncias.
+- 19 áudios estavam cortados em exatamente 262.144 bytes (teto do cache em
+  base64). `scripts/reparar-audios-cortados.mjs` rebaixou tudo para o bucket e
+  liberou 4,8 MB. A rota de mídia rebaixa de novo quando encontra o teto.
+
+### Comercial: fila comum e Start do SDR
+
+Voltou a regra antiga: o lead novo entra **sem dono**, todos os SDRs são
+avisados, e quem apertar Start primeiro fica com ele.
+
+- `donoAutomaticoDoLead(nivel)` — só quem tem `comercial_membros.recebe_apenas_mql`
+  igual ao nível ganha dono na entrada. Hoje é só o Léo, com `S`.
+- `notifyCommercialLeadPool()` — avisa todos os SDRs ativos, ignorando
+  preferências: "Lead novo no CRM. Quem pegar primeiro fica com a oportunidade."
+- `POST /api/comercial/leads/start` — o update tem `.is('sdr_id', null)` como
+  trava de corrida; o segundo a clicar recebe 409. SDR não rouba lead com dono.
+- **Estado real em 25/08:** 11 leads criados pelo webhook, **0 assumidos pelo
+  Start**, 13 atribuídos na mão pelo Léo no seletor. A fila funciona (um lead
+  ficou 24 minutos sem dono), mas a coordenação distribui antes dos SDRs
+  reagirem. Falta decidir se o closer continua podendo atribuir.
+- **Pendente no banco:** `supabase/2026-08-24_fila_comum_de_leads.sql`, que faz o
+  SDR **enxergar** lead sem dono. Sem ele a fila é invisível. Conferir com
+  `select policyname, qual from pg_policies where tablename = 'comercial_leads';`
+
+### Comercial: rodízio, sala e relatórios
+
+- Rodízio por volume, não por ordem de chegada
+  (`src/app/api/webhooks/n8n/leads/route.ts`): a escolha é o membro com menos
+  leads no período, o que corrigiu a diferença de 8 x 6 na Conexão Corretora.
+- Painel da sala (`/comercial/sala`): responsivo por largura **e** altura,
+  ranking só de SDR, tudo medido **somente hoje**, ligações atendidas separadas
+  das feitas, meta de 100/dia (`comercial_metas.meta_calls`).
+- Relatório do SDR (`/comercial/relatorios`): filtro por SDR e por data,
+  ligações da central + cadência, ranking, meta, exportação CSV e as gravações
+  das atendidas. A coluna "Central" é a ligação originada pelo Click2Call.
+- **Regra de venda:** venda é o que está na etapa `Negócio fechado`. Valor solto
+  em lead estornado não conta mais (caso Vinicius Heliodoro).
+
+### Tráfego: relatório no formato de campanha
+
+O relatório geral e o histórico salvo agora saem no bloco que o gestor manda no
+grupo do cliente:
+
+```
+Logo abaixo estou deixando os dados das nossas campanhas (17/08 até 23/08): ⤵️
+
+📈 CAMPANHAS PLANO DE SAÚDE:
+💸 Investimento: R$ 97,13
+✅ Nº Leads: 6
+✅ Custo médio por Lead: R$ 16,18
+```
+
+A prévia na tela mostra exatamente o texto que vai ser copiado.
+
+### Notificações
+
+- `src/lib/apoloNotifications.ts` quebrava para quem não tinha linha em
+  `notificacao_preferencias` — só o Cadu tinha. Faltava um `?.`. Todo o time
+  comercial ficou sem aviso até isso ser corrigido.
+- Patrick não recebe mais notificação de lead Kripto; o admin responsável é o
+  Pedro.
+
+### Acesso e RLS
+
+- Corretor com mais de um registro em `corretores` (caso Fortis, 2 registros) não
+  enxergava os próprios leads: 56 de 64 pertenciam à Milena. Criada
+  `current_profile_corretor_ids()` e reescritas 4 políticas.
+- Criar tarefa em lead quebrava para o corretor porque o insert pedia
+  `.select('id')` de volta e a política de leitura barrava. O insert virou cego e
+  `POST /api/tarefas/notificar` encontra a tarefa pelo par lead + responsável
+  numa janela de 5 minutos.
+- Observação digitada num lead vazava para os outros cards: faltava chave no
+  componente e reset do estado ao trocar de lead.
+
+---
+
 ## 5. VoIP — estado e o que falta
 
 ### O que a API faz
@@ -200,10 +326,13 @@ varrer ids sem tocar telefone de ninguém.
 
 ### O que falta
 
-1. **`VOIP_CLICK2CALL_DEVICE_ID`** não foi descoberto. Token, key e domínio já
-   estão no `.env.local` local; falta esse valor no `.env.local` e no
-   `.env.production` da VPS. O id da linha fica no PABX Virtual em
-   "gerenciar linhas"; a conta tem duas linhas, `9171025` e `9171026`.
+1. ~~`VOIP_CLICK2CALL_DEVICE_ID`~~ **resolvido.** As duas linhas foram
+   descobertas pela varredura e ficaram amarradas ao operador em
+   `profiles.voip_device_id`: **Talita = 12291**, **Carlos Eduardo (Cadu) =
+   12292**. O `.env` guarda `12291` só como padrão de quem não tem linha
+   própria; `POST /api/comercial/calls` manda o `device_id` do operador.
+   Migration: `supabase/2026-08-24_voip_linha_por_operador.sql`. Até agora só 7
+   ligações registradas em `comercial_ligacoes` — a central ainda é pouco usada.
 2. **CDR não existe.** Sem ele não há duração, "atendeu ou não" nem gravação.
    Perguntar à VoIP do Brasil: existe API ou webhook de fim de chamada? A API
    pode devolver um identificador único? Sem id, casar o registro do CRM com o da
@@ -218,61 +347,76 @@ varrer ids sem tocar telefone de ninguém.
 
 ---
 
-## 6. Estado das IAs por corretora (23/08)
+## 6. Estado das IAs por corretora (25/08)
 
-| Corretora | Status | Persona | Envio | Identidade |
+São 9 configurações em `corretora_ai_configs`, 5 com `status = ativo`:
+
+| Persona | Status | Envio | Identidade | Atende sozinho |
 |---|---|---|---|---|
-| OCTAVITA | ativo | Aline | profile | equipe |
-| FACILITA | ativo | Aline | dedicated | equipe |
-| RONIELE | ativo | Roniele | profile | própria |
-| B2L | ativo | Aline | profile | equipe |
-| SOMA | desconectado | **Rafaela** | profile | **própria** |
-| HP | aguardando conexão | Aline | profile | equipe |
-| EVO SEG, ORION, ITAEL | desconectado | Aline | — | equipe |
+| Aline | ativo | profile | equipe | não |
+| Aline | ativo | dedicated | equipe | não |
+| Aline | ativo | profile | equipe | não |
+| **Roniele** | ativo | profile | **própria** | **sim** |
+| **Rafaela (Soma)** | ativo | profile | **própria** | **sim** |
+| Aline | aguardando conexão | profile | equipe | não |
+| Aline | desconectado (3) | profile/dedicated | equipe | não |
 
-**Soma**: a Rafaela vai atender como ela mesma, pelo WhatsApp dela. Falta apenas
-conectar o WhatsApp dela ao inbox — não existe instância UAZAPI para o número
-dela. A instância dedicada antiga (`orion_ai_af16f182…`) foi abandonada.
+**A Soma entrou no ar**: a Rafaela atende como ela mesma, pelo WhatsApp dela, em
+modo `propria` e `atende_sozinho`. As mudanças de texto pedidas para a Roniele
+(CNPJ, ligação de 5 minutos) valem **somente** para ela.
 
-Volume: 18.586 leads no CRM, 260 no comercial. A Soma é a terceira em captação do
-mês e ainda é atendida no braço.
+Lembrete que já custou tempo: o prompt vem de `corretora_ai_configs.system_prompt`.
+Editar o `.ts` não muda produção.
 
----
+## 7. Pendências abertas (25/08)
 
-## 7. Pendências abertas
+**SQL que ainda não foi aplicado no Supabase** (aplicação é manual, no SQL Editor)
+1. `supabase/2026-08-24_fila_comum_de_leads.sql` — sem ele o SDR não enxerga lead
+   sem dono e a fila do Start é invisível. **É o mais urgente.**
+2. `supabase/2026-08-24_rodizio_por_nivel_mql.sql`
+3. `supabase/2026-08-24_voip_linha_por_operador.sql` — a coluna
+   `voip_device_id` já responde em produção, mas confirmar se este arquivo foi o
+   aplicado.
 
 **Segurança**
-1. `SUPABASE_SERVICE_ROLE_KEY` está embutida na imagem Docker (`Dockerfile`,
+4. `SUPABASE_SERVICE_ROLE_KEY` está embutida na imagem Docker (`Dockerfile`,
    `ARG` + `ENV`). É o maior risco aberto.
-2. Bucket `inbox-media` é público: quem tem o link abre sem login.
+5. Bucket `inbox-media` é público: quem tem o link abre sem login.
 
 **Produto**
-3. Thalysson não enxerga a conversa da vendedora Natália: `profiles.nome_empresa`
-   é "EVOSEG CORRETORA" e `corretores.nome_empresa` é "EVO SEG". Além do dado, a
-   sidebar **substitui** `idsToFetch` pelo resultado (vazio) das corretoras
-   irmãs, em vez de somar.
-4. Furo no contador de gasto de criativo: `jobs/route.ts` reserva e
+6. Decidir se o closer continua podendo atribuir lead no seletor. Hoje ele
+   distribui antes de os SDRs apertarem Start, e o Start nunca é usado.
+7. Furo no contador de gasto de criativo: `jobs/route.ts` reserva e
    `automation.ts` dá baixa, mas `library/route.ts` não passa pelo controle. Por
    isso `gasto_usd` fica zerado e os alertas nunca disparam.
-5. Qualidade de imagem configurável (`low` como padrão). Faz US$ 20 renderem 129
+8. Qualidade de imagem configurável (`low` como padrão). Faz US$ 20 renderem 129
    criativos em vez de 36.
-6. Comercial: os dois interruptores de primeiro contato estão `false`. Decidir
+9. Comercial: os dois interruptores de primeiro contato estão `false`. Decidir
    entre bot e IA e religar.
-7. Patrick Alan e Lucas Rodrigues receberam telefone agora, mas com **8 dígitos**
-   (sem o nono). Se não receberem notificação, trocar para `98162-5459` e
-   `98635-1486`.
-8. Checklist só pode ser criado junto com a tarefa. Falta permitir acrescentar
-   item depois, no detalhe.
-9. Os checklists das predefinições "Edição de vídeo" e "Ajuste CRM" foram
-   chutados; o dono ainda não confirmou os itens reais.
+10. Checklist só pode ser criado junto com a tarefa. Falta permitir acrescentar
+    item depois, no detalhe.
+11. Os checklists das predefinições "Edição de vídeo" e "Ajuste CRM" foram
+    chutados; o dono ainda não confirmou os itens reais.
+12. Cliente novo quer migrar 19.700 leads com histórico de mensagens. O banco
+    hoje tem 18.774 leads e 29.409 mensagens numa instância de ~1 GB — a
+    migração praticamente dobra a base e precisa de plano antes de começar.
+
+**Perguntar à VoIP do Brasil**
+13. Existe API ou webhook de fim de chamada (CDR)? Sem isso não há duração nem
+    "atendeu ou não" confiável vindo da central.
+14. A gravação está **inativa** nas duas linhas. Precisa ser habilitada, e é
+    preciso saber como o áudio é recuperado e por quanto tempo fica disponível.
+    O campo `comercial_ligacoes.gravacao_url` e a tela de relatório já esperam
+    por ele.
 
 **Operação**
-10. Código morto do ElevenLabs em `leadAiAgent.ts`.
-11. Dois workflows disparam no mesmo push e rodam o mesmo deploy em paralelo.
-12. O monitor alerta "Docker: 2/1" durante o deploy, que é o comportamento normal
-    de `order: start-first`. A regra deveria alertar só quando réplicas < desejado.
-
----
+15. Código morto do ElevenLabs em `leadAiAgent.ts`.
+16. Dois workflows disparam no mesmo push e rodam o mesmo deploy em paralelo.
+17. O monitor alerta "Docker: 2/1" durante o deploy, que é o comportamento normal
+    de `order: start-first`.
+18. Monitor diário comparando contagem de mensagens da UAZAPI com a do CRM —
+    oferecido, nunca construído. Serviria para pegar cedo o tipo de falha que
+    levou dias para ser notada no inbox.
 
 ## 8. Convenções deste repositório
 
@@ -285,3 +429,23 @@ mês e ainda é atendida no braço.
 - SQL fica em `supabase/*.sql` (aplicado à mão no SQL Editor) e em
   `supabase/migrations/*.sql`. Nada é aplicado automaticamente.
 - Toda migration termina com `notify pgrst, 'reload schema';`.
+
+---
+
+## 9. Como investigar problema de mensagem (roteiro que funcionou)
+
+1. **A mensagem existe no banco?** `whatsapp_mensagens` filtrando por
+   `metadata->>sender_profile_id`. Sem `send_status` = veio do celular pelo
+   webhook; `send_status: sent` = saiu pelo CRM.
+2. **A instância é a do corretor?** `GET {UAZAPI}/instance/all` com `admintoken`.
+   Confira `owner` — número brasileiro antigo vem sem o nono dígito.
+3. **O WhatsApp entregou?** `POST {UAZAPI}/message/find` com `{id}` (aceita o id
+   com ou sem prefixo). O campo `status` traz `Pending`, `Delivered`, `Read`.
+4. **O webhook está configurado?** `GET {UAZAPI}/webhook` com o token da
+   instância. Tem que listar a URL de produção e os eventos.
+5. **O build no ar é o esperado?** Sondar um endpoint que mudou. Exemplo usado:
+   `POST /api/inbox/uazapi/webhook` com `{"EventType":"messages_update",...}` —
+   o build novo responde `{"recibo":true,...}`, o antigo responde
+   `{"ignored":true}`.
+
+O caminho da VPS é `/root/oriontrack` (`cd ~/oriontrack`), **não** `/opt`.
