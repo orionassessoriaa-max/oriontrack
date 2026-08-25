@@ -3,6 +3,7 @@ import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
+import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const WHATSAPP_REJECTION_RE = /whatsapp server rejected|rejected this message|not an internal api error|server rejected/i;
@@ -278,20 +279,42 @@ async function syncProviderHistory(conversation: any) {
 
   if (!collected.size) return;
   const existingIds = new Set<string>();
+  const existingRows = new Map<string, { id: string; metadata: any }>();
   const existingPageSize = 1000;
   for (let from = 0; ; from += existingPageSize) {
     const { data: page, error } = await supabaseAdmin
       .from('whatsapp_mensagens')
-      .select('provider_message_id')
+      .select('id, provider_message_id, metadata')
       .eq('conversa_id', conversation.id)
       .not('provider_message_id', 'is', null)
       .range(from, from + existingPageSize - 1);
     if (error) throw error;
     (page || []).forEach((row) => {
       const providerId = normalizeWhatsAppMessageId(row.provider_message_id);
-      if (providerId) existingIds.add(providerId);
+      if (!providerId) return;
+      existingIds.add(providerId);
+      existingRows.set(providerId, { id: row.id, metadata: row.metadata });
     });
     if (!page || page.length < existingPageSize) break;
+  }
+
+  // O historico do provedor ja diz se cada mensagem foi entregue ou lida. O
+  // evento de atualizacao nem sempre chega, entao o recibo e conferido aqui:
+  // abrir a conversa e o momento em que o corretor precisa saber se o que ele
+  // mandou chegou mesmo. So as ultimas, para nao virar enxurrada de update.
+  const pendentesDeRecibo = [...collected.entries()]
+    .filter(([providerId]) => existingRows.has(providerId))
+    .map(([providerId, entry]) => ({ providerId, entry, recibo: reciboDoProvedor(entry.message?.status) }))
+    .filter(({ recibo, providerId }) => recibo && reciboAvanca(existingRows.get(providerId)?.metadata?.recibo, recibo))
+    .slice(-40);
+
+  for (const { providerId, recibo } of pendentesDeRecibo) {
+    const linha = existingRows.get(providerId);
+    if (!linha) continue;
+    await supabaseAdmin
+      .from('whatsapp_mensagens')
+      .update({ metadata: { ...(linha.metadata || {}), recibo, recibo_at: new Date().toISOString() } })
+      .eq('id', linha.id);
   }
 
   const rows = [...collected.entries()]

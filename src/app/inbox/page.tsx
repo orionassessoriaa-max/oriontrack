@@ -2258,11 +2258,13 @@ export default function BrokerInboxPage() {
    */
   const reciboDaMensagem = (message: InboxMessage) => {
     if (message.direction !== 'outbound') return null;
-    if (message.metadata?.send_status !== 'sent') return null;
     const recibo = String(message.metadata?.recibo || '').toLowerCase();
     if (recibo === 'read' || recibo === 'played') return { texto: 'lida', alerta: false };
     if (recibo === 'delivered') return { texto: 'entregue', alerta: false };
     if (recibo === 'sent' || recibo === 'server') return { texto: 'enviada', alerta: false };
+    // Sem recibo so acusa o que saiu pelo CRM: mensagem digitada no celular
+    // chega aqui pelo webhook e ficaria marcada como duvidosa sem motivo.
+    if (message.metadata?.send_status !== 'sent') return null;
     const idade = Date.now() - new Date(message.created_at).getTime();
     if (idade < 5 * 60_000) return { texto: 'enviando', alerta: false };
     return { texto: 'sem confirmacao', alerta: true };

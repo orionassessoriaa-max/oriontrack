@@ -7,6 +7,7 @@ import { continueCommercialSdrFromIncoming } from '@/lib/commercialSdrAgent';
 import { stopCommercialAiForHumanTakeover } from '@/lib/commercialSdrSession';
 import { ensureCommercialConversation, findCommercialConversation, isCommercialAiEcho } from '@/lib/commercialInbox';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
+import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 
 function readText(body: any) {
   return pickString(
@@ -298,10 +299,8 @@ function readOwnerJid(body: any) {
  * pelo CRM tinha confirmacao de entrega. Sem isso o corretor via a mensagem na
  * tela e nao tinha como saber que ela nunca chegou.
  */
-const ORDEM_RECIBO = ['pending', 'sent', 'server', 'delivered', 'read', 'played'];
-
 function readAckStatus(body: any) {
-  const bruto = pickString(
+  return reciboDoProvedor(pickString(
     body?.status,
     body?.ack,
     body?.messageStatus,
@@ -310,13 +309,7 @@ function readAckStatus(body: any) {
     body?.data?.messageStatus,
     body?.message?.status,
     body?.data?.message?.status,
-  ).toLowerCase();
-  if (!bruto) return '';
-  if (bruto === '1') return 'sent';
-  if (bruto === '2') return 'delivered';
-  if (bruto === '3') return 'read';
-  if (bruto === '4') return 'played';
-  return ORDEM_RECIBO.includes(bruto) ? bruto : '';
+  ));
 }
 
 async function registrarRecibo(providerId: string, recibo: string) {
@@ -331,9 +324,7 @@ async function registrarRecibo(providerId: string, recibo: string) {
     .maybeSingle();
   if (!linha) return { atualizado: false, motivo: 'mensagem_nao_encontrada' };
 
-  // Recibo atrasado nao pode rebaixar o que ja foi lido.
-  const atual = String((linha.metadata as any)?.recibo || '').toLowerCase();
-  if (atual && ORDEM_RECIBO.indexOf(recibo) <= ORDEM_RECIBO.indexOf(atual)) {
+  if (!reciboAvanca((linha.metadata as any)?.recibo, recibo)) {
     return { atualizado: false, motivo: 'recibo_anterior' };
   }
 
