@@ -6,7 +6,7 @@ import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
 import { donoAutomaticoDoLead } from '@/lib/commercialDistribution';
 import { commercialCadenceMaxDay, getCommercialMqlLevel, isCommercialMql } from '@/lib/commercialQualification';
 import { cadenceDayFromStage } from '@/lib/comercialCadencia';
-import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
+import { notifyCommercialLeadAssignment, notifyCommercialLeadPool } from '@/lib/commercialLeadNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { generateOnboardingBriefing } from '@/lib/commercialOnboardingBriefing';
 import { canAssignCommercialResponsible } from '@/lib/comercial';
@@ -77,9 +77,10 @@ export async function GET(request: Request) {
   const end = url.searchParams.get('end');
   const status = url.searchParams.get('status');
   const search = url.searchParams.get('search')?.trim();
+  const includeQueue = url.searchParams.get('queue') === '1';
 
   let query = supabaseAdmin.from('comercial_leads').select('*').order('data_entrada', { ascending: false }).limit(2000);
-  query = applyCommercialLeadScope(query, guard.commercialRole, guard.profile.id);
+  query = applyCommercialLeadScope(query, guard.commercialRole, guard.profile.id, includeQueue);
   if (start) query = query.gte('data_entrada', `${start}T00:00:00-03:00`);
   if (end) query = query.lte('data_entrada', `${end}T23:59:59-03:00`);
   if (status && status !== 'todos') query = query.eq('status', status);
@@ -103,6 +104,16 @@ export async function GET(request: Request) {
   }
   return NextResponse.json({
     leads: (data || []).map((lead) => {
+      // O SDR sabe apenas que existe uma oportunidade disponivel. Os dados
+      // pessoais so saem do servidor depois que o START atomico for vencido.
+      if (includeQueue && guard.commercialRole === 'sdr' && !lead.sdr_id) {
+        return {
+          id: lead.id,
+          status: lead.status,
+          sdr_id: null,
+          fila_oculta: true,
+        };
+      }
       const nextReturn = nextReturnByLead.get(lead.id);
       return redactFinancialFields(enrichSaleFields({
         ...lead,
@@ -127,11 +138,12 @@ export async function POST(request: Request) {
     guard.commercialRole,
     guard.profile.id,
   );
-  const assignedSdrId = guard.commercialRole === 'sdr'
-    ? guard.profile.id
-    : canAssignResponsible && body.sdr_id
-      ? body.sdr_id
-      : await donoAutomaticoDoLead(getCommercialMqlLevel(body.faturamento_mensal, body.investimento));
+  const fixedOwnerId = await donoAutomaticoDoLead(
+    getCommercialMqlLevel(body.faturamento_mensal, body.investimento),
+  );
+  const assignedSdrId = fixedOwnerId || (canAssignResponsible && body.sdr_id
+    ? body.sdr_id
+    : null);
   const payload = {
     nome,
     telefone: String(body.telefone || '').trim() || null,
@@ -177,7 +189,8 @@ export async function POST(request: Request) {
     metadata: { status: data.status, sdr_id: data.sdr_id, closer_id: data.closer_id },
   });
   try {
-    await notifyCommercialLeadAssignment(data);
+    if (data.sdr_id) await notifyCommercialLeadAssignment(data);
+    else await notifyCommercialLeadPool(data);
   } catch (notificationError) {
     console.error('commercial_lead_assignment_notification_failed', notificationError);
   }

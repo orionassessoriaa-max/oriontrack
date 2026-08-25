@@ -5,6 +5,7 @@ import { writeAuditLog } from '@/lib/api/security';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 import { canAssignCommercialResponsible } from '@/lib/comercial';
+import { getCommercialMqlLevel } from '@/lib/commercialQualification';
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request);
@@ -94,6 +95,10 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (alvoError) return NextResponse.json({ error: alvoError.message }, { status: 500 });
   if (!alvo) return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
+
+  if (!alvo.sdr_id && getCommercialMqlLevel(alvo.faturamento_mensal, alvo.investimento) === 'S') {
+    return NextResponse.json({ error: 'Lead MQL S e reservado para o Leo.' }, { status: 409 });
+  }
 
   if (alvo.sdr_id && alvo.sdr_id !== guard.profile.id) {
     return NextResponse.json({ error: 'Outro SDR assumiu este lead primeiro.' }, { status: 409 });

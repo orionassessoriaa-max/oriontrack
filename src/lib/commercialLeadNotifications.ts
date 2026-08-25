@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
-import { isCommercialMql } from '@/lib/commercialQualification';
+import { getCommercialMqlLevel, isCommercialMql } from '@/lib/commercialQualification';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 type CommercialLeadNotification = {
@@ -127,6 +127,9 @@ async function loadCommercialNotificationProfiles(sdrId: string) {
  * primeiro fica com ele. Sem dono definido, nao existe "agora e sua vez".
  */
 export async function notifyCommercialLeadPool(lead: CommercialLeadNotification) {
+  // O objeto identifica a origem do aviso, mas nenhum dado dele entra na
+  // mensagem: antes do START a oportunidade precisa permanecer anonima.
+  void lead;
   const { data: membros, error } = await supabaseAdmin
     .from('comercial_membros')
     .select('profile_id, papel, ativo')
@@ -144,19 +147,16 @@ export async function notifyCommercialLeadPool(lead: CommercialLeadNotification)
     .in('status', ['active', 'ativo', 'Ativo']);
 
   const mensagem = [
-    'Lead novo no CRM. Quem pegar primeiro fica com a oportunidade.',
+    'Lead novo no CRM. Quem pegar primeiro fica com a oportunidade!',
     '',
-    `Nome: ${plain(lead.nome)}`,
-    `Telefone: ${plain(lead.telefone)}`,
-    `Faturamento: ${plain(lead.faturamento_mensal)}`,
-    `Investimento: ${plain(lead.investimento)}`,
+    '1, 2, 3... GO!!!!!!',
     '',
-    'Abra o kanban e aperte Start para assumir.',
+    'Abra o Kanban e aperte START para assumir.',
   ].join('\n');
 
   return sendApoloWhatsApp({
     type: 'novo_lead',
-    title: 'Lead novo na fila',
+    title: 'Novo lead: START liberado',
     message: mensagem,
     profiles: (perfis || []) as NotificationProfile[],
     respectPreferences: false,
@@ -171,9 +171,10 @@ export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotific
   if (!targets.sdr) return { sdr: [], coordinators: [] };
 
   const outsideMql = !isCommercialMql(lead.faturamento_mensal, lead.investimento);
+  const mqlLevel = getCommercialMqlLevel(lead.faturamento_mensal, lead.investimento);
   const motivation = await generateMotivation(targets.sdr.nome || 'SDR', outsideMql);
   const sdrMessage = [
-    'Um novo lead entrou no seu rodizio.',
+    mqlLevel === 'S' ? 'Um novo Lead MQL S foi direcionado para voce.' : 'Um novo lead entrou no seu rodizio.',
     '',
     `Nome: ${plain(lead.nome)}`,
     `Telefone: ${plain(lead.telefone)}`,
@@ -191,7 +192,7 @@ export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotific
   const [sdrResult, coordinatorResult] = await Promise.all([
     sendApoloWhatsApp({
       type: 'novo_lead',
-      title: 'Agora e sua vez',
+      title: mqlLevel === 'S' ? 'Lead MQL S' : 'Agora e sua vez',
       message: sdrMessage,
       profiles: [targets.sdr],
       respectPreferences: false,

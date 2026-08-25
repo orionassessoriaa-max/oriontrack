@@ -279,9 +279,7 @@ export async function POST(request: Request) {
     const notes = buildNotes(rawPayload);
     const status = normalizeCommercialStatus(field(rawPayload, ['status', 'etapa', 'pipeline']));
     const dataEntrada = parseDate(field(rawPayload, ['data_entrada', 'data entrada', 'data', 'created_time', 'timestamp'])) || new Date().toISOString();
-    const explicitSdrId = normalizeText(field(rawPayload, ['sdr_id', 'sdr']));
     const explicitCloserId = normalizeText(field(rawPayload, ['closer_id', 'closer']));
-    const sdrId = isUuid(explicitSdrId) ? explicitSdrId : null;
     const closerId = isUuid(explicitCloserId) ? explicitCloserId : await resolveDefaultCommercialMember('closer');
     const jaInvestiuTrafego = normalizeText(field(rawPayload, ['ja_investiu_trafego', 'ja investiu em trafego', 'traffic', 'tráfego'])) || null;
     const faturamentoMensal = normalizeText(field(rawPayload, ['faturamento_mensal', 'faturamento mensal', 'revenue', 'faturamento'])) || null;
@@ -293,6 +291,8 @@ export async function POST(request: Request) {
     const utmCampaign = trackingField(rawPayload, 'utm_campaign', ['utmCampaign', 'utm campaign', 'campaign_name', 'campaignName', 'campaign', 'campanha']);
     const utmTerm = trackingField(rawPayload, 'utm_term', ['utmTerm', 'utm term', 'term', 'adset', 'ad_set', 'conjunto']);
     const utmContent = trackingField(rawPayload, 'utm_content', ['utmContent', 'utm content', 'content', 'ad', 'creative', 'criativo']);
+    const mqlLevel = getCommercialMqlLevel(faturamentoMensal, investimento);
+    const fixedOwnerId = await donoAutomaticoDoLead(mqlLevel);
 
     const incoming = {
       nome,
@@ -313,7 +313,9 @@ export async function POST(request: Request) {
       utm_term: utmTerm,
       utm_content: utmContent,
       status,
-      sdr_id: sdrId || null,
+      // O payload externo nao escolhe SDR: S vai ao Leo e os demais entram na
+      // fila anonima para os dois SDRs disputarem no START.
+      sdr_id: fixedOwnerId,
       closer_id: closerId || null,
       lead_qualificado: isCommercialMql(faturamentoMensal, investimento),
       valor_negociacao: parseCurrencyValue(field(rawPayload, ['valor_negociacao', 'valor negociacao', 'valor', 'receita', 'ticket'])),
@@ -373,10 +375,6 @@ export async function POST(request: Request) {
       });
 
       return NextResponse.json({ success: true, duplicated: true, lead: data, sheet });
-    }
-
-    if (!incoming.sdr_id) {
-      incoming.sdr_id = await donoAutomaticoDoLead(getCommercialMqlLevel(incoming.faturamento_mensal, incoming.investimento));
     }
 
     const { data, error } = await supabaseAdmin

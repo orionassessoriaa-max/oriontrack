@@ -242,7 +242,7 @@ export default function CommercialKanbanPage() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const payload = await api("/api/comercial/leads");
+      const payload = await api("/api/comercial/leads?queue=1");
       setLeads(payload.leads || []);
     } finally {
       if (!silent) setLoading(false);
@@ -287,6 +287,15 @@ export default function CommercialKanbanPage() {
       void supabase.removeChannel(channel);
     };
   }, [currentProfileId, load]);
+  useEffect(() => {
+    if (role !== "sdr") return;
+    // O banco nao libera os dados da fila no Realtime. Uma sincronizacao curta
+    // busca apenas os cards anonimizados e evita qualquer necessidade de F5.
+    const poolTimer = window.setInterval(() => {
+      if (!draggingRef.current) void load(true).catch(() => undefined);
+    }, 4_000);
+    return () => window.clearInterval(poolTimer);
+  }, [load, role]);
   useEffect(() => {
     if (!expandedLeadId) {
       // Reset the modal-bound state when there is no selected lead.
@@ -379,6 +388,13 @@ export default function CommercialKanbanPage() {
   const visible = useMemo(
     () =>
       leads.filter((lead) => {
+        const matchesSdr =
+          sdrFilter === "todos" ||
+          (sdrFilter === "sem_responsavel"
+            ? !lead.sdr_id
+            : lead.sdr_id === sdrFilter);
+        // Nao ha campos para pesquisar ou filtrar por data antes do START.
+        if (lead.fila_oculta) return matchesSdr;
         const matchesSearch = [lead.nome, lead.empresa, lead.telefone]
           .join(" ")
           .toLowerCase()
@@ -388,11 +404,6 @@ export default function CommercialKanbanPage() {
           !dateStart || date >= new Date(`${dateStart}T00:00:00`).getTime();
         const matchesEnd =
           !dateEnd || date <= new Date(`${dateEnd}T23:59:59`).getTime();
-        const matchesSdr =
-          sdrFilter === "todos" ||
-          (sdrFilter === "sem_responsavel"
-            ? !lead.sdr_id
-            : lead.sdr_id === sdrFilter);
         return matchesSearch && matchesStart && matchesEnd && matchesSdr;
       }),
     [leads, search, dateStart, dateEnd, sdrFilter],
@@ -785,7 +796,7 @@ export default function CommercialKanbanPage() {
       setLeads((current) =>
         current.map((item) =>
           item.id === lead.id
-            ? { ...item, sdr_id: payload.sdr_id || currentProfileId }
+            ? payload.lead || { ...item, sdr_id: payload.sdr_id || currentProfileId }
             : item,
         ),
       );
@@ -1214,6 +1225,21 @@ export default function CommercialKanbanPage() {
               <div className="kh-kanban-cards">
                 <div className="kh-kanban-list">
                   {statusLeads.map((lead) => {
+                    if (role === "sdr" && lead.fila_oculta && !lead.sdr_id) {
+                      return (
+                        <article key={lead.id} className="kh-start-card">
+                          <button
+                            type="button"
+                            className="kh-start-card-button"
+                            aria-label="Assumir nova oportunidade"
+                            disabled={startingId === lead.id}
+                            onClick={(event) => void startLead(event, lead)}
+                          >
+                            {startingId === lead.id ? "INICIANDO..." : "START"}
+                          </button>
+                        </article>
+                      );
+                    }
                     const assignedSdr = lead.sdr_id
                       ? memberMap.get(lead.sdr_id)
                       : null;

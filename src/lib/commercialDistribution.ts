@@ -1,14 +1,9 @@
 import 'server-only';
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { LEO_COMMERCIAL_CLOSER_PROFILE_ID } from '@/lib/comercial';
 import type { CommercialMqlLevel } from '@/lib/commercialQualification';
 
-/**
- * Escolhe quem recebe o proximo lead.
- *
- * O nivel importa porque um membro pode estar limitado a um nivel: o Leo entra
- * no rodizio, mas so nos leads S. Quem nao tem limite recebe qualquer um.
- */
 /**
  * Dono automatico do lead novo.
  *
@@ -18,19 +13,9 @@ import type { CommercialMqlLevel } from '@/lib/commercialQualification';
  * comercial_membros.recebe_apenas_mql.
  */
 export async function donoAutomaticoDoLead(nivel?: CommercialMqlLevel | null) {
-  if (!nivel) return null;
-  const { data, error } = await supabaseAdmin
-    .from('comercial_membros')
-    .select('profile_id, ativo, distribuicao_ativa, recebe_apenas_mql')
-    .eq('recebe_apenas_mql', nivel)
-    .eq('ativo', true);
-  if (error) {
-    // Antes da migration a coluna nao existe: sem dono fixo, cai na fila comum.
-    if (/recebe_apenas_mql|column|schema cache/i.test(String(error.message || ''))) return null;
-    throw error;
-  }
-  const elegivel = (data || []).find((membro) => membro.distribuicao_ativa !== false);
-  return elegivel ? String(elegivel.profile_id) : null;
+  // Regra fixa da Kripto: somente MQL S sai da disputa e vai direto ao Leo.
+  // A, B e C sempre entram sem dono para Talita e Carlos disputarem no START.
+  return nivel === 'S' ? LEO_COMMERCIAL_CLOSER_PROFILE_ID : null;
 }
 
 export async function assignNextCommercialSdr(nivel?: CommercialMqlLevel | null) {

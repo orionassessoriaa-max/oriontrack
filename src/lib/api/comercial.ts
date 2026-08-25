@@ -146,10 +146,17 @@ export async function requireCommercialUser(
 }
 
 export function applyCommercialLeadScope<
-  T extends { eq: (column: string, value: string) => T },
->(query: T, role: CommercialRole, profileId: string) {
-  // Cada SDR opera uma carteira isolada. Closer e coordenador permanecem com
-  // visao de supervisao sobre o funil inteiro.
-  if (role === "sdr") return query.eq("sdr_id", profileId);
+  T extends {
+    eq: (column: string, value: string) => T;
+    or: (filters: string) => T;
+  },
+>(query: T, role: CommercialRole, profileId: string, includeUnassigned = false) {
+  // A fila sem dono so entra na listagem principal, que devolve um card
+  // anonimizado. Todas as outras rotas continuam aceitando apenas o dono.
+  if (role === "sdr") {
+    return includeUnassigned
+      ? query.or(`sdr_id.eq.${profileId},sdr_id.is.null`)
+      : query.eq("sdr_id", profileId);
+  }
   return query;
 }
