@@ -930,7 +930,7 @@ async function finalizeScheduledHandoff(params: {
     .eq('id', session.id);
 
   await updateLeadFromSummary(lead.id, summary);
-  await notifyResponsible(lead, summary);
+  await notifyResponsible(lead, summary, adminProfile);
   const scheduledVal = extractAgendadoValue(summary);
   if (scheduledVal) {
     await createAutoScheduledTask(lead, scheduledVal, adminProfile.id);
@@ -942,9 +942,10 @@ async function finalizeScheduledHandoff(params: {
 async function handoffAiFailure(params: {
   session: any;
   lead: LeadRow;
+  adminProfile: ProfileRow;
   reason: string;
 }) {
-  const { session, lead, reason } = params;
+  const { session, lead, adminProfile, reason } = params;
   const summary = appendSummaryLine(
     session.summary || leadFacts(lead),
     `IA encerrada: ${reason}`
@@ -972,7 +973,7 @@ async function handoffAiFailure(params: {
   }
 
   await updateLeadFromSummary(lead.id, summary);
-  await notifyResponsible(lead, summary);
+  await notifyResponsible(lead, summary, adminProfile);
 
   return { handled: true, handoff: true, reason };
 }
@@ -1412,9 +1413,12 @@ function formatResponsibleSummary(lead: LeadRow, summary: string) {
   ].filter(Boolean).join('\n');
 }
 
-async function notifyResponsible(lead: LeadRow, summary: string) {
+async function notifyResponsible(lead: LeadRow, summary: string, preferredAdmin?: ProfileRow | null) {
   const responsible = await findResponsibleProfile(lead.responsavel_profile_id);
-  const admin = await findAiAdmin(lead.corretor_id);
+  // A IA pode usar um remetente configurado diferente do primeiro perfil da
+  // corretora. O aviso precisa voltar para quem conduziu a conversa; na Invida
+  // esse perfil e a Simiellen, mesmo quando o lead ainda nao tem responsavel.
+  const admin = preferredAdmin || await findAiAdmin(lead.corretor_id);
 
   const targets: any[] = [];
   if (responsible) {
@@ -2055,6 +2059,7 @@ export async function continueLeadAiFromIncoming(options: {
     return await handoffAiFailure({
       session,
       lead,
+      adminProfile,
       reason: 'a IA nao retornou uma resposta para continuar a conversa.',
     });
   }
@@ -2078,7 +2083,7 @@ export async function continueLeadAiFromIncoming(options: {
   }
 
   if (handoff) {
-    await notifyResponsible(lead, currentSummary || '');
+    await notifyResponsible(lead, currentSummary || '', adminProfile);
     const scheduledVal = extractAgendadoValue(currentSummary);
     if (scheduledVal) {
       await createAutoScheduledTask(lead, scheduledVal, adminProfile.id);
@@ -2124,7 +2129,8 @@ export async function handoffLeadAiToResponsible(leadId: string, reason: string)
     })
     .eq('id', session.id);
 
-  await notifyResponsible(lead, summary);
+  const sessionAdmin = await findAiAdmin(lead.corretor_id, session.admin_profile_id);
+  await notifyResponsible(lead, summary, sessionAdmin);
   return { handled: true, handoff: true };
 }
 
@@ -2255,7 +2261,8 @@ export async function checkLeadAiTimeouts() {
     }
 
     await updateLeadFromSummary(lead.id, newSummary);
-    await notifyResponsible(lead, newSummary);
+    const sessionAdmin = await findAiAdmin(lead.corretor_id, session.admin_profile_id);
+    await notifyResponsible(lead, newSummary, sessionAdmin);
     handoffCount++;
   }
 
