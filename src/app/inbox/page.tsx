@@ -203,6 +203,7 @@ function getMessageMimeType(message: InboxMessage) {
 function getMessageFileName(message: InboxMessage) {
   const metadata = message.metadata || {};
   const media = readNestedMedia(message);
+  const textFileName = String(message.mensagem || '').match(/^(?:\s*📎\s*)?Arquivo\s*\(([^)]+)\)\s*$/i)?.[1];
   return String(
     media?.fileName ||
     media?.filename ||
@@ -212,9 +213,28 @@ function getMessageFileName(message: InboxMessage) {
     metadata.message?.filename ||
     metadata.fileName ||
     metadata.filename ||
-    metadata.caption ||
+    textFileName ||
     ''
   ).trim();
+}
+
+function getMessageMediaCaption(message: InboxMessage, fileName: string) {
+  const metadata = message.metadata || {};
+  const media = readNestedMedia(message);
+  const metadataCaption = String(media?.caption || metadata.caption || '').trim();
+  const messageCaption = String(message.mensagem || '')
+    .replace(/^[\s📎📷🎥🎤]+/u, '')
+    .replace(/^(?:Arquivo|Imagem|Video|Vídeo|Mensagem de voz)\s*:?\s*/i, '')
+    .replace(/^\((.*)\)$/, '$1')
+    .trim();
+
+  // A legenda e conteudo da conversa, nao nome do arquivo. Separar os dois
+  // evita que textos longos aumentem o cartao e estourem a largura do chat.
+  return [metadataCaption, messageCaption].find((caption) => (
+    caption
+    && caption !== fileName
+    && !/^arquivo (recebido|anexado)$/i.test(caption)
+  )) || '';
 }
 
 function getMessageMediaKind(message: InboxMessage): MessageMediaKind {
@@ -2776,7 +2796,8 @@ export default function BrokerInboxPage() {
                       const media = mediaUrls[message.id];
                       const isMediaLoading = loadingMediaId === message.id;
                       const mediaError = Boolean(mediaLoadErrors[message.id]);
-                      const fileName = media?.fileName || getMessageFileName(message) || message.mensagem.replace(/^.*?(Imagem|Arquivo|Video|Vídeo)\s*:?\s*/i, '').replace(/[()]/g, '').trim() || 'Arquivo recebido';
+                      const fileName = media?.fileName || getMessageFileName(message) || 'Arquivo anexado';
+                      const mediaCaption = getMessageMediaCaption(message, fileName);
                       const previousMessage = displayChatMessages[index - 1];
                       const showDaySeparator = !previousMessage || messageDayKey(previousMessage.created_at) !== messageDayKey(message.created_at);
                       return (
@@ -2788,8 +2809,8 @@ export default function BrokerInboxPage() {
                               </span>
                             </div>
                           )}
-                          <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
-                          <div className={`orion-inbox-message-bubble relative max-w-[86%] sm:max-w-[75%] rounded-[1.25rem] sm:rounded-[1.5rem] p-3 sm:p-3.5 shadow-lg space-y-1.5 ${
+                          <div className={`flex min-w-0 max-w-full ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
+                          <div className={`orion-inbox-message-bubble relative min-w-0 max-w-[86%] sm:max-w-[75%] rounded-[1.25rem] sm:rounded-[1.5rem] p-3 sm:p-3.5 shadow-lg space-y-1.5 ${
                             mediaKind === 'call'
                               ? isMine
                                 ? 'bg-emerald-600 text-white rounded-tr-none'
@@ -2932,26 +2953,33 @@ export default function BrokerInboxPage() {
                                 )}
                               </div>
                             ) : mediaKind === 'file' ? (
-                              <button
-                                type="button"
-                                onClick={() => openMessageMedia(message)}
-                                className={`flex min-w-52 items-center gap-3 rounded-2xl border p-3 text-left transition ${
-                                  isMine ? 'border-white/15 bg-white/10 hover:bg-white/15' : 'border-cyan-500/20 bg-cyan-950/20 hover:bg-cyan-950/35'
-                                }`}
-                              >
-                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/20">
-                                  {isMediaLoading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-xs font-black">{fileName}</p>
-                                  <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
-                                    {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia indisponivel. Tentar novamente' : 'Clique para abrir arquivo'}
+                              <div className="min-w-0 max-w-full space-y-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openMessageMedia(message)}
+                                  className={`flex w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-2xl border p-3 text-left transition ${
+                                    isMine ? 'border-white/15 bg-white/10 hover:bg-white/15' : 'border-cyan-500/20 bg-cyan-950/20 hover:bg-cyan-950/35'
+                                  }`}
+                                >
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/20">
+                                    {isMediaLoading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-xs font-black" title={fileName}>{fileName}</p>
+                                    <p className={`text-[9px] font-bold ${isMine ? 'text-cyan-100' : 'text-slate-400'}`}>
+                                      {isMediaLoading ? 'Carregando...' : mediaError ? 'Midia indisponivel. Tentar novamente' : 'Clique para abrir arquivo'}
+                                    </p>
+                                  </div>
+                                  <Download size={14} className="shrink-0 opacity-80" />
+                                </button>
+                                {mediaCaption ? (
+                                  <p className="whitespace-pre-wrap break-words text-xs font-bold leading-normal [overflow-wrap:anywhere]">
+                                    {mediaCaption}
                                   </p>
-                                </div>
-                                <Download size={14} className="shrink-0 opacity-80" />
-                              </button>
+                                ) : null}
+                              </div>
                             ) : (
-                              <p className="orion-inbox-message-body text-xs font-bold leading-normal whitespace-pre-wrap">{message.mensagem}</p>
+                              <p className="orion-inbox-message-body whitespace-pre-wrap break-words text-xs font-bold leading-normal [overflow-wrap:anywhere]">{message.mensagem}</p>
                             )}
                             <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-wider">
                               <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>
