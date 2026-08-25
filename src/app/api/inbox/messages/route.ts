@@ -542,6 +542,18 @@ export async function GET(request: Request) {
 
     const conversationIds = await findAccessibleConversationIdsByPhone(guard.profile, conversation);
 
+    // Reserva orfa: a linha e gravada antes de chamar o provedor e apagada
+    // quando o envio falha. Se o processo morre no meio, ela fica no banco com
+    // cara de mensagem enviada e o corretor jura que mandou algo que nunca
+    // chegou ao WhatsApp. O provedor tem 15s de limite, entao qualquer reserva
+    // parada ha mais de tres minutos e envio morto.
+    await supabaseAdmin
+      .from('whatsapp_mensagens')
+      .delete()
+      .in('conversa_id', conversationIds)
+      .like('provider_message_id', 'orion-client:%')
+      .lt('created_at', new Date(Date.now() - 3 * 60_000).toISOString());
+
     // O banco local pode estar incompleto quando mensagens foram trocadas
     // diretamente no WhatsApp ou chegaram durante uma falha do webhook.
     // Ao abrir a conversa, reconcilia o historico mantido pela instancia antes

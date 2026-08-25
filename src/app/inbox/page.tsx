@@ -1425,17 +1425,11 @@ export default function BrokerInboxPage() {
         if (payload.success && payload.conversation) realConversation = payload.conversation as Conversation;
       }
 
+      // Sem a linha que o servidor gravou nao existe mensagem enviada. Inventar
+      // um balao aqui fazia o CRM mostrar como enviada uma mensagem que podia
+      // nunca ter chegado ao WhatsApp: agora a conversa e relida do banco.
       if (insertedMessages.length === 0) {
-        insertedMessages.push({
-          id: `local_${Date.now()}`,
-          conversa_id: selectedConversation.id,
-          direction: 'outbound',
-          remetente: profile?.nome || 'Bianca Alves',
-          mensagem: isAudio ? 'Mensagem de voz' : finalMsg,
-          created_at: new Date().toISOString(),
-          isAudio,
-          audioDuration,
-        });
+        void fetchMessages(realConversation?.id || selectedConversation.id, { silent: true });
       }
 
       const localMessages = insertedMessages.map((message) => {
