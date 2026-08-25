@@ -5,11 +5,9 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
  * Aviso de "fulano criou uma tarefa para voce".
  *
  * Antes disso, criar tarefa no Apollo ou dentro do lead nao avisava ninguem: a
- * pessoa so descobria abrindo a tela. Quem recebe e o responsavel pela tarefa,
- * mais a copia de acompanhamento para o dev.
+ * pessoa so descobria abrindo a tela. Quem recebe e somente o responsavel pela
+ * tarefa, evitando copias de acompanhamento para quem nao participa dela.
  */
-const PERFIL_DEV = '7091766b-bc44-4ad7-b6c4-caa2461bf26b';
-
 type PerfilAlvo = {
   id: string;
   nome: string | null;
@@ -53,7 +51,7 @@ export async function notificarTarefaAtribuida(options: {
   const { responsavelProfileId, autorProfileId } = options;
   if (!responsavelProfileId) return [];
 
-  const perfis = await carregarPerfis([responsavelProfileId, autorProfileId || '', PERFIL_DEV]);
+  const perfis = await carregarPerfis([responsavelProfileId, autorProfileId || '']);
   const responsavel = perfis.find((perfil) => perfil.id === responsavelProfileId);
   if (!responsavel) return [];
 
@@ -69,17 +67,11 @@ export async function notificarTarefaAtribuida(options: {
   if (options.descricao) linhas.push('', options.descricao.slice(0, 400));
   linhas.push('', options.origem === 'apollo' ? 'Abra em /equipe/apollo/tarefas' : 'Abra em /tarefas');
 
-  const alvos: PerfilAlvo[] = [responsavel];
-  // O dev acompanha todas as atribuicoes, menos as dele mesmo, para nao
-  // receber a mesma mensagem duas vezes.
-  const dev = perfis.find((perfil) => perfil.id === PERFIL_DEV);
-  if (dev && dev.id !== responsavel.id) alvos.push(dev);
-
   return sendApoloWhatsApp({
     type: 'demandas',
     title: 'Nova tarefa',
     message: linhas.join('\n'),
-    profiles: alvos,
+    profiles: [responsavel],
   });
 }
 
@@ -114,7 +106,7 @@ export async function notificarAndamentoTarefa(options: {
   // Quem move a propria tarefa que ele mesmo criou nao precisa se avisar.
   if (!criadorProfileId || criadorProfileId === quemMoveuProfileId) return [];
 
-  const perfis = await carregarPerfis([criadorProfileId, quemMoveuProfileId || '', PERFIL_DEV]);
+  const perfis = await carregarPerfis([criadorProfileId, quemMoveuProfileId || '']);
   const criador = perfis.find((perfil) => perfil.id === criadorProfileId);
   if (!criador) return [];
 
@@ -131,15 +123,11 @@ export async function notificarAndamentoTarefa(options: {
     linhas.push('', 'Se algo precisar mudar, peca revisao em /equipe/apollo/tarefas.');
   }
 
-  const alvos: PerfilAlvo[] = [criador];
-  const dev = perfis.find((perfil) => perfil.id === PERFIL_DEV);
-  if (dev && dev.id !== criador.id) alvos.push(dev);
-
   return sendApoloWhatsApp({
     type: 'demandas',
     title: options.status === 'fazendo' ? 'Tarefa iniciada' : 'Tarefa concluida',
     message: linhas.join('\n'),
-    profiles: alvos,
+    profiles: [criador],
   });
 }
 
@@ -152,7 +140,7 @@ export async function notificarRevisaoTarefa(options: {
   autorProfileId?: string | null;
 }) {
   if (!options.responsavelProfileId) return [];
-  const perfis = await carregarPerfis([options.responsavelProfileId, options.autorProfileId || '', PERFIL_DEV]);
+  const perfis = await carregarPerfis([options.responsavelProfileId, options.autorProfileId || '']);
   const responsavel = perfis.find((perfil) => perfil.id === options.responsavelProfileId);
   if (!responsavel) return [];
 
@@ -165,14 +153,10 @@ export async function notificarRevisaoTarefa(options: {
   ];
   if (options.comentario) linhas.push(options.comentario.slice(0, 400));
 
-  const alvos: PerfilAlvo[] = [responsavel];
-  const dev = perfis.find((perfil) => perfil.id === PERFIL_DEV);
-  if (dev && dev.id !== responsavel.id) alvos.push(dev);
-
   return sendApoloWhatsApp({
     type: 'demandas',
     title: 'Revisao pedida',
     message: linhas.join('\n'),
-    profiles: alvos,
+    profiles: [responsavel],
   });
 }
