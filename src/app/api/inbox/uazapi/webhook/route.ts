@@ -1110,6 +1110,33 @@ async function findConversation(corretorId: string, phone: string, leadId?: stri
   return exact || rows[0] || null;
 }
 
+/**
+ * O mesmo envio chega aqui com o id em dois formatos: o CRM guarda o que veio
+ * na resposta do envio (as vezes so "3A87...") e o eco do provedor traz
+ * "5511989057745:3A87...". Comparando texto contra texto os dois passavam e a
+ * conversa mostrava a mensagem duplicada. A comparacao agora e pelo id sem o
+ * prefixo do dono da linha.
+ */
+async function jaExisteMensagemDoProvedor(conversationId: string, providerId: string) {
+  const identificador = normalizeWhatsAppMessageId(providerId);
+  if (!conversationId || !identificador) return false;
+
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('id')
+    .eq('conversa_id', conversationId)
+    .or(`provider_message_id.eq.${providerId},provider_message_id.eq.${identificador},provider_message_id.like.%:${identificador}`)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[uazapi_webhook] Falha ao conferir mensagem repetida do provedor:', error);
+    return false;
+  }
+
+  return Boolean(data?.id);
+}
+
 async function hasRecentDuplicateMessage(conversationId: string, direction: 'inbound' | 'outbound', message: string) {
   const normalizedMessage = message.trim();
   if (!conversationId || !normalizedMessage) return false;
@@ -1496,6 +1523,15 @@ export async function POST(request: Request) {
     }
 
     const direction = fromMe ? 'outbound' : 'inbound';
+    if (providerId && await jaExisteMensagemDoProvedor(conversation.id, providerId)) {
+      console.log('[uazapi_webhook] Eco do proprio envio: mensagem ja esta na conversa.', {
+        conversationId: conversation.id,
+        direction,
+        providerId,
+      });
+      return NextResponse.json({ ok: true, duplicated: true, reason: 'provider_echo' });
+    }
+
     if (!providerId && !hasMedia && await hasRecentDuplicateMessage(conversation.id, direction, message)) {
       console.log('[uazapi_webhook] Ignorando mensagem duplicada recente.', {
         conversationId: conversation.id,
