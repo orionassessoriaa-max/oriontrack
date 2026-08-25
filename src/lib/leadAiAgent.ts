@@ -212,7 +212,7 @@ type LeadRow = {
   responsavel_profile_id?: string | null;
 };
 
-type HandoffContactMode = 'self_service' | 'team_person' | 'same_whatsapp' | 'different_responsible' | 'unassigned';
+type HandoffContactMode = 'self_service' | 'team_person' | 'same_whatsapp' | 'different_responsible' | 'unassigned' | 'specialist_only';
 
 export type AiIdentityMode = 'equipe' | 'equipe_pessoa' | 'propria';
 
@@ -328,6 +328,14 @@ export function handoffContactMode(lead: LeadRow, adminProfile: ProfileRow, iden
 }
 
 function handoffContactRule(mode: HandoffContactMode, pessoa?: string) {
+  if (mode === 'specialist_only') {
+    return [
+      'Regra obrigatoria para o encerramento deste lead:',
+      '- Diga apenas que vai passar o atendimento para um especialista dar continuidade.',
+      '- Nao diga que o especialista vai chamar, entrar em contato ou confirmar por outro numero.',
+      '- Nao informe por qual WhatsApp ou numero o atendimento continuara.',
+    ].join('\n');
+  }
   if (mode === 'team_person' && pessoa) {
     return [
       'Regra obrigatoria para o encerramento deste lead:',
@@ -365,6 +373,10 @@ function handoffContactRule(mode: HandoffContactMode, pessoa?: string) {
     '- Use uma mensagem neutra: "Nossa equipe continuara seu atendimento em breve."',
     '- Nao prometa nome nem numero de contato.',
   ].join('\n');
+}
+
+function hasSpecialistOnlyHandoff(aiConfig: any) {
+  return normalizeAiText(aiConfig?.system_prompt).includes('encerramento especialista sem numero');
 }
 
 function leadFacts(lead: LeadRow) {
@@ -612,6 +624,9 @@ export function isCallRefusal(text?: string | null, previousOutboundText?: strin
 }
 
 function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode, pessoa?: string) {
+  if (mode === 'specialist_only') {
+    return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Vou passar seu atendimento para um especialista dar continuidade. Obrigada!`);
+  }
   if (mode === 'team_person' && pessoa) {
     return polishAiReply(`Sem problema, ${leadFirstName(lead)}. A ${pessoa} vai te chamar por aqui com o estudo e as opcoes. Obrigada!`);
   }
@@ -632,6 +647,9 @@ function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode, pessoa
 // chamar, e a frase soava falsa para o cliente.
 export function valueRequestHandoffReply(mode: HandoffContactMode, pessoa?: string) {
   const base = 'Os valores dependem da cotacao, da rede escolhida e dos dados do perfil.';
+  if (mode === 'specialist_only') {
+    return polishAiReply(`${base} Vou passar seu atendimento para um especialista dar continuidade.`);
+  }
   if (mode === 'team_person' && pessoa) {
     return polishAiReply(`${base} A ${pessoa} vai te passar os numeros certinhos por aqui.`);
   }
@@ -823,6 +841,9 @@ function looksLikeScheduleAnswer(text?: string | null) {
 }
 
 function handoffScheduleReply(lead: LeadRow, mode: HandoffContactMode, pessoa?: string) {
+  if (mode === 'specialist_only') {
+    return polishAiReply(`Perfeito, ${leadFirstName(lead)}. Vou passar seu atendimento para um especialista dar continuidade. Obrigada!`);
+  }
   if (mode === 'team_person' && pessoa) {
     return polishAiReply(`Perfeito, ${leadFirstName(lead)}. A ${pessoa} vai confirmar esse agendamento por aqui. Obrigada pelo atendimento.`);
   }
@@ -884,7 +905,10 @@ async function finalizeScheduledHandoff(params: {
   // Aqui so existe o aiConfig: sem o nome_exibicao preenchido, o modo pessoa
   // nao tem nome para citar e o texto cai no generico.
   const identity = aiIdentity(aiConfig, '');
-  const reply = handoffScheduleReply(lead, handoffContactMode(lead, adminProfile, identity), identity.displayName);
+  const contactMode = hasSpecialistOnlyHandoff(aiConfig)
+    ? 'specialist_only'
+    : handoffContactMode(lead, adminProfile, identity);
+  const reply = handoffScheduleReply(lead, contactMode, identity.displayName);
 
     registerAiOutbound(lead.telefone || '', reply);
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
@@ -1780,7 +1804,9 @@ export async function continueLeadAiFromIncoming(options: {
     adminProfile.ai_instance_name = aiConfig.dedicated_instance_name || uazapiAiInstanceName(corretora.id);
   }
   const contactIdentity = aiIdentity(aiConfig, formatAiBrokerageDisplayName(corretora.nome || ''));
-  const contactMode = handoffContactMode(lead, adminProfile, contactIdentity);
+  const contactMode = hasSpecialistOnlyHandoff(aiConfig)
+    ? 'specialist_only'
+    : handoffContactMode(lead, adminProfile, contactIdentity);
 
   const { data: recentHistory } = await supabaseAdmin
     .from('whatsapp_mensagens')
