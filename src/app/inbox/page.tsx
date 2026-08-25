@@ -2249,6 +2249,25 @@ export default function BrokerInboxPage() {
     }
   };
 
+  /**
+   * Recibo do WhatsApp para o que saiu pelo CRM.
+   *
+   * So vale para a mensagem que o proprio CRM enviou: as que o corretor digita
+   * no celular chegam aqui pelo webhook e nunca teriam recibo. Sem esse aviso,
+   * mensagem entregue e mensagem que nunca saiu ficavam iguais na tela.
+   */
+  const reciboDaMensagem = (message: InboxMessage) => {
+    if (message.direction !== 'outbound') return null;
+    if (message.metadata?.send_status !== 'sent') return null;
+    const recibo = String(message.metadata?.recibo || '').toLowerCase();
+    if (recibo === 'read' || recibo === 'played') return { texto: 'lida', alerta: false };
+    if (recibo === 'delivered') return { texto: 'entregue', alerta: false };
+    if (recibo === 'sent' || recibo === 'server') return { texto: 'enviada', alerta: false };
+    const idade = Date.now() - new Date(message.created_at).getTime();
+    if (idade < 5 * 60_000) return { texto: 'enviando', alerta: false };
+    return { texto: 'sem confirmacao', alerta: true };
+  };
+
   const messageDayKey = (value: string) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
@@ -2939,7 +2958,21 @@ export default function BrokerInboxPage() {
                               <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>
                                 {cleanInboxDisplayName(message.remetente || selectedConversation.nome_contato, selectedConversation.telefone)}
                               </span>
-                              <span className={`orion-inbox-message-time ${isMine ? 'text-cyan-200' : 'text-slate-500'}`}>
+                              <span className={`orion-inbox-message-time flex items-center gap-1 ${isMine ? 'text-cyan-200' : 'text-slate-500'}`}>
+                                {(() => {
+                                  const recibo = reciboDaMensagem(message);
+                                  if (!recibo) return null;
+                                  return (
+                                    <span
+                                      className={recibo.alerta ? 'text-amber-300' : 'text-cyan-200/80'}
+                                      title={recibo.alerta
+                                        ? 'O WhatsApp nao confirmou a entrega desta mensagem. Confira a conexao do numero antes de considerar enviada.'
+                                        : `WhatsApp confirmou: ${recibo.texto}`}
+                                    >
+                                      {recibo.alerta ? '! ' : ''}{recibo.texto}
+                                    </span>
+                                  );
+                                })()}
                                 {formatHour(message.created_at)}
                               </span>
                             </div>

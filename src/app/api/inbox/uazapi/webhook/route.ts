@@ -289,6 +289,61 @@ function readOwnerJid(body: any) {
   );
 }
 
+/**
+ * Recibo de entrega do WhatsApp.
+ *
+ * O provedor manda "messages_update" quando a mensagem sai, chega no aparelho
+ * do contato ou e lida. Antes esse evento entrava aqui como se fosse mensagem
+ * nova: gerava balao repetido na conversa e, pior, nenhuma mensagem enviada
+ * pelo CRM tinha confirmacao de entrega. Sem isso o corretor via a mensagem na
+ * tela e nao tinha como saber que ela nunca chegou.
+ */
+const ORDEM_RECIBO = ['pending', 'sent', 'server', 'delivered', 'read', 'played'];
+
+function readAckStatus(body: any) {
+  const bruto = pickString(
+    body?.status,
+    body?.ack,
+    body?.messageStatus,
+    body?.data?.status,
+    body?.data?.ack,
+    body?.data?.messageStatus,
+    body?.message?.status,
+    body?.data?.message?.status,
+  ).toLowerCase();
+  if (!bruto) return '';
+  if (bruto === '1') return 'sent';
+  if (bruto === '2') return 'delivered';
+  if (bruto === '3') return 'read';
+  if (bruto === '4') return 'played';
+  return ORDEM_RECIBO.includes(bruto) ? bruto : '';
+}
+
+async function registrarRecibo(providerId: string, recibo: string) {
+  if (!providerId || !recibo) return { atualizado: false, motivo: 'sem_dados' };
+  const messageId = providerId.includes(':') ? String(providerId.split(':').pop()) : providerId;
+  const { data: linha } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('id, metadata')
+    .or(`provider_message_id.eq.${providerId},provider_message_id.like.%:${messageId}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!linha) return { atualizado: false, motivo: 'mensagem_nao_encontrada' };
+
+  // Recibo atrasado nao pode rebaixar o que ja foi lido.
+  const atual = String((linha.metadata as any)?.recibo || '').toLowerCase();
+  if (atual && ORDEM_RECIBO.indexOf(recibo) <= ORDEM_RECIBO.indexOf(atual)) {
+    return { atualizado: false, motivo: 'recibo_anterior' };
+  }
+
+  await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .update({ metadata: { ...((linha.metadata as any) || {}), recibo, recibo_at: new Date().toISOString() } })
+    .eq('id', linha.id);
+  return { atualizado: true, recibo };
+}
+
 function readProviderId(body: any) {
   return pickString(
     body?.id,
@@ -1187,6 +1242,13 @@ export async function POST(request: Request) {
       body?.data?.type ||
       ''
     ).toUpperCase();
+
+    // O recibo chega antes de qualquer coisa: ele nao e mensagem, e so o
+    // carimbo de entrega da mensagem que ja esta na conversa.
+    if (!isCallEvent(body, event) && (event.includes('UPDATE') || event.includes('ACK'))) {
+      const resultado = await registrarRecibo(readProviderId(body), readAckStatus(body));
+      return NextResponse.json({ ok: true, recibo: true, ...resultado });
+    }
 
     const callEvent = isCallEvent(body, event);
     const instance = readWebhookInstanceName(body);
