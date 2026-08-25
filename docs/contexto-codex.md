@@ -137,7 +137,7 @@ SIMULA_PERSONA=Rafaela SIMULA_MODO=propria npm.cmd run simular-ia -- soma
   - tarefa vai para "feito" → avisa quem criou, com a **duração da entrega**
     contada a partir de `iniciada_em`;
   - revisão pedida → avisa quem executou.
-  Todas levam cópia para o dev (`PERFIL_DEV` em `taskNotifications.ts`).
+  A cópia para o dev existiu durante os testes e foi removida em `fda436f`.
   Como a tarefa de lead é gravada pelo navegador, o envio passa por
   `POST /api/tarefas/notificar`, que relê a tarefa do banco.
 - **Revisão**: quem criou a tarefa pode devolvê-la com título e comentário; a
