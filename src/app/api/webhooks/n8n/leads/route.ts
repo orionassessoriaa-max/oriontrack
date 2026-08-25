@@ -436,7 +436,29 @@ async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
 
   if (!members || members.length === 0) return null;
 
-  const member = members[0];
+  // O rodizio escolhia so por "quem recebeu ha mais tempo". Isso desencaixa
+  // sempre que um lead chega com responsavel definido de fora ou e reatribuido
+  // na mao: a pessoa ganha o lead sem gastar a vez, e a diferenca cresce. Na
+  // Conexao chegou a 8 contra 6. Agora quem tem menos leads no mes recebe, e o
+  // criterio antigo vira desempate.
+  const inicioDaJanela = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const idsDosMembros = members.map((item) => item.id);
+  const { data: recentes } = await supabaseAdmin
+    .from('leads')
+    .select('responsavel_membro_id')
+    .in('responsavel_membro_id', idsDosMembros)
+    .gte('created_at', inicioDaJanela)
+    .limit(4000);
+
+  const carga = new Map(idsDosMembros.map((id) => [id, 0]));
+  for (const lead of recentes || []) {
+    const dono = String(lead.responsavel_membro_id || '');
+    if (carga.has(dono)) carga.set(dono, (carga.get(dono) || 0) + 1);
+  }
+
+  const member = members.reduce((escolhido, candidato) => (
+    (carga.get(candidato.id) || 0) < (carga.get(escolhido.id) || 0) ? candidato : escolhido
+  ), members[0]);
   const now = new Date().toISOString();
 
   await supabaseAdmin
