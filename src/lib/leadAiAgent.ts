@@ -78,6 +78,7 @@ const RUNTIME_AI_GUARDRAILS = `Regras finais obrigatórias do Orion Track:
 - Se o cliente mandar apenas saudacao, como "bom dia", "boa tarde", "boa noite", "oi" ou "ola", responda a saudacao rapidamente e retome a pergunta pendente. Nunca responda "como posso ajudar hoje" quando ja existir atendimento em andamento.
 - Se o cliente pedir valor, preco, mensalidade ou tabela, nunca diga que nao pode enviar pelo WhatsApp. Explique de forma natural que os valores dependem da cotacao e da rede escolhida, e ofereca chamar um especialista para passar certinho.
 - Se o cliente mencionar luto, doenca, internacao, dor, cirurgia, cancer, perda de familiar ou qualquer situacao delicada, acolha primeiro com empatia real e curta. Nao acelere a venda. Pergunte se esta tudo bem continuar a cotacao.
+- Quando a pergunta for sobre hospital ou clinica e o cliente responder "sem preferencia", trate apenas como ausencia de preferencia de rede. Nunca diga "que bom que esta tudo bem" nem conclua nada sobre a saude sem o cliente ter dito isso.
 - Se o formulario ja trouxe as principais informacoes comerciais, avance para hospital/regiao ou diretamente para e-mail/agendamento. Nao aja como se o formulario nao existisse.
 - Se o cliente pedir esclarecimento sobre algo que voce acabou de perguntar (ex: "como assim?", "nao entendi", "que isso?", "pq?", "explica", "o que e isso"), reexplique de forma simples, curta e natural como uma humana faria — NAO faca handoff nesses casos.
 - So faca handoff se: o cliente pedir preco exato, detalhes tecnicos de operadora, reclamar de algo, ficar claramente confuso com o fluxo (mais de 2 respostas desconexa), pedir para falar com humano, ou enviar exatamente a palavra "alvorada" sozinha. Quando for pedido de valor, pode responder ao cliente antes do handoff, sem dizer que e proibido enviar pelo WhatsApp. Nao faca handoff se "Alvorada" for parte de nome de hospital, clinica, bairro ou regiao.
@@ -652,6 +653,26 @@ function isCnpjConfirmationQuestion(text?: string | null) {
   );
 }
 
+function isHospitalPreferenceQuestion(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return (
+    /\b(hospital|clinica|rede)\b/.test(normalized) &&
+    /\b(preferencia|prefere|preferido|regiao)\b/.test(normalized)
+  );
+}
+
+function isNoHospitalPreferenceAnswer(text?: string | null) {
+  const normalized = normalizeAiText(text)
+    .replace(/[!?.,;:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return (
+    /^(sem|nao tenho|nenhuma?|nao possuo) preferencia\b/.test(normalized) ||
+    /^(qualquer|tanto faz|pode ser qualquer)( hospital| clinica| rede| um| uma)?$/.test(normalized)
+  );
+}
+
 function cnpjModeFromLead(lead: LeadRow) {
   const normalized = normalizeAiText(lead.possui_cnpj);
   if (!hasKnownValue(lead.possui_cnpj)) return 'unknown';
@@ -695,6 +716,18 @@ function nextQuestionAfterCnpjConfirmation(lead: LeadRow) {
   }
 
   return `Perfeito, ${firstName}. Com essas informacoes, consigo analisar seu perfil e te apresentar as melhores opcoes com mais clareza.\n\nQue dia e horario voce esta mais confortavel para uma ligacao rapida?`;
+}
+
+function nextQuestionAfterNoHospitalPreference(lead: LeadRow, summary: string) {
+  if (!hasKnownValue(lead.motivo_busca) && !hasKnownValue(extractSummaryField(summary, 'Motivo'))) {
+    return 'Entendi, vou considerar opcoes com uma rede ampla. Qual e o principal motivo para buscar um novo plano: prevencao, urgencia ou algum atendimento especifico?';
+  }
+
+  if (!hasKnownValue(lead.email) && !hasKnownValue(extractSummaryField(summary, 'Email|E-mail'))) {
+    return 'Entendi, vou considerar opcoes com uma rede ampla. Qual e o melhor e-mail para eu deixar a proposta organizada?';
+  }
+
+  return 'Entendi, vou considerar opcoes com uma rede ampla. Que dia e horario voce esta mais confortavel para uma ligacao rapida?';
 }
 
 function fallbackLeadAiContinuation(params: {
@@ -810,6 +843,31 @@ function appendSummaryLine(summary: string | null | undefined, line: string) {
   return base ? `${base}\n${line}` : line;
 }
 
+function setSummaryField(summary: string | null | undefined, label: string, value: string) {
+  const base = String(summary || '').trim();
+  const normalizedLabel = normalizeAiText(label).replace(/[^a-z0-9]/g, '');
+  const replacement = `*${label}*: ${value}`;
+  let replaced = false;
+
+  const lines = base.split(/\r?\n/).filter((line) => {
+    const separator = line.indexOf(':');
+    if (separator < 0) return true;
+    const currentLabel = normalizeAiText(line.slice(0, separator)).replace(/[^a-z0-9]/g, '');
+    if (currentLabel !== normalizedLabel) return true;
+    if (replaced) return false;
+    replaced = true;
+    return true;
+  }).map((line) => {
+    const separator = line.indexOf(':');
+    if (separator < 0) return line;
+    const currentLabel = normalizeAiText(line.slice(0, separator)).replace(/[^a-z0-9]/g, '');
+    return currentLabel === normalizedLabel ? replacement : line;
+  });
+
+  if (!replaced) lines.push(replacement);
+  return lines.filter(Boolean).join('\n');
+}
+
 async function finalizeScheduledHandoff(params: {
   session: any;
   lead: LeadRow;
@@ -820,7 +878,8 @@ async function finalizeScheduledHandoff(params: {
   incomingWasAudio?: boolean;
 }) {
   const { session, lead, conversationId, adminProfile, aiConfig, customerMessage, incomingWasAudio } = params;
-  let summary = appendSummaryLine(session.summary || leadFacts(lead), `*Agendado*: ${customerMessage.trim()}`);
+  let summary = setSummaryField(session.summary || leadFacts(lead), 'Agendado', customerMessage.trim());
+  summary = setSummaryField(summary, 'Pendente', 'Nao');
   summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
   // Aqui so existe o aiConfig: sem o nome_exibicao preenchido, o modo pessoa
   // nao tem nome para citar e o texto cai no generico.
@@ -1746,6 +1805,9 @@ export async function continueLeadAiFromIncoming(options: {
   const scheduleConfirmed =
     looksLikeScheduleAnswer(options.customerMessage) &&
     (isSchedulePrompt(previousOutboundText) || recentOutboundTexts.some(isSchedulePrompt));
+  const noHospitalPreference =
+    isHospitalPreferenceQuestion(previousOutboundText) &&
+    isNoHospitalPreferenceAnswer(options.customerMessage);
 
   if (
     (isInitialConfirmationQuestion(previousOutboundText) || (recentInitialConfirmation && !recentCnpjConfirmation)) &&
@@ -1814,8 +1876,27 @@ export async function continueLeadAiFromIncoming(options: {
     return { handled: true, handoff: false, deterministic: 'greeting_kept_initial_confirmation' };
   }
 
+  // O agendamento tem prioridade sobre confirmacoes antigas. "Pode ser amanha
+  // as 15" contem "pode" e antes caia como confirmacao do CNPJ ainda presente
+  // nas ultimas mensagens, repetindo a pergunta de horario.
+  if (scheduleConfirmed) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
+    return await finalizeScheduledHandoff({
+      session,
+      lead,
+      conversationId: options.conversationId,
+      adminProfile,
+      aiConfig,
+      customerMessage: options.customerMessage,
+      incomingWasAudio: options.incomingWasAudio,
+    });
+  }
+
   if (
-    (isCnpjConfirmationQuestion(previousOutboundText) || recentCnpjConfirmation) &&
+    isCnpjConfirmationQuestion(previousOutboundText) &&
     (isAffirmativeAnswer(options.customerMessage) || isDocumentTypeAnswer(options.customerMessage))
   ) {
     if (!(await isLeadAiSessionActive(session.id))) {
@@ -1844,20 +1925,37 @@ export async function continueLeadAiFromIncoming(options: {
     return { handled: true, handoff: false, deterministic: 'cnpj_confirmed_next_step' };
   }
 
-  if (scheduleConfirmed) {
+  if (noHospitalPreference) {
     if (!(await isLeadAiSessionActive(session.id))) {
       return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
     }
 
-    return await finalizeScheduledHandoff({
-      session,
+    const summary = setSummaryField(session.summary || leadFacts(lead), 'Hospital/Regiao', 'Sem preferencia');
+    const reply = customerReplyForFollowUp(
+      nextQuestionAfterNoHospitalPreference(lead, summary),
       lead,
-      conversationId: options.conversationId,
-      adminProfile,
-      aiConfig,
-      customerMessage: options.customerMessage,
-      incomingWasAudio: options.incomingWasAudio,
+      Boolean(previousOutboundText),
+    );
+    registerAiOutbound(lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+      ...(payload || {}),
+      instance: aiInstanceName(adminProfile),
+      ai_agent: aiConfig.persona,
     });
+
+    await supabaseAdmin
+      .from('lead_ai_sessions')
+      .update({
+        summary,
+        last_customer_message_at: new Date().toISOString(),
+        last_ai_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', session.id);
+
+    await updateLeadFromSummary(lead.id, summary);
+    return { handled: true, handoff: false, deterministic: 'hospital_without_preference' };
   }
 
   let ai: any;
