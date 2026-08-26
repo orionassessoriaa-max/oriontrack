@@ -757,6 +757,10 @@ export default function BrokerInboxPage() {
     const nextSelection = previousSelection
       ? rowsInCurrentBox.find((row) => row.id === previousSelection.id) || matchedConversationInCurrentBox || rowsInCurrentBox[0] || null
       : matchedConversationInCurrentBox || rowsInCurrentBox[0] || null;
+    // O carregamento das mensagens pode terminar antes do React executar o
+    // efeito que atualiza a ref. Grave a selecao imediatamente para o
+    // historico sincronizado do celular nao ser descartado como conversa antiga.
+    selectedConversationRef.current = nextSelection;
     setSelectedConversation(nextSelection);
     setLoading(false);
     if (!isSilent && nextSelection?.id && !nextSelection.id.startsWith('new-')) {
@@ -1015,8 +1019,9 @@ export default function BrokerInboxPage() {
     }
   }, [selectedConversation?.id]);
 
-  // O Realtime continua sendo o caminho principal. Esta sincronizacao silenciosa
-  // cobre navegadores ou sessoes em que o evento nao chega, sem exigir F5.
+  // O Realtime continua sendo o caminho principal. Mensagens digitadas no
+  // celular nem sempre geram webhook no provedor, por isso a conversa aberta
+  // reconcilia o historico em uma janela curta, sem exigir F5.
   useEffect(() => {
     const conversationId = selectedConversation?.id;
     if (!conversationId || conversationId.startsWith('new-')) return;
@@ -1026,17 +1031,17 @@ export default function BrokerInboxPage() {
         void fetchMessages(conversationId, { silent: true });
       }
     };
-    const interval = window.setInterval(syncOpenConversation, 30_000);
+    const interval = window.setInterval(syncOpenConversation, 8_000);
     return () => window.clearInterval(interval);
   }, [selectedConversation?.id, profile?.id]);
 
-  // Atualiza a ordem e a previa das conversas com uma frequencia menor para
-  // evitar consultas pesadas, mantendo a lista lateral sincronizada.
+  // Atualiza a ordem e a previa das conversas separadamente. Assim uma
+  // mensagem recuperada do celular tambem move o contato para o topo.
   useEffect(() => {
     if (!profile?.id) return;
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') void fetchInbox(true);
-    }, 30_000);
+    }, 10_000);
     return () => window.clearInterval(interval);
   }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
@@ -2586,6 +2591,7 @@ export default function BrokerInboxPage() {
                     <button
                       key={c.id}
                       onClick={() => {
+                        selectedConversationRef.current = c;
                         setSelectedConversation(c);
                         setDetailsPanelOpen(false);
                       }}
