@@ -86,8 +86,12 @@ export default function CommercialLeadsPage() {
       const resposta = (await api("/api/comercial/calls", {
         method: "POST",
         body: JSON.stringify({ lead_id: lead.id, sdr_id: lead.sdr_id }),
-      })) as { discagem?: { originada?: boolean } } | null;
-      if (!resposta?.discagem?.originada) window.location.href = `tel:${digits}`;
+      })) as { discagem?: { originada?: boolean; mensagem?: string } } | null;
+      if (!resposta?.discagem?.originada) {
+        window.location.href = `tel:${digits}`;
+        return;
+      }
+      setNotice(resposta.discagem.mensagem || "Central acionada. Atenda seu telefone.");
     } catch (callError) {
       setNotice(callError instanceof Error ? callError.message : "Não foi possível registrar a ligação.");
     }

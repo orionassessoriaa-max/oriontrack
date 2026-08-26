@@ -4,13 +4,32 @@
  * A API so origina a chamada: liga primeiro para o src (o SDR) e, quando ele
  * atende, liga para o dst (o lead) e junta os dois em conferencia. O retorno
  * nao traz identificador, nao diz se alguem atendeu, nao tem duracao e nao tem
- * gravacao. Duracao, atendimento e audio dependem do CDR da operadora, que
- * ainda nao foi liberado para a conta.
+ * gravacao. Duracao, atendimento e audio sao conciliados depois pelo endpoint
+ * /api/recording da mesma operadora.
  *
  * O token e a key vao dentro da URL, entao a chamada nunca pode sair do
  * navegador e a URL nunca pode ir para log.
  */
 const TIMEOUT_MS = 15000;
+
+export type GravacaoVoip = {
+  recordId: number;
+  calldate: string;
+  clid: string;
+  source: string;
+  destination: string;
+  duration: number;
+  durationText: string | null;
+  size: string | null;
+};
+
+type RecordingResponse = {
+  error?: number;
+  reason?: string;
+  total_records?: number;
+  records?: number;
+  data?: Array<Record<string, unknown>>;
+};
 
 export type ResultadoDiscagem = {
   originada: boolean;
@@ -25,6 +44,96 @@ export function voipConfigurado() {
     process.env.VOIP_CLICK2CALL_KEY &&
     process.env.VOIP_CLICK2CALL_DEVICE_ID,
   );
+}
+
+function credenciaisVoip() {
+  const dominio = String(process.env.VOIP_CLICK2CALL_DOMINIO || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const token = process.env.VOIP_CLICK2CALL_TOKEN;
+  const key = process.env.VOIP_CLICK2CALL_KEY;
+  if (!dominio || !token || !key) throw new Error('Credenciais da VoIP do Brasil nao configuradas.');
+  return { dominio, token, key };
+}
+
+function recordingUrl(path = '', query?: URLSearchParams) {
+  const { dominio, token, key } = credenciaisVoip();
+  const base = `https://${dominio}/api/recording/${encodeURIComponent(token)}/${encodeURIComponent(key)}${path}`;
+  return query?.size ? `${base}?${query.toString()}` : base;
+}
+
+/** Consulta paginada do relatorio oficial sem expor token ou key ao navegador. */
+export async function listarGravacoesVoip(options: {
+  dateIni: string;
+  dateEnd: string;
+  timeIni?: string;
+  timeEnd?: string;
+  limit?: number;
+  maxPages?: number;
+}) {
+  const limit = Math.min(100, Math.max(1, options.limit || 100));
+  const maxPages = Math.min(50, Math.max(1, options.maxPages || 20));
+  const results: GravacaoVoip[] = [];
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const start = page * limit;
+    const query = new URLSearchParams({
+      date_ini: options.dateIni,
+      date_end: options.dateEnd,
+      time_ini: options.timeIni || '00:00:00',
+      time_end: options.timeEnd || '23:59:59',
+      start: String(start),
+      limit: String(limit),
+    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const response = await fetch(recordingUrl('', query), { method: 'GET', cache: 'no-store', signal: controller.signal });
+      const payload = await response.json().catch(() => ({})) as RecordingResponse;
+      if (!response.ok || Number(payload.error || 0) !== 0) {
+        throw new Error(String(payload.reason || `Erro HTTP ${response.status} ao consultar gravacoes.`));
+      }
+      const rows = Array.isArray(payload.data) ? payload.data : [];
+      for (const row of rows) {
+        const recordId = Number(row.record_id);
+        if (!Number.isSafeInteger(recordId) || recordId <= 0) continue;
+        results.push({
+          recordId,
+          calldate: String(row.calldate || ''),
+          clid: String(row.clid || ''),
+          source: String(row.source || ''),
+          destination: String(row.destination || ''),
+          duration: Math.max(0, Number(row.duration) || 0),
+          durationText: row.duration2 ? String(row.duration2) : null,
+          size: row.size ? String(row.size) : null,
+        });
+      }
+      const total = Math.max(0, Number(payload.total_records) || 0);
+      if (rows.length < limit || start + rows.length >= total) break;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return results;
+}
+
+/**
+ * O manual oferece POST por path e GET com id_record/is_download. Na conta
+ * real, validada em 26/08/2026, o GET devolve audio/mpeg e o POST responde JSON.
+ */
+export async function baixarGravacaoVoip(recordId: number) {
+  if (!Number.isSafeInteger(recordId) || recordId <= 0) throw new Error('ID de gravacao invalido.');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const query = new URLSearchParams({ id_record: String(recordId), is_download: '1' });
+    const response = await fetch(recordingUrl('', query), { method: 'GET', cache: 'no-store', signal: controller.signal });
+    if (!response.ok) throw new Error(`A operadora nao disponibilizou a gravacao (${response.status}).`);
+    if (!String(response.headers.get('content-type') || '').toLowerCase().includes('audio/')) {
+      throw new Error('A operadora respondeu sem um arquivo de audio valido.');
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**

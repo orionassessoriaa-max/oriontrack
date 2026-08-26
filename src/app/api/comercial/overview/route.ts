@@ -250,7 +250,7 @@ export async function GET(request: Request) {
 
   const [leadsHoje, ligacoesHoje, reunioesHoje, tarefasAtrasadas, kanbanAtivos, conversasHoje, metaDoMes, vendasDoMes] = await Promise.all([
     supabaseAdmin.from('comercial_leads').select('id', { count: 'exact', head: true }).gte('created_at', inicioDoDia),
-    supabaseAdmin.from('comercial_ligacoes').select('id', { count: 'exact', head: true }).gte('iniciada_at', inicioDoDia),
+    supabaseAdmin.from('comercial_ligacoes').select('id', { count: 'exact', head: true }).in('status', ['atendida', 'nao_atendida', 'concluida']).or('origem.neq.click2call,voip_record_id.not.is.null').gte('iniciada_at', inicioDoDia),
     supabaseAdmin.from('comercial_leads').select('id', { count: 'exact', head: true }).gte('reuniao_agendada_at', inicioDoDia),
     supabaseAdmin.from('comercial_tarefas').select('id', { count: 'exact', head: true }).neq('status', 'concluida').lt('vencimento', agora.toISOString()),
     supabaseAdmin.from('comercial_leads').select('id', { count: 'exact', head: true }).not('status', 'in', `(${ETAPAS_ENCERRADAS.map((etapa) => `"${etapa}"`).join(',')})`),

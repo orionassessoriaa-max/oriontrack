@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 
+PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$PROJECT_DIR"
+
 if [ ! -f .env.production ]; then
   echo "Arquivo .env.production nao encontrado."
   echo "Crie o arquivo com NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY e SUPABASE_SERVICE_ROLE_KEY."
@@ -11,13 +14,41 @@ set -a
 . ./.env.production
 set +a
 
-for required_var in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY; do
+for required_var in \
+  NEXT_PUBLIC_SUPABASE_URL \
+  NEXT_PUBLIC_SUPABASE_ANON_KEY \
+  SUPABASE_SERVICE_ROLE_KEY \
+  CRON_SECRET \
+  VOIP_CLICK2CALL_DOMINIO \
+  VOIP_CLICK2CALL_TOKEN \
+  VOIP_CLICK2CALL_KEY \
+  VOIP_CLICK2CALL_DEVICE_ID \
+  VOIP_RECORDING_SIGNING_SECRET; do
   eval "required_value=\${$required_var:-}"
   if [ -z "$required_value" ]; then
     echo "A variavel obrigatoria $required_var esta vazia em .env.production. Deploy cancelado."
     exit 1
   fi
 done
+
+if [ "${#CRON_SECRET}" -lt 32 ] || [ "${#VOIP_RECORDING_SIGNING_SECRET}" -lt 32 ]; then
+  echo "CRON_SECRET e VOIP_RECORDING_SIGNING_SECRET precisam ter pelo menos 32 caracteres."
+  exit 1
+fi
+
+SCHEMA_STATUS="$(curl \
+  --silent \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  --max-time 20 \
+  --header "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/comercial_ligacoes?select=voip_record_id&limit=1" || true)"
+if [ "$SCHEMA_STATUS" != "200" ]; then
+  echo "Migration VoIP ainda nao aplicada no Supabase (HTTP $SCHEMA_STATUS)."
+  echo "Execute supabase db push com uma conta autorizada antes do deploy."
+  exit 1
+fi
 
 DEPLOY_TAG="$(date -u +%Y%m%d%H%M%S)"
 ORIONTRACK_IMAGE="oriontrack:${DEPLOY_TAG}"
@@ -93,3 +124,13 @@ DEPLOY_FINISHED=1
 printf '{"timestamp":"%s","event":"deploy_completed","image":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ORIONTRACK_IMAGE" >> "$DEPLOY_LOG_FILE"
 trap - EXIT
 echo "Deploy concluido sem interrupcao. Imagem ativa: $ORIONTRACK_IMAGE"
+
+VOIP_CRON_TAG="# oriontrack-voip-recordings"
+VOIP_CRON_LINE="*/5 * * * * $PROJECT_DIR/scripts/sync-voip-recordings-vps.sh >> /var/log/oriontrack-voip-sync.log 2>&1 $VOIP_CRON_TAG"
+CRON_TMP="$(mktemp)"
+crontab -l 2>/dev/null | grep -F -v "$VOIP_CRON_TAG" > "$CRON_TMP" || true
+printf '%s\n' "$VOIP_CRON_LINE" >> "$CRON_TMP"
+crontab "$CRON_TMP"
+rm -f "$CRON_TMP"
+chmod 700 "$PROJECT_DIR/scripts/sync-voip-recordings-vps.sh"
+echo "Sincronizacao VoIP instalada no cron a cada 5 minutos."

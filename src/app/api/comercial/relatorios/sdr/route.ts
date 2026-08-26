@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { signedRecordingUrl } from '@/lib/voipRecordingAccess';
+import { maybeSyncVoipRecordings } from '@/lib/voipRecordingSync';
 
 /**
  * Relatorio de esforco do SDR.
  *
- * A ligacao mora em dois lugares: a que sai pela central grava em
- * comercial_ligacoes, e a que o SDR faz do aparelho ou pelo WhatsApp fica como
- * tentativa da cadencia. Contar so uma das duas mostrava metade do trabalho.
- * Tentativa marcada como "nao necessario" fica de fora: o dia foi fechado antes
- * dela acontecer.
+ * Ligacoes fixas sao confirmadas pelo relatorio oficial da central. A cadencia
+ * complementa somente as chamadas por WhatsApp.
  */
 type LinhaSdr = {
   profile_id: string;
@@ -42,6 +41,12 @@ export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
 
+  try {
+    await maybeSyncVoipRecordings();
+  } catch (error) {
+    console.error('[relatorio_sdr_voip_sync]', error instanceof Error ? error.message : error);
+  }
+
   const url = new URL(request.url);
   const hoje = new Date().toISOString().slice(0, 10);
   const start = url.searchParams.get('start') || hoje;
@@ -55,14 +60,16 @@ export async function GET(request: Request) {
       supabaseAdmin.from('comercial_membros').select('profile_id, papel, ativo'),
       supabaseAdmin
         .from('comercial_ligacoes')
-        .select('id, sdr_id, lead_id, status, iniciada_at, duracao_segundos, gravacao_url, numero_destino, origem')
+        .select('id, sdr_id, lead_id, status, iniciada_at, duracao_segundos, gravacao_url, numero_destino, origem, voip_record_id')
+        .in('status', ['atendida', 'nao_atendida', 'concluida'])
+        .or('origem.neq.click2call,voip_record_id.not.is.null')
         .gte('iniciada_at', de)
         .lte('iniciada_at', ate)
         .limit(5000),
       supabaseAdmin
         .from('comercial_cadencia_tentativas')
         .select('autor_id, lead_id, canal, status, concluido_at')
-        .like('canal', 'ligacao%')
+        .eq('canal', 'ligacao_whatsapp')
         .in('status', ['atendeu', 'nao_atendeu'])
         .gte('concluido_at', de)
         .lte('concluido_at', ate)
@@ -122,8 +129,7 @@ export async function GET(request: Request) {
       if (!alvoIds.includes(id)) continue;
       const row = linha(id);
       row.ligacoes += 1;
-      if (tentativa.canal === 'ligacao_whatsapp') row.whatsapp += 1;
-      else row.telefone += 1;
+      row.whatsapp += 1;
       if (tentativa.status === 'atendeu') row.atendidas += 1;
     }
 
@@ -158,7 +164,9 @@ export async function GET(request: Request) {
         lead: nomeLead.get(chamada.lead_id) || 'Lead',
         numero: chamada.numero_destino,
         duracao_segundos: chamada.duracao_segundos,
-        gravacao_url: chamada.gravacao_url,
+        gravacao_url: chamada.voip_record_id
+          ? signedRecordingUrl(Number(chamada.voip_record_id))
+          : chamada.gravacao_url,
       }))
       .sort((a, b) => String(b.quando).localeCompare(String(a.quando)))
       .slice(0, 100);

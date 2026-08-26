@@ -8,12 +8,20 @@ export default {
   },
 
   async scheduled(_controller, env, ctx) {
-    const secret = env.CRON_SECRET || env.UAZAPI_GLOBAL_TOKEN || env.EVOLUTION_API_KEY || '';
-    const request = new Request('https://oriontrack.local/api/inbox/uazapi/cron-timeout', {
+    const secret = env.CRON_SECRET || '';
+    const headers = secret ? { authorization: `Bearer ${secret}` } : {};
+    const timeoutRequest = new Request('https://oriontrack.local/api/inbox/uazapi/cron-timeout', {
       method: 'POST',
-      headers: secret ? { authorization: `Bearer ${secret}` } : {},
+      headers,
+    });
+    const voipRequest = new Request('https://oriontrack.local/api/integrations/voip/recordings/cron', {
+      method: 'POST',
+      headers,
     });
 
-    ctx.waitUntil(appWorker.fetch(request, env, ctx));
+    ctx.waitUntil(Promise.all([
+      appWorker.fetch(timeoutRequest, env, ctx),
+      appWorker.fetch(voipRequest, env, ctx),
+    ]));
   },
 };

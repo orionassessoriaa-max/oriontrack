@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireCommercialUser } from "@/lib/api/comercial";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { signedRecordingUrl } from "@/lib/voipRecordingAccess";
+import { maybeSyncVoipRecordings } from "@/lib/voipRecordingSync";
 
 function normalized(value: unknown) {
   return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -20,6 +22,11 @@ function isClosed(lead: Record<string, unknown>) {
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ("error" in guard) return guard.error;
+  try {
+    await maybeSyncVoipRecordings();
+  } catch (error) {
+    console.error("[revops_voip_sync]", error instanceof Error ? error.message : error);
+  }
   const url = new URL(request.url);
   const now = new Date();
   const start = url.searchParams.get("start") || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -27,7 +34,9 @@ export async function GET(request: Request) {
 
   let leadQuery = supabaseAdmin.from("comercial_leads").select("*").order("data_entrada", { ascending: false }).limit(5000);
   let callQuery = supabaseAdmin.from("comercial_ligacoes")
-    .select("id,lead_id,sdr_id,status,iniciada_at,finalizada_at,duracao_segundos,gravacao_url,observacoes")
+    .select("id,lead_id,sdr_id,status,iniciada_at,finalizada_at,duracao_segundos,gravacao_url,observacoes,voip_record_id")
+    .in("status", ["atendida", "nao_atendida", "concluida"])
+    .or("origem.neq.click2call,voip_record_id.not.is.null")
     .gte("iniciada_at", `${start}T00:00:00-03:00`)
     .lte("iniciada_at", `${end}T23:59:59-03:00`)
     .order("iniciada_at", { ascending: false })
@@ -174,6 +183,7 @@ export async function GET(request: Request) {
     daily: Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
     calls: calls.slice(0, 200).map((call) => ({
       ...call,
+      gravacao_url: call.voip_record_id ? signedRecordingUrl(Number(call.voip_record_id)) : call.gravacao_url,
       lead_name: leadMap.get(call.lead_id)?.nome || "Lead",
       lead_phone: leadMap.get(call.lead_id)?.telefone || null,
       sdr_name: profileMap.get(call.sdr_id)?.nome || "SDR",

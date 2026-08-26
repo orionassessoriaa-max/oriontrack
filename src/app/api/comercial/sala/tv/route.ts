@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { maybeSyncVoipRecordings } from '@/lib/voipRecordingSync';
 
 // Painel de parede da sala comercial. Um unico GET alimenta a TV inteira, com
 // os mesmos criterios de fechamento que a Sala e as Metas ja usam, para o
@@ -51,6 +52,14 @@ export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
 
+  // A TV se atualiza sozinha. Aproveitamos o mesmo ciclo, com trava de 45s,
+  // para trazer o relatorio oficial da central sem depender de F5.
+  try {
+    await maybeSyncVoipRecordings();
+  } catch (error) {
+    console.error('[sala_tv_voip_sync]', error instanceof Error ? error.message : error);
+  }
+
   const today = saoPauloToday();
   const month = today.slice(0, 7);
   const monthStart = `${month}-01`;
@@ -68,6 +77,8 @@ export async function GET(request: Request) {
     supabaseAdmin
       .from('comercial_ligacoes')
       .select('id,sdr_id,status,iniciada_at')
+      .in('status', ['atendida', 'nao_atendida', 'concluida'])
+      .or('origem.neq.click2call,voip_record_id.not.is.null')
       .gte('iniciada_at', `${today}T00:00:00-03:00`)
       .lte('iniciada_at', `${today}T23:59:59-03:00`)
       .limit(2000),
@@ -82,14 +93,12 @@ export async function GET(request: Request) {
       .select('lead_id,tipo,comentario,created_at')
       .order('created_at', { ascending: false })
       .limit(20),
-    // Ligacao feita pelo aparelho ou pelo WhatsApp nao passa pela central: fica
-    // registrada como tentativa da cadencia. Sem isso o painel via so metade do
-    // esforco. "nao_necessario" fica de fora porque e tentativa que nem chegou
-    // a acontecer: o dia foi fechado antes.
+    // Ligacao fixa agora vem do relatorio oficial da central. A cadencia entra
+    // somente para chamadas por WhatsApp, que nao existem na API da VoIP.
     supabaseAdmin
       .from('comercial_cadencia_tentativas')
       .select('autor_id,canal,status,concluido_at')
-      .like('canal', 'ligacao%')
+      .eq('canal', 'ligacao_whatsapp')
       .in('status', ['atendeu', 'nao_atendeu'])
       .gte('concluido_at', `${today}T00:00:00-03:00`)
       .lte('concluido_at', `${today}T23:59:59-03:00`)
