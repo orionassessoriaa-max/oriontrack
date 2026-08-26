@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { isTeamLeadWithoutResponse } from '@/lib/leadStatusMetrics';
+import { isTeamLeadSale, isTeamLeadStalled, isTeamLeadWithoutResponse } from '@/lib/leadStatusMetrics';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadAtividade, LeadStatus, LeadTarefa, TipoCampanha } from '@/types';
 import { getLeadStatusStyle, normalizeLeadStatus } from '@/lib/leadStatus';
@@ -56,7 +56,7 @@ type WhatsAppConversa = {
   updated_at?: string | null;
 };
 
-type MetricFilter = 'todos' | 'sem_resposta' | 'sem_resposta_time' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
+type MetricFilter = 'todos' | 'sem_resposta' | 'sem_resposta_time' | 'parados_time' | 'vendas_time' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
 type CrmScopeView = 'meus' | 'todos_concessionaria' | 'sem_responsavel' | `member:${string}` | `broker:${string}`;
 type KanbanColumn = { id: LeadStatus; label: string; desc: string; saleEquivalent?: boolean };
 
@@ -437,7 +437,7 @@ export default function CrmPage() {
     const requestedFilter = params.get('filtro') as MetricFilter | null;
     const requestedScope = params.get('escopo') as CrmScopeView | null;
     requestedLeadIdRef.current = params.get('lead');
-    if (requestedFilter && ['todos', 'sem_resposta', 'sem_resposta_time', 'tarefas', 'hoje', 'cadencia', 'fit_icp'].includes(requestedFilter)) {
+    if (requestedFilter && ['todos', 'sem_resposta', 'sem_resposta_time', 'parados_time', 'vendas_time', 'tarefas', 'hoje', 'cadencia', 'fit_icp'].includes(requestedFilter)) {
       setMetricFilter(requestedFilter);
     }
     if (requestedScope === 'todos_concessionaria') {
@@ -1108,9 +1108,29 @@ export default function CrmPage() {
 
   const scopedLeadIds = useMemo(() => new Set(viewScopedLeads.map((lead) => lead.id)), [viewScopedLeads]);
   const staleLeadIds = useMemo(() => new Set(viewScopedLeads.filter(isStale).map((lead) => lead.id)), [viewScopedLeads]);
+  const assignedTeamLeadIds = useMemo(() => new Set(
+    viewScopedLeads
+      .filter((lead) => teamMembers.some((member) => (
+        lead.responsavel_membro_id === member.id ||
+        (!!member.profile_id && lead.responsavel_profile_id === member.profile_id)
+      )))
+      .map((lead) => lead.id)
+  ), [viewScopedLeads, teamMembers]);
   const teamNoReplyLeadIds = useMemo(() => new Set(
-    viewScopedLeads.filter((lead) => isTeamLeadWithoutResponse(lead.status)).map((lead) => lead.id)
-  ), [viewScopedLeads]);
+    viewScopedLeads
+      .filter((lead) => assignedTeamLeadIds.has(lead.id) && isTeamLeadWithoutResponse(lead.status))
+      .map((lead) => lead.id)
+  ), [viewScopedLeads, assignedTeamLeadIds]);
+  const stalledTeamLeadIds = useMemo(() => new Set(
+    viewScopedLeads
+      .filter((lead) => assignedTeamLeadIds.has(lead.id) && isTeamLeadStalled(lead))
+      .map((lead) => lead.id)
+  ), [viewScopedLeads, assignedTeamLeadIds]);
+  const soldTeamLeadIds = useMemo(() => new Set(
+    viewScopedLeads
+      .filter((lead) => assignedTeamLeadIds.has(lead.id) && isTeamLeadSale(lead.status))
+      .map((lead) => lead.id)
+  ), [viewScopedLeads, assignedTeamLeadIds]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id)).map((task) => task.lead_id)), [tarefas, scopedLeadIds]);
   const todayTaskLeadIds = useMemo(() => {
     const today = new Date().toDateString();
@@ -1166,6 +1186,8 @@ export default function CrmPage() {
         metricFilter === 'todos' ||
         (metricFilter === 'sem_resposta' && staleLeadIds.has(lead.id)) ||
         (metricFilter === 'sem_resposta_time' && teamNoReplyLeadIds.has(lead.id)) ||
+        (metricFilter === 'parados_time' && stalledTeamLeadIds.has(lead.id)) ||
+        (metricFilter === 'vendas_time' && soldTeamLeadIds.has(lead.id)) ||
         (metricFilter === 'tarefas' && openTaskLeadIds.has(lead.id)) ||
         (metricFilter === 'hoje' && todayTaskLeadIds.has(lead.id)) ||
         (metricFilter === 'fit_icp' && fitLeadIds.has(lead.id));
@@ -1174,7 +1196,7 @@ export default function CrmPage() {
     });
 
     return nextLeads;
-  }, [viewScopedLeads, search, pageFilter, originFilter, metricFilter, staleLeadIds, teamNoReplyLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
+  }, [viewScopedLeads, search, pageFilter, originFilter, metricFilter, staleLeadIds, teamNoReplyLeadIds, stalledTeamLeadIds, soldTeamLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
 
   const boardColumns = useMemo(() => {
     const existingStatusColumns = leadStatusColumns.filter((statusColumn) => (
@@ -1453,6 +1475,8 @@ export default function CrmPage() {
     todos: 'Todos os leads',
     sem_resposta: 'Sem resposta',
     sem_resposta_time: 'Sem resposta do time',
+    parados_time: 'Parados ha mais de 24 horas',
+    vendas_time: 'Vendas do time',
     tarefas: 'Tarefas abertas',
     hoje: 'Tarefas de hoje',
     cadencia: 'Cadencia',

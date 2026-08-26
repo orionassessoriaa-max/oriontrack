@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
 import Link from 'next/link';
-import { isTeamLeadWithoutResponse } from '@/lib/leadStatusMetrics';
+import { isTeamLeadSale, isTeamLeadStalled, isTeamLeadWithoutResponse } from '@/lib/leadStatusMetrics';
 
 type CorretorTeamManagerProps = {
   corretorId?: string;
@@ -121,13 +121,6 @@ function hoursBetween(start?: string | null, end?: string | null) {
   return Math.round(diff / 36_000) / 100;
 }
 
-function hoursSince(value?: string | null) {
-  if (!value) return 0;
-  const diff = Date.now() - new Date(value).getTime();
-  if (!Number.isFinite(diff) || diff <= 0) return 0;
-  return Math.floor(diff / 36_000) / 100;
-}
-
 function leadBelongsToMember(lead: AssignableLead, member: Membro) {
   return Boolean(
     (lead.responsavel_membro_id && lead.responsavel_membro_id === member.id) ||
@@ -178,13 +171,11 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       const memberLeads = leads.filter((lead) => leadBelongsToMember(lead, member));
       const stats = memberLeads.reduce((acc, lead) => {
         const status = normalizeStatus(lead.status);
-        const isSale = status.includes('venda');
-        const isLost = status.includes('sem interesse') || status.includes('nao tive retorno') || status.includes('telefone nao existe');
+        const isSale = isTeamLeadSale(lead.status);
         const isNegotiation = status.includes('negoci');
         const isQuote = status.includes('cotacao') || status.includes('cota');
         const noReply = isTeamLeadWithoutResponse(lead.status);
-        const lastMovement = lead.updated_at || lead.data_entrada;
-        const isStalled = !isSale && !isLost && hoursSince(lastMovement) >= 24;
+        const isStalled = isTeamLeadStalled(lead);
 
         acc.semResposta += noReply ? 1 : 0;
         acc.negociacao += isNegotiation ? 1 : 0;
@@ -953,11 +944,11 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
       {/* Stats Section */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
-          { label: 'Leads do time', value: teamSummary.total, detail: `${teamSummary.assigned} atribuídos`, icon: Users, tone: 'blue' },
+          { label: 'Leads do time', value: teamSummary.total, detail: `${teamSummary.assigned} atribuídos`, icon: Users, tone: 'blue', href: '/crm?filtro=todos&escopo=todos_concessionaria' },
           { label: 'No rodízio', value: teamSummary.participantesRodizio, detail: 'recebem leads novos', icon: Send, tone: 'blue' },
           { label: 'Sem resposta', value: teamSummary.semResposta, detail: 'precisam de atencao', icon: Target, tone: 'amber', href: '/crm?filtro=sem_resposta_time&escopo=todos_concessionaria' },
-          { label: 'Parados +24h', value: teamSummary.parados24h, detail: `${teamSummary.tempoMedioHoras}h média mov.`, icon: Clock, tone: 'amber' },
-          { label: 'Vendas', value: teamSummary.sales, detail: `${teamSummary.conversion}% conversão`, icon: TrendingUp, tone: 'emerald' },
+          { label: 'Parados +24h', value: teamSummary.parados24h, detail: `${teamSummary.tempoMedioHoras}h média mov.`, icon: Clock, tone: 'amber', href: '/crm?filtro=parados_time&escopo=todos_concessionaria' },
+          { label: 'Vendas', value: teamSummary.sales, detail: `${teamSummary.conversion}% conversão`, icon: TrendingUp, tone: 'emerald', href: '/crm?filtro=vendas_time&escopo=todos_concessionaria' },
         ].map((card) => {
           const Icon = card.icon;
           const tone = {
