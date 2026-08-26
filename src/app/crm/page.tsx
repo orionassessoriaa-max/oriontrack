@@ -317,6 +317,8 @@ export default function CrmPage() {
   const [atividades, setAtividades] = useState<LeadAtividade[]>([]);
   const [conversas, setConversas] = useState<WhatsAppConversa[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const selectedLeadIdRef = useRef<string | null>(null);
+  selectedLeadIdRef.current = selectedLead?.id || null;
   const [columns, setColumns] = useState<KanbanColumn[]>(() => {
     if (typeof window === 'undefined') return DEFAULT_COLUMNS;
     try {
@@ -781,14 +783,25 @@ export default function CrmPage() {
   }
 
   async function fetchTimeline(leadId: string) {
-    const { data } = await supabase
-      .from('lead_atividades')
-      .select('*, profiles:profile_id(nome)')
-      .eq('lead_id', leadId)
-      .order('created_at', { ascending: false })
-      .limit(40);
+    const token = await getToken();
+    if (!token) {
+      if (selectedLeadIdRef.current === leadId) setAtividades([]);
+      return;
+    }
 
-    setAtividades((data || []) as LeadAtividade[]);
+    const response = await fetch(`/api/crm/leads/${encodeURIComponent(leadId)}/activities`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (selectedLeadIdRef.current !== leadId) return;
+    if (!response.ok) {
+      setAtividades([]);
+      setError(payload.error || 'Erro ao carregar a timeline do lead.');
+      return;
+    }
+
+    setAtividades((payload.activities || []) as LeadAtividade[]);
   }
 
   useEffect(() => {
@@ -1429,23 +1442,44 @@ export default function CrmPage() {
     event.preventDefault();
     if (!selectedLead || !note.trim()) return;
 
+    const leadId = selectedLead.id;
+    const descricao = note.trim();
     setSaving(true);
-    const { error: insertError } = await supabase.from('lead_atividades').insert([{
-      lead_id: selectedLead.id,
-      profile_id: profile?.id,
-      tipo: 'nota',
-      titulo: 'Observacao registrada',
-      descricao: note.trim()
-    }]);
-    setSaving(false);
 
-    if (insertError) {
-      alert(insertError.message);
-      return;
+    try {
+      const token = await getToken();
+      if (!token) {
+        alert('Sessao expirada. Entre novamente.');
+        return;
+      }
+
+      const response = await fetch(`/api/crm/leads/${encodeURIComponent(leadId)}/activities`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ descricao }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        alert(payload.error || 'Erro ao salvar observacao.');
+        return;
+      }
+
+      if (selectedLeadIdRef.current === leadId) {
+        setNote('');
+        setAtividades((current) => [
+          payload.activity as LeadAtividade,
+          ...current.filter((activity) => activity.id !== payload.activity.id),
+        ].slice(0, 40));
+      }
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Erro ao salvar observacao.');
+    } finally {
+      setSaving(false);
     }
-
-    setNote('');
-    await fetchTimeline(selectedLead.id);
   }
 
   async function addTask(event: FormEvent) {
