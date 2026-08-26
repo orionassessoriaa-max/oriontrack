@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
 import Link from 'next/link';
+import { isTeamLeadWithoutResponse } from '@/lib/leadStatusMetrics';
 
 type CorretorTeamManagerProps = {
   corretorId?: string;
@@ -181,7 +182,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
         const isLost = status.includes('sem interesse') || status.includes('nao tive retorno') || status.includes('telefone nao existe');
         const isNegotiation = status.includes('negoci');
         const isQuote = status.includes('cotacao') || status.includes('cota');
-        const noReply = status.includes('retorno') || status.includes('resposta') || status.includes('aguardando') || status.includes('contato feito');
+        const noReply = isTeamLeadWithoutResponse(lead.status);
         const lastMovement = lead.updated_at || lead.data_entrada;
         const isStalled = !isSale && !isLost && hoursSince(lastMovement) >= 24;
 
@@ -954,7 +955,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
         {[
           { label: 'Leads do time', value: teamSummary.total, detail: `${teamSummary.assigned} atribuídos`, icon: Users, tone: 'blue' },
           { label: 'No rodízio', value: teamSummary.participantesRodizio, detail: 'recebem leads novos', icon: Send, tone: 'blue' },
-          { label: 'Sem resposta', value: teamSummary.semResposta, detail: 'precisam de atencao', icon: Target, tone: 'amber' },
+          { label: 'Sem resposta', value: teamSummary.semResposta, detail: 'precisam de atencao', icon: Target, tone: 'amber', href: '/crm?filtro=sem_resposta_time&escopo=todos_concessionaria' },
           { label: 'Parados +24h', value: teamSummary.parados24h, detail: `${teamSummary.tempoMedioHoras}h média mov.`, icon: Clock, tone: 'amber' },
           { label: 'Vendas', value: teamSummary.sales, detail: `${teamSummary.conversion}% conversão`, icon: TrendingUp, tone: 'emerald' },
         ].map((card) => {
@@ -965,14 +966,29 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
             emerald: 'border-emerald-500/10 bg-emerald-500/5 text-emerald-400 hover:border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.05)]',
             slate: 'border-white/5 bg-[#090e1a]/85 text-slate-300 hover:border-white/10 shadow-2xl',
           }[card.tone];
-          return (
-            <div key={card.label} className={`rounded-3xl border p-6 transition-all duration-300 ${tone}`}>
+          const content = (
+            <>
               <div className="mb-4 flex items-center justify-between">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{card.label}</p>
                 <Icon size={20} />
               </div>
               <p className="text-3xl font-black text-white">{card.value}</p>
               <p className="mt-2 text-xs font-black uppercase tracking-widest opacity-70 text-slate-400">{card.detail}</p>
+            </>
+          );
+
+          return card.href ? (
+            <Link
+              key={card.label}
+              href={card.href}
+              className={`rounded-3xl border p-6 transition-all duration-300 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${tone}`}
+              aria-label={`Abrir no CRM: ${card.label}`}
+            >
+              {content}
+            </Link>
+          ) : (
+            <div key={card.label} className={`rounded-3xl border p-6 transition-all duration-300 ${tone}`}>
+              {content}
             </div>
           );
         })}

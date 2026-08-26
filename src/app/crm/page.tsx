@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { isTeamLeadWithoutResponse } from '@/lib/leadStatusMetrics';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadAtividade, LeadStatus, LeadTarefa, TipoCampanha } from '@/types';
 import { getLeadStatusStyle, normalizeLeadStatus } from '@/lib/leadStatus';
@@ -55,7 +56,7 @@ type WhatsAppConversa = {
   updated_at?: string | null;
 };
 
-type MetricFilter = 'todos' | 'sem_resposta' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
+type MetricFilter = 'todos' | 'sem_resposta' | 'sem_resposta_time' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
 type CrmScopeView = 'meus' | 'todos_concessionaria' | 'sem_responsavel' | `member:${string}` | `broker:${string}`;
 type KanbanColumn = { id: LeadStatus; label: string; desc: string; saleEquivalent?: boolean };
 
@@ -143,6 +144,13 @@ function isCustomKanbanColumn(column: KanbanColumn) {
 function isStale(lead: Lead) {
   if (normalizeLeadStatus(lead.status) !== 'Aguardando atendimento' || !lead.data_entrada) return false;
   return Date.now() - new Date(lead.data_entrada).getTime() > 20 * 60 * 1000;
+}
+
+function normalizeEditableOrigin(value?: string | null) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'orion') return 'Orion';
+  if (normalized === 'manual') return 'Manual';
+  return 'Outro';
 }
 
 function cleanPhone(phone?: string | null) {
@@ -391,6 +399,7 @@ export default function CrmPage() {
   const [simulatedCorretorId, setSimulatedCorretorId] = useState<string | null>(null);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const requestedLeadIdRef = useRef<string | null>(null);
+  const requestedScopeViewRef = useRef<CrmScopeView | null>(null);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
   const usesMyLeadsByDefault = String(profile?.nome_empresa || '')
     .normalize('NFD')
@@ -426,9 +435,14 @@ export default function CrmPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedFilter = params.get('filtro') as MetricFilter | null;
+    const requestedScope = params.get('escopo') as CrmScopeView | null;
     requestedLeadIdRef.current = params.get('lead');
-    if (requestedFilter && ['todos', 'sem_resposta', 'tarefas', 'hoje', 'cadencia', 'fit_icp'].includes(requestedFilter)) {
+    if (requestedFilter && ['todos', 'sem_resposta', 'sem_resposta_time', 'tarefas', 'hoje', 'cadencia', 'fit_icp'].includes(requestedFilter)) {
       setMetricFilter(requestedFilter);
+    }
+    if (requestedScope === 'todos_concessionaria') {
+      requestedScopeViewRef.current = requestedScope;
+      setCrmScopeView(requestedScope);
     }
   }, []);
 
@@ -737,7 +751,9 @@ export default function CrmPage() {
       );
 
       setTeamMembers(members);
-      setCrmScopeView(shouldOpenMyLeads ? 'meus' : 'todos_concessionaria');
+      setCrmScopeView(requestedScopeViewRef.current === 'todos_concessionaria'
+        ? 'todos_concessionaria'
+        : shouldOpenMyLeads ? 'meus' : 'todos_concessionaria');
     }
   }
 
@@ -881,7 +897,7 @@ export default function CrmPage() {
         investimento: selectedLead.investimento || '',
         cidade: selectedLead.cidade || '',
         operadora: selectedLead.operadora || '',
-        origem: selectedLead.origem || '',
+        origem: normalizeEditableOrigin(selectedLead.origem || selectedLead.utm_source),
         email: selectedLead.email || '',
         motivo_busca: selectedLead.motivo_busca || '',
         hospital_preferencia: selectedLead.hospital_preferencia || '',
@@ -1092,6 +1108,9 @@ export default function CrmPage() {
 
   const scopedLeadIds = useMemo(() => new Set(viewScopedLeads.map((lead) => lead.id)), [viewScopedLeads]);
   const staleLeadIds = useMemo(() => new Set(viewScopedLeads.filter(isStale).map((lead) => lead.id)), [viewScopedLeads]);
+  const teamNoReplyLeadIds = useMemo(() => new Set(
+    viewScopedLeads.filter((lead) => isTeamLeadWithoutResponse(lead.status)).map((lead) => lead.id)
+  ), [viewScopedLeads]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id)).map((task) => task.lead_id)), [tarefas, scopedLeadIds]);
   const todayTaskLeadIds = useMemo(() => {
     const today = new Date().toDateString();
@@ -1146,6 +1165,7 @@ export default function CrmPage() {
       const metricMatch =
         metricFilter === 'todos' ||
         (metricFilter === 'sem_resposta' && staleLeadIds.has(lead.id)) ||
+        (metricFilter === 'sem_resposta_time' && teamNoReplyLeadIds.has(lead.id)) ||
         (metricFilter === 'tarefas' && openTaskLeadIds.has(lead.id)) ||
         (metricFilter === 'hoje' && todayTaskLeadIds.has(lead.id)) ||
         (metricFilter === 'fit_icp' && fitLeadIds.has(lead.id));
@@ -1154,7 +1174,7 @@ export default function CrmPage() {
     });
 
     return nextLeads;
-  }, [viewScopedLeads, search, pageFilter, originFilter, metricFilter, staleLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
+  }, [viewScopedLeads, search, pageFilter, originFilter, metricFilter, staleLeadIds, teamNoReplyLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
 
   const boardColumns = useMemo(() => {
     const existingStatusColumns = leadStatusColumns.filter((statusColumn) => (
@@ -1432,6 +1452,7 @@ export default function CrmPage() {
   const metricLabels: Record<MetricFilter, string> = {
     todos: 'Todos os leads',
     sem_resposta: 'Sem resposta',
+    sem_resposta_time: 'Sem resposta do time',
     tarefas: 'Tarefas abertas',
     hoje: 'Tarefas de hoje',
     cadencia: 'Cadencia',
@@ -1592,7 +1613,7 @@ export default function CrmPage() {
     }
 
     setSaving(true);
-    const { error: updateError } = await supabase
+    const { data: updatedLead, error: updateError } = await supabase
       .from('leads')
       .update({
         nome: editForm.nome,
@@ -1606,7 +1627,8 @@ export default function CrmPage() {
         investimento: editForm.investimento,
         cidade: editForm.cidade,
         operadora: editForm.operadora || null,
-        utm_source: editForm.origem || null,
+        origem: editForm.origem,
+        utm_source: editForm.origem,
         email: editForm.email || null,
         motivo_busca: editForm.motivo_busca || null,
         hospital_preferencia: editForm.hospital_preferencia || null,
@@ -1617,11 +1639,19 @@ export default function CrmPage() {
         status: editForm.status,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', selectedLead.id);
+      .eq('id', selectedLead.id)
+      .select('id, origem, utm_source')
+      .maybeSingle();
 
     if (updateError) {
       setSaving(false);
       alert('Erro ao atualizar lead: ' + updateError.message);
+      return;
+    }
+
+    if (!updatedLead) {
+      setSaving(false);
+      alert('A origem nao foi atualizada. Verifique sua permissao para editar este lead.');
       return;
     }
 
@@ -2151,7 +2181,7 @@ export default function CrmPage() {
                       <EditField label="Telefone" value={editForm.telefone} onChange={(value) => setEditForm((prev) => ({ ...prev, telefone: value }))} />
                       <EditField label="Idades" value={editForm.idades} onChange={(value) => setEditForm((prev) => ({ ...prev, idades: value }))} />
                       <EditField label="Cidade" value={editForm.cidade} onChange={(value) => setEditForm((prev) => ({ ...prev, cidade: value }))} />
-                      <EditField label="Origem" value={editForm.origem} onChange={(value) => setEditForm((prev) => ({ ...prev, origem: value }))} />
+                      <EditSelect label="Origem" value={editForm.origem} options={['Orion', 'Manual', 'Outro']} onChange={(value) => setEditForm((prev) => ({ ...prev, origem: value }))} />
                       <EditSelect label="Possui CNPJ?" value={editForm.possui_cnpj} options={['Sim', 'Não', 'Tenho MEI']} onChange={(value) => setEditForm((prev) => ({ ...prev, possui_cnpj: value }))} />
                       <EditField label="CNPJ do cliente" value={editForm.cnpj} onChange={(value) => setEditForm((prev) => ({ ...prev, cnpj: value }))} />
                       <EditSelect label="Plano ativo" value={editForm.tem_plano_ativo} options={['Sim', 'Não', 'Não informado']} onChange={(value) => setEditForm((prev) => ({ ...prev, tem_plano_ativo: value }))} />
