@@ -440,7 +440,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                 ? menuItems.find((item) => item.href === '/admin/configuracoes')
                 : undefined;
               const pinnedTasks = menuItems.find((item) => item.href === '/equipe/apollo/tarefas');
-              const pinnedItems = [pinnedTasks, pinnedMeta, pinnedSettings].filter(
+              const pinnedTeam = menuItems.find((item) => item.href === '/equipe/apollo');
+              const pinnedItems = [pinnedTasks, pinnedTeam, pinnedMeta, pinnedSettings].filter(
                 (item): item is NonNullable<typeof item> => Boolean(item)
               );
               const menuWithoutPinned = pinnedItems.length
