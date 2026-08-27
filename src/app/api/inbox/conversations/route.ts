@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { ApiProfile, requireApiUser } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { syncRecentInboxChats } from '@/lib/uazapiInboxSync';
 import { UserRole } from '@/types';
 
 const INBOX_LIST_ROLES = ['admin', 'account_manager', 'corretor', 'corretor_admin'] as const;
@@ -144,6 +145,9 @@ export async function GET(request: Request) {
 
     const assignedLeadIds = await listAssignedLeadIds(target.id);
     const conversations = await listConversations(corretorIds, assignedLeadIds);
+    after(async () => {
+      await syncRecentInboxChats(target.id, conversations);
+    });
     const leadIds = Array.from(new Set(
       conversations.map((conversation) => conversation.lead_id).filter(Boolean).map(String)
     ));
