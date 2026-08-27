@@ -1022,6 +1022,11 @@ export async function POST(request: Request) {
     }
     console.error('[POST /api/inbox/messages] ERROR:', error);
     const rawMessage = String(error?.message || '');
+    if (/not connected|disconnected|logged out|session.+(?:close|offline)|connection closed/i.test(rawMessage)) {
+      return NextResponse.json({
+        error: 'O WhatsApp esta desconectado. Reconecte a conta pelo QR Code antes de enviar novamente.',
+      }, { status: 409 });
+    }
     if (WHATSAPP_REJECTION_RE.test(rawMessage)) {
       return NextResponse.json({
         error: 'O WhatsApp recusou essa mensagem. Tente enviar em partes menores ou confirme se o numero tem WhatsApp ativo.',

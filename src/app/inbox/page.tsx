@@ -498,6 +498,12 @@ export default function BrokerInboxPage() {
           setConnectError(null);
         } else if (payload.state === 'close') {
           setQrCode(null);
+          const disconnectReason = String(payload.disconnectReason || '').toLowerCase();
+          setConnectError(
+            disconnectReason.includes('logged out from another device')
+              ? 'A sessao foi encerrada por outro aparelho. Conecte novamente pelo QR Code e confira os aparelhos conectados no WhatsApp.'
+              : null
+          );
         }
       }
     } catch (err) {
@@ -850,6 +856,10 @@ export default function BrokerInboxPage() {
         (payload) => {
           if (document.visibilityState !== 'visible') return;
           const newMsg = payload.new as InboxMessage;
+          // A linha com status "sending" e apenas a reserva idempotente do
+          // servidor. Ela ainda nao foi confirmada pelo WhatsApp e nao deve
+          // aparecer por um instante para depois sumir quando o envio falhar.
+          if (newMsg.direction === 'outbound' && newMsg.metadata?.send_status === 'sending') return;
           const currentSelected = selectedConversationRef.current;
           const belongsToVisibleInbox = visibleConversationIdsRef.current.has(newMsg.conversa_id);
 
@@ -1366,6 +1376,11 @@ export default function BrokerInboxPage() {
     const finalMsg = textOverride || messageText.trim();
     if (!finalMsg && selectedAttachments.length === 0 && !isAudio) return;
     if (sendInFlightRef.current) return;
+    if (!isWhatsAppConnected) {
+      setSendError('O WhatsApp esta desconectado. Reconecte a conta pelo QR Code antes de enviar.');
+      void fetchConnectionStatus();
+      return;
+    }
 
     sendInFlightRef.current = true;
 
@@ -1436,6 +1451,7 @@ export default function BrokerInboxPage() {
 
         if (!response.ok) {
           setSendError(payload.error || 'Nao consegui enviar agora.');
+          void fetchConnectionStatus();
           if (!isAudio) {
             setMessageText(originalText);
             setSelectedAttachments(originalAttachments);
@@ -3196,7 +3212,7 @@ export default function BrokerInboxPage() {
                       {/* Send Button */}
                       <button
                         onClick={() => sendMessage()}
-                        disabled={sendingMessage || (!messageText.trim() && selectedAttachments.length === 0)}
+                        disabled={!isWhatsAppConnected || sendingMessage || (!messageText.trim() && selectedAttachments.length === 0)}
                         className="p-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl flex items-center justify-center cursor-pointer shrink-0 shadow-lg shadow-cyan-950/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
                       >
                         {sendingMessage ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

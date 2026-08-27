@@ -416,6 +416,7 @@ export async function GET(request: Request) {
         state: snapshot.state, // 'open', 'connecting', 'close'
         connected: snapshot.state === 'open',
         qrcode: snapshot.qrcode,
+        disconnectReason: snapshot.state === 'close' ? snapshot.disconnectReason : '',
         statusSource: 'provider',
         targetProfile: targetPayload(targetProfile),
       }, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } });
