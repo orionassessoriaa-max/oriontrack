@@ -354,6 +354,7 @@ export default function BrokerInboxPage() {
   const inboxRefreshTimerRef = useRef<number | null>(null);
   const messageSyncInFlightRef = useRef(false);
   const messageFetchRequestRef = useRef(0);
+  const messageFetchAbortRef = useRef<AbortController | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Audio Playback States
@@ -769,10 +770,7 @@ export default function BrokerInboxPage() {
     selectedConversationRef.current = nextSelection;
     setSelectedConversation(nextSelection);
     setLoading(false);
-    if (!isSilent && nextSelection?.id && !nextSelection.id.startsWith('new-')) {
-      void fetchMessages(nextSelection.id);
-    }
-      if (!isSilent) void fetchConnectionStatus();
+    if (!isSilent) void fetchConnectionStatus();
     } catch (error) {
       console.error('Erro ao atualizar o Inbox:', error);
       if (!isSilent) setLoading(false);
@@ -953,7 +951,9 @@ export default function BrokerInboxPage() {
   // Fetch Messages for Selected Conversation
   async function fetchMessages(conversationId: string, options: { silent?: boolean } = {}) {
     if (conversationId.startsWith('new-')) {
+      messageFetchAbortRef.current?.abort();
       setMessages([]);
+      setLoadingMessages(false);
       visibleConversationIdsRef.current = new Set();
       return;
     }
@@ -963,12 +963,22 @@ export default function BrokerInboxPage() {
     const token = await getToken();
     if (!token) return;
 
+    if (!options.silent) {
+      messageFetchAbortRef.current?.abort();
+    }
+    const controller = new AbortController();
+    messageFetchAbortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
     const requestId = ++messageFetchRequestRef.current;
     messageSyncInFlightRef.current = true;
-    if (!options.silent) setLoadingMessages(true);
+    if (!options.silent) {
+      setMessages([]);
+      setLoadingMessages(true);
+    }
     try {
       const response = await fetch(`/api/inbox/messages?conversation_id=${conversationId}`, {
         cache: 'no-store',
+        signal: controller.signal,
         headers: { 
           Authorization: `Bearer ${token}`,
           ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
@@ -1009,8 +1019,18 @@ export default function BrokerInboxPage() {
         return unchanged ? current : mapped;
       });
     } catch (err) {
-      console.error(err);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (!options.silent && requestId === messageFetchRequestRef.current) {
+          setSendError('O historico demorou para responder. Selecione a conversa novamente para tentar outra vez.');
+        }
+      } else {
+        console.error(err);
+      }
     } finally {
+      window.clearTimeout(timeoutId);
+      if (messageFetchAbortRef.current === controller) {
+        messageFetchAbortRef.current = null;
+      }
       if (requestId === messageFetchRequestRef.current) {
         messageSyncInFlightRef.current = false;
         if (!options.silent) setLoadingMessages(false);
@@ -1025,9 +1045,15 @@ export default function BrokerInboxPage() {
     if (selectedConversation?.id) {
       void fetchMessages(selectedConversation.id);
     } else {
+      messageFetchAbortRef.current?.abort();
       setMessages([]);
+      setLoadingMessages(false);
     }
   }, [selectedConversation?.id]);
+
+  useEffect(() => () => {
+    messageFetchAbortRef.current?.abort();
+  }, []);
 
   // O Realtime continua sendo o caminho principal. Mensagens digitadas no
   // celular nem sempre geram webhook no provedor, por isso a conversa aberta
