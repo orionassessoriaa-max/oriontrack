@@ -1022,6 +1022,11 @@ export async function POST(request: Request) {
     }
     console.error('[POST /api/inbox/messages] ERROR:', error);
     const rawMessage = String(error?.message || '');
+    if (/<!doctype|<html|<body|<head|cloudflare|cf-error|error code 5\d\d/i.test(rawMessage)) {
+      return NextResponse.json({
+        error: 'O servico do WhatsApp ficou temporariamente indisponivel. Aguarde alguns segundos e tente novamente.',
+      }, { status: 503 });
+    }
     if (/not connected|disconnected|logged out|session.+(?:close|offline)|connection closed/i.test(rawMessage)) {
       return NextResponse.json({
         error: 'O WhatsApp esta desconectado. Reconecte a conta pelo QR Code antes de enviar novamente.',
@@ -1032,6 +1037,6 @@ export async function POST(request: Request) {
         error: 'O WhatsApp recusou essa mensagem. Tente enviar em partes menores ou confirme se o numero tem WhatsApp ativo.',
       }, { status: 422 });
     }
-    return NextResponse.json({ error: rawMessage || 'Nao consegui enviar a mensagem agora.' }, { status: 500 });
+    return NextResponse.json({ error: rawMessage.slice(0, 500) || 'Nao consegui enviar a mensagem agora.' }, { status: 500 });
   }
 }

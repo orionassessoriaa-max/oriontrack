@@ -9,6 +9,16 @@ function getRequestTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : 15000;
 }
 
+function readableProviderError(payload: any, status: number) {
+  const raw = String(payload?.message || payload?.response?.message || payload?.error || '').trim();
+  const normalized = raw.toLowerCase();
+  const isHtml = /<!doctype|<html|<body|<head|cloudflare|cf-error|error code 5\d\d/.test(normalized);
+  if (isHtml || status >= 500) {
+    return 'O servico do WhatsApp esta temporariamente indisponivel. Aguarde alguns segundos e tente novamente.';
+  }
+  return raw.slice(0, 500);
+}
+
 async function fetchWithTimeout(url: string, init: RequestInit = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), getRequestTimeoutMs());
@@ -264,7 +274,7 @@ export async function uazapiFetch(
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     console.error('[uazapiFetch ERROR] Path: %s | Status: %s', path, response.status, {
-      payload: JSON.stringify(payload, null, 2),
+      payload: JSON.stringify(payload, null, 2).slice(0, 2_000),
     });
 
     const payloadStr = JSON.stringify(payload).toLowerCase();
@@ -277,7 +287,7 @@ export async function uazapiFetch(
       throw new Error('Instance already exists');
     }
 
-    const rawMessage = String(payload?.message || payload?.response?.message || payload?.error || '');
+    const rawMessage = readableProviderError(payload, response.status);
     const normalizedMessage = rawMessage.toLowerCase();
 
     if (response.status === 401 || response.status === 403 || normalizedMessage.includes('forbidden') || normalizedMessage.includes('unauthorized')) {
