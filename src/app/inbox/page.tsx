@@ -308,6 +308,7 @@ const QUICK_EMOJIS = ['😀', '😊', '🙏', '👍', '✅', '🚀', '📌', '�
 export default function BrokerInboxPage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [inboxError, setInboxError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   
@@ -352,6 +353,7 @@ export default function BrokerInboxPage() {
   const inboxSyncInFlightRef = useRef(false);
   const inboxSyncQueuedRef = useRef(false);
   const inboxRefreshTimerRef = useRef<number | null>(null);
+  const inboxFetchAbortRef = useRef<AbortController | null>(null);
   const messageSyncInFlightRef = useRef(false);
   const messageFetchRequestRef = useRef(0);
   const messageFetchAbortRef = useRef<AbortController | null>(null);
@@ -547,10 +549,15 @@ export default function BrokerInboxPage() {
     }
     inboxSyncInFlightRef.current = true;
     inboxSyncQueuedRef.current = false;
+    inboxFetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    inboxFetchAbortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
 
     try {
       if (!isSilent) {
         setLoading(true);
+        setInboxError(null);
       }
     const params = new URLSearchParams(window.location.search);
     const urlPhone = params.get('telefone') || '';
@@ -589,6 +596,7 @@ export default function BrokerInboxPage() {
       const response = await fetch('/api/inbox/conversations', {
         method: 'GET',
         cache: 'no-store',
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${token}`,
           'x-orion-view-profile-id': profile.id,
@@ -755,6 +763,7 @@ export default function BrokerInboxPage() {
     }
 
     setConversations(rowsWithFollowUp);
+    setInboxError(null);
     const previousSelection = selectedConversationRef.current;
     const currentBox = conversationBoxRef.current;
     const rowsInCurrentBox = rowsWithFollowUp.filter((row) => conversationBelongsToBox(row, currentBox));
@@ -773,8 +782,18 @@ export default function BrokerInboxPage() {
     if (!isSilent) void fetchConnectionStatus();
     } catch (error) {
       console.error('Erro ao atualizar o Inbox:', error);
+      const message = error instanceof DOMException && error.name === 'AbortError'
+        ? 'O Inbox demorou para responder. Tente carregar novamente.'
+        : error instanceof Error
+          ? error.message
+          : 'Nao foi possivel carregar as conversas.';
+      setInboxError(message);
       if (!isSilent) setLoading(false);
     } finally {
+      window.clearTimeout(timeoutId);
+      if (inboxFetchAbortRef.current === controller) {
+        inboxFetchAbortRef.current = null;
+      }
       inboxSyncInFlightRef.current = false;
       if (inboxSyncQueuedRef.current && document.visibilityState === 'visible') {
         inboxSyncQueuedRef.current = false;
@@ -798,6 +817,10 @@ export default function BrokerInboxPage() {
       void fetchTeamMembers();
     }
   }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
+
+  useEffect(() => () => {
+    inboxFetchAbortRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     const intervalTime = isWhatsAppConnected ? 30000 : 10000;
@@ -960,8 +983,19 @@ export default function BrokerInboxPage() {
 
     if (options.silent && messageSyncInFlightRef.current) return;
 
-    const token = await getToken();
-    if (!token) return;
+    let token = '';
+    try {
+      token = await getToken();
+    } catch (error) {
+      console.error('Erro ao recuperar a sessao do Inbox:', error);
+    }
+    if (!token) {
+      if (!options.silent) {
+        setLoadingMessages(false);
+        setSendError('Sua sessao expirou. Entre novamente para abrir as mensagens.');
+      }
+      return;
+    }
 
     if (!options.silent) {
       messageFetchAbortRef.current?.abort();
@@ -2625,6 +2659,18 @@ export default function BrokerInboxPage() {
               {loading ? (
                 <div className="flex h-40 items-center justify-center">
                   <Loader2 className="animate-spin text-cyan-400" size={24} />
+                </div>
+              ) : inboxError && conversations.length === 0 ? (
+                <div className="flex h-48 flex-col items-center justify-center gap-3 px-5 text-center">
+                  <MessageSquare size={22} className="text-amber-400" />
+                  <p className="text-[10px] font-bold leading-relaxed text-slate-400">{inboxError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void fetchInbox()}
+                    className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-[9px] font-black uppercase tracking-wider text-cyan-300 transition-colors hover:bg-cyan-500/20"
+                  >
+                    Carregar novamente
+                  </button>
                 </div>
               ) : filteredConversations.length > 0 ? (
                 filteredConversations.map((c) => {

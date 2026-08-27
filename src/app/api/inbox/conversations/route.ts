@@ -151,7 +151,14 @@ export async function GET(request: Request) {
     const leadIds = Array.from(new Set(
       conversations.map((conversation) => conversation.lead_id).filter(Boolean).map(String)
     ));
-    const openFollowUpLeadIds = await listOpenFollowUpLeadIds(leadIds);
+    let openFollowUpLeadIds = new Set<string>();
+    try {
+      openFollowUpLeadIds = await listOpenFollowUpLeadIds(leadIds);
+    } catch (followUpError) {
+      // A sinalizacao de tarefa e complementar. Uma falha nela nao pode
+      // impedir o corretor de abrir o Inbox e acessar as mensagens.
+      console.error('[Inbox conversations] Falha ao consultar follow-ups:', followUpError);
+    }
 
     return NextResponse.json({
       conversations: conversations.map((conversation) => ({
