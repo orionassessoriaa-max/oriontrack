@@ -50,15 +50,25 @@ function normalizeMetaName(value: unknown) {
     .trim();
 }
 
-function requestedCampaignTokens(messages: ChatMessage[]) {
+/**
+ * Nome de campanha da Orion vem como colchetes colados:
+ * [ORION][BRADESCO][BELEM][ABO][01/08]. Quando o gestor cita duas campanhas na
+ * mesma frase ("sobe o anuncio na X igual ao da Y"), juntar todos os colchetes
+ * numa lista so exigia que uma unica campanha contivesse os pedacos das duas —
+ * nenhuma casava e a resposta era sempre "nao foi encontrada na estrutura".
+ * Cada sequencia colada de colchetes e um nome candidato, testado por vez.
+ */
+function requestedCampaignCandidates(messages: ChatMessage[]) {
   const request = [...messages]
     .reverse()
     .find((message) => message.role === 'user' && /campanha/i.test(plainMessageContent(message.content)));
-  if (!request) return [];
+  if (!request) return [] as string[][];
   const content = plainMessageContent(request.content);
-  return Array.from(content.matchAll(/\[([^\]]+)\]/g))
-    .map((match) => normalizeMetaName(match[1]))
-    .filter(Boolean);
+  return Array.from(content.matchAll(/(?:\[[^\]]+\])+/g))
+    .map((match) => Array.from(match[0].matchAll(/\[([^\]]+)\]/g))
+      .map((token) => normalizeMetaName(token[1]))
+      .filter(Boolean))
+    .filter((tokens) => tokens.length > 0);
 }
 
 function recentUserRequest(messages: ChatMessage[]) {
@@ -92,17 +102,26 @@ function hasExistingDestination(draft: any) {
 
 function enforceExistingDestination(draft: any, tree: unknown, messages: ChatMessage[]) {
   if (!draft || !Array.isArray(tree)) return draft;
-  const tokens = requestedCampaignTokens(messages);
-  if (!tokens.length) return draft;
-  const campaigns = (tree as MetaTreeCampaign[]).filter((campaign) => {
+  const candidatos = requestedCampaignCandidates(messages);
+  if (!candidatos.length) return draft;
+
+  const casar = (tokens: string[]) => (tree as MetaTreeCampaign[]).filter((campaign) => {
     const name = normalizeMetaName(campaign.name);
     return campaign.id && tokens.every((token) => name.includes(token));
   });
+
+  let campaigns: MetaTreeCampaign[] = [];
+  for (const tokens of candidatos) {
+    campaigns = casar(tokens);
+    if (campaigns.length) break;
+  }
+
   if (!campaigns.length) {
     const missing = Array.isArray(draft.missing_info) ? draft.missing_info : [];
+    const nomes = candidatos.map((tokens) => `[${tokens.join('][').toUpperCase()}]`).join(' nem ');
     return {
       ...draft,
-      missing_info: [...missing, `A campanha solicitada [${tokens.join('][').toUpperCase()}] nao foi encontrada na estrutura atual.`],
+      missing_info: [...missing, `A campanha solicitada ${nomes} nao foi encontrada na estrutura atual.`],
     };
   }
 
