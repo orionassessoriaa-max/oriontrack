@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -7,6 +7,11 @@ import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const WHATSAPP_REJECTION_RE = /whatsapp server rejected|rejected this message|not an internal api error|server rejected/i;
+const PROVIDER_HISTORY_SYNC_INTERVAL_MS = 60_000;
+const MAX_PROVIDER_HISTORY_SYNC_CONCURRENCY = 2;
+const providerHistorySyncTimes = new Map<string, number>();
+const providerHistorySyncLocks = new Map<string, Promise<void>>();
+let providerHistoryActiveSyncs = 0;
 
 function normalizeOutboundText(text: string) {
   return String(text || '')
@@ -252,8 +257,8 @@ async function syncProviderHistory(conversation: any) {
       const chatIds = await providerChatIds(instance, phone);
       for (const chatid of chatIds) {
         let offset = 0;
-        const limit = 500;
-        for (let page = 0; page < 20; page += 1) {
+        const limit = 250;
+        for (let page = 0; page < 2; page += 1) {
           const payload = await uazapiFetch('/message/find', {
             method: 'POST',
             body: JSON.stringify({ chatid, limit, offset }),
@@ -366,6 +371,35 @@ async function syncProviderHistory(conversation: any) {
       .update({ ultima_mensagem_at: latest, updated_at: new Date().toISOString() })
       .eq('id', conversation.id);
   }
+}
+
+async function syncProviderHistoryThrottled(conversation: any) {
+  const key = String(conversation?.id || '').trim();
+  if (!key) return;
+
+  const running = providerHistorySyncLocks.get(key);
+  if (running) return running;
+
+  const lastRun = providerHistorySyncTimes.get(key) || 0;
+  if (Date.now() - lastRun < PROVIDER_HISTORY_SYNC_INTERVAL_MS) return;
+  if (providerHistoryActiveSyncs >= MAX_PROVIDER_HISTORY_SYNC_CONCURRENCY) return;
+
+  providerHistoryActiveSyncs += 1;
+  const operation = syncProviderHistory(conversation)
+    .catch((error) => {
+      console.warn('[inbox_messages] Falha ao reconciliar historico em segundo plano.', {
+        conversationId: key,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    })
+    .finally(() => {
+      providerHistoryActiveSyncs = Math.max(0, providerHistoryActiveSyncs - 1);
+      providerHistorySyncTimes.set(key, Date.now());
+      providerHistorySyncLocks.delete(key);
+    });
+
+  providerHistorySyncLocks.set(key, operation);
+  return operation;
 }
 
 async function getConversation(id: string) {
@@ -579,9 +613,11 @@ export async function GET(request: Request) {
 
     // O banco local pode estar incompleto quando mensagens foram trocadas
     // diretamente no WhatsApp ou chegaram durante uma falha do webhook.
-    // Ao abrir a conversa, reconcilia o historico mantido pela instancia antes
-    // de montar a timeline exibida no Inbox.
-    await syncProviderHistory(conversation);
+    // Ao abrir a conversa, devolve primeiro o historico local e reconcilia o
+    // provedor depois da resposta. A trava impede buscas concorrentes do poll.
+    after(async () => {
+      await syncProviderHistoryThrottled(conversation);
+    });
 
     // Um mesmo contato pode possuir conversas diferentes quando foi atendido
     // por integrantes/instancias distintas. O Inbox deve apresentar uma unica

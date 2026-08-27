@@ -9,8 +9,8 @@ type InboxConversationForSync = {
   ultima_mensagem_at?: string | null;
 };
 
-const SYNC_INTERVAL_MS = 25_000;
-const MAX_CHANGED_CHATS_PER_RUN = 12;
+const SYNC_INTERVAL_MS = 45_000;
+const MAX_CHANGED_CHATS_PER_RUN = 4;
 const syncTimes = new Map<string, number>();
 const syncLocks = new Map<string, Promise<void>>();
 
