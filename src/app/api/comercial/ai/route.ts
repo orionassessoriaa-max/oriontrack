@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { NextResponse } from 'next/server';
 import { applyCommercialLeadScope, requireCommercialUser } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -40,7 +41,7 @@ ${history || 'Ainda nao informado.'}
 
 Escreva somente a proxima mensagem para este lead.`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await openaiFetch('ia_comercial_teste', 'https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

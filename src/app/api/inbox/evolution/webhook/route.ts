@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { NextResponse } from 'next/server';
 import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone, profileIdFromEvolutionInstance } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -128,7 +129,7 @@ async function transcribeAudio(base64: string, mimeType = 'audio/ogg') {
   formData.append('model', process.env.ORION_LEAD_AI_TRANSCRIBE_MODEL || 'whisper-1');
   formData.append('language', 'pt');
 
-  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+  const response = await openaiFetch('transcricao_audio_evolution', 'https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,

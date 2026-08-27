@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { NextResponse } from 'next/server';
 import { requireApiUser, rateLimit, writeAuditLog } from '@/lib/api/security';
 import {
@@ -120,14 +121,14 @@ export async function POST(request: Request) {
           const extension = reference.contentType === 'image/jpeg' ? 'jpg' : reference.contentType.split('/')[1];
           form.append('image[]', new Blob([reference.bytes], { type: reference.contentType }), `referencia-${index + 1}.${extension}`);
         });
-        response = await fetch('https://api.openai.com/v1/images/edits', {
+        response = await openaiFetch('criativo_avulso', 'https://api.openai.com/v1/images/edits', {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}` },
           body: form,
           signal: controller.signal,
         });
         } else {
-          response = await fetch('https://api.openai.com/v1/images/generations', {
+          response = await openaiFetch('criativo_avulso', 'https://api.openai.com/v1/images/generations', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${apiKey}`,

@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import 'server-only';
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -86,7 +87,7 @@ function fallbackCopies(job: JobRow): CopyVariation[] {
 async function generateCopies(job: JobRow): Promise<CopyVariation[]> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return fallbackCopies(job).slice(0, job.quantidade);
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await openaiFetch('criativo_lote', 'https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -185,13 +186,13 @@ ${references.length ? `Use as ${references.length} imagens enviadas como referen
       const extension = reference.contentType === 'image/jpeg' ? 'jpg' : reference.contentType.split('/')[1];
       form.append('image[]', new Blob([Uint8Array.from(reference.bytes).buffer as ArrayBuffer], { type: reference.contentType }), `referencia-${index + 1}.${extension}`);
     });
-    response = await fetch('https://api.openai.com/v1/images/edits', {
+    response = await openaiFetch('criativo_lote', 'https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
     });
   } else {
-    response = await fetch('https://api.openai.com/v1/images/generations', {
+    response = await openaiFetch('criativo_lote', 'https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, prompt, size: '1024x1024', quality: 'medium', output_format: 'png' }),

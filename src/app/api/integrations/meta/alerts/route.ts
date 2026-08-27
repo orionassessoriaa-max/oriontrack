@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
@@ -395,7 +396,7 @@ async function generatePortfolioAiReview(
     })),
   };
 
-  const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+  const response = await openaiFetch('trafego_alertas', 'https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({

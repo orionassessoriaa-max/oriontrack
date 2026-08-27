@@ -11,7 +11,8 @@
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "simular-ia": "esbuild scripts/simular-ia-corretora.ts --bundle --platform=node --format=esm --target=node20 --outfile=node_modules/.cache/simulador.mjs --external:next --external:@supabase/supabase-js --external:dotenv --log-level=error && node --env-file=.env.local node_modules/.cache/simulador.mjs",
-    "testar-voip": "node --env-file=.env.local scripts/testar-voip.mjs"
+    "testar-voip": "node --env-file=.env.local scripts/testar-voip.mjs",
+    "gasto-openai": "node --env-file=.env.local scripts/relatorio-openai.mjs"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.19.9",

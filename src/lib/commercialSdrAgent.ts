@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
 import { COMMERCIAL_MESSAGE_SPLIT, DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
@@ -97,7 +98,7 @@ function splitBurst(reply: string, limit: number, splitOnBlankLines = false) {
 async function askOpenAi(systemPrompt: string, userPrompt: string, temperature: number) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY nao configurada.');
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await openaiFetch('ia_sdr_comercial', 'https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

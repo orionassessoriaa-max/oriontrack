@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { configureUazapiWebhook, getUazapiInstanceConnection, normalizePhone, phoneMatchKey, uazapiAiInstanceName, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
@@ -718,7 +719,16 @@ function cnpjConfirmationReply(lead: LeadRow) {
   return `Legal, ${firstName}! So para eu te direcionar certinho: a simulacao seria pelo CNPJ/MEI ou pelo CPF?`;
 }
 
-function nextQuestionAfterCnpjConfirmation(lead: LeadRow) {
+function isDaniloAi(profile: ProfileRow) {
+  return normalizeAiText(profile.nome).startsWith('danilo');
+}
+
+function isCityQuestion(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return normalized.includes('de qual cidade voce e') || normalized.includes('qual e a sua cidade');
+}
+
+function nextQuestionAfterCity(lead: LeadRow) {
   const firstName = leadFirstName(lead);
 
   if (!hasKnownValue(lead.hospital_preferencia)) {
@@ -734,6 +744,11 @@ function nextQuestionAfterCnpjConfirmation(lead: LeadRow) {
   }
 
   return `Perfeito, ${firstName}. Com essas informacoes, consigo analisar seu perfil e te apresentar as melhores opcoes com mais clareza.\n\nQue dia e horario voce esta mais confortavel para uma ligacao rapida?`;
+}
+
+function nextQuestionAfterCnpjConfirmation(lead: LeadRow, askCity: boolean) {
+  if (askCity) return 'De qual cidade você é?';
+  return nextQuestionAfterCity(lead);
 }
 
 function nextQuestionAfterNoHospitalPreference(lead: LeadRow, summary: string) {
@@ -1226,7 +1241,7 @@ async function formatTextForSpeech(text: string) {
   if (!apiKey || cleanText.length < 20) return cleanText;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await openaiFetch('ia_corretora', 'https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1561,7 +1576,7 @@ export async function askAline(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await openaiFetch('ia_corretora', 'https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1838,6 +1853,7 @@ export async function continueLeadAiFromIncoming(options: {
   const noHospitalPreference =
     isHospitalPreferenceQuestion(previousOutboundText) &&
     isNoHospitalPreferenceAnswer(options.customerMessage);
+  const cityAnswered = isCityQuestion(previousOutboundText);
 
   if (
     (isInitialConfirmationQuestion(previousOutboundText) || (recentInitialConfirmation && !recentCnpjConfirmation)) &&
@@ -1933,7 +1949,11 @@ export async function continueLeadAiFromIncoming(options: {
       return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
     }
 
-    const reply = customerReplyForFollowUp(nextQuestionAfterCnpjConfirmation(lead), lead, Boolean(previousOutboundText));
+    const reply = customerReplyForFollowUp(
+      nextQuestionAfterCnpjConfirmation(lead, !isDaniloAi(adminProfile)),
+      lead,
+      Boolean(previousOutboundText),
+    );
       registerAiOutbound(lead.telefone || '', reply);
       const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
       await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
@@ -1953,6 +1973,35 @@ export async function continueLeadAiFromIncoming(options: {
       .eq('id', session.id);
 
     return { handled: true, handoff: false, deterministic: 'cnpj_confirmed_next_step' };
+  }
+
+  if (cityAnswered) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
+    const summary = setSummaryField(session.summary || leadFacts(lead), 'Cidade', options.customerMessage.trim());
+    const reply = customerReplyForFollowUp(nextQuestionAfterCity(lead), lead, Boolean(previousOutboundText));
+    registerAiOutbound(lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+      ...(payload || {}),
+      instance: aiInstanceName(adminProfile),
+      ai_agent: aiConfig.persona,
+    });
+
+    await supabaseAdmin
+      .from('lead_ai_sessions')
+      .update({
+        summary,
+        last_customer_message_at: new Date().toISOString(),
+        last_ai_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', session.id);
+
+    await updateLeadFromSummary(lead.id, summary);
+    return { handled: true, handoff: false, deterministic: 'city_confirmed_next_step' };
   }
 
   if (noHospitalPreference) {

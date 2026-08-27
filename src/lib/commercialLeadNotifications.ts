@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import 'server-only';
 
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
@@ -58,7 +59,7 @@ async function generateMotivation(sdrName: string, outsideMql: boolean) {
   if (!apiKey) return fallback;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await openaiFetch('motivacao_lead', 'https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({

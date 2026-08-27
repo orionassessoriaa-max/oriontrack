@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import type { CommercialLead } from "@/lib/comercial";
 
 const ALLOWED_MEETING_HOSTS = new Set([
@@ -124,7 +125,7 @@ export async function generateOnboardingBriefing(input: BriefingInput) {
   };
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await openaiFetch('briefing_onboarding', "https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,

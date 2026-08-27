@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
@@ -50,7 +51,7 @@ Conteúdo Textual do Arquivo:
 ${fileContent.slice(0, 15000)}
 ---`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await openaiFetch('simulador_tabela', 'https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

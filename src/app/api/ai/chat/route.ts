@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
@@ -116,7 +117,7 @@ Fale com o corretor com o respeito e elegância de um mordomo digital futurista,
       ...messages
     ];
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await openaiFetch('chat_interno', 'https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

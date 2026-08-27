@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
@@ -259,7 +260,7 @@ daily_budget deve ser informado em reais (exemplo: 50 para R$ 50,00). Nunca inve
 
     aiMessages.push({ role: 'user', content: partesDoPedido });
 
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const response = await openaiFetch('apolo_chat', 'https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({

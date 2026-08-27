@@ -1,3 +1,4 @@
+import { openaiFetch } from '@/lib/openaiUso';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
@@ -501,7 +502,7 @@ async function generateAiRecommendation(payload: any) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return localRecommendation(payload.total);
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await openaiFetch('trafego_otimizacao', 'https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
