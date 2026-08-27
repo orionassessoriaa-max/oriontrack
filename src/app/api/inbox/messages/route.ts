@@ -672,11 +672,18 @@ export async function POST(request: Request) {
   let reservedMessageId: string | null = null;
 
   try {
-    const limited = rateLimit(request, 'inbox:messages:send', { limit: 30, windowMs: 60_000 });
-    if (limited) return limited;
-
     const guard = await requireApiUser(request, [...INBOX_ROLES]);
     if ('error' in guard) return guard.error;
+
+    // Corretores na mesma empresa normalmente compartilham IP e navegador.
+    // Limitar por rede fazia 30 envios somados bloquearem o time inteiro.
+    // Depois da autenticacao, cada perfil recebe o proprio limite.
+    const limited = rateLimit(request, 'inbox:messages:send', {
+      limit: 30,
+      windowMs: 60_000,
+      key: guard.profile.id,
+    });
+    if (limited) return limited;
 
     const body = await request.json().catch(() => ({}));
     let conversationId = String(body.conversation_id || '');
