@@ -1379,7 +1379,20 @@ export async function POST(request: Request) {
       }
     }
 
-    if (hasAudio) {
+    // Audio que o proprio corretor gravou nao precisa de transcricao: ele sabe o
+    // que disse, a IA nao responde a si mesma e a tela do lead so mostra a
+    // transcricao do cliente. Em agosto isso foi 965 dos 1.561 audios, ou seja
+    // quase dois tercos do gasto de transcricao ia embora sem servir para nada.
+    const audioProprio = Boolean(
+      body?.fromMe
+      ?? body?.key?.fromMe
+      ?? body?.message?.key?.fromMe
+      ?? body?.message?.fromMe
+      ?? body?.data?.fromMe
+      ?? body?.data?.key?.fromMe,
+    );
+
+    if (hasAudio && !audioProprio) {
       try {
         audioTranscript = mediaMetadata.media_base64
           ? await transcribeAudio(mediaMetadata.media_base64, mediaMetadata.media_mimetype || 'audio/ogg')
