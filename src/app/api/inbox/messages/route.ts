@@ -3,6 +3,7 @@ import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
+import { guardarMidiaForaDoBanco } from '@/lib/inboxMedia';
 import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
@@ -979,12 +980,17 @@ export async function POST(request: Request) {
       payload?.id ||
       null;
 
+    // O arquivo enviado sai do banco e vai para o bucket: era ele que inchava
+    // whatsapp_mensagens e deixava o inbox lento. So depois do envio, para nao
+    // guardar arquivo de mensagem que nao chegou a sair.
+    const midiaGravavel = await guardarMidiaForaDoBanco(outboundMediaMetadata);
+
     const persistedMessage = {
       mensagem: messageTextDb,
       provider_message_id: providerId || reservationProviderId,
       metadata: {
         ...(payload || {}),
-        ...outboundMediaMetadata,
+        ...midiaGravavel,
         instance,
         client_message_id: clientMessageId || null,
         send_status: 'sent',

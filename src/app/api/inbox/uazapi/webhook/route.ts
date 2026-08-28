@@ -1,4 +1,5 @@
 import { openaiFetch } from '@/lib/openaiUso';
+import { guardarMidiaForaDoBanco } from '@/lib/inboxMedia';
 import { after, NextResponse } from 'next/server';
 import { normalizePhone, phoneMatchKey, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -1547,6 +1548,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, duplicated: true, reason: 'recent_duplicate' });
     }
 
+    // Midia recebida tambem sai do banco: e ela que faz a tabela de mensagens
+    // pesar e o inbox demorar para abrir. A transcricao ja rodou acima, com os
+    // bytes na mao, entao aqui so sobra guardar o arquivo no lugar certo.
+    const midiaGravavel = await guardarMidiaForaDoBanco(mediaMetadata);
+
     const { error: insertError } = await supabaseAdmin.from('whatsapp_mensagens').insert([{
       conversa_id: conversation.id,
       direction,
@@ -1555,7 +1561,7 @@ export async function POST(request: Request) {
       provider_message_id: providerId || null,
       metadata: {
         ...(body || {}),
-        ...mediaMetadata,
+        ...midiaGravavel,
         messageType: callEvent ? 'call' : body?.type,
         mediaType: callEvent ? 'call' : body?.type,
         isBrokerCall: callEvent ? fromMe : undefined,
