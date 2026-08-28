@@ -129,6 +129,29 @@ function dedupeMessages(messages: any[]) {
   return result;
 }
 
+const PRIVATE_PROVIDER_METADATA_KEYS = /^(?:token|admintoken|api_?key|apikey|secret|openai_apikey|baseurl)$/i;
+const BULKY_PROVIDER_METADATA_KEYS = new Set([
+  'chat',
+  'content',
+  'quoted',
+  'convertOptions',
+  'ai_customer_message',
+  'media_base64',
+]);
+
+function sanitizeProviderMetadata(value: unknown, depth = 0): unknown {
+  if (value === null || value === undefined || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => sanitizeProviderMetadata(item, depth + 1));
+
+  const safe: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (PRIVATE_PROVIDER_METADATA_KEYS.test(key)) continue;
+    if (depth === 0 && BULKY_PROVIDER_METADATA_KEYS.has(key)) continue;
+    safe[key] = sanitizeProviderMetadata(item, depth + 1);
+  }
+  return safe;
+}
+
 function providerMessages(payload: any): any[] {
   if (Array.isArray(payload?.messages)) return payload.messages;
   if (Array.isArray(payload?.data?.messages)) return payload.data.messages;
@@ -639,7 +662,10 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      messages: dedupeMessages(history),
+      messages: dedupeMessages(history).map((message) => ({
+        ...message,
+        metadata: sanitizeProviderMetadata(message.metadata),
+      })),
       conversation_ids: conversationIds,
     });
   } catch (error: any) {
