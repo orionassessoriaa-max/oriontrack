@@ -9,6 +9,9 @@ function getRequestTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : 15000;
 }
 
+const INSTANCE_TOKEN_CACHE_TTL_MS = 5 * 60_000;
+const instanceTokenCache = new Map<string, { token: string; expiresAt: number }>();
+
 function readableProviderError(payload: any, status: number) {
   const raw = String(payload?.message || payload?.response?.message || payload?.error || '').trim();
   const normalized = raw.toLowerCase();
@@ -205,32 +208,48 @@ export function profileIdFromUazapiInstance(instance?: string | null) {
 }
 
 async function getUazapiInstanceToken(baseUrl: string, globalToken: string, instanceName: string) {
-  const response = await fetchWithTimeout(`${baseUrl}/instance/all`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      admintoken: globalToken,
-    },
-    cache: 'no-store',
-  });
+  const cacheKey = instanceName.toLowerCase();
+  const cached = instanceTokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.token;
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.message || payload?.error || 'Nao consegui listar instancias do UAZAPI.');
+  try {
+    const response = await fetchWithTimeout(`${baseUrl}/instance/all`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        admintoken: globalToken,
+      },
+      cache: 'no-store',
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.message || payload?.error || 'Nao consegui listar instancias do UAZAPI.');
+    }
+
+    const matchingInstances = asArray(payload).filter(
+      (item) => readInstanceName(item).toLowerCase() === cacheKey
+    );
+    // O provedor pode devolver registros antigos com o mesmo nome. Para o
+    // Apolo, sempre usa primeiro a sessao que esta efetivamente conectada.
+    const instance = matchingInstances.find(isConnectedUazapiInstance) || matchingInstances[0];
+    const token = readInstanceToken(instance);
+    if (!token) {
+      throw new Error(`Instancia UAZAPI ${instanceName} ainda nao foi criada ou nao possui token.`);
+    }
+
+    instanceTokenCache.set(cacheKey, {
+      token,
+      expiresAt: Date.now() + INSTANCE_TOKEN_CACHE_TTL_MS,
+    });
+    return token;
+  } catch (error) {
+    // O token da instancia costuma permanecer estavel. Se apenas a listagem
+    // administrativa oscilar, o ultimo token confirmado ainda permite que o
+    // corretor envie sem duplicar a requisicao de mensagem.
+    if (cached?.token) return cached.token;
+    throw error;
   }
-
-  const matchingInstances = asArray(payload).filter(
-    (item) => readInstanceName(item).toLowerCase() === instanceName.toLowerCase()
-  );
-  // O provedor pode devolver registros antigos com o mesmo nome. Para o
-  // Apolo, sempre usa primeiro a sessao que esta efetivamente conectada.
-  const instance = matchingInstances.find(isConnectedUazapiInstance) || matchingInstances[0];
-  const token = readInstanceToken(instance);
-  if (!token) {
-    throw new Error(`Instancia UAZAPI ${instanceName} ainda nao foi criada ou nao possui token.`);
-  }
-
-  return token;
 }
 
 export async function uazapiFetch(
@@ -291,6 +310,7 @@ export async function uazapiFetch(
     const normalizedMessage = rawMessage.toLowerCase();
 
     if (response.status === 401 || response.status === 403 || normalizedMessage.includes('forbidden') || normalizedMessage.includes('unauthorized')) {
+      if (options.instanceName) instanceTokenCache.delete(options.instanceName.toLowerCase());
       throw new Error('A conexão com o UAZAPI foi recusada. Confirme o token global do UAZAPI no servidor e tente novamente.');
     }
 
