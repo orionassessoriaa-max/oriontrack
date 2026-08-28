@@ -69,7 +69,17 @@ log_failed_deploy() {
 trap log_failed_deploy EXIT
 
 echo "[1/3] Construindo imagem ${ORIONTRACK_IMAGE}..."
-docker build \
+BUILD_RESOURCE_ARGS=""
+if docker buildx build --help 2>/dev/null | grep -q -- '--resource'; then
+  # O build acontece na mesma VPS do CRM. Sob disputa, deixa o processo ao vivo
+  # com oito vezes mais peso de CPU que cada etapa da compilacao.
+  BUILD_RESOURCE_ARGS="--resource cpu-shares=128"
+fi
+
+# shellcheck disable=SC2086
+docker buildx build \
+  --load \
+  $BUILD_RESOURCE_ARGS \
   --build-arg NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" \
   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
   --build-arg SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
