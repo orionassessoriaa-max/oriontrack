@@ -11,6 +11,20 @@ import { canSelectOperationalTeam, TEAM_SELECTION_STORAGE_KEY } from '@/lib/team
 // Ponto exato da câmera lenta no vídeo (em segundos)
 const PAUSE_TIME = 2.6;
 
+function isTemporaryAuthFailure(message?: string | null) {
+  return /failed to fetch|network|timeout|timed out|fetch failed|load failed/i.test(String(message || ''));
+}
+
+function loginErrorMessage(message?: string | null) {
+  if (isTemporaryAuthFailure(message)) {
+    return 'O CRM esta oscilando e nao conseguiu consultar seu acesso. Sua senha nao foi alterada. Tente novamente em alguns segundos.';
+  }
+  if (/invalid login credentials|email not confirmed/i.test(String(message || ''))) {
+    return 'Email ou senha invalidos.';
+  }
+  return 'Nao foi possivel validar seu acesso agora. Tente novamente.';
+}
+
 export default function LoginPage() {
   const [view, setView] = useState<'login' | 'recovery'>('login');
   const [email, setEmail] = useState('');
@@ -80,12 +94,14 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      let loginResult = await supabase.auth.signInWithPassword({ email, password });
+      if (loginResult.error && isTemporaryAuthFailure(loginResult.error.message)) {
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        loginResult = await supabase.auth.signInWithPassword({ email, password });
+      }
+      const { data: authData, error: authError } = loginResult;
 
-      if (authError) throw new Error('Email ou senha inválidos.');
+      if (authError) throw new Error(loginErrorMessage(authError.message));
       if (!authData.user) throw new Error('Erro ao identificar usuário.');
 
       const { data: profileData, error: profileError } = await supabase
