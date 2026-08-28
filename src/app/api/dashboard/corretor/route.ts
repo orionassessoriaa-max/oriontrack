@@ -33,6 +33,43 @@ const LEAD_METRIC_COLUMNS = [
   'cadencia_fim',
 ].join(',');
 
+const READ_TIMEOUT_MS = 4_000;
+const READ_ATTEMPTS = 2;
+
+type ReadResult<T> = {
+  data: T | null;
+  error: { message: string } | null;
+};
+
+function isTransientReadError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /abort|timeout|timed out|fetch|network|load failed/i.test(message);
+}
+
+async function readWithRetry<T>(
+  operation: (signal: AbortSignal) => PromiseLike<ReadResult<T>>,
+): Promise<ReadResult<T>> {
+  let lastResult: ReadResult<T> = { data: null, error: { message: 'Falha temporaria na consulta.' } };
+
+  for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+    try {
+      lastResult = await operation(controller.signal);
+      if (!lastResult.error || !isTransientReadError(lastResult.error.message) || attempt === READ_ATTEMPTS) {
+        return lastResult;
+      }
+    } catch (error) {
+      lastResult = { data: null, error: { message: error instanceof Error ? error.message : String(error) } };
+      if (!isTransientReadError(error) || attempt === READ_ATTEMPTS) return lastResult;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return lastResult;
+}
+
 export async function GET(request: Request) {
   const auth = await requireApiUser(request, [...ALLOWED_ROLES]);
   if ('error' in auth) return auth.error;
@@ -100,6 +137,20 @@ export async function GET(request: Request) {
   const pageSize = 1000;
   const leads = [];
 
+  const pendingTasksPromise = readWithRetry((signal) => {
+    let query = supabaseAdmin
+      .from('lead_tarefas')
+      .select('id, vencimento')
+      .in('corretor_id', brokerIds)
+      .eq('status', 'pendente');
+
+    if (responsibleProfileId) {
+      query = query.eq('responsavel_profile_id', responsibleProfileId);
+    }
+
+    return query.abortSignal(signal);
+  });
+
   for (let page = 0; ; page += 1) {
     const from = page * pageSize;
     let leadsQuery = supabaseAdmin
@@ -113,7 +164,9 @@ export async function GET(request: Request) {
       leadsQuery = leadsQuery.eq('responsavel_profile_id', responsibleProfileId);
     }
 
-    const { data: pageRows, error: leadsError } = await leadsQuery;
+    const { data: pageRows, error: leadsError } = await readWithRetry((signal) =>
+      leadsQuery.abortSignal(signal),
+    );
     if (leadsError) {
       return NextResponse.json({ error: leadsError.message }, { status: 500 });
     }
@@ -122,17 +175,7 @@ export async function GET(request: Request) {
     if (!pageRows || pageRows.length < pageSize) break;
   }
 
-  let tasksQuery = supabaseAdmin
-    .from('lead_tarefas')
-    .select('id, vencimento')
-    .in('corretor_id', brokerIds)
-    .eq('status', 'pendente');
-
-  if (responsibleProfileId) {
-    tasksQuery = tasksQuery.eq('responsavel_profile_id', responsibleProfileId);
-  }
-
-  const { data: pendingTasks, error: tasksError } = await tasksQuery;
+  const { data: pendingTasks, error: tasksError } = await pendingTasksPromise;
   if (tasksError) {
     return NextResponse.json({ error: tasksError.message }, { status: 500 });
   }
