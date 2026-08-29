@@ -236,7 +236,7 @@ function providerCreatedAt(value: unknown) {
   return new Date(milliseconds).toISOString();
 }
 
-async function historyInstanceNames(conversation: any) {
+async function historyInstanceNames(conversation: any, varrerCorretoraInteira: boolean) {
   const profileIds = new Set<string>();
   if (conversation?.lead_id) {
     const { data: lead } = await supabaseAdmin
@@ -247,7 +247,10 @@ async function historyInstanceNames(conversation: any) {
     if (lead?.responsavel_profile_id) profileIds.add(String(lead.responsavel_profile_id));
   }
 
-  if (conversation?.corretor_id) {
+  // Varrer todas as instancias da corretora custava caro por nada: numa
+  // corretora de 6 perfis foram 5 chamadas em serie, 5 segundos, e nenhuma
+  // delas trouxe mensagem. Fora da primeira carga, basta a linha do dono.
+  if (conversation?.corretor_id && (varrerCorretoraInteira || !profileIds.size)) {
     const { data: owners } = await supabaseAdmin
       .from('profiles')
       .select('id')
@@ -272,7 +275,16 @@ async function syncProviderHistory(conversation: any) {
   const phone = normalizePhone(conversation?.telefone || '');
   if (!phone) return;
 
-  const instances = await historyInstanceNames(conversation);
+  // Conversa vazia no banco e o unico caso que justifica varrer a corretora
+  // inteira: pode ser historico atendido por outro integrante. Com mensagem ja
+  // gravada, a linha do dono cobre o que o webhook deixou passar. Numa
+  // corretora de 6 perfis eram 5 chamadas em serie que nao traziam nada.
+  const { count: mensagensLocais } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversa_id', conversation.id);
+
+  const instances = await historyInstanceNames(conversation, !mensagensLocais);
   if (!instances.length) return;
 
   const collected = new Map<string, { message: any; instance: string }>();
