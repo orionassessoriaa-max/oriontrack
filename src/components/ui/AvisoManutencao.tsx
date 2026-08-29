@@ -10,13 +10,18 @@ import { useEffect, useState } from 'react';
  * manutencao o banco e justamente o que pode estar fora, e o aviso precisa
  * aparecer mesmo assim.
  */
-const INICIO = new Date('2026-08-29T13:00:00-03:00').getTime();
-const FIM = new Date('2026-08-29T14:00:00-03:00').getTime();
+// Para avisar a equipe de novo, basta preencher a janela e religar o componente
+// no layout. Vazio aqui significa nenhum aviso na tela.
+const JANELA = { inicio: '', fim: '' };
+
+const INICIO = JANELA.inicio ? new Date(JANELA.inicio).getTime() : 0;
+const FIM = JANELA.fim ? new Date(JANELA.fim).getTime() : 0;
 
 export default function AvisoManutencao() {
   const [visivel, setVisivel] = useState(false);
 
   useEffect(() => {
+    if (!INICIO || !FIM) return;
     const conferir = () => {
       const agora = Date.now();
       setVisivel(agora >= INICIO && agora <= FIM);
