@@ -24,6 +24,45 @@ export function forbidden(message = 'Acesso negado.') {
   return NextResponse.json({ error: message }, { status: 403 });
 }
 
+/**
+ * Conferencia de token com memoria curta.
+ *
+ * Cada chamada de API perguntava ao servico de autenticacao quem era o dono do
+ * token, e o Inbox sozinho dispara tres chamadas a cada dez segundos por
+ * usuario. Deu 203 mil requisicoes de autenticacao em 24 horas para uma equipe
+ * de algumas dezenas de pessoas.
+ *
+ * O token continua sendo validado de verdade; o que fica guardado por trinta
+ * segundos e o resultado dessa validacao. Na pratica, o mesmo usuario clicando
+ * pelo sistema passa a custar uma checagem por meio minuto em vez de uma por
+ * requisicao. O preco e claro: token revogado ainda entra por ate trinta
+ * segundos, e mudanca de papel demora o mesmo tanto para valer.
+ */
+const VALIDACAO_TTL_MS = 30_000;
+const validacoesRecentes = new Map<string, { quando: number; user: { id: string; email?: string | null } }>();
+
+async function usuarioDoToken(token: string) {
+  const guardado = validacoesRecentes.get(token);
+  if (guardado && Date.now() - guardado.quando < VALIDACAO_TTL_MS) return guardado.user;
+
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) {
+    validacoesRecentes.delete(token);
+    return null;
+  }
+
+  // Sem limpeza o mapa cresceria com cada token novo emitido no dia.
+  if (validacoesRecentes.size > 500) {
+    const limite = Date.now() - VALIDACAO_TTL_MS;
+    for (const [chave, valor] of validacoesRecentes) {
+      if (valor.quando < limite) validacoesRecentes.delete(chave);
+    }
+  }
+
+  validacoesRecentes.set(token, { quando: Date.now(), user: { id: user.id, email: user.email } });
+  return { id: user.id, email: user.email };
+}
+
 export async function requireApiUser(request: Request, allowedRoles?: UserRole[]) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -31,8 +70,8 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
   }
 
   const token = authHeader.split(' ')[1];
-  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError || !user) {
+  const user = await usuarioDoToken(token);
+  if (!user) {
     return { error: NextResponse.json({ error: 'Sessao expirada.' }, { status: 401 }) };
   }
 
