@@ -12,6 +12,44 @@ const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', '
 const MAX_CACHE_BASE64_BYTES = Number(process.env.INBOX_MEDIA_CACHE_MAX_BYTES || 256 * 1024);
 const MAX_PROXY_MEDIA_BYTES = Number(process.env.INBOX_MEDIA_PROXY_MAX_BYTES || 25 * 1024 * 1024);
 
+/**
+ * Arquivo do nosso proprio bucket e lido pela API de storage, e nao pela URL
+ * publica.
+ *
+ * Enquanto a leitura dependia da URL publica, o bucket precisava ficar aberto:
+ * qualquer pessoa com o link abria CNH, identidade e boleto de cliente sem
+ * login nenhum. Lendo pela chave de servico, o mesmo arquivo continua chegando
+ * na tela de quem tem acesso e o bucket pode ser fechado.
+ */
+const BUCKET_MIDIA = 'inbox-media';
+
+function caminhoNoBucket(url?: string | null) {
+  const bruto = String(url || '');
+  const marcador = `/storage/v1/object/public/${BUCKET_MIDIA}/`;
+  const indice = bruto.indexOf(marcador);
+  if (indice < 0) return '';
+  return decodeURIComponent(bruto.slice(indice + marcador.length).split('?')[0]);
+}
+
+async function lerDoBucket(url?: string | null, fallbackMimeType?: string | null) {
+  const caminho = caminhoNoBucket(url);
+  if (!caminho) return null;
+
+  const { data, error } = await supabaseAdmin.storage.from(BUCKET_MIDIA).download(caminho);
+  if (error || !data) {
+    console.warn('[Media API] Nao consegui ler o arquivo no bucket:', { caminho, erro: error?.message });
+    return null;
+  }
+
+  const bytes = Buffer.from(await data.arrayBuffer());
+  if (!bytes.length) return null;
+
+  return {
+    base64: bytes.toString('base64'),
+    mimeType: data.type || fallbackMimeType || 'application/octet-stream',
+  };
+}
+
 function canProxyMediaUrl(value?: string | null) {
   try {
     const url = new URL(String(value || ''));
@@ -32,6 +70,9 @@ function canProxyMediaUrl(value?: string | null) {
 }
 
 async function proxyRemoteMedia(url: string, fallbackMimeType?: string | null) {
+  const doBucket = await lerDoBucket(url, fallbackMimeType);
+  if (doBucket) return doBucket;
+
   if (!canProxyMediaUrl(url)) return null;
 
   const controller = new AbortController();
