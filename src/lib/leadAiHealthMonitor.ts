@@ -147,11 +147,16 @@ export async function checkLeadAiInstanceHealth(options: MonitorOptions = {}) {
 
     let connection = await getUazapiInstanceConnection(instance).catch(() => ({ found: false, connected: false, state: 'check_failed' }));
     let recovered = false;
+    // Reconectar sozinho so vale para sessao que ja funcionou e caiu. Enquanto
+    // a configuracao esta em "aguardando_conexao", quem precisa agir e a pessoa
+    // com o celular na mao: cada /instance/connect automatico gera um QR novo e
+    // invalida o que ela esta lendo na tela. Era isso que fazia a IA da Evo Seg
+    // conectar e cair, com o monitor disparando de minuto em minuto.
     if (
       !connection.connected
       && connection.found
       && reconnect
-      && ['ativo', 'aguardando_conexao', DISCONNECT_PENDING_STATUS].includes(config.status)
+      && ['ativo', DISCONNECT_PENDING_STATUS].includes(config.status)
     ) {
       try {
         await uazapiFetch('/instance/connect', { method: 'POST', body: '{}' }, { instanceName: instance });
