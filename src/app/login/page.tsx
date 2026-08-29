@@ -158,7 +158,7 @@ export default function LoginPage() {
         <img
           src="/capa-login.webp"
           alt="Orion Track"
-          className="absolute inset-0 h-full w-full object-cover object-[45%_top] lg:object-center"
+          className="absolute inset-0 h-full w-full object-cover object-[45%_top] lg:object-[50%_top]"
         />
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#04102e] to-transparent lg:hidden" />
         <div className="absolute inset-y-0 right-0 hidden w-44 bg-gradient-to-l from-[#04102e] to-transparent lg:block" />
