@@ -8,9 +8,6 @@ import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/types';
 import { canSelectOperationalTeam, TEAM_SELECTION_STORAGE_KEY } from '@/lib/teamSelection';
 
-// Ponto exato da câmera lenta no vídeo (em segundos)
-const PAUSE_TIME = 2.6;
-
 function isTemporaryAuthFailure(message?: string | null) {
   return /failed to fetch|network|timeout|timed out|fetch failed|load failed/i.test(String(message || ''));
 }
@@ -33,11 +30,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   
-  // Estados da transição cinematográfica
-  const videoRef = useRef<HTMLVideoElement>(null);
   const redirectFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [videoState, setVideoState] = useState<'playing-intro' | 'paused-form' | 'playing-goal' | 'redirecting'>('playing-intro');
-  const [targetRoute, setTargetRoute] = useState<string>('');
+  const [redirecionando, setRedirecionando] = useState(false);
 
   const router = useRouter();
 
@@ -49,43 +43,21 @@ export default function LoginPage() {
 
   const finishLoginRedirect = (path: string) => {
     clearRedirectFallback();
-    setVideoState('redirecting');
+    setRedirecionando(true);
     router.replace(path);
   };
 
   useEffect(() => () => clearRedirectFallback(), []);
 
-  // Fallback robusto caso o vídeo não inicie ou o autoplay seja bloqueado
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (videoState === 'playing-intro') {
-        setVideoState('paused-form');
-        videoRef.current?.pause();
-      }
-    }, 4500); // 4.5 segundos limite
-    return () => clearTimeout(timer);
-  }, [videoState]);
-
-  // Função para executar a retomada do vídeo no sucesso do login
-  const handlePlayGoal = (path: string) => {
-    setTargetRoute(path);
-    setVideoState('playing-goal');
-
+  // O login leva direto ao painel. A navegacao completa e a rede de seguranca
+  // para navegador presa em chunk antigo, que ja aconteceu aqui.
+  const entrarNoPainel = (path: string) => {
+    setRedirecionando(true);
     clearRedirectFallback();
     redirectFallbackRef.current = setTimeout(() => {
-      // A animação é apenas visual e nunca pode bloquear o acesso.
-      // A navegação completa também recupera navegadores com chunks antigos.
       window.location.replace(path);
     }, 3000);
-    
-    if (videoRef.current) {
-      videoRef.current.play().catch((err) => {
-        console.warn('Play do vídeo bloqueado ou falhou. Redirecionando imediatamente:', err);
-        finishLoginRedirect(path);
-      });
-    } else {
-      finishLoginRedirect(path);
-    }
+    finishLoginRedirect(path);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -118,7 +90,7 @@ export default function LoginPage() {
       }
 
       if (profile.precisa_trocar_senha) {
-        handlePlayGoal('/primeiro-acesso');
+        entrarNoPainel('/primeiro-acesso');
         return;
       }
 
@@ -145,7 +117,7 @@ export default function LoginPage() {
         if (commercialMember?.ativo) destination = '/comercial';
       }
 
-      handlePlayGoal(destination);
+      entrarNoPainel(destination);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erro ao entrar no painel.');
       setLoading(false);
@@ -174,78 +146,37 @@ export default function LoginPage() {
     }
   };
 
-  const skipIntro = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = PAUSE_TIME;
-      videoRef.current.pause();
-    }
-    setVideoState('paused-form');
-  };
-
   return (
     <div className="min-h-screen bg-[#020512] flex items-center justify-center relative overflow-hidden font-sans">
       
-      {/* Background Player de Vídeo */}
-      <video
-        ref={videoRef}
-        src="/Jogador_chutando_bola_parada_202605311417.mp4"
-        className="absolute inset-0 w-full h-full object-cover z-0 select-none pointer-events-none"
-        muted
-        playsInline
-        autoPlay
-        onTimeUpdate={(e) => {
-          const video = e.currentTarget;
-          // Pausa o vídeo exatamente na câmera lenta do chute
-          if (videoState === 'playing-intro' && video.currentTime >= PAUSE_TIME) {
-            video.pause();
-            setVideoState('paused-form');
-          }
-        }}
-        onEnded={() => {
-          // Quando o vídeo acaba (gol marcado), faz o redirecionamento
-          if (videoState === 'playing-goal' && targetRoute) {
-            finishLoginRedirect(targetRoute);
-          }
-        }}
-        onError={() => {
-          if (videoState === 'playing-goal' && targetRoute) {
-            finishLoginRedirect(targetRoute);
-            return;
-          }
-          if (videoState === 'playing-intro') {
-            setVideoState('paused-form');
-          }
+      {/* Fundo sobrio: a operacao vende previsibilidade, nao espetaculo. Sem
+          video, a tela de entrada tambem deixou de baixar 6,9 MB por acesso. */}
+      <div className="absolute inset-0 z-0 bg-[#020512]" />
+      <div
+        className="absolute inset-0 z-0 opacity-70"
+        style={{
+          background:
+            'radial-gradient(circle at 20% 15%, rgba(37,99,235,0.22) 0%, transparent 45%),' +
+            'radial-gradient(circle at 85% 80%, rgba(6,182,212,0.16) 0%, transparent 50%)',
         }}
       />
-
-      {/* Overlay de contraste com desfoque de fundo inteligente */}
-      <div 
-        className={`absolute inset-0 bg-slate-950/50 transition-all duration-1000 z-10 ${
-          videoState === 'paused-form' ? 'backdrop-blur-[4px]' : 'backdrop-blur-[1px]'
-        }`} 
+      <div
+        className="absolute inset-0 z-0 opacity-[0.06]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(148,163,184,0.9) 1px, transparent 1px),' +
+            'linear-gradient(90deg, rgba(148,163,184,0.9) 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+        }}
       />
+      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#020512] to-transparent z-10 pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#020512] to-transparent z-10 pointer-events-none" />
 
-      {/* Vinhetas cinematográficas para cobrir marcas d'água e aumentar contraste visual */}
-      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#020512] via-[#020512]/85 to-transparent z-10 pointer-events-none" />
-      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#020512] via-[#020512]/50 to-transparent z-10 pointer-events-none" />
-
-      {/* Botão de Pular Intro (Discreto, no topo direito) */}
-      {videoState === 'playing-intro' && (
-        <button
-          onClick={skipIntro}
-          className="absolute top-6 right-6 z-50 flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-4.5 py-2.5 text-[9px] font-black uppercase tracking-wider text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md shadow-md animate-fade-in"
-          title="Pular introdução do chute"
-        >
-          Pular Intro
-        </button>
-      )}
-
-      {/* Overlay de Transição Final Tela Cheia (Gol!) */}
-      {videoState === 'redirecting' && (
+      {redirecionando && (
         <div className="absolute inset-0 z-[9999] bg-slate-950 flex flex-col items-center justify-center animate-fade-in">
           <div className="text-center space-y-4">
             <Loader2 className="animate-spin text-cyan-400 mx-auto" size={40} />
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-300 animate-pulse">Sincronizando painel comercial...</p>
+            <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-300 animate-pulse">Abrindo seu painel...</p>
           </div>
         </div>
       )}
@@ -253,7 +184,7 @@ export default function LoginPage() {
       {/* Container Principal de Login (Centralizado e Glassmorphic) */}
       <div className="w-full max-w-md px-6 relative z-20">
         <AnimatePresence>
-          {videoState === 'paused-form' && (
+          {!redirecionando && (
             <motion.div
               initial={{ opacity: 0, y: 35, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -279,10 +210,10 @@ export default function LoginPage() {
                     >
                       <div className="mb-6 text-center space-y-3">
                         <h2 className="text-lg md:text-xl font-black text-white leading-tight tracking-tight uppercase">
-                          A gestao que coloca sua concessionaria no <span className="text-cyan-400 font-extrabold animate-pulse">ataque</span>.
+                          Venda com <span className="text-cyan-400 font-extrabold">previsibilidade</span>.
                         </h2>
                         <p className="text-slate-400 font-bold text-3xs uppercase tracking-wider leading-relaxed">
-                          Um CRM criado para corretores de planos de saúde venderem com mais controle, velocidade e previsibilidade.
+                          O CRM que mostra quantos leads entram, quanto custa cada um e o que vira venda.
                         </p>
                       </div>
 
