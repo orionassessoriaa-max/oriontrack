@@ -1394,23 +1394,6 @@ export async function POST(request: Request) {
       ?? body?.data?.key?.fromMe,
     );
 
-    if (hasAudio && !audioProprio) {
-      try {
-        audioTranscript = mediaMetadata.media_base64
-          ? await transcribeAudio(mediaMetadata.media_base64, mediaMetadata.media_mimetype || 'audio/ogg')
-          : await transcribeUazapiAudio(body);
-        if (audioTranscript) {
-          aiCustomerMessage = `Audio transcrito do cliente: ${audioTranscript}`;
-        }
-      } catch (audioErr) {
-        audioTranscriptionFailed = true;
-        console.error('[uazapi_webhook] Failed processing inbound audio:', audioErr);
-      }
-      if (!audioTranscript) {
-        audioTranscriptionFailed = true;
-      }
-    }
-
     if (!message && hasMedia) {
       if (hasAudio) message = '🎤 Mensagem de voz';
       else if (hasImage) message = '📷 Imagem';
@@ -1536,6 +1519,27 @@ export async function POST(request: Request) {
         providerId,
       });
       return NextResponse.json({ ok: true, duplicated: true, reason: 'provider_echo' });
+    }
+
+    // A transcricao roda so depois de confirmado que a mensagem e nova. Antes
+    // vinha antes da checagem: cada reenvio do mesmo audio pela central pagava
+    // uma transcricao que era jogada fora junto com a linha repetida. Em dois
+    // dias foram 1.301 chamadas de transcricao para pouco mais de 200 audios.
+    if (hasAudio && !audioProprio) {
+      try {
+        audioTranscript = mediaMetadata.media_base64
+          ? await transcribeAudio(mediaMetadata.media_base64, mediaMetadata.media_mimetype || 'audio/ogg')
+          : await transcribeUazapiAudio(body);
+        if (audioTranscript) {
+          aiCustomerMessage = `Audio transcrito do cliente: ${audioTranscript}`;
+        }
+      } catch (audioErr) {
+        audioTranscriptionFailed = true;
+        console.error('[uazapi_webhook] Failed processing inbound audio:', audioErr);
+      }
+      if (!audioTranscript) {
+        audioTranscriptionFailed = true;
+      }
     }
 
     if (!providerId && !hasMedia && await hasRecentDuplicateMessage(conversation.id, direction, message)) {

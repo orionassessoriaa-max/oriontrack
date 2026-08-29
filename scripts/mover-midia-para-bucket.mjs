@@ -19,11 +19,15 @@
 import { createClient } from '@supabase/supabase-js';
 
 const BUCKET = 'inbox-media';
-const PAGINA = 60;
-const PAUSA_MS = 400;
+const PAGINA = 40;
+const PAUSA_MS = 500;
 const MINIMO_BYTES = 20 * 1024;
 
 const seco = process.argv.includes('--dry-run');
+const desdeArg = process.argv.find((a) => a.startsWith('--desde='));
+// A midia toda esta nos ultimos dias: varrer o historico inteiro so faz o banco
+// destoastar 32 mil linhas a toa, e foi o que deixou a instancia de joelhos.
+const desde = desdeArg ? desdeArg.split('=')[1] : '2026-08-17';
 const limiteArg = process.argv.find((a) => a.startsWith('--limite='));
 const limite = limiteArg ? Number(limiteArg.split('=')[1]) : Infinity;
 
@@ -65,14 +69,24 @@ console.log(seco ? 'MODO SECO: nada sera gravado.\n' : 'Movendo midia para o buc
 // Pagina grande em cima da coluna com base64 estoura o statement timeout do
 // banco: e o mesmo motivo de o inbox ficar lento. Quando isso acontece a pagina
 // e relida em pedacos menores, em vez de abandonar o resto da fila.
-async function lerPagina(inicio, tamanho) {
+async function lerPagina(inicio, tamanho, tentativa = 1) {
   const { data, error } = await supabase
     .from('whatsapp_mensagens')
     .select('id, created_at, mensagem, metadata')
+    .gte('created_at', desde)
     .order('created_at', { ascending: true })
     .range(inicio, inicio + tamanho - 1);
   if (!error) return data || [];
-  if (!/timeout/i.test(error.message) || tamanho <= 5) throw new Error(error.message);
+
+  // A borda da Supabase as vezes devolve pagina de erro em vez de JSON. Antes
+  // isso abortava a fila inteira: agora espera e tenta de novo.
+  if (!/timeout/i.test(error.message)) {
+    if (tentativa >= 3) throw new Error(String(error.message).replace(/<[^>]*>/g, ' ').slice(0, 120));
+    await espera(3000 * tentativa);
+    return lerPagina(inicio, tamanho, tentativa + 1);
+  }
+
+  if (tamanho <= 5) throw new Error('timeout mesmo com pagina minima');
 
   const metade = Math.max(5, Math.floor(tamanho / 4));
   const juntas = [];
