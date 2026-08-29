@@ -147,42 +147,45 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020512] flex items-center justify-center relative overflow-hidden font-sans">
-      
-      {/* Fundo sobrio: a operacao vende previsibilidade, nao espetaculo. Sem
-          video, a tela de entrada tambem deixou de baixar 6,9 MB por acesso. */}
-      <div className="absolute inset-0 z-0 bg-[#020512]" />
-      <div
-        className="absolute inset-0 z-0 opacity-70"
-        style={{
-          background:
-            'radial-gradient(circle at 20% 15%, rgba(37,99,235,0.22) 0%, transparent 45%),' +
-            'radial-gradient(circle at 85% 80%, rgba(6,182,212,0.16) 0%, transparent 50%)',
-        }}
-      />
-      <div
-        className="absolute inset-0 z-0 opacity-[0.06]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(148,163,184,0.9) 1px, transparent 1px),' +
-            'linear-gradient(90deg, rgba(148,163,184,0.9) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-        }}
-      />
-      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#020512] to-transparent z-10 pointer-events-none" />
-      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#020512] to-transparent z-10 pointer-events-none" />
+    <div className="min-h-screen bg-[#04102e] font-sans lg:grid lg:grid-cols-[1.15fr_minmax(430px,0.85fr)]">
 
-      {redirecionando && (
-        <div className="absolute inset-0 z-[9999] bg-slate-950 flex flex-col items-center justify-center animate-fade-in">
-          <div className="text-center space-y-4">
-            <Loader2 className="animate-spin text-cyan-400 mx-auto" size={40} />
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-300 animate-pulse">Abrindo seu painel...</p>
+      {/* Capa da marca. No desktop ocupa a coluna da esquerda inteira; no
+          celular vira uma faixa no topo, porque a imagem e larga e cortada em
+          tela estreita nao mostra nem a pessoa nem o logo. O tom do fundo do
+          formulario foi tirado da propria imagem para as duas metades
+          encostarem sem emenda visivel. */}
+      <div className="relative h-44 w-full overflow-hidden sm:h-56 lg:h-auto">
+        <img
+          src="/capa-login.webp"
+          alt="Orion Track"
+          className="absolute inset-0 h-full w-full object-cover object-[45%_top] lg:object-center"
+        />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#04102e] to-transparent lg:hidden" />
+        <div className="absolute inset-y-0 right-0 hidden w-44 bg-gradient-to-l from-[#04102e] to-transparent lg:block" />
+      </div>
+
+      {/* Coluna do formulario */}
+      <div className="relative flex items-center justify-center px-5 pb-12 pt-2 lg:px-10 lg:py-12">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{
+            background:
+              'radial-gradient(circle at 70% 20%, rgba(37,99,235,0.20) 0%, transparent 55%),' +
+              'radial-gradient(circle at 30% 90%, rgba(6,182,212,0.12) 0%, transparent 55%)',
+          }}
+        />
+
+        {redirecionando && (
+          <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#04102e] animate-fade-in">
+            <div className="text-center space-y-4">
+              <Loader2 className="animate-spin text-cyan-400 mx-auto" size={40} />
+              <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-300 animate-pulse">Abrindo seu painel...</p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Container Principal de Login (Centralizado e Glassmorphic) */}
-      <div className="w-full max-w-md px-6 relative z-20">
+      <div className="w-full max-w-md relative z-20">
         <AnimatePresence>
           {!redirecionando && (
             <motion.div
@@ -350,6 +353,7 @@ export default function LoginPage() {
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
       </div>
 
     </div>
