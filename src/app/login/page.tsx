@@ -213,10 +213,10 @@ export default function LoginPage() {
                     >
                       <div className="mb-6 text-center space-y-3">
                         <h2 className="text-lg md:text-xl font-black text-white leading-tight tracking-tight uppercase">
-                          Venda com <span className="text-cyan-400 font-extrabold">previsibilidade</span>.
+                          Chega de vender no escuro.
                         </h2>
                         <p className="text-slate-400 font-bold text-3xs uppercase tracking-wider leading-relaxed">
-                          O CRM que mostra quantos leads entram, quanto custa cada um e o que vira venda.
+                          O CRM que te traz <span className="text-cyan-400">previsibilidade</span>.
                         </p>
                       </div>
 
