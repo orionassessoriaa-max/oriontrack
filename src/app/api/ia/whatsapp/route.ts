@@ -71,11 +71,28 @@ async function resolveAiContext(profile: any) {
   return { broker, corretora, config, instance };
 }
 
-async function providerState(instance: string) {
+/**
+ * Alem do estado, devolve o codigo que a central esta mostrando agora.
+ *
+ * O QR do WhatsApp vale menos de um minuto. A tela pedia o codigo uma vez e
+ * mantinha a mesma imagem na frente do corretor: quando ele finalmente
+ * escaneava, o aparelho respondia "verifique sua conexao e tente novamente",
+ * porque aquele codigo ja tinha morrido. Lendo o codigo atual a cada consulta,
+ * a imagem na tela acompanha o que a central espera.
+ *
+ * O paircode e a saida por numero de telefone, que funciona quando a camera ou
+ * a conexao atrapalham a leitura.
+ */
+async function providerSnapshot(instance: string) {
   const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
   const matches = asArray(payload).filter((row) => instanceName(row).toLowerCase() === instance.toLowerCase());
   const found = matches.find((row) => stateOf(row) === 'open') || matches[0];
-  return found ? stateOf(found) : 'close';
+  if (!found) return { state: 'close', qrcode: null as string | null, paircode: null as string | null };
+  return {
+    state: stateOf(found),
+    qrcode: String(found.qrcode || '') || null,
+    paircode: String(found.paircode || '') || null,
+  };
 }
 
 export async function GET(request: Request) {
@@ -86,7 +103,10 @@ export async function GET(request: Request) {
     const context = await resolveAiContext(targetProfile);
     if (!context) return NextResponse.json({ configured: false, error: 'Concessionaria nao identificada.' }, { status: 404 });
     const dedicated = context.config?.sender_mode === 'dedicated';
-    const state = dedicated ? await providerState(context.instance).catch(() => 'close') : 'close';
+    const snapshot = dedicated
+      ? await providerSnapshot(context.instance).catch(() => ({ state: 'close', qrcode: null, paircode: null }))
+      : { state: 'close', qrcode: null, paircode: null };
+    const state = snapshot.state;
     if (dedicated && state === 'open') {
       after(async () => {
         try {
@@ -113,6 +133,8 @@ export async function GET(request: Request) {
       connected: state === 'open',
       concessionaria: context.corretora.nome,
       instance: dedicated ? context.instance : null,
+      qrcode: state === 'connecting' ? snapshot.qrcode : null,
+      paircode: state === 'connecting' ? snapshot.paircode : null,
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel consultar a IA.' }, { status: 500 });
@@ -167,7 +189,13 @@ export async function POST(request: Request) {
       entity_id: context.config.id,
       metadata: { corretora_id: context.corretora.id, instance: context.instance, target_profile_id: targetProfile.id },
     });
-    return NextResponse.json({ success: true, qrcode: qrCode(payload), state: 'connecting' });
+    const inicial = await providerSnapshot(context.instance).catch(() => ({ state: 'connecting', qrcode: null, paircode: null }));
+    return NextResponse.json({
+      success: true,
+      qrcode: qrCode(payload) || inicial.qrcode,
+      paircode: inicial.paircode,
+      state: 'connecting',
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel gerar o QR Code da IA.' }, { status: 502 });
   }

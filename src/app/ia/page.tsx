@@ -20,6 +20,7 @@ export default function AiConnectionPage() {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
+  const [paircode, setPaircode] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const accessToken = useCallback(
@@ -44,7 +45,13 @@ export default function AiConnectionPage() {
       else setNotice(payload.error || 'Nao foi possivel consultar a conexao.');
       if (payload.connected) {
         setQr(null);
+        setPaircode(null);
         setNotice(null);
+      } else if (payload.qrcode) {
+        // O codigo da central vale menos de um minuto: a imagem na tela
+        // acompanha o que ela espera agora, senao o aparelho recusa a leitura.
+        setQr(payload.qrcode);
+        setPaircode(payload.paircode || null);
       }
     } catch {
       setNotice('Nao foi possivel consultar a conexao.');
@@ -57,7 +64,7 @@ export default function AiConnectionPage() {
 
   useEffect(() => {
     if (!qr && connection.state !== 'connecting') return;
-    const interval = window.setInterval(() => void load(), 20000);
+    const interval = window.setInterval(() => void load(), 15000);
     return () => window.clearInterval(interval);
   }, [connection.state, load, qr]);
 
@@ -72,6 +79,7 @@ export default function AiConnectionPage() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Falha ao conectar.');
       setQr(payload.qrcode || null);
+      setPaircode(payload.paircode || null);
       setConnection((current) => ({ ...current, state: 'connecting' }));
       if (!payload.qrcode) setNotice('Conexao iniciada. Aguarde alguns segundos.');
     } catch (error: unknown) {
@@ -120,11 +128,26 @@ export default function AiConnectionPage() {
                 <X size={16} />
               </button>
               <h2 className="text-xl font-black text-slate-950">Escaneie o QR Code</h2>
+              <p className="mx-auto mt-2 max-w-xs text-xs font-bold text-slate-500">
+                Use o celular do numero da IA, nao o do seu atendimento.
+              </p>
               <img
                 className="mx-auto mt-5 h-72 w-72"
                 src={qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`}
                 alt="QR Code para conectar a IA"
               />
+              <p className="mt-3 text-[11px] font-bold text-slate-400">O codigo se renova sozinho a cada 15 segundos.</p>
+              {paircode && (
+                <div className="mt-4 rounded-2xl bg-slate-100 px-4 py-3">
+                  <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+                    Ou conecte pelo numero de telefone
+                  </p>
+                  <p className="mt-1 text-2xl font-black tracking-[0.3em] text-slate-900">{paircode}</p>
+                  <p className="mt-1 text-[11px] font-bold text-slate-500">
+                    WhatsApp, Dispositivos conectados, Conectar com numero de telefone.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
