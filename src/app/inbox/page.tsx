@@ -353,6 +353,11 @@ export default function BrokerInboxPage() {
   const inboxSyncInFlightRef = useRef(false);
   const inboxSyncQueuedRef = useRef(false);
   const inboxRefreshTimerRef = useRef<number | null>(null);
+  // Ultimo evento vindo do tempo real. Enquanto ele chega, a pesquisa periodica
+  // recua e vira so rede de seguranca; se parar de chegar, ela volta a apertar
+  // o passo sozinha. Assim a tela nao depende de a publicacao estar ligada nem
+  // de a politica de leitura deixar o evento passar.
+  const ultimoEventoRealtimeRef = useRef(0);
   const inboxFetchAbortRef = useRef<AbortController | null>(null);
   const messageSyncInFlightRef = useRef(false);
   const messageFetchRequestRef = useRef(0);
@@ -802,6 +807,10 @@ export default function BrokerInboxPage() {
     }
   }
 
+  function tempoRealAtivo() {
+    return Date.now() - ultimoEventoRealtimeRef.current < 120_000;
+  }
+
   function scheduleInboxRefresh(delay = 750) {
     if (document.visibilityState !== 'visible') return;
     if (inboxRefreshTimerRef.current) window.clearTimeout(inboxRefreshTimerRef.current);
@@ -875,6 +884,7 @@ export default function BrokerInboxPage() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
         (payload) => {
+          ultimoEventoRealtimeRef.current = Date.now();
           if (document.visibilityState !== 'visible') return;
           const newMsg = payload.new as InboxMessage;
           // A linha com status "sending" e apenas a reserva idempotente do
@@ -931,6 +941,7 @@ export default function BrokerInboxPage() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'whatsapp_conversas' },
         (payload) => {
+          ultimoEventoRealtimeRef.current = Date.now();
           // Trigger a silent inbox refresh to update the sidebar when any conversation changes
           const changedConversation = (payload.new || payload.old) as { corretor_id?: string | null };
           if (changedConversation.corretor_id && inboxCorretorIdsRef.current.has(changedConversation.corretor_id)) {
@@ -1096,23 +1107,28 @@ export default function BrokerInboxPage() {
     const conversationId = selectedConversation?.id;
     if (!conversationId || conversationId.startsWith('new-')) return;
 
+    let timer: number | null = null;
     const syncOpenConversation = () => {
       if (document.visibilityState === 'visible') {
         void fetchMessages(conversationId, { silent: true });
       }
+      timer = window.setTimeout(syncOpenConversation, tempoRealAtivo() ? 45_000 : 8_000);
     };
-    const interval = window.setInterval(syncOpenConversation, 8_000);
-    return () => window.clearInterval(interval);
+    timer = window.setTimeout(syncOpenConversation, tempoRealAtivo() ? 45_000 : 8_000);
+    return () => { if (timer) window.clearTimeout(timer); };
   }, [selectedConversation?.id, profile?.id]);
 
   // Atualiza a ordem e a previa das conversas separadamente. Assim uma
   // mensagem recuperada do celular tambem move o contato para o topo.
   useEffect(() => {
     if (!profile?.id) return;
-    const interval = window.setInterval(() => {
+    let timer: number | null = null;
+    const sincronizarLista = () => {
       if (document.visibilityState === 'visible') void fetchInbox(true);
-    }, 10_000);
-    return () => window.clearInterval(interval);
+      timer = window.setTimeout(sincronizarLista, tempoRealAtivo() ? 45_000 : 10_000);
+    };
+    timer = window.setTimeout(sincronizarLista, tempoRealAtivo() ? 45_000 : 10_000);
+    return () => { if (timer) window.clearTimeout(timer); };
   }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
   // Ao voltar para a aba/janela, sincroniza novamente a lista completa. Isso
