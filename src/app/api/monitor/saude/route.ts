@@ -16,6 +16,10 @@ import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
  * que ninguem le.
  */
 const JANELA_SILENCIO_MS = 6 * 60 * 60_000;
+// Alerta tecnico vai so para quem conserta. Mandar para todos os admins faria a
+// equipe receber aviso de banco lento sem ter o que fazer com a informacao, e
+// aviso que nao gera acao vira aviso ignorado.
+const PERFIL_DEV = process.env.MONITOR_ALERTA_PROFILE_ID || '7091766b-bc44-4ad7-b6c4-caa2461bf26b';
 const HORARIO_COMERCIAL = { inicio: 8, fim: 20 };
 
 type Alerta = { chave: string; texto: string };
@@ -141,17 +145,18 @@ export async function GET(request: Request) {
     }
 
     if (novos.length) {
-      const { data: destinos } = await supabaseAdmin
+      const { data: dev } = await supabaseAdmin
         .from('profiles')
         .select('id, nome, email, tipo_usuario, telefone')
-        .eq('tipo_usuario', 'admin')
-        .in('status', ['active', 'ativo', 'Ativo']);
+        .eq('id', PERFIL_DEV)
+        .maybeSingle();
+      const destinos = dev ? [dev] : [];
 
       await sendApoloWhatsApp({
         type: 'suporte',
         title: 'Alerta do CRM',
         message: ['Alerta do CRM:', '', ...novos.map((alerta) => `- ${alerta.texto}`)].join('\n'),
-        profiles: (destinos || []) as any,
+        profiles: destinos as any,
         respectPreferences: false,
       }).catch((erro) => console.error('[monitor] Falha ao avisar:', erro));
 
