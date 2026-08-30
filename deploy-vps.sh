@@ -144,3 +144,15 @@ crontab "$CRON_TMP"
 rm -f "$CRON_TMP"
 chmod 700 "$PROJECT_DIR/scripts/sync-voip-recordings-vps.sh"
 echo "Sincronizacao VoIP instalada no cron a cada 5 minutos."
+
+# Monitor de saude: avisa no WhatsApp quando o banco fica lento, uma instancia
+# conectada para de gravar mensagem ou o lead para de cair no expediente. Antes
+# disso, todo problema era descoberto por reclamacao de quem estava usando.
+MONITOR_CRON_TAG="# oriontrack-monitor-saude"
+MONITOR_CRON_LINE="*/10 * * * * curl -s -m 60 -H \"Authorization: Bearer $CRON_SECRET\" http://127.0.0.1:3000/api/monitor/saude >> /var/log/oriontrack-monitor-saude.log 2>&1 $MONITOR_CRON_TAG"
+CRON_TMP="$(mktemp)"
+crontab -l 2>/dev/null | grep -F -v "$MONITOR_CRON_TAG" > "$CRON_TMP" || true
+printf '%s\n' "$MONITOR_CRON_LINE" >> "$CRON_TMP"
+crontab "$CRON_TMP"
+rm -f "$CRON_TMP"
+echo "Monitor de saude instalado no cron a cada 10 minutos."
