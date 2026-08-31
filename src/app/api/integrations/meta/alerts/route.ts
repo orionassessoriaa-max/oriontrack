@@ -329,10 +329,18 @@ async function fetchActiveCreatives(
     .slice(0, 10);
 }
 
+/**
+ * O painel do gestor carrega a carteira inteira antes de desenhar. Com 36
+ * contas em lotes de 6, sao seis rodadas em fila, e cada rodada espera a Meta
+ * responder: e o "Carregando painel..." que o gestor via. A Meta ja vem em
+ * cache de uma hora e o cliente cortado por limite de uso continua protegido
+ * pelo controle do metaCachedFetch, entao o lote maior encurta a espera sem
+ * multiplicar chamada.
+ */
 async function settleInBatches<T, R>(
   items: T[],
   worker: (item: T) => Promise<R>,
-  batchSize = 6
+  batchSize = 12
 ): Promise<PromiseSettledResult<R>[]> {
   const results: PromiseSettledResult<R>[] = [];
   for (let index = 0; index < items.length; index += batchSize) {
