@@ -15,6 +15,10 @@ type UazapiConnectionSnapshot = {
   state: 'open' | 'connecting' | 'close';
   qrcode: string | null;
   disconnectReason: string;
+  // Numero que esta de fato conectado na central. O corretor precisa ver isso
+  // na tela: quem tem mais de um chip nao sabia qual estava respondendo pelo
+  // CRM, e o suporte perdia tempo perguntando.
+  numero: string | null;
 };
 
 function canViewWhatsappTarget(actor: ApiProfile, target: WhatsappTargetProfile) {
@@ -141,7 +145,7 @@ async function fetchUazapiInstanceStateFromList(instance: string): Promise<Uazap
     item?.status || item?.state || item?.connectionStatus || item?.sessionStatus,
     item?.connected === true || item?.isConnected === true || item?.loggedIn === true
   ) === 'open') || matches[0];
-  if (!found) return { state: 'close', qrcode: null, disconnectReason: '' };
+  if (!found) return { state: 'close', qrcode: null, disconnectReason: '', numero: null };
   const qrcode = extractUazapiQrCode(found);
   const normalizedState = normalizeUazapiState(
     found?.status || found?.state || found?.connectionStatus || found?.sessionStatus,
@@ -151,6 +155,7 @@ async function fetchUazapiInstanceStateFromList(instance: string): Promise<Uazap
     state: qrcode && normalizedState === 'close' ? 'connecting' : normalizedState,
     qrcode,
     disconnectReason: readUazapiDisconnectReason(found),
+    numero: String(found?.owner || found?.wid || found?.jid || '').split('@')[0] || null,
   };
 }
 
@@ -263,7 +268,15 @@ async function fetchUazapiInstanceState(instance: string): Promise<UazapiConnect
     const qrcode = extractUazapiQrCode(payload);
     const normalizedState = normalizeUazapiState(statusStr, isConnected);
     const state = qrcode && normalizedState === 'close' ? 'connecting' : normalizedState;
-    if (state !== 'close') return { state, qrcode, disconnectReason: readUazapiDisconnectReason(payload) };
+    if (state !== 'close') {
+      const dono = payload?.instance || payload?.data?.instance || payload;
+      return {
+        state,
+        qrcode,
+        disconnectReason: readUazapiDisconnectReason(payload),
+        numero: String(dono?.owner || dono?.wid || dono?.jid || '').split('@')[0] || null,
+      };
+    }
 
     // Alguns retornos do UAZAPI podem vir incompletos no endpoint de status.
     // Antes de mostrar desconectado, confirme na lista geral de instancias.
@@ -274,7 +287,7 @@ async function fetchUazapiInstanceState(instance: string): Promise<UazapiConnect
       return await fetchUazapiInstanceStateFromList(instance);
     } catch (fallbackError) {
       console.warn('[GET /api/inbox/uazapi/connect] instance/all fallback failed for %s. returning close.', instance, fallbackError);
-      return { state: 'close', qrcode: null, disconnectReason: '' };
+      return { state: 'close', qrcode: null, disconnectReason: '', numero: null };
     }
   }
 }
@@ -416,6 +429,7 @@ export async function GET(request: Request) {
         state: snapshot.state, // 'open', 'connecting', 'close'
         connected: snapshot.state === 'open',
         qrcode: snapshot.qrcode,
+        numero: snapshot.numero,
         disconnectReason: snapshot.state === 'close' ? snapshot.disconnectReason : '',
         statusSource: 'provider',
         targetProfile: targetPayload(targetProfile),

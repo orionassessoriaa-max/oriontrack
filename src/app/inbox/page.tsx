@@ -305,6 +305,20 @@ const TEMPLATES_PADRAO = [
 
 const QUICK_EMOJIS = ['😀', '😊', '🙏', '👍', '✅', '🚀', '📌', '📄', '💬', '📲', '💙', '🔥'];
 
+/**
+ * Numero que a central devolve vem cru, tipo 557187229444. Quem tem mais de
+ * um chip precisa bater o olho e reconhecer qual esta conectado, entao a tela
+ * mostra no formato que a pessoa usa no dia a dia.
+ */
+function formatarNumeroConectado(bruto: string) {
+  const digitos = String(bruto || '').replace(/\D/g, '');
+  if (digitos.length < 12) return bruto;
+  const pais = digitos.slice(0, 2);
+  const ddd = digitos.slice(2, 4);
+  const resto = digitos.slice(4);
+  return `+${pais} (${ddd}) ${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}`;
+}
+
 export default function BrokerInboxPage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -319,6 +333,7 @@ export default function BrokerInboxPage() {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [whatsAppOwnerName, setWhatsAppOwnerName] = useState('');
+  const [whatsAppNumero, setWhatsAppNumero] = useState('');
 
   // Message states
   const [messages, setMessages] = useState<InboxMessage[]>([]);
@@ -498,6 +513,7 @@ export default function BrokerInboxPage() {
         setIsWhatsAppConnected(payload.connected);
         setWhatsappStatus(payload.state || 'close');
         setWhatsAppOwnerName(payload.targetProfile?.nome || profile?.nome || '');
+        setWhatsAppNumero(String(payload.numero || ''));
         if (payload.connected) {
           setQrCode(null);
           setConnectError(null);
@@ -2509,6 +2525,9 @@ export default function BrokerInboxPage() {
                 <p className="text-xs font-black text-emerald-200 uppercase tracking-wider">WhatsApp Conectado</p>
                 <p className="text-2xs text-slate-400 font-bold mt-0.5">
                   {whatsAppOwnerName ? `${whatsAppOwnerName} conectado e pronto para enviar e receber mensagens diretamente.` : 'Conta conectada e pronta para enviar e receber mensagens diretamente.'}
+                  {whatsAppNumero && (
+                    <span className="text-emerald-300"> Numero: {formatarNumeroConectado(whatsAppNumero)}</span>
+                  )}
                 </p>
               </div>
             </div>
