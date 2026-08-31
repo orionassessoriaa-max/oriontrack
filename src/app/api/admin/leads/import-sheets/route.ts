@@ -37,9 +37,14 @@ type LeadInsert = {
   responsavel_profile_id?: string | null;
 };
 
-const IMPORT_INSERT_BATCH_SIZE = 200;
+const IMPORT_INSERT_BATCH_SIZE = 100;
 const IMPORT_EXISTING_PAGE_SIZE = 1000;
-const IMPORT_PARALLEL_BATCHES = 4;
+// Cada insert aciona a distribuicao do lead e atualiza o ultimo atendimento
+// dos mesmos membros. Lotes paralelos disputavam essas linhas e uma planilha
+// grande terminava com "canceling statement due to statement timeout" depois
+// de ja importar parte dos leads. A fila sequencial preserva o rodizio e evita
+// a espera por locks sem aumentar o timeout global do banco.
+const IMPORT_PARALLEL_BATCHES = 1;
 const IMPORT_PARALLEL_UPDATES = 10;
 
 async function requireImporter(request: Request) {
@@ -299,6 +304,17 @@ function isLeadDedupeConstraintError(error: any) {
     || message.includes('duplicate key value');
 }
 
+function isStatementTimeoutError(error: any) {
+  const message = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return String(error?.code || '') === '57014'
+    || message.includes('statement timeout')
+    || message.includes('canceling statement due to statement timeout');
+}
+
 async function insertLeadBatchHandlingMissingOrigin(leads: LeadInsert[]) {
   let { data, error } = await supabaseAdmin
     .from('leads')
@@ -329,19 +345,22 @@ async function insertLeadBatchResilient(leads: LeadInsert[]): Promise<{ ids: str
     };
   }
 
-  if (!isLeadDedupeConstraintError(error)) {
+  const duplicateError = isLeadDedupeConstraintError(error);
+  const timeoutError = isStatementTimeoutError(error);
+  if (!duplicateError && !timeoutError) {
     throw new Error(error.message || 'Erro ao inserir lote de leads.');
   }
 
   if (leads.length === 1) {
-    return { ids: [], duplicated: 1 };
+    if (duplicateError) return { ids: [], duplicated: 1 };
+    throw new Error(error.message || 'O banco demorou demais para inserir este lead.');
   }
 
   const middle = Math.ceil(leads.length / 2);
-  const [left, right] = await Promise.all([
-    insertLeadBatchResilient(leads.slice(0, middle)),
-    insertLeadBatchResilient(leads.slice(middle)),
-  ]);
+  // As metades tambem precisam ser sequenciais: ambas acionam o mesmo gatilho
+  // de rodizio e podem bloquear uma a outra nos membros da concessionaria.
+  const left = await insertLeadBatchResilient(leads.slice(0, middle));
+  const right = await insertLeadBatchResilient(leads.slice(middle));
 
   return {
     ids: [...left.ids, ...right.ids],
