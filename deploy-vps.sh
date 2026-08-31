@@ -114,7 +114,10 @@ while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
   esac
 
   # Tambem cobre a primeira criacao do servico, quando ainda nao existe UpdateStatus.
-  if [ -z "$UPDATE_STATE" ] && [ "$REPLICAS" = "1/1" ] && [ "$SERVICE_IMAGE" = "$ORIONTRACK_IMAGE" ]; then
+  # Primeira criacao do servico, quando ainda nao existe UpdateStatus. O
+  # "2/2" acompanha o numero de replicas do stack; com "1/1" fixo, o deploy
+  # ficava esperando um estado que nunca chega.
+  if [ -z "$UPDATE_STATE" ] && [ "${REPLICAS%%/*}" = "${REPLICAS##*/}" ] && [ -n "$REPLICAS" ] && [ "$SERVICE_IMAGE" = "$ORIONTRACK_IMAGE" ]; then
     DEPLOY_OK=1
     break
   fi

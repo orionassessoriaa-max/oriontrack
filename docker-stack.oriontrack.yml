@@ -42,7 +42,10 @@ services:
       ELEVENLABS_API_KEY: "${ELEVENLABS_API_KEY}"
       ORION_LEAD_AI_ELEVEN_VOICE_ID: "${ORION_LEAD_AI_ELEVEN_VOICE_ID}"
     deploy:
-      replicas: 1
+      # Duas replicas para o deploy nao derrubar o CRM. Com uma so, existe a
+      # janela em que a antiga ja saiu e a nova ainda esta subindo o Next, e e
+      # nela que o corretor leva erro. Com duas, sempre sobra uma atendendo.
+      replicas: 2
       restart_policy:
         condition: any
         delay: 5s
@@ -56,12 +59,19 @@ services:
         - "traefik.http.routers.oriontrack.tls=true"
         - "traefik.http.routers.oriontrack.tls.certresolver=letsencryptresolver"
         - "traefik.http.services.oriontrack.loadbalancer.server.port=3000"
+        # Sem isso o Traefik manda trafego assim que o container sobe, antes de
+        # o Next estar pronto para responder.
+        - "traefik.http.services.oriontrack.loadbalancer.healthcheck.path=/api/health"
+        - "traefik.http.services.oriontrack.loadbalancer.healthcheck.interval=10s"
+        - "traefik.http.services.oriontrack.loadbalancer.healthcheck.timeout=5s"
       update_config:
         parallelism: 1
         order: start-first
-        delay: 5s
+        # Espera maior entre uma replica e outra: o Traefik precisa de alguns
+        # segundos para perceber que a nova esta de pe antes de a proxima sair.
+        delay: 20s
         failure_action: rollback
-        monitor: 30s
+        monitor: 60s
       rollback_config:
         parallelism: 1
         order: start-first
