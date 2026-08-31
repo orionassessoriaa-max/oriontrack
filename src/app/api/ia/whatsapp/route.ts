@@ -92,6 +92,10 @@ async function providerSnapshot(instance: string) {
     state: stateOf(found),
     qrcode: String(found.qrcode || '') || null,
     paircode: String(found.paircode || '') || null,
+    // A central explica por que a sessao caiu. Sem mostrar isso, o corretor
+    // reconecta as cegas: no caso da Evo Seg foi "primary device was logged
+    // out", ou seja, o aparelho do numero da IA e que derrubou o pareamento.
+    motivoDesconexao: String(found.lastDisconnectReason || '') || null,
   };
 }
 
@@ -104,8 +108,8 @@ export async function GET(request: Request) {
     if (!context) return NextResponse.json({ configured: false, error: 'Concessionaria nao identificada.' }, { status: 404 });
     const dedicated = context.config?.sender_mode === 'dedicated';
     const snapshot = dedicated
-      ? await providerSnapshot(context.instance).catch(() => ({ state: 'close', qrcode: null, paircode: null }))
-      : { state: 'close', qrcode: null, paircode: null };
+      ? await providerSnapshot(context.instance).catch(() => ({ state: 'close', qrcode: null, paircode: null, motivoDesconexao: null }))
+      : { state: 'close', qrcode: null, paircode: null, motivoDesconexao: null };
     const state = snapshot.state;
     if (dedicated && state === 'open') {
       after(async () => {
@@ -135,6 +139,7 @@ export async function GET(request: Request) {
       instance: dedicated ? context.instance : null,
       qrcode: state === 'connecting' ? snapshot.qrcode : null,
       paircode: state === 'connecting' ? snapshot.paircode : null,
+      motivo_desconexao: state === 'open' ? null : snapshot.motivoDesconexao,
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel consultar a IA.' }, { status: 500 });

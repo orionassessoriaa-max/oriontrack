@@ -11,6 +11,9 @@ type AiConnection = {
   can_connect?: boolean;
   connected?: boolean;
   state?: 'open' | 'connecting' | 'close';
+  qrcode?: string | null;
+  paircode?: string | null;
+  motivo_desconexao?: string | null;
   error?: string;
 };
 
@@ -116,6 +119,12 @@ export default function AiConnectionPage() {
           {!loading && connection.can_connect === false && (
             <p className="mt-4 text-sm font-bold text-amber-300">
               Esta concessionaria ja usa a IA pelo WhatsApp de um perfil. Altere para numero exclusivo no painel administrativo antes de conectar.
+            </p>
+          )}
+          {!loading && !connection.connected && connection.motivo_desconexao && (
+            <p className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs font-bold text-amber-200">
+              A central informou: {connection.motivo_desconexao}.
+              {/^403|logged out/i.test(String(connection.motivo_desconexao)) && ' Isso acontece quando o proprio aparelho do numero da IA desconecta o dispositivo. Confira em Dispositivos conectados antes de ler o QR de novo.'}
             </p>
           )}
           {notice && <p className="mt-4 text-sm font-bold text-rose-300">{notice}</p>}
