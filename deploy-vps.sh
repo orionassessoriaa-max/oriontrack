@@ -135,6 +135,10 @@ printf '{"timestamp":"%s","event":"deploy_completed","image":"%s"}\n' "$(date -u
 trap - EXIT
 echo "Deploy concluido sem interrupcao. Imagem ativa: $ORIONTRACK_IMAGE"
 
+# O servico nao publica porta no host: quem alcanca a aplicacao e o Traefik,
+# pelo dominio. Cron batendo em 127.0.0.1:3000 nunca chegava a lugar nenhum.
+APP_URL="${APP_URL:-https://track.orionassessoriaa.com.br}"
+
 VOIP_CRON_TAG="# oriontrack-voip-recordings"
 VOIP_CRON_LINE="*/5 * * * * $PROJECT_DIR/scripts/sync-voip-recordings-vps.sh >> /var/log/oriontrack-voip-sync.log 2>&1 $VOIP_CRON_TAG"
 CRON_TMP="$(mktemp)"
@@ -149,7 +153,7 @@ echo "Sincronizacao VoIP instalada no cron a cada 5 minutos."
 # conectada para de gravar mensagem ou o lead para de cair no expediente. Antes
 # disso, todo problema era descoberto por reclamacao de quem estava usando.
 MONITOR_CRON_TAG="# oriontrack-monitor-saude"
-MONITOR_CRON_LINE="*/10 * * * * curl -s -m 60 -H \"Authorization: Bearer $CRON_SECRET\" http://127.0.0.1:3000/api/monitor/saude >> /var/log/oriontrack-monitor-saude.log 2>&1 $MONITOR_CRON_TAG"
+MONITOR_CRON_LINE="*/10 * * * * curl -s -m 60 -H \"Authorization: Bearer $CRON_SECRET\" $APP_URL/api/monitor/saude >> /var/log/oriontrack-monitor-saude.log 2>&1 $MONITOR_CRON_TAG"
 CRON_TMP="$(mktemp)"
 crontab -l 2>/dev/null | grep -F -v "$MONITOR_CRON_TAG" > "$CRON_TMP" || true
 printf '%s\n' "$MONITOR_CRON_LINE" >> "$CRON_TMP"
@@ -160,7 +164,7 @@ echo "Monitor de saude instalado no cron a cada 10 minutos."
 # Aquecimento do cache da Meta: a resposta vale meia hora, entao so a primeira
 # visita do gestor era lenta. Rodando antes dele, a tela ja abre com o dado.
 AQUECE_CRON_TAG="# oriontrack-aquece-meta"
-AQUECE_CRON_LINE="*/20 * * * * curl -s -m 300 -H \"Authorization: Bearer $CRON_SECRET\" http://127.0.0.1:3000/api/monitor/aquecer-meta >> /var/log/oriontrack-aquece-meta.log 2>&1 $AQUECE_CRON_TAG"
+AQUECE_CRON_LINE="*/20 * * * * curl -s -m 300 -H \"Authorization: Bearer $CRON_SECRET\" $APP_URL/api/monitor/aquecer-meta >> /var/log/oriontrack-aquece-meta.log 2>&1 $AQUECE_CRON_TAG"
 CRON_TMP="$(mktemp)"
 crontab -l 2>/dev/null | grep -F -v "$AQUECE_CRON_TAG" > "$CRON_TMP" || true
 printf '%s\n' "$AQUECE_CRON_LINE" >> "$CRON_TMP"
