@@ -130,12 +130,22 @@ type CommercialPayload = {
   sem_interesse_fez_cotacao?: boolean;
 };
 
+const MOTIVOS_SEM_INTERESSE = [
+  'Preco acima do esperado',
+  'Ja fechou com outro corretor',
+  'Nao quer contratar agora',
+  'Fora do perfil de atendimento',
+  'Nao respondeu apos tentativas',
+  'Numero errado',
+];
+
 type CommercialModalState = {
   lead: Lead;
   status: LeadStatus;
   valor_negociacao: string;
   operadora_negociacao: string;
   sem_interesse_motivo: string;
+  sem_interesse_outro: string;
   sem_interesse_fez_cotacao: boolean;
 } | null;
 
@@ -697,7 +707,14 @@ export default function BrokerLeadsPage() {
       status,
       valor_negociacao: lead.valor_negociacao ? String(lead.valor_negociacao) : '',
       operadora_negociacao: lead.operadora_negociacao || '',
-      sem_interesse_motivo: lead.sem_interesse_motivo || '',
+      // Motivo gravado que nao esta na lista volta como texto livre, senao a
+      // tela abriria vazia e perderia o que o corretor tinha escrito.
+      sem_interesse_motivo: MOTIVOS_SEM_INTERESSE.includes(String(lead.sem_interesse_motivo || ''))
+        ? String(lead.sem_interesse_motivo)
+        : (lead.sem_interesse_motivo ? 'Outro motivo' : ''),
+      sem_interesse_outro: MOTIVOS_SEM_INTERESSE.includes(String(lead.sem_interesse_motivo || ''))
+        ? ''
+        : String(lead.sem_interesse_motivo || ''),
       sem_interesse_fez_cotacao: Boolean(lead.sem_interesse_fez_cotacao || parseCurrencyInput(lead.valor_negociacao) > 0),
     });
 
@@ -718,10 +735,19 @@ export default function BrokerLeadsPage() {
     if (!commercialModal) return;
 
     if (commercialModal.status === 'Sem interesse') {
-      const motivo = commercialModal.sem_interesse_motivo.trim();
+      // "Outro motivo" sozinho nao diz nada para quem le depois: o que fica
+      // gravado e o texto que o corretor escreveu.
+      const escolhido = commercialModal.sem_interesse_motivo.trim();
+      const motivo = escolhido === 'Outro motivo'
+        ? commercialModal.sem_interesse_outro.trim()
+        : escolhido;
       const valor = parseCurrencyInput(commercialModal.valor_negociacao);
-      if (!motivo) {
+      if (!escolhido) {
         setCommercialModalError('Informe o motivo para marcar o lead como sem interesse.');
+        return;
+      }
+      if (!motivo) {
+        setCommercialModalError('Escreva qual foi o motivo antes de encerrar.');
         return;
       }
       if (commercialModal.sem_interesse_fez_cotacao && !valor) {
@@ -2148,14 +2174,24 @@ export default function BrokerLeadsPage() {
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                   >
                     <option value="">Selecione o motivo</option>
-                    <option value="Preco acima do esperado">Preco acima do esperado</option>
-                    <option value="Ja fechou com outro corretor">Ja fechou com outro corretor</option>
-                    <option value="Nao quer contratar agora">Nao quer contratar agora</option>
-                    <option value="Fora do perfil de atendimento">Fora do perfil de atendimento</option>
-                    <option value="Nao respondeu apos tentativas">Nao respondeu apos tentativas</option>
+                    {MOTIVOS_SEM_INTERESSE.map((motivo) => (
+                      <option key={motivo} value={motivo}>{motivo}</option>
+                    ))}
                     <option value="Outro motivo">Outro motivo</option>
                   </select>
                 </label>
+                {commercialModal.sem_interesse_motivo === 'Outro motivo' && (
+                  <label className="block">
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Qual foi o motivo</span>
+                    <input
+                      value={commercialModal.sem_interesse_outro}
+                      onChange={(event) => setCommercialModal((current) => current ? { ...current, sem_interesse_outro: event.target.value } : current)}
+                      placeholder="Escreva o motivo com suas palavras"
+                      maxLength={180}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                    />
+                  </label>
+                )}
                 <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <span className="text-sm font-black text-slate-800">Chegou a fazer cotacao?</span>
                   <input
