@@ -156,3 +156,14 @@ printf '%s\n' "$MONITOR_CRON_LINE" >> "$CRON_TMP"
 crontab "$CRON_TMP"
 rm -f "$CRON_TMP"
 echo "Monitor de saude instalado no cron a cada 10 minutos."
+
+# Aquecimento do cache da Meta: a resposta vale meia hora, entao so a primeira
+# visita do gestor era lenta. Rodando antes dele, a tela ja abre com o dado.
+AQUECE_CRON_TAG="# oriontrack-aquece-meta"
+AQUECE_CRON_LINE="*/20 * * * * curl -s -m 300 -H \"Authorization: Bearer $CRON_SECRET\" http://127.0.0.1:3000/api/monitor/aquecer-meta >> /var/log/oriontrack-aquece-meta.log 2>&1 $AQUECE_CRON_TAG"
+CRON_TMP="$(mktemp)"
+crontab -l 2>/dev/null | grep -F -v "$AQUECE_CRON_TAG" > "$CRON_TMP" || true
+printf '%s\n' "$AQUECE_CRON_LINE" >> "$CRON_TMP"
+crontab "$CRON_TMP"
+rm -f "$CRON_TMP"
+echo "Aquecimento do cache da Meta instalado no cron a cada 20 minutos."

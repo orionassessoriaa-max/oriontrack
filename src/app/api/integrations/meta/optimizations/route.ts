@@ -6,6 +6,7 @@ import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 import { TRAFFIC_RULES } from '@/lib/trafego/rules';
 import { metaCachedFetch } from '@/lib/meta/cachedFetch';
+import { buscarInsights } from '@/lib/meta/insights';
 
 type CorretorMeta = {
   id: string;
@@ -301,27 +302,7 @@ function metricRow(row: any, crmLeads: number, currency = 'BRL') {
 }
 
 async function fetchInsights(accountId: string, level: 'account' | 'campaign' | 'adset' | 'ad', since: string, until: string, token: string, graphVersion: string) {
-  const url = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);
-  const identityFields = level === 'campaign'
-    ? ',campaign_id,campaign_name'
-    : level === 'adset'
-      ? ',campaign_id,campaign_name,adset_id,adset_name'
-      : level === 'ad'
-        ? ',campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name'
-        : '';
-  url.searchParams.set('fields', `spend,ctr,cpc,cpm,frequency,clicks,inline_link_clicks,actions${identityFields}`);
-  url.searchParams.set('level', level);
-  url.searchParams.set('limit', '500');
-  url.searchParams.set('time_range', JSON.stringify({ since, until }));
-  url.searchParams.set('access_token', token);
-
-  const response = await metaCachedFetch(url.toString(), {
-    ttlSeconds: 1800,
-    resourceKind: `optimization-${level}`,
-  });
-  const payload = await response.json();
-  if (!response.ok || payload.error) throw new Error(describeMetaError(payload.error, accountId));
-  return payload.data || [];
+  return buscarInsights(accountId, level, since, until, token, graphVersion, describeMetaError);
 }
 
 async function fetchObjectMap(ids: string[], fields: string, token: string, graphVersion: string) {
