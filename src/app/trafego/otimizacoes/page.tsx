@@ -130,9 +130,12 @@ export default function OtimizacoesPage() {
   const [statusSort, setStatusSort] = useState<'ativos' | 'pausados' | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [dateStart, setDateStart] = useState(daysAgo(30));
+  const [dateStart, setDateStart] = useState(daysAgo(7));
   const [dateEnd, setDateEnd] = useState(todayLocal());
-  const [presetLabel, setPresetLabel] = useState('Últimos 30 dias');
+  // Abrir em 30 dias fazia a tela puxar um mes de Meta e de leads antes de
+  // mostrar qualquer coisa, e a espera era sentida em toda visita. Sete dias e a
+  // janela que o gestor usa para decidir; o resto continua a um clique.
+  const [presetLabel, setPresetLabel] = useState('Últimos 7 dias');
   const [expandedCampaigns, setExpandedCampaigns] = useState<Record<string, boolean>>({});
   const [expandedAdsets, setExpandedAdsets] = useState<Record<string, boolean>>({});
   const [expandedAds, setExpandedAds] = useState<Record<string, boolean>>({});

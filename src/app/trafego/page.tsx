@@ -166,9 +166,12 @@ export default function GestorDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ tone: 'ok' | 'erro'; texto: string } | null>(null);
 
-  const [dataInicio, setDataInicio] = useState(daysAgo(30));
+  const [dataInicio, setDataInicio] = useState(daysAgo(7));
   const [dataFim, setDataFim] = useState(today());
-  const [presetLabel, setPresetLabel] = useState('Últimos 30 dias');
+  // Abrir em 30 dias fazia a tela puxar um mes de Meta e de leads antes de
+  // mostrar qualquer coisa, e a espera era sentida em toda visita. Sete dias e a
+  // janela que o gestor usa para decidir; o resto continua a um clique.
+  const [presetLabel, setPresetLabel] = useState('Últimos 7 dias');
 
   const [confirmando, setConfirmando] = useState<Recomendacao | null>(null);
   const [ativacaoPendente, setAtivacaoPendente] = useState<Recomendacao | null>(null);
