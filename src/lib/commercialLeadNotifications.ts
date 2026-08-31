@@ -134,10 +134,9 @@ export async function notifyCommercialLeadPool(lead: CommercialLeadNotification)
   const { data: membros, error } = await supabaseAdmin
     .from('comercial_membros')
     .select('profile_id, papel, ativo')
-    // O closer tambem trabalha lead da fila desde que o nivel S deixou de ter
-    // dono fixo. Sem ele na lista, o aviso chegaria so para os SDRs e ele
-    // ficaria sabendo por ultimo.
-    .in('papel', ['sdr', 'closer'])
+    // Lead novo e assunto de SDR. O closer continua no time, mas entra depois,
+    // na reuniao, e nao disputa a fila.
+    .eq('papel', 'sdr')
     .eq('ativo', true);
   if (error) throw error;
 

@@ -82,9 +82,9 @@ export async function POST(request: Request) {
 
   // Fila comum: o lead novo chega sem dono e quem apertar Start primeiro fica
   // com ele. Ninguem toma lead de ninguem, entao so vale para lead sem dono.
-  if (guard.commercialRole !== 'sdr' && guard.commercialRole !== 'closer') {
+  if (guard.commercialRole !== 'sdr') {
     return NextResponse.json({
-      error: 'Apenas SDR ou closer assume lead pela fila. A coordenacao atribui pelo seletor.',
+      error: 'Apenas SDR assume lead pela fila. A coordenacao atribui pelo seletor.',
     }, { status: 403 });
   }
 
