@@ -124,7 +124,7 @@ export function resolveTrackingStatus(input: {
   staleAfterHours?: number;
 }): TrackingStatus {
   const explicit = String(input.explicitStatus || '').trim();
-  const staleAfterHours = input.staleAfterHours ?? 24;
+  const staleAfterHours = input.staleAfterHours ?? 48;
   const now = input.now instanceof Date ? input.now : new Date(input.now || Date.now());
   const lastLeadAt = input.lastOrionLeadAt ? new Date(input.lastOrionLeadAt) : null;
   const lastLeadTimestamp = lastLeadAt?.getTime() ?? Number.NaN;
@@ -132,7 +132,15 @@ export function resolveTrackingStatus(input: {
   const hoursWithoutLead = hasReliableLastLead
     ? Math.max(0, (now.getTime() - lastLeadTimestamp) / 3_600_000)
     : 0;
-  const isStale = input.spend > 0 && hasReliableLastLead && hoursWithoutLead >= staleAfterHours;
+  // Rastreio quebrado e o caso de gastar e nao entrar lead nenhum. Antes bastava
+  // passar 24h sem lead novo, entao toda segunda-feira meia carteira aparecia
+  // quebrada: conta com oito leads na semana caia junto com conta que parou de
+  // verdade, e o CPL era escondido nas duas. Com lead no periodo, o rastreio
+  // esta funcionando, a conta so e mais lenta.
+  const isStale = input.spend > 0
+    && input.leadsInPeriod === 0
+    && hasReliableLastLead
+    && hoursWithoutLead >= staleAfterHours;
 
   if (explicit === 'nao_configurado') return 'aguardando_integracao';
   if (explicit === 'planilha_importada') {
