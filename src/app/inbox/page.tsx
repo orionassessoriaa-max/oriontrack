@@ -1000,13 +1000,10 @@ export default function BrokerInboxPage() {
 
   // Fetch Messages for Selected Conversation
   async function fetchMessages(conversationId: string, options: { silent?: boolean } = {}) {
-    if (conversationId.startsWith('new-')) {
-      messageFetchAbortRef.current?.abort();
-      setMessages([]);
-      setLoadingMessages(false);
-      visibleConversationIdsRef.current = new Set();
-      return;
-    }
+    const requestedConversation = selectedConversationRef.current?.id === conversationId
+      ? selectedConversationRef.current
+      : null;
+    const isNewConversation = conversationId.startsWith('new-');
 
     if (options.silent && messageSyncInFlightRef.current) return;
 
@@ -1037,7 +1034,13 @@ export default function BrokerInboxPage() {
       setLoadingMessages(true);
     }
     try {
-      const response = await fetch(`/api/inbox/messages?conversation_id=${conversationId}`, {
+      const query = new URLSearchParams({ conversation_id: conversationId });
+      if (isNewConversation && requestedConversation) {
+        query.set('telefone', requestedConversation.telefone);
+        if (requestedConversation.lead_id) query.set('lead_id', requestedConversation.lead_id);
+        if (requestedConversation.nome_contato) query.set('nome_contato', requestedConversation.nome_contato);
+      }
+      const response = await fetch(`/api/inbox/messages?${query.toString()}`, {
         cache: 'no-store',
         signal: controller.signal,
         headers: { 
@@ -1063,7 +1066,33 @@ export default function BrokerInboxPage() {
         if (!options.silent) setSendError(errorMessage);
         return;
       }
-      if (selectedConversationRef.current?.id !== conversationId) return;
+      const currentConversationId = selectedConversationRef.current?.id;
+      if (currentConversationId !== conversationId && currentConversationId !== payload.conversation?.id) return;
+
+      if (isNewConversation && payload.conversation) {
+        const resolvedConversation = {
+          ...(requestedConversation || {}),
+          ...payload.conversation,
+          status: payload.conversation.status === 'aguardando'
+            ? 'espera'
+            : payload.conversation.status === 'resolvida'
+              ? 'fechada'
+              : payload.conversation.status,
+        } as Conversation;
+        selectedConversationRef.current = resolvedConversation;
+        setSelectedConversation(resolvedConversation);
+        setConversations((current) => {
+          let replaced = false;
+          const next = current
+            .filter((item) => item.id !== resolvedConversation.id || item.id === conversationId)
+            .map((item) => {
+              if (item.id !== conversationId) return item;
+              replaced = true;
+              return resolvedConversation;
+            });
+          return replaced ? next : [resolvedConversation, ...next];
+        });
+      }
       visibleConversationIdsRef.current = new Set(
         Array.isArray(payload.conversation_ids)
           ? payload.conversation_ids.map(String)

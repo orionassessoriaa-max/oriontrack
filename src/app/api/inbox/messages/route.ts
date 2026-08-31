@@ -1,5 +1,5 @@
 import { after, NextResponse } from 'next/server';
-import { rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
@@ -583,6 +583,84 @@ async function findExistingConversation(corretorId: string, phone: string, leadI
   return data;
 }
 
+async function resolveConversationForHistory(
+  request: Request,
+  profile: ApiProfile,
+  conversationId: string,
+  searchParams: URLSearchParams,
+) {
+  if (!conversationId.startsWith('new-')) return getConversation(conversationId);
+
+  const phone = normalizePhone(searchParams.get('telefone') || conversationId.replace('new-', ''));
+  const leadId = String(searchParams.get('lead_id') || '').trim();
+  let contactName = String(searchParams.get('nome_contato') || '').trim() || phone;
+  let corretorId = String(profile?.corretor_id || '').trim();
+
+  if (!phone) throw new Error('Telefone do contato invalido.');
+
+  if (leadId) {
+    const { data: lead, error } = await supabaseAdmin
+      .from('leads')
+      .select('id,nome,telefone,corretor_id,responsavel_profile_id')
+      .eq('id', leadId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!lead) return null;
+
+    const leadPhone = normalizePhone(lead.telefone || '');
+    if (leadPhone && leadPhone.slice(-8) !== phone.slice(-8)) return null;
+
+    const candidate = {
+      id: conversationId,
+      lead_id: lead.id,
+      corretor_id: lead.corretor_id,
+      telefone: phone,
+    };
+    if (!(await canAccessConversation(profile, candidate))) return null;
+
+    corretorId = String(lead.corretor_id || corretorId).trim();
+    contactName = String(lead.nome || contactName).trim();
+  }
+
+  // No modo administrador o perfil autenticado nao possui corretor_id. O
+  // perfil visualizado e confiavel somente depois da mesma checagem usada no
+  // restante do Inbox; nunca aceitamos um corretor_id enviado pelo navegador.
+  if (!corretorId) {
+    const targetProfileId = String(request.headers.get('x-orion-view-profile-id') || '').trim();
+    if (targetProfileId) {
+      const { data: target, error } = await supabaseAdmin
+        .from('profiles')
+        .select('id,corretor_id')
+        .eq('id', targetProfileId)
+        .maybeSingle();
+      if (error) throw error;
+      if (target && (profile.tipo_usuario === 'admin' || target.id === profile.id)) {
+        corretorId = String(target.corretor_id || '').trim();
+      }
+    }
+  }
+
+  if (!corretorId) throw new Error('Nao foi possivel identificar a concessionaria deste contato.');
+
+  const existing = await findExistingConversation(corretorId, phone, leadId || null);
+  if (existing) return existing;
+
+  const { data: created, error: createError } = await supabaseAdmin
+    .from('whatsapp_conversas')
+    .insert([{
+      corretor_id: corretorId,
+      lead_id: leadId || null,
+      telefone: phone,
+      nome_contato: contactName,
+      status: 'aberta',
+      ultima_mensagem_at: null,
+    }])
+    .select('*')
+    .single();
+  if (createError) throw createError;
+  return created;
+}
+
 async function findAccessibleConversationIdsByPhone(profile: any, conversation: any) {
   const phone = normalizePhone(conversation?.telefone || '');
   const digits = phone.replace(/\D/g, '');
@@ -628,7 +706,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Selecione uma conversa.' }, { status: 400 });
     }
 
-    const conversation = await getConversation(conversationId);
+    const conversation = await resolveConversationForHistory(request, guard.profile, conversationId, searchParams);
     if (!(await canAccessConversation(guard.profile, conversation))) {
       return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
     }
@@ -647,13 +725,24 @@ export async function GET(request: Request) {
       .like('provider_message_id', 'orion-client:%')
       .lt('created_at', new Date(Date.now() - 3 * 60_000).toISOString());
 
-    // O banco local pode estar incompleto quando mensagens foram trocadas
-    // diretamente no WhatsApp ou chegaram durante uma falha do webhook.
-    // Ao abrir a conversa, devolve primeiro o historico local e reconcilia o
-    // provedor depois da resposta. A trava impede buscas concorrentes do poll.
-    after(async () => {
+    const { count: localMessageCount, error: localMessageCountError } = await supabaseAdmin
+      .from('whatsapp_mensagens')
+      .select('id', { count: 'exact', head: true })
+      .in('conversa_id', conversationIds);
+    if (localMessageCountError) throw localMessageCountError;
+
+    // Uma conversa vazia pode ser apenas nova no Orion, embora ja tenha meses
+    // de historico no WhatsApp. Nesse primeiro acesso a sincronizacao precisa
+    // terminar antes da resposta; caso contrario o usuario so ve o historico
+    // depois de enviar uma mensagem. Conversas ja preenchidas continuam com a
+    // reconciliacao em segundo plano para manter o Inbox rapido.
+    if (!localMessageCount) {
       await syncProviderHistoryThrottled(conversation);
-    });
+    } else {
+      after(async () => {
+        await syncProviderHistoryThrottled(conversation);
+      });
+    }
 
     // Um mesmo contato pode possuir conversas diferentes quando foi atendido
     // por integrantes/instancias distintas. O Inbox deve apresentar uma unica
@@ -678,6 +767,7 @@ export async function GET(request: Request) {
         ...message,
         metadata: sanitizeProviderMetadata(message.metadata),
       })),
+      conversation,
       conversation_ids: conversationIds,
     });
   } catch (error: any) {
