@@ -379,6 +379,27 @@ export default function CommercialKanbanPage() {
     () => members.filter(recebeLeadNoRodizio),
     [members],
   );
+  /**
+   * Quem aparece no seletor de responsavel.
+   *
+   * A distribuicao de hoje e so dos SDRs, mas lead antigo pode ter sido
+   * atendido por quem saiu do rodizio: o Leo trabalhou como SDR e tem venda
+   * fechada no nome dele. Fora da lista, o card mostrava "Sem responsavel" e
+   * bastava um clique para apagar o historico.
+   */
+  const sdrOptions = useMemo(() => {
+    const lista = [...sdrMembers];
+    const jaTem = new Set(lista.map((member) => member.profile_id));
+    for (const lead of leads) {
+      const dono = lead.sdr_id;
+      if (!dono || jaTem.has(dono)) continue;
+      const membro = memberMap.get(dono);
+      if (!membro) continue;
+      jaTem.add(dono);
+      lista.push(membro);
+    }
+    return lista;
+  }, [sdrMembers, leads, memberMap]);
   const saleSellerMembers = useMemo(
     () => members.filter((member) => member.ativo && (member.papel === "closer" || member.profile_id === "a12b63f9-4c72-4a92-a99a-98c020723a06")),
     [members],
@@ -985,7 +1006,7 @@ export default function CommercialKanbanPage() {
               >
                 <option value="todos">Todos os SDRs</option>
                 <option value="sem_responsavel">Sem responsavel</option>
-                {sdrMembers.map((member) => (
+                {sdrOptions.map((member) => (
                   <option key={member.profile_id} value={member.profile_id}>
                     {member.nome}
                   </option>
@@ -1370,7 +1391,7 @@ export default function CommercialKanbanPage() {
                               disabled={startingId === lead.id}
                             >
                               <option value="">Sem responsavel</option>
-                              {sdrMembers.map((member) => (
+                              {sdrOptions.map((member) => (
                                 <option
                                   key={member.profile_id}
                                   value={member.profile_id}
