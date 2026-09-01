@@ -390,6 +390,13 @@ export default function CommercialKanbanPage() {
   const sdrOptions = useMemo(() => {
     const lista = [...sdrMembers];
     const jaTem = new Set(lista.map((member) => member.profile_id));
+    // O closer nao recebe lead pela fila, mas cobre SDR ausente: sem ele na
+    // lista, nao havia como passar o lead para quem vai atender agora.
+    for (const membro of members) {
+      if (!membro.ativo || membro.papel !== 'closer' || jaTem.has(membro.profile_id)) continue;
+      jaTem.add(membro.profile_id);
+      lista.push(membro);
+    }
     for (const lead of leads) {
       const dono = lead.sdr_id;
       if (!dono || jaTem.has(dono)) continue;
@@ -399,7 +406,7 @@ export default function CommercialKanbanPage() {
       lista.push(membro);
     }
     return lista;
-  }, [sdrMembers, leads, memberMap]);
+  }, [sdrMembers, members, leads, memberMap]);
   const saleSellerMembers = useMemo(
     () => members.filter((member) => member.ativo && (member.papel === "closer" || member.profile_id === "a12b63f9-4c72-4a92-a99a-98c020723a06")),
     [members],

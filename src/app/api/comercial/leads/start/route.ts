@@ -32,15 +32,17 @@ export async function POST(request: Request) {
     if (!previousLead) return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
 
     if (requestedSdrId) {
+      // O closer nao entra no rodizio, mas atende quando precisa cobrir um SDR
+      // ausente. Aceitar so papel de SDR aqui impedia justamente esse socorro.
       const { data: member, error: memberError } = await supabaseAdmin
         .from('comercial_membros')
         .select('profile_id,papel,ativo')
         .eq('profile_id', requestedSdrId)
-        .eq('papel', 'sdr')
+        .in('papel', ['sdr', 'closer'])
         .eq('ativo', true)
         .maybeSingle();
       if (memberError) return NextResponse.json({ error: memberError.message }, { status: 500 });
-      if (!member) return NextResponse.json({ error: 'Selecione um SDR ativo para atribuir o lead.' }, { status: 400 });
+      if (!member) return NextResponse.json({ error: 'Selecione um SDR ou closer ativo para atribuir o lead.' }, { status: 400 });
     }
 
     const { data, error } = await supabaseAdmin
