@@ -385,6 +385,7 @@ export default function BrokerInboxPage() {
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [mediaUrls, setMediaUrls] = useState<Record<string, { url: string; mimeType: string; fileName?: string }>>({});
   const [loadingMediaId, setLoadingMediaId] = useState<string | null>(null);
+  const midiasEmVooRef = useRef<Set<string>>(new Set());
   const [mediaLoadErrors, setMediaLoadErrors] = useState<Record<string, boolean>>({});
   const [mediaPreview, setMediaPreview] = useState<InlineMediaPreview | null>(null);
 
@@ -2525,17 +2526,34 @@ export default function BrokerInboxPage() {
       });
   }, [filteredChatMessages]);
 
+  // Carrega sozinho a previa das imagens da conversa aberta.
+  //
+  // Antes o controle de "ja estou buscando" era um id unico. Disparando dez de
+  // uma vez, so o ultimo ficava marcado, e como o proprio id era dependencia do
+  // efeito, cada resposta reexecutava tudo e pedia os outros nove de novo. Deu
+  // 1.180 chamadas na mesma tela ate o navegador recusar conexao
+  // (ERR_INSUFFICIENT_RESOURCES) e o inbox travar. A lista de pedidos em voo
+  // vive num ref: muda sem provocar novo render.
   useEffect(() => {
+    const emVoo = midiasEmVooRef.current;
     const imageMessages = filteredChatMessages
-      .filter(message => getMessageMediaKind(message) === 'image' && !mediaUrls[message.id] && loadingMediaId !== message.id && !mediaLoadErrors[message.id])
+      .filter((message) => getMessageMediaKind(message) === 'image'
+        && !mediaUrls[message.id]
+        && !mediaLoadErrors[message.id]
+        && !emVoo.has(message.id))
       .slice(0, 10);
 
-    imageMessages.forEach(message => {
-      void fetchMessageMedia(message).catch(() => {
-        setMediaLoadErrors(prev => ({ ...prev, [message.id]: true }));
-      });
+    imageMessages.forEach((message) => {
+      emVoo.add(message.id);
+      void fetchMessageMedia(message)
+        .catch(() => {
+          setMediaLoadErrors((prev) => ({ ...prev, [message.id]: true }));
+        })
+        .finally(() => {
+          emVoo.delete(message.id);
+        });
     });
-  }, [filteredChatMessages, mediaUrls, loadingMediaId, mediaLoadErrors, fetchMessageMedia]);
+  }, [filteredChatMessages, mediaUrls, mediaLoadErrors, fetchMessageMedia]);
 
   return (
     <InternalLayout>
