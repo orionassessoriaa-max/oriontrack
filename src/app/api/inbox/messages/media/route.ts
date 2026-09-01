@@ -25,28 +25,37 @@ const BUCKET_MIDIA = 'inbox-media';
 
 function caminhoNoBucket(url?: string | null) {
   const bruto = String(url || '');
-  const marcador = `/storage/v1/object/public/${BUCKET_MIDIA}/`;
-  const indice = bruto.indexOf(marcador);
-  if (indice < 0) return '';
-  return decodeURIComponent(bruto.slice(indice + marcador.length).split('?')[0]);
+  // Linha antiga guarda o caminho publico; se algum link assinado tiver sido
+  // gravado por engano, o arquivo continua sendo o mesmo.
+  for (const marcador of [`/storage/v1/object/public/${BUCKET_MIDIA}/`, `/storage/v1/object/sign/${BUCKET_MIDIA}/`]) {
+    const indice = bruto.indexOf(marcador);
+    if (indice >= 0) return decodeURIComponent(bruto.slice(indice + marcador.length).split('?')[0]);
+  }
+  return '';
 }
 
+/**
+ * Devolve um link assinado em vez do arquivo.
+ *
+ * Baixar do bucket, converter para base64 e mandar dentro do JSON custava perto
+ * de dois segundos por imagem, e o inbox carrega dez de uma vez. Com o link
+ * assinado o navegador busca direto do storage, sem passar pelo servidor e sem
+ * inflar 33% do tamanho na conversao. O bucket continua fechado: o link vale
+ * uma hora e nao serve para quem nao recebeu.
+ */
 async function lerDoBucket(url?: string | null, fallbackMimeType?: string | null) {
   const caminho = caminhoNoBucket(url);
   if (!caminho) return null;
 
-  const { data, error } = await supabaseAdmin.storage.from(BUCKET_MIDIA).download(caminho);
-  if (error || !data) {
-    console.warn('[Media API] Nao consegui ler o arquivo no bucket:', { caminho, erro: error?.message });
+  const { data, error } = await supabaseAdmin.storage.from(BUCKET_MIDIA).createSignedUrl(caminho, 3600);
+  if (error || !data?.signedUrl) {
+    console.warn('[Media API] Nao consegui assinar o arquivo no bucket:', { caminho, erro: error?.message });
     return null;
   }
 
-  const bytes = Buffer.from(await data.arrayBuffer());
-  if (!bytes.length) return null;
-
   return {
-    base64: bytes.toString('base64'),
-    mimeType: data.type || fallbackMimeType || 'application/octet-stream',
+    url: data.signedUrl,
+    mimeType: fallbackMimeType || 'application/octet-stream',
   };
 }
 
@@ -456,6 +465,11 @@ async function cacheRecoveredMedia(message: any, payload: { base64?: string | nu
   // Arquivo que ja tem URL nao volta para dentro do banco. Sem esta guarda, abrir
   // a midia no inbox regravava o base64 na linha e a tabela inchava de novo:
   // whatsapp_mensagens sozinha ja chegou a 970 MB por causa disso.
+  // Link assinado vale uma hora: gravar na linha deixaria a mensagem apontando
+  // para um endereco morto amanha.
+  const assinado = String(payload.url || '').includes(`/object/sign/${BUCKET_MIDIA}/`);
+  if (assinado) return;
+
   const alreadyStored = Boolean(pickMediaUrl(message.metadata) || payload.url);
   const shouldCacheBase64 = !alreadyStored && base64 && base64ByteLength(base64) <= MAX_CACHE_BASE64_BYTES;
   const metadata = {
