@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
  */
 // Para avisar a equipe de novo, basta preencher a janela e religar o componente
 // no layout. Vazio aqui significa nenhum aviso na tela.
-const JANELA = { inicio: '', fim: '' };
+const JANELA = { inicio: '2026-09-01T12:00:00-03:00', fim: '2026-09-01T13:30:00-03:00' };
 
 const INICIO = JANELA.inicio ? new Date(JANELA.inicio).getTime() : 0;
 const FIM = JANELA.fim ? new Date(JANELA.fim).getTime() : 0;
@@ -54,10 +54,10 @@ export default function AvisoManutencao() {
         boxShadow: '0 1px 6px rgba(0,0,0,0.18)',
       }}
     >
-      <span>Manutencao programada agora, as 13h03.</span>
+      <span>Atualizacao programada as 12h00.</span>
       <span style={{ fontWeight: 500 }}>
-        Estamos ampliando o servidor do banco de dados para deixar o CRM mais rapido. O sistema pode
-        ficar alguns minutos indisponivel. Se der erro, aguarde e atualize a pagina.
+        Subimos melhorias no inbox e no comercial. Se a tela demorar ou ficar estranha, atualize a
+        pagina com Ctrl + Shift + R.
       </span>
     </div>
   );

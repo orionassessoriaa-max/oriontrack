@@ -7,6 +7,7 @@ import EscapeToClose from "@/components/ui/EscapeToClose";
 import DialogProvider from "@/components/providers/DialogProvider";
 import CreativeJobsProvider from "@/components/creatives/CreativeJobsProvider";
 import RecarregarAposDeploy from "@/components/providers/RecarregarAposDeploy";
+import AvisoManutencao from "@/components/ui/AvisoManutencao";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,6 +36,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <AvisoManutencao />
         <RecarregarAposDeploy />
         <DatePickerEnhancer />
         <EscapeToClose />
