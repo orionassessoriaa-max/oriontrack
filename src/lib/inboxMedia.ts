@@ -79,3 +79,43 @@ export async function guardarMidiaForaDoBanco(metadata: Record<string, any>) {
     return metadata;
   }
 }
+
+/**
+ * Tira do metadata qualquer bloco gigante de texto quando o arquivo ja esta no
+ * bucket.
+ *
+ * O webhook copia o corpo inteiro do provedor para dentro da linha, e esse
+ * corpo traz o arquivo em base64. Guardar a URL por cima nao apagava o base64
+ * que veio junto: em um unico dia voltaram 24 MB para a tabela que o inbox mais
+ * le. Em vez de perseguir nome de campo, que muda conforme o tipo de midia,
+ * remove todo texto acima de 20 mil caracteres.
+ */
+const TETO_TEXTO = 20_000;
+
+export function removerBlobs(metadata: Record<string, any>) {
+  if (!metadata?.media_url) return metadata;
+
+  const limpo: Record<string, any> = {};
+  for (const [chave, valor] of Object.entries(metadata)) {
+    if (typeof valor === 'string' && valor.length > TETO_TEXTO) continue;
+    if (valor && typeof valor === 'object' && !Array.isArray(valor)) {
+      limpo[chave] = removerBlobsDeObjeto(valor as Record<string, any>);
+      continue;
+    }
+    limpo[chave] = valor;
+  }
+  return limpo;
+}
+
+function removerBlobsDeObjeto(objeto: Record<string, any>) {
+  const limpo: Record<string, any> = {};
+  for (const [chave, valor] of Object.entries(objeto)) {
+    if (typeof valor === 'string' && valor.length > TETO_TEXTO) continue;
+    if (valor && typeof valor === 'object' && !Array.isArray(valor)) {
+      limpo[chave] = removerBlobsDeObjeto(valor as Record<string, any>);
+      continue;
+    }
+    limpo[chave] = valor;
+  }
+  return limpo;
+}

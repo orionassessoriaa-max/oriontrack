@@ -3,7 +3,8 @@ import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/
 import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
-import { guardarMidiaForaDoBanco } from '@/lib/inboxMedia';
+import { guardarMidiaForaDoBanco, removerBlobs } from '@/lib/inboxMedia';
+import { assinarMensagem, resolverAtendimentoCompartilhado } from '@/lib/atendimentoCompartilhado';
 import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
@@ -978,6 +979,11 @@ export async function POST(request: Request) {
       }
     }
 
+    // Concessionaria com atendimento compartilhado envia sempre pelo mesmo
+    // numero, seja qual for o vendedor que clicou. Fora dela, nada muda: cada
+    // perfil continua com a propria instancia.
+    const compartilhado = await resolverAtendimentoCompartilhado(conversation.corretor_id || senderProfile.corretor_id);
+
     if (conversation.lead_id && ['corretor', 'corretor_admin', 'corretor_membro'].includes(senderProfile.tipo_usuario)) {
       const { data: claimResult, error: claimError } = await supabaseAdmin.rpc('claim_shared_lead', {
         target_lead_id: conversation.lead_id,
@@ -985,7 +991,11 @@ export async function POST(request: Request) {
       });
       if (claimError && !/not_shared_queue/i.test(claimError.message || '')) throw claimError;
       const claim = claimResult as any;
-      const enforceExclusiveOwnership = senderProfile.tipo_usuario === 'corretor_membro';
+      // Com numero compartilhado a exclusividade vale para todo mundo: o
+      // primeiro que responder fica dono e os outros acompanham. Sem isso, o
+      // cliente receberia respostas de vendedores diferentes na mesma conversa.
+      const enforceExclusiveOwnership = senderProfile.tipo_usuario === 'corretor_membro'
+        || compartilhado.ativo;
 
       // Donos e administradores da corretora mantêm a supervisão do inbox e
       // podem responder leads do próprio time. A exclusividade evita apenas
@@ -998,7 +1008,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const instance = uazapiInstanceName(senderProfileId);
+    const instance = compartilhado.instancia || uazapiInstanceName(senderProfileId);
     const reservationProviderId = clientMessageId ? `orion-client:${clientMessageId}` : null;
     let messageTextDb = text;
     if (mediaBase64) {
@@ -1086,13 +1096,16 @@ export async function POST(request: Request) {
           number: phone,
           file: dataUrl,
           type: mediaTypeMapped,
-          text: text || undefined,
+          text: (compartilhado.ativo ? assinarMensagem(text, senderProfile.nome) : text) || undefined,
           mimetype: mimetype || undefined,
           delay: audioDelay,
         }),
       }, { instanceName: instance });
     } else {
-      const result = await sendTextWithSequenceFallback(instance, phone, text);
+      const textoEnviado = compartilhado.ativo
+        ? assinarMensagem(text, senderProfile.nome || senderProfile.email_real || senderProfile.email)
+        : text;
+      const result = await sendTextWithSequenceFallback(instance, phone, textoEnviado);
       payload = {
         ...(result.payload || {}),
         orion_sequence_sent: result.split,
@@ -1116,7 +1129,7 @@ export async function POST(request: Request) {
     const persistedMessage = {
       mensagem: messageTextDb,
       provider_message_id: providerId || reservationProviderId,
-      metadata: {
+      metadata: removerBlobs({
         ...(payload || {}),
         ...midiaGravavel,
         instance,
@@ -1125,7 +1138,7 @@ export async function POST(request: Request) {
         sender_profile_id: senderProfileId,
         sender_name: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
         sender_type: 'human',
-      },
+      }),
     };
 
     const persistenceResult = reservedMessageId

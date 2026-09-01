@@ -1,5 +1,5 @@
 import { openaiFetch } from '@/lib/openaiUso';
-import { guardarMidiaForaDoBanco } from '@/lib/inboxMedia';
+import { guardarMidiaForaDoBanco, removerBlobs } from '@/lib/inboxMedia';
 import { after, NextResponse } from 'next/server';
 import { normalizePhone, phoneMatchKey, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -1563,7 +1563,7 @@ export async function POST(request: Request) {
       remetente: fromMe ? (profile?.nome || 'Orion') : contactName,
       mensagem: message,
       provider_message_id: providerId || null,
-      metadata: {
+      metadata: removerBlobs({
         ...(body || {}),
         ...midiaGravavel,
         messageType: callEvent ? 'call' : body?.type,
@@ -1577,7 +1577,7 @@ export async function POST(request: Request) {
         sender_profile_id: fromMe ? profile?.id : undefined,
         sender_name: fromMe ? (profile?.nome || 'Orion') : undefined,
         sender_type: fromMe ? 'human' : undefined,
-      },
+      }),
     }]);
 
     if (insertError) {
