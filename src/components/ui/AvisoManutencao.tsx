@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
  */
 // Para avisar a equipe de novo, basta preencher a janela e religar o componente
 // no layout. Vazio aqui significa nenhum aviso na tela.
-const JANELA = { inicio: '2026-09-01T12:00:00-03:00', fim: '2026-09-01T13:30:00-03:00' };
+const JANELA = { inicio: '', fim: '' };
 
 const INICIO = JANELA.inicio ? new Date(JANELA.inicio).getTime() : 0;
 const FIM = JANELA.fim ? new Date(JANELA.fim).getTime() : 0;
