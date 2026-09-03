@@ -88,6 +88,7 @@ export function useCommercial() {
 
 const baseNavigation = [
   { href: "/comercial", label: "Visão geral", icon: LayoutDashboard },
+  { href: "/overview", label: "Overview", icon: Orbit },
   { href: "/comercial/inbox", label: "Inbox", icon: MessageSquare },
   { href: "/comercial/kanban", label: "Kanban", icon: BriefcaseBusiness },
   { href: "/comercial/leads", label: "Leads", icon: Table2 },
