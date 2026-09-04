@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarPlus,
+  BadgeCheck,
   AlertTriangle,
   CircleDollarSign,
   ChevronDown,
@@ -27,6 +28,9 @@ import {
   X,
 } from "lucide-react";
 import { useCommercial } from "@/components/commercial/CommercialShell";
+import CommercialDateRangeFilter, {
+  type CommercialDatePreset,
+} from "@/components/commercial/CommercialDateRangeFilter";
 import CommercialLeadModal from "@/components/commercial/CommercialLeadModal";
 import CommercialLeadDetailsModal from "@/components/commercial/CommercialLeadDetailsModal";
 import {
@@ -39,7 +43,10 @@ import {
   type CommercialLead,
   type CommercialStage,
 } from "@/lib/comercial";
-import { getCommercialMqlLevel } from "@/lib/commercialQualification";
+import {
+  getCommercialMqlLevel,
+  type CommercialMqlLevel,
+} from "@/lib/commercialQualification";
 import { supabase } from "@/lib/supabase/client";
 
 type LeadInteraction = {
@@ -52,9 +59,6 @@ type LeadInteraction = {
   metadata?: Record<string, unknown>;
   created_at: string;
 };
-
-type DatePreset =
-  | "todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado";
 
 function localDateValue(date: Date) {
   const year = date.getFullYear();
@@ -132,22 +136,6 @@ function formatDaniloCnpj(lead: CommercialLead) {
   return "CNPJ: sim";
 }
 
-function getPresetRange(preset: DatePreset) {
-  const today = new Date();
-  const end = new Date(today);
-  const start = new Date(today);
-  if (preset === "ontem") {
-    start.setDate(start.getDate() - 1);
-    end.setDate(end.getDate() - 1);
-  }
-  if (preset === "7dias") start.setDate(start.getDate() - 6);
-  if (preset === "30dias") start.setDate(start.getDate() - 29);
-  if (preset === "mes") start.setDate(1);
-  return preset === "todos"
-    ? { start: "", end: "" }
-    : { start: localDateValue(start), end: localDateValue(end) };
-}
-
 const STAGE_COLORS = ["#2563EB", "#0891B2", "#059669", "#D97706", "#E11D48", "#7C3AED"];
 
 function stageColor(stage: CommercialStage, index: number) {
@@ -170,9 +158,12 @@ export default function CommercialKanbanPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sdrFilter, setSdrFilter] = useState("todos");
-  const [datePreset, setDatePreset] = useState<DatePreset>("todos");
+  const [datePreset, setDatePreset] = useState<CommercialDatePreset>("todos");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
+  const [mqlFilter, setMqlFilter] = useState<"todos" | CommercialMqlLevel>(
+    "todos",
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [initialStatus, setInitialStatus] = useState("Oportunidade");
   const [dragging, setDragging] = useState<string | null>(null);
@@ -421,8 +412,8 @@ export default function CommercialKanbanPage() {
           (sdrFilter === "sem_responsavel"
             ? !lead.sdr_id
             : lead.sdr_id === sdrFilter);
-        // Nao ha campos para pesquisar ou filtrar por data antes do START.
-        if (lead.fila_oculta) return matchesSdr;
+        // A fila anterior ao START nao expoe qualificacao ou data do lead.
+        if (lead.fila_oculta) return matchesSdr && mqlFilter === "todos";
         const matchesSearch = [lead.nome, lead.empresa, lead.telefone]
           .join(" ")
           .toLowerCase()
@@ -432,10 +423,33 @@ export default function CommercialKanbanPage() {
           !dateStart || date >= new Date(`${dateStart}T00:00:00`).getTime();
         const matchesEnd =
           !dateEnd || date <= new Date(`${dateEnd}T23:59:59`).getTime();
-        return matchesSearch && matchesStart && matchesEnd && matchesSdr;
+        const matchesMql =
+          mqlFilter === "todos" ||
+          getCommercialMqlLevel(
+            lead.faturamento_mensal,
+            lead.investimento,
+          ) === mqlFilter;
+        return (
+          matchesSearch &&
+          matchesStart &&
+          matchesEnd &&
+          matchesSdr &&
+          matchesMql
+        );
       }),
-    [leads, search, dateStart, dateEnd, sdrFilter],
+    [leads, search, dateStart, dateEnd, sdrFilter, mqlFilter],
   );
+  const allTimeRange = useMemo(() => {
+    const dates = leads
+      .filter((lead) => !lead.fila_oculta)
+      .map((lead) => new Date(lead.data_entrada))
+      .filter((date) => !Number.isNaN(date.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime());
+    return {
+      start: dates[0] ? localDateValue(dates[0]) : "",
+      end: dates.at(-1) ? localDateValue(dates.at(-1)!) : "",
+    };
+  }, [leads]);
   const grouped = useMemo(
     () =>
       Object.fromEntries(
@@ -972,15 +986,6 @@ export default function CommercialKanbanPage() {
     }
   }
 
-  function changeDatePreset(next: DatePreset) {
-    setDatePreset(next);
-    if (next !== "personalizado") {
-      const range = getPresetRange(next);
-      setDateStart(range.start);
-      setDateEnd(range.end);
-    }
-  }
-
   return (
     <div
       className={`kh-kanban-page ${canViewCommercialFinancials ? "" : "kh-hide-commercial-financials"} ${canEditCommercial ? "" : "kh-read-only"}`}
@@ -1021,42 +1026,34 @@ export default function CommercialKanbanPage() {
               </select>
             </label>
           )}
-          <label className="kh-date-preset">
-            <CalendarDays size={15} />
+          <label className="kh-date-preset kh-mql-filter">
+            <BadgeCheck size={15} />
             <select
-              value={datePreset}
+              value={mqlFilter}
               onChange={(event) =>
-                changeDatePreset(event.target.value as DatePreset)
+                setMqlFilter(event.target.value as "todos" | CommercialMqlLevel)
               }
-              aria-label="Período"
+              aria-label="Filtrar por classificação MQL"
             >
-              <option value="todos">Todo o período</option>
-              <option value="hoje">Hoje</option>
-              <option value="ontem">Ontem</option>
-              <option value="7dias">Últimos 7 dias</option>
-              <option value="30dias">Últimos 30 dias</option>
-              <option value="mes">Este mês</option>
-              <option value="personalizado">Personalizado</option>
+              <option value="todos">Todos os MQLs</option>
+              <option value="S">MQL S</option>
+              <option value="A">MQL A</option>
+              <option value="B">MQL B</option>
+              <option value="C">MQL C</option>
             </select>
           </label>
-          {datePreset === "personalizado" && (
-            <>
-              <input
-                className="kh-input kh-date-filter"
-                type="date"
-                value={dateStart}
-                onChange={(event) => setDateStart(event.target.value)}
-                aria-label="Data inicial"
-              />
-              <input
-                className="kh-input kh-date-filter"
-                type="date"
-                value={dateEnd}
-                onChange={(event) => setDateEnd(event.target.value)}
-                aria-label="Data final"
-              />
-            </>
-          )}
+          <CommercialDateRangeFilter
+            preset={datePreset}
+            start={dateStart}
+            end={dateEnd}
+            allTimeStart={allTimeRange.start}
+            allTimeEnd={allTimeRange.end}
+            onApply={(nextPreset, range) => {
+              setDatePreset(nextPreset);
+              setDateStart(range.start);
+              setDateEnd(range.end);
+            }}
+          />
           <button
             className="kh-icon-button"
             onClick={() => void load()}
