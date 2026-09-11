@@ -226,7 +226,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const adminMenu = [
     { icon: Home, label: 'Visão Geral', href: '/admin' },
-    { icon: LayoutDashboard, label: 'Overview', href: '/overview' },
+    { icon: LayoutDashboard, label: 'Overview Vendas', href: '/overview' },
+    { icon: Building2, label: 'Escritório', href: '/escritorio' },
     { icon: Building2, label: 'Concessionárias', href: '/admin/corretoras' },
     { icon: Shield, label: 'Usuários', href: '/admin/usuarios' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
@@ -255,7 +256,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const trafficMenu = [
     { icon: Home, label: 'Dashboard', href: '/trafego' },
-    { icon: LayoutDashboard, label: 'Overview', href: '/overview' },
+    { icon: LayoutDashboard, label: 'Overview Vendas', href: '/overview' },
     { icon: TrendingUp, label: 'Otimizações', href: '/trafego/otimizacoes' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: Building2, label: 'Concessionárias', href: '/admin/corretoras' },
@@ -273,7 +274,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const designerMenu = [
     { icon: Palette, label: 'Designer', href: '/designer' },
-    { icon: LayoutDashboard, label: 'Overview', href: '/overview' },
+    { icon: LayoutDashboard, label: 'Overview Vendas', href: '/overview' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: FileText, label: 'Ofertas', href: '/designer/ofertas' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/equipe/apollo/tarefas' },
@@ -284,7 +285,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const accountMenu = [
     { icon: Home, label: 'Account', href: '/account' },
-    { icon: LayoutDashboard, label: 'Overview', href: '/overview' },
+    { icon: LayoutDashboard, label: 'Overview Vendas', href: '/overview' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: Users, label: 'Corretores', href: '/account/corretores' },
     { icon: MessageSquare, label: 'Inbox', href: '/account/inbox' },
