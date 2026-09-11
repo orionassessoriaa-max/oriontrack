@@ -1,16 +1,21 @@
 import { NextResponse } from 'next/server';
 import { requireApiUser } from '@/lib/api/security';
+import { resolverMetasDoMes } from '@/lib/comercialMetas';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { maybeSyncVoipRecordings } from '@/lib/voipRecordingSync';
 
 export const dynamic = 'force-dynamic';
 
 const TIMEZONE = 'America/Sao_Paulo';
-const KRIPTO_REVENUE_GOAL = 185_000;
-const KRIPTO_SALES_GOAL = 25;
+/**
+ * Receita, vendas e conversao saem de comercial_metas (resolverMetasDoMes).
+ *
+ * Estes dois ficam fixos de proposito, nao e esquecimento: sao combinado de
+ * time definido pelo dono (100 ligacoes por SDR por dia, teto de 20% de
+ * no-show), nao meta mensal que o coordenador edita na tela de Inteligencia.
+ */
 const KRIPTO_CALLS_PER_SDR_GOAL = 100;
 const KRIPTO_NO_SHOW_LIMIT = 20;
-const KRIPTO_CONVERSION_GOAL = 40;
 const APOLLO_GOAL = 30_000;
 const APOLLO_SUPER_GOAL = 50_000;
 const CLOSED_STATES = new Set(['negocio fechado', 'venda realizada']);
@@ -87,6 +92,7 @@ export async function GET(request: Request) {
     apolloMembersResult,
     apolloPointsResult,
     apolloSalesResult,
+    metasResult,
   ] = await Promise.all([
     supabaseAdmin
       .from('comercial_leads')
@@ -130,6 +136,10 @@ export async function GET(request: Request) {
       .eq('equipe', 'apollo')
       .eq('mes', month)
       .order('created_at', { ascending: false }),
+    // select('*') de proposito: se o SQL ainda nao foi aplicado ou o cache de
+    // schema do PostgREST estiver velho, a coluna volta undefined e o fallback
+    // cobre, em vez de a consulta inteira falhar por coluna inexistente.
+    supabaseAdmin.from('comercial_metas').select('*').eq('mes', `${month}-01`).maybeSingle(),
   ]);
 
   const firstError = [leadsResult, callsResult, whatsappCallsResult, membersResult, apolloMembersResult]
@@ -138,6 +148,13 @@ export async function GET(request: Request) {
   if (apolloPointsResult.error && !isMissingTeamTable(apolloPointsResult.error)) {
     return NextResponse.json({ error: apolloPointsResult.error.message }, { status: 500 });
   }
+
+  // Meta e enfeite perto do resto do painel: se falhar, o telao continua com os
+  // padroes em vez de ficar sem numero nenhum.
+  if (metasResult.error) {
+    console.error('[overview_metas]', metasResult.error.message);
+  }
+  const metas = resolverMetasDoMes(metasResult.error ? null : metasResult.data);
 
   let apolloSalesRows = apolloSalesResult.data || [];
   if (apolloSalesResult.error) {
@@ -276,8 +293,8 @@ export async function GET(request: Request) {
     today,
     updatedAt: new Date().toISOString(),
     kripto: {
-      revenue: { actual: revenue, goal: KRIPTO_REVENUE_GOAL },
-      sales: { actual: monthClosed.length, goal: KRIPTO_SALES_GOAL },
+      revenue: { actual: revenue, goal: metas.receita },
+      sales: { actual: monthClosed.length, goal: metas.vendas },
       calls: {
         actual: teamCalls,
         goal: KRIPTO_CALLS_PER_SDR_GOAL * Math.max(1, activeSdrs.length),
@@ -285,7 +302,7 @@ export async function GET(request: Request) {
         answered: teamAnswered,
       },
       noShow: { actual: percent(noShows, scheduled), limit: KRIPTO_NO_SHOW_LIMIT, count: noShows, scheduled },
-      conversion: { actual: percent(monthClosed.length, qualifiedMeetings), goal: KRIPTO_CONVERSION_GOAL, qualifiedMeetings },
+      conversion: { actual: percent(monthClosed.length, qualifiedMeetings), goal: metas.conversao, qualifiedMeetings },
       callsRanking,
       salesRanking,
     },
