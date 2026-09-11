@@ -61,33 +61,31 @@ async function listAssignedLeadIds(profileId: string) {
   return ids;
 }
 
-async function listConversations(corretorIds: string[], assignedLeadIds: string[]) {
-  const rows: any[] = [];
-  const pageSize = 500;
+async function listConversations(corretorIds: string[], assignedLeadIds: string[], offset: number, limit: number) {
+  let query = supabaseAdmin
+    .from('whatsapp_conversas')
+    .select('*,leads(id,nome,status,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))')
+    .order('ultima_mensagem_at', { ascending: false })
+    .order('id', { ascending: true })
+    // Busca um item extra para informar se existe historico a carregar, sem
+    // fazer uma contagem cara a cada atualizacao do Inbox.
+    .range(offset, offset + limit);
 
-  for (let from = 0; ; from += pageSize) {
-    let query = supabaseAdmin
-      .from('whatsapp_conversas')
-      .select('*,leads(id,nome,status,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))')
-      .order('ultima_mensagem_at', { ascending: false })
-      .order('id', { ascending: true })
-      .range(from, from + pageSize - 1);
-
-    if (assignedLeadIds.length > 0) {
-      query = query.or(
-        `corretor_id.in.(${corretorIds.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
-      );
-    } else {
-      query = query.in('corretor_id', corretorIds);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    rows.push(...(data || []));
-    if (!data || data.length < pageSize) break;
+  if (assignedLeadIds.length > 0) {
+    query = query.or(
+      `corretor_id.in.(${corretorIds.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
+    );
+  } else {
+    query = query.in('corretor_id', corretorIds);
   }
 
-  return rows;
+  const { data, error } = await query;
+  if (error) throw error;
+  const page = data || [];
+  return {
+    conversations: page.slice(0, limit),
+    hasMore: page.length > limit,
+  };
 }
 
 async function listOpenFollowUpLeadIds(leadIds: string[]) {
@@ -116,6 +114,9 @@ export async function GET(request: Request) {
   if ('error' in guard) return guard.error;
 
   try {
+    const url = new URL(request.url);
+    const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') || '0', 10) || 0);
+    const limit = Math.min(200, Math.max(25, Number.parseInt(url.searchParams.get('limit') || '100', 10) || 100));
     const target = await resolveTargetProfile(request, guard.profile);
     if (!target.corretor_id) {
       return NextResponse.json({ conversations: [], corretorIds: [], assignedLeadIds: [] });
@@ -144,7 +145,8 @@ export async function GET(request: Request) {
     }
 
     const assignedLeadIds = await listAssignedLeadIds(target.id);
-    const conversations = await listConversations(corretorIds, assignedLeadIds);
+    const page = await listConversations(corretorIds, assignedLeadIds, offset, limit);
+    const conversations = page.conversations;
     after(async () => {
       await syncRecentInboxChats(target.id, conversations);
     });
@@ -169,6 +171,8 @@ export async function GET(request: Request) {
       })),
       corretorIds,
       assignedLeadIds,
+      hasMore: page.hasMore,
+      nextOffset: page.hasMore ? offset + conversations.length : null,
     }, {
       headers: { 'Cache-Control': 'no-store' },
     });

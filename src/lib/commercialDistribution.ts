@@ -1,21 +1,17 @@
 import 'server-only';
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { LEO_COMMERCIAL_CLOSER_PROFILE_ID } from '@/lib/comercial';
 import type { CommercialMqlLevel } from '@/lib/commercialQualification';
 
 /**
  * Dono automatico do lead novo.
  *
- * O lead comum nao tem mais dono na entrada: fica na fila comum, visivel para
- * todos os SDRs, e quem aperta Start primeiro fica com ele. So o nivel com dono
- * fixo escapa disso, que hoje e o S do Leo, configurado em
- * comercial_membros.recebe_apenas_mql.
+ * Todos os niveis, inclusive MQL S, entram na fila sem dono.
+ * Quem assumir primeiro pelo CRM ou pelo grupo fica com a oportunidade.
  */
 export async function donoAutomaticoDoLead(nivel?: CommercialMqlLevel | null) {
-  // Regra fixa da Kripto: somente MQL S sai da disputa e vai direto ao Leo.
-  // A, B e C sempre entram sem dono para Talita e Carlos disputarem no START.
-  return nivel === 'S' ? LEO_COMMERCIAL_CLOSER_PROFILE_ID : null;
+  void nivel;
+  return null;
 }
 
 export async function assignNextCommercialSdr(nivel?: CommercialMqlLevel | null) {

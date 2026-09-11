@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
   CheckSquare2,
@@ -25,6 +25,8 @@ import {
   getCommercialMqlLevel,
   type CommercialMqlLevel,
 } from "@/lib/commercialQualification";
+
+const LEADS_PAGE_SIZE = 200;
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("pt-BR", {
@@ -60,12 +62,15 @@ export default function CommercialLeadsPage() {
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [hasMoreLeads, setHasMoreLeads] = useState(true);
+  const [loadingMoreLeads, setLoadingMoreLeads] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CommercialLead | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [sheetLink, setSheetLink] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const nextLeadOffset = useRef(0);
 
   async function startCall(lead: CommercialLead) {
     const digits = String(lead.telefone || "").replace(/\D/g, "");
@@ -91,17 +96,51 @@ export default function CommercialLeadsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const payload = await api("/api/comercial/leads");
-      setLeads(payload.leads || []);
+      const payload = await api(
+        `/api/comercial/leads?limit=${LEADS_PAGE_SIZE}&offset=0`,
+      );
+      const nextLeads = payload.leads || [];
+      setLeads(nextLeads);
+      nextLeadOffset.current = payload.next_offset ?? nextLeads.length;
+      setHasMoreLeads(payload.next_offset !== null);
     } finally {
       setLoading(false);
     }
   }, [api]);
+  const loadMoreLeads = useCallback(async () => {
+    if (loadingMoreLeads || !hasMoreLeads) return;
+    setLoadingMoreLeads(true);
+    try {
+      const payload = await api(
+        `/api/comercial/leads?limit=${LEADS_PAGE_SIZE}&offset=${nextLeadOffset.current}`,
+      );
+      const nextLeads = payload.leads || [];
+      setLeads((current) => {
+        const byId = new Map(current.map((lead) => [lead.id, lead]));
+        for (const lead of nextLeads) byId.set(lead.id, lead);
+        return Array.from(byId.values());
+      });
+      nextLeadOffset.current =
+        payload.next_offset ?? nextLeadOffset.current + nextLeads.length;
+      setHasMoreLeads(payload.next_offset !== null);
+    } finally {
+      setLoadingMoreLeads(false);
+    }
+  }, [api, hasMoreLeads, loadingMoreLeads]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+  useEffect(() => {
+    const handleScroll = () => {
+      const documentHeight = document.documentElement.scrollHeight;
+      if (window.scrollY + window.innerHeight >= documentHeight - 320)
+        void loadMoreLeads();
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [loadMoreLeads]);
 
   const visible = useMemo(
     () =>
@@ -412,6 +451,61 @@ export default function CommercialLeadsPage() {
           {visible.length} de {leads.length} leads
         </span>
       </section>
+      {canEditCommercial && selected.size > 0 && (
+        <div
+          className="kh-bulk-bar"
+          role="region"
+          aria-label="Ações para leads selecionados"
+          aria-live="polite"
+        >
+          <strong>
+            {selected.size} selecionado{selected.size > 1 ? "s" : ""}
+          </strong>
+          <select
+            className="kh-select"
+            defaultValue=""
+            aria-label="Mover leads selecionados para outro status"
+            onChange={(event) => {
+              if (event.target.value) void bulkStatus(event.target.value);
+            }}
+          >
+            <option value="" disabled>
+              Mover para status...
+            </option>
+            {COMMERCIAL_STATUSES.map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="kh-bulk-edit"
+            disabled={selected.size !== 1}
+            title={
+              selected.size === 1
+                ? "Editar lead selecionado"
+                : "Selecione apenas um lead para editar"
+            }
+            onClick={editSelected}
+          >
+            <Edit3 size={15} /> Editar lead
+          </button>
+          <button
+            type="button"
+            className="danger"
+            disabled={actionLoading}
+            onClick={() => void deleteSelected()}
+          >
+            <Trash2 size={15} /> Excluir lead{selected.size > 1 ? "s" : ""}
+          </button>
+          <button
+            type="button"
+            className="kh-bulk-clear"
+            onClick={() => setSelected(new Set())}
+          >
+            <X size={16} /> Limpar seleção
+          </button>
+        </div>
+      )}
       <section className="kh-sheet-wrap">
         <table className="kh-sheet-table">
           <thead>
@@ -499,55 +593,6 @@ export default function CommercialLeadsPage() {
           </tbody>
         </table>
       </section>
-      {canEditCommercial && selected.size > 0 && (
-        <div className="kh-bulk-bar">
-          <strong>
-            {selected.size} selecionado{selected.size > 1 ? "s" : ""}
-          </strong>
-          <select
-            className="kh-select"
-            defaultValue=""
-            onChange={(event) => {
-              if (event.target.value) void bulkStatus(event.target.value);
-            }}
-          >
-            <option value="" disabled>
-              Mover para status...
-            </option>
-            {COMMERCIAL_STATUSES.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="kh-bulk-edit"
-            disabled={selected.size !== 1}
-            title={
-              selected.size === 1
-                ? "Editar lead selecionado"
-                : "Selecione apenas um lead para editar"
-            }
-            onClick={editSelected}
-          >
-            <Edit3 size={15} /> Editar lead
-          </button>
-          <button
-            type="button"
-            className="danger"
-            disabled={actionLoading}
-            onClick={() => void deleteSelected()}
-          >
-            <Trash2 size={15} /> Excluir lead{selected.size > 1 ? "s" : ""}
-          </button>
-          <button
-            type="button"
-            aria-label="Limpar selecao"
-            onClick={() => setSelected(new Set())}
-          >
-            <X size={17} />
-          </button>
-        </div>
-      )}
       {importOpen && (
         <div className="kh-modal-backdrop" role="presentation">
           <div

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { COMMERCIAL_STATUSES } from '@/lib/comercial';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
@@ -139,13 +138,6 @@ function isUuid(value: unknown) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalizeText(value));
 }
 
-function normalizeCommercialStatus(value: unknown) {
-  const raw = normalizeText(value);
-  if (!raw) return 'Oportunidade';
-  const found = COMMERCIAL_STATUSES.find((status) => normalizeKey(status) === normalizeKey(raw));
-  return found || 'Oportunidade';
-}
-
 function buildNotes(body: CommercialLeadPayload) {
   const ignored = new Set([
     'nome', 'name', 'lead_nome', 'cliente', 'nome_completo',
@@ -277,7 +269,11 @@ export async function POST(request: Request) {
     }
 
     const notes = buildNotes(rawPayload);
-    const status = normalizeCommercialStatus(field(rawPayload, ['status', 'etapa', 'pipeline']));
+    // A origem externa pode carregar a etapa do seu proprio funil (por exemplo,
+    // "Follow MRR"). Isso fazia um lead recem-chegado aparecer em uma coluna
+    // distante e parecer invisivel para o time. Todo novo lead do webhook entra
+    // na fila inicial; a equipe comercial e quem avanca as etapas no CRM.
+    const status = 'Oportunidade';
     const dataEntrada = parseDate(field(rawPayload, ['data_entrada', 'data entrada', 'data', 'created_time', 'timestamp'])) || new Date().toISOString();
     const explicitCloserId = normalizeText(field(rawPayload, ['closer_id', 'closer']));
     const closerId = isUuid(explicitCloserId) ? explicitCloserId : await resolveDefaultCommercialMember('closer');
@@ -313,8 +309,7 @@ export async function POST(request: Request) {
       utm_term: utmTerm,
       utm_content: utmContent,
       status,
-      // O payload externo nao escolhe SDR: S vai ao Leo e os demais entram na
-      // fila anonima para os dois SDRs disputarem no START.
+      // O payload externo nao escolhe SDR: todos os niveis entram na fila do START.
       sdr_id: fixedOwnerId,
       closer_id: closerId || null,
       lead_qualificado: isCommercialMql(faturamentoMensal, investimento),
@@ -398,8 +393,7 @@ export async function POST(request: Request) {
       metadata: { origem: incoming.origem, campanha: incoming.campanha, sheet },
     });
     try {
-      // Com dono definido na entrada, que hoje e so o S do Leo, o aviso vai para
-      // ele. Sem dono, o lead entra na fila e todos os SDRs sao chamados.
+      // Sem dono, o lead entra na fila e os SDRs disputam pelo botao no grupo.
       if (data.sdr_id) await notifyCommercialLeadAssignment(data);
       else await notifyCommercialLeadPool(data);
     } catch (notificationError) {

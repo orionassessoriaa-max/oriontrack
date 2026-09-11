@@ -5,6 +5,7 @@ import { LeadStatus } from '@/types';
 import { normalizeKanbanStages, isSaleEquivalentStage } from '@/lib/kanbanStages';
 
 const LEAD_STATUS_MAX_LENGTH = 80;
+const SEM_INTERESSE_MOTIVO_MAX_LENGTH = 180;
 
 function numericOrNull(value: unknown) {
   if (value === null || value === undefined || value === '') return null;
@@ -68,7 +69,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const { data: lead } = await supabaseAdmin
       .from('leads')
-      .select('id, status, corretor_id, responsavel_profile_id, created_at, data_entrada, cadencia_inicio')
+      .select('id, status, corretor_id, responsavel_profile_id, created_at, data_entrada, cadencia_inicio, observacoes, sem_interesse_motivo')
       .eq('id', leadId)
       .maybeSingle();
 
@@ -81,6 +82,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
 
     const isStatusChanging = lead.status !== status;
+    const requestedSemInteresseMotivo = String(body.sem_interesse_motivo || '').trim();
+
+    if (status === 'Sem interesse') {
+      if ((isStatusChanging || 'sem_interesse_motivo' in body) && !requestedSemInteresseMotivo) {
+        return NextResponse.json({ error: 'Informe o motivo para marcar o lead como sem interesse.' }, { status: 400 });
+      }
+      if (requestedSemInteresseMotivo.length > SEM_INTERESSE_MOTIVO_MAX_LENGTH) {
+        return NextResponse.json({ error: `O motivo deve ter no maximo ${SEM_INTERESSE_MOTIVO_MAX_LENGTH} caracteres.` }, { status: 400 });
+      }
+    }
+
     const updatePayload: Record<string, unknown> = {
       status,
       updated_at: new Date().toISOString(),
@@ -99,8 +111,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     if ('valor_negociacao' in body) updatePayload.valor_negociacao = numericOrNull(body.valor_negociacao);
     if ('operadora_negociacao' in body) updatePayload.operadora_negociacao = body.operadora_negociacao ? String(body.operadora_negociacao).trim() : null;
-    if ('sem_interesse_motivo' in body) updatePayload.sem_interesse_motivo = body.sem_interesse_motivo ? String(body.sem_interesse_motivo).trim() : null;
+    if ('sem_interesse_motivo' in body) updatePayload.sem_interesse_motivo = requestedSemInteresseMotivo || null;
     if ('sem_interesse_fez_cotacao' in body) updatePayload.sem_interesse_fez_cotacao = boolOrNull(body.sem_interesse_fez_cotacao);
+
+    const effectiveSemInteresseMotivo = requestedSemInteresseMotivo || String(lead.sem_interesse_motivo || '').trim();
+    if (status === 'Sem interesse' && effectiveSemInteresseMotivo) {
+      const currentObservations = String(lead.observacoes || '').trim();
+      if (!currentObservations.toLocaleLowerCase('pt-BR').includes(effectiveSemInteresseMotivo.toLocaleLowerCase('pt-BR'))) {
+        const reasonNote = `Motivo de sem interesse: ${effectiveSemInteresseMotivo}`;
+        updatePayload.observacoes = currentObservations ? `${currentObservations} | ${reasonNote}` : reasonNote;
+      }
+    }
 
     const { data: updated, error: updateError } = await supabaseAdmin
       .from('leads')

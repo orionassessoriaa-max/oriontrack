@@ -64,3 +64,6 @@ comment on table public.corretor_lead_labels is
 
 comment on column public.leads.origem_config_id is
   'Origem configurada usada para selecionar o pipeline da concessionaria.';
+
+-- Garante que a Data API reconheca imediatamente as novas tabelas e a coluna.
+notify pgrst, 'reload schema';

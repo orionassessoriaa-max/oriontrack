@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { applyCommercialLeadScope, requireCommercialUser } from '@/lib/api/comercial';
+import { applyCommercialLeadScope, requireCommercialUser, type CommercialGuard } from '@/lib/api/comercial';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeAuditLog } from '@/lib/api/security';
 import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
@@ -69,6 +69,51 @@ function redactFinancialFields<T extends Record<string, unknown>>(lead: T, canVi
   return sanitized;
 }
 
+type CommercialStageSummary = {
+  total: number;
+  valor_total: number;
+};
+
+async function loadCommercialStageSummaries(
+  guard: CommercialGuard,
+  includeQueue: boolean,
+) {
+  const summaries: Record<string, CommercialStageSummary> = {};
+  const pageSize = 1000;
+  let offset = 0;
+
+  // Os cards do Kanban sao paginados, mas o cabecalho de cada etapa precisa
+  // refletir o banco inteiro. Buscamos apenas etapa e valor, sem PII, em lotes
+  // para manter o resultado correto mesmo quando houver mais de mil leads.
+  while (true) {
+    let query = supabaseAdmin
+      .from('comercial_leads')
+      .select('status,valor_negociacao')
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    query = applyCommercialLeadScope(
+      query,
+      guard.commercialRole,
+      guard.profile.id,
+      includeQueue,
+    );
+    const { data, error } = await query;
+    if (error) throw error;
+
+    for (const lead of data || []) {
+      const status = String(lead.status || '');
+      const current = summaries[status] || { total: 0, valor_total: 0 };
+      current.total += 1;
+      current.valor_total += Number(lead.valor_negociacao || 0);
+      summaries[status] = current;
+    }
+    if (!data || data.length < pageSize) break;
+    offset += data.length;
+  }
+
+  return summaries;
+}
+
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
@@ -78,16 +123,35 @@ export async function GET(request: Request) {
   const status = url.searchParams.get('status');
   const search = url.searchParams.get('search')?.trim();
   const includeQueue = url.searchParams.get('queue') === '1';
+  const updatedAfter = url.searchParams.get('updated_after');
+  const requestedLimit = Number(url.searchParams.get('limit') || 200);
+  const requestedOffset = Number(url.searchParams.get('offset') || 0);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.floor(requestedLimit), 1), 200)
+    : 200;
+  const offset = Number.isFinite(requestedOffset)
+    ? Math.max(Math.floor(requestedOffset), 0)
+    : 0;
 
-  let query = supabaseAdmin.from('comercial_leads').select('*').order('data_entrada', { ascending: false }).limit(2000);
+  let query = supabaseAdmin
+    .from('comercial_leads')
+    .select('*')
+    .order(updatedAfter ? 'updated_at' : 'data_entrada', { ascending: false })
+    .range(offset, offset + limit - 1);
   query = applyCommercialLeadScope(query, guard.commercialRole, guard.profile.id, includeQueue);
+  if (updatedAfter) query = query.gt('updated_at', updatedAfter);
   if (start) query = query.gte('data_entrada', `${start}T00:00:00-03:00`);
   if (end) query = query.lte('data_entrada', `${end}T23:59:59-03:00`);
   if (status && status !== 'todos') query = query.eq('status', status);
   if (search) query = query.or(`nome.ilike.%${search}%,telefone.ilike.%${search}%,email.ilike.%${search}%,empresa.ilike.%${search}%`);
 
-  const { data, error } = await query;
+  const [leadResult, stageSummaries] = await Promise.all([
+    query,
+    loadCommercialStageSummaries(guard, includeQueue),
+  ]);
+  const { data, error } = leadResult;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!stageSummaries) return NextResponse.json({ error: 'Nao foi possivel calcular os totais por etapa.' }, { status: 500 });
   const leadIds = (data || []).map((lead) => lead.id);
   const { data: pendingTasks } = leadIds.length
     ? await supabaseAdmin
@@ -123,6 +187,9 @@ export async function GET(request: Request) {
       }), guard.canViewCommercialFinancials);
     }),
     role: guard.commercialRole,
+    stage_summaries: stageSummaries,
+    next_offset: (data || []).length === limit ? offset + limit : null,
+    sync_at: new Date().toISOString(),
   });
 }
 

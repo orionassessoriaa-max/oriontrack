@@ -5,7 +5,7 @@ import { writeAuditLog } from '@/lib/api/security';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 import { canAssignCommercialResponsible } from '@/lib/comercial';
-import { getCommercialMqlLevel } from '@/lib/commercialQualification';
+import { claimCommercialLead } from '@/lib/commercialLeadClaim';
 
 export async function POST(request: Request) {
   const guard = await requireCommercialUser(request);
@@ -98,10 +98,6 @@ export async function POST(request: Request) {
   if (alvoError) return NextResponse.json({ error: alvoError.message }, { status: 500 });
   if (!alvo) return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
 
-  if (!alvo.sdr_id && getCommercialMqlLevel(alvo.faturamento_mensal, alvo.investimento) === 'S') {
-    return NextResponse.json({ error: 'Lead MQL S e reservado para o Leo.' }, { status: 409 });
-  }
-
   if (alvo.sdr_id && alvo.sdr_id !== guard.profile.id) {
     return NextResponse.json({ error: 'Outro SDR assumiu este lead primeiro.' }, { status: 409 });
   }
@@ -111,29 +107,22 @@ export async function POST(request: Request) {
 
   // A condicao no update e a trava de corrida: se dois SDRs clicarem no mesmo
   // instante, o segundo nao encontra a linha e recebe o aviso de que perdeu.
-  const { data: assumido, error: assumirError } = await supabaseAdmin
-    .from('comercial_leads')
-    .update({ sdr_id: guard.profile.id, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .is('sdr_id', null)
-    .select('*')
-    .maybeSingle();
-  if (assumirError) return NextResponse.json({ error: assumirError.message }, { status: 500 });
-  if (!assumido) return NextResponse.json({ error: 'Outro SDR assumiu este lead primeiro.' }, { status: 409 });
-
-  await writeAuditLog(request, guard.profile, {
-    action: 'commercial.lead.claim',
-    entity_type: 'commercial_lead',
-    entity_id: id,
-    metadata: { sdr_id: guard.profile.id },
-  });
-  await recordCommercialTimelineEvent({
-    leadId: id,
-    actorId: guard.profile.id,
-    type: 'sdr_assigned',
-    description: `${guard.profile.nome || 'SDR'} assumiu o lead na fila.`,
-    metadata: { sdr_id: guard.profile.id, origem: 'fila' },
-  });
-
-  return NextResponse.json({ lead: assumido, sdr_id: guard.profile.id });
+  try {
+    const result = await claimCommercialLead(id, guard.profile.id, 'fila');
+    if (result.status === 'forbidden') return NextResponse.json({ error: 'Apenas SDR ativo assume lead.' }, { status: 403 });
+    if (result.status === 'not_found') return NextResponse.json({ error: 'Lead nao encontrado.' }, { status: 404 });
+    if (result.status === 'conflict') return NextResponse.json({ error: 'Outro SDR assumiu este lead primeiro.' }, { status: 409 });
+    if (result.status === 'previous_contact_required') {
+      const previousLeadName = result.previousLeadName || 'o lead anterior';
+      return NextResponse.json({
+        error: `Antes de assumir um novo lead, registre uma tentativa de contato com ${previousLeadName}.`,
+        previous_lead_name: result.previousLeadName,
+      }, { status: 409 });
+    }
+    if (result.status === 'already_owned') return NextResponse.json({ lead: { ...alvo, sdr_id: guard.profile.id }, sdr_id: guard.profile.id });
+    return NextResponse.json({ lead: result.lead, sdr_id: guard.profile.id, notified: result.notified });
+  } catch (error) {
+    console.error('commercial_lead_claim_failed', error);
+    return NextResponse.json({ error: 'Nao foi possivel assumir o lead.' }, { status: 500 });
+  }
 }

@@ -1,6 +1,6 @@
 import OverviewBoard from '@/components/overview/OverviewBoard';
-import { tvFontClass } from '@/lib/tvFonts';
+import { overviewFontClass } from '@/lib/tvFonts';
 
 export default function OverviewPage() {
-  return <div className={tvFontClass}><OverviewBoard /></div>;
+  return <div className={overviewFontClass}><OverviewBoard /></div>;
 }

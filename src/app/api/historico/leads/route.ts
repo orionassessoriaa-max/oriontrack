@@ -77,14 +77,27 @@ export async function GET(request: Request) {
     const leadIds = leadRows.map((lead) => lead.id).filter(Boolean);
 
     let activities: any[] = [];
+    let semInteresseActivities: any[] = [];
     let tasks: any[] = [];
     if (leadIds.length > 0) {
       for (const ids of chunk(leadIds, 250)) {
-        const [{ data, error }, { data: taskRows, error: taskError }] = await Promise.all([
+        const [
+          { data, error },
+          { data: semInteresseRows, error: semInteresseError },
+          { data: taskRows, error: taskError },
+        ] = await Promise.all([
           supabaseAdmin
             .from('lead_atividades')
             .select('*')
             .in('lead_id', ids)
+            .order('created_at', { ascending: false })
+            .limit(1000),
+          supabaseAdmin
+            .from('lead_atividades')
+            .select('*')
+            .in('lead_id', ids)
+            .eq('tipo', 'status')
+            .ilike('descricao', '%Motivo:%')
             .order('created_at', { ascending: false })
             .limit(1000),
           supabaseAdmin
@@ -96,15 +109,22 @@ export async function GET(request: Request) {
         ]);
 
         if (error) throw error;
+        if (semInteresseError) throw semInteresseError;
         if (taskError) throw taskError;
         activities = activities.concat(data || []);
+        semInteresseActivities = semInteresseActivities.concat(semInteresseRows || []);
         tasks = tasks.concat(taskRows || []);
       }
     }
 
-    activities = activities
+    const recentActivities = activities
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 1000);
+
+    activities = Array.from(new Map(
+      [...recentActivities, ...semInteresseActivities].map((activity) => [activity.id, activity]),
+    ).values())
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     const profileIds = Array.from(new Set([
       ...leadRows.map((lead) => lead.responsavel_profile_id).filter(Boolean),

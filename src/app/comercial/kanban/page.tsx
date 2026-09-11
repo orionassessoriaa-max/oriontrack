@@ -49,6 +49,8 @@ import {
 } from "@/lib/commercialQualification";
 import { supabase } from "@/lib/supabase/client";
 
+const LEADS_PAGE_SIZE = 200;
+
 type LeadInteraction = {
   id: string;
   comentario: string | null;
@@ -154,6 +156,11 @@ export default function CommercialKanbanPage() {
   } = useCommercial();
   const router = useRouter();
   const [leads, setLeads] = useState<CommercialLead[]>([]);
+  const [stageSummaries, setStageSummaries] = useState<
+    Record<string, { total: number; valor_total: number }>
+  >({});
+  const [hasMoreLeads, setHasMoreLeads] = useState(true);
+  const [loadingMoreLeads, setLoadingMoreLeads] = useState(false);
   const [stages, setStages] = useState<CommercialStage[]>(COMMERCIAL_STAGES);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -229,16 +236,78 @@ export default function CommercialKanbanPage() {
     Record<string, string>
   >({});
   const realtimeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextLeadOffset = useRef(0);
+  const lastLeadSyncAt = useRef<string | null>(null);
+  const firstContinuationPrefetched = useRef(false);
+
+  const mergeLeads = useCallback(
+    (first: CommercialLead[], second: CommercialLead[]) => {
+      const byId = new Map<string, CommercialLead>();
+      for (const lead of [...second, ...first]) byId.set(lead.id, lead);
+      return Array.from(byId.values());
+    },
+    [],
+  );
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const payload = await api("/api/comercial/leads?queue=1");
-      setLeads(payload.leads || []);
+      const payload = await api(
+        `/api/comercial/leads?queue=1&limit=${LEADS_PAGE_SIZE}&offset=0`,
+      );
+      const nextLeads = payload.leads || [];
+      if (payload.stage_summaries) setStageSummaries(payload.stage_summaries);
+      setLeads((current) =>
+        silent ? mergeLeads(nextLeads, current) : nextLeads,
+      );
+      nextLeadOffset.current = Math.max(
+        nextLeadOffset.current,
+        payload.next_offset ?? nextLeads.length,
+      );
+      setHasMoreLeads(payload.next_offset !== null);
+      lastLeadSyncAt.current = payload.sync_at || new Date().toISOString();
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [api]);
+  }, [api, mergeLeads]);
+  const loadMoreLeads = useCallback(async () => {
+    if (loadingMoreLeads || !hasMoreLeads) return;
+    setLoadingMoreLeads(true);
+    try {
+      const payload = await api(
+        `/api/comercial/leads?queue=1&limit=${LEADS_PAGE_SIZE}&offset=${nextLeadOffset.current}`,
+      );
+      const nextLeads = payload.leads || [];
+      if (payload.stage_summaries) setStageSummaries(payload.stage_summaries);
+      setLeads((current) => mergeLeads(current, nextLeads));
+      nextLeadOffset.current =
+        payload.next_offset ?? nextLeadOffset.current + nextLeads.length;
+      setHasMoreLeads(payload.next_offset !== null);
+    } finally {
+      setLoadingMoreLeads(false);
+    }
+  }, [api, hasMoreLeads, loadingMoreLeads, mergeLeads]);
+  const loadMoreWhenReachingColumnEnd = useCallback(
+    (element: HTMLDivElement) => {
+      if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
+        void loadMoreLeads();
+    },
+    [loadMoreLeads],
+  );
+  const syncLeadChanges = useCallback(async () => {
+    if (!lastLeadSyncAt.current) {
+      await load(true);
+      return;
+    }
+    const payload = await api(
+      `/api/comercial/leads?queue=1&limit=${LEADS_PAGE_SIZE}&updated_after=${encodeURIComponent(lastLeadSyncAt.current)}`,
+    );
+    const changedLeads = payload.leads || [];
+    if (payload.stage_summaries) setStageSummaries(payload.stage_summaries);
+    if (changedLeads.length)
+      setLeads((current) => mergeLeads(changedLeads, current));
+    lastLeadSyncAt.current = payload.sync_at || new Date().toISOString();
+  }, [api, load, mergeLeads]);
   const loadStages = useCallback(async () => {
     try {
       const payload = await api("/api/comercial/stages");
@@ -255,6 +324,23 @@ export default function CommercialKanbanPage() {
   }, [load, loadStages]);
 
   useEffect(() => {
+    // A primeira carga continua leve (200 leads). Quando ha mais historico,
+    // trazemos discretamente mais uma pagina logo depois: sem isso, uma etapa
+    // cujo primeiro card esta na posicao 201 ficaria vazia e nao haveria como
+    // o usuario rolar a propria coluna para acionar o carregamento.
+    if (
+      loading ||
+      loadingMoreLeads ||
+      !hasMoreLeads ||
+      !leads.length ||
+      firstContinuationPrefetched.current
+    )
+      return;
+    firstContinuationPrefetched.current = true;
+    void loadMoreLeads();
+  }, [hasMoreLeads, leads.length, loadMoreLeads, loading, loadingMoreLeads]);
+
+  useEffect(() => {
     const channel = supabase
       .channel(`commercial-kanban-${currentProfileId || "current"}`)
       .on(
@@ -267,7 +353,7 @@ export default function CommercialKanbanPage() {
           if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
           realtimeRefreshTimer.current = setTimeout(() => {
             if (draggingRef.current) return;
-            void load(true).catch(() => undefined);
+            void syncLeadChanges().catch(() => undefined);
           }, 250);
         },
       )
@@ -277,16 +363,15 @@ export default function CommercialKanbanPage() {
       realtimeRefreshTimer.current = null;
       void supabase.removeChannel(channel);
     };
-  }, [currentProfileId, load]);
+  }, [currentProfileId, syncLeadChanges]);
   useEffect(() => {
-    if (role !== "sdr") return;
-    // O banco nao libera os dados da fila no Realtime. Uma sincronizacao curta
-    // busca apenas os cards anonimizados e evita qualquer necessidade de F5.
-    const poolTimer = window.setInterval(() => {
-      if (!draggingRef.current) void load(true).catch(() => undefined);
+    // Esta sincronizacao e a garantia de atualizacao mesmo quando o Realtime
+    // estiver indisponivel. Busca somente leads alterados, sem recarregar o Kanban.
+    const syncTimer = window.setInterval(() => {
+      if (!draggingRef.current) void syncLeadChanges().catch(() => undefined);
     }, 4_000);
-    return () => window.clearInterval(poolTimer);
-  }, [load, role]);
+    return () => window.clearInterval(syncTimer);
+  }, [syncLeadChanges]);
   useEffect(() => {
     if (!expandedLeadId) {
       // Reset the modal-bound state when there is no selected lead.
@@ -1138,10 +1223,12 @@ export default function CommercialKanbanPage() {
       <div className="kh-kanban" aria-label="Pipeline comercial">
         {stages.map((stage, index) => {
           const statusLeads = grouped[stage.id] || [];
-          const total = statusLeads.reduce(
+          const loadedTotal = statusLeads.reduce(
             (sum, lead) => sum + Number(lead.valor_negociacao || 0),
             0,
           );
+          const summary = stageSummaries[stage.id];
+          const total = summary?.valor_total ?? loadedTotal;
           return (
             <section
               key={stage.id}
@@ -1223,7 +1310,7 @@ export default function CommercialKanbanPage() {
                   <div>
                     <GripVertical size={14} className="kh-stage-grip" />
                     <strong>{stage.label}</strong>
-                    <b>{statusLeads.length}</b>
+                    <b>{summary?.total ?? statusLeads.length}</b>
                   </div>
                   {canViewCommercialFinancials && (
                     <small>{currency(total)}</small>
@@ -1248,7 +1335,12 @@ export default function CommercialKanbanPage() {
                 )}
               </header>
               <div className="kh-kanban-cards">
-                <div className="kh-kanban-list">
+                <div
+                  className="kh-kanban-list"
+                  onScroll={(event) =>
+                    loadMoreWhenReachingColumnEnd(event.currentTarget)
+                  }
+                >
                   {statusLeads.map((lead) => {
                     if (role === "sdr" && lead.fila_oculta && !lead.sdr_id) {
                       return (

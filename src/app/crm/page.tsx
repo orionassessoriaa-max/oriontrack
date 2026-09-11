@@ -40,7 +40,8 @@ import {
   History,
   UserCheck,
   MessageCircle,
-  Trash2
+  Trash2,
+  FileDown
 } from 'lucide-react';
 import OrionMark from '@/components/ui/OrionMark';
 
@@ -72,6 +73,7 @@ const DEFAULT_COLUMNS: KanbanColumn[] = [
 ];
 
 const KANBAN_COLUMNS_STORAGE_KEY = 'orion:crm_kanban_columns:v1';
+const DANILO_PROFILE_ID = 'e1db6a41-8395-4c7d-b92d-70642f26edc0';
 const FIXED_KANBAN_STATUS_ORDER: LeadStatus[] = [
   'Aguardando atendimento',
   'Em negociaÃ§Ã£o',
@@ -736,6 +738,35 @@ export default function CrmPage() {
   async function getToken() {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token;
+  }
+
+  async function downloadSemInterestReport() {
+    const token = await getToken();
+    if (!token) {
+      alert('Sessao expirada. Entre novamente.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await fetch('/api/crm/reports/sem-interesse', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Nao foi possivel gerar o relatorio.');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'relatorio-leads-sem-interesse.pdf';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || 'Nao foi possivel gerar o relatorio.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function fetchTeamMembers() {
@@ -1792,6 +1823,11 @@ export default function CrmPage() {
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
+            )}
+            {profile?.id === DANILO_PROFILE_ID && (
+              <button onClick={() => void downloadSemInterestReport()} disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 text-sm font-black text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60 lg:w-[238px]">
+                {saving ? <Loader2 className="animate-spin" size={16} /> : <FileDown size={16} />} Relatorio Sem interesse
+              </button>
             )}
             <button onClick={() => void fetchCrm()} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md lg:w-[170px]">
               {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Atualizar

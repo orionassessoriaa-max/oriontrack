@@ -239,7 +239,7 @@ function getMessageMediaCaption(message: InboxMessage, fileName: string) {
 
 function getMessageMediaKind(message: InboxMessage): MessageMediaKind {
   const metadata = message.metadata || {};
-  const text = String(message.mensagem || '').toLowerCase();
+  const text = String(message.mensagem || '').toLowerCase().trim();
   const mime = getMessageMimeType(message);
   const messageType = String(
     metadata.messageType ||
@@ -250,12 +250,19 @@ function getMessageMediaKind(message: InboxMessage): MessageMediaKind {
     metadata.data?.messageType ||
     ''
   ).toLowerCase();
+  // Rotulos de midia sem URL chegam como "Video", "Imagem" ou
+  // "Arquivo (nome.extensao)". Nao basta procurar a palavra no texto: uma
+  // mensagem comum como "se nao puder por video" nao e um anexo.
+  const isMediaPlaceholder = (label: string) => new RegExp(
+    `^(?:[📎📷🎥🎤]\\s*)?${label}(?:\\s*\\([^)]*\\)|\\s*:\\s*[^\\n]+)?$`,
+    'i',
+  ).test(text);
 
   if (messageType.includes('call') || text.includes('ligacao de voz') || text.includes('ligação de voz')) return 'call';
   if (message.isAudio || mime.startsWith('audio/') || messageType.includes('audio')) return 'audio';
-  if (mime.startsWith('image/') || messageType.includes('image') || text.includes('imagem')) return 'image';
-  if (mime.startsWith('video/') || messageType.includes('video') || text.includes('video') || text.includes('vã­deo') || text.includes('vídeo')) return 'video';
-  if (mime || messageType.includes('document') || messageType.includes('file') || text.includes('arquivo') || text.includes('documento')) return 'file';
+  if (mime.startsWith('image/') || messageType.includes('image') || isMediaPlaceholder('imagem')) return 'image';
+  if (mime.startsWith('video/') || messageType.includes('video') || isMediaPlaceholder('v(?:i|í|ã­)deo')) return 'video';
+  if (mime || messageType.includes('document') || messageType.includes('file') || isMediaPlaceholder('arquivo') || isMediaPlaceholder('documento')) return 'file';
   return null;
 }
 
@@ -324,6 +331,8 @@ export default function BrokerInboxPage() {
   const [loading, setLoading] = useState(true);
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   
   // Connection states
@@ -362,7 +371,12 @@ export default function BrokerInboxPage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const selectedConversationRef = useRef<Conversation | null>(null);
+  const conversationsRef = useRef<Conversation[]>([]);
+  const nextConversationOffsetRef = useRef<number | null>(0);
+  const loadingMoreConversationsRef = useRef(false);
+  const conversationListRef = useRef<HTMLDivElement | null>(null);
   const visibleConversationIdsRef = useRef<Set<string>>(new Set());
   const inboxCorretorIdsRef = useRef<Set<string>>(new Set());
   const inboxSyncInFlightRef = useRef(false);
@@ -378,6 +392,10 @@ export default function BrokerInboxPage() {
   const messageFetchRequestRef = useRef(0);
   const messageFetchAbortRef = useRef<AbortController | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   // Audio Playback States
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -480,6 +498,28 @@ export default function BrokerInboxPage() {
     return digits;
   };
 
+  function mapInboxRows(data: any[]) {
+    return (data || []).map((row: any) => {
+      const lead = row.leads as any;
+      const responsibleProfileId = lead?.responsavel_profile_id || null;
+      const member = responsibleProfileId ? teamMemberByProfileId.get(String(responsibleProfileId)) : null;
+      return {
+        ...row,
+        status: row.status === 'aguardando' ? 'espera' : row.status === 'resolvida' ? 'fechada' : row.status,
+        agentName: lead?.responsavel_membro?.nome || member?.nome || (responsibleProfileId && responsibleProfileId === profile?.id ? profile?.nome : null) || 'Fila Geral',
+        responsibleProfileId,
+        leadStatus: lead?.status || null,
+        expirationTime: '03/06 às 23:07',
+        protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
+        tags: row.tags || ['Lead Frio'],
+        notes: row.notes || [],
+        source: 'Meta',
+        aiActive: row.aiActive ?? false,
+        customFields: row.customFields || [],
+      };
+    }) as Conversation[];
+  }
+
   async function getToken() {
     const { data } = await supabase.auth.getSession();
     const session = data.session;
@@ -574,7 +614,11 @@ export default function BrokerInboxPage() {
     inboxFetchAbortRef.current?.abort();
     const controller = new AbortController();
     inboxFetchAbortRef.current = controller;
-    const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
+    // O Inbox administrativo do Danilo consolida toda a equipe. Com centenas
+    // de conversas, o limite normal podia cancelar a resposta antes de a lista
+    // chegar inteira e ocultar conversas ativas de outros corretores.
+    const requestTimeout = profile.tipo_usuario === 'corretor_admin' ? 30_000 : 12_000;
+    const timeoutId = window.setTimeout(() => controller.abort(), requestTimeout);
 
     try {
       if (!isSilent) {
@@ -615,7 +659,7 @@ export default function BrokerInboxPage() {
       const token = await getToken();
       if (!token) throw new Error('Sessao expirada. Entre novamente.');
 
-      const response = await fetch('/api/inbox/conversations', {
+      const response = await fetch('/api/inbox/conversations?limit=100&offset=0', {
         method: 'GET',
         cache: 'no-store',
         signal: controller.signal,
@@ -635,31 +679,16 @@ export default function BrokerInboxPage() {
       assignedLeadIds = Array.isArray(payload.assignedLeadIds)
         ? payload.assignedLeadIds.map(String)
         : [];
+      if (!isSilent) {
+        nextConversationOffsetRef.current = typeof payload.nextOffset === 'number' ? payload.nextOffset : null;
+        setHasMoreConversations(payload.hasMore === true);
+      }
       data.push(...(Array.isArray(payload.conversations) ? payload.conversations : []));
       followUpLoadedByApi = true;
     }
     inboxCorretorIdsRef.current = new Set(idsToFetch);
 
-    const rows = (data || []).map((row: any) => {
-      const lead = row.leads as any;
-      const responsibleProfileId = lead?.responsavel_profile_id || null;
-      const member = responsibleProfileId ? teamMemberByProfileId.get(String(responsibleProfileId)) : null;
-
-      return {
-        ...row,
-        status: row.status === 'aguardando' ? 'espera' : row.status === 'resolvida' ? 'fechada' : row.status,
-        agentName: lead?.responsavel_membro?.nome || member?.nome || (responsibleProfileId && responsibleProfileId === profile?.id ? profile?.nome : null) || 'Fila Geral',
-        responsibleProfileId,
-        leadStatus: lead?.status || null,
-        expirationTime: '03/06 às 23:07',
-        protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
-        tags: row.tags || ['Lead Frio'],
-        notes: row.notes || [],
-        source: 'Meta',
-        aiActive: row.aiActive ?? false,
-        customFields: row.customFields || []
-      };
-    }) as Conversation[];
+    const rows = mapInboxRows(data);
 
     // Add temp conversation if URL has lead phone and it's not saved
     let matchedConv = null;
@@ -784,11 +813,15 @@ export default function BrokerInboxPage() {
       }));
     }
 
-    setConversations(rowsWithFollowUp);
+    const mergedRows = isSilent && !isTeamMember
+      ? [...rowsWithFollowUp, ...conversationsRef.current.filter((current) => !rowsWithFollowUp.some((row) => row.id === current.id))]
+      : rowsWithFollowUp;
+    conversationsRef.current = mergedRows;
+    setConversations(mergedRows);
     setInboxError(null);
     const previousSelection = selectedConversationRef.current;
     const currentBox = conversationBoxRef.current;
-    const rowsInCurrentBox = rowsWithFollowUp.filter((row) => conversationBelongsToBox(row, currentBox));
+    const rowsInCurrentBox = mergedRows.filter((row) => conversationBelongsToBox(row, currentBox));
     const matchedConversationInCurrentBox = matchedConv
       ? rowsInCurrentBox.find((row) => row.id === matchedConv.id) || null
       : null;
@@ -824,8 +857,42 @@ export default function BrokerInboxPage() {
     }
   }
 
-  function tempoRealAtivo() {
-    return Date.now() - ultimoEventoRealtimeRef.current < 120_000;
+  async function loadMoreConversations() {
+    const offset = nextConversationOffsetRef.current;
+    if (profile?.tipo_usuario === 'corretor_membro' || offset === null || loadingMoreConversationsRef.current) return;
+    const token = await getToken();
+    if (!token) return;
+
+    loadingMoreConversationsRef.current = true;
+    setLoadingMoreConversations(true);
+    try {
+      const response = await fetch(`/api/inbox/conversations?limit=100&offset=${offset}`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${token}`, 'x-orion-view-profile-id': profile?.id || '' },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || 'Nao foi possivel carregar o historico.');
+      const moreRows = mapInboxRows(Array.isArray(payload.conversations) ? payload.conversations : []);
+      const knownIds = new Set(conversationsRef.current.map((conversation) => conversation.id));
+      const additions = moreRows.filter((conversation) => !knownIds.has(conversation.id));
+      const nextRows = [...conversationsRef.current, ...additions];
+      conversationsRef.current = nextRows;
+      setConversations(nextRows);
+      nextConversationOffsetRef.current = typeof payload.nextOffset === 'number' ? payload.nextOffset : null;
+      setHasMoreConversations(payload.hasMore === true);
+    } catch (error) {
+      console.error('Erro ao carregar historico do Inbox:', error);
+    } finally {
+      loadingMoreConversationsRef.current = false;
+      setLoadingMoreConversations(false);
+    }
+  }
+
+  function handleConversationListScroll(event: React.UIEvent<HTMLDivElement>) {
+    const element = event.currentTarget;
+    if (hasMoreConversations && element.scrollTop + element.clientHeight >= element.scrollHeight - 160) {
+      void loadMoreConversations();
+    }
   }
 
   function scheduleInboxRefresh(delay = 750) {
@@ -1158,9 +1225,9 @@ export default function BrokerInboxPage() {
       if (document.visibilityState === 'visible') {
         void fetchMessages(conversationId, { silent: true });
       }
-      timer = window.setTimeout(syncOpenConversation, tempoRealAtivo() ? 45_000 : 8_000);
+      timer = window.setTimeout(syncOpenConversation, 4_000);
     };
-    timer = window.setTimeout(syncOpenConversation, tempoRealAtivo() ? 45_000 : 8_000);
+    timer = window.setTimeout(syncOpenConversation, 4_000);
     return () => { if (timer) window.clearTimeout(timer); };
   }, [selectedConversation?.id, profile?.id]);
 
@@ -1171,9 +1238,13 @@ export default function BrokerInboxPage() {
     let timer: number | null = null;
     const sincronizarLista = () => {
       if (document.visibilityState === 'visible') void fetchInbox(true);
-      timer = window.setTimeout(sincronizarLista, tempoRealAtivo() ? 45_000 : 10_000);
+      // Mantem todos os perfis sincronizados sem depender de F5 ou do Realtime.
+      timer = window.setTimeout(sincronizarLista, 4_000);
     };
-    timer = window.setTimeout(sincronizarLista, tempoRealAtivo() ? 45_000 : 10_000);
+    timer = window.setTimeout(
+      sincronizarLista,
+      4_000,
+    );
     return () => { if (timer) window.clearTimeout(timer); };
   }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
 
@@ -2737,7 +2808,7 @@ export default function BrokerInboxPage() {
             </div>
 
             {/* Conversas list */}
-            <div className="flex-1 overflow-y-auto divide-y divide-white/2">
+            <div ref={conversationListRef} onScroll={handleConversationListScroll} aria-busy={loadingMoreConversations} className="flex-1 overflow-y-auto divide-y divide-white/2">
               {loading ? (
                 <div className="flex h-40 items-center justify-center">
                   <Loader2 className="animate-spin text-cyan-400" size={24} />
@@ -2958,13 +3029,28 @@ export default function BrokerInboxPage() {
                 )}
 
                 {/* Mensagens list */}
-                <div className="orion-inbox-messages flex-1 overflow-y-auto bg-[#050b16] p-3 sm:p-5 space-y-3 sm:space-y-4">
+                <div
+                  ref={messagesContainerRef}
+                  className="orion-inbox-messages flex-1 overflow-y-auto bg-[#050b16] p-3 sm:p-5 space-y-3 sm:space-y-4"
+                >
                   {loadingMessages ? (
                     <div className="flex h-full items-center justify-center">
                       <Loader2 className="animate-spin text-cyan-400" size={24} />
                     </div>
                   ) : displayChatMessages.length > 0 ? (
-                    displayChatMessages.map((message, index) => {
+                    <>
+                      {displayChatMessages.length > 8 && (
+                        <div className="sticky top-0 z-10 flex justify-center pb-2">
+                          <button
+                            type="button"
+                            onClick={() => messagesContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                            className="rounded-full border border-cyan-400/30 bg-slate-950/95 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-cyan-200 shadow-lg backdrop-blur hover:bg-slate-900"
+                          >
+                            Ver início da conversa · {displayChatMessages.length} mensagens
+                          </button>
+                        </div>
+                      )}
+                      {displayChatMessages.map((message, index) => {
                       const isMine = message.direction === 'outbound';
                       const isPlaying = playingAudioId === message.id;
                       const isLoading = loadingAudioId === message.id;
@@ -3188,7 +3274,8 @@ export default function BrokerInboxPage() {
                         </div>
                         </div>
                       );
-                    })
+                      })}
+                    </>
                   ) : (
                     <div className="h-full flex flex-col items-center justify-center text-center space-y-3">
                       <MessageSquare className="text-cyan-400" size={32} />

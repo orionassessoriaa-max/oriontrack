@@ -17,6 +17,29 @@ type AiConnection = {
   error?: string;
 };
 
+/**
+ * A central responde em ingles e no jargao dela ("QR Code timeout", "403:
+ * primary device was logged out"). Jogar isso na tela do corretor nao ajuda
+ * ninguem: o que ele precisa saber e o que fazer a seguir.
+ */
+function explicarDesconexao(motivo?: string | null) {
+  const bruto = String(motivo || '').toLowerCase();
+  if (!bruto) return '';
+  if (bruto.includes('qr code timeout') || bruto.includes('qrcode timeout')) {
+    return 'O codigo anterior expirou antes de alguem ler. Deixe o celular do numero da IA em maos, clique em Conectar IA e escaneie na hora.';
+  }
+  if (bruto.includes('logged out from another device') || bruto.startsWith('401')) {
+    return 'A sessao foi encerrada por outro aparelho. Confira em Aparelhos conectados no WhatsApp do numero da IA antes de conectar de novo.';
+  }
+  if (bruto.includes('primary device was logged out') || bruto.startsWith('403')) {
+    return 'O proprio aparelho do numero da IA desconectou o dispositivo, ou o numero foi bloqueado pelo WhatsApp. Confira em Aparelhos conectados; se o numero estiver bloqueado, sera preciso outro chip.';
+  }
+  if (bruto.includes('not reconnectable') || bruto.includes('session')) {
+    return 'A sessao anterior nao pode ser retomada. Clique em Conectar IA para gerar um codigo novo.';
+  }
+  return '';
+}
+
 export default function AiConnectionPage() {
   const { profile } = useAuth();
   const [connection, setConnection] = useState<AiConnection>({});
@@ -121,10 +144,9 @@ export default function AiConnectionPage() {
               Esta concessionaria ja usa a IA pelo WhatsApp de um perfil. Altere para numero exclusivo no painel administrativo antes de conectar.
             </p>
           )}
-          {!loading && !connection.connected && connection.motivo_desconexao && (
+          {!loading && !connection.connected && explicarDesconexao(connection.motivo_desconexao) && (
             <p className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs font-bold text-amber-200">
-              A central informou: {connection.motivo_desconexao}.
-              {/^403|logged out/i.test(String(connection.motivo_desconexao)) && ' Isso acontece quando o proprio aparelho do numero da IA desconecta o dispositivo. Confira em Dispositivos conectados antes de ler o QR de novo.'}
+              {explicarDesconexao(connection.motivo_desconexao)}
             </p>
           )}
           {notice && <p className="mt-4 text-sm font-bold text-rose-300">{notice}</p>}

@@ -9,7 +9,10 @@ import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const WHATSAPP_REJECTION_RE = /whatsapp server rejected|rejected this message|not an internal api error|server rejected/i;
-const PROVIDER_HISTORY_SYNC_INTERVAL_MS = 60_000;
+// Mensagens enviadas ou recebidas pelo celular do corretor nao passam pelo
+// webhook do CRM em todos os casos. A conversa aberta reconcilia o provedor
+// em ritmo curto para que a supervisao veja a resposta sem F5.
+const PROVIDER_HISTORY_SYNC_INTERVAL_MS = 4_000;
 const MAX_PROVIDER_HISTORY_SYNC_CONCURRENCY = 2;
 const providerHistorySyncTimes = new Map<string, number>();
 const providerHistorySyncLocks = new Map<string, Promise<void>>();
