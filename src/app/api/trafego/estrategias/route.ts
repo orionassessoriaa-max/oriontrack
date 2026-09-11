@@ -3,6 +3,13 @@ import { requireApiUser, rateLimit } from '@/lib/api/security';
 import { canUseCreativeFolder } from '@/lib/creatives/access';
 import { ensureCreativeStrategyFolder, processCreativeGenerationJob } from '@/lib/creatives/automation';
 import { getDefaultCreativePrompt, mergeCreativeBriefing } from '@/lib/creatives/operatorPrompts';
+import {
+  beginCreativeGeneration,
+  creativeRequestFingerprint,
+  endCreativeGeneration,
+  releaseOrionCredits,
+  reserveOrionCredits,
+} from '@/lib/creatives/orionCred';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 function clean(value: unknown, max = 120) {
@@ -150,22 +157,54 @@ export async function POST(request: Request) {
     if (existingJobsError) throw existingJobsError;
 
     const strategiesWithJobs = new Set((existingJobs || []).map((job) => job.estrategia_id));
-    const generationRows = savedStrategies
-      .filter((strategy) => !strategiesWithJobs.has(strategy.id))
-      .map((strategy) => ({
+
+    /**
+     * Reserva o credito ANTES de enfileirar, com o id do job ja definido aqui
+     * para a referencia bater com o `lote:<id>` que o settle usa.
+     *
+     * Sem isso a imagem era gerada, a OpenAI cobrava, e o consumo estourava na
+     * RPC por falta de reserva: o job morria como "falhou" e o gasto nunca
+     * subia. Pior, o estorno do catch nao confere a referencia, entao esse job
+     * fantasma podia devolver a reserva de um lote legitimo rodando ao lado.
+     */
+    const QUANTIDADE_POR_LOTE = 4;
+    const generationRows: Record<string, unknown>[] = [];
+    const reservados: Array<{ referencia: string }> = [];
+    const semCredito: string[] = [];
+
+    for (const strategy of savedStrategies) {
+      if (strategiesWithJobs.has(strategy.id)) continue;
+      const jobId = crypto.randomUUID();
+      const referencia = `lote:${jobId}`;
+      const briefing = mergeCreativeBriefing(strategy.operadora, strategy.creative_prompt, '');
+      try {
+        await beginCreativeGeneration(gestorId, referencia, creativeRequestFingerprint([
+          gestorId, corretorId, strategy.operadora, strategy.regiao, QUANTIDADE_POR_LOTE, briefing, null,
+        ]));
+        await reserveOrionCredits(gestorId, QUANTIDADE_POR_LOTE, referencia);
+      } catch {
+        // Sem saldo ou lote repetido: a estrategia continua salva, so nao gera.
+        await endCreativeGeneration(gestorId, referencia).catch(() => null);
+        semCredito.push(`${strategy.operadora}/${strategy.regiao}`);
+        continue;
+      }
+      reservados.push({ referencia });
+      generationRows.push({
+        id: jobId,
         corretor_id: corretorId,
         gestor_id: gestorId,
         estrategia_id: strategy.id,
         recommendation_id: null,
         operadora: strategy.operadora,
         regiao: strategy.regiao,
-        quantidade: 4,
-        briefing: mergeCreativeBriefing(strategy.operadora, strategy.creative_prompt, ''),
+        quantidade: QUANTIDADE_POR_LOTE,
+        briefing,
         referencia_url: null,
         origem: 'entrada',
         status: 'na_fila',
         solicitado_por_profile_id: guard.profile.id,
-      }));
+      });
+    }
 
     const { data: generationJobs, error: generationError } = generationRows.length
       ? await supabaseAdmin
@@ -173,7 +212,14 @@ export async function POST(request: Request) {
         .insert(generationRows)
         .select('id')
       : { data: [], error: null };
-    if (generationError) throw generationError;
+    if (generationError) {
+      // O insert e em lote: se ele falha, nenhum job existe e toda reserva volta.
+      for (const item of reservados) {
+        await releaseOrionCredits(gestorId, QUANTIDADE_POR_LOTE, item.referencia).catch(() => null);
+        await endCreativeGeneration(gestorId, item.referencia).catch(() => null);
+      }
+      throw generationError;
+    }
 
     after(async () => {
       for (const strategy of savedStrategies) {
@@ -195,9 +241,13 @@ export async function POST(request: Request) {
       saved: savedStrategies.length,
       removed: removedIds.length,
       generation_started: generationJobs?.length || 0,
+      sem_credito: semCredito,
       message: generationJobs?.length
         ? `${generationJobs.length} lote(s) de criativos entraram na fila. As imagens serao geradas em segundo plano.`
-        : 'Estrategias salvas. Os criativos existentes foram preservados sem duplicacao.',
+          + (semCredito.length ? ` ${semCredito.length} lote(s) ficaram de fora por falta de credito: ${semCredito.join(', ')}.` : '')
+        : semCredito.length
+          ? `Estrategias salvas, mas nenhum criativo entrou na fila por falta de credito: ${semCredito.join(', ')}.`
+          : 'Estrategias salvas. Os criativos existentes foram preservados sem duplicacao.',
     });
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Erro ao salvar estratégia.' }, { status: 500 });
