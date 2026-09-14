@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import { concessionariaKey, isPausedConcessionariaStage } from '@/lib/concessionariaBoard';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 import { fetchOrionCumulativeSpend } from '@/lib/meta/orionSpend';
 import { fetchWithTimeout } from '@/lib/meta/fetchWithTimeout';
@@ -785,13 +786,24 @@ export async function POST(request: Request) {
         )
       : ((corretores || []) as CorretorMeta[]);
 
-    const resolvedCorretores = scopedCorretores.map((corretor) => {
+    const { data: analysisStages, error: analysisStagesError } = await supabaseAdmin
+      .from('atendimento_analise_status')
+      .select('concessionaria_key, etapa');
+    if (analysisStagesError) return NextResponse.json({ error: analysisStagesError.message }, { status: 500 });
+    const pausedKeys = new Set((analysisStages || [])
+      .filter((item) => isPausedConcessionariaStage(item.etapa))
+      .map((item) => item.concessionaria_key));
+    const operationalCorretores = scopedCorretores.filter((corretor) =>
+      !pausedKeys.has(concessionariaKey(corretor.nome_empresa || corretor.nome))
+    );
+
+    const resolvedCorretores = operationalCorretores.map((corretor) => {
       const corretoraNome = String(corretor.nome_empresa || '').trim();
       const scopedGroupIds = corretoraNome
-        ? scopedCorretores.filter((item) => item.nome_empresa === corretoraNome).map((item) => item.id)
+        ? operationalCorretores.filter((item) => item.nome_empresa === corretoraNome).map((item) => item.id)
         : [corretor.id];
       return {
-        ...resolveBrokerageMetaAccount(corretor, scopedCorretores),
+        ...resolveBrokerageMetaAccount(corretor, operationalCorretores),
         scoped_corretor_ids: scopedGroupIds,
       };
     });
@@ -1016,6 +1028,7 @@ export async function POST(request: Request) {
       analises_hoje: analisesHoje || 0,
       ultima_analise_em: ultimaAnalise?.created_at || null,
       portfolio_ai_review: portfolioAiReview || ultimaAnalise?.resumo_ia || '',
+      operational_corretor_ids: operationalCorretores.map((corretor) => corretor.id),
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao buscar avisos Meta.' }, { status: 500 });

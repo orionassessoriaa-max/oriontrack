@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireApiUser, rateLimit, writeAuditLog } from '@/lib/api/security';
-import { groupConcessionarias } from '@/lib/concessionariaBoard';
+import { groupConcessionarias, isPausedConcessionariaStage } from '@/lib/concessionariaBoard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const ROLES = ['admin', 'gestor_trafego', 'account_manager', 'designer'] as const;
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
         .order('nome_empresa', { ascending: true }),
       supabaseAdmin
         .from('atendimento_analise_status')
-        .select('concessionaria_key, etapa, updated_at'),
+        .select('concessionaria_key, etapa, motivo, updated_at'),
     ]);
     if (corretoresError) throw corretoresError;
     if (savedError) throw savedError;
@@ -25,8 +25,9 @@ export async function GET(request: Request) {
     const concessionarias = groupConcessionarias(corretores || []).map((item) => ({
       ...item,
       etapa: statusMap.get(item.key)?.etapa || 'entrada',
+      motivo: statusMap.get(item.key)?.motivo || null,
       updated_at: statusMap.get(item.key)?.updated_at || null,
-    }));
+    })).filter((item) => guard.profile.tipo_usuario === 'admin' || !isPausedConcessionariaStage(item.etapa));
     return NextResponse.json({
       concessionarias,
       can_move: guard.profile.tipo_usuario === 'admin',
@@ -52,8 +53,12 @@ export async function PATCH(request: Request) {
     const key = String(body.concessionaria_key || '').trim().slice(0, 140);
     const nome = String(body.concessionaria_nome || '').trim().slice(0, 180);
     const etapa = String(body.etapa || '').trim();
+    const motivo = String(body.motivo || '').trim().slice(0, 500);
     if (!key || !nome || !ETAPAS.includes(etapa as (typeof ETAPAS)[number])) {
       return NextResponse.json({ error: 'Movimentacao invalida.' }, { status: 400 });
+    }
+    if (isPausedConcessionariaStage(etapa) && !motivo) {
+      return NextResponse.json({ error: 'Informe o motivo para colocar a concessionaria em Standby ou Suspenso.' }, { status: 400 });
     }
     const now = new Date().toISOString();
     const { error } = await supabaseAdmin
@@ -62,6 +67,7 @@ export async function PATCH(request: Request) {
         concessionaria_key: key,
         concessionaria_nome: nome,
         etapa,
+        motivo: isPausedConcessionariaStage(etapa) ? motivo : null,
         atualizado_por_profile_id: guard.profile.id,
         updated_at: now,
       }, { onConflict: 'concessionaria_key' });
@@ -70,7 +76,7 @@ export async function PATCH(request: Request) {
       action: 'concessionaria.analysis.move',
       entity_type: 'concessionaria',
       entity_id: key,
-      metadata: { etapa, concessionaria_nome: nome },
+      metadata: { etapa, concessionaria_nome: nome, motivo: isPausedConcessionariaStage(etapa) ? motivo : null },
     });
     return NextResponse.json({ success: true, updated_at: now });
   } catch (error: unknown) {

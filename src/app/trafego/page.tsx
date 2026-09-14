@@ -248,9 +248,6 @@ export default function GestorDashboardPage() {
       if (profile.tipo_usuario === 'gestor_trafego') {
         lista = lista.filter((c) => isGestorLinkedToConcessionariaCorretor(c, profile));
       }
-      if (!atual()) return;
-      setCorretores(lista as Corretor[]);
-
       const token = await getToken();
       if (!token) {
         if (atual()) setError('Sessão expirada. Entre novamente.');
@@ -277,6 +274,9 @@ export default function GestorDashboardPage() {
         setError(payload.error || 'Erro ao carregar o painel.');
         return;
       }
+
+      const operationalIds = new Set((payload.operational_corretor_ids || []).map(String));
+      setCorretores(lista.filter((corretor) => operationalIds.has(String(corretor.id))) as Corretor[]);
 
       setMetaAccounts(payload.accounts || []);
       setActiveCreatives(payload.active_creatives || []);

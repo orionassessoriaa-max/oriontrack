@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireApiUser, rateLimit, writeAuditLog } from '@/lib/api/security';
-import { concessionariaKey, groupConcessionarias } from '@/lib/concessionariaBoard';
+import { concessionariaKey, groupConcessionarias, isPausedConcessionariaStage } from '@/lib/concessionariaBoard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const STATUS = ['boa', 'atencao', 'ruim'] as const;
@@ -37,7 +37,13 @@ async function gestorConcessionarias(gestorId: string) {
     .in('status', ['active', 'ativo', 'Ativo'])
     .order('nome_empresa', { ascending: true });
   if (error) throw error;
-  return groupConcessionarias(data || []);
+  const concessionarias = groupConcessionarias(data || []);
+  const { data: stages, error: stagesError } = await supabaseAdmin
+    .from('atendimento_analise_status')
+    .select('concessionaria_key, etapa');
+  if (stagesError) throw stagesError;
+  const pausedKeys = new Set((stages || []).filter((item) => isPausedConcessionariaStage(item.etapa)).map((item) => item.concessionaria_key));
+  return concessionarias.filter((item) => !pausedKeys.has(item.key));
 }
 
 export async function GET(request: Request) {

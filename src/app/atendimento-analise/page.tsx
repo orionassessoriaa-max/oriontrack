@@ -25,6 +25,7 @@ type Concessionaria = {
   nome: string;
   corretor_ids: string[];
   etapa: StageKey;
+  motivo?: string | null;
   updated_at?: string | null;
 };
 
@@ -53,6 +54,8 @@ export default function AtendimentoAnalisePage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [reasonMove, setReasonMove] = useState<{ item: Concessionaria; etapa: StageKey } | null>(null);
+  const [reason, setReason] = useState('');
 
   const getToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -91,8 +94,13 @@ export default function AtendimentoAnalisePage() {
     return items.filter((item) => item.nome.toLocaleLowerCase('pt-BR').includes(normalized));
   }, [items, query]);
 
-  async function move(item: Concessionaria, etapa: StageKey) {
+  async function move(item: Concessionaria, etapa: StageKey, motivo?: string) {
     if (!canMove || item.etapa === etapa || moving) return;
+    if ((etapa === 'stand_by' || etapa === 'suspenso') && !motivo?.trim()) {
+      setReason('');
+      setReasonMove({ item, etapa });
+      return;
+    }
     const previous = item.etapa;
     setMoving(item.key);
     setItems((current) => current.map((entry) => entry.key === item.key ? { ...entry, etapa } : entry));
@@ -107,6 +115,7 @@ export default function AtendimentoAnalisePage() {
           concessionaria_key: item.key,
           concessionaria_nome: item.nome,
           etapa,
+          motivo: motivo?.trim() || '',
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -157,6 +166,26 @@ export default function AtendimentoAnalisePage() {
         </div>
 
         {error ? <div className="mb-5 rounded-xl border border-rose-900/70 bg-rose-950/40 px-4 py-3 text-sm font-bold text-rose-300">{error}</div> : null}
+
+        {reasonMove ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/75 p-4" role="dialog" aria-modal="true" aria-labelledby="paused-reason-title">
+            <form className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl" onSubmit={(event) => {
+              event.preventDefault();
+              if (!reason.trim()) return;
+              const pending = reasonMove;
+              setReasonMove(null);
+              void move(pending.item, pending.etapa, reason);
+            }}>
+              <h2 id="paused-reason-title" className="text-lg font-black text-white">Motivo de {reasonMove.etapa === 'suspenso' ? 'suspensão' : 'standby'}</h2>
+              <p className="mt-2 text-sm font-medium text-slate-400">Informe por que {reasonMove.item.nome} ficará fora da operação. Ela deixará de aparecer e de contar para o gestor.</p>
+              <textarea autoFocus value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} required placeholder="Ex.: campanhas pausadas a pedido da corretora" className="mt-4 min-h-28 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm font-medium text-white outline-none focus:border-cyan-500" />
+              <div className="mt-4 flex justify-end gap-3">
+                <button type="button" onClick={() => setReasonMove(null)} className="rounded-xl px-4 py-2 text-sm font-bold text-slate-300 hover:bg-slate-800">Cancelar</button>
+                <button type="submit" disabled={!reason.trim()} className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-black text-slate-950 disabled:opacity-50">Confirmar</button>
+              </div>
+            </form>
+          </div>
+        ) : null}
 
         {loading ? (
           <div className="flex min-h-[420px] items-center justify-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 text-sm font-bold text-slate-400">
@@ -210,6 +239,7 @@ export default function AtendimentoAnalisePage() {
                             <p className="mt-1 text-[11px] font-medium text-slate-500">
                               {item.corretor_ids.length} cadastro{item.corretor_ids.length === 1 ? '' : 's'} vinculado{item.corretor_ids.length === 1 ? '' : 's'}
                             </p>
+                            {item.motivo ? <p className="mt-2 break-words text-[11px] font-medium text-slate-400">Motivo: {item.motivo}</p> : null}
                           </div>
                         </div>
                         {canMove ? (

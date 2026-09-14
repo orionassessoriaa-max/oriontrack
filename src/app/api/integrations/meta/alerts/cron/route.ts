@@ -4,10 +4,12 @@ import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone } from '@/li
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 import { TRAFFIC_RULES } from '@/lib/trafego/rules';
+import { concessionariaKey, isPausedConcessionariaStage } from '@/lib/concessionariaBoard';
 
 type CorretorMeta = {
   id: string;
   nome: string;
+  nome_empresa?: string | null;
   gestor_trafego_id: string | null;
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
@@ -154,13 +156,24 @@ export async function POST(request: Request) {
     // 2. Coletar todos os corretores que possuem conta vinculada
     const { data: corretores, error: dbError } = await supabaseAdmin
       .from('corretores')
-      .select('id, nome, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name, operadoras_info')
+      .select('id, nome, nome_empresa, gestor_trafego_id, meta_ad_account_id, meta_ad_account_name, operadoras_info')
       .not('meta_ad_account_id', 'is', null)
       .not('gestor_trafego_id', 'is', null);
 
     if (dbError) throw dbError;
 
-    if (!corretores || corretores.length === 0) {
+    const { data: analysisStages, error: analysisStagesError } = await supabaseAdmin
+      .from('atendimento_analise_status')
+      .select('concessionaria_key, etapa');
+    if (analysisStagesError) throw analysisStagesError;
+    const pausedKeys = new Set((analysisStages || [])
+      .filter((item) => isPausedConcessionariaStage(item.etapa))
+      .map((item) => item.concessionaria_key));
+    const operationalCorretores = (corretores || []).filter((corretor) =>
+      !pausedKeys.has(concessionariaKey(corretor.nome_empresa || corretor.nome))
+    );
+
+    if (operationalCorretores.length === 0) {
       return NextResponse.json({ success: true, message: 'Nenhuma conta vinculada encontrada.' });
     }
 
@@ -169,12 +182,12 @@ export async function POST(request: Request) {
     const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
 
     const settled = await Promise.allSettled(
-      corretores.map((c) => fetchAccountMetrics(c, since, until, accessToken, graphVersion))
+      operationalCorretores.map((c) => fetchAccountMetrics(c, since, until, accessToken, graphVersion))
     );
 
     const accountsWithMetrics = settled.map((result, index) => {
       if (result.status === 'fulfilled') return result.value;
-      const c = corretores[index];
+      const c = operationalCorretores[index];
       return {
         corretor_id: c.id,
         corretor_nome: c.nome,

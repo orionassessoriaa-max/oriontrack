@@ -8,6 +8,12 @@ export function concessionariaKey(value?: string | null) {
     .slice(0, 140);
 }
 
+export const PAUSED_CONCESSIONARIA_STAGES = new Set(['stand_by', 'suspenso']);
+
+export function isPausedConcessionariaStage(value?: string | null) {
+  return PAUSED_CONCESSIONARIA_STAGES.has(String(value || '').trim());
+}
+
 export type BoardCorretor = {
   id: string;
   nome: string | null;
