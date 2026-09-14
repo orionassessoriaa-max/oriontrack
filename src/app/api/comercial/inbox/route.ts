@@ -30,7 +30,10 @@ async function buildInboxPayload(guard: CommercialGuard) {
   const phoneMap = new Map<string, any>();
   for (const lead of leads || []) { const phone = digits(lead.telefone); if (phone) phoneMap.set(phone, lead); }
   if (!phoneMap.size) return { conversations: [], role: guard.commercialRole };
-  const { data: conversations, error } = await supabaseAdmin.from('whatsapp_conversas').select('id,lead_id,corretor_id,telefone,nome_contato,status,ultima_mensagem_at,updated_at').order('ultima_mensagem_at', { ascending: false, nullsFirst: false }).limit(3000);
+  // Conversas de corretoras usam o mesmo telefone em alguns casos. O Inbox
+  // comercial deve mostrar somente a caixa da operação (sem corretora), nunca
+  // as conversas pessoais ou de outras corretoras de quem está logado.
+  const { data: conversations, error } = await supabaseAdmin.from('whatsapp_conversas').select('id,lead_id,corretor_id,telefone,nome_contato,status,ultima_mensagem_at,updated_at').is('corretor_id', null).order('ultima_mensagem_at', { ascending: false, nullsFirst: false }).limit(3000);
   if (error) throw new Error(error.message);
   const result = (conversations || []).map((conversation) => ({ ...conversation, commercial_lead: phoneMap.get(digits(conversation.telefone)) || null })).filter((conversation) => conversation.commercial_lead);
   return { conversations: result, role: guard.commercialRole };
