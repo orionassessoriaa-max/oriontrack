@@ -49,6 +49,15 @@ import {
   ExternalLink
 } from 'lucide-react';
 
+const SEM_INTERESSE_MOTIVOS = [
+  'Preco acima do esperado',
+  'Ja fechou com outro corretor',
+  'Nao quer contratar agora',
+  'Fora do perfil de atendimento',
+  'Nao respondeu apos tentativas',
+  'Numero errado',
+];
+
 function WhatsAppGlyph({ className = '' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
@@ -430,6 +439,11 @@ export default function BrokerInboxPage() {
   // Apolo Bot & Close Reason Modal States
   const [showBotConfigModal, setShowBotConfigModal] = useState(false);
   const [showCloseReasonModal, setShowCloseReasonModal] = useState(false);
+  const [showSemInteresseModal, setShowSemInteresseModal] = useState(false);
+  const [semInteresseMotivo, setSemInteresseMotivo] = useState('');
+  const [semInteresseOutroMotivo, setSemInteresseOutroMotivo] = useState('');
+  const [semInteresseFezCotacao, setSemInteresseFezCotacao] = useState(false);
+  const [semInteresseValorCotacao, setSemInteresseValorCotacao] = useState('');
   const [botName, setBotName] = useState('Apolo Bot');
   const [welcomeMessage, setWelcomeMessage] = useState('Ola! Seja bem-vindo. Sou o seu assistente virtual. Como posso te ajudar hoje?');
   const [flowSteps, setFlowSteps] = useState([
@@ -1303,7 +1317,8 @@ export default function BrokerInboxPage() {
         .select(`
           status, etiqueta, observacoes, nome, telefone, idades, possui_cnpj, cnpj, responsavel_profile_id,
           tem_plano_ativo, plano_atual, investimento, cidade, operadora, utm_source, email,
-          motivo_busca, hospital_preferencia, valor_negociacao, operadora_negociacao
+          motivo_busca, hospital_preferencia, valor_negociacao, operadora_negociacao,
+          sem_interesse_motivo, sem_interesse_fez_cotacao
         `)
         .eq('id', leadId)
         .single();
@@ -1403,10 +1418,19 @@ export default function BrokerInboxPage() {
     });
   }
 
-  const handleUpdateLeadStatus = async (newStatus: string) => {
+  const handleUpdateLeadStatus = async (newStatus: string, commercialPayload?: Record<string, unknown>) => {
     if (!selectedConversation?.lead_id) {
       alert('Esta conversa não possui um Lead associado.');
-      return;
+      return false;
+    }
+
+    if (newStatus === 'Sem interesse' && !commercialPayload) {
+      setSemInteresseMotivo('');
+      setSemInteresseOutroMotivo('');
+      setSemInteresseFezCotacao(false);
+      setSemInteresseValorCotacao('');
+      setShowSemInteresseModal(true);
+      return false;
     }
     
     setUpdatingStatus(true);
@@ -1418,7 +1442,7 @@ export default function BrokerInboxPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, ...commercialPayload }),
       });
       const payload = await response.json().catch(() => ({}));
 
@@ -1427,9 +1451,11 @@ export default function BrokerInboxPage() {
       setLeadStatus(newStatus);
       void fetchLeadDetails(selectedConversation.lead_id);
       alert('Status do Lead atualizado com sucesso no CRM!');
+      return true;
     } catch (err: any) {
       console.error('Erro ao atualizar status do lead:', err);
       alert(err.message || 'Erro ao atualizar status no Supabase.');
+      return false;
     } finally {
       setUpdatingStatus(false);
     }
@@ -4198,6 +4224,126 @@ export default function BrokerInboxPage() {
 
         </div>
       </div>
+      )}
+
+      {showSemInteresseModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900 text-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-white/5 p-6">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-rose-400">Status do CRM</p>
+                <h3 className="mt-1 text-lg font-black">Marcar como sem interesse</h3>
+                <p className="mt-1 text-xs font-semibold text-slate-400">Informe o motivo antes de atualizar o lead.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSemInteresseModal(false)}
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-white/5 hover:text-white"
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-6">
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Motivo</span>
+                <select
+                  autoFocus
+                  value={semInteresseMotivo}
+                  onChange={(event) => setSemInteresseMotivo(event.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none transition focus:border-cyan-500"
+                >
+                  <option value="">Selecione o motivo</option>
+                  {SEM_INTERESSE_MOTIVOS.map((motivo) => (
+                    <option key={motivo} value={motivo}>{motivo}</option>
+                  ))}
+                  <option value="Outro motivo">Outro motivo</option>
+                </select>
+              </label>
+
+              {semInteresseMotivo === 'Outro motivo' && (
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Qual foi o motivo</span>
+                  <input
+                    value={semInteresseOutroMotivo}
+                    onChange={(event) => setSemInteresseOutroMotivo(event.target.value)}
+                    placeholder="Escreva o motivo com suas palavras"
+                    maxLength={180}
+                    className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none transition focus:border-cyan-500"
+                  />
+                </label>
+              )}
+
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                <span className="text-sm font-bold text-slate-200">Chegou a fazer cotação?</span>
+                <input
+                  type="checkbox"
+                  checked={semInteresseFezCotacao}
+                  onChange={(event) => setSemInteresseFezCotacao(event.target.checked)}
+                  className="h-5 w-5 rounded border-slate-500 text-cyan-500 focus:ring-cyan-500"
+                />
+              </label>
+
+              {semInteresseFezCotacao && (
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Valor da cotação</span>
+                  <input
+                    inputMode="decimal"
+                    value={semInteresseValorCotacao}
+                    onChange={(event) => setSemInteresseValorCotacao(event.target.value)}
+                    placeholder="Ex: 1200"
+                    className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none transition focus:border-cyan-500"
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-white/5 bg-slate-950/20 p-6">
+              <button
+                type="button"
+                onClick={() => setShowSemInteresseModal(false)}
+                className="rounded-xl bg-white/5 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-300 transition hover:bg-white/10"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={updatingStatus}
+                onClick={async () => {
+                  const motivo = semInteresseMotivo === 'Outro motivo'
+                    ? semInteresseOutroMotivo.trim()
+                    : semInteresseMotivo.trim();
+                  if (!motivo) {
+                    alert(semInteresseMotivo === 'Outro motivo' ? 'Escreva o motivo antes de salvar.' : 'Selecione o motivo.');
+                    return;
+                  }
+
+                  const valorNormalizado = semInteresseValorCotacao
+                    .trim()
+                    .replace(/[^\d,.-]/g, '')
+                    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+                    .replace(',', '.');
+                  const valor = Number(valorNormalizado);
+                  if (semInteresseFezCotacao && (!Number.isFinite(valor) || valor <= 0)) {
+                    alert('Informe o valor da cotação feita antes de salvar.');
+                    return;
+                  }
+
+                  const saved = await handleUpdateLeadStatus('Sem interesse', {
+                    sem_interesse_motivo: motivo,
+                    sem_interesse_fez_cotacao: semInteresseFezCotacao,
+                    valor_negociacao: semInteresseFezCotacao ? valor : null,
+                  });
+                  if (saved) setShowSemInteresseModal(false);
+                }}
+                className="rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {updatingStatus ? 'Salvando...' : 'Salvar e marcar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ================= MODAL: MOTIVO DE ENCERRAMENTO OBRIGATÓRIO ================= */}
