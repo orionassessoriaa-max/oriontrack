@@ -27,7 +27,7 @@ export default function ManagerDemandButton() {
       if (!token) throw new Error('Sessão expirada. Entre novamente.');
       const response = await fetch('/api/equipe/apollo/demandas', {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ categoria: category, titulo: title, descricao: description, prioridade }),
+        body: JSON.stringify({ categoria: category, titulo: title, descricao: description, prioridade: priority }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar a demanda.');
