@@ -28,6 +28,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import Link from 'next/link';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
+import ManagerDemandButton from '@/components/trafego/ManagerDemandButton';
 import OrionCredCard from '@/components/creatives/OrionCredCard';
 import {
   ACTION_LABELS,
@@ -534,6 +535,7 @@ export default function GestorDashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {profile?.tipo_usuario === 'gestor_trafego' ? <ManagerDemandButton /> : null}
             <MetaDatePicker
               startDate={dataInicio}
               endDate={dataFim}
