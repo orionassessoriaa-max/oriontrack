@@ -106,10 +106,9 @@ async function main() {
   assert.ok(groupCalls[0].body.text.includes(sdr.nome));
   assert.equal(assignment.sdr.length, 0);
   assert.equal(assignment.group[0].group_id, groupId);
-  assert.equal(privateCalls.length, 1);
-  assert.equal(privateCalls[0].profiles[0].id, coordinator.id);
+  assert.equal(privateCalls.length, 0);
   assert.equal(auditRows[0].metadata.group_delivery[0].group_id, groupId);
-  assert.equal(auditRows[0].metadata.coordinator_delivery[0].profile_id, coordinator.id);
+  assert.equal(auditRows[0].metadata.coordinator_delivery.length, 0);
 
   providerFails = true; privateCalls = [];
   await assert.rejects(() => notifications.notifyCommercialLeadPool(lead), /Falha simulada/);

@@ -220,13 +220,17 @@ export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotific
     groupId
       ? sendCommercialGroupNotification(groupId, title, groupMessage)
       : Promise.resolve([]),
-    sendApoloWhatsApp({
-      type: 'novo_lead',
-      title: 'Nova oportunidade distribuida',
-      message: `${targets.sdr.nome || 'O SDR responsavel'} acabou de receber uma nova oportunidade.`,
-      profiles: targets.coordinators,
-      respectPreferences: false,
-    }),
+    // Com a fila no grupo, o coordenador acompanha ali. Evita o mesmo aviso
+    // no privado, que antes duplicava cada distribuicao para o Pedro.
+    groupId
+      ? Promise.resolve([])
+      : sendApoloWhatsApp({
+        type: 'novo_lead',
+        title: 'Nova oportunidade distribuida',
+        message: `${targets.sdr.nome || 'O SDR responsavel'} acabou de receber uma nova oportunidade.`,
+        profiles: targets.coordinators,
+        respectPreferences: false,
+      }),
   ]);
 
   await supabaseAdmin.from('audit_logs').insert({
