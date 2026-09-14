@@ -320,16 +320,16 @@ export default function CommercialLeadsPage() {
       "PRIORIDADE",
       ...(canViewCommercialLeadQualification ? ["INVESTIMENTO"] : []),
       "VIDAS",
-      "UTM SOURCE",
-      "UTM MEDIUM",
-      "UTM CAMPAIGN",
-      "UTM TERM",
-      "UTM CONTENT",
       "INSTAGRAM",
       "DISPOSIÇÃO",
       "QUALIFICAÇÃO LP",
       "URL LP",
       "FBCLID",
+      "UTM SOURCE",
+      "UTM MEDIUM",
+      "UTM CAMPAIGN",
+      "UTM TERM",
+      "UTM CONTENT",
     ];
     const rows = visible.map((lead) => [
       formatDate(lead.data_entrada),
@@ -342,16 +342,16 @@ export default function CommercialLeadsPage() {
       lead.prioridade || "",
       ...(canViewCommercialLeadQualification ? [lead.investimento || ""] : []),
       lead.vidas || "",
-      lead.utm_source || "",
-      lead.utm_medium || "",
-      lead.utm_campaign || "",
-      lead.utm_term || "",
-      lead.utm_content || "",
       lead.instagram || "",
       lead.disposicao || "",
       lead.qualificacao_lp || "",
       lead.url_lp || "",
       lead.fbclid || "",
+      lead.utm_source || "",
+      lead.utm_medium || "",
+      lead.utm_campaign || "",
+      lead.utm_term || "",
+      lead.utm_content || "",
     ]);
     const csv = [headers, ...rows]
       .map((row) =>
@@ -539,11 +539,6 @@ export default function CommercialLeadsPage() {
               <th className="name">NOME</th>
               <th className="phone">TELEFONE</th>
               <th className="email">EMAIL</th>
-              <th className="extra">INSTAGRAM</th>
-              <th className="extra">DISPOSIÇÃO</th>
-              <th className="extra">QUALIFICAÇÃO LP</th>
-              <th className="extra url">URL LP</th>
-              <th className="extra">FBCLID</th>
               {canViewCommercialLeadQualification && (
                 <>
                   <th className="qualification">JA INVESTIU EM TRAFEGO?</th>
@@ -553,6 +548,11 @@ export default function CommercialLeadsPage() {
               <th className="priority">PRIORIDADE</th>
               {canViewCommercialLeadQualification && <th className="investment">INVESTIMENTO</th>}
               <th className="lives">VIDAS</th>
+              <th className="extra">INSTAGRAM</th>
+              <th className="extra">DISPOSIÇÃO</th>
+              <th className="extra">QUALIFICAÇÃO LP</th>
+              <th className="extra url">URL LP</th>
+              <th className="extra">FBCLID</th>
               <th className="utm">UTM SOURCE</th>
               <th className="utm">UTM MEDIUM</th>
               <th className="utm campaign">UTM CAMPAIGN</th>
@@ -583,11 +583,6 @@ export default function CommercialLeadsPage() {
                 <td className="name" data-label="Nome" title={lead.nome}>{lead.nome}</td>
                 <td className="phone" data-label="Telefone">{lead.telefone ? (canEditCommercial ? <button type="button" className="kh-table-phone" onClick={() => void startCall(lead)} title="Ligar e registrar no CRM"><PhoneCall size={14} />{lead.telefone}</button> : lead.telefone) : "-"}</td>
                 <td className="email" data-label="E-mail">{lead.email || "-"}</td>
-                <td className="extra" data-label="Instagram" title={lead.instagram || ""}>{lead.instagram || "-"}</td>
-                <td className="extra" data-label="Disposição" title={lead.disposicao || ""}>{lead.disposicao || "-"}</td>
-                <td className="extra" data-label="Qualificação LP" title={lead.qualificacao_lp || ""}>{lead.qualificacao_lp || "-"}</td>
-                <td className="extra url" data-label="URL LP" title={lead.url_lp || ""}>{lead.url_lp || "-"}</td>
-                <td className="extra" data-label="FBCLID" title={lead.fbclid || ""}>{lead.fbclid || "-"}</td>
                 {canViewCommercialLeadQualification && (
                   <>
                     <td className="qualification" data-label="Já investiu em tráfego?">{lead.ja_investiu_trafego || "-"}</td>
@@ -599,6 +594,11 @@ export default function CommercialLeadsPage() {
                   <td className="investment" data-label="Investimento">{lead.investimento || "-"}</td>
                 )}
                 <td className="lives" data-label="Vidas">{lead.vidas || "-"}</td>
+                <td className="extra" data-label="Instagram" title={lead.instagram || ""}>{lead.instagram || "-"}</td>
+                <td className="extra" data-label="Disposição" title={lead.disposicao || ""}>{lead.disposicao || "-"}</td>
+                <td className="extra" data-label="Qualificação LP" title={lead.qualificacao_lp || ""}>{lead.qualificacao_lp || "-"}</td>
+                <td className="extra url" data-label="URL LP" title={lead.url_lp || ""}>{lead.url_lp || "-"}</td>
+                <td className="extra" data-label="FBCLID" title={lead.fbclid || ""}>{lead.fbclid || "-"}</td>
                 <td className="utm" data-label="UTM source">{lead.utm_source || "-"}</td>
                 <td className="utm" data-label="UTM medium">{lead.utm_medium || "-"}</td>
                 <td className="utm campaign" data-label="UTM campaign">{lead.utm_campaign || "-"}</td>
