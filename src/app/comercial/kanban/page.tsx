@@ -75,6 +75,12 @@ function localDateTimeValue(value: string | Date = new Date()) {
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
+
+function isTestCommercialLead(lead: CommercialLead) {
+  return /\b(test|teste|dummy)\b/i.test(
+    [lead.nome, lead.email, lead.empresa, lead.origem].filter(Boolean).join(" "),
+  );
+}
 function formatLeadEntry(value: string | null | undefined) {
   if (!value) return "Entrada não informada";
   const date = new Date(value);
@@ -1363,8 +1369,8 @@ export default function CommercialKanbanPage() {
                     const selectedSdr =
                       lead.sdr_id ||
                       assignmentChoice[lead.id] ||
-                      sdrMembers[0]?.profile_id ||
                       "";
+                    const isTestLead = isTestCommercialLead(lead);
                     const mqlLevel = getCommercialMqlLevel(
                       lead.faturamento_mensal,
                       lead.investimento,
@@ -1497,7 +1503,7 @@ export default function CommercialKanbanPage() {
                               ))}
                             </select>
                           )}
-                          {!assignedSdr && (role === "sdr" || canAssignSdr) && (
+                          {!isTestLead && !assignedSdr && (role === "sdr" || canAssignSdr) && (
                             <button
                               type="button"
                               className="kh-card-start"
