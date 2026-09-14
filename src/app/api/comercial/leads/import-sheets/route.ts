@@ -84,6 +84,11 @@ export async function POST(request: Request) {
         prioridade: value(row, ['prioridade', 'priority']),
         investimento: value(row, ['investimento', 'investment']),
         vidas: value(row, ['vidas', 'lives']),
+        instagram: value(row, ['instagram']),
+        disposicao: value(row, ['disposicao', 'disposição']),
+        qualificacao_lp: value(row, ['qualificacao_lp', 'qualificação lp', 'qualificacao lp']),
+        url_lp: value(row, ['url_lp', 'url lp']),
+        fbclid: value(row, ['fbclid']),
         utm_source: value(row, ['utm_source']), utm_medium: value(row, ['utm_medium']),
         utm_campaign: value(row, ['utm_campaign']), utm_term: value(row, ['utm_term']), utm_content: value(row, ['utm_content']),
         status: statusValue(value(row, ['status', 'etapa', 'status do crm'])),
@@ -97,7 +102,7 @@ export async function POST(request: Request) {
       const { data: existing } = await supabaseAdmin.from('comercial_leads').select('*').eq('telefone', lead.telefone).maybeSingle();
       if (existing?.id) {
         const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
-        for (const field of ['email', 'empresa', 'estado', 'origem', 'campanha', 'ja_investiu_trafego', 'faturamento_mensal', 'prioridade', 'investimento', 'vidas', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']) {
+        for (const field of ['email', 'empresa', 'estado', 'origem', 'campanha', 'ja_investiu_trafego', 'faturamento_mensal', 'prioridade', 'investimento', 'vidas', 'instagram', 'disposicao', 'qualificacao_lp', 'url_lp', 'fbclid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']) {
           if ((!existing[field] || existing[field] === '-') && lead[field]) update[field] = lead[field];
         }
         if (Object.keys(update).length > 1) { await supabaseAdmin.from('comercial_leads').update(update).eq('id', existing.id); enriched += 1; }

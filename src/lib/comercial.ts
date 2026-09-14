@@ -116,6 +116,11 @@ export type CommercialLead = {
   utm_campaign: string | null;
   utm_term: string | null;
   utm_content: string | null;
+  instagram?: string | null;
+  disposicao?: string | null;
+  qualificacao_lp?: string | null;
+  url_lp?: string | null;
+  fbclid?: string | null;
   status: string;
   sdr_id: string | null;
   closer_id: string | null;

@@ -1531,7 +1531,7 @@ body:has(.kh-commercial-leads-page) { overflow-x: auto; overflow-y: auto; }
 .kh-commercial-leads-page .kh-sheet-table { width: max-content; min-width: 100%; table-layout: auto; }
 .kh-commercial-leads-page .kh-sheet-table th,
 .kh-commercial-leads-page .kh-sheet-table td { width: auto !important; max-width: none; padding-inline: 11px; overflow: visible; overflow-wrap: normal; text-overflow: clip; white-space: nowrap; }
-.kh-commercial-leads-page .kh-sheet-table th { height: 48px; white-space: nowrap; font-size: 12px; line-height: 1.2; }
+.kh-commercial-leads-page .kh-sheet-table th { position: sticky; top: 0; z-index: 9; height: 48px; white-space: nowrap; background: var(--kh-surface-2); font-size: 12px; line-height: 1.2; }
 .kh-commercial-leads-page .kh-sheet-table td { height: 56px; font-size: 13px; line-height: 1.45; }
 .kh-commercial-leads-page .kh-table-phone { font-size: 13px; }
 .kh-commercial-leads-page .kh-sheet-table .select { min-width: 44px; }.kh-commercial-leads-page .kh-sheet-table .index { min-width: 48px; }.kh-commercial-leads-page .kh-sheet-table .date { min-width: 112px; }.kh-commercial-leads-page .kh-sheet-table .name { min-width: 210px; }.kh-commercial-leads-page .kh-sheet-table .phone { min-width: 170px; }.kh-commercial-leads-page .kh-sheet-table .email { min-width: 250px; }.kh-commercial-leads-page .kh-sheet-table .qualification { min-width: 220px; }.kh-commercial-leads-page .kh-sheet-table .revenue { min-width: 190px; }.kh-commercial-leads-page .kh-sheet-table .priority { min-width: 235px; }.kh-commercial-leads-page .kh-sheet-table .investment { min-width: 205px; }.kh-commercial-leads-page .kh-sheet-table .lives { min-width: 105px; }.kh-commercial-leads-page .kh-sheet-table .utm { min-width: 205px; }.kh-commercial-leads-page .kh-sheet-table .utm.campaign { min-width: 285px; }
@@ -1552,6 +1552,10 @@ body:has(.kh-commercial-leads-page) { overflow-x: auto; overflow-y: auto; }
 .kh-commercial-leads-page.kh-read-only .kh-sheet-table .name { left: 160px; }
 .kh-commercial-leads-page .kh-sheet-table .name { border-right-color: #33465c; }
 .kh-commercial-leads-page .kh-sheet-table .name { box-shadow: 9px 0 14px -12px rgba(69,199,235,.75); }
+.kh-commercial-leads-page .kh-sheet-table .name { width: 320px !important; min-width: 320px; max-width: 320px; }
+.kh-commercial-leads-page .kh-sheet-table td.name { overflow: visible; text-overflow: clip; }
+.kh-commercial-leads-page .kh-sheet-table .extra { min-width: 165px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.kh-commercial-leads-page .kh-sheet-table .extra.url { min-width: 260px; max-width: 340px; }
 .kh-commercial-leads-page .kh-sheet-table tr:hover td.select,
 .kh-commercial-leads-page .kh-sheet-table tr:hover td.index,
 .kh-commercial-leads-page .kh-sheet-table tr:hover td.date,
