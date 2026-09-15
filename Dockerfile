@@ -28,6 +28,9 @@ COPY --from=builder --chown=node:node /app/next.config.ts ./next.config.ts
 # Scripts de manutencao rodam dentro do container: a VPS nao tem Node instalado,
 # e aqui ja existem node_modules e as variaveis de ambiente do stack.
 COPY --from=builder --chown=node:node /app/scripts ./scripts
+# A proposta comercial e um HTML lido do disco pela rota /api/comercial/proposta.
+# Fica fora de public/ para nao ser servida sem login, entao precisa vir na mao.
+COPY --from=builder --chown=node:node /app/conteudo ./conteudo
 
 # Sem USER o processo roda como root dentro do container. O diretorio de trabalho fica
 # com o usuario 'node' para que o cache do Next e os scripts de manutencao continuem escrevendo em /app.

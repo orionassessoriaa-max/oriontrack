@@ -27,6 +27,7 @@ import {
   Target,
   Table2,
   UsersRound,
+  FileText,
   X,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -36,6 +37,7 @@ import {
   type CommercialRole,
 } from "@/lib/comercial";
 import { canSelectOperationalTeam, DUAL_OPERATION_ACCESS_KEY } from "@/lib/teamSelection";
+import { PROPOSTA_KRIPTO_IDS } from "@/lib/propostaKripto";
 
 type CommercialContextValue = {
   role: CommercialRole | null;
@@ -88,7 +90,7 @@ export function useCommercial() {
 
 const baseNavigation = [
   { href: "/comercial", label: "Visão geral", icon: LayoutDashboard },
-  { href: "/overview", label: "Overview", icon: Orbit },
+  { href: "/overview", label: "Overview Vendas", icon: Orbit },
   { href: "/comercial/inbox", label: "Inbox", icon: MessageSquare },
   { href: "/comercial/kanban", label: "Kanban", icon: BriefcaseBusiness },
   { href: "/comercial/leads", label: "Leads", icon: Table2 },
@@ -277,26 +279,37 @@ export default function CommercialShell({
     router.push("/comercial/usuarios");
   }, [router]);
 
-  const navigation = useMemo(
-    () =>
-      role === "visualizador"
-        ? baseNavigation.filter(
-            (item) =>
-              item.href === "/comercial/kanban" ||
-              item.href === "/comercial/leads",
-          )
-        : role === "coordenador"
-          ? [
-              ...baseNavigation,
-              {
-                href: "/comercial/usuarios",
-                label: "Usuários",
-                icon: UsersRound,
-              },
-            ]
-          : baseNavigation,
-    [role],
-  );
+  const navigation = useMemo(() => {
+    if (role === "visualizador")
+      return baseNavigation.filter(
+        (item) =>
+          item.href === "/comercial/kanban" || item.href === "/comercial/leads",
+      );
+    const itens =
+      role === "coordenador"
+        ? [
+            ...baseNavigation,
+            {
+              href: "/comercial/usuarios",
+              label: "Usuários",
+              icon: UsersRound,
+            },
+          ]
+        : [...baseNavigation];
+    // A proposta mostra preco e condicao comercial, entao nao acompanha papel do
+    // time: entra no menu so para o Leo e para quem administra. Esconder o item
+    // e cosmetico; quem vale e a checagem da rota /api/comercial/proposta.
+    if (
+      isDevOps ||
+      (currentProfileId && PROPOSTA_KRIPTO_IDS.has(currentProfileId))
+    )
+      itens.push({
+        href: "/comercial/proposta",
+        label: "Proposta",
+        icon: FileText,
+      });
+    return itens;
+  }, [role, isDevOps, currentProfileId]);
   const currentMember = members.find(
     (member) => member.profile_id === currentProfileId,
   );
