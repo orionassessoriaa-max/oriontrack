@@ -362,7 +362,7 @@ body.editing .zone .cue{display:none}
   background:linear-gradient(to top,rgba(3,6,12,.92),transparent);
   transition:opacity .45s ease;
 }
-body.idle #chrome{opacity:1;pointer-events:auto}
+body.idle #chrome{opacity:0;pointer-events:none}
 #counter{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted-2);letter-spacing:.1em;flex:none;font-variant-numeric:tabular-nums}
 #dots{display:flex;gap:6px;flex:1;flex-wrap:wrap}
 #dots button{
@@ -392,7 +392,7 @@ body.idle #chrome{opacity:1;pointer-events:auto}
 #arrows button:hover{background:var(--blue);border-color:var(--blue)}
 #arrows button:focus-visible{outline:2px solid var(--blue-lift);outline-offset:3px}
 #prevBtn{left:20px}#nextBtn{right:20px}
-body.idle #arrows button{opacity:1;pointer-events:auto}
+body.idle #arrows button{opacity:0;pointer-events:none}
 body.editing #arrows button{opacity:0;pointer-events:none}
 
 /* edit bar */
