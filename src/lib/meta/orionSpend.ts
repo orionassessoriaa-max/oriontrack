@@ -77,3 +77,44 @@ export async function fetchOrionCumulativeSpend(
 
   return { spend, since };
 }
+
+export async function fetchOrionSpendForPeriod(
+  accountId: string,
+  since: string,
+  until: string,
+  accessToken: string,
+  graphVersion: string
+) {
+  const normalizedId = normalizeAccountId(accountId);
+  const campaignsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${normalizedId}/campaigns`);
+  campaignsUrl.searchParams.set('fields', 'id,name');
+  campaignsUrl.searchParams.set('limit', '500');
+  campaignsUrl.searchParams.set('access_token', accessToken);
+
+  const campaigns = (await fetchAll<{ id: string; name?: string }>(
+    campaignsUrl,
+    21600,
+    'orion-campaign-list'
+  )).filter((campaign) => isOrionCampaign(campaign.name));
+
+  if (campaigns.length === 0) return 0;
+
+  const campaignIds = new Set(campaigns.map((campaign) => String(campaign.id)));
+  const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${normalizedId}/insights`);
+  insightsUrl.searchParams.set('fields', 'spend,campaign_id,campaign_name');
+  insightsUrl.searchParams.set('level', 'campaign');
+  insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
+  insightsUrl.searchParams.set('limit', '500');
+  insightsUrl.searchParams.set('access_token', accessToken);
+
+  const rows = await fetchAll<{ campaign_id?: string; campaign_name?: string; spend?: string }>(
+    insightsUrl,
+    3600,
+    'orion-period-spend'
+  );
+
+  return rows.reduce((total, row) => {
+    const belongsToOrion = (row.campaign_id && campaignIds.has(String(row.campaign_id))) || isOrionCampaign(row.campaign_name);
+    return belongsToOrion ? total + Number(row.spend || 0) : total;
+  }, 0);
+}

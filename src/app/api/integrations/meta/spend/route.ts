@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
-import { fetchOrionCumulativeSpend } from '@/lib/meta/orionSpend';
+import { fetchOrionCumulativeSpend, fetchOrionSpendForPeriod } from '@/lib/meta/orionSpend';
 import { metaCachedFetch } from '@/lib/meta/cachedFetch';
 
 async function requireTrafficAccess(request: Request) {
@@ -195,6 +195,25 @@ export async function POST(request: Request) {
           acumulado_orion: true,
         });
       }
+    }
+
+    if (body.somente_orion === true) {
+      const spend = await fetchOrionSpendForPeriod(
+        accountId,
+        metaRange.since,
+        metaRange.until,
+        accessToken,
+        graphVersion
+      );
+
+      return NextResponse.json({
+        success: true,
+        corretor_id: corretor.id,
+        meta_ad_account_id: metaAccount.meta_ad_account_id,
+        meta_ad_account_name: metaAccount.meta_ad_account_name,
+        spend,
+        somente_orion: true,
+      });
     }
 
     const url = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/insights`);

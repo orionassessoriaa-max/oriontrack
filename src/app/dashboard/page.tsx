@@ -617,6 +617,7 @@ export default function DashboardPage() {
                     corretor_id: profile.corretor_id,
                     data_inicio: metaRange.since,
                     data_fim: metaRange.until,
+                    somente_orion: true,
                   }),
                 });
                 const spendPayload = await spendResponse.json().catch(() => ({}));
@@ -643,6 +644,7 @@ export default function DashboardPage() {
                     corretor_id: profile.corretor_id,
                     data_inicio: range.since,
                     data_fim: range.until,
+                    somente_orion: true,
                   }),
                 });
                 const payload = await response.json().catch(() => ({}));
