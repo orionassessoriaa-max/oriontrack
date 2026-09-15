@@ -165,6 +165,24 @@ async function getAssignableProfiles(corretorIds: string[]) {
   return data || [];
 }
 
+async function getRecentPresence(profileIds: Array<string | null | undefined>) {
+  const ids = [...new Set(profileIds.filter(Boolean) as string[])];
+  if (ids.length === 0) return new Map<string, string | null>();
+
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, last_active_at')
+    .in('id', ids);
+
+  // Permite publicar o codigo antes da migration sem quebrar a tela de equipe.
+  if (error) {
+    console.warn('presence_lookup_failed', error.message);
+    return new Map<string, string | null>();
+  }
+
+  return new Map((data || []).map((profile: any) => [profile.id, profile.last_active_at || null]));
+}
+
 async function getTeamLeads(corretorIds: string[]) {
   const pageSize = 1000;
   let page = 0;
@@ -237,6 +255,7 @@ export async function GET(request: Request) {
         getOwnerProfiles(scope.corretorIds),
         getAssignableProfiles(scope.corretorIds),
       ]);
+      const presence = await getRecentPresence(assignableProfiles.map((profile: any) => profile.id));
       const membros = assignableProfiles.map((profile: any, index: number) => ({
         id: `profile:${profile.id}`,
         time_id: null,
@@ -251,6 +270,7 @@ export async function GET(request: Request) {
         created_at: null,
         foto_url: null,
         tipo_usuario: profile.tipo_usuario,
+        last_active_at: presence.get(profile.id) || null,
       }));
 
       return NextResponse.json({
@@ -294,6 +314,11 @@ export async function GET(request: Request) {
       membros.some((m: any) => m.profile_id === op.id)
     );
 
+    const presence = await getRecentPresence([
+      ...(membros || []).map((member: any) => member.profile_id),
+      ...assignableProfiles.map((profile: any) => profile.id),
+    ]);
+
     const membrosWithPhoto = (membros || []).map((m: any) => {
       const joinedProfile = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
       return {
@@ -310,6 +335,7 @@ export async function GET(request: Request) {
         created_at: m.created_at,
         foto_url: joinedProfile?.foto_url || null,
         tipo_usuario: joinedProfile?.tipo_usuario || 'corretor_membro',
+        last_active_at: presence.get(m.profile_id) || null,
       };
     });
 
@@ -330,6 +356,7 @@ export async function GET(request: Request) {
         created_at: null,
         foto_url: null,
         tipo_usuario: profile.tipo_usuario,
+        last_active_at: presence.get(profile.id) || null,
       });
     });
 

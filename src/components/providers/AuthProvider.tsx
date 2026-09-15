@@ -406,6 +406,38 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }, [router]);
 
   useEffect(() => {
+    if (!user || !actualProfile) return;
+
+    let cancelled = false;
+    const markPresence = async () => {
+      if (cancelled || document.visibilityState !== 'visible' || !document.hasFocus()) return;
+
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token || cancelled) return;
+
+      await fetch('/api/presence', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+
+    const handleVisibility = () => { void markPresence(); };
+    void markPresence();
+    window.addEventListener('focus', handleVisibility);
+    document.addEventListener('visibilitychange', handleVisibility);
+    const interval = window.setInterval(() => { void markPresence(); }, 60_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleVisibility);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [user, actualProfile]);
+
+  useEffect(() => {
     async function restoreCorretorView() {
       if (!user || !actualProfile || !['admin', 'gestor_trafego', 'account_manager'].includes(actualProfile.tipo_usuario) || viewingProfile) return;
 

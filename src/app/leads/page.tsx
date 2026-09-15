@@ -156,7 +156,16 @@ type TeamMember = {
   email: string;
   profile_id?: string | null;
   tipo_usuario?: string | null;
+  last_active_at?: string | null;
 };
+
+const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
+
+function isRecentlyActive(lastActiveAt: string | null | undefined, now = Date.now()) {
+  if (!lastActiveAt) return false;
+  const timestamp = new Date(lastActiveAt).getTime();
+  return Number.isFinite(timestamp) && now - timestamp >= 0 && now - timestamp < PRESENCE_WINDOW_MS;
+}
 
 type LeadOriginConfig = {
   id: string;
@@ -260,6 +269,12 @@ function isFacilitaCorretora(value?: string | null) {
 
 export default function BrokerLeadsPage() {
   const { profile, actualProfile, isViewingAsCorretor } = useAuth();
+  const [presenceCheckAt, setPresenceCheckAt] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setPresenceCheckAt(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
   const { confirmDialog } = useDialog();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1206,9 +1221,10 @@ export default function BrokerLeadsPage() {
         semResposta,
         vendas,
         negociacao,
+        online: isRecentlyActive(member.last_active_at, presenceCheckAt),
       };
     });
-  }, [teamMembers, leads]);
+  }, [teamMembers, leads, presenceCheckAt]);
 
   const ranking = useMemo(() => {
     return [...teamStats].sort((a, b) => b.vendas - a.vendas || b.total - a.total);
@@ -1287,7 +1303,14 @@ export default function BrokerLeadsPage() {
                     {member.nome.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-black text-slate-950">{member.nome}</p>
+                    <p className="flex min-w-0 items-center gap-2 truncate font-black text-slate-950">
+                      <span className="truncate">{member.nome}</span>
+                      <span
+                        aria-label={member.online ? 'Ativo agora' : 'Inativo'}
+                        className={`h-2 w-2 shrink-0 rounded-full ${member.online ? 'bg-emerald-500 ring-2 ring-emerald-100' : 'bg-slate-300'}`}
+                        title={member.online ? 'Ativo agora' : 'Inativo'}
+                      />
+                    </p>
                     <p className="truncate text-[11px] font-bold text-slate-400">{member.email}</p>
                   </div>
                 </div>

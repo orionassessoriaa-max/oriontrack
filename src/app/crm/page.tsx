@@ -270,7 +270,16 @@ type TeamMember = {
   email: string;
   profile_id?: string | null;
   tipo_usuario?: string | null;
+  last_active_at?: string | null;
 };
+
+const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
+
+function isRecentlyActive(lastActiveAt: string | null | undefined, now = Date.now()) {
+  if (!lastActiveAt) return false;
+  const timestamp = new Date(lastActiveAt).getTime();
+  return Number.isFinite(timestamp) && now - timestamp >= 0 && now - timestamp < PRESENCE_WINDOW_MS;
+}
 
 type DealershipBroker = {
   id: string;
@@ -332,6 +341,12 @@ function isConversationInRange(conversation: WhatsAppConversa, startDate: string
 
 export default function CrmPage() {
   const { profile, actualProfile } = useAuth();
+  const [presenceCheckAt, setPresenceCheckAt] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setPresenceCheckAt(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tarefas, setTarefas] = useState<LeadTarefa[]>([]);
   const [atividades, setAtividades] = useState<LeadAtividade[]>([]);
@@ -980,7 +995,7 @@ export default function CrmPage() {
     const completed = periodConversations.filter((conversation) => normalizeConversationStatus(conversation.status) === 'closed').length;
     const totalContacts = periodConversations.length;
     const totalAgents = teamMembers.length + (profile?.id ? 1 : 0);
-    const onlineAgents = totalContacts > 0 ? Math.min(totalAgents, 1) : 0;
+    const onlineAgents = (profile?.id ? 1 : 0) + teamMembers.filter((member) => isRecentlyActive(member.last_active_at, presenceCheckAt)).length;
     const rating = '0.00';
 
     return {
@@ -1000,7 +1015,7 @@ export default function CrmPage() {
       totalAgents,
       rating
     };
-  }, [profile?.id, conversas, leads, teamMembers, metricsStartDate, metricsEndDate, metricsChannel, metricsDepartment, metricsAgent]);
+  }, [profile?.id, conversas, leads, teamMembers, metricsStartDate, metricsEndDate, metricsChannel, metricsDepartment, metricsAgent, presenceCheckAt]);
 
   const activeBrokersList = useMemo(() => {
     const periodConversations = conversas.filter((conversation) =>
@@ -1026,7 +1041,7 @@ export default function CrmPage() {
       nome: profile?.nome || 'Você',
       email: profile?.email || '',
       role: profile?.tipo_usuario === 'corretor_admin' ? 'Administrador' : 'Corretor',
-      online: currentStats.active > 0,
+      online: true,
       tme: formatDuration(0),
       tma: formatDuration(0),
       conversasAtivas: currentStats.active,
@@ -1040,7 +1055,7 @@ export default function CrmPage() {
         nome: member.nome,
         email: member.email,
         role: member.tipo_usuario === 'corretor_admin' ? 'Administrador' : 'Corretor',
-        online: memberStats.active > 0,
+        online: isRecentlyActive(member.last_active_at, presenceCheckAt),
         tme: formatDuration(0),
         tma: formatDuration(0),
         conversasAtivas: memberStats.active,
@@ -1049,7 +1064,7 @@ export default function CrmPage() {
     });
 
     return [currentAgent, ...teamBrokers];
-  }, [profile, teamMembers, conversas, leads, metricsStartDate, metricsEndDate]);
+  }, [profile, teamMembers, conversas, leads, metricsStartDate, metricsEndDate, presenceCheckAt]);
 
   const activeChatsList = useMemo(() => {
     const dbConversas = conversas.filter((conversation) => {
