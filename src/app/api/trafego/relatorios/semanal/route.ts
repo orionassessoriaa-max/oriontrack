@@ -187,10 +187,10 @@ export async function POST(request: Request) {
       const mensagem = [
         `Logo abaixo estou deixando os dados das nossas campanhas (${diaMes(dataInicio)} até ${diaMes(dataFim)}): ⤵️`,
         '',
-        '📈 CAMPANHAS PLANO DE SAÚDE:',
-        `💸 Investimento: ${brl(investimento)}`,
-        `✅ Nº Leads: ${leads === null ? 'N/A' : leads}`,
-        `✅ Custo médio por Lead: ${brl(cpl)}`,
+        'CAMPANHAS DE PLANO DE SAÚDE',
+        `Investimento: ${brl(investimento)}`,
+        `Leads: ${leads === null ? 'N/A' : leads}`,
+        `Custo médio por lead: ${brl(cpl)}`,
       ].join('\n') + `${leadsAviso}${metaAviso}`;
       return {
         corretor_id: metaOwner.id,

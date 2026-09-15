@@ -89,16 +89,16 @@ export default function ApoloAiWidget() {
   // Determinar a mensagem de boas-vindas dinâmica baseado no cargo do usuário
   const welcomeMessage: Message = useMemo(() => {
     const role = profile?.tipo_usuario || 'corretor';
-    let content = `Olá, corretor parceiro! Eu sou o **Apolo**, seu co-piloto e guia inteligente de alta conversão no Orion Track. 🧭\n\nEstou aqui para te ajudar em tudo o que precisar: seja para encontrar uma tela do sistema (como simulador ou CRM), ou para criar abordagens persuasivas de vendas para o seu WhatsApp e contornar objeções de clientes.\n\nEscolha uma das sugestões abaixo ou digite sua dúvida!`;
+    let content = `Olá. Sou o **Apolo**, assistente do Orion Track.\n\nPosso ajudar a localizar recursos do sistema, consultar informações do CRM e preparar abordagens para o WhatsApp.\n\nEscolha uma sugestão ou escreva sua dúvida.`;
 
     if (role === 'gestor_trafego') {
-      content = `Olá, gestor de tráfego! Eu sou o **Apolo**, seu analista de inteligência de tráfego no Orion Track. 📊\n\nEstou aqui para te ajudar a maximizar o ROI das suas campanhas de planos de saúde, otimizar orçamentos no Meta Ads, planejar criativos e analisar o CPL. Como posso impulsionar seus resultados hoje?`;
+      content = `Olá. Sou o **Apolo**, assistente de tráfego do Orion Track.\n\nPosso ajudar a analisar campanhas, orçamento, criativos e indicadores como CPL.`;
     } else if (role === 'designer') {
-      content = `Olá, designer criativo! Eu sou o **Apolo**, seu assistente de direção de arte e design focado em alta conversão. 🎨\n\nVamos idealizar criativos estáticos premium, roteiros para criativos em vídeo e definir paletas de cores magnéticas para atrair leads de saúde? Diga-me o que você gostaria de criar!`;
+      content = `Olá. Sou o **Apolo**, assistente de design do Orion Track.\n\nPosso apoiar a criação de peças, roteiros e direcionamentos visuais.`;
     } else if (role === 'account_manager') {
-      content = `Olá, account manager! Eu sou o **Apolo**, seu especialista e assessor estratégico de CS no Orion Track. 🤝\n\nEstou à sua disposição para otimizar o relacionamento com os parceiros, refinar a distribuição inteligente de leads, melhorar as taxas de retenção e acelerar o onboarding. Qual é o nosso foco hoje?`;
+      content = `Olá. Sou o **Apolo**, assistente de operações do Orion Track.\n\nPosso ajudar com relacionamento, distribuição de leads, retenção e onboarding.`;
     } else if (role === 'admin') {
-      content = `Olá, administrador do Orion Track! Eu sou o **Apolo**, seu painel de suporte analítico a sistemas e bancos de dados. 💻\n\nPrecisa de ajuda com status de APIs (como Evolution), otimização de RLS, logs de auditoria e segurança global? Estou pronto para facilitar sua rotina técnica!`;
+      content = `Olá. Sou o **Apolo**, assistente administrativo do Orion Track.\n\nPosso ajudar com integrações, status de APIs, auditoria e segurança.`;
     }
 
     return { role: 'assistant', content };

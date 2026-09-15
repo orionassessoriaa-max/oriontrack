@@ -389,12 +389,12 @@ export default function TrafficReportsPage() {
       : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor));
     const diaMes = (iso: string) => format(new Date(`${iso}T12:00:00`), 'dd/MM');
     return [
-      `Logo abaixo estou deixando os dados das nossas campanhas (${diaMes(formData.data_inicio)} até ${diaMes(formData.data_fim)}): ⤵️`,
+      `Resumo das campanhas (${diaMes(formData.data_inicio)} até ${diaMes(formData.data_fim)}):`,
       '',
-      '📈 CAMPANHAS PLANO DE SAÚDE:',
-      `💸 Investimento: ${brl(preview.valorInvestido)}`,
-      `✅ Nº Leads: ${preview.leads}`,
-      `✅ Custo médio por Lead: ${brl(preview.cpl)}`,
+      'CAMPANHAS DE PLANO DE SAÚDE',
+      `Investimento: ${brl(preview.valorInvestido)}`,
+      `Leads: ${preview.leads}`,
+      `Custo médio por lead: ${brl(preview.cpl)}`,
     ].join('\n');
   };
 
@@ -411,12 +411,12 @@ export default function TrafficReportsPage() {
       : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor));
     const diaMes = (iso: string) => format(new Date(iso), 'dd/MM');
     const text = [
-      `Logo abaixo estou deixando os dados das nossas campanhas (${diaMes(report.data_inicio)} até ${diaMes(report.data_fim)}): ⤵️`,
+      `Resumo das campanhas (${diaMes(report.data_inicio)} até ${diaMes(report.data_fim)}):`,
       '',
-      '📈 CAMPANHAS PLANO DE SAÚDE:',
-      `💸 Investimento: ${brl(report.valor_investido)}`,
-      `✅ Nº Leads: ${report.quantidade_leads}`,
-      `✅ Custo médio por Lead: ${brl(report.cpl)}`,
+      'CAMPANHAS DE PLANO DE SAÚDE',
+      `Investimento: ${brl(report.valor_investido)}`,
+      `Leads: ${report.quantidade_leads}`,
+      `Custo médio por lead: ${brl(report.cpl)}`,
     ].join('\n');
     try {
       await navigator.clipboard.writeText(text);

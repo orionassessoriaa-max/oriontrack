@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 import { getLeadStatusStyle, normalizeLeadStatus } from '@/lib/leadStatus';
 import { DEFAULT_KANBAN_STAGES, KanbanStage, getKanbanStageLabel, normalizeKanbanStages } from '@/lib/kanbanStages';
-import { 
+import {
   CheckCircle2, 
   Loader2, 
   MessageSquare, 
@@ -2506,6 +2506,22 @@ export default function BrokerInboxPage() {
     }
   };
 
+  const formatMessageDateTime = (value: string) => {
+    try {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
+  };
+
   /**
    * Recibo do WhatsApp para o que saiu pelo CRM.
    *
@@ -3072,7 +3088,7 @@ export default function BrokerInboxPage() {
                             onClick={() => messagesContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
                             className="rounded-full border border-cyan-400/30 bg-slate-950/95 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-cyan-200 shadow-lg backdrop-blur hover:bg-slate-900"
                           >
-                            Ver início da conversa · {displayChatMessages.length} mensagens
+                            Início: {formatMessageDateTime(displayChatMessages[0]?.created_at || '')} · {displayChatMessages.length} mensagens
                           </button>
                         </div>
                       )}
@@ -3722,10 +3738,10 @@ export default function BrokerInboxPage() {
                   >
                     <option value="">Selecione uma etiqueta...</option>
                     <option value="__nova_etiqueta__">+ Adicionar etiqueta</option>
-                    <option value="Lead Quente">Lead Quente 🔥</option>
-                    <option value="Aguardando Retorno">Aguardando Retorno ⏳</option>
-                    <option value="Sem Interesse">Sem Interesse ❄️</option>
-                    <option value="Documentação Enviada">Documentação Enviada 📋</option>
+                    <option value="Lead Quente">Lead Quente</option>
+                    <option value="Aguardando Retorno">Aguardando Retorno</option>
+                    <option value="Sem Interesse">Sem Interesse</option>
+                    <option value="Documentação Enviada">Documentação Enviada</option>
                   </select>
 
                   {/* Render current tags */}
@@ -4505,9 +4521,9 @@ export default function BrokerInboxPage() {
                   onChange={(e) => setTaskPriority(e.target.value)}
                   className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-3 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50"
                 >
-                  <option value="normal">Normal 🟢</option>
-                  <option value="alta">Alta 🔴</option>
-                  <option value="baixa">Baixa ⚪</option>
+                  <option value="normal">Normal</option>
+                  <option value="alta">Alta</option>
+                  <option value="baixa">Baixa</option>
                 </select>
               </div>
 

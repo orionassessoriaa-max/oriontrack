@@ -437,7 +437,7 @@ export default function BrokerCreativesPage() {
               onClick={() => setExpandedAssetUrl(null)}
               className="absolute -top-10 right-0 text-xs font-black uppercase tracking-widest text-white hover:text-slate-300 flex items-center gap-1.5"
             >
-              Fechar ✕
+              Fechar
             </button>
           </div>
         </div>
