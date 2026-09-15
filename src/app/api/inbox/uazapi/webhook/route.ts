@@ -3,7 +3,7 @@ import { guardarMidiaForaDoBanco, removerBlobs } from '@/lib/inboxMedia';
 import { after, NextResponse } from 'next/server';
 import { normalizePhone, phoneMatchKey, profileIdFromUazapiInstance, uazapiFetch } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
+import { captureHospitalPreferenceAfterHandoff, continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { continueCommercialSdrFromIncoming } from '@/lib/commercialSdrAgent';
 import { stopCommercialAiForHumanTakeover } from '@/lib/commercialSdrSession';
@@ -1652,6 +1652,10 @@ export async function POST(request: Request) {
             phone,
           });
         } else {
+          await captureHospitalPreferenceAfterHandoff({
+            leadId: lead.id,
+            customerMessage: aiCustomerMessage || message,
+          });
           await continueLeadAiFromIncoming({
           leadId: lead.id,
           conversationId: conversation.id,

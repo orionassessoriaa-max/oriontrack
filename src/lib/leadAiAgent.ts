@@ -1476,6 +1476,108 @@ async function notifyResponsible(lead: LeadRow, summary: string, preferredAdmin?
   }
 }
 
+function extractHospitalPreferenceFromMessage(message: string) {
+  const text = String(message || '').replace(/\s+/g, ' ').trim();
+  if (text.length < 3) return null;
+
+  const normalized = normalizeAiText(text);
+  if (!/\b(atende|atendam|atender|atendimento|hospital|hospitais|clinica|clinicas|rede)\b/.test(normalized)) {
+    return null;
+  }
+
+  const match = text.match(/\b(?:atende|atendam|atender)\s+(?:(?:no|na|em)\s+)?(.+)$/i)
+    || text.match(/\b(?:hospital(?:is)?|cl[ií]nica(?:s)?|rede)\s+(?:de\s+)?(?:prefer[eê]ncia\s*)?(?:é|são|seria|seriam|:)?\s*(.+)$/i);
+  const preference = String(match?.[1] || '')
+    .replace(/\b(por favor|por gentileza|obrigado|obrigada)\b.*$/i, '')
+    .replace(/^[\s:;,.\-]+|[\s:;,.\-]+$/g, '')
+    .trim();
+
+  const normalizedPreference = normalizeAiText(preference);
+  if (
+    preference.length < 3 ||
+    /^(hospital|hospitais|rede|clinica|clinicas|credenciada|de preferencia)$/.test(normalizedPreference)
+  ) {
+    return null;
+  }
+
+  return preference.slice(0, 240);
+}
+
+export async function captureHospitalPreferenceAfterHandoff(input: {
+  leadId: string;
+  customerMessage: string;
+}) {
+  const preference = extractHospitalPreferenceFromMessage(input.customerMessage);
+  if (!preference) return { captured: false };
+
+  const { data: session } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .select('id, summary, admin_profile_id, status')
+    .eq('lead_id', input.leadId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!session || session.status !== 'handoff') return { captured: false };
+
+  const { data: lead } = await supabaseAdmin
+    .from('leads')
+    .select('id, corretor_id, nome, telefone, hospital_preferencia, responsavel_profile_id')
+    .eq('id', input.leadId)
+    .maybeSingle();
+
+  if (!lead) return { captured: false };
+
+  const existing = normalizeAiText(lead.hospital_preferencia);
+  const incoming = normalizeAiText(preference);
+  if (existing && (existing === incoming || existing.includes(incoming))) {
+    return { captured: false, alreadyRegistered: true };
+  }
+
+  const summary = setSummaryField(session.summary || leadFacts(lead), 'Hospital/Regiao', preference);
+  const now = new Date().toISOString();
+  const [{ error: leadError }, { error: sessionError }] = await Promise.all([
+    supabaseAdmin.from('leads').update({ hospital_preferencia: preference }).eq('id', lead.id),
+    supabaseAdmin.from('lead_ai_sessions').update({
+      summary,
+      last_customer_message_at: now,
+      updated_at: now,
+    }).eq('id', session.id),
+  ]);
+  if (leadError) throw leadError;
+  if (sessionError) throw sessionError;
+
+  const responsible = await findResponsibleProfile(lead.responsavel_profile_id);
+  const admin = await findAiAdmin(lead.corretor_id, session.admin_profile_id);
+  const targets = [responsible, admin].filter((profile, index, profiles): profile is ProfileRow =>
+    Boolean(profile) && profiles.findIndex((candidate) => candidate?.id === profile?.id) === index
+  );
+  const message = [
+    `Atualização do lead *${plain(lead.nome)}*.`,
+    '',
+    `*Hospital/Região de preferência:* ${preference}`,
+    '',
+    'Informação recebida após a transferência e já registrada no CRM.',
+  ].join('\n');
+
+  for (const target of targets) {
+    await supabaseAdmin.from('notificacoes').insert([{
+      titulo: 'Atualização do lead',
+      mensagem: message,
+      destinatario_profile_id: target.id,
+      lida: false,
+    }]);
+    await sendApoloWhatsApp({
+      type: 'novo_lead',
+      title: 'Atualização do lead',
+      message,
+      profiles: [target],
+    });
+  }
+
+  return { captured: true, preference };
+}
+
 // Exportada para o simulador (scripts/simular-ia-corretora.ts) poder rodar a
 // mesma geracao usada em producao, sem enviar nada no WhatsApp.
 export async function askAline(

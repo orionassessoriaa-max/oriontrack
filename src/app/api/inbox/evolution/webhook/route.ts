@@ -2,7 +2,7 @@ import { openaiFetch } from '@/lib/openaiUso';
 import { NextResponse } from 'next/server';
 import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone, profileIdFromEvolutionInstance } from '@/lib/evolution';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
+import { captureHospitalPreferenceAfterHandoff, continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 
 function readText(data: any) {
@@ -429,6 +429,10 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true, audio_handoff: true });
         }
 
+        await captureHospitalPreferenceAfterHandoff({
+          leadId: lead.id,
+          customerMessage: aiCustomerMessage || message,
+        });
         await continueLeadAiFromIncoming({
           leadId: lead.id,
           conversationId: conversation.id,
