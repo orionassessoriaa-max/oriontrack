@@ -1055,14 +1055,12 @@ body.editing [data-e]:hover{outline-color:rgba(61,130,255,.75);background:rgba(1
   /* ---------- fit stage to viewport ---------- */
   function fit(){
     var pad = 0;
-    var visual = window.visualViewport;
-    var w = (visual ? visual.width : window.innerWidth) - pad;
-    var h = (visual ? visual.height : window.innerHeight) - pad;
+    var w = document.documentElement.clientWidth - pad;
+    var h = document.documentElement.clientHeight - pad;
     var s = Math.min(w / 1600, h / 900);
     stage.style.transform = "scale(" + s + ")";
   }
   window.addEventListener("resize", fit);
-  if (window.visualViewport) window.visualViewport.addEventListener("resize", fit);
   fit();
 
   /* ---------- navigation ---------- */

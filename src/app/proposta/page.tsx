@@ -81,8 +81,8 @@ export default function PropostaApresentacaoPage() {
   }
 
   if (erro && !url) return <main style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: '#05080f', color: '#f7f9fc', padding: 24 }}>{erro}</main>;
-  return <main style={{ minHeight: '100dvh', background: '#05080f' }}>
-    {url && <iframe src={url} title="Proposta comercial Orion" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" style={{ display: 'block', width: '100vw', height: '100dvh', border: 0 }} />}
+  return <main style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#05080f' }}>
+    {url && <iframe src={url} title="Proposta comercial Orion" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" style={{ display: 'block', width: '100%', height: '100%', border: 0 }} />}
     {erro && <p style={{ position: 'fixed', left: 16, bottom: 16, zIndex: 10, color: '#ffd2d2' }}>{erro}</p>}
     {salvarAberto && <div onMouseDown={() => !salvando && setSalvarAberto(false)} style={{ position: 'fixed', inset: 0, zIndex: 20, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.68)', padding: 20 }}>
       <section onMouseDown={(event) => event.stopPropagation()} style={{ width: 'min(460px,100%)', borderRadius: 14, padding: 24, background: '#0b1422', color: '#f7f9fc', boxShadow: '0 20px 80px rgba(0,0,0,.5)' }}>
