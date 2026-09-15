@@ -1055,11 +1055,14 @@ body.editing [data-e]:hover{outline-color:rgba(61,130,255,.75);background:rgba(1
   /* ---------- fit stage to viewport ---------- */
   function fit(){
     var pad = 0;
-    var w = window.innerWidth - pad, h = window.innerHeight - pad;
+    var visual = window.visualViewport;
+    var w = (visual ? visual.width : window.innerWidth) - pad;
+    var h = (visual ? visual.height : window.innerHeight) - pad;
     var s = Math.min(w / 1600, h / 900);
     stage.style.transform = "scale(" + s + ")";
   }
   window.addEventListener("resize", fit);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", fit);
   fit();
 
   /* ---------- navigation ---------- */
@@ -1813,6 +1816,7 @@ body.editing [data-e]:hover{outline-color:rgba(61,130,255,.75);background:rgba(1
   }
 
   clientInput.addEventListener("input", function(){
+    document.querySelectorAll("[data-proposal-client]").forEach(function(element){ element.textContent = clientInput.value || "Nome do lead"; });
     saveState.textContent = "Salvando…";
     save();
   });
@@ -1827,11 +1831,22 @@ body.editing [data-e]:hover{outline-color:rgba(61,130,255,.75);background:rgba(1
     if (on) { wake(); document.body.classList.remove("idle"); }
     document.getElementById("editBtn").textContent = on ? "Apresentar" : "Editar";
   }
-  document.getElementById("editBtn").addEventListener("click", function(){ setEdit(!document.body.classList.contains("editing")); });
+  document.getElementById("editBtn").addEventListener("click", function(){
+    var editing = document.body.classList.contains("editing");
+    setEdit(!editing);
+    if (!editing) {
+      var coverName = document.querySelector("[data-proposal-client]");
+      if (coverName) coverName.focus();
+    }
+  });
   document.getElementById("doneBtn").addEventListener("click", function(){ setEdit(false); });
 
   stage.addEventListener("input", function(e){
     if (e.target && e.target.hasAttribute && (e.target.hasAttribute("data-e") || e.target.hasAttribute("data-price"))) {
+      if (e.target.hasAttribute("data-proposal-client")) {
+        clientInput.value = e.target.textContent.trim();
+        clientInput.dispatchEvent(new Event("change", { bubbles:true }));
+      }
       saveState.textContent = "Salvando…";
       save();
     }
