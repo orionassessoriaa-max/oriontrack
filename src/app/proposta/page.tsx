@@ -25,8 +25,14 @@ export default function PropostaApresentacaoPage() {
   useEffect(() => {
     async function load() {
       try {
-        const proposalId = new URLSearchParams(window.location.search).get('proposal_id');
-        const response = await fetch(`/api/comercial/proposta${proposalId ? `?proposal_id=${encodeURIComponent(proposalId)}` : ''}`, { headers: { Authorization: `Bearer ${await token()}` } });
+        const query = new URLSearchParams(window.location.search);
+        const proposalId = query.get('proposal_id');
+        const initialLeadId = query.get('lead_id');
+        if (initialLeadId) setLeadId(initialLeadId);
+        const search = proposalId
+          ? `?proposal_id=${encodeURIComponent(proposalId)}`
+          : initialLeadId ? `?lead_id=${encodeURIComponent(initialLeadId)}` : '';
+        const response = await fetch(`/api/comercial/proposta${search}`, { headers: { Authorization: `Bearer ${await token()}` } });
         if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Não foi possível abrir a proposta.');
         const next = URL.createObjectURL(new Blob([await response.text()], { type: 'text/html' }));
         urlRef.current = next;

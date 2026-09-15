@@ -22,8 +22,11 @@ const ARQUIVO = path.join(process.cwd(), "conteudo", "proposta-kripto.html");
 let cache: string | null = null;
 const MAX_SNAPSHOT_SIZE = 3_000_000;
 
-function bridge(html: string) {
-  const script = `<script>(function(){var client=document.getElementById('clientName');if(!client)return;function tell(type,extra){window.parent.postMessage(Object.assign({type:type,clientName:client.value.trim()},extra||{}),'*')}client.addEventListener('change',function(){tell('orion-proposal-client-changed')});window.addEventListener('message',function(event){if(!event.data||event.data.type!=='orion-proposal-snapshot-request')return;var state={client:client.value,texts:{},mod:'mensal',prices:null};try{var saved=JSON.parse(localStorage.getItem('orion-proposta-v2')||'{}');state.mod=saved.mod||state.mod;state.prices=saved.prices||state.prices;state.texts=saved.texts||state.texts}catch(error){}document.querySelectorAll('[contenteditable]').forEach(function(element,index){state.texts[index]=element.innerHTML});var output='<!doctype html>'+document.documentElement.outerHTML;output=output.replace('<script id="pageScript">','<script>window.__ORION_BAKED__=true;window.__ORION_STATE__='+JSON.stringify(state).replace(/<\\/script/gi,'<\\\\/script')+';<\\/script><script id="pageScript">');tell('orion-proposal-snapshot',{html:output})})})();</script>`;
+type ProposalLead = { nome: string; empresa: string | null };
+
+function bridge(html: string, lead: ProposalLead | null) {
+  const leadData = JSON.stringify(lead);
+  const script = `<script>(function(){var client=document.getElementById('clientName');var lead=${leadData};function setText(selector,value){document.querySelectorAll(selector).forEach(function(element){element.textContent=value})}if(lead){var date=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'}).format(new Date());date=date.charAt(0).toUpperCase()+date.slice(1);setText('[data-proposal-client]',lead.nome);setText('[data-proposal-segment]',lead.empresa||'Corretora de planos de saúde');setText('[data-proposal-date]',date);if(client)client.value=lead.nome}if(!client)return;function tell(type,extra){window.parent.postMessage(Object.assign({type:type,clientName:client.value.trim()},extra||{}),'*')}client.addEventListener('change',function(){tell('orion-proposal-client-changed')});window.addEventListener('message',function(event){if(!event.data||event.data.type!=='orion-proposal-snapshot-request')return;var state={client:client.value,texts:{},mod:'mensal',prices:null};try{var saved=JSON.parse(localStorage.getItem('orion-proposta-v2')||'{}');state.mod=saved.mod||state.mod;state.prices=saved.prices||state.prices;state.texts=saved.texts||state.texts}catch(error){}document.querySelectorAll('[contenteditable]').forEach(function(element,index){state.texts[index]=element.innerHTML});var output='<!doctype html>'+document.documentElement.outerHTML;output=output.replace('<script id="pageScript">','<script>window.__ORION_BAKED__=true;window.__ORION_STATE__='+JSON.stringify(state).replace(/<\\/script/gi,'<\\\\/script')+';<\\/script><script id="pageScript">');tell('orion-proposal-snapshot',{html:output})})})();</script>`;
   return html.replace(/<\/body>/i, `${script}</body>`);
 }
 
@@ -70,6 +73,20 @@ export async function GET(request: Request) {
     return new NextResponse(data.html_snapshot, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow" } });
   }
 
+  const leadId = url.searchParams.get("lead_id");
+  let leadForProposal: ProposalLead | null = null;
+  if (leadId) {
+    const { data: lead, error } = await supabaseAdmin.from("comercial_leads")
+      .select("nome,empresa,status")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!lead || lead.status !== "Reuniões agendadas") {
+      return NextResponse.json({ error: "Selecione um lead que esteja em Reuniões agendadas." }, { status: 400 });
+    }
+    leadForProposal = { nome: lead.nome, empresa: lead.empresa };
+  }
+
   if (!cache) cache = await readFile(ARQUIVO, "utf8").catch(() => null);
   if (!cache) {
     return NextResponse.json(
@@ -78,7 +95,7 @@ export async function GET(request: Request) {
     );
   }
 
-  return new NextResponse(bridge(cache), {
+  return new NextResponse(bridge(cache, leadForProposal), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       // Nao e pagina publica: nem CDN nem navegador guardam copia.

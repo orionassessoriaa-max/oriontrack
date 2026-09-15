@@ -8,9 +8,9 @@ import { PROPOSTA_KRIPTO_IDS } from '@/lib/propostaKripto';
 export default function PropostaKriptoPage() {
   const { isDevOps, currentProfileId, loading } = useCommercial();
   const liberado = isDevOps || Boolean(currentProfileId && PROPOSTA_KRIPTO_IDS.has(currentProfileId));
-  const proposalId = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('proposal_id');
-  const href = `/proposta${proposalId ? `?proposal_id=${encodeURIComponent(proposalId)}` : ''}`;
   const [propostas, setPropostas] = useState<Array<{ id: string; nome_cliente: string; lead_nome: string; created_at: string }>>([]);
+  const [leads, setLeads] = useState<Array<{ id: string; nome: string; empresa: string | null }>>([]);
+  const [leadId, setLeadId] = useState('');
   const [listError, setListError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,10 +19,16 @@ export default function PropostaKriptoPage() {
       try {
         const { supabase } = await import('@/lib/supabase/client');
         const { data } = await supabase.auth.getSession();
-        const response = await fetch('/api/comercial/proposta?mode=list', { headers: { Authorization: `Bearer ${data.session?.access_token || ''}` } });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar as propostas.');
-        setPropostas(payload.proposals || []);
+        const headers = { Authorization: `Bearer ${data.session?.access_token || ''}` };
+        const [listResponse, leadsResponse] = await Promise.all([
+          fetch('/api/comercial/proposta?mode=list', { headers }),
+          fetch('/api/comercial/proposta?mode=leads', { headers }),
+        ]);
+        const [listPayload, leadsPayload] = await Promise.all([listResponse.json(), leadsResponse.json()]);
+        if (!listResponse.ok) throw new Error(listPayload.error || 'Não foi possível carregar as propostas.');
+        if (!leadsResponse.ok) throw new Error(leadsPayload.error || 'Não foi possível carregar os leads agendados.');
+        setPropostas(listPayload.proposals || []);
+        setLeads(leadsPayload.leads || []);
       } catch (error) { setListError(error instanceof Error ? error.message : 'Não foi possível carregar as propostas.'); }
     }
     void load();
@@ -34,9 +40,16 @@ export default function PropostaKriptoPage() {
   return <div className="kh-panel" style={{ maxWidth: 680, margin: '48px auto', textAlign: 'center', padding: 40 }}>
     <FileText size={28} aria-hidden style={{ color: '#00b8df', marginBottom: 12 }} />
     <h1 style={{ margin: '0 0 10px' }}>Proposta comercial</h1>
-    <p style={{ margin: '0 0 24px', opacity: 0.7 }}>A apresentação abre em uma nova aba, sem a navegação do CRM.</p>
-    <a href={href} target="_blank" rel="noopener noreferrer" className="kh-button kh-button-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-      <ExternalLink size={16} aria-hidden /> Abrir proposta
+    <p style={{ margin: '0 0 20px', opacity: 0.7 }}>Escolha o lead em Reuniões agendadas. A capa já abre com os dados dele.</p>
+    <label style={{ display: 'block', maxWidth: 430, margin: '0 auto 16px', textAlign: 'left' }}>
+      <span style={{ display: 'block', fontSize: 12, marginBottom: 7, opacity: .7 }}>Lead da proposta</span>
+      <select value={leadId} onChange={(event) => setLeadId(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,.16)', background: '#07101c', color: 'white' }}>
+        <option value="">Selecione o lead</option>
+        {leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.nome}{lead.empresa ? ` - ${lead.empresa}` : ''}</option>)}
+      </select>
+    </label>
+    <a href={leadId ? `/proposta?lead_id=${encodeURIComponent(leadId)}` : '#'} onClick={(event) => { if (!leadId) event.preventDefault(); }} target="_blank" rel="noopener noreferrer" aria-disabled={!leadId} className="kh-button kh-button-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', opacity: leadId ? 1 : .5, pointerEvents: leadId ? 'auto' : 'none' }}>
+      <ExternalLink size={16} aria-hidden /> Abrir nova proposta
     </a>
     <section style={{ marginTop: 36, textAlign: 'left', borderTop: '1px solid rgba(255,255,255,.1)', paddingTop: 24 }}>
       <strong>Propostas salvas</strong>
