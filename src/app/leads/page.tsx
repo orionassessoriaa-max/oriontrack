@@ -1257,21 +1257,17 @@ export default function BrokerLeadsPage() {
 
       {canAssignTeamLeads && teamMembers.length > 0 && (
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className={`flex flex-col justify-between gap-3 md:flex-row md:items-center ${teamSummaryOpen ? 'mb-4' : ''}`}>
+          <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Time comercial</p>
               <h2 className="text-xl font-black text-slate-950">Resumo dos vendedores</h2>
               <p className="text-sm font-bold text-slate-500">Acompanhe quem esta com leads, sem resposta e vendas realizadas.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setTeamSummaryOpen((current) => !current)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-700 transition-all hover:bg-slate-100">
-                <ChevronDown size={15} className={`transition-transform ${teamSummaryOpen ? 'rotate-180' : ''}`} /> {teamSummaryOpen ? 'Minimizar' : 'Ver resumo'}
-              </button>
-              {teamSummaryOpen && <button type="button" onClick={() => setRankingEnabled((current) => !current)} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all ${rankingEnabled ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'border border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}><Trophy size={15} /> {rankingEnabled ? 'Ranking ativo' : 'Ativar ranking'}</button>}
-            </div>
+            <button type="button" onClick={() => setRankingEnabled((current) => !current)} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all ${rankingEnabled ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'border border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
+              <Trophy size={15} /> {rankingEnabled ? 'Ranking ativo' : 'Ativar ranking'}
+            </button>
           </div>
 
-          <div className={teamSummaryOpen ? 'space-y-4' : 'hidden'}>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {teamStats.map((member) => (
               <div key={member.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
