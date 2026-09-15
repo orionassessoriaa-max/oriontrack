@@ -48,6 +48,21 @@ export async function GET(request: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ leads: data || [] });
   }
+  if (url.searchParams.get("mode") === "list") {
+    const { data: proposals, error } = await supabaseAdmin
+      .from("comercial_propostas")
+      .select("id,lead_id,nome_cliente,created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const leadIds = (proposals || []).map((proposal) => proposal.lead_id);
+    const { data: leads, error: leadsError } = leadIds.length
+      ? await supabaseAdmin.from("comercial_leads").select("id,nome").in("id", leadIds)
+      : { data: [], error: null };
+    if (leadsError) return NextResponse.json({ error: leadsError.message }, { status: 500 });
+    const nameByLead = new Map((leads || []).map((lead) => [lead.id, lead.nome]));
+    return NextResponse.json({ proposals: (proposals || []).map((proposal) => ({ ...proposal, lead_nome: nameByLead.get(proposal.lead_id) || proposal.nome_cliente })) });
+  }
   const proposalId = url.searchParams.get("proposal_id");
   if (proposalId) {
     const { data } = await supabaseAdmin.from("comercial_propostas").select("html_snapshot").eq("id", proposalId).maybeSingle();
