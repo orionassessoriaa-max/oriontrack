@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, FileText, RefreshCw } from 'lucide-react';
+import { ExternalLink, FileText, RefreshCw, Save, X } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import { PROPOSTA_KRIPTO_IDS } from '@/lib/propostaKripto';
 
@@ -21,6 +21,12 @@ export default function PropostaKriptoPage() {
   const [url, setUrl] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [nomeCliente, setNomeCliente] = useState('');
+  const [leadsAgendados, setLeadsAgendados] = useState<Array<{ id: string; nome: string; empresa: string | null; reuniao_agendada_at: string | null }>>([]);
+  const [leadId, setLeadId] = useState('');
+  const [salvarAberto, setSalvarAberto] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [snapshot, setSnapshot] = useState<string | null>(null);
   const urlRef = useRef<string | null>(null);
 
   // Trava de vitrine. A trava que vale e a da rota; esta so evita mostrar a
@@ -37,7 +43,8 @@ export default function PropostaKriptoPage() {
       const token = data.session?.access_token;
       if (!token) throw new Error('Sessão expirada. Entre novamente.');
 
-      const resposta = await fetch('/api/comercial/proposta', {
+      const proposalId = new URLSearchParams(window.location.search).get('proposal_id');
+      const resposta = await fetch(`/api/comercial/proposta${proposalId ? `?proposal_id=${encodeURIComponent(proposalId)}` : ''}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resposta.ok) {
@@ -71,6 +78,53 @@ export default function PropostaKriptoPage() {
   useEffect(() => () => {
     if (urlRef.current) URL.revokeObjectURL(urlRef.current);
   }, []);
+
+  useEffect(() => {
+    function receive(event: MessageEvent) {
+      if (!event.data || typeof event.data !== 'object') return;
+      if (event.data.type === 'orion-proposal-client-changed' && event.data.clientName) {
+        setNomeCliente(String(event.data.clientName));
+        setSalvarAberto(true);
+      }
+      if (event.data.type === 'orion-proposal-snapshot' && event.data.html) setSnapshot(String(event.data.html));
+    }
+    window.addEventListener('message', receive);
+    return () => window.removeEventListener('message', receive);
+  }, []);
+
+  const abrirSalvar = useCallback(async () => {
+    setSalvarAberto(true);
+    if (leadsAgendados.length) return;
+    try {
+      const { supabase } = await import('@/lib/supabase/client');
+      const { data } = await supabase.auth.getSession();
+      const response = await fetch('/api/comercial/proposta?mode=leads', { headers: { Authorization: `Bearer ${data.session?.access_token || ''}` } });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os leads agendados.');
+      setLeadsAgendados(payload.leads || []);
+    } catch (error) { setErro(error instanceof Error ? error.message : 'Não foi possível carregar os leads agendados.'); }
+  }, [leadsAgendados.length]);
+
+  useEffect(() => {
+    if (salvarAberto && !leadsAgendados.length) void abrirSalvar();
+  }, [salvarAberto, leadsAgendados.length, abrirSalvar]);
+
+  const salvarProposta = useCallback(async () => {
+    if (!nomeCliente || !leadId) { setErro('Informe o cliente e selecione o lead agendado.'); return; }
+    const frame = document.querySelector<HTMLIFrameElement>('iframe[title="Proposta comercial Orion"]');
+    if (!snapshot) { frame?.contentWindow?.postMessage({ type: 'orion-proposal-snapshot-request' }, '*'); return; }
+    setSalvando(true);
+    try {
+      const { supabase } = await import('@/lib/supabase/client');
+      const { data } = await supabase.auth.getSession();
+      const response = await fetch('/api/comercial/proposta', { method: 'POST', headers: { Authorization: `Bearer ${data.session?.access_token || ''}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: leadId, nome_cliente: nomeCliente, html_snapshot: snapshot }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar a proposta.');
+      setSalvarAberto(false);
+      setSnapshot(null);
+    } catch (error) { setErro(error instanceof Error ? error.message : 'Não foi possível salvar a proposta.'); }
+    finally { setSalvando(false); }
+  }, [leadId, nomeCliente, snapshot]);
 
   if (loading) return <div className="kh-panel"><p style={{ opacity: 0.65 }}>Carregando…</p></div>;
 
@@ -109,6 +163,9 @@ export default function PropostaKriptoPage() {
         >
           <ExternalLink size={14} aria-hidden /> Abrir em nova aba
         </button>
+        <button type="button" className="kh-button" disabled={!url} onClick={() => void abrirSalvar()}>
+          <Save size={14} aria-hidden /> Salvar proposta
+        </button>
       </header>
 
       {erro && <div className="kh-inline-error">{erro}</div>}
@@ -129,6 +186,18 @@ export default function PropostaKriptoPage() {
           </div>
         )}
       </div>
+      {salvarAberto && (
+        <div className="kh-modal-backdrop" role="presentation" onMouseDown={() => !salvando && setSalvarAberto(false)}>
+          <section className="kh-modal" role="dialog" aria-modal="true" aria-label="Salvar proposta" onMouseDown={(event) => event.stopPropagation()} style={{ maxWidth: 520 }}>
+            <button type="button" className="kh-modal-close" onClick={() => setSalvarAberto(false)} aria-label="Fechar"><X size={18} /></button>
+            <h2>Salvar proposta</h2>
+            <p>Vincule esta apresentação a um lead que esteja em Reuniões agendadas.</p>
+            <label className="kh-field"><span>Nome do cliente</span><input value={nomeCliente} onChange={(event) => { setNomeCliente(event.target.value); setSnapshot(null); }} autoFocus /></label>
+            <label className="kh-field"><span>Lead da reunião</span><select value={leadId} onChange={(event) => setLeadId(event.target.value)}><option value="">Selecione o lead</option>{leadsAgendados.map((lead) => <option key={lead.id} value={lead.id}>{lead.nome}{lead.empresa ? ` - ${lead.empresa}` : ''}</option>)}</select></label>
+            <div className="kh-modal-actions"><button type="button" className="kh-button" onClick={() => setSalvarAberto(false)} disabled={salvando}>Cancelar</button><button type="button" className="kh-button kh-button-primary" onClick={() => void salvarProposta()} disabled={salvando}>{snapshot ? (salvando ? 'Salvando...' : 'Salvar proposta') : 'Preparar proposta'}</button></div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

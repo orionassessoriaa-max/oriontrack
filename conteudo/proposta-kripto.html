@@ -420,65 +420,12 @@ body.editing [data-e]:hover{outline-color:rgba(61,130,255,.75);background:rgba(1
 [data-e]:focus{outline:2px solid var(--blue-lift);outline-offset:3px;background:rgba(11,91,255,.1)}
 
 #toast{
-  position:fixed;left:50%;bottom:86px;transform:translateX(-50%) translateY(10px);z-index:90;
+  position:fixed;left:50%;bottom:86px;transform:translateX(-50%) translateY(10px);z-index:70;
   background:rgba(8,14,26,.96);border:1px solid var(--line-2);border-radius:10px;
   padding:12px 18px;font-size:14px;font-weight:300;color:var(--paper);
   opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s,transform .25s;max-width:min(520px,92vw);
 }
 #toast.show{opacity:1;visibility:visible;transform:translateX(-50%)}
-
-/* ---------- biblioteca de propostas ---------- */
-#library{
-  position:fixed;inset:0;z-index:80;display:none;overflow:auto;
-  padding:56px 24px 72px;
-  background:
-    radial-gradient(900px 600px at 20% -10%, rgba(18,34,74,.9) 0%, transparent 60%),
-    rgba(4,7,14,.96);
-  backdrop-filter:blur(10px);
-}
-body.library{overflow:hidden}
-body.library #library{display:block}
-body.library #chrome,body.library #arrows button{opacity:0;pointer-events:none}
-body.library #editbar{opacity:0;pointer-events:none}
-.lib-wrap{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
-.lib-head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
-.lib-head .who{flex:1;min-width:240px;display:flex;flex-direction:column;gap:10px}
-.lib-head .eyebrow{margin:0}
-.lib-head h2{font-size:38px;font-weight:600;letter-spacing:-.025em;margin:0}
-.lib-head p{font-size:15px;font-weight:300;color:var(--muted);max-width:52ch;line-height:1.5;margin:0}
-.lib-list{display:flex;flex-direction:column;gap:10px}
-.lib-item{
-  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
-  background:var(--panel);border:1px solid var(--line);border-radius:14px;
-  padding:16px 18px;transition:.2s;
-}
-.lib-item:hover{background:var(--panel-2);border-color:var(--line-2)}
-.lib-item.is-current{
-  border-color:rgba(61,130,255,.45);
-  background:linear-gradient(160deg,rgba(11,91,255,.14),rgba(11,91,255,.03));
-}
-.lib-item .who{flex:1;min-width:180px;display:flex;flex-direction:column;gap:5px}
-.lib-item .who strong{font-size:18px;font-weight:500;letter-spacing:-.015em;word-break:break-word}
-.lib-item .who span{
-  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--muted-2);
-}
-.lib-acts{display:flex;gap:7px;flex:none;flex-wrap:wrap}
-.lib-empty{
-  border:1px dashed var(--line-2);border-radius:14px;padding:28px 22px;
-  font-size:15px;font-weight:300;color:var(--muted);line-height:1.55;margin:0;
-}
-.lib-foot{font-size:12.5px;font-weight:300;color:var(--muted-2);line-height:1.6;margin:0}
-.sync{
-  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--muted-2);margin:0;
-  display:flex;align-items:center;gap:8px;line-height:1.5;
-}
-.sync:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted-2);flex:none}
-.sync.on{color:var(--good)}
-.sync.on:before{background:var(--good);box-shadow:0 0 0 3px rgba(61,220,151,.16)}
-.sync.off{color:#FFB36B}
-.sync.off:before{background:#FFB36B}
 
 /* ---------- hover: elevação discreta ---------- */
 .phase,.hz,.step,.m,.shot,.logo-cell img,.case-name{
@@ -505,10 +452,6 @@ body.library #editbar{opacity:0;pointer-events:none}
   *{scroll-behavior:auto}
 }
 @media (max-width:700px){
-  #library{padding:32px 16px 48px}
-  .lib-item{flex-direction:column;align-items:stretch}
-  .lib-acts{width:100%}
-  .lib-acts .btn{flex:1 1 auto}
   #arrows button{width:42px;height:42px}
   #prevBtn{left:8px}#nextBtn{right:8px}
   #chrome{padding-left:14px;padding-right:14px;gap:10px}
@@ -1044,46 +987,32 @@ body.library #editbar{opacity:0;pointer-events:none}
 
 <div id="editbar">
   <span class="tag">Modo edição</span>
-  <span class="hint">Clique em qualquer texto e digite. Dê um nome à proposta e clique em Salvar.</span>
-  <label class="field" for="clientName">Proposta
-    <input id="clientName" type="text" placeholder="Nome do cliente" autocomplete="off" spellcheck="false">
+  <span class="hint">Clique em qualquer texto e digite. As alterações ficam salvas neste navegador.</span>
+  <label class="field" for="clientName">Cliente
+    <input id="clientName" type="text" placeholder="Cléber" autocomplete="off" spellcheck="false">
   </label>
   <span id="saveState"></span>
-  <button class="btn primary" id="saveBtn" type="button">Salvar</button>
-  <button class="btn" id="exportBtn" type="button">Exportar</button>
+  <button class="btn" id="exportBtn" type="button">Exportar arquivo</button>
   <button class="btn ghost" id="resetBtn" type="button">Restaurar original</button>
-  <button class="btn" id="doneBtn" type="button">Apresentar</button>
+  <button class="btn primary" id="doneBtn" type="button">Concluir</button>
 </div>
 
 <div id="chrome">
   <span id="counter">01 / 16</span>
   <div id="dots" role="tablist" aria-label="Ir para slide"></div>
-  <button class="btn" id="libBtn" type="button">Propostas</button>
   <button class="btn" id="editBtn" type="button">Editar</button>
   <button class="btn" id="fsBtn" type="button">Tela cheia</button>
 </div>
 
-<div id="library" aria-hidden="true">
-  <div class="lib-wrap">
-    <div class="lib-head">
-      <div class="who">
-        <p class="eyebrow">Orion</p>
-        <h2>Propostas</h2>
-        <p>Cada proposta guarda os textos, o cronograma, os planos e os preços
-           de um cliente. Uma não mexe na outra.</p>
-        <p id="syncState" class="sync"></p>
-      </div>
-      <button class="btn primary" id="libNewBtn" type="button">Nova proposta</button>
-      <a class="btn ghost" id="logoutBtn" href="index.php?sair=1" style="display:none;text-decoration:none">Sair</a>
-      <button class="btn ghost" id="libCloseBtn" type="button">Fechar</button>
-    </div>
-    <div class="lib-list" id="libList"></div>
-    <p class="lib-foot">Enquanto uma proposta estiver aberta, o que você editar é gravado nela
-      automaticamente. Para começar outro cliente sem mexer neste, use “Nova proposta” ou “Duplicar”.</p>
-  </div>
-</div>
-
 <div id="toast" role="status" aria-live="polite"></div>
+<!-- Compatibilidade interna: controles da biblioteca anterior permanecem
+     invisíveis para não alterar a apresentação enviada pelo cliente. -->
+<div id="library" hidden aria-hidden="true"><div id="libList"></div></div>
+<button id="saveBtn" type="button" hidden></button>
+<button id="libBtn" type="button" hidden></button>
+<button id="libCloseBtn" type="button" hidden></button>
+<button id="libNewBtn" type="button" hidden></button>
+<a id="logoutBtn" hidden></a>
 
 <script id="pageScript">
 (function(){

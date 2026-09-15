@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { requireCommercialUser } from "@/lib/api/comercial";
 import { podeVerPropostaKripto } from "@/lib/propostaKripto";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * A proposta e um HTML fechado em si, com as imagens ja embutidas em base64.
@@ -19,16 +20,39 @@ const ARQUIVO = path.join(process.cwd(), "conteudo", "proposta-kripto.html");
 // 1,6 MB lidos do disco a cada request seria desperdicio: cada replica guarda
 // a sua copia depois da primeira leitura.
 let cache: string | null = null;
+const MAX_SNAPSHOT_SIZE = 3_000_000;
+
+function bridge(html: string) {
+  const script = `<script>(function(){var client=document.getElementById('clientName');if(!client)return;function tell(type,extra){window.parent.postMessage(Object.assign({type:type,clientName:client.value.trim()},extra||{}),'*')}client.addEventListener('change',function(){tell('orion-proposal-client-changed')});window.addEventListener('message',function(event){if(!event.data||event.data.type!=='orion-proposal-snapshot-request')return;var state={client:client.value,texts:{},mod:'mensal',prices:null};try{var saved=JSON.parse(localStorage.getItem('orion-proposta-v2')||'{}');state.mod=saved.mod||state.mod;state.prices=saved.prices||state.prices;state.texts=saved.texts||state.texts}catch(error){}document.querySelectorAll('[contenteditable]').forEach(function(element,index){state.texts[index]=element.innerHTML});var output='<!doctype html>'+document.documentElement.outerHTML;output=output.replace('<script id="pageScript">','<script>window.__ORION_BAKED__=true;window.__ORION_STATE__='+JSON.stringify(state).replace(/<\\/script/gi,'<\\\\/script')+';<\\/script><script id="pageScript">');tell('orion-proposal-snapshot',{html:output})})})();</script>`;
+  return html.replace(/<\/body>/i, `${script}</body>`);
+}
+
+async function guardProposalAccess(request: Request) {
+  const guard = await requireCommercialUser(request);
+  if ("error" in guard) return guard;
+  if (!podeVerPropostaKripto(guard.profile)) {
+    return { error: NextResponse.json({ error: "Proposta restrita ao Leo e aos administradores." }, { status: 403 }) };
+  }
+  return guard;
+}
 
 export async function GET(request: Request) {
-  const guard = await requireCommercialUser(request);
+  const guard = await guardProposalAccess(request);
   if ("error" in guard) return guard.error;
-
-  if (!podeVerPropostaKripto(guard.profile)) {
-    return NextResponse.json(
-      { error: "Proposta restrita ao Leo e aos administradores." },
-      { status: 403 },
-    );
+  const url = new URL(request.url);
+  if (url.searchParams.get("mode") === "leads") {
+    const { data, error } = await supabaseAdmin.from("comercial_leads")
+      .select("id,nome,empresa,reuniao_agendada_at,status")
+      .eq("status", "Reuniões agendadas")
+      .order("reuniao_agendada_at", { ascending: true });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ leads: data || [] });
+  }
+  const proposalId = url.searchParams.get("proposal_id");
+  if (proposalId) {
+    const { data } = await supabaseAdmin.from("comercial_propostas").select("html_snapshot").eq("id", proposalId).maybeSingle();
+    if (!data) return NextResponse.json({ error: "Proposta não encontrada." }, { status: 404 });
+    return new NextResponse(data.html_snapshot, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow" } });
   }
 
   if (!cache) cache = await readFile(ARQUIVO, "utf8").catch(() => null);
@@ -39,7 +63,7 @@ export async function GET(request: Request) {
     );
   }
 
-  return new NextResponse(cache, {
+  return new NextResponse(bridge(cache), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       // Nao e pagina publica: nem CDN nem navegador guardam copia.
@@ -47,4 +71,22 @@ export async function GET(request: Request) {
       "X-Robots-Tag": "noindex, nofollow",
     },
   });
+}
+
+export async function POST(request: Request) {
+  const guard = await guardProposalAccess(request);
+  if ("error" in guard) return guard.error;
+  const body = await request.json().catch(() => ({}));
+  const leadId = String(body.lead_id || "").trim();
+  const nomeCliente = String(body.nome_cliente || "").trim().slice(0, 160);
+  const htmlSnapshot = String(body.html_snapshot || "");
+  if (!leadId || !nomeCliente || !htmlSnapshot) return NextResponse.json({ error: "Informe o cliente, o lead agendado e a apresentação." }, { status: 400 });
+  if (htmlSnapshot.length > MAX_SNAPSHOT_SIZE) return NextResponse.json({ error: "A apresentação excede o tamanho permitido." }, { status: 413 });
+  const { data: lead } = await supabaseAdmin.from("comercial_leads").select("id,status").eq("id", leadId).maybeSingle();
+  if (!lead || lead.status !== "Reuniões agendadas") return NextResponse.json({ error: "Selecione um lead que esteja em Reuniões agendadas." }, { status: 400 });
+  const { data, error } = await supabaseAdmin.from("comercial_propostas")
+    .insert({ lead_id: leadId, nome_cliente: nomeCliente, html_snapshot: htmlSnapshot, criado_por: guard.profile.id })
+    .select("id,lead_id,nome_cliente,created_at").single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ proposal: data }, { status: 201 });
 }

@@ -14,6 +14,7 @@ export const COMMERCIAL_STATUSES = [
   "Fora do ICP com recurso",
   "Dentro do ICP sem recurso",
   "Reuniões agendadas",
+  "Reunião realizada",
   "No-show",
   "Outros seguros",
   "Fora do MQL",
@@ -147,6 +148,8 @@ export type CommercialLead = {
   contato_cadencia_inicio?: string | null;
   proximo_retorno_at?: string | null;
   proximo_retorno_titulo?: string | null;
+  proposta_id?: string | null;
+  proposta_nome_cliente?: string | null;
   created_at: string;
   updated_at: string;
 };

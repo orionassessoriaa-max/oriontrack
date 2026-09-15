@@ -38,6 +38,7 @@ import {
   recebeLeadNoRodizio,
   canManageCommercialStages,
   COMMERCIAL_STAGES,
+  LEO_COMMERCIAL_CLOSER_PROFILE_ID,
   currency,
   type CommercialContactCadence,
   type CommercialLead,
@@ -130,6 +131,24 @@ function normalizeStageForCard(value: string | null | undefined) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
+}
+
+function isScheduledMeetingCard(value: string | null | undefined) {
+  const stage = normalizeStageForCard(value);
+  return stage.includes("reunio") && stage.includes("agend");
+}
+
+function meetingTimingLabel(value: string | null | undefined, now: number) {
+  if (!value) return "Horário da reunião não informado";
+  const at = new Date(value).getTime();
+  if (Number.isNaN(at)) return "Horário da reunião não informado";
+  const difference = at - now;
+  const minutes = Math.round(Math.abs(difference) / 60_000);
+  const unit = minutes < 60 ? "min" : minutes < 1440 ? "hora" : "dia";
+  const amount = unit === "min" ? minutes : unit === "hora" ? Math.round(minutes / 60) : Math.round(minutes / 1440);
+  const label = unit === "hora" && amount !== 1 ? "horas" : unit === "dia" && amount !== 1 ? "dias" : unit;
+  if (difference >= 0) return `Reunião em ${amount} ${label}`;
+  return `Reunião atrasada há ${amount} ${label}`;
 }
 
 function formatDaniloCnpj(lead: CommercialLead) {
@@ -238,6 +257,7 @@ export default function CommercialKanbanPage() {
   const [saleSaving, setSaleSaving] = useState(false);
   const [briefingDownloading, setBriefingDownloading] = useState<string | null>(null);
   const [startingId, setStartingId] = useState<string | null>(null);
+  const [meetingNow, setMeetingNow] = useState(() => Date.now());
   const [assignmentChoice, setAssignmentChoice] = useState<
     Record<string, string>
   >({});
@@ -245,6 +265,11 @@ export default function CommercialKanbanPage() {
   const nextLeadOffset = useRef(0);
   const lastLeadSyncAt = useRef<string | null>(null);
   const firstContinuationPrefetched = useRef(false);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setMeetingNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const mergeLeads = useCallback(
     (first: CommercialLead[], second: CommercialLead[]) => {
@@ -630,6 +655,27 @@ export default function CommercialKanbanPage() {
           ? error.message
           : "Não foi possível mover o lead. Tente novamente.",
       );
+      await load();
+    } finally {
+      setMovingId(null);
+    }
+  }
+
+  async function resolveScheduledMeeting(event: React.MouseEvent, lead: CommercialLead, status: "Reunião realizada" | "No-show") {
+    event.stopPropagation();
+    setMovingId(lead.id);
+    try {
+      const payload = await api("/api/comercial/leads", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id: lead.id,
+          status,
+          ...(status === "Reunião realizada" ? { reuniao_realizada_at: new Date().toISOString() } : {}),
+        }),
+      });
+      if (payload.lead) setLeads((current) => current.map((item) => item.id === lead.id ? payload.lead : item));
+    } catch (error) {
+      setStageError(error instanceof Error ? error.message : "Não foi possível atualizar a reunião.");
       await load();
     } finally {
       setMovingId(null);
@@ -1379,13 +1425,15 @@ export default function CommercialKanbanPage() {
                     const isMqlC = mqlLevel === "C";
                     const cadenceLimitReached = isMqlC && cadenceDay !== null && cadenceDay > 2;
                     const cadenceOverdue = cadenceLimitReached || isCadenceStageOverdue(lead);
+                    const scheduledMeeting = isScheduledMeetingCard(lead.status);
+                    const canResolveThisMeeting = currentProfileId === LEO_COMMERCIAL_CLOSER_PROFILE_ID;
                     return (
                       <article
                         key={lead.id}
-                        draggable={canEditCommercial}
+                        draggable={canEditCommercial && (!scheduledMeeting || canResolveThisMeeting)}
                         onDragStart={(event) => {
                           event.stopPropagation();
-                          if (canEditCommercial) {
+                          if (canEditCommercial && (!scheduledMeeting || canResolveThisMeeting)) {
                             draggingRef.current = lead.id;
                             setDragging(lead.id);
                           }
@@ -1456,6 +1504,12 @@ export default function CommercialKanbanPage() {
                           <CalendarDays size={12} />
                           <span>{formatDaniloEntry(lead.data_entrada)}</span>
                         </div>
+                        {scheduledMeeting && (
+                          <div className="kh-card-meeting-time" role="status">
+                            <CalendarClock size={12} />
+                            <span>{meetingTimingLabel(lead.reuniao_agendada_at, meetingNow)}</span>
+                          </div>
+                        )}
                         {lead.proximo_retorno_at && (
                           <div className="kh-card-return">
                             <CalendarClock size={12} />
@@ -1472,6 +1526,18 @@ export default function CommercialKanbanPage() {
                               )}
                             </span>
                           </div>
+                        )}
+                        {lead.proposta_id && (
+                          <button
+                            type="button"
+                            className="kh-card-proposal"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              router.push(`/comercial/proposta?proposal_id=${encodeURIComponent(lead.proposta_id || "")}`);
+                            }}
+                          >
+                            <FileCheck2 size={12} /> Proposta salva
+                          </button>
                         )}
                         {canEditCommercial && <div className="kh-card-actions">
                           <button
@@ -1522,6 +1588,26 @@ export default function CommercialKanbanPage() {
                             <span className="kh-card-owner">
                               SDR: {assignedSdr.nome.split(" ")[0]}
                             </span>
+                          )}
+                          {scheduledMeeting && canResolveThisMeeting && (
+                            <div className="kh-card-meeting-actions">
+                              <button
+                                type="button"
+                                className="kh-card-meeting-done"
+                                disabled={movingId === lead.id}
+                                onClick={(event) => void resolveScheduledMeeting(event, lead, "Reunião realizada")}
+                              >
+                                Reunião realizada
+                              </button>
+                              <button
+                                type="button"
+                                className="kh-card-meeting-no-show"
+                                disabled={movingId === lead.id}
+                                onClick={(event) => void resolveScheduledMeeting(event, lead, "No-show")}
+                              >
+                                No-show
+                              </button>
+                            </div>
                           )}
                         </div>}
                       </article>

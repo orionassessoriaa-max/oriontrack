@@ -9,7 +9,7 @@ import { cadenceDayFromStage } from '@/lib/comercialCadencia';
 import { notifyCommercialLeadAssignment, notifyCommercialLeadPool } from '@/lib/commercialLeadNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { generateOnboardingBriefing } from '@/lib/commercialOnboardingBriefing';
-import { canAssignCommercialResponsible } from '@/lib/comercial';
+import { canAssignCommercialResponsible, LEO_COMMERCIAL_CLOSER_PROFILE_ID } from '@/lib/comercial';
 
 function normalizeStage(value: unknown) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -22,6 +22,11 @@ function isScheduledMeetingStage(value: unknown) {
 
 function isNoShowStage(value: unknown) {
   return normalizeStage(value).replace(/[-_]/g, ' ').includes('no show');
+}
+
+function isCompletedMeetingStage(value: unknown) {
+  const normalized = normalizeStage(value);
+  return normalized.includes('reuniao') && normalized.includes('realizada');
 }
 
 function isClosedStage(value: unknown) {
@@ -153,18 +158,29 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!stageSummaries) return NextResponse.json({ error: 'Nao foi possivel calcular os totais por etapa.' }, { status: 500 });
   const leadIds = (data || []).map((lead) => lead.id);
-  const { data: pendingTasks } = leadIds.length
-    ? await supabaseAdmin
-      .from('comercial_tarefas')
-      .select('lead_id,titulo,vencimento')
-      .in('lead_id', leadIds)
-      .eq('status', 'pendente')
-      .not('vencimento', 'is', null)
-      .order('vencimento', { ascending: true })
-    : { data: [] };
+  const [{ data: pendingTasks }, { data: proposals }] = leadIds.length
+    ? await Promise.all([
+      supabaseAdmin
+        .from('comercial_tarefas')
+        .select('lead_id,titulo,vencimento')
+        .in('lead_id', leadIds)
+        .eq('status', 'pendente')
+        .not('vencimento', 'is', null)
+        .order('vencimento', { ascending: true }),
+      supabaseAdmin
+        .from('comercial_propostas')
+        .select('id,lead_id,nome_cliente,created_at')
+        .in('lead_id', leadIds)
+        .order('created_at', { ascending: false }),
+    ])
+    : [{ data: [] }, { data: [] }];
   const nextReturnByLead = new Map<string, { titulo: string | null; vencimento: string | null }>();
   for (const task of pendingTasks || []) {
     if (task.lead_id && !nextReturnByLead.has(task.lead_id)) nextReturnByLead.set(task.lead_id, task);
+  }
+  const proposalByLead = new Map<string, { id: string; nome_cliente: string }>();
+  for (const proposal of proposals || []) {
+    if (proposal.lead_id && !proposalByLead.has(proposal.lead_id)) proposalByLead.set(proposal.lead_id, proposal);
   }
   return NextResponse.json({
     leads: (data || []).map((lead) => {
@@ -179,11 +195,14 @@ export async function GET(request: Request) {
         };
       }
       const nextReturn = nextReturnByLead.get(lead.id);
+      const proposal = proposalByLead.get(lead.id);
       return redactFinancialFields(enrichSaleFields({
         ...lead,
         lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento),
         proximo_retorno_at: nextReturn?.vencimento || null,
         proximo_retorno_titulo: nextReturn?.titulo || null,
+        proposta_id: proposal?.id || null,
+        proposta_nome_cliente: proposal?.nome_cliente || null,
       }), guard.canViewCommercialFinancials);
     }),
     role: guard.commercialRole,
@@ -277,6 +296,11 @@ export async function PATCH(request: Request) {
   if (!allowed) return NextResponse.json({ error: 'Lead nao encontrado ou sem permissao.' }, { status: 404 });
 
   const targetStatus = String(body.status || '').trim();
+  const resolvingScheduledMeeting = isScheduledMeetingStage(allowed.status)
+    && (isNoShowStage(targetStatus) || isCompletedMeetingStage(targetStatus));
+  if (resolvingScheduledMeeting && guard.profile.id !== LEO_COMMERCIAL_CLOSER_PROFILE_ID) {
+    return NextResponse.json({ error: 'Somente o Léo pode registrar reunião realizada ou no-show.' }, { status: 403 });
+  }
   const targetCadenceDay = cadenceDayFromStage(targetStatus);
   const cadenceMaxDay = commercialCadenceMaxDay(
     Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') ? body.faturamento_mensal : allowed.faturamento_mensal,
