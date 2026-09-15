@@ -24,6 +24,19 @@ const MAX_SNAPSHOT_SIZE = 3_000_000;
 
 type ProposalLead = { nome: string; empresa: string | null };
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] || character);
+}
+
+function applyLeadToCover(html: string, lead: ProposalLead | null) {
+  if (!lead) return html;
+  const date = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "America/Sao_Paulo" }).format(new Date());
+  return html
+    .replace("Nome do lead", escapeHtml(lead.nome))
+    .replace("Corretora de planos de saúde", escapeHtml(lead.empresa || "Corretora de planos de saúde"))
+    .replace("Setembro de 2026", escapeHtml(date.charAt(0).toUpperCase() + date.slice(1)));
+}
+
 function bridge(html: string, lead: ProposalLead | null) {
   const leadData = JSON.stringify(lead);
   const script = `<script>(function(){var client=document.getElementById('clientName');var lead=${leadData};function setText(selector,value){document.querySelectorAll(selector).forEach(function(element){element.textContent=value})}if(lead){var date=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'}).format(new Date());date=date.charAt(0).toUpperCase()+date.slice(1);setText('[data-proposal-client]',lead.nome);setText('[data-proposal-segment]',lead.empresa||'Corretora de planos de saúde');setText('[data-proposal-date]',date);if(client)client.value=lead.nome}if(!client)return;function tell(type,extra){window.parent.postMessage(Object.assign({type:type,clientName:client.value.trim()},extra||{}),'*')}client.addEventListener('change',function(){tell('orion-proposal-client-changed')});window.addEventListener('message',function(event){if(!event.data||event.data.type!=='orion-proposal-snapshot-request')return;var state={client:client.value,texts:{},mod:'mensal',prices:null};try{var saved=JSON.parse(localStorage.getItem('orion-proposta-v2')||'{}');state.mod=saved.mod||state.mod;state.prices=saved.prices||state.prices;state.texts=saved.texts||state.texts}catch(error){}document.querySelectorAll('[contenteditable]').forEach(function(element,index){state.texts[index]=element.innerHTML});var output='<!doctype html>'+document.documentElement.outerHTML;output=output.replace('<script id="pageScript">','<script>window.__ORION_BAKED__=true;window.__ORION_STATE__='+JSON.stringify(state).replace(/<\\/script/gi,'<\\\\/script')+';<\\/script><script id="pageScript">');tell('orion-proposal-snapshot',{html:output})})})();</script>`;
@@ -95,7 +108,7 @@ export async function GET(request: Request) {
     );
   }
 
-  return new NextResponse(bridge(cache, leadForProposal), {
+  return new NextResponse(bridge(applyLeadToCover(cache, leadForProposal), leadForProposal), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       // Nao e pagina publica: nem CDN nem navegador guardam copia.
