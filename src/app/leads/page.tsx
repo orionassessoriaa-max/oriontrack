@@ -1271,8 +1271,7 @@ export default function BrokerLeadsPage() {
             </div>
           </div>
 
-          {teamSummaryOpen ? (
-            <div className="space-y-4">
+          <div className={teamSummaryOpen ? 'space-y-4' : 'hidden'}>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {teamStats.map((member) => (
               <div key={member.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
