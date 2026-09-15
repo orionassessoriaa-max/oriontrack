@@ -179,6 +179,7 @@ type ActiveMetaCreative = {
   body?: string | null;
   image_url?: string | null;
   thumbnail_url?: string | null;
+  video_url?: string | null;
   status: string;
 };
 
@@ -353,11 +354,12 @@ export default function BrokerLeadsPage() {
 
         const params = new URLSearchParams();
         if (brokerCorretorId) params.set('corretor_id', brokerCorretorId);
+        params.set('include_inactive', '1');
         const response = await fetch(`/api/criativos/ativos-meta${params.size ? `?${params.toString()}` : ''}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || 'Nao foi possivel consultar os anuncios ativos.');
+        if (!response.ok) throw new Error(payload.error || 'Nao foi possivel consultar os anuncios da conta Meta.');
         if (!payload.account_connected) throw new Error('A conta Meta desta concessionaria ainda nao esta vinculada.');
         creatives = Array.isArray(payload.creatives) ? payload.creatives : [];
         activeMetaCreativesRef.current = creatives;
@@ -376,7 +378,7 @@ export default function BrokerLeadsPage() {
         adName,
         loading: false,
         creative,
-        error: creative ? null : 'Este anuncio nao foi encontrado entre os anuncios ativos da conta Meta.',
+        error: creative ? null : 'Este anuncio nao foi encontrado na conta Meta.',
       });
     } catch (previewError) {
       setAdPreview({
@@ -2068,7 +2070,7 @@ export default function BrokerLeadsPage() {
           <div className="relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-cyan-500/30 bg-[#071521] shadow-2xl">
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-[#071521]/95 px-6 py-5 backdrop-blur sm:px-8">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-400">Anuncio ativo na Meta</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-400">Anuncio na Meta</p>
                 <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">{adPreview.adName}</h2>
               </div>
               <button
@@ -2095,7 +2097,19 @@ export default function BrokerLeadsPage() {
               ) : adPreview.creative ? (
                 <div className="grid gap-7 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
                   <div className="flex min-h-80 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70">
-                    {adPreview.creative.image_url || adPreview.creative.thumbnail_url ? (
+                    {adPreview.creative.video_url ? (
+                      <video
+                        controls
+                        playsInline
+                        preload="metadata"
+                        poster={adPreview.creative.thumbnail_url || adPreview.creative.image_url || undefined}
+                        className="max-h-[68vh] w-full bg-black object-contain"
+                        aria-label={`Video do anuncio ${adPreview.creative.ad_name}`}
+                      >
+                        <source src={adPreview.creative.video_url} />
+                        Seu navegador nao consegue reproduzir este video.
+                      </video>
+                    ) : adPreview.creative.image_url || adPreview.creative.thumbnail_url ? (
                       <img
                         src={adPreview.creative.image_url || adPreview.creative.thumbnail_url || ''}
                         alt={`Criativo do anuncio ${adPreview.creative.ad_name}`}
@@ -2110,9 +2124,11 @@ export default function BrokerLeadsPage() {
                     )}
                   </div>
                   <div className="space-y-5">
-                    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Status</span>
-                      <p className="mt-1 text-sm font-black text-emerald-100">Ativo</p>
+                    <div className={`rounded-2xl border p-4 ${adPreview.creative.status === 'ACTIVE' ? 'border-emerald-400/20 bg-emerald-400/10' : 'border-amber-400/20 bg-amber-400/10'}`}>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${adPreview.creative.status === 'ACTIVE' ? 'text-emerald-300' : 'text-amber-300'}`}>Status</span>
+                      <p className={`mt-1 text-sm font-black ${adPreview.creative.status === 'ACTIVE' ? 'text-emerald-100' : 'text-amber-100'}`}>
+                        {adPreview.creative.status === 'ACTIVE' ? 'Ativo' : adPreview.creative.status === 'PAUSED' ? 'Pausado' : adPreview.creative.status}
+                      </p>
                     </div>
                     {adPreview.creative.title && (
                       <div>

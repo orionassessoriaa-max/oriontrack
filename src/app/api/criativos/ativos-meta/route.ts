@@ -8,6 +8,7 @@ import type { ApiProfile } from '@/lib/api/security';
 type MetaAd = {
   id?: string | number;
   name?: string;
+  status?: string;
   effective_status?: string;
   creative?: {
     name?: string;
@@ -15,10 +16,14 @@ type MetaAd = {
     body?: string;
     image_url?: string;
     thumbnail_url?: string;
+    video_id?: string;
     object_story_spec?: {
       link_data?: {
         name?: string;
         message?: string;
+      };
+      video_data?: {
+        video_id?: string;
       };
     };
   };
@@ -89,8 +94,10 @@ export async function GET(request: Request) {
     if (!profile || !['admin', 'gestor_trafego', 'designer', 'account_manager', 'corretor', 'corretor_admin', 'corretor_membro', 'corretor_integrante', 'corretor_parceiro'].includes(profile.tipo_usuario)) {
       return NextResponse.json({ error: 'Acesso restrito ao cliente.' }, { status: 403 });
     }
-    const requestedCorretorId = validUuid(new URL(request.url).searchParams.get('corretor_id'));
-    const gestorId = validUuid(new URL(request.url).searchParams.get('gestor_id'));
+    const searchParams = new URL(request.url).searchParams;
+    const requestedCorretorId = validUuid(searchParams.get('corretor_id'));
+    const gestorId = validUuid(searchParams.get('gestor_id'));
+    const includeInactive = searchParams.get('include_inactive') === '1';
     const isStaff = ['admin', 'gestor_trafego', 'designer', 'account_manager'].includes(profile.tipo_usuario);
     const corretorId = isStaff
       ? requestedCorretorId
@@ -150,11 +157,13 @@ export async function GET(request: Request) {
     const url = new URL(graphUrl(`act_${accountId}/ads`));
     url.searchParams.set(
       'fields',
-      'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,title,body,object_story_spec}'
+      'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,title,body,video_id,object_story_spec}'
     );
-    url.searchParams.set('filtering', JSON.stringify([
-      { field: 'effective_status', operator: 'IN', value: ['ACTIVE'] },
-    ]));
+    if (!includeInactive) {
+      url.searchParams.set('filtering', JSON.stringify([
+        { field: 'effective_status', operator: 'IN', value: ['ACTIVE'] },
+      ]));
+    }
     url.searchParams.set('limit', '100');
     url.searchParams.set('access_token', accessToken);
 
@@ -166,9 +175,20 @@ export async function GET(request: Request) {
       }, { status: 502 });
     }
 
-    const creatives = (payload.data || [])
-      .filter((ad) => String(ad.effective_status || '').toUpperCase() === 'ACTIVE')
-      .map((ad) => ({
+    const creatives = await Promise.all((payload.data || [])
+      .filter((ad) => includeInactive || String(ad.effective_status || '').toUpperCase() === 'ACTIVE')
+      .map(async (ad) => {
+        const videoId = String(ad.creative?.video_id || ad.creative?.object_story_spec?.video_data?.video_id || '').trim();
+        let videoUrl: string | null = null;
+        if (videoId) {
+          const videoUrlRequest = new URL(graphUrl(videoId));
+          videoUrlRequest.searchParams.set('fields', 'source');
+          videoUrlRequest.searchParams.set('access_token', accessToken);
+          const videoResponse = await fetchWithTimeout(videoUrlRequest.toString(), { next: { revalidate: 300 } });
+          const videoPayload = await videoResponse.json().catch(() => ({})) as { source?: string };
+          videoUrl = videoResponse.ok && typeof videoPayload.source === 'string' ? videoPayload.source : null;
+        }
+        return {
         id: String(ad.id),
         ad_name: ad.name || 'Anuncio sem nome',
         creative_name: ad.creative?.name || null,
@@ -176,7 +196,9 @@ export async function GET(request: Request) {
         body: ad.creative?.body || ad.creative?.object_story_spec?.link_data?.message || null,
         image_url: ad.creative?.image_url || null,
         thumbnail_url: ad.creative?.thumbnail_url || null,
-        status: 'ACTIVE',
+        video_url: videoUrl,
+        status: String(ad.effective_status || ad.status || 'UNKNOWN').toUpperCase(),
+        };
       }));
 
     return NextResponse.json({
