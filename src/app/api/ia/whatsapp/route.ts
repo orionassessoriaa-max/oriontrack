@@ -1,7 +1,7 @@
 import { after, NextResponse } from 'next/server';
 import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { configureUazapiWebhook, ensureUazapiInstance, ensureUazapiWebhookConfigured, uazapiAiInstanceName, uazapiFetch } from '@/lib/uazapi';
+import { configureUazapiWebhook, ensureUazapiInstance, ensureUazapiWebhookConfigured, uazapiAiInstanceName, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { DEFAULT_LEAD_AI_PERSONA, DEFAULT_LEAD_AI_SYSTEM_PROMPT } from '@/lib/defaultLeadAiPrompt';
 
 const AI_TARGET_ROLES = ['corretor', 'corretor_admin', 'corretor_membro'] as const;
@@ -66,8 +66,10 @@ async function resolveAiContext(profile: any) {
   if (!broker?.nome_empresa) return null;
   const { data: corretora } = await supabaseAdmin.from('corretoras').select('id, nome').ilike('nome', broker.nome_empresa).maybeSingle();
   if (!corretora) return null;
-  const { data: config } = await supabaseAdmin.from('corretora_ai_configs').select('id, corretora_id, status, sender_mode, dedicated_instance_name').eq('corretora_id', corretora.id).maybeSingle();
-  const instance = config?.dedicated_instance_name || uazapiAiInstanceName(corretora.id);
+  const { data: config } = await supabaseAdmin.from('corretora_ai_configs').select('id, corretora_id, status, sender_mode, sender_profile_id, dedicated_instance_name').eq('corretora_id', corretora.id).maybeSingle();
+  const instance = config?.sender_mode === 'profile' && config.sender_profile_id
+    ? uazapiInstanceName(config.sender_profile_id)
+    : config?.dedicated_instance_name || uazapiAiInstanceName(corretora.id);
   return { broker, corretora, config, instance };
 }
 
@@ -107,11 +109,12 @@ export async function GET(request: Request) {
     const context = await resolveAiContext(targetProfile);
     if (!context) return NextResponse.json({ configured: false, error: 'Concessionaria nao identificada.' }, { status: 404 });
     const dedicated = context.config?.sender_mode === 'dedicated';
-    const snapshot = dedicated
+    const sharedProfileNumber = context.config?.sender_mode === 'profile';
+    const snapshot = (dedicated || sharedProfileNumber)
       ? await providerSnapshot(context.instance).catch(() => ({ state: 'close', qrcode: null, paircode: null, motivoDesconexao: null }))
       : { state: 'close', qrcode: null, paircode: null, motivoDesconexao: null };
     const state = snapshot.state;
-    if (dedicated && state === 'open') {
+    if ((dedicated || sharedProfileNumber) && state === 'open') {
       after(async () => {
         try {
           await ensureUazapiWebhookConfigured(context.instance);
@@ -120,7 +123,7 @@ export async function GET(request: Request) {
         }
       });
     }
-    if (dedicated && context.config) {
+    if ((dedicated || sharedProfileNumber) && context.config) {
       // Uma consulta da pagina pode confirmar recuperacao, mas nunca deve
       // transformar uma oscilacao isolada em desconexao definitiva.
       if (state === 'open' && context.config.status !== 'ativo') {
@@ -131,12 +134,12 @@ export async function GET(request: Request) {
     return NextResponse.json({
       configured: Boolean(context.config),
       dedicated,
-      can_connect: !context.config || dedicated,
+      can_connect: !context.config || dedicated || sharedProfileNumber,
       active: context.config?.status === 'ativo',
       state,
       connected: state === 'open',
       concessionaria: context.corretora.nome,
-      instance: dedicated ? context.instance : null,
+      instance: (dedicated || sharedProfileNumber) ? context.instance : null,
       qrcode: state === 'connecting' ? snapshot.qrcode : null,
       paircode: state === 'connecting' ? snapshot.paircode : null,
       motivo_desconexao: state === 'open' ? null : snapshot.motivoDesconexao,
@@ -157,8 +160,8 @@ export async function POST(request: Request) {
     if (!context) {
       return NextResponse.json({ error: 'Concessionaria nao identificada.' }, { status: 404 });
     }
-    if (context.config && context.config.sender_mode !== 'dedicated') {
-      return NextResponse.json({ error: 'Selecione Numero exclusivo da IA na configuracao da concessionaria antes de conectar.' }, { status: 400 });
+    if (context.config?.sender_mode === 'profile' && context.config.sender_profile_id !== targetProfile.id) {
+      return NextResponse.json({ error: 'Somente o responsável pelo número compartilhado pode gerar o QR Code da IA.' }, { status: 403 });
     }
 
     if (!context.config) {
@@ -174,11 +177,14 @@ export async function POST(request: Request) {
           status: 'aguardando_conexao',
           updated_at: new Date().toISOString(),
         }, { onConflict: 'corretora_id' })
-        .select('id, corretora_id, status, sender_mode, dedicated_instance_name')
+        .select('id, corretora_id, status, sender_mode, sender_profile_id, dedicated_instance_name')
         .single();
       if (configError) throw configError;
       context.config = createdConfig;
     }
+
+    const configId = context.config?.id;
+    if (!configId) throw new Error('Configuracao da IA nao encontrada.');
 
     await ensureUazapiInstance(context.instance);
 
@@ -187,11 +193,11 @@ export async function POST(request: Request) {
     await supabaseAdmin
       .from('corretora_ai_configs')
       .update({ status: 'aguardando_conexao', updated_at: new Date().toISOString() })
-      .eq('id', context.config.id);
+      .eq('id', configId);
     await writeAuditLog(request, guard.profile, {
       action: 'ai.whatsapp.connect.request',
       entity_type: 'corretora_ai_configs',
-      entity_id: context.config.id,
+      entity_id: configId,
       metadata: { corretora_id: context.corretora.id, instance: context.instance, target_profile_id: targetProfile.id },
     });
     const inicial = await providerSnapshot(context.instance).catch(() => ({ state: 'connecting', qrcode: null, paircode: null }));

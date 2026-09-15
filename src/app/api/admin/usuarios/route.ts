@@ -144,6 +144,27 @@ async function resolveBrokerageRecord(nomeEmpresa: unknown) {
   return data;
 }
 
+async function acceptsSharedWhatsappWithoutPersonalPhone(nomeEmpresa: unknown) {
+  const brokerageName = String(nomeEmpresa || '').trim();
+  if (!brokerageName) return false;
+
+  const { data, error } = await supabaseAdmin
+    .from('corretores')
+    .select('atendimento_compartilhado')
+    .eq('nome_empresa', brokerageName)
+    .eq('atendimento_compartilhado', true)
+    .limit(1)
+    .maybeSingle();
+
+  // Instalações ainda sem a migration de atendimento compartilhado seguem
+  // exigindo telefone, em vez de transformar o cadastro inteiro em erro 500.
+  if (error) {
+    if (/atendimento_compartilhado|schema cache|does not exist/i.test(error.message || '')) return false;
+    throw error;
+  }
+  return Boolean(data?.atendimento_compartilhado);
+}
+
 async function ensureCorretorTeam(corretorId: string, nomeEmpresa?: string | null) {
   const { data: existing, error: existingError } = await supabaseAdmin
     .from('corretor_times')
@@ -231,7 +252,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Nome e tipo de usuário são obrigatórios.' }, { status: 400 });
     }
 
-    if (['corretor', 'corretor_admin', 'corretor_membro'].includes(role) && !telefone) {
+    const sharedWhatsappOperation = await acceptsSharedWhatsappWithoutPersonalPhone(body.nome_empresa);
+    if (['corretor', 'corretor_admin', 'corretor_membro'].includes(role) && !telefone && !sharedWhatsappOperation) {
       return NextResponse.json({ error: 'Telefone é obrigatório para corretor.' }, { status: 400 });
     }
 
