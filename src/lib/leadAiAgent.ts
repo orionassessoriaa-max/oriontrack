@@ -1729,7 +1729,7 @@ function formatOperadoraName(name?: string | null) {
   return clean.charAt(0) + clean.slice(1).toLowerCase();
 }
 
-export async function startLeadAiIfEligible(leadId: string) {
+export async function startLeadAiIfEligible(leadId: string, options: { entryChannel?: 'whatsapp_ad' } = {}) {
   const { data: lead } = await supabaseAdmin
     .from('leads')
     .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, operadora')
@@ -1795,16 +1795,21 @@ export async function startLeadAiIfEligible(leadId: string) {
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
 
   const opName = formatOperadoraName(lead.operadora);
-  const interestText = opName
-    ? `Você clicou em um anúncio nosso e preencheu o formulário de interesse da ${opName}.`
-    : 'Você clicou em um anúncio nosso e preencheu o formulário de interesse em nossos planos de saúde.';
+  const cameFromWhatsAppAd = options.entryChannel === 'whatsapp_ad';
+  const interestText = cameFromWhatsAppAd
+    ? 'Vi que você veio pelo nosso anúncio no WhatsApp.'
+    : opName
+      ? `Você clicou em um anúncio nosso e preencheu o formulário de interesse da ${opName}.`
+      : 'Você clicou em um anúncio nosso e preencheu o formulário de interesse em nossos planos de saúde.';
 
   const introIdentity = aiIdentity(aiConfig, formattedBrokerageName);
   const intro = fixPortugueseMojibake([
     `Olá, ${leadFirstName(lead)}! Tudo bem?`,
     aiIntroLine(introIdentity, aiConfig.persona),
     interestText,
-    initialLeadQuestion(lead),
+    cameFromWhatsAppAd
+      ? 'Para eu te ajudar certinho, como você se chama?'
+      : initialLeadQuestion(lead),
   ].join('\n\n'));
 
   const { data: existing } = await supabaseAdmin

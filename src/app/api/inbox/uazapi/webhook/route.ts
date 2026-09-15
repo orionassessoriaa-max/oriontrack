@@ -10,6 +10,7 @@ import { stopCommercialAiForHumanTakeover } from '@/lib/commercialSdrSession';
 import { ensureCommercialConversation, findCommercialConversation, isCommercialAiEcho } from '@/lib/commercialInbox';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
+import { getReceptiveAiConfig, handleReceptiveIncoming } from '@/lib/receptiveAi';
 
 function readText(body: any) {
   return pickString(
@@ -1444,12 +1445,28 @@ export async function POST(request: Request) {
 
     if (!aiCustomerMessage) aiCustomerMessage = audioTranscript || message;
     const lead = commercialLead || await findLead(profile!, phone);
+    const fromMe = Boolean(
+      body?.fromMe === true ||
+      body?.key?.fromMe === true ||
+      body?.message?.key?.fromMe === true ||
+      body?.message?.fromMe === true ||
+      body?.data?.fromMe === true ||
+      body?.data?.key?.fromMe === true ||
+      body?.data?.message?.key?.fromMe === true ||
+      event === 'SEND_MESSAGE' ||
+      event.includes('SEND') ||
+      isOutboundCall
+    );
+    const receptiveConfig = !commercialMode && !lead && !fromMe
+      ? await getReceptiveAiConfig(profile!)
+      : null;
     const currentConversation = commercialMode
       ? await findCommercialConversation(phone)
       : await findConversation(profile!.corretor_id, phone, lead?.id || null);
 
-    // Ignorar mensagens de contatos pessoais
-    if (!lead && !currentConversation) {
+    // Contatos fora da IA receptiva continuam sendo ignorados. Para a Unity,
+    // a conversa entra no Inbox, mas so vira lead apos origem de anuncio.
+    if (!lead && !currentConversation && !receptiveConfig) {
       console.log(`[uazapi_webhook] Ignorando contato pessoal: ${phone} (corretor: ${profile?.corretor_id})`);
       return NextResponse.json({ ok: true, ignored: true, reason: 'Not a CRM lead' });
     }
@@ -1492,19 +1509,6 @@ export async function POST(request: Request) {
         })
         .eq('id', currentConversation.id);
     }
-
-    const fromMe = Boolean(
-      body?.fromMe === true ||
-      body?.key?.fromMe === true ||
-      body?.message?.key?.fromMe === true ||
-      body?.message?.fromMe === true ||
-      body?.data?.fromMe === true ||
-      body?.data?.key?.fromMe === true ||
-      body?.data?.message?.key?.fromMe === true ||
-      event === 'SEND_MESSAGE' ||
-      event.includes('SEND') ||
-      isOutboundCall
-    );
 
     if (fromMe && isAiOutbound(phone, message)) {
       console.log(`[uazapi_webhook] Ignorando retorno de mensagem enviada pela propria IA: ${phone}`);
@@ -1607,6 +1611,25 @@ export async function POST(request: Request) {
         .eq('id', currentConversation.id);
       if (reopenError) throw reopenError;
       conversation = { ...conversation, status: 'aberta' };
+    }
+
+    if (!fromMe && !lead?.id && receptiveConfig) {
+      after(async () => {
+        try {
+          await handleReceptiveIncoming({
+            config: receptiveConfig,
+            conversationId: conversation.id,
+            corretorId: profile!.corretor_id,
+            phone,
+            contactName,
+            instance,
+            text: aiCustomerMessage || message,
+            payload: body,
+          });
+        } catch (receptiveError) {
+          console.error('[uazapi_webhook] Failed handling receptive AI:', receptiveError);
+        }
+      });
     }
 
     if (fromMe && lead?.id) {
