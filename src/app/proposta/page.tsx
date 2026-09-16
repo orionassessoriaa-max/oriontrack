@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Maximize2, Minimize2, Pencil, Save } from 'lucide-react';
+import { Download, Maximize2, Pencil, Save } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 type ScheduledLead = { id: string; nome: string; empresa: string | null };
@@ -29,7 +29,7 @@ export default function PropostaApresentacaoPage() {
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [presentationMode, setPresentationMode] = useState<boolean | null>(null);
   const [frameReady, setFrameReady] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
@@ -50,6 +50,9 @@ export default function PropostaApresentacaoPage() {
         const query = new URLSearchParams(window.location.search);
         const proposalId = query.get('proposal_id');
         const initialLeadId = query.get('lead_id');
+        const isPresentation = query.get('presentation') === '1';
+        setPresentationMode(isPresentation);
+        if (isPresentation) document.title = 'Apresentação comercial Orion';
         if (initialLeadId) setLeadId(initialLeadId);
         const search = proposalId ? `?proposal_id=${encodeURIComponent(proposalId)}` : initialLeadId ? `?lead_id=${encodeURIComponent(initialLeadId)}` : '';
         const response = await fetch(`/api/comercial/proposta${search}`, { headers: { Authorization: `Bearer ${await token()}` } });
@@ -152,10 +155,10 @@ export default function PropostaApresentacaoPage() {
     if (editButton) editButton.style.display = 'none';
     if (fullscreenButton) fullscreenButton.style.display = 'none';
     doneButton?.addEventListener('click', finishEditing);
-    documentFrame.body.classList.toggle('parent-fullscreen', fullscreen);
+    documentFrame.body.classList.toggle('parent-fullscreen', presentationMode === true);
     windowFrame.dispatchEvent(new Event('resize'));
     setFrameReady(true);
-  }, [finishEditing, fullscreen]);
+  }, [finishEditing, presentationMode]);
 
   useEffect(() => {
     function receive(event: MessageEvent) {
@@ -177,16 +180,11 @@ export default function PropostaApresentacaoPage() {
 
   useEffect(() => {
     const documentFrame = iframeRef.current?.contentDocument;
-    documentFrame?.body.classList.toggle('parent-fullscreen', fullscreen);
-    iframeRef.current?.contentWindow?.postMessage({ type: 'orion-proposal-fullscreen-state', active: fullscreen }, '*');
+    const active = presentationMode === true;
+    documentFrame?.body.classList.toggle('parent-fullscreen', active);
+    iframeRef.current?.contentWindow?.postMessage({ type: 'orion-proposal-fullscreen-state', active }, '*');
     iframeRef.current?.contentWindow?.dispatchEvent(new Event('resize'));
-  }, [fullscreen]);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) { if (event.key === 'Escape' && fullscreen) setFullscreen(false); }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [fullscreen]);
+  }, [presentationMode]);
 
   useEffect(() => {
     if (!sucesso) return;
@@ -205,6 +203,28 @@ export default function PropostaApresentacaoPage() {
     const wasEditing = documentFrame.body.classList.contains('editing');
     editButton.click();
     if (wasEditing) finishEditing(); else setEditing(true);
+  }
+
+  function openPresentationWindow() {
+    const presentationUrl = new URL(window.location.href);
+    presentationUrl.searchParams.set('presentation', '1');
+    presentationUrl.searchParams.delete('download');
+    const availableWidth = window.screen.availWidth;
+    const availableHeight = window.screen.availHeight;
+    const width = Math.min(availableWidth, Math.max(720, Math.round(availableWidth * 0.55)));
+    const height = Math.min(availableHeight, Math.max(600, availableHeight - 80));
+    const left = Math.max(0, availableWidth - width);
+    const presentationWindow = window.open(
+      presentationUrl.toString(),
+      'orion-proposal-presentation',
+      `popup=yes,width=${width},height=${height},left=${left},top=0,resizable=yes,scrollbars=no`,
+    );
+    if (!presentationWindow) {
+      setErro('O navegador bloqueou a janela de apresentação. Libere os pop-ups deste site e tente novamente.');
+      return;
+    }
+    presentationWindow.opener = null;
+    presentationWindow.focus();
   }
 
   const downloadPdf = useCallback(async () => {
@@ -342,10 +362,10 @@ export default function PropostaApresentacaoPage() {
   return <main style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#05080f' }}>
     {url && <iframe ref={iframeRef} src={url} onLoad={configureProposalFrame} title="Proposta comercial Orion" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads" style={{ display: 'block', width: '100%', height: '100%', border: 0 }} />}
 
-    {url && <div style={{ position: 'fixed', right: 18, bottom: 14, zIndex: 15, display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 9 }}>
-      {!fullscreen && <button type="button" onClick={toggleEditing} style={buttonStyle} title={editing ? 'Voltar para a apresentação' : 'Editar esta proposta'}>{editing ? <Save size={16} aria-hidden="true" /> : <Pencil size={16} aria-hidden="true" />}{editing ? 'Concluir edição' : 'Editar'}</button>}
-      {!fullscreen && <button type="button" onClick={() => void downloadPdf()} disabled={exportando} style={{ ...buttonStyle, opacity: exportando ? .6 : 1 }} title="Baixar PDF sem a página de condição de fechamento"><Download size={16} aria-hidden="true" />{exportando ? 'Gerando PDF' : 'Baixar PDF'}</button>}
-      <button type="button" onClick={() => setFullscreen((active) => !active)} style={buttonStyle} title="Ocupa somente esta janela, mantendo o Meet visível na tela dividida">{fullscreen ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}{fullscreen ? 'Sair da apresentação' : 'Tela cheia'}</button>
+    {url && presentationMode === false && <div style={{ position: 'fixed', right: 18, bottom: 14, zIndex: 15, display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 9 }}>
+      <button type="button" onClick={toggleEditing} style={buttonStyle} title={editing ? 'Voltar para a apresentação' : 'Editar esta proposta'}>{editing ? <Save size={16} aria-hidden="true" /> : <Pencil size={16} aria-hidden="true" />}{editing ? 'Concluir edição' : 'Editar'}</button>
+      <button type="button" onClick={() => void downloadPdf()} disabled={exportando} style={{ ...buttonStyle, opacity: exportando ? .6 : 1 }} title="Baixar PDF sem a página de condição de fechamento"><Download size={16} aria-hidden="true" />{exportando ? 'Gerando PDF' : 'Baixar PDF'}</button>
+      <button type="button" onClick={openPresentationWindow} style={buttonStyle} title="Abre uma janela limpa e redimensionável para usar ao lado do Meet"><Maximize2 size={16} aria-hidden="true" />Abrir apresentação</button>
     </div>}
 
     {erro && <div role="alert" style={{ position: 'fixed', left: 16, bottom: 16, zIndex: 30, maxWidth: 520, border: '1px solid rgba(255,110,110,.4)', borderRadius: 9, background: 'rgba(55,10,15,.94)', color: '#ffd2d2', padding: '11px 14px' }}>{erro}</div>}
