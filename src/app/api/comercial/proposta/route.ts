@@ -43,7 +43,18 @@ function bridge(html: string, lead: ProposalLead | null) {
   const withoutPreviousBridge = html
     .replace(/<script id="orionProposalBridge">[\s\S]*?<\/script>/i, "")
     .replace(/<script>\(function\(\)\{var client=document\.getElementById\('clientName'\);[\s\S]*?<\/script>\s*(?=<\/body>)/i, "");
-  return withoutPreviousBridge.replace(/<\/body>/i, `${script}</body>`);
+  // O deck tem um "Exportar arquivo" que monta HTML por concatenacao, e dentro
+  // dele existe a string '</body></html>'. Como replace sem /g troca a PRIMEIRA
+  // ocorrencia, o bridge era injetado no meio daquele literal de JavaScript: o
+  // script do deck virava erro de sintaxe e morria inteiro, levando junto a
+  // navegacao e a edicao. Ancorar na ULTIMA ocorrencia acerta a tag de verdade.
+  const corte = withoutPreviousBridge.lastIndexOf("</body>");
+  if (corte === -1) return withoutPreviousBridge + script;
+  return (
+    withoutPreviousBridge.slice(0, corte) +
+    script +
+    withoutPreviousBridge.slice(corte)
+  );
 }
 
 async function guardProposalAccess(request: Request) {

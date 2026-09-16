@@ -50,7 +50,7 @@ img{max-width:100%;display:block}
   transition:inset .22s ease;
 }
 #stage{
-  width:var(--stage-w);height:var(--stage-h);position:relative;
+  width:var(--stage-w);height:var(--stage-h);position:absolute;left:50%;top:50%;margin-left:calc(var(--stage-w) / -2);margin-top:calc(var(--stage-h) / -2);
   transform-origin:center center;flex:none;
   background:var(--ink);overflow:hidden;
   border-radius:0;
