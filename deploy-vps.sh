@@ -36,6 +36,15 @@ if [ "${#CRON_SECRET}" -lt 32 ] || [ "${#VOIP_RECORDING_SIGNING_SECRET}" -lt 32 
   exit 1
 fi
 
+if [ -n "${GOOGLE_CALENDAR_REFRESH_TOKEN:-}" ]; then
+  CALENDAR_CLIENT_ID="${GOOGLE_CALENDAR_CLIENT_ID:-${GOOGLE_DRIVE_CLIENT_ID:-}}"
+  CALENDAR_CLIENT_SECRET="${GOOGLE_CALENDAR_CLIENT_SECRET:-${GOOGLE_DRIVE_CLIENT_SECRET:-}}"
+  if [ -z "$CALENDAR_CLIENT_ID" ] || [ -z "$CALENDAR_CLIENT_SECRET" ]; then
+    echo "Google Calendar sem credenciais OAuth. Configure as credenciais do Calendar ou reutilize o cliente OAuth do Drive."
+    exit 1
+  fi
+fi
+
 SCHEMA_STATUS="$(curl \
   --silent \
   --output /dev/null \

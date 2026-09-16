@@ -10,6 +10,7 @@ import { notifyCommercialLeadAssignment, notifyCommercialLeadPool } from '@/lib/
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { generateOnboardingBriefing } from '@/lib/commercialOnboardingBriefing';
 import { canAssignCommercialResponsible, LEO_COMMERCIAL_CLOSER_PROFILE_ID } from '@/lib/comercial';
+import { isGoogleCalendarConfigured, syncGoogleCalendarMeeting } from '@/lib/integrations/googleCalendar';
 
 function normalizeStage(value: unknown) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -66,8 +67,10 @@ function validMeetingLink(value: unknown) {
 }
 
 function redactFinancialFields<T extends Record<string, unknown>>(lead: T, canView: boolean) {
-  if (canView) return lead;
   const sanitized = { ...lead };
+  delete sanitized.google_calendar_event_id;
+  delete sanitized.google_calendar_synced_at;
+  if (canView) return sanitized;
   // O valor em negociação faz parte da operação diária do SDR e precisa aparecer
   // no card. Dados do fechamento continuam restritos aos perfis financeiros.
   for (const field of ['valor_fechado', 'valor_pago', 'modelo_pagamento']) delete sanitized[field];
@@ -477,6 +480,29 @@ export async function PATCH(request: Request) {
   }
   if (isClosedStage(update.status) && !Object.prototype.hasOwnProperty.call(body, 'fechado_at')) {
     update.fechado_at = new Date().toISOString();
+  }
+
+  if (isScheduledStage && scheduledAt && isGoogleCalendarConfigured()) {
+    try {
+      const calendarEvent = await syncGoogleCalendarMeeting({
+        id: allowed.id,
+        nome: String(update.nome ?? allowed.nome ?? 'Lead'),
+        email: String(update.email ?? allowed.email ?? '').trim() || null,
+        telefone: String(update.telefone ?? allowed.telefone ?? '').trim() || null,
+        empresa: String(update.empresa ?? allowed.empresa ?? '').trim() || null,
+        data_entrada: String(update.data_entrada ?? allowed.data_entrada),
+        reuniao_agendada_at: scheduledAt.toISOString(),
+        google_calendar_event_id: allowed.google_calendar_event_id || null,
+      });
+      update.google_calendar_event_id = calendarEvent.eventId;
+      update.google_calendar_synced_at = new Date().toISOString();
+      update.reuniao_link = calendarEvent.meetLink;
+      update.observacoes = notesWithMeetingLink(update.observacoes ?? allowed.observacoes, calendarEvent.meetLink);
+    } catch (calendarError) {
+      const message = calendarError instanceof Error ? calendarError.message : 'Não foi possível criar a reunião no Google Calendar.';
+      console.error('commercial_google_calendar_sync_failed', { leadId: id, message });
+      return NextResponse.json({ error: `O lead não foi movido. Google Calendar: ${message}` }, { status: 502 });
+    }
   }
 
   const { data, error } = await supabaseAdmin.from('comercial_leads').update(update).eq('id', id).select('*').single();

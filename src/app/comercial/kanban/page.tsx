@@ -836,7 +836,7 @@ export default function CommercialKanbanPage() {
     setMeetingSaving(true);
     setMovingId(meetingMove.leadId);
     try {
-      await api("/api/comercial/leads", {
+      const payload = await api("/api/comercial/leads", {
         method: "PATCH",
         body: JSON.stringify({
           id: meetingMove.leadId,
@@ -847,14 +847,17 @@ export default function CommercialKanbanPage() {
       setLeads((current) =>
         current.map((lead) =>
           lead.id === meetingMove.leadId
-            ? {
-                ...lead,
-                status: meetingMove.status,
-                reuniao_agendada_at: scheduledAt,
-              }
+            ? payload.lead || {
+              ...lead,
+              status: meetingMove.status,
+              reuniao_agendada_at: scheduledAt,
+            }
             : lead,
         ),
       );
+      setCallNotice(payload.lead?.reuniao_link
+        ? "Reunião criada no Google Calendar, convite enviado e Google Meet gerado."
+        : "Reunião agendada no CRM.");
       setMeetingMove(null);
     } catch (error) {
       setStageError(
