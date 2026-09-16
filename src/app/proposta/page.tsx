@@ -228,7 +228,18 @@ export default function PropostaApresentacaoPage() {
     }));
     const captureStyle = documentFrame.createElement('style');
     captureStyle.id = 'orion-pdf-capture-style';
-    captureStyle.textContent = '*{animation:none!important;transition:none!important}#chrome{display:none!important}';
+    captureStyle.textContent = `
+      *{animation:none!important;transition:none!important}
+      #chrome{display:none!important}
+      .veil{filter:none!important}
+      .zone .cue{display:none!important}
+      .stop .pop{
+        opacity:1!important;
+        visibility:visible!important;
+        pointer-events:none!important;
+        transform:translateX(-50%) translateY(0) scale(1)!important;
+      }
+    `;
 
     try {
       documentFrame.head.appendChild(captureStyle);
