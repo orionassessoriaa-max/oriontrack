@@ -152,6 +152,15 @@ function cleanInboxDisplayName(value?: string | null, fallback = 'Contato') {
   return cleaned || fallback;
 }
 
+function inboxMessageSenderName(message: InboxMessage, fallback = 'Contato') {
+  const metadata = message.metadata || {};
+  const attributedSender = message.direction === 'outbound'
+    ? metadata.ai_agent || metadata.sender_name || message.remetente
+    : message.remetente;
+
+  return cleanInboxDisplayName(attributedSender, fallback);
+}
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -1191,6 +1200,9 @@ export default function BrokerInboxPage() {
           return message.id === nextMessage?.id
             && message.mensagem === nextMessage?.mensagem
             && message.direction === nextMessage?.direction
+            && message.remetente === nextMessage?.remetente
+            && message.metadata?.ai_agent === nextMessage?.metadata?.ai_agent
+            && message.metadata?.sender_name === nextMessage?.metadata?.sender_name
             && message.created_at === nextMessage?.created_at;
         });
         return unchanged ? current : mapped;
@@ -3109,6 +3121,10 @@ export default function BrokerInboxPage() {
                       const mediaError = Boolean(mediaLoadErrors[message.id]);
                       const fileName = media?.fileName || getMessageFileName(message) || 'Arquivo anexado';
                       const mediaCaption = getMessageMediaCaption(message, fileName);
+                      const senderName = inboxMessageSenderName(
+                        message,
+                        message.direction === 'outbound' ? 'Atendente' : selectedConversation.nome_contato || 'Contato',
+                      );
                       const previousMessage = displayChatMessages[index - 1];
                       const showDaySeparator = !previousMessage || messageDayKey(previousMessage.created_at) !== messageDayKey(message.created_at);
                       return (
@@ -3130,6 +3146,11 @@ export default function BrokerInboxPage() {
                                 ? 'bg-cyan-600 text-white rounded-tr-none' 
                                 : 'bg-slate-900 border border-white/5 text-slate-100 rounded-tl-none'
                           }`}>
+                            <div className={`text-[10px] font-black uppercase tracking-[0.08em] ${
+                              isMine ? 'text-white' : 'text-cyan-300'
+                            }`}>
+                              {senderName}
+                            </div>
                             {/* Se for áudio */}
                             {mediaKind === 'audio' ? (
                               audioUrls[message.id] ? (
@@ -3292,10 +3313,7 @@ export default function BrokerInboxPage() {
                             ) : (
                               <p className="orion-inbox-message-body whitespace-pre-wrap break-words text-xs font-bold leading-normal [overflow-wrap:anywhere]">{message.mensagem}</p>
                             )}
-                            <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-wider">
-                              <span className={isMine ? 'text-cyan-200' : 'text-slate-500'}>
-                                {cleanInboxDisplayName(message.remetente || selectedConversation.nome_contato, selectedConversation.telefone)}
-                              </span>
+                            <div className="flex justify-end items-center text-[8px] font-black uppercase tracking-wider">
                               <span className={`orion-inbox-message-time flex items-center gap-1 ${isMine ? 'text-cyan-200' : 'text-slate-500'}`}>
                                 {(() => {
                                   const recibo = reciboDaMensagem(message);

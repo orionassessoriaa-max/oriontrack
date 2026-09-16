@@ -3,6 +3,7 @@ import { openaiFetch } from '@/lib/openaiUso';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizePhone, uazapiFetch } from '@/lib/uazapi';
+import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 
 type ReceptiveProfile = {
   id: string;
@@ -93,14 +94,61 @@ async function sendText(instance: string, conversationId: string, phone: string,
     method: 'POST',
     body: JSON.stringify({ number: normalizePhone(phone), text }),
   }, { instanceName: instance });
-  await supabaseAdmin.from('whatsapp_mensagens').insert({
-    conversa_id: conversationId,
-    direction: 'outbound',
-    remetente: sender,
-    mensagem: text,
-    provider_message_id: String(payload?.messageId || payload?.id || payload?.key?.id || '') || null,
-    metadata: { ...metadata, ai_agent: sender, instance },
+  await persistAiOutboundMessage({
+    conversationId,
+    sender,
+    text,
+    providerMessageId: String(payload?.messageId || payload?.id || payload?.key?.id || '') || null,
+    metadata: { ...metadata, instance },
   });
+}
+
+async function persistAiOutboundMessage(options: {
+  conversationId: string;
+  sender: string;
+  text: string;
+  providerMessageId: string | null;
+  metadata: Record<string, unknown>;
+}) {
+  const normalizedProviderMessageId = normalizeWhatsAppMessageId(options.providerMessageId) || null;
+  const attributedMetadata = {
+    ...options.metadata,
+    ai_agent: options.sender,
+    sender_name: options.sender,
+    sender_type: 'ai',
+  };
+  const row = {
+    conversa_id: options.conversationId,
+    direction: 'outbound',
+    remetente: options.sender,
+    mensagem: options.text,
+    provider_message_id: normalizedProviderMessageId,
+    metadata: attributedMetadata,
+  };
+  const { error } = await supabaseAdmin.from('whatsapp_mensagens').insert(row);
+  if (!error) return;
+  if (error.code !== '23505' || !normalizedProviderMessageId) throw error;
+
+  // O webhook pode confirmar a mensagem antes desta gravacao e atribui-la ao
+  // perfil tecnico do WhatsApp. Nesse caso, preserve o registro confirmado,
+  // mas corrija a autoria para a atendente que realmente enviou a mensagem.
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('id, metadata')
+    .eq('provider_message_id', normalizedProviderMessageId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (!existing) throw error;
+
+  const { error: updateError } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .update({
+      remetente: options.sender,
+      mensagem: options.text,
+      metadata: { ...(existing.metadata || {}), ...attributedMetadata },
+    })
+    .eq('id', existing.id);
+  if (updateError) throw updateError;
 }
 
 async function sendOriginButtons(instance: string, conversationId: string, phone: string, persona: string) {
@@ -120,13 +168,12 @@ async function sendOriginButtons(instance: string, conversationId: string, phone
       footerText: 'Unity Saúde',
     }),
   }, { instanceName: instance });
-  await supabaseAdmin.from('whatsapp_mensagens').insert({
-    conversa_id: conversationId,
-    direction: 'outbound',
-    remetente: persona,
-    mensagem: text,
-    provider_message_id: String(payload?.messageId || payload?.id || payload?.key?.id || '') || null,
-    metadata: { ai_agent: persona, instance, receptive_origin_buttons: true },
+  await persistAiOutboundMessage({
+    conversationId,
+    sender: persona,
+    text,
+    providerMessageId: String(payload?.messageId || payload?.id || payload?.key?.id || '') || null,
+    metadata: { instance, receptive_origin_buttons: true },
   });
 }
 
