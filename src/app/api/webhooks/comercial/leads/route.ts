@@ -155,6 +155,7 @@ function buildNotes(body: CommercialLeadPayload) {
     'vidas', 'lives', 'quantidade_de_vidas',
     'negocio_etapa',
     'utm_medium', 'utm_term', 'utm_content', 'medium', 'term', 'content', 'adset', 'ad_set', 'conjunto', 'ad', 'creative', 'criativo',
+    'instagram', 'disposicao', 'qualificacao_lp', 'url_lp', 'fbclid',
     'data_entrada', 'data', 'created_time', 'timestamp',
     'sdr_id', 'sdr', 'closer_id', 'closer',
     'valor_negociacao', 'valor', 'receita', 'ticket',
@@ -287,7 +288,12 @@ export async function POST(request: Request) {
     const utmCampaign = trackingField(rawPayload, 'utm_campaign', ['utmCampaign', 'utm campaign', 'campaign_name', 'campaignName', 'campaign', 'campanha']);
     const utmTerm = trackingField(rawPayload, 'utm_term', ['utmTerm', 'utm term', 'term', 'adset', 'ad_set', 'conjunto']);
     const utmContent = trackingField(rawPayload, 'utm_content', ['utmContent', 'utm content', 'content', 'ad', 'creative', 'criativo']);
-    const mqlLevel = getCommercialMqlLevel(faturamentoMensal, investimento);
+    const instagram = normalizeText(field(rawPayload, ['instagram', 'instagram do corretor'])) || null;
+    const disposicao = normalizeText(field(rawPayload, ['disposicao', 'disposição'])) || null;
+    const qualificacaoLp = normalizeText(field(rawPayload, ['qualificacao_lp', 'qualificação lp', 'qualificacao lp'])) || null;
+    const urlLp = normalizeText(field(rawPayload, ['url_lp', 'url lp', 'landing page url'])) || null;
+    const fbclid = normalizeText(field(rawPayload, ['fbclid'])) || null;
+    const mqlLevel = getCommercialMqlLevel(faturamentoMensal, investimento, prioridade);
     const fixedOwnerId = await donoAutomaticoDoLead(mqlLevel);
 
     const incoming = {
@@ -308,11 +314,16 @@ export async function POST(request: Request) {
       utm_campaign: utmCampaign,
       utm_term: utmTerm,
       utm_content: utmContent,
+      instagram,
+      disposicao,
+      qualificacao_lp: qualificacaoLp,
+      url_lp: urlLp,
+      fbclid,
       status,
       // O payload externo nao escolhe SDR: todos os niveis entram na fila do START.
       sdr_id: fixedOwnerId,
       closer_id: closerId || null,
-      lead_qualificado: isCommercialMql(faturamentoMensal, investimento),
+      lead_qualificado: isCommercialMql(faturamentoMensal, investimento, prioridade),
       valor_negociacao: parseCurrencyValue(field(rawPayload, ['valor_negociacao', 'valor negociacao', 'valor', 'receita', 'ticket'])),
       observacoes: notes,
       data_entrada: dataEntrada,
@@ -340,8 +351,14 @@ export async function POST(request: Request) {
           lead_qualificado: isCommercialMql(
             existing.faturamento_mensal || incoming.faturamento_mensal,
             existing.investimento || incoming.investimento,
+            existing.prioridade || incoming.prioridade,
           ),
           vidas: existing.vidas || incoming.vidas,
+          instagram: existing.instagram || incoming.instagram,
+          disposicao: existing.disposicao || incoming.disposicao,
+          qualificacao_lp: existing.qualificacao_lp || incoming.qualificacao_lp,
+          url_lp: existing.url_lp || incoming.url_lp,
+          fbclid: existing.fbclid || incoming.fbclid,
           utm_source: existing.utm_source || incoming.utm_source,
           utm_medium: existing.utm_medium || incoming.utm_medium,
           utm_campaign: existing.utm_campaign || incoming.utm_campaign,

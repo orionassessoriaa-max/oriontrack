@@ -177,8 +177,8 @@ export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotific
   const targets = await loadCommercialNotificationProfiles(sdrId);
   if (!targets.sdr) return { sdr: [], coordinators: [] };
 
-  const outsideMql = !isCommercialMql(lead.faturamento_mensal, lead.investimento);
-  const mqlLevel = getCommercialMqlLevel(lead.faturamento_mensal, lead.investimento);
+  const outsideMql = !isCommercialMql(lead.faturamento_mensal, lead.investimento, lead.prioridade);
+  const mqlLevel = getCommercialMqlLevel(lead.faturamento_mensal, lead.investimento, lead.prioridade);
   const motivation = await generateMotivation(targets.sdr.nome || 'SDR', outsideMql);
   const sdrMessage = [
     mqlLevel === 'S' ? 'Um novo Lead MQL S foi direcionado para voce.' : 'Um novo lead entrou no seu rodizio.',

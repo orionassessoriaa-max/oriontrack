@@ -180,6 +180,7 @@ export default function CommercialLeadsPage() {
           getCommercialMqlLevel(
             lead.faturamento_mensal,
             lead.investimento,
+            lead.prioridade,
           ) === mqlFilter;
         return (
           (!search || haystack.includes(search.toLowerCase())) &&
@@ -450,6 +451,7 @@ export default function CommercialLeadsPage() {
             <option value="A">MQL A</option>
             <option value="B">MQL B</option>
             <option value="C">MQL C</option>
+            <option value="FMQL">FMQL · Fora do MQL</option>
           </select>
         </label>
         <select

@@ -120,10 +120,11 @@ type EditableLead = {
 };
 
 const mqlCopy: Record<CommercialMqlLevel, { title: string; detail: string }> = {
-  S: { title: "MQL S", detail: "Pica das galáxias" },
-  A: { title: "MQL A", detail: "R$ 10 mil a R$ 20 mil" },
-  B: { title: "MQL B", detail: "Abaixo de R$ 10 mil, com investimento" },
-  C: { title: "MQL C", detail: "Fora do MQL" },
+  S: { title: "MQL S", detail: "R$ 30 mil+ · investimento · prioridade alta" },
+  A: { title: "MQL A", detail: "R$ 20 mil+ · com investimento" },
+  B: { title: "MQL B", detail: "R$ 20 mil+ · sem recurso" },
+  C: { title: "MQL C", detail: "Abaixo de R$ 20 mil" },
+  FMQL: { title: "FMQL", detail: "Fora do MQL" },
 };
 
 function dateTime(value: string | null | undefined) {
@@ -393,6 +394,7 @@ export default function CommercialLeadDetailsModal({
   const mqlLevel = getCommercialMqlLevel(
     editing ? effective.faturamento_mensal : lead.faturamento_mensal,
     editing ? effective.investimento : lead.investimento,
+    editing ? effective.prioridade : lead.prioridade,
   );
   function focusInteraction() {
     interactionRef.current?.scrollIntoView({
@@ -882,7 +884,7 @@ export default function CommercialLeadDetailsModal({
                     </strong>
                     <small>
                       {contactCadence.max_day === 2
-                        ? "MQL C: ciclo máximo de 2 dias"
+                        ? "FMQL: ciclo máximo de 2 dias"
                         : "Checklist exclusivo desta etapa"}
                     </small>
                   </div>
@@ -894,7 +896,7 @@ export default function CommercialLeadDetailsModal({
                 </header>
                 {contactCadence.limit_reached && (
                   <div className="kh-cadence-limit-warning" role="alert">
-                    Este lead é MQL C e não deve continuar nas etapas Dia 3 a Dia 10. Mova-o para uma etapa fora da cadência.
+                    Este lead é FMQL e não deve continuar nas etapas Dia 3 a Dia 10. Mova-o para uma etapa fora da cadência.
                   </div>
                 )}
                 {contactCadenceError && (

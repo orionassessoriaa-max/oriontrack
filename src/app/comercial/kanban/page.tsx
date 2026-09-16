@@ -544,6 +544,7 @@ export default function CommercialKanbanPage() {
           getCommercialMqlLevel(
             lead.faturamento_mensal,
             lead.investimento,
+            lead.prioridade,
           ) === mqlFilter;
         return (
           matchesSearch &&
@@ -582,11 +583,11 @@ export default function CommercialKanbanPage() {
     const targetCadenceDay = cadenceDayFromStage(status);
     if (
       leadToMove &&
-      getCommercialMqlLevel(leadToMove.faturamento_mensal, leadToMove.investimento) === "C" &&
+      getCommercialMqlLevel(leadToMove.faturamento_mensal, leadToMove.investimento, leadToMove.prioridade) === "FMQL" &&
       targetCadenceDay !== null &&
       targetCadenceDay > 2
     ) {
-      setStageError("Lead MQL C possui cadência máxima de 2 dias. Encerre a cadência após o Dia 2.");
+      setStageError("Lead FMQL possui cadência máxima de 2 dias. Encerre a cadência após o Dia 2.");
       return;
     }
     const normalizedStatus = status
@@ -1177,6 +1178,7 @@ export default function CommercialKanbanPage() {
               <option value="A">MQL A</option>
               <option value="B">MQL B</option>
               <option value="C">MQL C</option>
+              <option value="FMQL">FMQL · Fora do MQL</option>
             </select>
           </label>
           <CommercialDateRangeFilter
@@ -1420,10 +1422,11 @@ export default function CommercialKanbanPage() {
                     const mqlLevel = getCommercialMqlLevel(
                       lead.faturamento_mensal,
                       lead.investimento,
+                      lead.prioridade,
                     );
                     const cadenceDay = cadenceDayFromStage(lead.status);
-                    const isMqlC = mqlLevel === "C";
-                    const cadenceLimitReached = isMqlC && cadenceDay !== null && cadenceDay > 2;
+                    const isFmql = mqlLevel === "FMQL";
+                    const cadenceLimitReached = isFmql && cadenceDay !== null && cadenceDay > 2;
                     const cadenceOverdue = cadenceLimitReached || isCadenceStageOverdue(lead);
                     const scheduledMeeting = isScheduledMeetingCard(lead.status);
                     const canResolveThisMeeting = currentProfileId === LEO_COMMERCIAL_CLOSER_PROFILE_ID;
@@ -1482,21 +1485,21 @@ export default function CommercialKanbanPage() {
                         )}
                         {isContactCadenceStage(lead.status) && (
                           <div className="kh-card-cadence">
-                            {isMqlC
+                            {isFmql
                               ? cadenceLimitReached
-                                ? "Cadência MQL C encerrada no Dia 2"
-                                : `Cadência MQL C: Dia ${cadenceDay} de 2`
+                                ? "Cadência FMQL encerrada no Dia 2"
+                                : `Cadência FMQL: Dia ${cadenceDay} de 2`
                               : `Cadência: Dia ${cadenceDay}`}
                           </div>
                         )}
-                        {isMqlC && cadenceDay === 2 && !cadenceOverdue && (
-                          <div className="kh-card-cadence-limit">Último dia da cadência MQL C</div>
+                        {isFmql && cadenceDay === 2 && !cadenceOverdue && (
+                          <div className="kh-card-cadence-limit">Último dia da cadência FMQL</div>
                         )}
                         {cadenceOverdue && (
                           <div className="kh-card-cadence-alert" role="status">
                             <AlertTriangle size={12} />
-                            {isMqlC && cadenceDay !== null && cadenceDay >= 2
-                              ? "Encerrar cadência MQL C"
+                            {isFmql && cadenceDay !== null && cadenceDay >= 2
+                              ? "Encerrar cadência FMQL"
                               : "Mover para o próximo dia"}
                           </div>
                         )}

@@ -105,7 +105,7 @@ export async function GET(request: Request) {
 
   const leads = (leadResult.data || []).map((lead) => ({
     ...lead,
-    lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento),
+    lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento, lead.prioridade),
   }));
   const weekStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 6)).toISOString().slice(0, 10);
   const weekEnd = now.toISOString().slice(0, 10);

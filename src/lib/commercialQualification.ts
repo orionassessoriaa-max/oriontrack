@@ -1,4 +1,4 @@
-export type CommercialMqlLevel = 'S' | 'A' | 'B' | 'C';
+export type CommercialMqlLevel = 'S' | 'A' | 'B' | 'C' | 'FMQL';
 
 function parseCommercialToken(token: string) {
   let numeric = token.trim();
@@ -31,37 +31,54 @@ export function hasCommercialInvestment(input: unknown) {
   return normalizeCommercialNumber(source) > 0 || source.length > 0;
 }
 
-export function getCommercialMqlLevel(faturamento: unknown, investimento: unknown): CommercialMqlLevel {
-  const revenueLabel = String(faturamento ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  if (!revenueLabel.trim() || /\b(?:nao informado|sem informacao)\b/.test(revenueLabel)) return 'C';
-  if (/(?:acima|mais)\s+de\s+(?:r\$\s*)?20(?:[\s.]?mil|k)?/.test(revenueLabel)) return 'S';
-  if (/abaixo\s+de\s+(?:r\$\s*)?10(?:[\s.]?mil|k)?/.test(revenueLabel)) {
-    return hasCommercialInvestment(investimento) ? 'B' : 'C';
-  }
-  const revenue = normalizeCommercialNumber(faturamento);
-  if (revenue > 20_000) return 'S';
-  if (revenue >= 10_000) return 'A';
-  return hasCommercialInvestment(investimento) ? 'B' : 'C';
+function normalizeCommercialLabel(input: unknown) {
+  return String(input ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 }
 
-export function commercialCadenceMaxDay(faturamento: unknown, investimento: unknown) {
-  return getCommercialMqlLevel(faturamento, investimento) === 'C' ? 2 : 10;
+export function commercialRevenueFloor(input: unknown) {
+  const source = normalizeCommercialLabel(input);
+  if (!source || /\b(?:nao informado|sem informacao)\b/.test(source)) return 0;
+  if (/\b(?:abaixo|menos)\s+de\b/.test(source)) return 0;
+
+  const values = Array.from(source.matchAll(/(-?\d+(?:[.,]\d+)*)\s*(milhao|milhoes|mil|k)?/g))
+    .map((match) => {
+      const value = parseCommercialToken(match[1]);
+      const unit = match[2] || '';
+      if (unit.startsWith('milhao') || unit.startsWith('milhoe')) return value * 1_000_000;
+      if (unit === 'mil' || unit === 'k') return value * 1_000;
+      return value;
+    })
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) return 0;
+  if (values.length === 1 && /\bate\b/.test(source)) return 0;
+  return Math.min(...values);
 }
 
-export function isCommercialMql(faturamento: unknown, _investimento?: unknown) {
-  void _investimento;
-  const revenueLabel = String(faturamento ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-  if (!revenueLabel || /\b(?:nao informado|sem informacao)\b/.test(revenueLabel)) return false;
+export function isCommercialHighPriority(input: unknown) {
+  const source = normalizeCommercialLabel(input);
+  return source.includes('alta') && source.includes('quero crescer agora');
+}
 
-  const tokens = revenueLabel.match(/-?\d+(?:[.,]\d+)*/g) || [];
-  if (!tokens.length) return false;
-  if (tokens.length === 1 && /\b(?:abaixo|menos)\s+de\b|\bate\b/.test(revenueLabel)) return false;
+export function getCommercialMqlLevel(
+  faturamento: unknown,
+  investimento: unknown,
+  prioridade?: unknown,
+): CommercialMqlLevel {
+  const revenueFloor = commercialRevenueFloor(faturamento);
+  const hasInvestment = hasCommercialInvestment(investimento);
 
-  const multiplier = /(?:\bmil\b|\bk\b)/i.test(revenueLabel) ? 1000 : 1;
-  const revenues = tokens.map((token) => parseCommercialToken(token) * multiplier);
+  // Ordem aprovada: S -> A -> B -> C -> Fora do MQL.
+  if (revenueFloor >= 30_000 && hasInvestment && isCommercialHighPriority(prioridade)) return 'S';
+  if (revenueFloor >= 20_000 && hasInvestment) return 'A';
+  if (revenueFloor >= 20_000) return 'B';
+  if (revenueFloor >= 10_000 || hasInvestment) return 'C';
+  return 'FMQL';
+}
 
-  // Faixas representam uma promessa de faturamento minimo. Ex.: "R$ 10 mil a
-  // R$ 20 mil" nao garante o corte, enquanto "R$ 20 mil a R$ 50 mil" garante.
-  const minimumRevenue = revenues.length > 1 ? Math.min(...revenues) : revenues[0];
-  return minimumRevenue >= 20_000;
+export function commercialCadenceMaxDay(faturamento: unknown, investimento: unknown, prioridade?: unknown) {
+  return getCommercialMqlLevel(faturamento, investimento, prioridade) === 'FMQL' ? 2 : 10;
+}
+
+export function isCommercialMql(faturamento: unknown, investimento?: unknown, prioridade?: unknown) {
+  return getCommercialMqlLevel(faturamento, investimento, prioridade) !== 'FMQL';
 }

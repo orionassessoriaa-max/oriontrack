@@ -27,7 +27,7 @@ async function allowedLead(
   let query = supabaseAdmin
     .from("comercial_leads")
     .select(
-      "id,status,sdr_id,closer_id,faturamento_mensal,investimento,status_started_at,contato_cadencia_ativa,contato_cadencia_inicio",
+      "id,status,sdr_id,closer_id,faturamento_mensal,investimento,prioridade,status_started_at,contato_cadencia_ativa,contato_cadencia_inicio",
     )
     .eq("id", id);
   if (guard.commercialRole !== "coordenador")
@@ -60,12 +60,13 @@ async function cadencePayload(lead: {
   status: string;
   faturamento_mensal: string | null;
   investimento: string | null;
+  prioridade: string | null;
   status_started_at: string | null;
   contato_cadencia_ativa: boolean;
   contato_cadencia_inicio: string | null;
 }) {
   const stageDay = cadenceDayFromStage(lead.status);
-  const maxDay = commercialCadenceMaxDay(lead.faturamento_mensal, lead.investimento);
+  const maxDay = commercialCadenceMaxDay(lead.faturamento_mensal, lead.investimento, lead.prioridade);
   const limitReached = stageDay !== null && stageDay > maxDay;
   const active = stageDay !== null && !limitReached;
   const day = stageDay || 1;
@@ -139,7 +140,7 @@ export async function PATCH(
       { error: "A cadência só pode ser registrada nas etapas Dia 1 a Dia 10." },
       { status: 409 },
     );
-  const maxDay = commercialCadenceMaxDay(lead.faturamento_mensal, lead.investimento);
+  const maxDay = commercialCadenceMaxDay(lead.faturamento_mensal, lead.investimento, lead.prioridade);
   if (day > maxDay)
     return NextResponse.json(
       { error: `A cadência deste lead termina no Dia ${maxDay}. Mova-o para uma etapa fora da cadência.` },

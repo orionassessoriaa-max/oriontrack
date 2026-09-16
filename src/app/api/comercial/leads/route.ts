@@ -198,7 +198,7 @@ export async function GET(request: Request) {
       const proposal = proposalByLead.get(lead.id);
       return redactFinancialFields(enrichSaleFields({
         ...lead,
-        lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento),
+        lead_qualificado: isCommercialMql(lead.faturamento_mensal, lead.investimento, lead.prioridade),
         proximo_retorno_at: nextReturn?.vencimento || null,
         proximo_retorno_titulo: nextReturn?.titulo || null,
         proposta_id: proposal?.id || null,
@@ -225,7 +225,7 @@ export async function POST(request: Request) {
     guard.profile.id,
   );
   const fixedOwnerId = await donoAutomaticoDoLead(
-    getCommercialMqlLevel(body.faturamento_mensal, body.investimento),
+    getCommercialMqlLevel(body.faturamento_mensal, body.investimento, body.prioridade),
   );
   const assignedSdrId = fixedOwnerId || (canAssignResponsible && body.sdr_id
     ? body.sdr_id
@@ -252,7 +252,7 @@ export async function POST(request: Request) {
     status,
     sdr_id: assignedSdrId || null,
     closer_id: guard.commercialRole === 'closer' ? guard.profile.id : body.closer_id || null,
-    lead_qualificado: isCommercialMql(body.faturamento_mensal, body.investimento),
+    lead_qualificado: isCommercialMql(body.faturamento_mensal, body.investimento, body.prioridade),
     valor_negociacao: guard.canViewCommercialFinancials ? Number(body.valor_negociacao || 0) : 0,
     observacoes: String(body.observacoes || '').trim() || null,
     created_by: guard.profile.id,
@@ -305,10 +305,11 @@ export async function PATCH(request: Request) {
   const cadenceMaxDay = commercialCadenceMaxDay(
     Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') ? body.faturamento_mensal : allowed.faturamento_mensal,
     Object.prototype.hasOwnProperty.call(body, 'investimento') ? body.investimento : allowed.investimento,
+    Object.prototype.hasOwnProperty.call(body, 'prioridade') ? body.prioridade : allowed.prioridade,
   );
   if (targetCadenceDay !== null && targetCadenceDay > cadenceMaxDay) {
     return NextResponse.json(
-      { error: `Lead MQL C possui cadência máxima de ${cadenceMaxDay} dias. Encerre a cadência após o Dia ${cadenceMaxDay}.` },
+      { error: `Lead FMQL possui cadência máxima de ${cadenceMaxDay} dias. Encerre a cadência após o Dia ${cadenceMaxDay}.` },
       { status: 400 },
     );
   }
@@ -462,10 +463,11 @@ export async function PATCH(request: Request) {
     update.reuniao_realizada_at = body.reuniao_realizada_at || new Date().toISOString();
     update.no_show = false;
   }
-  if (Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') || Object.prototype.hasOwnProperty.call(body, 'investimento')) {
+  if (Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') || Object.prototype.hasOwnProperty.call(body, 'investimento') || Object.prototype.hasOwnProperty.call(body, 'prioridade')) {
     update.lead_qualificado = isCommercialMql(
       Object.prototype.hasOwnProperty.call(body, 'faturamento_mensal') ? body.faturamento_mensal : allowed.faturamento_mensal,
       Object.prototype.hasOwnProperty.call(body, 'investimento') ? body.investimento : allowed.investimento,
+      Object.prototype.hasOwnProperty.call(body, 'prioridade') ? body.prioridade : allowed.prioridade,
     );
   }
   if (isClosedStage(update.status) && !Object.prototype.hasOwnProperty.call(body, 'fechado_at')) {
