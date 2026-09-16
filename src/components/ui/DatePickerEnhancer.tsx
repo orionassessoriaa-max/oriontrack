@@ -21,11 +21,9 @@ export default function DatePickerEnhancer() {
     const handleOpenPicker = (event: Event) => openPicker(event.target);
 
     document.addEventListener('click', handleOpenPicker, true);
-    document.addEventListener('focusin', handleOpenPicker, true);
 
     return () => {
       document.removeEventListener('click', handleOpenPicker, true);
-      document.removeEventListener('focusin', handleOpenPicker, true);
     };
   }, []);
 

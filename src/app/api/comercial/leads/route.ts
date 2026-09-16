@@ -314,7 +314,11 @@ export async function PATCH(request: Request) {
     );
   }
   const isScheduledStage = isScheduledMeetingStage(targetStatus);
-  const scheduledAt = body.reuniao_agendada_at ? new Date(String(body.reuniao_agendada_at)) : null;
+  const hasScheduledAt = Object.prototype.hasOwnProperty.call(body, 'reuniao_agendada_at') && Boolean(body.reuniao_agendada_at);
+  const scheduledAt = hasScheduledAt ? new Date(String(body.reuniao_agendada_at)) : null;
+  if (hasScheduledAt && (!scheduledAt || Number.isNaN(scheduledAt.getTime()))) {
+    return NextResponse.json({ error: 'A data e o horario informados para a reuniao sao invalidos.' }, { status: 400 });
+  }
   if (isScheduledStage && (!scheduledAt || Number.isNaN(scheduledAt.getTime()))) {
     return NextResponse.json({ error: 'Informe a data e o horario da reuniao antes de mover o lead.' }, { status: 400 });
   }
@@ -367,6 +371,7 @@ export async function PATCH(request: Request) {
     if (guard.commercialRole === 'sdr' && field === 'closer_id') continue;
     if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field] === '' ? null : body[field];
   }
+  if (scheduledAt) update.reuniao_agendada_at = scheduledAt.toISOString();
   if (enteringNegotiation) update.valor_negociacao = negotiationValue;
   if (closingSale) {
     const automaticSellerId = guard.commercialRole === 'closer' || guard.profile.id === PEDRO_GHISOLFI_PROFILE_ID

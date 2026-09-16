@@ -49,6 +49,7 @@ import {
   type CommercialMqlLevel,
 } from "@/lib/commercialQualification";
 import { supabase } from "@/lib/supabase/client";
+import { localDateTimeInputToIso } from "@/lib/localDateTime";
 
 const LEADS_PAGE_SIZE = 200;
 
@@ -243,6 +244,7 @@ export default function CommercialKanbanPage() {
     status: string;
   } | null>(null);
   const [meetingAt, setMeetingAt] = useState("");
+  const [meetingError, setMeetingError] = useState<string | null>(null);
   const [meetingSaving, setMeetingSaving] = useState(false);
   const [negotiationMove, setNegotiationMove] = useState<{ leadId: string; status: string } | null>(null);
   const [negotiationValue, setNegotiationValue] = useState("");
@@ -622,6 +624,7 @@ export default function CommercialKanbanPage() {
     ) {
       setMeetingMove({ leadId: id, status });
       setMeetingAt("");
+      setMeetingError(null);
       return;
     }
     setMovingId(id);
@@ -798,10 +801,15 @@ export default function CommercialKanbanPage() {
   async function confirmMeetingMove(event: React.FormEvent) {
     event.preventDefault();
     if (!meetingMove || !meetingAt) return;
+    const scheduledAt = localDateTimeInputToIso(meetingAt);
+    if (!scheduledAt) {
+      setMeetingError("Selecione uma data e um horário válidos para a reunião.");
+      return;
+    }
+    setMeetingError(null);
     setMeetingSaving(true);
     setMovingId(meetingMove.leadId);
     try {
-      const scheduledAt = new Date(meetingAt).toISOString();
       await api("/api/comercial/leads", {
         method: "PATCH",
         body: JSON.stringify({
@@ -1709,10 +1717,17 @@ export default function CommercialKanbanPage() {
                   className="kh-input"
                   type="datetime-local"
                   value={meetingAt}
-                  onChange={(event) => setMeetingAt(event.target.value)}
+                  onChange={(event) => {
+                    setMeetingAt(event.target.value);
+                    setMeetingError(null);
+                  }}
+                  step="300"
+                  aria-invalid={Boolean(meetingError)}
+                  aria-describedby={meetingError ? "meeting-date-error" : undefined}
                   required
                   autoFocus
                 />
+                {meetingError && <small id="meeting-date-error" role="alert" style={{ color: "#ff9aaa" }}>{meetingError}</small>}
               </label>
             </div>
             <footer>
@@ -1726,7 +1741,7 @@ export default function CommercialKanbanPage() {
               <button
                 type="submit"
                 className="kh-button primary"
-                disabled={meetingSaving}
+                disabled={meetingSaving || !meetingAt}
               >
                 {meetingSaving ? (
                   <RefreshCw size={15} className="kh-spin" />

@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
+import { localDateTimeInputToIso } from '@/lib/localDateTime';
 import { recebeLeadNoRodizio, type CommercialStage } from '@/lib/comercial';
 
 type Conversation = {
@@ -223,6 +224,7 @@ export default function CommercialInboxPage() {
   const [movingStage, setMovingStage] = useState(false);
   const [meetingStage, setMeetingStage] = useState('');
   const [meetingAt, setMeetingAt] = useState('');
+  const [meetingError, setMeetingError] = useState('');
   const [negotiationStage, setNegotiationStage] = useState('');
   const [negotiationValue, setNegotiationValue] = useState('');
   const [draft, setDraft] = useState('');
@@ -426,6 +428,7 @@ export default function CommercialInboxPage() {
     if (normalized.includes('reunio') && normalized.includes('agend')) {
       setMeetingStage(status);
       setMeetingAt('');
+      setMeetingError('');
       return;
     }
     if (normalized.trim() === 'em negociacao') {
@@ -440,15 +443,21 @@ export default function CommercialInboxPage() {
 
   async function moveSelectedLead(status: string, scheduledAt?: string, negotiationAmount?: number) {
     if (!selected || !status || status === selected.commercial_lead.status || movingStage) return;
+    const scheduledIso = scheduledAt ? localDateTimeInputToIso(scheduledAt) : null;
+    if (scheduledAt && !scheduledIso) {
+      setMeetingError('Selecione uma data e um horário válidos para a reunião.');
+      return;
+    }
     setMovingStage(true);
     setNotice('');
+    setMeetingError('');
     try {
       const payload = await api('/api/comercial/leads', {
         method: 'PATCH',
         body: JSON.stringify({
           id: selected.commercial_lead.id,
           status,
-          ...(scheduledAt ? { reuniao_agendada_at: new Date(scheduledAt).toISOString() } : {}),
+          ...(scheduledIso ? { reuniao_agendada_at: scheduledIso } : {}),
           ...(negotiationAmount ? { valor_negociacao: negotiationAmount } : {}),
         }),
       });
@@ -888,7 +897,7 @@ export default function CommercialInboxPage() {
                 </> : <button type="button" className="kh-button" onClick={() => setEditingLead(true)}><Pencil size={14} /> Editar dados</button>}
               </div>
               <label className="kh-inbox-stage-move"><span>Mover para outra etapa</span><select value={negotiationStage || meetingStage || lead.status} onChange={(event) => selectLeadStage(event.target.value)} disabled={movingStage}>{funnelStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select></label>
-              {meetingStage && <div className="kh-inbox-meeting-move"><label><span>Data e hora da reunião</span><input type="datetime-local" value={meetingAt} onChange={(event) => setMeetingAt(event.target.value)} /></label><div><button type="button" className="kh-button primary" disabled={!meetingAt || movingStage} onClick={() => void moveSelectedLead(meetingStage, meetingAt)}>Confirmar</button><button type="button" className="kh-button" onClick={() => { setMeetingStage(''); setMeetingAt(''); }}>Cancelar</button></div></div>}
+              {meetingStage && <div className="kh-inbox-meeting-move"><label><span>Data e hora da reunião</span><input type="datetime-local" value={meetingAt} step="300" aria-invalid={Boolean(meetingError)} aria-describedby={meetingError ? 'inbox-meeting-date-error' : undefined} onChange={(event) => { setMeetingAt(event.target.value); setMeetingError(''); }} />{meetingError && <small id="inbox-meeting-date-error" role="alert" style={{ color: '#ff9aaa' }}>{meetingError}</small>}</label><div><button type="button" className="kh-button primary" disabled={!meetingAt || movingStage} onClick={() => void moveSelectedLead(meetingStage, meetingAt)}>Confirmar</button><button type="button" className="kh-button" onClick={() => { setMeetingStage(''); setMeetingAt(''); setMeetingError(''); }}>Cancelar</button></div></div>}
               {editingLead ? <div className="kh-inbox-lead-form">
                 <label className="wide"><span>Nome</span><input value={leadDraft.nome} onChange={(event) => setLeadDraft((current) => ({ ...current, nome: event.target.value }))} /></label>
                 <label><span>Telefone</span><input value={leadDraft.telefone} onChange={(event) => setLeadDraft((current) => ({ ...current, telefone: event.target.value }))} /></label>
