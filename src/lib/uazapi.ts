@@ -320,6 +320,33 @@ export async function uazapiFetch(
   return payload;
 }
 
+export function uazapiTypingDelayMs(text: string) {
+  const characterCount = String(text || '').replace(/\s+/g, ' ').trim().length;
+  return Math.min(5_000, Math.max(1_600, 800 + (characterCount * 18)));
+}
+
+export async function sendUazapiTypingPresence(instanceName: string, phone: string, text: string) {
+  const number = normalizePhone(phone);
+  if (!instanceName || !number) return false;
+
+  try {
+    await uazapiFetch('/message/presence', {
+      method: 'POST',
+      body: JSON.stringify({
+        number,
+        presence: 'composing',
+        delay: uazapiTypingDelayMs(text),
+      }),
+    }, { instanceName });
+    return true;
+  } catch (error) {
+    // Presenca e um refinamento visual. Uma oscilacao do provedor nunca deve
+    // impedir a IA de entregar a resposta que ja foi gerada.
+    console.warn('[uazapi] Nao foi possivel exibir digitando antes da resposta automatica:', error);
+    return false;
+  }
+}
+
 async function createUazapiInstance(instanceName: string) {
   const body = JSON.stringify({
     name: instanceName,

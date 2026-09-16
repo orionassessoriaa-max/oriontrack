@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
+import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, sendUazapiTypingPresence, uazapiFetch } from '@/lib/uazapi';
 import { ensureCommercialConversation, normalizeSdrText } from '@/lib/commercialInbox';
 
 const DEFAULT_MESSAGE = 'Ola, {primeiro_nome}! Tudo bem?\n\nVi que voce acabou de preencher nosso formulario. Vou te fazer algumas perguntas bem rapidinhas para entender seu momento e te direcionar melhor, tudo bem?';
@@ -59,6 +59,7 @@ export async function startCommercialBotIfEligible(leadId: string, options: Comm
     // SDR sempre que o rodizio tinha atribuido alguem, o que era o caso de
     // praticamente todo lead que entra pelo funil.
     const instance = COMMERCIAL_MASTER_INSTANCE;
+    await sendUazapiTypingPresence(instance, phone, message);
     const providerPayload = await uazapiFetch('/send/text', {
       method: 'POST',
       body: JSON.stringify({ number: phone, text: message, delay: 1200 }),

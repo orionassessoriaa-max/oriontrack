@@ -2,7 +2,7 @@ import 'server-only';
 import { openaiFetch } from '@/lib/openaiUso';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { normalizePhone, uazapiFetch } from '@/lib/uazapi';
+import { normalizePhone, sendUazapiTypingPresence, uazapiFetch } from '@/lib/uazapi';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 
 type ReceptiveProfile = {
@@ -90,6 +90,7 @@ export async function getReceptiveAiConfig(profile: ReceptiveProfile): Promise<R
 }
 
 async function sendText(instance: string, conversationId: string, phone: string, sender: string, text: string, metadata: Record<string, unknown>) {
+  await sendUazapiTypingPresence(instance, phone, text);
   const payload = await uazapiFetch('/send/text', {
     method: 'POST',
     body: JSON.stringify({ number: normalizePhone(phone), text }),
@@ -153,6 +154,7 @@ async function persistAiOutboundMessage(options: {
 
 async function sendOriginButtons(instance: string, conversationId: string, phone: string, persona: string) {
   const text = `Olá! Eu sou a ${persona}, da Unity Saúde. Para eu te direcionar certinho, como você chegou até a gente?`;
+  await sendUazapiTypingPresence(instance, phone, text);
   const payload = await uazapiFetch('/send/menu', {
     method: 'POST',
     body: JSON.stringify({

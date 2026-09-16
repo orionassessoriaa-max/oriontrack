@@ -1,6 +1,6 @@
 import { openaiFetch } from '@/lib/openaiUso';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { configureUazapiWebhook, getUazapiInstanceConnection, normalizePhone, phoneMatchKey, uazapiAiInstanceName, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { configureUazapiWebhook, getUazapiInstanceConnection, normalizePhone, phoneMatchKey, sendUazapiTypingPresence, uazapiAiInstanceName, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
@@ -1176,6 +1176,7 @@ async function insertMessage(conversaId: string, direction: 'inbound' | 'outboun
 
 async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: string) {
   const instance = aiInstanceName(adminProfile);
+  await sendUazapiTypingPresence(instance, phone, text);
   return uazapiFetch('/send/text', {
     method: 'POST',
     body: JSON.stringify({ number: normalizePhone(phone), text }),

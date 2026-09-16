@@ -1,6 +1,6 @@
 import { openaiFetch } from '@/lib/openaiUso';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, uazapiFetch } from '@/lib/uazapi';
+import { COMMERCIAL_MASTER_INSTANCE, normalizePhone, sendUazapiTypingPresence, uazapiFetch } from '@/lib/uazapi';
 import { COMMERCIAL_MESSAGE_SPLIT, DEFAULT_COMMERCIAL_SDR_PROMPT } from '@/lib/commercialSdrPrompt';
 import {
   ensureCommercialConversation,
@@ -129,6 +129,7 @@ async function sendCommercialMessages(
   for (const [index, text] of messages.entries()) {
     if (index > 0) await wait(BURST_GAP_MS);
     registerAiOutbound(phone, text);
+    await sendUazapiTypingPresence(COMMERCIAL_MASTER_INSTANCE, phone, text);
     const providerPayload = await uazapiFetch('/send/text', {
       method: 'POST',
       body: JSON.stringify({ number: phone, text, delay: 1200 }),

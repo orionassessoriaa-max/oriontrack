@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { configureUazapiWebhook, normalizePhone, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { configureUazapiWebhook, normalizePhone, sendUazapiTypingPresence, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 
 type LeadRow = {
   id: string;
@@ -325,6 +325,7 @@ async function insertMessage(
 
 async function sendBotText(instanceName: string, phone: string, text: string) {
   await configureUazapiWebhook(instanceName);
+  await sendUazapiTypingPresence(instanceName, phone, text);
 
   return uazapiFetch('/send/text', {
     method: 'POST',
