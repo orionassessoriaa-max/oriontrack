@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 type ScheduledLead = { id: string; nome: string; empresa: string | null };
+type ProposalState = { client?: string; texts?: Record<string, string>; mod?: string; prices?: unknown };
+type ProposalFrameWindow = Window & { __ORION_COLLECT__?: () => ProposalState };
 
 export default function PropostaApresentacaoPage() {
   const [url, setUrl] = useState<string | null>(null);
@@ -57,10 +59,51 @@ export default function PropostaApresentacaoPage() {
     } catch (error) { setErro(error instanceof Error ? error.message : 'Não foi possível carregar os leads agendados.'); }
   }, [leads.length, token]);
 
+  const collectSnapshot = useCallback(() => {
+    const documentFrame = iframeRef.current?.contentDocument;
+    const windowFrame = iframeRef.current?.contentWindow as ProposalFrameWindow | null;
+    if (!documentFrame || !windowFrame) return null;
+    const state = windowFrame.__ORION_COLLECT__?.() || {};
+    const serializedState = JSON.stringify(state).replace(/<\/script/gi, '<\\/script');
+    const html = `<!doctype html>${documentFrame.documentElement.outerHTML}`;
+    return html.replace(
+      '<script id="pageScript">',
+      `<script>window.__ORION_BAKED__=true;window.__ORION_STATE__=${serializedState};</script><script id="pageScript">`,
+    );
+  }, []);
+
   const requestSnapshot = useCallback(() => {
     setSnapshot(null);
+    const currentSnapshot = collectSnapshot();
+    if (currentSnapshot) {
+      setSnapshot(currentSnapshot);
+      return;
+    }
     iframeRef.current?.contentWindow?.postMessage({ type: 'orion-proposal-snapshot-request' }, '*');
-  }, []);
+  }, [collectSnapshot]);
+
+  const finishEditing = useCallback(() => {
+    const documentFrame = iframeRef.current?.contentDocument;
+    const clientInput = documentFrame?.getElementById('clientName') as HTMLInputElement | null;
+    const coverName = documentFrame?.querySelector('[data-proposal-client]')?.textContent?.trim();
+    const clientName = clientInput?.value.trim() || coverName || '';
+    setEditing(false);
+    if (clientName) setNomeCliente(clientName);
+    setSalvarAberto(true);
+    requestSnapshot();
+    void loadLeads();
+  }, [loadLeads, requestSnapshot]);
+
+  const configureProposalFrame = useCallback(() => {
+    const documentFrame = iframeRef.current?.contentDocument;
+    if (!documentFrame) return;
+    const editButton = documentFrame.getElementById('editBtn') as HTMLButtonElement | null;
+    const fullscreenButton = documentFrame.getElementById('fsBtn') as HTMLButtonElement | null;
+    const doneButton = documentFrame.getElementById('doneBtn') as HTMLButtonElement | null;
+    if (editButton) editButton.style.display = 'none';
+    if (fullscreenButton) fullscreenButton.style.display = 'none';
+    doneButton?.addEventListener('click', finishEditing);
+  }, [finishEditing]);
 
   useEffect(() => {
     function receive(event: MessageEvent) {
@@ -72,7 +115,7 @@ export default function PropostaApresentacaoPage() {
       if (event.data.type === 'orion-proposal-edit-state') {
         setEditing(Boolean(event.data.editing));
       }
-      if (event.data.type === 'orion-proposal-edit-finished' && event.data.clientName) {
+      if (event.data.type === 'orion-proposal-edit-finished' && event.data.clientName && !iframeRef.current?.contentDocument) {
         setEditing(false);
         setNomeCliente(String(event.data.clientName));
         setSalvarAberto(true);
@@ -89,14 +132,25 @@ export default function PropostaApresentacaoPage() {
     function syncFullscreen() {
       const active = document.fullscreenElement === mainRef.current;
       setFullscreen(active);
-      iframeRef.current?.contentWindow?.postMessage({ type: 'orion-proposal-fullscreen-state', active }, '*');
+      const documentFrame = iframeRef.current?.contentDocument;
+      documentFrame?.body.classList.toggle('parent-fullscreen', active);
+      iframeRef.current?.contentWindow?.dispatchEvent(new Event('resize'));
     }
     document.addEventListener('fullscreenchange', syncFullscreen);
     return () => document.removeEventListener('fullscreenchange', syncFullscreen);
   }, []);
 
   function toggleEditing() {
-    iframeRef.current?.contentWindow?.postMessage({ type: 'orion-proposal-toggle-edit' }, '*');
+    const documentFrame = iframeRef.current?.contentDocument;
+    const editButton = documentFrame?.getElementById('editBtn') as HTMLButtonElement | null;
+    if (!documentFrame || !editButton) {
+      setErro('A apresentação ainda está carregando. Aguarde um instante e tente novamente.');
+      return;
+    }
+    const wasEditing = documentFrame.body.classList.contains('editing');
+    editButton.click();
+    if (wasEditing) finishEditing();
+    else setEditing(true);
   }
 
   async function toggleFullscreen() {
@@ -123,7 +177,7 @@ export default function PropostaApresentacaoPage() {
 
   if (erro && !url) return <main style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: '#05080f', color: '#f7f9fc', padding: 24 }}>{erro}</main>;
   return <main ref={mainRef} style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#05080f' }}>
-    {url && <iframe ref={iframeRef} src={url} title="Proposta comercial Orion" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads" allow="fullscreen" allowFullScreen style={{ display: 'block', width: '100%', height: '100%', border: 0 }} />}
+    {url && <iframe ref={iframeRef} src={url} onLoad={configureProposalFrame} title="Proposta comercial Orion" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads" allow="fullscreen" allowFullScreen style={{ display: 'block', width: '100%', height: '100%', border: 0 }} />}
     {url && <div style={{ position: 'fixed', right: 22, bottom: 16, zIndex: 15, display: 'flex', gap: 12 }}>
       <button type="button" onClick={toggleEditing} style={{ fontFamily: 'Outfit, Segoe UI, sans-serif', fontSize: 13, color: '#edf1f8', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer' }}>{editing ? 'Apresentar' : 'Editar'}</button>
       <button type="button" onClick={() => void toggleFullscreen()} style={{ fontFamily: 'Outfit, Segoe UI, sans-serif', fontSize: 13, color: '#edf1f8', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer' }}>{fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}</button>
