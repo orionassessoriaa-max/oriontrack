@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink, FileText } from 'lucide-react';
+import { Download, ExternalLink, FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import { PROPOSTA_KRIPTO_IDS } from '@/lib/propostaKripto';
@@ -8,7 +8,7 @@ import { PROPOSTA_KRIPTO_IDS } from '@/lib/propostaKripto';
 export default function PropostaKriptoPage() {
   const { isDevOps, currentProfileId, loading } = useCommercial();
   const liberado = isDevOps || Boolean(currentProfileId && PROPOSTA_KRIPTO_IDS.has(currentProfileId));
-  const [propostas, setPropostas] = useState<Array<{ id: string; nome_cliente: string; lead_nome: string; created_at: string }>>([]);
+  const [propostas, setPropostas] = useState<Array<{ id: string; nome_cliente: string; lead_nome: string; created_at: string; updated_at: string | null }>>([]);
   const [leads, setLeads] = useState<Array<{ id: string; nome: string; empresa: string | null }>>([]);
   const [leadId, setLeadId] = useState('');
   const [listError, setListError] = useState<string | null>(null);
@@ -57,10 +57,14 @@ export default function PropostaKriptoPage() {
       {!listError && !propostas.length && <p style={{ opacity: .65 }}>Nenhuma proposta salva ainda.</p>}
       <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
         {propostas.map((proposal) => (
-          <a key={proposal.id} href={`/proposta?proposal_id=${encodeURIComponent(proposal.id)}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '12px 14px', border: '1px solid rgba(255,255,255,.12)', borderRadius: 8, color: 'inherit', textDecoration: 'none' }}>
-            <span><strong>{proposal.lead_nome}</strong><small style={{ display: 'block', marginTop: 3, opacity: .65 }}>Cliente: {proposal.nome_cliente}</small></span>
-            <small style={{ opacity: .65, whiteSpace: 'nowrap' }}>{new Date(proposal.created_at).toLocaleDateString('pt-BR')}</small>
-          </a>
+          <article key={proposal.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', padding: '13px 14px', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, color: 'inherit', background: 'rgba(255,255,255,.015)' }}>
+            <span style={{ minWidth: 0 }}><strong>{proposal.lead_nome}</strong><small style={{ display: 'block', marginTop: 3, opacity: .65 }}>Cliente: {proposal.nome_cliente}</small></span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <small style={{ opacity: .65, whiteSpace: 'nowrap', marginRight: 4 }}>{new Date(proposal.updated_at || proposal.created_at).toLocaleDateString('pt-BR')}</small>
+              <a href={`/proposta?proposal_id=${encodeURIComponent(proposal.id)}&download=pdf`} target="_blank" rel="noopener noreferrer" aria-label={`Baixar PDF da proposta de ${proposal.nome_cliente}`} title="Baixar PDF" style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, color: '#dce8f5', background: 'rgba(255,255,255,.04)' }}><Download size={17} aria-hidden /></a>
+              <a href={`/proposta?proposal_id=${encodeURIComponent(proposal.id)}`} target="_blank" rel="noopener noreferrer" aria-label={`Abrir proposta de ${proposal.nome_cliente}`} title="Abrir proposta" style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', border: '1px solid rgba(0,184,223,.45)', borderRadius: 9, color: '#dffaff', background: 'rgba(0,184,223,.1)' }}><ExternalLink size={17} aria-hidden /></a>
+            </span>
+          </article>
         ))}
       </div>
     </section>
