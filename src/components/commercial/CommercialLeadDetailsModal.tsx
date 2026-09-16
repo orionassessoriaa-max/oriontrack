@@ -5,7 +5,9 @@ import Image from "next/image";
 import {
   BadgeCheck,
   CalendarClock,
+  ChevronLeft,
   ChevronDown,
+  ChevronRight,
   CircleX,
   Clock3,
   Download,
@@ -73,6 +75,14 @@ type Props = {
   onInteractionFileChange: (file: File | null) => void;
   onAddInteraction: (event: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
+  leadNavigation?: {
+    current: number;
+    total: number;
+    previousName: string | null;
+    nextName: string | null;
+    onPrevious?: () => void;
+    onNext?: () => void;
+  };
   onSave: (data: Record<string, unknown>) => Promise<void>;
   onDownloadBriefing?: (leadId: string) => Promise<void>;
   briefingDownloading?: boolean;
@@ -327,6 +337,7 @@ export default function CommercialLeadDetailsModal({
   onInteractionFileChange,
   onAddInteraction,
   onClose,
+  leadNavigation,
   onSave,
   onDownloadBriefing,
   briefingDownloading = false,
@@ -704,6 +715,29 @@ export default function CommercialLeadDetailsModal({
             </div>
           </div>
           <div className="kh-lead-head-status">
+            {leadNavigation && leadNavigation.total > 1 && (
+              <div className="kh-lead-column-nav" aria-label="Navegar pelos leads desta coluna">
+                <button
+                  type="button"
+                  aria-label={leadNavigation.previousName ? `Abrir lead anterior: ${leadNavigation.previousName}` : "Não há lead anterior"}
+                  title={leadNavigation.previousName ? `Anterior: ${leadNavigation.previousName}` : "Primeiro lead da coluna"}
+                  onClick={leadNavigation.onPrevious}
+                  disabled={!leadNavigation.onPrevious || editing || editSaving}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <span><b>{leadNavigation.current}</b> de {leadNavigation.total}</span>
+                <button
+                  type="button"
+                  aria-label={leadNavigation.nextName ? `Abrir próximo lead: ${leadNavigation.nextName}` : "Não há próximo lead"}
+                  title={leadNavigation.nextName ? `Próximo: ${leadNavigation.nextName}` : "Último lead da coluna"}
+                  onClick={leadNavigation.onNext}
+                  disabled={!leadNavigation.onNext || editing || editSaving}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
             {canViewQualification && (
               <span className={`kh-mql-level level-${mqlLevel.toLowerCase()}`}>
                 <b>{mqlCopy[mqlLevel].title}</b>

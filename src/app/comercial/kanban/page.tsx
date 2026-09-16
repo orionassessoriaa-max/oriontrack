@@ -415,6 +415,7 @@ export default function CommercialKanbanPage() {
       return;
     }
     const leadId = expandedLeadId;
+    let active = true;
     setInteractionError(null);
     void api(`/api/comercial/leads/${leadId}/interactions`)
       .then((payload) => {
@@ -425,6 +426,7 @@ export default function CommercialKanbanPage() {
       })
       .catch((error) => {
         setInteractionsByLead((current) => ({ ...current, [leadId]: [] }));
+        if (!active) return;
         setInteractionError(
           error instanceof Error
             ? error.message
@@ -434,8 +436,11 @@ export default function CommercialKanbanPage() {
     setContactCadenceLoading(true);
     setContactCadenceError(null);
     void api(`/api/comercial/leads/${leadId}/cadencia`)
-      .then((payload) => setContactCadence(payload.cadence || null))
+      .then((payload) => {
+        if (active) setContactCadence(payload.cadence || null);
+      })
       .catch((error) => {
+        if (!active) return;
         setContactCadence(null);
         setContactCadenceError(
           error instanceof Error
@@ -443,7 +448,12 @@ export default function CommercialKanbanPage() {
             : "Não foi possível carregar a cadência.",
         );
       })
-      .finally(() => setContactCadenceLoading(false));
+      .finally(() => {
+        if (active) setContactCadenceLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [api, expandedLeadId]);
 
   async function updateContactCadence(
@@ -579,6 +589,22 @@ export default function CommercialKanbanPage() {
       ),
     [stages, visible],
   );
+  const leadNavigation = useMemo(() => {
+    if (!expandedLeadId) return null;
+    const currentLead = leads.find((lead) => lead.id === expandedLeadId);
+    if (!currentLead) return null;
+    const columnLeads = (grouped[currentLead.status] || []).filter(
+      (lead) => !(role === "sdr" && lead.fila_oculta && !lead.sdr_id),
+    );
+    const currentIndex = columnLeads.findIndex((lead) => lead.id === expandedLeadId);
+    if (currentIndex < 0) return null;
+    return {
+      current: currentIndex + 1,
+      total: columnLeads.length,
+      previous: columnLeads[currentIndex - 1] || null,
+      next: columnLeads[currentIndex + 1] || null,
+    };
+  }, [expandedLeadId, grouped, leads, role]);
 
   async function moveLead(id: string, status: string) {
     const leadToMove = leads.find((item) => item.id === id);
@@ -1033,25 +1059,30 @@ export default function CommercialKanbanPage() {
     }
   }
 
-  function toggleLeadDetails(lead: CommercialLead) {
-    const nextId = expandedLeadId === lead.id ? null : lead.id;
-    setExpandedLeadId(nextId);
+  function showLeadDetails(lead: CommercialLead) {
+    setExpandedLeadId(lead.id);
     setInteractionText("");
     setInteractionFile(null);
     setInteractionError(null);
-    if (nextId) {
-      setTaskForm({
-        titulo: "",
-        responsavel_id:
-          lead.closer_id ||
-          lead.sdr_id ||
-          members.find((member) => member.ativo)?.profile_id ||
-          "",
-        vencimento: "",
-        prioridade: "normal",
-        descricao: "",
-      });
+    setTaskForm({
+      titulo: "",
+      responsavel_id:
+        lead.closer_id ||
+        lead.sdr_id ||
+        members.find((member) => member.ativo)?.profile_id ||
+        "",
+      vencimento: "",
+      prioridade: "normal",
+      descricao: "",
+    });
+  }
+
+  function toggleLeadDetails(lead: CommercialLead) {
+    if (expandedLeadId === lead.id) {
+      setExpandedLeadId(null);
+      return;
     }
+    showLeadDetails(lead);
   }
   async function createLeadTask(event: React.FormEvent, lead: CommercialLead) {
     event.preventDefault();
@@ -1860,6 +1891,18 @@ export default function CommercialKanbanPage() {
           if (lead) void addInteraction(event, lead.id);
         }}
         onClose={() => setExpandedLeadId(null)}
+        leadNavigation={leadNavigation ? {
+          current: leadNavigation.current,
+          total: leadNavigation.total,
+          previousName: leadNavigation.previous?.nome || null,
+          nextName: leadNavigation.next?.nome || null,
+          onPrevious: leadNavigation.previous
+            ? () => showLeadDetails(leadNavigation.previous!)
+            : undefined,
+          onNext: leadNavigation.next
+            ? () => showLeadDetails(leadNavigation.next!)
+            : undefined,
+        } : undefined}
         onSave={async (data) => {
           const payload = await api("/api/comercial/leads", {
             method: "PATCH",
