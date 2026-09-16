@@ -39,21 +39,26 @@ function applyLeadToCover(html: string, lead: ProposalLead | null) {
 
 function bridge(html: string, lead: ProposalLead | null) {
   const leadData = JSON.stringify(lead);
+  const preflight = `<script id="orionProposalPreflight">(function(){document.body.classList.remove('editing','idle','library','parent-fullscreen');var viewport=document.getElementById('viewport');var stage=document.getElementById('stage');if(viewport)viewport.removeAttribute('style');if(stage)stage.removeAttribute('style');var slides=Array.prototype.slice.call(document.querySelectorAll('.slide'));slides.forEach(function(slide,index){slide.classList.remove('is-active','is-out');slide.removeAttribute('style');if(index===0)slide.classList.add('is-active')});document.querySelectorAll('.zone.open').forEach(function(zone){zone.classList.remove('open')});document.querySelectorAll('[contenteditable]').forEach(function(element){element.removeAttribute('contenteditable')});var dots=document.getElementById('dots');if(dots)dots.innerHTML='';var counter=document.getElementById('counter');if(counter)counter.textContent='01 / '+String(slides.length).padStart(2,'0')})();</script>`;
+  const initialState = lead ? `<script id="orionProposalInitialState">window.__ORION_BAKED__=true;window.__ORION_STATE__={client:${JSON.stringify(lead.nome)}};</script>` : "";
   const script = `<script id="orionProposalBridge">(function(){var style=document.getElementById('orionProposalHostStyle');if(!style){style=document.createElement('style');style.id='orionProposalHostStyle';style.textContent='body.parent-fullscreen #chrome{opacity:0!important;pointer-events:none!important}';document.head.appendChild(style)}var client=document.getElementById('clientName');var lead=${leadData};function setText(selector,value){document.querySelectorAll(selector).forEach(function(element){element.textContent=value})}if(lead){var date=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'}).format(new Date());date=date.charAt(0).toUpperCase()+date.slice(1);setText('[data-proposal-client]',lead.nome);setText('[data-proposal-segment]',lead.empresa||'Corretora de planos de saúde');setText('[data-proposal-date]',date);if(client)client.value=lead.nome}if(!client)return;var hint=document.querySelector('#editbar .hint');if(hint)hint.textContent='Clique em qualquer texto e digite. Quando terminar, clique em Concluir para salvar.';var edit=document.getElementById('editBtn');var fs=document.getElementById('fsBtn');if(edit)edit.style.display='none';if(fs)fs.style.display='none';function tell(type,extra){window.parent.postMessage(Object.assign({type:type,clientName:client.value.trim()},extra||{}),'*')}client.addEventListener('change',function(){tell('orion-proposal-client-updated')});var done=document.getElementById('doneBtn');if(done)done.addEventListener('click',function(){tell('orion-proposal-edit-finished')});window.addEventListener('message',function(event){if(event.source!==window.parent||!event.data)return;if(event.data.type==='orion-proposal-toggle-edit'){var wasEditing=document.body.classList.contains('editing');if(edit)edit.click();if(wasEditing)tell('orion-proposal-edit-finished');return}if(event.data.type==='orion-proposal-fullscreen-state'){document.body.classList.toggle('parent-fullscreen',Boolean(event.data.active));window.dispatchEvent(new Event('resize'));return}if(event.data.type!=='orion-proposal-snapshot-request')return;var state={client:client.value,texts:{},mod:'mensal',prices:null};try{var current=window.__ORION_COLLECT__?window.__ORION_COLLECT__():JSON.parse(localStorage.getItem('orion-proposta-v2')||'{}');state.mod=current.mod||state.mod;state.prices=current.prices||state.prices;state.texts=current.texts||state.texts}catch(error){}document.querySelectorAll('[data-e]').forEach(function(element,index){state.texts[index]=element.innerHTML});var output='<!doctype html>'+document.documentElement.outerHTML;output=output.replace('<script id="pageScript">','<script>window.__ORION_BAKED__=true;window.__ORION_STATE__='+JSON.stringify(state).replace(/<\\/script/gi,'<\\\\/script')+';<\\/script><script id="pageScript">');tell('orion-proposal-snapshot',{html:output})})})();</script>`;
   const withoutPreviousBridge = html
     .replace(/<script id="orionProposalBridge">[\s\S]*?<\/script>/i, "")
+    .replace(/<script id="orionProposalPreflight">[\s\S]*?<\/script>/i, "")
+    .replace(/<script id="orionProposalInitialState">[\s\S]*?<\/script>/i, "")
     .replace(/<script>\(function\(\)\{var client=document\.getElementById\('clientName'\);[\s\S]*?<\/script>\s*(?=<\/body>)/i, "");
+  const preparedHtml = withoutPreviousBridge.replace('<script id="pageScript">', `${preflight}${initialState}<script id="pageScript">`);
   // O deck tem um "Exportar arquivo" que monta HTML por concatenacao, e dentro
   // dele existe a string '</body></html>'. Como replace sem /g troca a PRIMEIRA
   // ocorrencia, o bridge era injetado no meio daquele literal de JavaScript: o
   // script do deck virava erro de sintaxe e morria inteiro, levando junto a
   // navegacao e a edicao. Ancorar na ULTIMA ocorrencia acerta a tag de verdade.
-  const corte = withoutPreviousBridge.lastIndexOf("</body>");
-  if (corte === -1) return withoutPreviousBridge + script;
+  const corte = preparedHtml.lastIndexOf("</body>");
+  if (corte === -1) return preparedHtml + script;
   return (
-    withoutPreviousBridge.slice(0, corte) +
+    preparedHtml.slice(0, corte) +
     script +
-    withoutPreviousBridge.slice(corte)
+    preparedHtml.slice(corte)
   );
 }
 
@@ -219,4 +224,21 @@ export async function PATCH(request: Request) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ proposal: data });
+}
+
+export async function DELETE(request: Request) {
+  const guard = await guardProposalAccess(request);
+  if ("error" in guard) return guard.error;
+  const body = await request.json().catch(() => ({}));
+  const proposalId = String(body.proposal_id || "").trim();
+  if (!proposalId) return NextResponse.json({ error: "Informe a proposta que deseja excluir." }, { status: 400 });
+
+  const { data, error } = await supabaseAdmin.from("comercial_propostas")
+    .delete()
+    .eq("id", proposalId)
+    .select("id")
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "Proposta não encontrada." }, { status: 404 });
+  return NextResponse.json({ deleted: true, proposal_id: data.id });
 }

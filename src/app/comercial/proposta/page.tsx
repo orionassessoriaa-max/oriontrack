@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, ExternalLink, FileText } from 'lucide-react';
+import { Download, ExternalLink, FileText, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
 import { PROPOSTA_KRIPTO_IDS } from '@/lib/propostaKripto';
@@ -12,6 +12,9 @@ export default function PropostaKriptoPage() {
   const [leads, setLeads] = useState<Array<{ id: string; nome: string; empresa: string | null }>>([]);
   const [leadId, setLeadId] = useState('');
   const [listError, setListError] = useState<string | null>(null);
+  const [listNotice, setListNotice] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; nome: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (loading || !liberado) return;
@@ -34,6 +37,31 @@ export default function PropostaKriptoPage() {
     void load();
   }, [liberado, loading]);
 
+  async function deleteProposal() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setListError(null);
+    setListNotice(null);
+    try {
+      const { supabase } = await import('@/lib/supabase/client');
+      const { data } = await supabase.auth.getSession();
+      const response = await fetch('/api/comercial/proposta', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${data.session?.access_token || ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposal_id: deleteTarget.id }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível excluir a proposta.');
+      setPropostas((current) => current.filter((proposal) => proposal.id !== deleteTarget.id));
+      setListNotice(`Proposta de ${deleteTarget.nome} excluída.`);
+      setDeleteTarget(null);
+    } catch (error) {
+      setListError(error instanceof Error ? error.message : 'Não foi possível excluir a proposta.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading) return <div className="kh-panel"><p style={{ opacity: 0.65 }}>Carregando...</p></div>;
   if (!liberado) return <div className="kh-panel"><div className="kh-inline-error">Esta proposta é restrita ao Léo e aos administradores.</div></div>;
 
@@ -54,6 +82,7 @@ export default function PropostaKriptoPage() {
     <section style={{ marginTop: 36, textAlign: 'left', borderTop: '1px solid rgba(255,255,255,.1)', paddingTop: 24 }}>
       <strong>Propostas salvas</strong>
       {listError && <p className="kh-inline-error">{listError}</p>}
+      {listNotice && <p role="status" aria-live="polite" style={{ color: '#74e7bf' }}>{listNotice}</p>}
       {!listError && !propostas.length && <p style={{ opacity: .65 }}>Nenhuma proposta salva ainda.</p>}
       <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
         {propostas.map((proposal) => (
@@ -61,12 +90,23 @@ export default function PropostaKriptoPage() {
             <span style={{ minWidth: 0 }}><strong>{proposal.lead_nome}</strong><small style={{ display: 'block', marginTop: 3, opacity: .65 }}>Cliente: {proposal.nome_cliente}</small></span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <small style={{ opacity: .65, whiteSpace: 'nowrap', marginRight: 4 }}>{new Date(proposal.updated_at || proposal.created_at).toLocaleDateString('pt-BR')}</small>
-              <a href={`/proposta?proposal_id=${encodeURIComponent(proposal.id)}&download=pdf`} target="_blank" rel="noopener noreferrer" aria-label={`Baixar PDF da proposta de ${proposal.nome_cliente}`} title="Baixar PDF" style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, color: '#dce8f5', background: 'rgba(255,255,255,.04)' }}><Download size={17} aria-hidden /></a>
-              <a href={`/proposta?proposal_id=${encodeURIComponent(proposal.id)}`} target="_blank" rel="noopener noreferrer" aria-label={`Abrir proposta de ${proposal.nome_cliente}`} title="Abrir proposta" style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', border: '1px solid rgba(0,184,223,.45)', borderRadius: 9, color: '#dffaff', background: 'rgba(0,184,223,.1)' }}><ExternalLink size={17} aria-hidden /></a>
+              <a href={`/proposta?proposal_id=${encodeURIComponent(proposal.id)}&download=pdf`} target="_blank" rel="noopener noreferrer" aria-label={`Baixar PDF da proposta de ${proposal.nome_cliente}`} title="Baixar PDF" style={{ width: 44, height: 44, display: 'grid', placeItems: 'center', border: '1px solid rgba(255,255,255,.14)', borderRadius: 9, color: '#dce8f5', background: 'rgba(255,255,255,.04)' }}><Download size={17} aria-hidden /></a>
+              <a href={`/proposta?proposal_id=${encodeURIComponent(proposal.id)}`} target="_blank" rel="noopener noreferrer" aria-label={`Abrir proposta de ${proposal.nome_cliente}`} title="Abrir proposta" style={{ width: 44, height: 44, display: 'grid', placeItems: 'center', border: '1px solid rgba(0,184,223,.45)', borderRadius: 9, color: '#dffaff', background: 'rgba(0,184,223,.1)' }}><ExternalLink size={17} aria-hidden /></a>
+              <button type="button" onClick={() => setDeleteTarget({ id: proposal.id, nome: proposal.lead_nome || proposal.nome_cliente })} aria-label={`Excluir proposta de ${proposal.lead_nome || proposal.nome_cliente}`} title="Excluir proposta" style={{ width: 44, height: 44, display: 'grid', placeItems: 'center', border: '1px solid rgba(255,91,113,.38)', borderRadius: 9, color: '#ffb2bd', background: 'rgba(255,64,91,.08)', cursor: 'pointer' }}><Trash2 size={17} aria-hidden /></button>
             </span>
           </article>
         ))}
       </div>
     </section>
+    {deleteTarget && <div role="presentation" onMouseDown={() => !deleting && setDeleteTarget(null)} style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'grid', placeItems: 'center', padding: 20, background: 'rgba(0,0,0,.72)', backdropFilter: 'blur(4px)' }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="delete-proposal-title" onMouseDown={(event) => event.stopPropagation()} style={{ width: 'min(430px,100%)', padding: 24, border: '1px solid rgba(255,255,255,.13)', borderRadius: 14, background: '#0b1422', color: '#f7f9fc', boxShadow: '0 24px 80px rgba(0,0,0,.55)', textAlign: 'left' }}>
+        <h2 id="delete-proposal-title" style={{ margin: '0 0 9px', fontSize: 20 }}>Excluir esta proposta?</h2>
+        <p style={{ margin: '0 0 20px', color: '#9fb0c4', lineHeight: 1.5 }}>A proposta de <strong style={{ color: '#f7f9fc' }}>{deleteTarget.nome}</strong> será removida. Se existir uma versão anterior para o mesmo lead, ela voltará a aparecer no card.</p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 9 }}>
+          <button type="button" className="kh-button" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancelar</button>
+          <button type="button" className="kh-button" onClick={() => void deleteProposal()} disabled={deleting} style={{ borderColor: 'rgba(255,91,113,.5)', background: 'rgba(255,64,91,.14)', color: '#ffd5db' }}>{deleting ? 'Excluindo...' : 'Excluir proposta'}</button>
+        </div>
+      </section>
+    </div>}
   </div>;
 }

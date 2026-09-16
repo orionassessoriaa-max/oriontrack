@@ -93,8 +93,34 @@ export default function PropostaApresentacaoPage() {
     if (!documentFrame || !windowFrame) return null;
     const state = windowFrame.__ORION_COLLECT__?.() || {};
     const serializedState = JSON.stringify(state).replace(/<\/script/gi, '<\\/script');
-    const html = `<!doctype html>${documentFrame.documentElement.outerHTML}`;
-    return html.replace('<script id="pageScript">', `<script>window.__ORION_BAKED__=true;window.__ORION_STATE__=${serializedState};</script><script id="pageScript">`);
+    const clone = documentFrame.documentElement.cloneNode(true) as HTMLElement;
+    const body = clone.querySelector('body');
+    body?.classList.remove('editing', 'idle', 'library', 'parent-fullscreen');
+    clone.querySelector('#viewport')?.removeAttribute('style');
+    clone.querySelector('#stage')?.removeAttribute('style');
+    clone.querySelectorAll('[contenteditable]').forEach((element) => element.removeAttribute('contenteditable'));
+    clone.querySelectorAll('.zone.open').forEach((element) => element.classList.remove('open'));
+    const slides = Array.from(clone.querySelectorAll('.slide'));
+    slides.forEach((slide, index) => {
+      slide.classList.remove('is-active', 'is-out');
+      slide.removeAttribute('style');
+      if (index === 0) slide.classList.add('is-active');
+    });
+    const dots = clone.querySelector('#dots');
+    if (dots) dots.innerHTML = '';
+    const counter = clone.querySelector('#counter');
+    if (counter) counter.textContent = `01 / ${String(slides.length).padStart(2, '0')}`;
+    clone.querySelectorAll('#orionProposalBridge,#orionProposalPreflight,#orionProposalInitialState,#orionProposalHostStyle,#orion-pdf-capture-style').forEach((element) => element.remove());
+    clone.querySelectorAll('script:not(#pageScript)').forEach((script) => {
+      if (script.textContent?.includes('window.__ORION_BAKED__')) script.remove();
+    });
+    const pageScript = clone.querySelector('#pageScript');
+    if (!pageScript?.parentNode) return null;
+    const stateScript = documentFrame.createElement('script');
+    stateScript.id = 'orionProposalState';
+    stateScript.textContent = `window.__ORION_BAKED__=true;window.__ORION_STATE__=${serializedState};`;
+    pageScript.parentNode.insertBefore(stateScript, pageScript);
+    return `<!doctype html>${clone.outerHTML}`;
   }, []);
 
   const requestSnapshot = useCallback(() => {
@@ -222,7 +248,7 @@ export default function PropostaApresentacaoPage() {
         const current = slideStates[index];
         current.slide.classList.remove('is-out');
         current.slide.classList.add('is-active');
-        current.slide.style.cssText = `${current.slide.style.cssText};display:block!important;visibility:visible!important;opacity:1!important;transform:none!important;`;
+        current.slide.style.cssText = `${current.slide.style.cssText};display:flex!important;visibility:visible!important;opacity:1!important;transform:none!important;`;
         current.zones.forEach(({ zone }) => zone.classList.add('open'));
         setExportProgress({ current: index + 1, total: slides.length });
         const canvas = await html2canvas(current.slide, { backgroundColor: '#02050a', width: 1600, height: 900, windowWidth: 1600, windowHeight: 900, scale: 1, useCORS: true, logging: false });

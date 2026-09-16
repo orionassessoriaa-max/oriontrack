@@ -1536,10 +1536,10 @@ export default function CommercialKanbanPage() {
                             className="kh-card-proposal"
                             onClick={(event) => {
                               event.stopPropagation();
-                              router.push(`/comercial/proposta?proposal_id=${encodeURIComponent(lead.proposta_id || "")}`);
+                              window.open(`/proposta?proposal_id=${encodeURIComponent(lead.proposta_id || "")}`, "_blank", "noopener,noreferrer");
                             }}
                           >
-                            <FileCheck2 size={12} /> Proposta salva
+                            <FileCheck2 size={12} /> Proposta: {lead.proposta_nome_cliente || lead.nome}
                           </button>
                         )}
                         {canEditCommercial && <div className="kh-card-actions">
