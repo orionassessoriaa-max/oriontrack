@@ -1066,7 +1066,7 @@ body.editing [data-e]:hover{outline-color:rgba(61,130,255,.75);background:rgba(1
   function fit(){
     var editing = document.body.classList.contains("editing");
     var top = editing ? document.getElementById("editbar").offsetHeight : 0;
-    var bottom = document.fullscreenElement ? 0 : document.getElementById("chrome").offsetHeight;
+    var bottom = document.fullscreenElement || document.body.classList.contains("parent-fullscreen") ? 0 : document.getElementById("chrome").offsetHeight;
     var side = document.documentElement.clientWidth < 700 ? 8 : 16;
     var w = document.documentElement.clientWidth - side * 2;
     var h = document.documentElement.clientHeight - top - bottom - 8;
@@ -1850,6 +1850,7 @@ body.editing [data-e]:hover{outline-color:rgba(61,130,255,.75);background:rgba(1
     });
     if (on) { wake(); document.body.classList.remove("idle"); }
     document.getElementById("editBtn").textContent = on ? "Apresentar" : "Editar";
+    window.parent.postMessage({ type:"orion-proposal-edit-state", editing:on }, "*");
     requestAnimationFrame(fit);
   }
   document.getElementById("editBtn").addEventListener("click", function(){

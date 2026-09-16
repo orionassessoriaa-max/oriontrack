@@ -13,8 +13,11 @@ export default function PropostaApresentacaoPage() {
   const [salvarAberto, setSalvarAberto] = useState(false);
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const urlRef = useRef<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
 
   const token = useCallback(async () => {
     const { supabase } = await import('@/lib/supabase/client');
@@ -66,7 +69,11 @@ export default function PropostaApresentacaoPage() {
       if (event.data.type === 'orion-proposal-client-updated' && event.data.clientName) {
         setNomeCliente(String(event.data.clientName));
       }
+      if (event.data.type === 'orion-proposal-edit-state') {
+        setEditing(Boolean(event.data.editing));
+      }
       if (event.data.type === 'orion-proposal-edit-finished' && event.data.clientName) {
+        setEditing(false);
         setNomeCliente(String(event.data.clientName));
         setSalvarAberto(true);
         requestSnapshot();
@@ -77,6 +84,29 @@ export default function PropostaApresentacaoPage() {
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
   }, [loadLeads, requestSnapshot]);
+
+  useEffect(() => {
+    function syncFullscreen() {
+      const active = document.fullscreenElement === mainRef.current;
+      setFullscreen(active);
+      iframeRef.current?.contentWindow?.postMessage({ type: 'orion-proposal-fullscreen-state', active }, '*');
+    }
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  function toggleEditing() {
+    iframeRef.current?.contentWindow?.postMessage({ type: 'orion-proposal-toggle-edit' }, '*');
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await mainRef.current?.requestFullscreen();
+    } catch {
+      setErro('O Chrome bloqueou a tela cheia. Atualize a página e tente novamente.');
+    }
+  }
 
   async function save() {
     if (!nomeCliente || !leadId) { setErro('Informe o cliente e selecione o lead agendado.'); return; }
@@ -92,8 +122,12 @@ export default function PropostaApresentacaoPage() {
   }
 
   if (erro && !url) return <main style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: '#05080f', color: '#f7f9fc', padding: 24 }}>{erro}</main>;
-  return <main style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#05080f' }}>
+  return <main ref={mainRef} style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#05080f' }}>
     {url && <iframe ref={iframeRef} src={url} title="Proposta comercial Orion" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads" allow="fullscreen" allowFullScreen style={{ display: 'block', width: '100%', height: '100%', border: 0 }} />}
+    {url && <div style={{ position: 'fixed', right: 22, bottom: 16, zIndex: 15, display: 'flex', gap: 12 }}>
+      <button type="button" onClick={toggleEditing} style={{ fontFamily: 'Outfit, Segoe UI, sans-serif', fontSize: 13, color: '#edf1f8', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer' }}>{editing ? 'Apresentar' : 'Editar'}</button>
+      <button type="button" onClick={() => void toggleFullscreen()} style={{ fontFamily: 'Outfit, Segoe UI, sans-serif', fontSize: 13, color: '#edf1f8', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer' }}>{fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}</button>
+    </div>}
     {erro && <p style={{ position: 'fixed', left: 16, bottom: 16, zIndex: 10, color: '#ffd2d2' }}>{erro}</p>}
     {salvarAberto && <div onMouseDown={() => !salvando && setSalvarAberto(false)} style={{ position: 'fixed', inset: 0, zIndex: 20, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.68)', padding: 20 }}>
       <section onMouseDown={(event) => event.stopPropagation()} style={{ width: 'min(460px,100%)', borderRadius: 14, padding: 24, background: '#0b1422', color: '#f7f9fc', boxShadow: '0 20px 80px rgba(0,0,0,.5)' }}>
