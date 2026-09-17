@@ -6,7 +6,6 @@ import { cadenceDayFromStage, isContactCadenceStage } from "@/lib/comercialCaden
 import {
   CalendarClock,
   CalendarDays,
-  CalendarPlus,
   BadgeCheck,
   AlertTriangle,
   CircleDollarSign,
@@ -36,6 +35,7 @@ import CommercialDateRangeFilter, {
 } from "@/components/commercial/CommercialDateRangeFilter";
 import CommercialLeadModal from "@/components/commercial/CommercialLeadModal";
 import CommercialLeadDetailsModal from "@/components/commercial/CommercialLeadDetailsModal";
+import CommercialMeetingScheduler from "@/components/commercial/CommercialMeetingScheduler";
 import {
   canAssignCommercialResponsible,
   recebeLeadNoRodizio,
@@ -1751,99 +1751,29 @@ export default function CommercialKanbanPage() {
             </div>
           );
         })()}
-      {meetingMove && (
-        <div
-          className="kh-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="meeting-modal-title"
-        >
-          <button
-            type="button"
-            className="kh-modal-scrim"
-            aria-label="Fechar"
-            onClick={() => setMeetingMove(null)}
-          />
-          <form
-            className="kh-modal-sheet kh-meeting-modal"
+      {meetingMove && (() => {
+        const meetingLead = leads.find((lead) => lead.id === meetingMove.leadId);
+        if (!meetingLead) return null;
+        return (
+          <CommercialMeetingScheduler
+            lead={meetingLead}
+            email={meetingEmail}
+            selectedAt={meetingAt}
+            error={meetingError}
+            saving={meetingSaving}
+            onEmailChange={(value) => {
+              setMeetingEmail(value);
+              setMeetingError(null);
+            }}
+            onSelectedAtChange={(value) => {
+              setMeetingAt(value);
+              setMeetingError(null);
+            }}
+            onClose={() => setMeetingMove(null)}
             onSubmit={(event) => void confirmMeetingMove(event)}
-          >
-            <header>
-              <div>
-                <span>Reunião agendada</span>
-                <h2 id="meeting-modal-title">Informe data e horário</h2>
-              </div>
-              <button
-                type="button"
-                aria-label="Fechar"
-                onClick={() => setMeetingMove(null)}
-              >
-                <X size={18} />
-              </button>
-            </header>
-            <div className="kh-meeting-form">
-              <p>
-                Informe o e-mail do cliente e quando a reunião acontecerá. O
-                convite com o link do Google Meet será enviado ao confirmar.
-              </p>
-              <label>
-                <span>E-mail do cliente</span>
-                <input
-                  className="kh-input"
-                  type="email"
-                  value={meetingEmail}
-                  onChange={(event) => {
-                    setMeetingEmail(event.target.value);
-                    setMeetingError(null);
-                  }}
-                  placeholder="cliente@empresa.com.br"
-                  autoComplete="email"
-                  required
-                  autoFocus
-                />
-              </label>
-              <label>
-                <span>Data e horário da reunião</span>
-                <input
-                  className="kh-input"
-                  type="datetime-local"
-                  value={meetingAt}
-                  onChange={(event) => {
-                    setMeetingAt(event.target.value);
-                    setMeetingError(null);
-                  }}
-                  step="300"
-                  aria-invalid={Boolean(meetingError)}
-                  aria-describedby={meetingError ? "meeting-date-error" : undefined}
-                  required
-                />
-                {meetingError && <small id="meeting-date-error" role="alert" style={{ color: "#ff9aaa" }}>{meetingError}</small>}
-              </label>
-            </div>
-            <footer>
-              <button
-                type="button"
-                className="kh-button"
-                onClick={() => setMeetingMove(null)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="kh-button primary"
-                disabled={meetingSaving || !meetingAt || !meetingEmail.trim()}
-              >
-                {meetingSaving ? (
-                  <RefreshCw size={15} className="kh-spin" />
-                ) : (
-                  <CalendarPlus size={15} />
-                )}{" "}
-                {meetingSaving ? "Salvando..." : "Confirmar agendamento"}
-              </button>
-            </footer>
-          </form>
-        </div>
-      )}
+          />
+        );
+      })()}
       {meetingDetailsLead && (
         <div className="kh-modal" role="dialog" aria-modal="true" aria-labelledby="meeting-details-title">
           <button type="button" className="kh-modal-scrim" aria-label="Fechar" onClick={() => setMeetingDetailsLead(null)} />

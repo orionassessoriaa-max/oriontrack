@@ -17,12 +17,29 @@ type CalendarLead = {
 
 type GoogleEvent = {
   id?: string;
+  summary?: string;
+  status?: string;
+  colorId?: string;
+  transparency?: string;
+  eventType?: string;
   hangoutLink?: string;
   htmlLink?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
   conferenceData?: {
     entryPoints?: Array<{ entryPointType?: string; uri?: string }>;
     createRequest?: { status?: { statusCode?: string } };
   };
+};
+
+export type GoogleCalendarScheduleEvent = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  busy: boolean;
+  colorId: string | null;
 };
 
 function requiredConfig() {
@@ -133,6 +150,58 @@ async function waitForMeet(calendarId: string, eventId: string, token: string, i
     event = result.payload as GoogleEvent;
   }
   return event;
+}
+
+export async function listGoogleCalendarEvents(timeMin: Date, timeMax: Date) {
+  if (Number.isNaN(timeMin.getTime()) || Number.isNaN(timeMax.getTime()) || timeMax <= timeMin) {
+    throw new Error('Intervalo da agenda invalido.');
+  }
+  if (timeMax.getTime() - timeMin.getTime() > 32 * 24 * 60 * 60 * 1000) {
+    throw new Error('Consulte no maximo 32 dias da agenda por vez.');
+  }
+  const config = requiredConfig();
+  const token = await accessToken();
+  const events: GoogleCalendarScheduleEvent[] = [];
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      showDeleted: 'false',
+      maxResults: '2500',
+      timeZone: SAO_PAULO_TIME_ZONE,
+      ...(pageToken ? { pageToken } : {}),
+    });
+    const result = await calendarRequest(
+      `calendars/${encodeURIComponent(config.calendarId)}/events?${params.toString()}`,
+      token,
+    );
+    if (!result.response.ok) {
+      const message = result.payload?.error?.message || `Google Calendar recusou a consulta (${result.response.status}).`;
+      throw new Error(message);
+    }
+    for (const event of (result.payload?.items || []) as GoogleEvent[]) {
+      const start = event.start?.dateTime || event.start?.date;
+      const end = event.end?.dateTime || event.end?.date;
+      if (!event.id || !start || !end || event.status === 'cancelled') continue;
+      const allDay = Boolean(event.start?.date && !event.start?.dateTime);
+      events.push({
+        id: event.id,
+        title: event.summary || 'Ocupado',
+        start,
+        end,
+        allDay,
+        busy: event.transparency !== 'transparent'
+          && event.eventType !== 'workingLocation'
+          && event.eventType !== 'birthday',
+        colorId: event.colorId || null,
+      });
+    }
+    pageToken = String(result.payload?.nextPageToken || '');
+  } while (pageToken);
+  return events;
 }
 
 export async function syncGoogleCalendarMeeting(lead: CalendarLead) {

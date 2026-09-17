@@ -693,6 +693,78 @@
 .kh-meeting-form { display: grid; gap: 16px; padding: 20px; }
 .kh-meeting-form p { margin: 0; color: var(--kh-muted); font-size: 12px; line-height: 1.55; }
 .kh-meeting-form label { display: grid; gap: 7px; color: var(--kh-text); font-size: 11px; font-weight: 800; }
+.kh-scheduler { position:fixed;inset:0;z-index:140;display:grid;place-items:center;padding:18px; }
+.kh-scheduler-scrim { position:absolute;inset:0;background:rgba(0,8,16,.86);backdrop-filter:blur(9px); }
+.kh-scheduler-shell { --scheduler-blue:#168bff;--scheduler-cyan:#39c4ff;position:relative;width:min(1540px,calc(100vw - 36px));height:min(900px,calc(100dvh - 36px));display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;border:1px solid #29485d;border-radius:14px;background:#07111a;box-shadow:0 32px 100px rgba(0,0,0,.66);color:#eaf4fb; }
+.kh-scheduler-toolbar { min-height:76px;display:grid;grid-template-columns:minmax(260px,1fr) auto minmax(40px,1fr);align-items:center;gap:18px;border-bottom:1px solid #203644;background:#091722;padding:12px 16px; }
+.kh-scheduler-brand { display:flex;align-items:center;gap:11px;min-width:0; }
+.kh-scheduler-brand > span { width:42px;height:42px;display:grid;place-items:center;flex:0 0 auto;border:1px solid rgba(57,196,255,.4);border-radius:10px;background:linear-gradient(145deg,#0b6db8,#12a9e5);box-shadow:0 10px 28px rgba(0,131,205,.22);color:#fff; }
+.kh-scheduler-brand small,.kh-scheduler-kicker { color:#42cfff;font-size:9px;font-weight:900;letter-spacing:.09em;text-transform:uppercase; }
+.kh-scheduler-brand h2 { margin:2px 0 0;color:#f5fbff;font-size:19px;letter-spacing:-.02em; }
+.kh-scheduler-navigation { display:flex;align-items:center;gap:7px; }
+.kh-scheduler-navigation button,.kh-scheduler-close { min-width:36px;height:36px;display:grid;place-items:center;border:1px solid #2a4354;border-radius:8px;background:#0b1b27;color:#c9d9e4;font:inherit;font-size:11px;font-weight:800;cursor:pointer; }
+.kh-scheduler-navigation button:first-child { width:auto;padding:0 14px; }
+.kh-scheduler-navigation button:hover,.kh-scheduler-close:hover { border-color:#3c91c4;background:#102a3c;color:#fff; }
+.kh-scheduler-navigation strong { min-width:210px;color:#e9f5fc;font-size:13px;text-align:center;text-transform:capitalize; }
+.kh-scheduler-close { justify-self:end; }
+.kh-scheduler-layout { min-height:0;display:grid;grid-template-columns:220px minmax(0,1fr) 270px; }
+.kh-scheduler-lead,.kh-scheduler-confirm { min-width:0;background:#091722;padding:18px; }
+.kh-scheduler-lead { border-right:1px solid #203644; }
+.kh-scheduler-lead-name { display:flex;align-items:center;gap:9px;margin-top:16px;border:1px solid #284659;border-radius:9px;background:#0a1c28;padding:11px; }
+.kh-scheduler-lead-name > svg { color:#43c9ff; }
+.kh-scheduler-lead-name > div { min-width:0;display:grid;gap:2px; }
+.kh-scheduler-lead-name strong,.kh-scheduler-lead-name small { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.kh-scheduler-lead-name strong { color:#f2f8fc;font-size:12px; }
+.kh-scheduler-lead-name small { color:#7e99ac;font-size:9px; }
+.kh-scheduler-lead > p { margin:14px 0;color:#829daf;font-size:10px;line-height:1.55; }
+.kh-scheduler-legend { display:grid;gap:9px;border-top:1px solid #1e3443;padding-top:14px;color:#98aebe;font-size:9px;font-weight:750; }
+.kh-scheduler-legend span { display:flex;align-items:center;gap:7px; }
+.kh-scheduler-legend i { width:9px;height:9px;border-radius:3px;background:#244054; }
+.kh-scheduler-legend i.is-selected { background:var(--scheduler-blue);box-shadow:0 0 9px rgba(22,139,255,.6); }
+.kh-scheduler-legend i.is-busy { background:#ff6548; }
+.kh-scheduler-legend i.is-free { border:1px solid #315166;background:#0a1720; }
+.kh-scheduler-calendar { position:relative;min-width:0;min-height:0;background:#071119; }
+.kh-scheduler-scroll { width:100%;height:100%;overflow:auto;scrollbar-color:#36586d #09141c; }
+.kh-scheduler-week { position:relative;min-width:980px;display:grid;grid-template-columns:64px repeat(7,minmax(128px,1fr));grid-template-rows:auto var(--scheduler-grid-height); }
+.kh-scheduler-time-head,.kh-scheduler-day-head { position:sticky;top:0;z-index:12;min-height:68px;border-bottom:1px solid #273c49;background:#0a1720; }
+.kh-scheduler-time-head { display:flex;align-items:flex-end;justify-content:center;padding:0 0 8px;color:#638397;font-size:8px;font-weight:800; }
+.kh-scheduler-day-head { display:grid;justify-items:center;align-content:center;gap:2px;border-left:1px solid #213541;padding:6px 4px; }
+.kh-scheduler-day-head > span { color:#839baa;font-size:8px;font-weight:900;text-transform:uppercase; }
+.kh-scheduler-day-head > strong { width:27px;height:27px;display:grid;place-items:center;border-radius:50%;color:#d8e6ef;font-size:15px; }
+.kh-scheduler-day-head.is-today > strong { background:#2799f2;color:#fff;box-shadow:0 0 0 3px rgba(39,153,242,.13); }
+.kh-scheduler-day-head > small { max-width:100%;overflow:hidden;border-radius:3px;background:#1a435a;color:#bceaff;padding:2px 4px;font-size:7px;text-overflow:ellipsis;white-space:nowrap; }
+.kh-scheduler-time-axis { position:relative;grid-column:1;grid-row:2;background:#08141d; }
+.kh-scheduler-time-axis span { position:absolute;right:8px;transform:translateY(-50%);color:#7892a3;font-size:8px;font-weight:700;font-variant-numeric:tabular-nums; }
+.kh-scheduler-day-column { position:relative;grid-row:2;overflow:hidden;border-left:1px solid #203440;background:#071119; }
+.kh-scheduler-day-column.is-today { background:rgba(20,104,157,.045); }
+.kh-scheduler-hour-lines,.kh-scheduler-slots { position:absolute;inset:0; }
+.kh-scheduler-hour-lines i { position:absolute;left:0;right:0;height:1px;background:#1c303b; }
+.kh-scheduler-slots { z-index:2;display:grid;grid-template-rows:repeat(52,14px); }
+.kh-scheduler-slots button { width:100%;height:14px;border:0;border-top:1px solid transparent;background:transparent;padding:0;cursor:pointer; }
+.kh-scheduler-slots button:nth-child(4n+1) { border-top-color:rgba(60,91,109,.16); }
+.kh-scheduler-slots button:hover:not(:disabled) { background:rgba(40,158,230,.14);box-shadow:inset 3px 0 #35baff; }
+.kh-scheduler-slots button:focus-visible { position:relative;z-index:8;outline:2px solid #5fcaff;outline-offset:-2px; }
+.kh-scheduler-slots button:disabled { cursor:not-allowed; }
+.kh-scheduler-event,.kh-scheduler-selection { position:absolute;z-index:4;left:4px;right:4px;display:grid;align-content:start;gap:2px;overflow:hidden;border-radius:5px;padding:4px 5px;pointer-events:none; }
+.kh-scheduler-event { border:1px solid rgba(255,255,255,.2);background:#ef5037;color:#fff; }
+.kh-scheduler-event.color-1 { background:#079c80; }.kh-scheduler-event.color-2 { background:#b24cc7; }.kh-scheduler-event.color-3 { background:#d68e15; }.kh-scheduler-event.color-4 { background:#377cc9; }
+.kh-scheduler-event strong,.kh-scheduler-selection strong { overflow:hidden;font-size:8px;font-weight:900;line-height:1.2;text-overflow:ellipsis;white-space:nowrap; }
+.kh-scheduler-event small,.kh-scheduler-selection small { overflow:hidden;font-size:7px;font-weight:700;line-height:1.2;text-overflow:ellipsis;white-space:nowrap; }
+.kh-scheduler-selection { z-index:7;grid-template-columns:14px minmax(0,1fr);border:1px solid #70c7ff;background:linear-gradient(135deg,#087de0,#15a5f0);box-shadow:0 8px 24px rgba(0,121,220,.34);color:#fff; }
+.kh-scheduler-selection svg { grid-row:1 / span 2;align-self:center; }.kh-scheduler-selection small { grid-column:2; }
+.kh-scheduler-now { position:absolute;z-index:9;left:0;right:0;height:1px;background:#ff526b;pointer-events:none; }.kh-scheduler-now i { position:absolute;left:-4px;top:-3px;width:7px;height:7px;border-radius:50%;background:#ff526b; }
+.kh-scheduler-loading { position:absolute;z-index:20;inset:68px 0 0 64px;display:flex;align-items:center;justify-content:center;gap:9px;background:rgba(5,15,23,.72);backdrop-filter:blur(2px);color:#b9d4e5;font-size:11px;font-weight:800; }
+.kh-scheduler-load-error { position:absolute;z-index:25;top:84px;left:50%;display:flex;align-items:center;gap:10px;transform:translateX(-50%);border:1px solid #91394b;border-radius:7px;background:#3a1720;color:#ffd9df;padding:8px 10px;font-size:10px; }.kh-scheduler-load-error button { border:0;background:transparent;color:#7fd2ff;font:inherit;font-weight:900;cursor:pointer; }
+.kh-scheduler-confirm { display:flex;flex-direction:column;border-left:1px solid #203644; }
+.kh-scheduler-confirm h3 { margin:8px 0 18px;color:#f0f7fb;font-size:17px; }
+.kh-scheduler-confirm label { display:grid;gap:7px;color:#a9becb;font-size:9px;font-weight:800; }.kh-scheduler-confirm label > span { display:flex;align-items:center;gap:5px; }
+.kh-scheduler-confirm input { width:100%;min-width:0;height:38px;box-sizing:border-box;border:1px solid #315166;border-radius:7px;outline:0;background:#06121b;color:#eff9ff;padding:0 10px;font:inherit;font-size:11px; }.kh-scheduler-confirm input:focus { border-color:#30aef1;box-shadow:0 0 0 2px rgba(48,174,241,.18); }
+.kh-scheduler-summary { display:grid;gap:11px;margin-top:18px;border-top:1px solid #203644;padding-top:17px; }
+.kh-scheduler-summary > div { display:grid;grid-template-columns:19px minmax(0,1fr);gap:7px;color:#51c3ff; }.kh-scheduler-summary span { display:grid;gap:2px;color:#718c9f;font-size:8px;font-weight:800;text-transform:uppercase; }.kh-scheduler-summary strong { color:#dcebf4;font-size:10px;line-height:1.35;text-transform:none; }
+.kh-scheduler-error { margin:14px 0 0;border:1px solid #85394a;border-radius:7px;background:#351820;color:#ffcbd3;padding:8px;font-size:9px;line-height:1.4; }
+.kh-scheduler-actions { display:grid;grid-template-columns:1fr 1.35fr;gap:8px;margin-top:auto;padding-top:18px; }.kh-scheduler-actions button { min-height:40px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid #315166;border-radius:8px;background:#0b1d29;color:#c9d9e3;font:inherit;font-size:10px;font-weight:900;cursor:pointer; }.kh-scheduler-actions button:last-child { border-color:#168bff;background:#117bdd;color:#fff;box-shadow:0 9px 24px rgba(17,123,221,.2); }.kh-scheduler-actions button:disabled { cursor:not-allowed;opacity:.45;box-shadow:none; }
+@media (max-width:1180px) { .kh-scheduler-layout { grid-template-columns:180px minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto; }.kh-scheduler-confirm { grid-column:1 / -1;display:grid;grid-template-columns:180px minmax(220px,1fr) minmax(340px,1.5fr) auto;align-items:center;gap:12px;border-top:1px solid #203644;border-left:0;padding:12px 16px; }.kh-scheduler-confirm h3,.kh-scheduler-confirm > .kh-scheduler-kicker { display:none; }.kh-scheduler-summary { grid-template-columns:repeat(3,1fr);margin:0;border:0;padding:0; }.kh-scheduler-actions { min-width:250px;margin:0;padding:0; }.kh-scheduler-error { grid-column:1 / -1;margin:0; } }
+@media (max-width:760px) { .kh-scheduler { padding:0; }.kh-scheduler-shell { width:100vw;height:100dvh;border:0;border-radius:0; }.kh-scheduler-toolbar { grid-template-columns:1fr auto;gap:8px;padding:9px 10px; }.kh-scheduler-brand h2 { font-size:15px; }.kh-scheduler-navigation { grid-column:1 / -1;grid-row:2;justify-content:center; }.kh-scheduler-close { grid-column:2;grid-row:1; }.kh-scheduler-layout { grid-template-columns:1fr; }.kh-scheduler-lead { display:none; }.kh-scheduler-confirm { grid-column:1;grid-template-columns:1fr 1fr; }.kh-scheduler-summary { display:none; }.kh-scheduler-actions { min-width:0; }.kh-scheduler-week { min-width:900px; } }
 .kh-meeting-details { width:min(720px,100%); }
 .kh-meeting-details-body { display:grid;gap:14px;max-height:min(70vh,680px);overflow:auto;padding:20px; }
 .kh-meeting-hero { display:flex;align-items:center;gap:12px;border:1px solid rgba(255,73,97,.35);border-radius:12px;background:linear-gradient(135deg,rgba(125,17,39,.32),rgba(8,20,31,.92));padding:14px; }
