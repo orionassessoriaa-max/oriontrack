@@ -5,6 +5,7 @@ import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 import { TRAFFIC_RULES } from '@/lib/trafego/rules';
 import { concessionariaKey, isPausedConcessionariaStage } from '@/lib/concessionariaBoard';
+import { resolveMetaBilling } from '@/lib/meta/payment';
 
 type CorretorMeta = {
   id: string;
@@ -18,19 +19,6 @@ type CorretorMeta = {
 
 function normalizeAccountId(accountId: string) {
   return accountId.replace(/^act_/, '');
-}
-
-function parseMoneyFromMetaText(value?: string | null) {
-  const text = String(value || '');
-  const match = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})|\d+(?:\.\d{2})?)/);
-  if (!match?.[1]) return null;
-
-  const normalized = match[1].includes(',')
-    ? match[1].replace(/\./g, '').replace(',', '.')
-    : match[1];
-
-  const amount = Number(normalized);
-  return Number.isFinite(amount) ? amount : null;
 }
 
 function currentMonthRange() {
@@ -80,7 +68,7 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   insightsUrl.searchParams.set('access_token', accessToken);
 
   const accountUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}`);
-  accountUrl.searchParams.set('fields', 'balance,currency,amount_spent,funding_source_details');
+  accountUrl.searchParams.set('fields', 'balance,currency,amount_spent,funding_source_details,is_prepay_account');
   accountUrl.searchParams.set('access_token', accessToken);
 
   const [insightsResponse, accountResponse, sheetLeads] = await Promise.all([
@@ -103,20 +91,10 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
   const leads = sheetLeads;
   const cpl = leads > 0 ? spend / leads : null;
   const ctr = Number(row.ctr || 0);
-  const rawBalance = accountPayload?.balance;
-  const balance = rawBalance === undefined || rawBalance === null ? null : Number(rawBalance) / 100;
-  const fundingDetails = accountPayload?.funding_source_details;
-  const fundingText = JSON.stringify(fundingDetails || {}).toLowerCase();
-  const isCard = fundingText.includes('card') || fundingText.includes('cart') || fundingText.includes('visa') || fundingText.includes('mastercard') || fundingText.includes('amex');
-  const cardPaymentError = isCard && /failed|declined|past.?due|unpaid|payment.?error|billing.?error|recusad|falh/.test(fundingText);
-  const displayBalance = parseMoneyFromMetaText(fundingDetails?.display_string);
-  const effectiveBalance = displayBalance ?? balance;
-  const formaPagamento = isCard
-    ? 'Cartao'
-    : fundingDetails?.display_string || fundingDetails?.type || (balance !== null ? 'Saldo pre-pago' : 'Nao informado');
+  const billing = resolveMetaBilling(accountPayload || {});
 
   // Dynamic alert thresholds per broker
-  const cplLimit = Number(corretor.operadoras_info?.alerta_limite_cpl ?? 25);
+  const cplLimit = Number(corretor.operadoras_info?.alerta_limite_cpl ?? TRAFFIC_RULES.cplCritical);
   const balanceLimit = TRAFFIC_RULES.lowBalance;
 
   return {
@@ -129,12 +107,15 @@ async function fetchAccountMetrics(corretor: CorretorMeta, since: string, until:
     leads,
     cpl,
     ctr,
-    saldo: isCard ? null : effectiveBalance,
+    saldo: billing.availableBalance,
     currency: accountPayload?.currency || 'BRL',
-    forma_pagamento: formaPagamento,
-    alerta_cpl_alto: cpl !== null && cpl > cplLimit,
-    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance <= balanceLimit,
-    error: cardPaymentError ? 'A Meta informou um erro de pagamento no cartao desta conta.' : undefined as string | undefined,
+    forma_pagamento: billing.paymentLabel,
+    billing_type: billing.billingType,
+    alerta_cpl_alto: cpl !== null && cpl >= cplLimit,
+    alerta_saldo_baixo: billing.billingType === 'prepaid'
+      && billing.availableBalance !== null
+      && billing.availableBalance <= balanceLimit,
+    error: billing.paymentError ? 'A Meta informou um erro de pagamento nesta conta.' : undefined as string | undefined,
     operadoras_info: corretor.operadoras_info,
   };
 }

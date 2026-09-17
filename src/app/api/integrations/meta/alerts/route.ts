@@ -8,6 +8,7 @@ import { isMissingLeadOriginColumn, isOrionLead } from '@/lib/leadOrigin';
 import { fetchOrionCumulativeSpend } from '@/lib/meta/orionSpend';
 import { fetchWithTimeout } from '@/lib/meta/fetchWithTimeout';
 import { getMetaUsageSnapshot, metaCachedFetch } from '@/lib/meta/cachedFetch';
+import { resolveMetaBilling } from '@/lib/meta/payment';
 import {
   TRAFFIC_RULES,
   buildRecommendations,
@@ -88,19 +89,6 @@ function getMetaCompatibleRange(since: string, until: string) {
     since: validSince > minSince ? validSince : minSince,
     until: end,
   };
-}
-
-function parseMoneyFromMetaText(value?: string | null) {
-  const text = String(value || '');
-  const match = text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})|\d+(?:\.\d{2})?)/);
-  if (!match?.[1]) return null;
-
-  const normalized = match[1].includes(',')
-    ? match[1].replace(/\./g, '').replace(',', '.')
-    : match[1];
-
-  const amount = Number(normalized);
-  return Number.isFinite(amount) ? amount : null;
 }
 
 function describeMetaError(error: any, accountId?: string | null) {
@@ -450,7 +438,7 @@ async function fetchAccountMetrics(
   insightsUrl.searchParams.set('access_token', accessToken);
 
   const accountUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}`);
-  accountUrl.searchParams.set('fields', 'balance,currency,amount_spent,funding_source_details');
+  accountUrl.searchParams.set('fields', 'balance,currency,amount_spent,funding_source_details,is_prepay_account');
   accountUrl.searchParams.set('access_token', accessToken);
 
   const [insightsResponse, accountResponse] = await Promise.all([
@@ -490,17 +478,7 @@ async function fetchAccountMetrics(
   const costPerLinkClick = Number(row.cost_per_inline_link_click || 0);
   const landingPageViews = Number((row.actions || []).find((item: any) => item.action_type === 'landing_page_view')?.value || 0);
   const costPerLandingPageView = Number((row.cost_per_action_type || []).find((item: any) => item.action_type === 'landing_page_view')?.value || 0);
-  const rawBalance = accountPayload?.balance;
-  const balance = rawBalance === undefined || rawBalance === null ? null : Number(rawBalance) / 100;
-  const fundingDetails = accountPayload?.funding_source_details;
-  const fundingText = JSON.stringify(fundingDetails || {}).toLowerCase();
-  const isCard = fundingText.includes('card') || fundingText.includes('cart') || fundingText.includes('visa') || fundingText.includes('mastercard') || fundingText.includes('amex');
-  const cardPaymentError = isCard && /failed|declined|past.?due|unpaid|payment.?error|billing.?error|recusad|falh/.test(fundingText);
-  const displayBalance = parseMoneyFromMetaText(fundingDetails?.display_string);
-  const effectiveBalance = displayBalance ?? balance;
-  const formaPagamento = isCard
-    ? 'Cartao'
-    : fundingDetails?.display_string || fundingDetails?.type || (balance !== null ? 'Saldo pre-pago' : 'Nao informado');
+  const billing = resolveMetaBilling(accountPayload || {});
 
   return {
     corretor_id: corretor.id,
@@ -512,9 +490,10 @@ async function fetchAccountMetrics(
     leads: leadCount,
     cpl,
     ctr,
-    saldo: isCard ? null : effectiveBalance,
+    saldo: billing.availableBalance,
     currency: accountPayload?.currency || 'BRL',
-    forma_pagamento: formaPagamento,
+    forma_pagamento: billing.paymentLabel,
+    billing_type: billing.billingType,
     clicks,
     link_clicks: linkClicks,
     cpc,
@@ -526,9 +505,11 @@ async function fetchAccountMetrics(
     alerta_cpl_alto: cpl !== null && cpl >= TRAFFIC_RULES.cplCritical,
     alerta_cpl_atencao: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && cpl < TRAFFIC_RULES.cplCritical,
     alerta_metricas_secundarias: cpl !== null && cpl >= TRAFFIC_RULES.cplAttention && (cpc > TRAFFIC_RULES.cpcMax || ctr < TRAFFIC_RULES.ctrMin),
-    alerta_saldo_baixo: !isCard && effectiveBalance !== null && effectiveBalance <= TRAFFIC_RULES.lowBalance,
+    alerta_saldo_baixo: billing.billingType === 'prepaid'
+      && billing.availableBalance !== null
+      && billing.availableBalance <= TRAFFIC_RULES.lowBalance,
     dados_crm_pendentes: spend > 0 && leadCount === 0,
-    error: cardPaymentError ? 'A Meta informou um erro de pagamento no cartao desta conta.' : undefined,
+    error: billing.paymentError ? 'A Meta informou um erro de pagamento nesta conta.' : undefined,
     regras: TRAFFIC_RULES,
   };
 }
@@ -709,6 +690,7 @@ export async function POST(request: Request) {
     const corretorId = body.corretor_id ? String(body.corretor_id) : null;
     const requestedGestorId = body.gestor_id ? String(body.gestor_id) : null;
     const shouldAnalyze = Boolean(body.analyze);
+    const accountsOnly = body.accounts_only === true;
     const useCumulativeOrion = body.acumulado_orion === true;
     let scopedGestorProfile = guard.profile;
 
@@ -931,6 +913,7 @@ export async function POST(request: Request) {
           saldo: null,
           currency: 'BRL',
           forma_pagamento: 'Nao informado',
+          billing_type: 'unknown',
           rastreio: (everHadOrionLead ? 'ativo' : 'aguardando_integracao') as TrackingStatus,
           rastreio_desde: corretor.rastreio_desde || null,
           alerta_cpl_alto: false,
@@ -943,6 +926,21 @@ export async function POST(request: Request) {
         };
       })
       .sort((a, b) => Number(b.alerta_cpl_alto) - Number(a.alerta_cpl_alto));
+
+    // A tela de avisos usa somente os totais por conta. Encerrar aqui evita
+    // consultas de criativos, recomendacoes e historico de analises que nao
+    // aparecem nessa pagina.
+    if (accountsOnly) {
+      return NextResponse.json({
+        success: true,
+        data_inicio: since,
+        data_fim: until,
+        refreshed_at: new Date().toISOString(),
+        threshold_cpl: TRAFFIC_RULES.cplCritical,
+        rules: TRAFFIC_RULES,
+        accounts,
+      });
+    }
 
     // O período selecionado atualiza também os criativos. O cache continua
     // protegendo a cota da Meta, mas uma combinação de datas ainda não lida

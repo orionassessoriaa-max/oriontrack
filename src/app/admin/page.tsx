@@ -222,6 +222,9 @@ export default function AdminCentralPage() {
           const sessionRes = await supabase.auth.getSession();
           const token = sessionRes.data.session?.access_token;
           if (!token) return;
+          const periodEnd = new Date();
+          const periodStart = new Date(periodEnd);
+          periodStart.setDate(periodStart.getDate() - 6);
           const response = await fetch('/api/integrations/meta/alerts', {
             method: 'POST',
             headers: {
@@ -229,8 +232,9 @@ export default function AdminCentralPage() {
               Authorization: `Bearer ${token}`
             },
             body: JSON.stringify({
-              data_inicio: format(new Date(), 'yyyy-MM-dd'),
-              data_fim: format(new Date(), 'yyyy-MM-dd')
+              data_inicio: format(periodStart, 'yyyy-MM-dd'),
+              data_fim: format(periodEnd, 'yyyy-MM-dd'),
+              accounts_only: true,
             })
           });
           if (response.ok) {
@@ -251,14 +255,7 @@ export default function AdminCentralPage() {
   // Computations
   const noBalanceList = useMemo(() => {
     const rawNoBalance = alertsList.filter(a => {
-      const paymentText = String(a.forma_pagamento || '').toLowerCase();
-      const isCard = paymentText.includes('cartao')
-        || paymentText.includes('cartão')
-        || paymentText.includes('card')
-        || paymentText.includes('visa')
-        || paymentText.includes('mastercard');
-
-      return !isCard && a.saldo !== null && Number(a.saldo) <= 0;
+      return a.billing_type === 'prepaid' && a.saldo !== null && Number(a.saldo) <= 0;
     });
     return rawNoBalance.map(a => {
       const cObj = corretoresList.find(c => c.id === a.corretor_id);

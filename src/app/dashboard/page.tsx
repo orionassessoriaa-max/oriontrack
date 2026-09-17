@@ -190,28 +190,24 @@ function getLastDays(total = 7) {
 
 function getBrokerMetaStatus(account: any, cplPeriodo: number | null, periodLabelText: string) {
   if (!account) return null;
-  const isCard = String(account.forma_pagamento || '').toLowerCase().includes('cartao') || 
-                 String(account.forma_pagamento || '').toLowerCase().includes('cartão') ||
-                 String(account.forma_pagamento || '').toLowerCase().includes('card') ||
-                 String(account.forma_pagamento || '').toLowerCase().includes('visa') ||
-                 String(account.forma_pagamento || '').toLowerCase().includes('mastercard');
+  const isPrepaid = account.billing_type === 'prepaid';
 
   const hasPaymentError = account.error && (
     /pagamento|payment|recusad|failed|declined|settle|cobrança|cobranca|cartao|cartão|card|invoice|unpaid|error/i.test(String(account.error))
   );
 
   // 1. CPL alto
-  if (cplPeriodo !== null && cplPeriodo > 25) {
+  if (cplPeriodo !== null && cplPeriodo >= 28) {
     return {
       status: 'cpl_alto',
       title: 'CPL Elevado',
-      detail: `CPL ${periodLabelText} de R$ ${Number(cplPeriodo).toFixed(2).replace('.', ',')} esta acima do ideal de R$ 25,00.`,
+      detail: `CPL ${periodLabelText} de R$ ${Number(cplPeriodo).toFixed(2).replace('.', ',')} esta acima do limite de R$ 28,00.`,
       tone: 'red',
     };
   }
 
   // 2. Erro no Pagamento (Cartão)
-  if (isCard && hasPaymentError) {
+  if (hasPaymentError) {
     return {
       status: 'erro_pagamento',
       title: 'Erro no Pagamento',
@@ -221,7 +217,7 @@ function getBrokerMetaStatus(account: any, cplPeriodo: number | null, periodLabe
   }
 
   // 3. Sem Saldo (Pré-pago)
-  if (!isCard && account.saldo !== null && account.saldo <= 0) {
+  if (isPrepaid && account.saldo !== null && account.saldo <= 0) {
     return {
       status: 'sem_saldo',
       title: 'Sem Saldo',
@@ -231,7 +227,7 @@ function getBrokerMetaStatus(account: any, cplPeriodo: number | null, periodLabe
   }
 
   // 4. Saldo Baixo (Pré-pago)
-  if (!isCard && account.saldo !== null && account.saldo <= 80) {
+  if (isPrepaid && account.saldo !== null && account.saldo <= 80) {
     return {
       status: 'saldo_baixo',
       title: 'Saldo Baixo',
@@ -253,8 +249,8 @@ function getBrokerMetaStatus(account: any, cplPeriodo: number | null, periodLabe
   // 6. Com Saldo (Normal)
   return {
     status: 'com_saldo',
-    title: isCard ? 'Cartao Ativo' : 'Com Saldo',
-    detail: isCard ? 'Seu cartão está ativo para cobrança automática.' : 'Saldo suficiente para veiculação de anúncios.',
+    title: isPrepaid ? 'Com Saldo' : 'Cobranca Ativa',
+    detail: isPrepaid ? 'Saldo suficiente para veiculação de anúncios.' : 'A conta está configurada para cobrança pós-paga.',
     tone: 'emerald',
   };
 }
@@ -770,7 +766,10 @@ export default function DashboardPage() {
                   Authorization: `Bearer ${accessToken}`,
                 },
                 body: JSON.stringify({
-                  corretor_id: profile.corretor_id
+                  corretor_id: profile.corretor_id,
+                  data_inicio: dataInicio,
+                  data_fim: dataFim,
+                  accounts_only: true,
                 }),
               });
               if (response.ok) {
@@ -1115,11 +1114,7 @@ export default function DashboardPage() {
         const metaStatus = getBrokerMetaStatus(metaAccount, displayPeriodCpl, periodLabelText);
         if (!metaStatus) return null;
 
-        const isCard = String(metaAccount.forma_pagamento || '').toLowerCase().includes('cartao') || 
-                       String(metaAccount.forma_pagamento || '').toLowerCase().includes('cartão') ||
-                       String(metaAccount.forma_pagamento || '').toLowerCase().includes('card') ||
-                       String(metaAccount.forma_pagamento || '').toLowerCase().includes('visa') ||
-                       String(metaAccount.forma_pagamento || '').toLowerCase().includes('mastercard');
+        const isPrepaid = metaAccount.billing_type === 'prepaid';
 
         return (
           <div className={`mb-8 p-5 sm:p-6 rounded-[1.5rem] border backdrop-blur-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${
@@ -1172,7 +1167,7 @@ export default function DashboardPage() {
                     : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: metaAccount.currency || 'BRL' }).format(displayPeriodCpl)}
                 </p>
               </div>
-              {!isCard && metaAccount.saldo !== null && (
+              {isPrepaid && metaAccount.saldo !== null && (
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo da Conta</p>
                   <p className="mt-1 text-xl font-black text-white">
