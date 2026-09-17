@@ -4,6 +4,7 @@ import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizePhone, sendUazapiTypingPresence, uazapiFetch } from '@/lib/uazapi';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
+import { assinarMensagem } from '@/lib/atendimentoCompartilhado';
 
 type ReceptiveProfile = {
   id: string;
@@ -90,10 +91,11 @@ export async function getReceptiveAiConfig(profile: ReceptiveProfile): Promise<R
 }
 
 async function sendText(instance: string, conversationId: string, phone: string, sender: string, text: string, metadata: Record<string, unknown>) {
-  await sendUazapiTypingPresence(instance, phone, text);
+  const whatsappText = assinarMensagem(text, sender);
+  await sendUazapiTypingPresence(instance, phone, whatsappText);
   const payload = await uazapiFetch('/send/text', {
     method: 'POST',
-    body: JSON.stringify({ number: normalizePhone(phone), text }),
+    body: JSON.stringify({ number: normalizePhone(phone), text: whatsappText }),
   }, { instanceName: instance });
   await persistAiOutboundMessage({
     conversationId,
@@ -154,13 +156,14 @@ async function persistAiOutboundMessage(options: {
 
 async function sendOriginButtons(instance: string, conversationId: string, phone: string, persona: string) {
   const text = `Olá! Eu sou a ${persona}, da Unity Saúde. Para eu te direcionar certinho, como você chegou até a gente?`;
-  await sendUazapiTypingPresence(instance, phone, text);
+  const whatsappText = assinarMensagem(text, persona);
+  await sendUazapiTypingPresence(instance, phone, whatsappText);
   const payload = await uazapiFetch('/send/menu', {
     method: 'POST',
     body: JSON.stringify({
       number: normalizePhone(phone),
       type: 'button',
-      text,
+      text: whatsappText,
       choices: [
         `VIM POR ANÚNCIO|${BUTTON_AD}`,
         `INDICAÇÃO|${BUTTON_INDICATION}`,

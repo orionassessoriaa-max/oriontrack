@@ -1099,13 +1099,15 @@ export async function POST(request: Request) {
           number: phone,
           file: dataUrl,
           type: mediaTypeMapped,
-          text: (compartilhado.ativo ? assinarMensagem(text, senderProfile.nome) : text) || undefined,
+          text: (compartilhado.assinarMensagens
+            ? assinarMensagem(text, senderProfile.nome || senderProfile.email_real || senderProfile.email)
+            : text) || undefined,
           mimetype: mimetype || undefined,
           delay: audioDelay,
         }),
       }, { instanceName: instance });
     } else {
-      const textoEnviado = compartilhado.ativo
+      const textoEnviado = compartilhado.assinarMensagens
         ? assinarMensagem(text, senderProfile.nome || senderProfile.email_real || senderProfile.email)
         : text;
       const result = await sendTextWithSequenceFallback(instance, phone, textoEnviado);

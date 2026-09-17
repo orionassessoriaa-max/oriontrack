@@ -1,7 +1,7 @@
 import { openaiFetch } from '@/lib/openaiUso';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { configureUazapiWebhook, getUazapiInstanceConnection, normalizePhone, phoneMatchKey, sendUazapiTypingPresence, uazapiAiInstanceName, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
-import { assinarMensagem } from '@/lib/atendimentoCompartilhado';
+import { assinarMensagem, isUnityBrokerage } from '@/lib/atendimentoCompartilhado';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
@@ -952,8 +952,9 @@ async function finalizeScheduledHandoff(params: {
   aiConfig: any;
   customerMessage: string;
   incomingWasAudio?: boolean;
+  signSenderName?: boolean;
 }) {
-  const { session, lead, conversationId, adminProfile, aiConfig, customerMessage, incomingWasAudio } = params;
+  const { session, lead, conversationId, adminProfile, aiConfig, customerMessage, incomingWasAudio, signSenderName } = params;
   let summary = setSummaryField(session.summary || leadFacts(lead), 'Agendado', customerMessage.trim());
   summary = setSummaryField(summary, 'Pendente', 'Nao');
   summary = appendSummaryLine(summary, 'IA encerrada: agendamento informado pelo cliente e enviado para o responsavel.');
@@ -966,7 +967,7 @@ async function finalizeScheduledHandoff(params: {
   const reply = handoffScheduleReply(lead, contactMode, identity.displayName);
 
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
     await insertMessage(conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -1214,9 +1215,9 @@ async function insertMessage(conversaId: string, direction: 'inbound' | 'outboun
   return data;
 }
 
-async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: string, senderName: string) {
+async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: string, senderName: string, signSenderName = false) {
   const instance = aiInstanceName(adminProfile);
-  const whatsappText = assinarMensagem(text, senderName);
+  const whatsappText = signSenderName ? assinarMensagem(text, senderName) : text;
   await sendUazapiTypingPresence(instance, phone, whatsappText);
   return uazapiFetch('/send/text', {
     method: 'POST',
@@ -1838,6 +1839,7 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
   if (!conversation) return { started: false, eligible: true, reason: 'Conversa nao criada.' };
 
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
+  const signSenderName = isUnityBrokerage(corretora.nome || broker.nome_empresa);
 
   const opName = formatOperadoraName(lead.operadora);
   const cameFromWhatsAppAd = options.entryChannel === 'whatsapp_ad';
@@ -1882,7 +1884,7 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
   try {
     await configureUazapiWebhook(senderInstance);
     registerAiOutbound(phone, intro);
-    const payload = await sendAiAdminText(adminProfile, phone, intro, aiConfig.persona);
+    const payload = await sendAiAdminText(adminProfile, phone, intro, aiConfig.persona, signSenderName);
     await insertMessage(conversation.id, 'outbound', aiConfig.persona, intro, {
       ...(payload || {}),
       instance: senderInstance,
@@ -1988,6 +1990,7 @@ export async function continueLeadAiFromIncoming(options: {
   const history = [...(recentHistory || [])].reverse();
 
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
+  const signSenderName = isUnityBrokerage(corretora.nome || broker.nome_empresa);
   const skipCallQuestion = isFacilitaBrokerage(corretora.nome || broker.nome_empresa);
 
   const previousOutbound = [...(history || [])]
@@ -2019,7 +2022,7 @@ export async function continueLeadAiFromIncoming(options: {
 
     const reply = customerReplyForFollowUp(cnpjConfirmationReply(lead), lead, Boolean(previousOutboundText));
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -2056,7 +2059,7 @@ export async function continueLeadAiFromIncoming(options: {
           : 'Oi!';
     const reply = customerReplyForFollowUp(`${greeting} ${initialLeadQuestion(lead)}`, lead, Boolean(previousOutboundText));
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -2091,6 +2094,7 @@ export async function continueLeadAiFromIncoming(options: {
       aiConfig,
       customerMessage: options.customerMessage,
       incomingWasAudio: options.incomingWasAudio,
+      signSenderName,
     });
   }
 
@@ -2108,7 +2112,7 @@ export async function continueLeadAiFromIncoming(options: {
       Boolean(previousOutboundText),
     );
       registerAiOutbound(lead.telefone || '', reply);
-      const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
+      const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
       await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
         ...(payload || {}),
         instance: aiInstanceName(adminProfile),
@@ -2136,7 +2140,7 @@ export async function continueLeadAiFromIncoming(options: {
     const summary = setSummaryField(session.summary || leadFacts(lead), 'Cidade', options.customerMessage.trim());
     const reply = customerReplyForFollowUp(nextQuestionAfterCity(lead, skipCallQuestion), lead, Boolean(previousOutboundText));
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -2169,7 +2173,7 @@ export async function continueLeadAiFromIncoming(options: {
       Boolean(previousOutboundText),
     );
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -2262,7 +2266,7 @@ export async function continueLeadAiFromIncoming(options: {
 
 
     registerAiOutbound(lead.telefone || '', part);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part, aiConfig.persona);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part, aiConfig.persona, signSenderName);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, part, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
