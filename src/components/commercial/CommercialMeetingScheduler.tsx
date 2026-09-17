@@ -2,12 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  AlignLeft,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   Clock3,
+  ExternalLink,
   Loader2,
   Mail,
+  MapPin,
+  Menu,
+  Users,
   UserRound,
   Video,
   X,
@@ -23,6 +28,11 @@ type CalendarEvent = {
   allDay: boolean;
   busy: boolean;
   colorId: string | null;
+  description: string | null;
+  location: string | null;
+  attendees: Array<{ email: string; name: string | null; responseStatus: string | null }>;
+  meetLink: string | null;
+  calendarLink: string | null;
 };
 
 type Props = {
@@ -97,6 +107,8 @@ export default function CommercialMeetingScheduler({
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [openEvent, setOpenEvent] = useState<CalendarEvent | null>(null);
   const [now, setNow] = useState(() => new Date());
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
   const slots = useMemo(
@@ -108,6 +120,16 @@ export default function CommercialMeetingScheduler({
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    function closeFloatingPanel(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (openEvent) setOpenEvent(null);
+      else if (editorOpen) setEditorOpen(false);
+    }
+    window.addEventListener("keydown", closeFloatingPanel);
+    return () => window.removeEventListener("keydown", closeFloatingPanel);
+  }, [editorOpen, openEvent]);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,8 +197,21 @@ export default function CommercialMeetingScheduler({
   }
 
   function showWeek(date: Date) {
+    setEditorOpen(false);
+    setOpenEvent(null);
     onSelectedAtChange("");
     setWeekStart(startOfWeek(date));
+  }
+
+  function selectFreeSlot(slotStart: Date) {
+    onSelectedAtChange(localDateTimeValue(slotStart));
+    setOpenEvent(null);
+    setEditorOpen(true);
+  }
+
+  function showEventDetails(event: CalendarEvent) {
+    setEditorOpen(false);
+    setOpenEvent(event);
   }
 
   return (
@@ -217,7 +252,7 @@ export default function CommercialMeetingScheduler({
                 {days.map((day) => {
                   const allDay = allDayEventsForDay(day);
                   const today = dateKey(day) === dateKey(now);
-                  return <div key={dateKey(day)} className={`kh-scheduler-day-head ${today ? "is-today" : ""}`}><span>{day.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</span><strong>{day.getDate()}</strong>{allDay.slice(0, 2).map((event) => <small key={event.id}>{event.title}</small>)}</div>;
+                  return <div key={dateKey(day)} className={`kh-scheduler-day-head ${today ? "is-today" : ""}`}><span>{day.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</span><strong>{day.getDate()}</strong>{allDay.slice(0, 2).map((event) => <button type="button" className="kh-scheduler-all-day" key={event.id} onClick={() => showEventDetails(event)}>{event.title}</button>)}</div>;
                 })}
                 <div className="kh-scheduler-time-axis" style={{ height: totalGridHeight }}>
                   {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => <span key={index} style={{ top: index * HOUR_HEIGHT }}>{String(START_HOUR + index).padStart(2, "0")}:00</span>)}
@@ -236,7 +271,7 @@ export default function CommercialMeetingScheduler({
                           slotStart.setHours(START_HOUR, slot * SLOT_MINUTES, 0, 0);
                           const unavailable = isSlotUnavailable(slotStart);
                           const selected = selectedDate?.getTime() === slotStart.getTime();
-                          return <button key={slot} type="button" disabled={unavailable} className={selected ? "is-selected" : ""} aria-label={`${unavailable ? "Ocupado" : "Selecionar"} ${slotStart.toLocaleString("pt-BR")}`} onClick={() => onSelectedAtChange(localDateTimeValue(slotStart))} />;
+                          return <button key={slot} type="button" disabled={unavailable} className={selected ? "is-selected" : ""} aria-label={`${unavailable ? "Ocupado" : "Criar evento em"} ${slotStart.toLocaleString("pt-BR")}`} onClick={() => selectFreeSlot(slotStart)} />;
                         })}
                       </div>
                       {dayEvents.map((event) => {
@@ -247,7 +282,7 @@ export default function CommercialMeetingScheduler({
                         if (endMinutes <= START_HOUR * 60 || startMinutes >= END_HOUR * 60) return null;
                         const top = ((startMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
                         const height = Math.max(22, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT);
-                        return <div key={event.id} className={`kh-scheduler-event color-${eventColor(event)}`} style={{ top, height }} title={`${event.title} · ${start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}><strong>{event.title}</strong><small>{start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}–{end.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></div>;
+                        return <button type="button" key={event.id} className={`kh-scheduler-event color-${eventColor(event)}`} style={{ top, height }} title={`${event.title} · ${start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`} aria-label={`Abrir ${event.title}`} onClick={() => showEventDetails(event)}><strong>{event.title}</strong><small>{start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}–{end.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></button>;
                       })}
                       {selectedOnDay && selectedDate && selectedEnd && (
                         <div className="kh-scheduler-selection" style={{ top: ((minutesFromDayStart(selectedDate) - START_HOUR * 60) / 60) * HOUR_HEIGHT, height: Math.max(28, (durationMinutes / 60) * HOUR_HEIGHT) }}><Video size={13} /><strong>Nova reunião</strong><small>{selectedDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}–{selectedEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></div>
@@ -274,6 +309,47 @@ export default function CommercialMeetingScheduler({
             <div className="kh-scheduler-actions"><button type="button" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving || loading || Boolean(loadError) || !selectedAt || !email.trim()}>{saving ? <Loader2 size={15} className="kh-spin" /> : <CalendarDays size={15} />}{saving ? "Criando evento..." : "Criar evento"}</button></div>
           </aside>
         </div>
+
+        {editorOpen && selectedDate && selectedEnd && (
+          <div className="kh-scheduler-floating-layer">
+            <button type="button" className="kh-scheduler-floating-scrim" aria-label="Fechar editor" onClick={() => setEditorOpen(false)} />
+            <section className="kh-scheduler-event-editor" role="dialog" aria-modal="true" aria-labelledby="scheduler-editor-title">
+              <header><Menu size={18} aria-hidden="true" /><button type="button" aria-label="Fechar" onClick={() => setEditorOpen(false)}><X size={20} /></button></header>
+              <div className="kh-scheduler-editor-body">
+                <input id="scheduler-editor-title" className="kh-scheduler-title-input" value={`Reunião com ${lead.nome}`} readOnly aria-label="Título do evento" />
+                <div className="kh-scheduler-editor-tabs"><strong>Evento</strong><span>Agenda comercial</span></div>
+                <div className="kh-scheduler-editor-row"><Clock3 size={20} /><div><strong>{selectedDate.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</strong><span>{selectedDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} – {selectedEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span><small>GMT-3 · Não se repete</small></div></div>
+                <label className="kh-scheduler-editor-row"><Users size={20} /><div><span>Convidado</span><input type="email" value={email} onChange={(event) => onEmailChange(event.target.value)} placeholder="cliente@empresa.com.br" required autoFocus /></div></label>
+                <div className="kh-scheduler-editor-row"><Video size={20} /><div><strong>Google Meet automático</strong><small>O link será criado e enviado ao convidado.</small></div></div>
+                <div className="kh-scheduler-editor-row"><MapPin size={20} /><div><strong>Agenda Comercial Orion</strong><small>Evento ocupado · lembrete padrão da agenda</small></div></div>
+                <div className="kh-scheduler-editor-row"><AlignLeft size={20} /><div><strong>Dados do lead incluídos</strong><small>Empresa, telefone, e-mail e data de entrada serão adicionados à descrição.</small></div></div>
+                {error && <p className="kh-scheduler-error" role="alert">{error}</p>}
+              </div>
+              <footer><button type="button" onClick={() => setEditorOpen(false)}>Cancelar</button><button type="submit" disabled={saving || !email.trim()}>{saving ? <Loader2 size={15} className="kh-spin" /> : <CalendarDays size={15} />}{saving ? "Criando..." : "Criar evento"}</button></footer>
+            </section>
+          </div>
+        )}
+
+        {openEvent && (() => {
+          const eventStart = new Date(openEvent.start);
+          const eventEnd = new Date(openEvent.end);
+          return (
+            <div className="kh-scheduler-floating-layer">
+              <button type="button" className="kh-scheduler-floating-scrim" aria-label="Fechar detalhes" onClick={() => setOpenEvent(null)} />
+              <section className="kh-scheduler-event-details" role="dialog" aria-modal="true" aria-labelledby="scheduler-event-title">
+                <header><span className={`kh-scheduler-event-dot color-${eventColor(openEvent)}`} /><div><small>Evento da agenda</small><h3 id="scheduler-event-title">{openEvent.title}</h3></div><button type="button" aria-label="Fechar" onClick={() => setOpenEvent(null)}><X size={20} /></button></header>
+                <div className="kh-scheduler-event-details-body">
+                  <div className="kh-scheduler-editor-row"><Clock3 size={20} /><div><strong>{eventStart.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</strong><span>{openEvent.allDay ? "Dia inteiro" : `${eventStart.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} – ${eventEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}</span></div></div>
+                  <div className="kh-scheduler-editor-row"><Users size={20} /><div><strong>Convidados</strong>{openEvent.attendees.length ? <ul>{openEvent.attendees.map((attendee) => <li key={attendee.email}><span>{attendee.name || attendee.email}</span><small>{attendee.name ? attendee.email : attendee.responseStatus || "Convidado"}</small></li>)}</ul> : <small>Nenhum convidado informado.</small>}</div></div>
+                  {openEvent.meetLink && <div className="kh-scheduler-editor-row"><Video size={20} /><div><strong>Google Meet</strong><a href={openEvent.meetLink} target="_blank" rel="noreferrer">Entrar na videoconferência <ExternalLink size={13} /></a></div></div>}
+                  {openEvent.location && <div className="kh-scheduler-editor-row"><MapPin size={20} /><div><strong>Local</strong><span>{openEvent.location}</span></div></div>}
+                  {openEvent.description && <div className="kh-scheduler-editor-row"><AlignLeft size={20} /><div><strong>Descrição</strong><p>{openEvent.description}</p></div></div>}
+                </div>
+                <footer><button type="button" onClick={() => setOpenEvent(null)}>Fechar</button>{openEvent.calendarLink && <a href={openEvent.calendarLink} target="_blank" rel="noreferrer">Abrir no Google Calendar <ExternalLink size={14} /></a>}</footer>
+              </section>
+            </div>
+          );
+        })()}
       </form>
     </div>
   );

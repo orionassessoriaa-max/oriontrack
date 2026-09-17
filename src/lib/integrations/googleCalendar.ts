@@ -24,6 +24,9 @@ type GoogleEvent = {
   eventType?: string;
   hangoutLink?: string;
   htmlLink?: string;
+  description?: string;
+  location?: string;
+  attendees?: Array<{ email?: string; displayName?: string; responseStatus?: string }>;
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   conferenceData?: {
@@ -40,6 +43,11 @@ export type GoogleCalendarScheduleEvent = {
   allDay: boolean;
   busy: boolean;
   colorId: string | null;
+  description: string | null;
+  location: string | null;
+  attendees: Array<{ email: string; name: string | null; responseStatus: string | null }>;
+  meetLink: string | null;
+  calendarLink: string | null;
 };
 
 function requiredConfig() {
@@ -197,6 +205,15 @@ export async function listGoogleCalendarEvents(timeMin: Date, timeMax: Date) {
           && event.eventType !== 'workingLocation'
           && event.eventType !== 'birthday',
         colorId: event.colorId || null,
+        description: event.description || null,
+        location: event.location || null,
+        attendees: (event.attendees || []).map((attendee) => ({
+          email: String(attendee.email || ''),
+          name: attendee.displayName || null,
+          responseStatus: attendee.responseStatus || null,
+        })).filter((attendee) => attendee.email),
+        meetLink: meetLink(event),
+        calendarLink: event.htmlLink || null,
       });
     }
     pageToken = String(result.payload?.nextPageToken || '');
