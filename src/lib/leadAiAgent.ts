@@ -1,6 +1,7 @@
 import { openaiFetch } from '@/lib/openaiUso';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { configureUazapiWebhook, getUazapiInstanceConnection, normalizePhone, phoneMatchKey, sendUazapiTypingPresence, uazapiAiInstanceName, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { assinarMensagem } from '@/lib/atendimentoCompartilhado';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
@@ -35,6 +36,15 @@ const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
 const DEFAULT_ELEVENLABS_FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
+
+function isFacilitaBrokerage(name?: string | null) {
+  return normalizeAiText(name).includes('facilita');
+}
+
+const FACILITA_NO_CALL_GUARDRAILS = `Regra exclusiva da Facilita Corretora:
+- Nunca ofereca ligacao, reuniao ou chamada.
+- Nunca pergunte dia, horario ou disponibilidade para ligacao.
+- Quando terminar de coletar os dados essenciais, encerre a coleta sem nova pergunta, defina "handoff": true e informe apenas que o atendimento sera encaminhado para continuidade.`;
 
 export function formatAiBrokerageDisplayName(name?: string | null) {
   const rawName = String(name || '').trim();
@@ -643,6 +653,25 @@ function callRefusalHandoffReply(lead: LeadRow, mode: HandoffContactMode, pessoa
   return polishAiReply(`Sem problema, ${leadFirstName(lead)}. Um especialista da nossa equipe vai entrar em contato para enviar a cotacao e prosseguir com seu atendimento. Obrigada!`);
 }
 
+function facilitaNoCallHandoffReply(lead: LeadRow, mode: HandoffContactMode, pessoa?: string) {
+  if (mode === 'specialist_only') {
+    return polishAiReply(`Obrigada, ${leadFirstName(lead)}. Vou passar seu atendimento para um especialista dar continuidade.`);
+  }
+  if (mode === 'team_person' && pessoa) {
+    return polishAiReply(`Obrigada, ${leadFirstName(lead)}. A ${pessoa} vai dar continuidade ao seu atendimento por aqui.`);
+  }
+  if (mode === 'self_service') {
+    return polishAiReply(`Obrigada, ${leadFirstName(lead)}. Vou preparar seu estudo e retorno por aqui com as opcoes.`);
+  }
+  if (mode === 'different_responsible') {
+    return polishAiReply(`Obrigada, ${leadFirstName(lead)}. Um especialista da nossa equipe vai dar continuidade ao atendimento por outro numero.`);
+  }
+  if (mode === 'unassigned') {
+    return polishAiReply(`Obrigada, ${leadFirstName(lead)}. Nossa equipe continuara seu atendimento em breve.`);
+  }
+  return polishAiReply(`Obrigada, ${leadFirstName(lead)}. Um especialista da nossa equipe vai dar continuidade ao atendimento.`);
+}
+
 // O pedido de valor tinha resposta fixa prometendo "um especialista". Na
 // corretora que atende sozinha (modo propria) nao existe outra pessoa para
 // chamar, e a frase soava falsa para o cliente.
@@ -728,7 +757,7 @@ function isCityQuestion(text?: string | null) {
   return normalized.includes('de qual cidade voce e') || normalized.includes('qual e a sua cidade');
 }
 
-function nextQuestionAfterCity(lead: LeadRow) {
+function nextQuestionAfterCity(lead: LeadRow, skipCallQuestion = false) {
   const firstName = leadFirstName(lead);
 
   if (!hasKnownValue(lead.hospital_preferencia)) {
@@ -743,21 +772,29 @@ function nextQuestionAfterCity(lead: LeadRow) {
     return `Perfeito, ${firstName}! Qual o melhor e-mail para eu deixar a proposta organizada?`;
   }
 
+  if (skipCallQuestion) {
+    return `Obrigada, ${firstName}. Com essas informacoes, vou encaminhar seu atendimento para a equipe dar continuidade.`;
+  }
+
   return `Perfeito, ${firstName}. Com essas informacoes, consigo analisar seu perfil e te apresentar as melhores opcoes com mais clareza.\n\nQue dia e horario voce esta mais confortavel para uma ligacao rapida?`;
 }
 
-function nextQuestionAfterCnpjConfirmation(lead: LeadRow, askCity: boolean) {
+function nextQuestionAfterCnpjConfirmation(lead: LeadRow, askCity: boolean, skipCallQuestion = false) {
   if (askCity) return 'De qual cidade você é?';
-  return nextQuestionAfterCity(lead);
+  return nextQuestionAfterCity(lead, skipCallQuestion);
 }
 
-function nextQuestionAfterNoHospitalPreference(lead: LeadRow, summary: string) {
+function nextQuestionAfterNoHospitalPreference(lead: LeadRow, summary: string, skipCallQuestion = false) {
   if (!hasKnownValue(lead.motivo_busca) && !hasKnownValue(extractSummaryField(summary, 'Motivo'))) {
     return 'Entendi, vou considerar opcoes com uma rede ampla. Qual e o principal motivo para buscar um novo plano: prevencao, urgencia ou algum atendimento especifico?';
   }
 
   if (!hasKnownValue(lead.email) && !hasKnownValue(extractSummaryField(summary, 'Email|E-mail'))) {
     return 'Entendi, vou considerar opcoes com uma rede ampla. Qual e o melhor e-mail para eu deixar a proposta organizada?';
+  }
+
+  if (skipCallQuestion) {
+    return 'Entendi, vou considerar opcoes com uma rede ampla e encaminhar seu atendimento para a equipe dar continuidade.';
   }
 
   return 'Entendi, vou considerar opcoes com uma rede ampla. Que dia e horario voce esta mais confortavel para uma ligacao rapida?';
@@ -768,6 +805,7 @@ function fallbackLeadAiContinuation(params: {
   sessionSummary?: string | null;
   customerMessage: string;
   previousOutboundText?: string | null;
+  skipCallQuestion?: boolean;
 }) {
   const { lead, customerMessage, previousOutboundText } = params;
   const customerText = String(customerMessage || '').trim();
@@ -798,6 +836,8 @@ function fallbackLeadAiContinuation(params: {
     reply = 'Anotado. E qual e o principal motivo para buscar um novo plano: reducao de custo, rede de atendimento ou alguma necessidade especifica?';
   } else if (!hasKnownValue(lead.email) && !hasKnownValue(email)) {
     reply = 'Certo. Qual e o melhor e-mail para eu deixar a proposta organizada?';
+  } else if (params.skipCallQuestion) {
+    reply = 'Com essas informacoes, vou encaminhar seu atendimento para a equipe dar continuidade.';
   } else {
     reply = 'Com essas informacoes, consigo direcionar melhor as opcoes. Que dia e horario voce esta mais confortavel para uma ligacao rapida?';
   }
@@ -926,7 +966,7 @@ async function finalizeScheduledHandoff(params: {
   const reply = handoffScheduleReply(lead, contactMode, identity.displayName);
 
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
     await insertMessage(conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -1174,12 +1214,13 @@ async function insertMessage(conversaId: string, direction: 'inbound' | 'outboun
   return data;
 }
 
-async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: string) {
+async function sendAiAdminText(adminProfile: ProfileRow, phone: string, text: string, senderName: string) {
   const instance = aiInstanceName(adminProfile);
-  await sendUazapiTypingPresence(instance, phone, text);
+  const whatsappText = assinarMensagem(text, senderName);
+  await sendUazapiTypingPresence(instance, phone, whatsappText);
   return uazapiFetch('/send/text', {
     method: 'POST',
-    body: JSON.stringify({ number: normalizePhone(phone), text }),
+    body: JSON.stringify({ number: normalizePhone(phone), text: whatsappText }),
   }, { instanceName: instance });
 }
 
@@ -1654,7 +1695,10 @@ export async function askAline(
     '- Nunca use nome completo falando com o cliente.',
     '- O nome completo so deve aparecer em resumo interno, banco de dados ou notificacao para o responsavel.',
   ].join('\n');
-  const system = `${clockRule}\n\n${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}\n\n${nameRule}\n\n${handoffContactRule(contactMode, pessoa)}`;
+  const brokerageRules = isFacilitaBrokerage(corretoraNome)
+    ? `\n\n${FACILITA_NO_CALL_GUARDRAILS}`
+    : '';
+  const system = `${clockRule}\n\n${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}${brokerageRules}\n\n${nameRule}\n\n${handoffContactRule(contactMode, pessoa)}`;
   const lastMessage = messages[messages.length - 1];
   const alreadyHasCustomerMessage =
     lastMessage?.role === 'user' &&
@@ -1838,7 +1882,7 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
   try {
     await configureUazapiWebhook(senderInstance);
     registerAiOutbound(phone, intro);
-    const payload = await sendAiAdminText(adminProfile, phone, intro);
+    const payload = await sendAiAdminText(adminProfile, phone, intro, aiConfig.persona);
     await insertMessage(conversation.id, 'outbound', aiConfig.persona, intro, {
       ...(payload || {}),
       instance: senderInstance,
@@ -1944,6 +1988,7 @@ export async function continueLeadAiFromIncoming(options: {
   const history = [...(recentHistory || [])].reverse();
 
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
+  const skipCallQuestion = isFacilitaBrokerage(corretora.nome || broker.nome_empresa);
 
   const previousOutbound = [...(history || [])]
     .reverse()
@@ -1974,7 +2019,7 @@ export async function continueLeadAiFromIncoming(options: {
 
     const reply = customerReplyForFollowUp(cnpjConfirmationReply(lead), lead, Boolean(previousOutboundText));
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -2011,7 +2056,7 @@ export async function continueLeadAiFromIncoming(options: {
           : 'Oi!';
     const reply = customerReplyForFollowUp(`${greeting} ${initialLeadQuestion(lead)}`, lead, Boolean(previousOutboundText));
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -2058,12 +2103,12 @@ export async function continueLeadAiFromIncoming(options: {
     }
 
     const reply = customerReplyForFollowUp(
-      nextQuestionAfterCnpjConfirmation(lead, !isDaniloAi(adminProfile)),
+      nextQuestionAfterCnpjConfirmation(lead, !isDaniloAi(adminProfile), skipCallQuestion),
       lead,
       Boolean(previousOutboundText),
     );
       registerAiOutbound(lead.telefone || '', reply);
-      const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+      const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
       await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
         ...(payload || {}),
         instance: aiInstanceName(adminProfile),
@@ -2089,9 +2134,9 @@ export async function continueLeadAiFromIncoming(options: {
     }
 
     const summary = setSummaryField(session.summary || leadFacts(lead), 'Cidade', options.customerMessage.trim());
-    const reply = customerReplyForFollowUp(nextQuestionAfterCity(lead), lead, Boolean(previousOutboundText));
+    const reply = customerReplyForFollowUp(nextQuestionAfterCity(lead, skipCallQuestion), lead, Boolean(previousOutboundText));
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -2119,12 +2164,12 @@ export async function continueLeadAiFromIncoming(options: {
 
     const summary = setSummaryField(session.summary || leadFacts(lead), 'Hospital/Regiao', 'Sem preferencia');
     const reply = customerReplyForFollowUp(
-      nextQuestionAfterNoHospitalPreference(lead, summary),
+      nextQuestionAfterNoHospitalPreference(lead, summary, skipCallQuestion),
       lead,
       Boolean(previousOutboundText),
     );
     registerAiOutbound(lead.telefone || '', reply);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
@@ -2171,8 +2216,21 @@ export async function continueLeadAiFromIncoming(options: {
         sessionSummary: session.summary,
         customerMessage: options.customerMessage,
         previousOutboundText,
+        skipCallQuestion,
       });
     }
+  }
+
+  if (skipCallQuestion && isSchedulePrompt(ai?.reply)) {
+    ai = {
+      ...ai,
+      handoff: true,
+      reply: facilitaNoCallHandoffReply(lead, contactMode, contactIdentity.displayName),
+      summary: appendSummaryLine(
+        ai?.summary || session.summary || leadFacts(lead),
+        'IA encerrada: regra da Facilita aplicada sem oferecer ou perguntar sobre ligacao.'
+      ),
+    };
   }
 
   let handoff = Boolean(ai.handoff);
@@ -2204,7 +2262,7 @@ export async function continueLeadAiFromIncoming(options: {
 
 
     registerAiOutbound(lead.telefone || '', part);
-    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', part, aiConfig.persona);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, part, {
       ...(payload || {}),
       instance: aiInstanceName(adminProfile),
