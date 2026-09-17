@@ -135,6 +135,16 @@ export type CommercialLead = {
   reuniao_realizada_at: string | null;
   reuniao_qualificada: boolean | null;
   reuniao_link: string | null;
+  reuniao_participantes?: Array<{
+    name: string;
+    joined_at: string | null;
+    left_at: string | null;
+  }> | null;
+  reuniao_transcricao?: string | null;
+  reuniao_transcricao_url?: string | null;
+  reuniao_resumo?: string | null;
+  reuniao_artefatos_status?: string | null;
+  reuniao_artefatos_synced_at?: string | null;
   onboarding_briefing: string | null;
   briefing_gerado_at: string | null;
   no_show: boolean;

@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  ExternalLink,
   FileCheck2,
   GripVertical,
   MessageSquare,
@@ -24,7 +25,9 @@ import {
   Search,
   Check,
   Trash2,
+  Users,
   UserRound,
+  Video,
   X,
 } from "lucide-react";
 import { useCommercial } from "@/components/commercial/CommercialShell";
@@ -152,6 +155,16 @@ function meetingTimingLabel(value: string | null | undefined, now: number) {
   return `Reunião atrasada há ${amount} ${label}`;
 }
 
+function meetingArtifactLabel(status: string | null | undefined) {
+  if (status === "ready") return "Transcrição e resumo disponíveis";
+  if (status === "in_progress") return "Reunião em andamento";
+  if (status === "transcript_pending") return "Google processando a transcrição";
+  if (status === "permission_required") return "Permissão do Google Meet pendente";
+  if (status === "unavailable") return "Reunião finalizada sem transcrição";
+  if (status === "error") return "Sincronização pendente";
+  return "Reunião agendada";
+}
+
 function formatDaniloCnpj(lead: CommercialLead) {
   const cnpjLead = lead as CommercialLead & { possui_cnpj?: string | null };
   const value = String(cnpjLead.possui_cnpj || "")
@@ -244,8 +257,10 @@ export default function CommercialKanbanPage() {
     status: string;
   } | null>(null);
   const [meetingAt, setMeetingAt] = useState("");
+  const [meetingEmail, setMeetingEmail] = useState("");
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [meetingSaving, setMeetingSaving] = useState(false);
+  const [meetingDetailsLead, setMeetingDetailsLead] = useState<CommercialLead | null>(null);
   const [negotiationMove, setNegotiationMove] = useState<{ leadId: string; status: string } | null>(null);
   const [negotiationValue, setNegotiationValue] = useState("");
   const [negotiationSaving, setNegotiationSaving] = useState(false);
@@ -650,6 +665,7 @@ export default function CommercialKanbanPage() {
     ) {
       setMeetingMove({ leadId: id, status });
       setMeetingAt("");
+      setMeetingEmail(leads.find((item) => item.id === id)?.email || "");
       setMeetingError(null);
       return;
     }
@@ -827,6 +843,10 @@ export default function CommercialKanbanPage() {
   async function confirmMeetingMove(event: React.FormEvent) {
     event.preventDefault();
     if (!meetingMove || !meetingAt) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(meetingEmail.trim())) {
+      setMeetingError("Informe um e-mail válido para enviar o convite ao cliente.");
+      return;
+    }
     const scheduledAt = localDateTimeInputToIso(meetingAt);
     if (!scheduledAt) {
       setMeetingError("Selecione uma data e um horário válidos para a reunião.");
@@ -841,6 +861,7 @@ export default function CommercialKanbanPage() {
         body: JSON.stringify({
           id: meetingMove.leadId,
           status: meetingMove.status,
+          email: meetingEmail.trim(),
           reuniao_agendada_at: scheduledAt,
         }),
       });
@@ -850,6 +871,7 @@ export default function CommercialKanbanPage() {
             ? payload.lead || {
               ...lead,
               status: meetingMove.status,
+              email: meetingEmail.trim(),
               reuniao_agendada_at: scheduledAt,
             }
             : lead,
@@ -1555,6 +1577,25 @@ export default function CommercialKanbanPage() {
                             <span>{meetingTimingLabel(lead.reuniao_agendada_at, meetingNow)}</span>
                           </div>
                         )}
+                        {lead.reuniao_link && (
+                          <button
+                            type="button"
+                            className="kh-card-meeting-preview"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setMeetingDetailsLead(lead);
+                            }}
+                          >
+                            <span className="kh-card-meeting-thumbnail" aria-hidden="true">
+                              <Video size={18} />
+                            </span>
+                            <span className="kh-card-meeting-copy">
+                              <strong>Reunião no Google Meet</strong>
+                              <small>{meetingArtifactLabel(lead.reuniao_artefatos_status)}</small>
+                            </span>
+                            <ChevronDown size={14} aria-hidden="true" />
+                          </button>
+                        )}
                         {lead.proximo_retorno_at && (
                           <div className="kh-card-return">
                             <CalendarClock size={12} />
@@ -1742,9 +1783,25 @@ export default function CommercialKanbanPage() {
             </header>
             <div className="kh-meeting-form">
               <p>
-                Informe quando a reunião acontecerá. O lead só será movido para
-                esta etapa depois que o agendamento for registrado.
+                Informe o e-mail do cliente e quando a reunião acontecerá. O
+                convite com o link do Google Meet será enviado ao confirmar.
               </p>
+              <label>
+                <span>E-mail do cliente</span>
+                <input
+                  className="kh-input"
+                  type="email"
+                  value={meetingEmail}
+                  onChange={(event) => {
+                    setMeetingEmail(event.target.value);
+                    setMeetingError(null);
+                  }}
+                  placeholder="cliente@empresa.com.br"
+                  autoComplete="email"
+                  required
+                  autoFocus
+                />
+              </label>
               <label>
                 <span>Data e horário da reunião</span>
                 <input
@@ -1759,7 +1816,6 @@ export default function CommercialKanbanPage() {
                   aria-invalid={Boolean(meetingError)}
                   aria-describedby={meetingError ? "meeting-date-error" : undefined}
                   required
-                  autoFocus
                 />
                 {meetingError && <small id="meeting-date-error" role="alert" style={{ color: "#ff9aaa" }}>{meetingError}</small>}
               </label>
@@ -1775,7 +1831,7 @@ export default function CommercialKanbanPage() {
               <button
                 type="submit"
                 className="kh-button primary"
-                disabled={meetingSaving || !meetingAt}
+                disabled={meetingSaving || !meetingAt || !meetingEmail.trim()}
               >
                 {meetingSaving ? (
                   <RefreshCw size={15} className="kh-spin" />
@@ -1786,6 +1842,59 @@ export default function CommercialKanbanPage() {
               </button>
             </footer>
           </form>
+        </div>
+      )}
+      {meetingDetailsLead && (
+        <div className="kh-modal" role="dialog" aria-modal="true" aria-labelledby="meeting-details-title">
+          <button type="button" className="kh-modal-scrim" aria-label="Fechar" onClick={() => setMeetingDetailsLead(null)} />
+          <section className="kh-modal-sheet kh-meeting-details">
+            <header>
+              <div>
+                <span>Google Meet</span>
+                <h2 id="meeting-details-title">Reunião com {meetingDetailsLead.nome}</h2>
+              </div>
+              <button type="button" aria-label="Fechar" onClick={() => setMeetingDetailsLead(null)}><X size={18} /></button>
+            </header>
+            <div className="kh-meeting-details-body">
+              <div className="kh-meeting-hero">
+                <span aria-hidden="true"><Video size={24} /></span>
+                <div>
+                  <strong>{meetingArtifactLabel(meetingDetailsLead.reuniao_artefatos_status)}</strong>
+                  <small>{meetingDetailsLead.reuniao_agendada_at
+                    ? new Date(meetingDetailsLead.reuniao_agendada_at).toLocaleString("pt-BR", { dateStyle: "full", timeStyle: "short" })
+                    : "Data não informada"}</small>
+                </div>
+              </div>
+              <section className="kh-meeting-section">
+                <h3><Users size={15} /> Pessoas</h3>
+                {meetingDetailsLead.reuniao_participantes?.length ? (
+                  <ul>{meetingDetailsLead.reuniao_participantes.map((participant, index) => (
+                    <li key={`${participant.name}-${index}`}><span>{participant.name}</span><small>{participant.left_at ? "Participou" : "Na reunião"}</small></li>
+                  ))}</ul>
+                ) : (
+                  <ul><li><span>{meetingDetailsLead.nome}</span><small>{meetingDetailsLead.email || "E-mail não informado"}</small></li></ul>
+                )}
+              </section>
+              <section className="kh-meeting-section">
+                <h3><FileCheck2 size={15} /> Resumo da reunião</h3>
+                <p>{meetingDetailsLead.reuniao_resumo || "O resumo aparecerá aqui depois que o Google finalizar a transcrição."}</p>
+              </section>
+              <details className="kh-meeting-transcript" open={Boolean(meetingDetailsLead.reuniao_transcricao)}>
+                <summary>Transcrição completa <ChevronDown size={14} /></summary>
+                <div>{meetingDetailsLead.reuniao_transcricao || "Ainda não há transcrição disponível para esta reunião."}</div>
+              </details>
+            </div>
+            <footer>
+              {meetingDetailsLead.reuniao_transcricao_url && (
+                <button type="button" className="kh-button" onClick={() => window.open(meetingDetailsLead.reuniao_transcricao_url || "", "_blank", "noopener,noreferrer")}>
+                  <FileCheck2 size={15} /> Abrir transcrição
+                </button>
+              )}
+              <button type="button" className="kh-button primary" onClick={() => window.open(meetingDetailsLead.reuniao_link || "", "_blank", "noopener,noreferrer")}>
+                <ExternalLink size={15} /> Abrir Google Meet
+              </button>
+            </footer>
+          </section>
         </div>
       )}
       {saleMove && (

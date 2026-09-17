@@ -59,6 +59,20 @@ if [ "$SCHEMA_STATUS" != "200" ]; then
   exit 1
 fi
 
+MEET_SCHEMA_STATUS="$(curl \
+  --silent \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  --max-time 20 \
+  --header "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/comercial_leads?select=reuniao_artefatos_status&limit=1" || true)"
+if [ "$MEET_SCHEMA_STATUS" != "200" ]; then
+  echo "Migration dos artefatos do Google Meet ainda nao aplicada no Supabase (HTTP $MEET_SCHEMA_STATUS)."
+  echo "Aplique as migrations antes do deploy para evitar criar evento sem salvar o card no CRM."
+  exit 1
+fi
+
 DEPLOY_TAG="$(date -u +%Y%m%d%H%M%S)"
 ORIONTRACK_IMAGE="oriontrack:${DEPLOY_TAG}"
 export ORIONTRACK_IMAGE
@@ -183,3 +197,14 @@ printf '%s\n' "$AQUECE_CRON_LINE" >> "$CRON_TMP"
 crontab "$CRON_TMP"
 rm -f "$CRON_TMP"
 echo "Aquecimento do cache da Meta instalado no cron a cada 20 minutos."
+
+# Google Meet: preserva o card da reuniao e completa participantes,
+# transcricao e resumo assim que o Google terminar de processar os artefatos.
+MEET_CRON_TAG="# oriontrack-google-meet-artifacts"
+MEET_CRON_LINE="*/10 * * * * curl -s -m 300 -H \"Authorization: Bearer $CRON_SECRET\" $APP_URL/api/integrations/google-meet/artifacts/cron >> /var/log/oriontrack-google-meet.log 2>&1 $MEET_CRON_TAG"
+CRON_TMP="$(mktemp)"
+crontab -l 2>/dev/null | grep -F -v "$MEET_CRON_TAG" > "$CRON_TMP" || true
+printf '%s\n' "$MEET_CRON_LINE" >> "$CRON_TMP"
+crontab "$CRON_TMP"
+rm -f "$CRON_TMP"
+echo "Sincronizacao do Google Meet instalada no cron a cada 10 minutos."

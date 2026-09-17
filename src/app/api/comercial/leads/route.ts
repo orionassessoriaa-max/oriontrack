@@ -10,7 +10,8 @@ import { notifyCommercialLeadAssignment, notifyCommercialLeadPool } from '@/lib/
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { generateOnboardingBriefing } from '@/lib/commercialOnboardingBriefing';
 import { canAssignCommercialResponsible, LEO_COMMERCIAL_CLOSER_PROFILE_ID } from '@/lib/comercial';
-import { isGoogleCalendarConfigured, syncGoogleCalendarMeeting } from '@/lib/integrations/googleCalendar';
+import { isGoogleCalendarConfigured, isValidCalendarGuestEmail, syncGoogleCalendarMeeting } from '@/lib/integrations/googleCalendar';
+import { enableMeetAutoTranscription, GoogleMeetPermissionError } from '@/lib/integrations/googleMeetArtifacts';
 
 function normalizeStage(value: unknown) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -70,6 +71,7 @@ function redactFinancialFields<T extends Record<string, unknown>>(lead: T, canVi
   const sanitized = { ...lead };
   delete sanitized.google_calendar_event_id;
   delete sanitized.google_calendar_synced_at;
+  delete sanitized.google_meet_conference_record_name;
   if (canView) return sanitized;
   // O valor em negociação faz parte da operação diária do SDR e precisa aparecer
   // no card. Dados do fechamento continuam restritos aos perfis financeiros.
@@ -325,6 +327,12 @@ export async function PATCH(request: Request) {
   if (isScheduledStage && (!scheduledAt || Number.isNaN(scheduledAt.getTime()))) {
     return NextResponse.json({ error: 'Informe a data e o horario da reuniao antes de mover o lead.' }, { status: 400 });
   }
+  const scheduledGuestEmail = String(
+    Object.prototype.hasOwnProperty.call(body, 'email') ? body.email : allowed.email,
+  ).trim();
+  if (isScheduledStage && !isValidCalendarGuestEmail(scheduledGuestEmail)) {
+    return NextResponse.json({ error: 'Informe um e-mail valido para convidar o cliente.' }, { status: 400 });
+  }
 
   const allowedFields = [
     'nome', 'telefone', 'email', 'empresa', 'estado', 'origem', 'campanha', 'ja_investiu_trafego', 'faturamento_mensal',
@@ -498,6 +506,24 @@ export async function PATCH(request: Request) {
       update.google_calendar_synced_at = new Date().toISOString();
       update.reuniao_link = calendarEvent.meetLink;
       update.observacoes = notesWithMeetingLink(update.observacoes ?? allowed.observacoes, calendarEvent.meetLink);
+      update.reuniao_participantes = [];
+      update.reuniao_transcricao = null;
+      update.reuniao_transcricao_url = null;
+      update.reuniao_resumo = null;
+      update.google_meet_conference_record_name = null;
+      update.reuniao_artefatos_synced_at = null;
+      try {
+        await enableMeetAutoTranscription(calendarEvent.meetLink);
+        update.reuniao_artefatos_status = 'pending';
+      } catch (meetError) {
+        update.reuniao_artefatos_status = meetError instanceof GoogleMeetPermissionError
+          ? 'permission_required'
+          : 'error';
+        console.error('commercial_google_meet_auto_transcription_failed', {
+          leadId: id,
+          message: meetError instanceof Error ? meetError.message : String(meetError),
+        });
+      }
     } catch (calendarError) {
       const message = calendarError instanceof Error ? calendarError.message : 'Não foi possível criar a reunião no Google Calendar.';
       console.error('commercial_google_calendar_sync_failed', { leadId: id, message });

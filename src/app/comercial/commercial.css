@@ -693,6 +693,28 @@
 .kh-meeting-form { display: grid; gap: 16px; padding: 20px; }
 .kh-meeting-form p { margin: 0; color: var(--kh-muted); font-size: 12px; line-height: 1.55; }
 .kh-meeting-form label { display: grid; gap: 7px; color: var(--kh-text); font-size: 11px; font-weight: 800; }
+.kh-meeting-details { width:min(720px,100%); }
+.kh-meeting-details-body { display:grid;gap:14px;max-height:min(70vh,680px);overflow:auto;padding:20px; }
+.kh-meeting-hero { display:flex;align-items:center;gap:12px;border:1px solid rgba(255,73,97,.35);border-radius:12px;background:linear-gradient(135deg,rgba(125,17,39,.32),rgba(8,20,31,.92));padding:14px; }
+.kh-meeting-hero > span { width:48px;height:48px;display:grid;place-items:center;flex:0 0 auto;border-radius:10px;background:linear-gradient(145deg,#ff405d,#aa0e28);box-shadow:0 12px 30px rgba(151,15,40,.25);color:#fff; }
+.kh-meeting-hero > div { min-width:0;display:grid;gap:4px; }
+.kh-meeting-hero strong { color:#f5faff;font-size:14px; }
+.kh-meeting-hero small { color:#9eb2c4;font-size:11px;line-height:1.45; }
+.kh-meeting-section { border:1px solid #22394b;border-radius:10px;background:#081620;padding:14px; }
+.kh-meeting-section h3 { display:flex;align-items:center;gap:7px;margin:0 0 10px;color:#ddecf7;font-size:12px; }
+.kh-meeting-section h3 svg { color:#57b8f2; }
+.kh-meeting-section p { margin:0;color:#b6c8d5;font-size:12px;line-height:1.65;white-space:pre-wrap; }
+.kh-meeting-section ul { display:grid;gap:7px;margin:0;padding:0;list-style:none; }
+.kh-meeting-section li { display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #1d3140;padding-top:7px;color:#e7f2f8;font-size:11px; }
+.kh-meeting-section li:first-child { border-top:0;padding-top:0; }
+.kh-meeting-section li small { color:#7893a6;font-size:10px; }
+.kh-meeting-transcript { overflow:hidden;border:1px solid #22394b;border-radius:10px;background:#081620; }
+.kh-meeting-transcript summary { display:flex;align-items:center;justify-content:space-between;cursor:pointer;list-style:none;padding:13px 14px;color:#ddecf7;font-size:12px;font-weight:850; }
+.kh-meeting-transcript summary::-webkit-details-marker { display:none; }
+.kh-meeting-transcript summary svg { transition:transform .2s ease; }
+.kh-meeting-transcript[open] summary svg { transform:rotate(180deg); }
+.kh-meeting-transcript > div { max-height:280px;overflow:auto;border-top:1px solid #22394b;padding:14px;color:#aebfcb;font-size:11px;line-height:1.65;white-space:pre-wrap; }
+@media (max-width:620px) { .kh-meeting-details-body { padding:14px; }.kh-meeting-details > footer { flex-wrap:wrap; }.kh-meeting-details > footer .kh-button { flex:1;justify-content:center; } }
 .kh-sale-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .kh-briefing-ready { display: grid; gap: 12px; border: 1px solid rgba(35, 147, 230, .4); border-radius: 12px; background: rgba(11, 92, 155, .13); padding: 16px; }
 .kh-briefing-ready > svg { color: #37b9ff; }
@@ -1317,6 +1339,14 @@
 .kh-danilo-card .kh-card-entry { margin-top: 5px; color: #b8c8d8; }
 .kh-danilo-card .kh-card-meeting-time { display:flex;align-items:center;gap:5px;margin-top:6px;color:#d6b4ff;font-size:9px;font-weight:800;line-height:1.2; }
 .kh-danilo-card .kh-card-meeting-time svg { flex:0 0 auto;color:#aa75ff; }
+.kh-danilo-card .kh-card-meeting-preview { display:grid;grid-template-columns:40px minmax(0,1fr) 14px;align-items:center;gap:8px;width:100%;margin-top:7px;overflow:hidden;border:1px solid rgba(255,73,97,.38);border-radius:7px;background:linear-gradient(135deg,rgba(115,15,34,.34),rgba(19,29,44,.96));color:#f6fbff;padding:6px;text-align:left;font:inherit;cursor:pointer; }
+.kh-danilo-card .kh-card-meeting-preview:hover { border-color:rgba(255,92,113,.75);background:linear-gradient(135deg,rgba(145,19,43,.42),rgba(23,37,54,.98)); }
+.kh-card-meeting-thumbnail { width:40px;height:30px;display:grid;place-items:center;border-radius:5px;background:linear-gradient(145deg,#ff405d,#b30f2b);box-shadow:0 7px 18px rgba(162,17,43,.28);color:#fff; }
+.kh-card-meeting-copy { min-width:0;display:grid;gap:2px; }
+.kh-card-meeting-copy strong,.kh-card-meeting-copy small { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.kh-card-meeting-copy strong { color:#f7fbff;font-size:9px;font-weight:900; }
+.kh-card-meeting-copy small { color:#aebdcb;font-size:7px;font-weight:700; }
+.kh-card-meeting-preview > svg { color:#7f94a8; }
 .kh-danilo-card .kh-card-proposal { display:flex;align-items:center;gap:5px;width:100%;margin-top:6px;border:1px solid rgba(68,154,255,.45);border-radius:5px;background:rgba(18,86,187,.18);color:#9cccff;padding:5px 7px;font:inherit;font-size:9px;font-weight:800;cursor:pointer; }
 .kh-danilo-card .kh-card-meeting-actions { display:flex;gap:6px;width:100%; }
 .kh-danilo-card .kh-card-meeting-done,.kh-danilo-card .kh-card-meeting-no-show { min-height:25px;border-radius:4px;padding:4px 8px;font:inherit;font-size:9px;font-weight:800;line-height:1;cursor:pointer; }
