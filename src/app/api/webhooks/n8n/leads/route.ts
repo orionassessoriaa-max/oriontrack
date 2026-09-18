@@ -9,6 +9,7 @@ import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 import { getLeadSpamReason } from '@/lib/leadSpam';
+import { assignLeadToNextTeamMember } from '@/lib/leadAssignment';
 
 function normalizeText(value: unknown, fallback = '') {
   if (value === undefined || value === null) return fallback;
@@ -383,100 +384,6 @@ async function resolveCorretorId(body: any) {
   }
 
   return null;
-}
-
-async function assignLeadToNextTeamMember(corretorId: string, leadId: string) {
-  const { data: currentLead } = await supabaseAdmin
-    .from('leads')
-    .select('responsavel_membro_id, responsavel_profile_id')
-    .eq('id', leadId)
-    .eq('corretor_id', corretorId)
-    .maybeSingle();
-
-  if (currentLead?.responsavel_membro_id || currentLead?.responsavel_profile_id) {
-    return currentLead.responsavel_membro_id || null;
-  }
-
-  const { data: broker } = await supabaseAdmin
-    .from('corretores')
-    .select('rodizio_ativo, nome_empresa')
-    .eq('id', corretorId)
-    .maybeSingle();
-
-  if (broker?.rodizio_ativo === false) return null;
-
-  if (broker?.nome_empresa) {
-    const { data: distribution } = await supabaseAdmin
-      .from('corretoras')
-      .select('distribuicao_modelo')
-      .ilike('nome', broker.nome_empresa)
-      .maybeSingle();
-    if (distribution?.distribuicao_modelo === 'fila_compartilhada') return null;
-  }
-
-  const { data: team } = await supabaseAdmin
-    .from('corretor_times')
-    .select('id')
-    .eq('corretor_id', corretorId)
-    .eq('ativo', true)
-    .maybeSingle();
-
-  if (!team?.id) return null;
-
-  const { data: members } = await supabaseAdmin
-    .from('corretor_time_membros')
-    .select('id, profile_id, ordem, ultimo_lead_at, created_at')
-    .eq('time_id', team.id)
-    .in('status', ['active', 'ativo'])
-    .not('profile_id', 'is', null)
-    .neq('participa_rodizio', false)
-    .order('ultimo_lead_at', { ascending: true, nullsFirst: true })
-    .order('ordem', { ascending: true })
-    .order('created_at', { ascending: true });
-
-  if (!members || members.length === 0) return null;
-
-  // O rodizio escolhia so por "quem recebeu ha mais tempo". Isso desencaixa
-  // sempre que um lead chega com responsavel definido de fora ou e reatribuido
-  // na mao: a pessoa ganha o lead sem gastar a vez, e a diferenca cresce. Na
-  // Conexao chegou a 8 contra 6. Agora quem tem menos leads no mes recebe, e o
-  // criterio antigo vira desempate.
-  const inicioDaJanela = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const idsDosMembros = members.map((item) => item.id);
-  const { data: recentes } = await supabaseAdmin
-    .from('leads')
-    .select('responsavel_membro_id')
-    .in('responsavel_membro_id', idsDosMembros)
-    .gte('created_at', inicioDaJanela)
-    .limit(4000);
-
-  const carga = new Map(idsDosMembros.map((id) => [id, 0]));
-  for (const lead of recentes || []) {
-    const dono = String(lead.responsavel_membro_id || '');
-    if (carga.has(dono)) carga.set(dono, (carga.get(dono) || 0) + 1);
-  }
-
-  const member = members.reduce((escolhido, candidato) => (
-    (carga.get(candidato.id) || 0) < (carga.get(escolhido.id) || 0) ? candidato : escolhido
-  ), members[0]);
-  const now = new Date().toISOString();
-
-  await supabaseAdmin
-    .from('leads')
-    .update({
-      responsavel_membro_id: member.id,
-      responsavel_profile_id: member.profile_id,
-      updated_at: now,
-    })
-    .eq('id', leadId)
-    .eq('corretor_id', corretorId);
-
-  await supabaseAdmin
-    .from('corretor_time_membros')
-    .update({ ultimo_lead_at: now })
-    .eq('id', member.id);
-
-  return member.id;
 }
 
 export async function POST(request: Request) {

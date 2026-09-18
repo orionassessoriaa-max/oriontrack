@@ -613,7 +613,10 @@ export default function BrokerInboxPage() {
     if (!token) return;
 
     try {
-      const response = await fetch(`/api/corretor/times?corretor_id=${encodeURIComponent(targetCorretorId)}`, {
+      const endpoint = profile?.tipo_usuario === 'corretor_membro'
+        ? '/api/inbox/lead-assignment'
+        : `/api/corretor/times?corretor_id=${encodeURIComponent(targetCorretorId)}`;
+      const response = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const payload = await response.json().catch(() => ({}));
@@ -674,7 +677,9 @@ export default function BrokerInboxPage() {
           .range(from, from + conversationPageSize - 1)
           .in('corretor_id', idsToFetch);
 
-        conversationsQuery = conversationsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
+        conversationsQuery = isUnitySharedMember
+          ? conversationsQuery.eq('leads.responsavel_profile_id', profile.id)
+          : conversationsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
 
         const { data: page, error } = await conversationsQuery;
         if (error) throw error;
@@ -746,7 +751,9 @@ export default function BrokerInboxPage() {
         }
 
         if (isTeamMember) {
-          savedConversationQuery = savedConversationQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
+          savedConversationQuery = isUnitySharedMember
+            ? savedConversationQuery.eq('leads.responsavel_profile_id', profile.id)
+            : savedConversationQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
         }
 
         const { data: savedConversations } = await savedConversationQuery;
@@ -782,7 +789,10 @@ export default function BrokerInboxPage() {
             .select('nome,responsavel_profile_id')
             .eq('id', leadId)
             .maybeSingle();
-          if (isTeamMember && leadData?.responsavel_profile_id && leadData.responsavel_profile_id !== profile.id) {
+          const cannotOpenLead = isUnitySharedMember
+            ? leadData?.responsavel_profile_id !== profile.id
+            : Boolean(leadData?.responsavel_profile_id && leadData.responsavel_profile_id !== profile.id);
+          if (isTeamMember && cannotOpenLead) {
             setConversations(rows);
             setSelectedConversation(rows[0] || null);
             setLoading(false);
@@ -2247,7 +2257,10 @@ export default function BrokerInboxPage() {
     }
 
     try {
-      const response = await fetch('/api/corretor/times', {
+      const endpoint = profile?.tipo_usuario === 'corretor_membro'
+        ? '/api/inbox/lead-assignment'
+        : '/api/corretor/times';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2286,6 +2299,7 @@ export default function BrokerInboxPage() {
       alert('Lead encaminhado com sucesso!');
       setShowForwardModal(false);
       setSelectedMemberId('');
+      await fetchInbox(true);
     } catch (err: any) {
       console.error('Erro ao encaminhar lead:', err);
       alert('Erro ao encaminhar lead: ' + err.message);

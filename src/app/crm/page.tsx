@@ -428,6 +428,11 @@ export default function CrmPage() {
   const requestedLeadIdRef = useRef<string | null>(null);
   const requestedScopeViewRef = useRef<CrmScopeView | null>(null);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
+  const isUnityTeamMember = isTeamMemberProfile && String(profile?.nome_empresa || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase() === 'UNITY SAUDE';
   const usesMyLeadsByDefault = String(profile?.nome_empresa || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -691,7 +696,9 @@ export default function CrmPage() {
         if (corretorIds.length > 0) {
           query = query.in('corretor_id', corretorIds);
         }
-        if (profile.tipo_usuario === 'corretor_membro') {
+        if (isUnityTeamMember) {
+          query = query.eq('responsavel_profile_id', profile.id);
+        } else if (profile.tipo_usuario === 'corretor_membro') {
           query = query.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
         }
 

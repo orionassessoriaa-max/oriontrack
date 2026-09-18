@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizePhone, sendUazapiTypingPresence, uazapiFetch } from '@/lib/uazapi';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 import { assinarMensagem } from '@/lib/atendimentoCompartilhado';
+import { assignLeadToNextTeamMember } from '@/lib/leadAssignment';
 
 type ReceptiveProfile = {
   id: string;
@@ -182,7 +183,7 @@ async function sendOriginButtons(instance: string, conversationId: string, phone
   });
 }
 
-async function createAdLead(options: { corretorId: string; phone: string; contactName: string; source: string }) {
+async function createAdLead(options: { corretorId: string; phone: string; contactName: string; source: string; assignToTeam?: boolean }) {
   const { data, error } = await supabaseAdmin
     .from('leads')
     .insert({
@@ -199,6 +200,9 @@ async function createAdLead(options: { corretorId: string; phone: string; contac
     .select('id')
     .single();
   if (error) throw error;
+  if (options.assignToTeam) {
+    await assignLeadToNextTeamMember(options.corretorId, data.id);
+  }
   return data;
 }
 
@@ -267,6 +271,7 @@ export async function handleReceptiveIncoming(options: {
       phone: options.phone,
       contactName: options.contactName,
       source: autoAd ? 'click_to_whatsapp' : 'origem_confirmada_no_whatsapp',
+      assignToTeam: normalized(options.config.corretora_nome) === 'unity saude',
     });
     await supabaseAdmin
       .from('whatsapp_receptive_sessions')

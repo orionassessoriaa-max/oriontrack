@@ -453,6 +453,20 @@ async function getConversation(id: string) {
   return data;
 }
 
+async function isUnityBrokerage(corretorId: string | null | undefined) {
+  if (!corretorId) return false;
+  const { data } = await supabaseAdmin
+    .from('corretores')
+    .select('nome_empresa')
+    .eq('id', corretorId)
+    .maybeSingle();
+  return String(data?.nome_empresa || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase() === 'UNITY SAUDE';
+}
+
 async function canParticipateInSharedLead(profileId: string, leadId: string) {
   const { data: lead } = await supabaseAdmin
     .from('leads')
@@ -529,9 +543,9 @@ async function canAccessConversation(profile: any, conversation: any) {
         .eq('id', conversation.lead_id)
         .maybeSingle();
       if (lead?.responsavel_profile_id === profile.id) return true;
+      if (await isUnityBrokerage(profile.corretor_id)) return false;
       if (!lead?.responsavel_profile_id && await canParticipateInSharedLead(profile.id, conversation.lead_id)) return true;
     }
-
     if (commercialMember) return false;
   }
   if (!profile.corretor_id) return false;
@@ -911,7 +925,11 @@ export async function POST(request: Request) {
           .select('responsavel_profile_id')
           .eq('id', leadIdParam)
           .maybeSingle();
-        if (leadAccess?.responsavel_profile_id !== guard.profile.id && !(await canParticipateInSharedLead(guard.profile.id, leadIdParam))) {
+        const strictUnityAccess = await isUnityBrokerage(guard.profile.corretor_id);
+        const canUseSharedQueue = !strictUnityAccess
+          && !leadAccess?.responsavel_profile_id
+          && await canParticipateInSharedLead(guard.profile.id, leadIdParam);
+        if (leadAccess?.responsavel_profile_id !== guard.profile.id && !canUseSharedQueue) {
           return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
         }
       }
