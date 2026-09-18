@@ -1956,7 +1956,7 @@ export default function BrokerInboxPage() {
       }
     } catch (err) {
       console.error('Erro ao baixar áudio:', err);
-      alert('Erro ao processar áudio.');
+      alert(err instanceof Error ? err.message : 'Erro ao processar áudio.');
     } finally {
       setLoadingAudioId(null);
     }

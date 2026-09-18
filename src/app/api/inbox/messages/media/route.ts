@@ -4,11 +4,10 @@ import { uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { evolutionFetch, getEvolutionInstanceApiKey } from '@/lib/evolution';
 import { createDecipheriv, hkdfSync } from 'crypto';
+import { guardarMidiaForaDoBanco, removerBlobs } from '@/lib/inboxMedia';
+import { whatsappMessageIdCandidates } from '@/lib/whatsappMessageId';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
-// Teto de arquivo guardado dentro da linha da mensagem. Era 15 MB, e foi o que
-// levou whatsapp_mensagens a 970 MB num banco de 1 GB. Arquivo grande fica no
-// Storage; o banco guarda so a URL.
 const MAX_CACHE_BASE64_BYTES = Number(process.env.INBOX_MEDIA_CACHE_MAX_BYTES || 256 * 1024);
 const MAX_PROXY_MEDIA_BYTES = Number(process.env.INBOX_MEDIA_PROXY_MAX_BYTES || 25 * 1024 * 1024);
 
@@ -234,6 +233,13 @@ function base64Truncado(base64?: string | null) {
   return bytes >= MAX_CACHE_BASE64_BYTES;
 }
 
+function base64ByteLength(base64: string) {
+  const clean = stripDataUrl(base64) || '';
+  if (!clean) return 0;
+  const padding = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
+  return Math.floor((clean.length * 3) / 4) - padding;
+}
+
 function pickMediaBase64(metadata: any) {
   const mediaMessage = pickMediaMessage(metadata);
   return stripDataUrl(pickString(
@@ -304,16 +310,19 @@ function pickMediaUrl(metadata: any) {
 function pickProviderPayloadBase64(payload: any) {
   return stripDataUrl(pickString(
     payload?.base64,
+    payload?.fileBase64,
     payload?.media_base64,
     payload?.mediaBase64,
     payload?.media,
     payload?.file,
     payload?.data?.base64,
+    payload?.data?.fileBase64,
     payload?.data?.media_base64,
     payload?.data?.mediaBase64,
     payload?.data?.media,
     payload?.data?.file,
     payload?.response?.base64,
+    payload?.response?.fileBase64,
     payload?.response?.media_base64,
     payload?.response?.mediaBase64,
     payload?.response?.media,
@@ -453,13 +462,6 @@ async function decryptWhatsAppMediaFromMetadata(mediaMessage: any, mimeType?: st
   return decrypted.toString('base64');
 }
 
-function base64ByteLength(base64: string) {
-  const clean = stripDataUrl(base64) || '';
-  if (!clean) return 0;
-  const padding = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
-  return Math.floor((clean.length * 3) / 4) - padding;
-}
-
 async function cacheRecoveredMedia(message: any, payload: { base64?: string | null; url?: string | null; mimeType?: string | null; fileName?: string | null }) {
   const base64 = stripDataUrl(payload.base64);
   // Arquivo que ja tem URL nao volta para dentro do banco. Sem esta guarda, abrir
@@ -470,16 +472,20 @@ async function cacheRecoveredMedia(message: any, payload: { base64?: string | nu
   const assinado = String(payload.url || '').includes(`/object/sign/${BUCKET_MIDIA}/`);
   if (assinado) return;
 
-  const alreadyStored = Boolean(pickMediaUrl(message.metadata) || payload.url);
-  const shouldCacheBase64 = !alreadyStored && base64 && base64ByteLength(base64) <= MAX_CACHE_BASE64_BYTES;
-  const metadata = {
+  let metadata: Record<string, any> = {
     ...(message.metadata || {}),
-    ...(shouldCacheBase64 ? { media_base64: base64 } : {}),
+    // Mesmo um arquivo grande precisa passar pelo helper abaixo. Ele sobe o
+    // conteudo para o Storage e evita que um link temporario do WhatsApp seja
+    // confundido com uma copia permanente.
+    ...(base64 ? { media_base64: base64 } : {}),
     ...(payload.url ? { media_url: payload.url } : {}),
     ...(payload.mimeType ? { media_mimetype: payload.mimeType } : {}),
     ...(payload.fileName ? { media_file_name: payload.fileName } : {}),
     media_cached_at: new Date().toISOString(),
   };
+
+  if (base64) metadata = await guardarMidiaForaDoBanco(metadata);
+  metadata = removerBlobs(metadata);
 
   const { error } = await supabaseAdmin
     .from('whatsapp_mensagens')
@@ -623,6 +629,7 @@ export async function GET(request: Request) {
     }
 
     const providerId = message.provider_message_id;
+    const providerIds = whatsappMessageIdCandidates(providerId);
     const directUrl = pickMediaUrl(message.metadata);
     if (directUrl && (!forceRefresh || !providerId)) {
       const proxied = await proxyRemoteMedia(directUrl, mimeType);
@@ -690,11 +697,13 @@ export async function GET(request: Request) {
       const evoInstance = metadataInstances[0] || currentActiveInstance;
       if (evoInstance) {
         try {
-          const evoBase64 = await getEvolutionMediaBase64(evoInstance, providerId);
-          if (evoBase64) {
-            const recovered = { base64: evoBase64, mimeType, fileName };
-            await cacheRecoveredMedia(message, recovered);
-            return NextResponse.json(recovered);
+          for (const candidateId of providerIds) {
+            const evoBase64 = await getEvolutionMediaBase64(evoInstance, candidateId);
+            if (evoBase64) {
+              const recovered = { base64: evoBase64, mimeType, fileName };
+              await cacheRecoveredMedia(message, recovered);
+              return NextResponse.json(recovered);
+            }
           }
         } catch (evoErr: any) {
           console.warn(`[Media API] Evolution API falhou em descriptografar:`, evoErr?.message || evoErr);
@@ -705,14 +714,17 @@ export async function GET(request: Request) {
     console.log('[Media API] Instancias para tentar download UAZAPI da mensagem %s:', messageId, instancesToTry);
 
     for (const inst of instancesToTry) {
-      const attempts = buildUazapiDownloadPayloads(providerId, mediaMessage).map((body) => ({
-        path: '/message/download',
-        body,
-      }));
+      const attempts = providerIds.flatMap((candidateId) => (
+        buildUazapiDownloadPayloads(candidateId, mediaMessage).map((body) => ({
+          path: '/message/download',
+          body,
+          providerId: candidateId,
+        }))
+      ));
 
       for (const attempt of attempts) {
         try {
-          console.log(`[Media API] Solicitando midia UAZAPI para providerId: ${providerId} na instancia: ${inst} via ${attempt.path}`);
+          console.log(`[Media API] Solicitando midia UAZAPI para providerId: ${attempt.providerId} na instancia: ${inst} via ${attempt.path}`);
           const payload = await uazapiFetch(attempt.path, {
             method: 'POST',
             body: JSON.stringify(attempt.body),
@@ -753,11 +765,13 @@ export async function GET(request: Request) {
       if (evoInstance) {
         try {
           console.log(`[Media API] UAZAPI falhou. Tentando Evolution API como fallback secundario.`);
-          const evoBase64 = await getEvolutionMediaBase64(evoInstance, providerId);
-          if (evoBase64) {
-            const recovered = { base64: evoBase64, mimeType, fileName };
-            await cacheRecoveredMedia(message, recovered);
-            return NextResponse.json(recovered);
+          for (const candidateId of providerIds) {
+            const evoBase64 = await getEvolutionMediaBase64(evoInstance, candidateId);
+            if (evoBase64) {
+              const recovered = { base64: evoBase64, mimeType, fileName };
+              await cacheRecoveredMedia(message, recovered);
+              return NextResponse.json(recovered);
+            }
           }
         } catch (evoErr: any) {
           console.warn(`[Media API] Evolution API fallback secundario falhou:`, evoErr?.message || evoErr);
@@ -793,7 +807,9 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ error: 'Nao consegui extrair a midia desta mensagem pelo UAZAPI ou Evolution API.' }, { status: 404 });
+    return NextResponse.json({
+      error: 'Este audio antigo nao esta mais disponivel no WhatsApp. Peca o reenvio do arquivo para ouvi-lo no CRM.',
+    }, { status: 404 });
   } catch (error: any) {
     console.error('[Media API Root Error]', error);
     return NextResponse.json({ error: error.message || 'Erro interno.' }, { status: 500 });

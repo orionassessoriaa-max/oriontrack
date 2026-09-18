@@ -8,7 +8,7 @@ import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { continueCommercialSdrFromIncoming } from '@/lib/commercialSdrAgent';
 import { stopCommercialAiForHumanTakeover } from '@/lib/commercialSdrSession';
 import { ensureCommercialConversation, findCommercialConversation, isCommercialAiEcho } from '@/lib/commercialInbox';
-import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
+import { normalizeWhatsAppMessageId, whatsappMessageIdCandidates } from '@/lib/whatsappMessageId';
 import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 import { getReceptiveAiConfig, handleReceptiveIncoming } from '@/lib/receptiveAi';
 
@@ -503,11 +503,13 @@ function readUazapiMediaMetadata(body: any) {
       body?.media_base64,
       body?.mediaBase64,
       body?.base64,
+      body?.fileBase64,
       body?.file,
       body?.media,
       body?.data?.media_base64,
       body?.data?.mediaBase64,
       body?.data?.base64,
+      body?.data?.fileBase64,
       body?.data?.file,
       body?.data?.media,
       mediaMessage?.base64,
@@ -622,16 +624,19 @@ function buildUazapiDownloadPayloads(providerId: string, mediaMessage: any) {
 function pickProviderPayloadBase64(payload: any) {
   return stripDataUrl(pickString(
     payload?.base64,
+    payload?.fileBase64,
     payload?.media_base64,
     payload?.mediaBase64,
     payload?.media,
     payload?.file,
     payload?.data?.base64,
+    payload?.data?.fileBase64,
     payload?.data?.media_base64,
     payload?.data?.mediaBase64,
     payload?.data?.media,
     payload?.data?.file,
     payload?.response?.base64,
+    payload?.response?.fileBase64,
     payload?.response?.media_base64,
     payload?.response?.mediaBase64,
     payload?.response?.media,
@@ -675,7 +680,9 @@ async function downloadUazapiMediaBase64(instance: string, providerId: string, b
   try {
     let payload: any = null;
     let mediaBase64 = '';
-    for (const bodyPayload of buildUazapiDownloadPayloads(providerId, mediaMessage)) {
+    const downloadPayloads = whatsappMessageIdCandidates(providerId)
+      .flatMap((candidateId) => buildUazapiDownloadPayloads(candidateId, mediaMessage));
+    for (const bodyPayload of downloadPayloads) {
       try {
         payload = await uazapiFetch('/message/download', {
           method: 'POST',
