@@ -34,19 +34,45 @@ function normalizeStages(input: unknown): CommercialStage[] {
   }).filter(Boolean) as CommercialStage[];
 }
 
+function ensureMeetingOutcomeStages(stages: CommercialStage[]) {
+  if (stages.some((stage) => stage.id === 'Reunião realizada')) return stages;
+
+  const completedStage: CommercialStage = {
+    id: 'Reunião realizada',
+    label: 'Reunião realizada',
+    desc: 'Reuniões concluídas pelo closer',
+    protected: true,
+    color: '#10B981',
+  };
+  const scheduledIndex = stages.findIndex((stage) => stage.id === 'Reuniões agendadas');
+  const noShowIndex = stages.findIndex((stage) => stage.id === 'No-show');
+  const insertAt = noShowIndex >= 0
+    ? noShowIndex
+    : scheduledIndex >= 0
+      ? scheduledIndex + 1
+      : stages.length;
+  const next = [...stages];
+  next.splice(insertAt, 0, completedStage);
+  return next;
+}
+
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
   if ('error' in guard) return guard.error;
   const { data, error } = await supabaseAdmin.from('comercial_config').select('etapas').eq('id', 1).maybeSingle();
   if (error && !/comercial_config|schema cache/i.test(error.message)) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ stages: normalizeStages(data?.etapas?.length ? data.etapas : COMMERCIAL_STAGES) });
+  return NextResponse.json({
+    stages: ensureMeetingOutcomeStages(
+      normalizeStages(data?.etapas?.length ? data.etapas : COMMERCIAL_STAGES),
+    ),
+  });
 }
 
 export async function PUT(request: Request) {
   const guard = await requireStageManager(request);
   if ('error' in guard) return guard.error;
   const body = await request.json();
-  const stages = normalizeStages(body.stages).slice(0, 40);
+  const stages = ensureMeetingOutcomeStages(normalizeStages(body.stages)).slice(0, 40);
   if (!stages.length) return NextResponse.json({ error: 'Inclua pelo menos uma etapa.' }, { status: 400 });
   const { error } = await supabaseAdmin.from('comercial_config').upsert({ id: 1, etapas: stages, updated_at: new Date().toISOString() });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
