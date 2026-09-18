@@ -68,17 +68,23 @@ export default function PropostaKriptoPage() {
   return <div className="kh-panel" style={{ maxWidth: 680, margin: '48px auto', textAlign: 'center', padding: 40 }}>
     <FileText size={28} aria-hidden style={{ color: '#00b8df', marginBottom: 12 }} />
     <h1 style={{ margin: '0 0 10px' }}>Proposta comercial</h1>
-    <p style={{ margin: '0 0 20px', opacity: 0.7 }}>Escolha o lead em Reuniões agendadas. A capa já abre com os dados dele.</p>
-    <label style={{ display: 'block', maxWidth: 430, margin: '0 auto 16px', textAlign: 'left' }}>
-      <span style={{ display: 'block', fontSize: 12, marginBottom: 7, opacity: .7 }}>Lead da proposta</span>
-      <select value={leadId} onChange={(event) => setLeadId(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,.16)', background: '#07101c', color: 'white' }}>
-        <option value="">Selecione o lead</option>
-        {leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.nome}{lead.empresa ? ` - ${lead.empresa}` : ''}</option>)}
-      </select>
-    </label>
-    <a href={leadId ? `/proposta?lead_id=${encodeURIComponent(leadId)}` : '#'} onClick={(event) => { if (!leadId) event.preventDefault(); }} target="_blank" rel="noopener noreferrer" aria-disabled={!leadId} className="kh-button kh-button-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', opacity: leadId ? 1 : .5, pointerEvents: leadId ? 'auto' : 'none' }}>
-      <ExternalLink size={16} aria-hidden /> Abrir nova proposta
+    <p style={{ margin: '0 0 20px', opacity: 0.7 }}>Abra a apresentação comercial da Orion ou escolha um lead para acessar uma proposta salva.</p>
+    <a href="/apresentacao/index.html" target="_blank" rel="noopener noreferrer" className="kh-button kh-button-primary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, textDecoration: 'none', width: 'min(100%, 430px)', boxSizing: 'border-box', marginBottom: 28 }}>
+      <ExternalLink size={16} aria-hidden /> Abrir apresentação Orion
     </a>
+    <div style={{ borderTop: '1px solid rgba(255,255,255,.1)', paddingTop: 24 }}>
+      <p style={{ margin: '0 0 20px', opacity: 0.7 }}>Para abrir a proposta vinculada, selecione um lead em Reuniões agendadas.</p>
+      <label style={{ display: 'block', maxWidth: 430, margin: '0 auto 16px', textAlign: 'left' }}>
+        <span style={{ display: 'block', fontSize: 12, marginBottom: 7, opacity: .7 }}>Lead da proposta</span>
+        <select value={leadId} onChange={(event) => setLeadId(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,.16)', background: '#07101c', color: 'white' }}>
+          <option value="">Selecione o lead</option>
+          {leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.nome}{lead.empresa ? ` - ${lead.empresa}` : ''}</option>)}
+        </select>
+      </label>
+      <a href={leadId ? `/proposta?lead_id=${encodeURIComponent(leadId)}` : '#'} onClick={(event) => { if (!leadId) event.preventDefault(); }} target="_blank" rel="noopener noreferrer" aria-disabled={!leadId} className="kh-button kh-button-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', opacity: leadId ? 1 : .5, pointerEvents: leadId ? 'auto' : 'none' }}>
+        <ExternalLink size={16} aria-hidden /> Abrir nova proposta
+      </a>
+    </div>
     <section style={{ marginTop: 36, textAlign: 'left', borderTop: '1px solid rgba(255,255,255,.1)', paddingTop: 24 }}>
       <strong>Propostas salvas</strong>
       {listError && <p className="kh-inline-error">{listError}</p>}
