@@ -3,15 +3,8 @@ import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { CommercialMqlLevel } from '@/lib/commercialQualification';
 
-/**
- * Dono automatico do lead novo.
- *
- * Todos os niveis, inclusive MQL S, entram na fila sem dono.
- * Quem assumir primeiro pelo CRM ou pelo grupo fica com a oportunidade.
- */
 export async function donoAutomaticoDoLead(nivel?: CommercialMqlLevel | null) {
-  void nivel;
-  return null;
+  return assignNextCommercialSdr(nivel);
 }
 
 export async function assignNextCommercialSdr(nivel?: CommercialMqlLevel | null) {

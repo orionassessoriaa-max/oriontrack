@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, BadgeCheck, Phone, Target, TrendingUp, Trophy, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import './overview.css';
 
@@ -28,6 +28,7 @@ type OverviewPayload = {
 
 const REFRESH_MS = 20_000;
 const ROTATION_MS = 5_000;
+const MEETINGS_PER_SDR_GOAL = 20;
 const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
 const DEMO: OverviewPayload = {
@@ -79,64 +80,114 @@ function progress(actual: number, goal: number) {
   return goal > 0 ? Math.min(100, Math.max(0, (actual / goal) * 100)) : 0;
 }
 
-function Person({ row }: { row: PersonRow }) {
-  return row.photo ? (
-    // A URL vem do perfil e pode usar provedores diferentes; o avatar nao e conteudo principal da pagina.
-    // eslint-disable-next-line @next/next/no-img-element
-    <img className="ov-avatar" src={row.photo} alt="" />
-  ) : <span className="ov-avatar ov-initials">{row.initials}</span>;
+function Person({ row, reach }: { row: PersonRow; reach: number }) {
+  return (
+    <>
+      {row.photo ? (
+        // A URL vem do perfil e pode usar provedores diferentes; o avatar nao e conteudo principal da pagina.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="ov-avatar" src={row.photo} alt="" />
+      ) : <span className="ov-avatar ov-initials">{row.initials}</span>}
+      <span className="ov-person"><b>{row.name}</b><i style={{ width: `${Math.max(12, reach)}%` }} /></span>
+    </>
+  );
 }
 
-function MiniProgress({ value, target, inverse = false }: { value: number; target: number; inverse?: boolean }) {
-  const width = inverse ? Math.min(100, (value / Math.max(target, 1)) * 100) : progress(value, target);
-  const good = inverse ? value <= target : value >= target;
-  return <span className="ov-mini-track"><span className={good ? 'is-good' : ''} style={{ width: `${width}%` }} /></span>;
-}
-
+/** Barra unica das duas telas. A supermeta, quando existe, vira o fim da regua. */
 function MainProgress({ actual, goal, superGoal }: { actual: number; goal: number; superGoal?: number }) {
   const range = superGoal || goal;
-  const goalMarker = superGoal ? progress(goal, range) : 100;
   return (
     <div className="ov-progress-wrap" aria-label={`${Math.round(progress(actual, goal))}% da meta`}>
       <div className="ov-progress-track">
         <span className="ov-progress-fill" style={{ width: `${progress(actual, range)}%` }} />
-        {superGoal ? <span className="ov-goal-marker" style={{ left: `${goalMarker}%` }}><b>Meta</b><small>R$ {money(goal)}</small></span> : null}
+        {superGoal ? (
+          <span className="ov-goal-marker" style={{ left: `${progress(goal, range)}%` }}>
+            <b>Meta</b><small>R$ {money(goal)}</small>
+          </span>
+        ) : null}
       </div>
-      <div className="ov-progress-scale"><span>R$ 0</span><span>{superGoal ? 'Supermeta' : 'Meta do mês'} R$ {money(range)}</span></div>
     </div>
   );
 }
 
 function KriptoView({ data }: { data: OverviewPayload['kripto'] }) {
   const mainPct = progress(data.revenue.actual, data.revenue.goal);
+  const missing = Math.max(0, data.revenue.goal - data.revenue.actual);
+  const noShowOk = data.noShow.actual <= data.noShow.limit;
+  const conversionOk = data.conversion.actual >= data.conversion.goal;
+
   return (
     <div className="ov-view" aria-label="Overview Kripto Hunters">
+      <p className="ov-title">A meta do mês é <b>R$ {money(data.revenue.goal)}</b></p>
+
       <section className="ov-hero">
         <div>
-          <p className="ov-eyebrow">Resultado do mês</p>
-          <p className="ov-money"><small>R$</small>{money(data.revenue.actual)} <em>/ R$ {money(data.revenue.goal)}</em></p>
+          <p className="ov-eyebrow">Caixa do mês</p>
+          <p className="ov-money"><small>R$</small>{money(data.revenue.actual)}<em>/ R$ {money(data.revenue.goal)}</em></p>
         </div>
-        <div className="ov-percent"><strong>{Math.round(mainPct)}%</strong><span>{data.sales.actual} de {data.sales.goal} vendas</span></div>
+        <div className="ov-percent">
+          <strong>{Math.round(mainPct)}%</strong>
+          <span>faltam R$ {money(missing)}</span>
+        </div>
       </section>
+
       <MainProgress actual={data.revenue.actual} goal={data.revenue.goal} />
-      <section className="ov-metrics">
-        <article><Phone /><span><small>Ligações hoje</small><b>{data.calls.actual} <em>/ {data.calls.goal}</em></b><MiniProgress value={data.calls.actual} target={data.calls.goal} /></span></article>
-        <article><BadgeCheck /><span><small>Atendidas hoje</small><b>{data.calls.answered}</b><em>{pct(data.calls.actual ? (data.calls.answered / data.calls.actual) * 100 : 0)} de atendimento</em></span></article>
-        <article className={data.noShow.actual > data.noShow.limit ? 'is-alert' : ''}><Users /><span><small>No-show do mês</small><b>{pct(data.noShow.actual)} <em>/ máx. {data.noShow.limit}%</em></b><MiniProgress value={data.noShow.actual} target={data.noShow.limit} inverse /></span></article>
-        <article><TrendingUp /><span><small>Conversão qualificada</small><b>{pct(data.conversion.actual)} <em>/ {data.conversion.goal}%</em></b><MiniProgress value={data.conversion.actual} target={data.conversion.goal} /></span></article>
+
+      <section className="ov-strip">
+        <article className={data.sales.actual >= data.sales.goal ? 'is-good' : ''}>
+          <small>Vendas no mês</small>
+          <b>{data.sales.actual} <em>/ {data.sales.goal}</em></b>
+        </article>
+        <article className={conversionOk ? 'is-good' : ''}>
+          <small>Conversão</small>
+          <b>{pct(data.conversion.actual)} <em>/ meta {data.conversion.goal}%</em></b>
+        </article>
+        <article className={noShowOk ? '' : 'is-alert'}>
+          <small>No-show</small>
+          <b>{pct(data.noShow.actual)} <em>/ máx. {data.noShow.limit}%</em></b>
+        </article>
+        <article>
+          <small>Ligações hoje</small>
+          <b>{data.calls.actual} <em>/ {data.calls.goal}</em></b>
+        </article>
       </section>
+
       <section className="ov-rank-grid">
         <div className="ov-panel">
-          <div className="ov-panel-head"><span>SDR</span><span>Ligações · agendamentos</span></div>
+          <div className="ov-panel-head ov-cols-sdr">
+            <span>#</span><span /><span>SDR</span><span>Ligações</span><span>Agendamentos</span>
+          </div>
           <div className="ov-list">
-            {data.callsRanking.slice(0, 5).map((row, index) => <div className="ov-row" key={row.id}><span className="ov-rank">#{index + 1}</span><Person row={row} /><span className="ov-person"><b>{row.name}</b><small>{row.answered} atendidas</small></span><span className="ov-row-metric"><b className={row.calls >= data.calls.perSdrGoal ? 'is-good-text' : ''}>{row.calls}</b><small>/ {data.calls.perSdrGoal} calls</small></span><span className="ov-row-metric"><b>{row.meetings}</b><small>agendamentos</small></span></div>)}
-            {!data.callsRanking.length ? <p className="ov-empty">Nenhum SDR ativo.</p> : null}
+            {data.callsRanking.slice(0, 5).map((row, index) => (
+              <div className="ov-row ov-cols-sdr" key={row.id}>
+                <span className="ov-rank">#{index + 1}</span>
+                <Person row={row} reach={progress(row.calls, data.calls.perSdrGoal)} />
+                <span className={`ov-metric ${row.calls >= data.calls.perSdrGoal ? 'is-good' : 'is-low'}`}>
+                  {row.calls} <em>/ {data.calls.perSdrGoal}</em>
+                </span>
+                <span className="ov-metric">{row.meetings} <em>/ {MEETINGS_PER_SDR_GOAL}</em></span>
+              </div>
+            ))}
+            {!data.callsRanking.length ? <p className="ov-empty">Nenhum SDR ativo hoje.</p> : null}
           </div>
         </div>
+
         <div className="ov-panel">
-          <div className="ov-panel-head"><span>Fechamento</span><span>Receita · vendas</span></div>
+          <div className="ov-panel-head ov-cols-closer">
+            <span>#</span><span /><span>Closer</span><span>Caixa no mês</span><span>Falta</span>
+          </div>
           <div className="ov-list">
-            {data.salesRanking.slice(0, 5).map((row, index) => <div className="ov-row" key={row.id}><span className="ov-rank">#{index + 1}</span><Person row={row} /><span className="ov-person"><b>{row.name}</b><small>{row.role === 'closer' ? 'Closer' : 'Comercial'}</small></span><span className="ov-row-metric ov-revenue"><b>R$ {money(row.revenue)}</b><small>{row.sales} {row.sales === 1 ? 'venda' : 'vendas'}</small></span></div>)}
+            {data.salesRanking.slice(0, 5).map((row, index) => {
+              const share = data.salesRanking.length ? data.revenue.goal / data.salesRanking.length : data.revenue.goal;
+              return (
+                <div className="ov-row ov-cols-closer" key={row.id}>
+                  <span className="ov-rank">#{index + 1}</span>
+                  <Person row={row} reach={progress(row.revenue, share)} />
+                  <span className="ov-metric is-good">R$ {money(row.revenue)} <em>/ R$ {money(share)}</em></span>
+                  <span className="ov-metric is-cyan">R$ {money(Math.max(0, share - row.revenue))}</span>
+                </div>
+              );
+            })}
             {!data.salesRanking.length ? <p className="ov-empty">Nenhuma venda registrada no mês.</p> : null}
           </div>
         </div>
@@ -147,34 +198,78 @@ function KriptoView({ data }: { data: OverviewPayload['kripto'] }) {
 
 function ApolloView({ data }: { data: OverviewPayload['apollo'] }) {
   const mainPct = progress(data.revenue.actual, data.revenue.goal);
+  const missing = Math.max(0, data.revenue.goal - data.revenue.actual);
+  const topPoints = data.members[0]?.points || 1;
+  const topSale = data.sales[0]?.value || 1;
+
   return (
-    <div className="ov-view ov-apollo" aria-label="Overview Apollo">
+    <div className="ov-view ov-apollo" aria-label="Overview Time Apollo">
+      <p className="ov-title">A meta do mês é <b>R$ {money(data.revenue.goal)}</b></p>
+
       <section className="ov-hero">
         <div>
           <p className="ov-eyebrow">Vendas no mês</p>
-          <p className="ov-money"><small>R$</small>{money(data.revenue.actual)} <em>/ R$ {money(data.revenue.goal)}</em></p>
+          <p className="ov-money"><small>R$</small>{money(data.revenue.actual)}<em>/ R$ {money(data.revenue.goal)}</em></p>
         </div>
-        <div className="ov-percent"><strong>{Math.round(mainPct)}%</strong><span>Supermeta R$ {money(data.revenue.superGoal)}</span></div>
+        <div className="ov-percent">
+          <strong>{Math.round(mainPct)}%</strong>
+          <span>faltam R$ {money(missing)}</span>
+        </div>
       </section>
+
       <MainProgress actual={data.revenue.actual} goal={data.revenue.goal} superGoal={data.revenue.superGoal} />
-      <section className="ov-metrics ov-apollo-metrics">
-        <article><Target /><span><small>Meta do mês</small><b>R$ {money(data.revenue.goal)}</b><em>objetivo principal</em></span></article>
-        <article><Trophy /><span><small>Supermeta</small><b>R$ {money(data.revenue.superGoal)}</b><em>próximo nível</em></span></article>
-        <article><TrendingUp /><span><small>Vendas registradas</small><b>{data.salesCount}</b><em>neste mês</em></span></article>
-        <article><Users /><span><small>Time Apollo</small><b>{data.members.length}</b><em>membros ativos</em></span></article>
+
+      <section className="ov-strip">
+        <article className={data.revenue.actual >= data.revenue.goal ? 'is-good' : ''}>
+          <small>Meta do mês</small>
+          <b>R$ {money(data.revenue.goal)}</b>
+        </article>
+        <article className={data.revenue.actual >= data.revenue.superGoal ? 'is-good' : ''}>
+          <small>Supermeta</small>
+          <b>R$ {money(data.revenue.superGoal)} <em>/ faltam R$ {money(Math.max(0, data.revenue.superGoal - data.revenue.actual))}</em></b>
+        </article>
+        <article>
+          <small>Vendas registradas</small>
+          <b>{data.salesCount}</b>
+        </article>
+        <article>
+          <small>Time Apollo</small>
+          <b>{data.members.length} <em>membros</em></b>
+        </article>
       </section>
+
       <section className="ov-rank-grid">
         <div className="ov-panel">
-          <div className="ov-panel-head"><span>Meu time</span><span>Ranking de pontos</span></div>
+          <div className="ov-panel-head ov-cols-sdr">
+            <span>#</span><span /><span>Meu time</span><span>Pontos</span><span>Função</span>
+          </div>
           <div className="ov-list">
-            {data.members.slice(0, 5).map((row, index) => <div className="ov-row" key={row.id}><span className="ov-rank">#{index + 1}</span><Person row={row} /><span className="ov-person"><b>{row.name}</b><small>{row.role.replaceAll('_', ' ')}</small></span><span className="ov-row-metric ov-revenue"><b>{row.points}</b><small>pontos</small></span></div>)}
+            {data.members.slice(0, 5).map((row, index) => (
+              <div className="ov-row ov-cols-sdr" key={row.id}>
+                <span className="ov-rank">#{index + 1}</span>
+                <Person row={row} reach={progress(row.points, topPoints)} />
+                <span className="ov-metric is-good">{row.points}</span>
+                <span className="ov-metric is-cyan" style={{ fontSize: '13px' }}>{row.role.replaceAll('_', ' ')}</span>
+              </div>
+            ))}
             {!data.members.length ? <p className="ov-empty">Nenhum membro no time Apollo.</p> : null}
           </div>
         </div>
+
         <div className="ov-panel">
-          <div className="ov-panel-head"><span>Vendas do mês</span><span>Últimas entradas</span></div>
+          <div className="ov-panel-head ov-cols-closer">
+            <span>#</span><span /><span>Venda</span><span>Produto</span><span>Valor</span>
+          </div>
           <div className="ov-list">
-            {data.sales.slice(0, 5).map((sale, index) => <div className="ov-row" key={sale.id}><span className="ov-rank">#{index + 1}</span><span className="ov-sale-icon">R$</span><span className="ov-person"><b>{sale.name}</b><small>{sale.product}</small></span><span className="ov-row-metric ov-revenue"><b>R$ {money(sale.value)}</b><small>fechado</small></span></div>)}
+            {data.sales.slice(0, 5).map((sale, index) => (
+              <div className="ov-row ov-cols-closer" key={sale.id}>
+                <span className="ov-rank">#{index + 1}</span>
+                <span className="ov-avatar ov-initials">R$</span>
+                <span className="ov-person"><b>{sale.name}</b><i style={{ width: `${Math.max(12, progress(sale.value, topSale))}%` }} /></span>
+                <span className="ov-metric is-cyan" style={{ fontSize: '13px' }}>{sale.product}</span>
+                <span className="ov-metric is-good">R$ {money(sale.value)}</span>
+              </div>
+            ))}
             {!data.sales.length ? <p className="ov-empty">Nenhuma venda registrada no mês.</p> : null}
           </div>
         </div>
@@ -221,7 +316,13 @@ export default function OverviewBoard() {
   return (
     <main className={`ov-root ov-${active}`}>
       <header className="ov-header">
-        <div className="ov-brand"><span className="ov-logo">ORION</span><span><b>OVERVIEW</b><small>{active === 'kripto' ? 'KRIPTO HUNTERS' : 'TIME APOLLO'} · {monthName}</small></span></div>
+        <div className="ov-brand">
+          <span className="ov-logo">ORION</span>
+          <span>
+            <b>OVERVIEW VENDAS</b>
+            <small>{active === 'kripto' ? 'KRIPTO HUNTERS' : 'TIME APOLLO'} · {monthName}</small>
+          </span>
+        </div>
         <div className="ov-status">
           {demo ? <span className="ov-demo">DADOS DE EXEMPLO</span> : null}
           {error ? <span className="ov-error">{error}</span> : null}
@@ -233,7 +334,11 @@ export default function OverviewBoard() {
       <div className="ov-content" key={active}>
         {data ? (active === 'kripto' ? <KriptoView data={data.kripto} /> : <ApolloView data={data.apollo} />) : <div className="ov-loading"><span /><p>Carregando dados do mês</p></div>}
       </div>
-      <footer className="ov-footer"><span className={active === 'kripto' ? 'active' : ''} /><span className={active === 'apollo' ? 'active' : ''} /><small>Troca automática a cada 5 segundos</small></footer>
+      <footer className="ov-footer">
+        <span className={active === 'kripto' ? 'active' : ''} />
+        <span className={active === 'apollo' ? 'active' : ''} />
+        <small>Troca automática a cada 5 segundos</small>
+      </footer>
     </main>
   );
 }

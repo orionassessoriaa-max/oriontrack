@@ -15,6 +15,12 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 const BUCKET = 'inbox-media';
 const MINIMO_PARA_BUCKET = 20 * 1024;
 
+function mediaEstaNoBucket(url?: string | null) {
+  const value = String(url || '');
+  return value.includes(`/storage/v1/object/public/${BUCKET}/`)
+    || value.includes(`/storage/v1/object/sign/${BUCKET}/`);
+}
+
 function extensaoDe(mime?: string | null, nomeOriginal?: string | null) {
   const doNome = String(nomeOriginal || '').split('.').pop();
   if (doNome && doNome.length <= 5 && /^[a-z0-9]+$/i.test(doNome)) return doNome.toLowerCase();
@@ -44,7 +50,10 @@ function pastaDe(mime?: string | null) {
  */
 export async function guardarMidiaForaDoBanco(metadata: Record<string, any>) {
   const base64Bruto = String(metadata?.media_base64 || '');
-  if (!base64Bruto || metadata?.media_url) return metadata;
+  // URLs do WhatsApp expiram. Elas não podem impedir o upload de uma cópia
+  // recuperada em base64, ou a mídia desaparece do histórico depois de alguns
+  // dias. Só uma URL do nosso bucket é considerada armazenamento permanente.
+  if (!base64Bruto || mediaEstaNoBucket(metadata?.media_url)) return metadata;
 
   const limpo = base64Bruto.includes(';base64,') ? base64Bruto.split(';base64,')[1] : base64Bruto;
   let bytes: Buffer;
@@ -93,7 +102,9 @@ export async function guardarMidiaForaDoBanco(metadata: Record<string, any>) {
 const TETO_TEXTO = 20_000;
 
 export function removerBlobs(metadata: Record<string, any>) {
-  if (!metadata?.media_url) return metadata;
+  // Só descarte os bytes quando o arquivo já estiver no nosso Storage. Um link
+  // temporário do WhatsApp não é uma cópia segura do anexo.
+  if (!mediaEstaNoBucket(metadata?.media_url)) return metadata;
 
   const limpo: Record<string, any> = {};
   for (const [chave, valor] of Object.entries(metadata)) {

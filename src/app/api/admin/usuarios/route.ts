@@ -572,7 +572,7 @@ export async function PATCH(request: Request) {
 
     const { data: targetProfile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, email, email_real, tipo_usuario, corretor_id, is_admin_master, telefone')
+      .select('id, email, email_real, tipo_usuario, corretor_id, nome_empresa, is_admin_master, telefone')
       .eq('id', id)
       .maybeSingle();
 
@@ -603,10 +603,14 @@ export async function PATCH(request: Request) {
       }
 
       const roleToSave = nextRole || targetProfile.tipo_usuario;
+      const isBrokerageUser = ['corretor', 'corretor_admin', 'corretor_membro'].includes(roleToSave);
+      const brokerageName = isBrokerageUser
+        ? String(body.nome_empresa || targetProfile.nome_empresa || '').trim() || null
+        : null;
       const profileUpdatePayload = {
         nome,
         email_real: emailReal,
-        nome_empresa: roleToSave === 'corretor' ? String(body.nome_empresa || '').trim() || null : null,
+        nome_empresa: brokerageName,
         foto_url: fotoUrl,
         telefone: telefone || null,
         tipo_usuario: roleToSave,
@@ -644,6 +648,55 @@ export async function PATCH(request: Request) {
       });
 
       await upsertNotificationPhone(id, telefone);
+
+      // Ao editar um integrante, preserve o vínculo com a concessionária e com
+      // o time. Sem isso o perfil continuava visível no cadastro, mas sumia do
+      // rodízio por não ter corretor_id nem registro em corretor_time_membros.
+      if (['corretor_membro', 'corretor_admin'].includes(roleToSave) && brokerageName) {
+        const primaryCorretor = await resolvePrimaryCorretorByBrokerage(brokerageName);
+        if (!primaryCorretor?.id) {
+          return NextResponse.json({ error: 'Concessionária sem Corretor Admin principal.' }, { status: 400 });
+        }
+
+        const teamId = await ensureCorretorTeam(primaryCorretor.id, primaryCorretor.nome_empresa || brokerageName);
+        const { data: existingMember, error: existingMemberError } = await supabaseAdmin
+          .from('corretor_time_membros')
+          .select('id, ordem')
+          .eq('time_id', teamId)
+          .eq('profile_id', id)
+          .maybeSingle();
+        if (existingMemberError) return NextResponse.json({ error: existingMemberError.message }, { status: 500 });
+
+        const { data: lastMember, error: lastMemberError } = await supabaseAdmin
+          .from('corretor_time_membros')
+          .select('ordem')
+          .eq('time_id', teamId)
+          .order('ordem', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (lastMemberError) return NextResponse.json({ error: lastMemberError.message }, { status: 500 });
+
+        const memberPayload = {
+          time_id: teamId,
+          corretor_id: primaryCorretor.id,
+          profile_id: id,
+          nome,
+          email: targetProfile.email,
+          status: 'ativo',
+          ordem: existingMember?.ordem || Number(lastMember?.ordem || 0) + 1,
+          participa_rodizio: body.participa_rodizio !== false,
+        };
+        const { error: memberError } = existingMember
+          ? await supabaseAdmin.from('corretor_time_membros').update(memberPayload).eq('id', existingMember.id)
+          : await supabaseAdmin.from('corretor_time_membros').insert([memberPayload]);
+        if (memberError) return NextResponse.json({ error: memberError.message }, { status: 500 });
+
+        const { error: profileLinkError } = await supabaseAdmin
+          .from('profiles')
+          .update({ corretor_id: primaryCorretor.id, nome_empresa: primaryCorretor.nome_empresa || brokerageName })
+          .eq('id', id);
+        if (profileLinkError) return NextResponse.json({ error: profileLinkError.message }, { status: 500 });
+      }
 
       if (targetProfile.tipo_usuario === 'corretor') {
         const { data: profileWithCorretor } = await supabaseAdmin

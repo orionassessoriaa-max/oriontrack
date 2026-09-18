@@ -185,17 +185,20 @@ com metas editáveis, reivindicação de lead pelo grupo de WhatsApp.
 
 ### Quebrado agora
 
-**O token da Meta expirou** em 12/09 às 11:42 de Brasília. Tudo que depende de
-anúncio está cego: Tráfego, Otimizações, alertas de CPL e saldo, insights do
-Apollo. **E o app do `.env.local` foi apagado** ("Application has been deleted"),
-então não dá para gerar token novo por ele. O sistema avisou nos dias 10 e 11.
-
-Recomendado: token de **System User** do Business Manager, que não expira.
-
 **O ciclo de crédito de criativo está parado em agosto** (`ciclo_inicio
 2026-08-01`, `ciclo_fim 2026-08-31`) com o gasto diário no teto. Desde a
 correção da reserva, a geração agora recusa por falta de crédito em vez de gerar
 sem contar. Alguém precisa virar o ciclo.
+
+### Ponto de atenção da Meta
+
+O token expirou em 12/09 e foi trocado no mesmo dia; produção voltou a responder
+200. **Mas o app continua apagado** ("Application has been deleted"), então não
+dá para consultar validade nem escopos do token atual. Se ele for de 60 dias,
+vence em meados de novembro, com aviso só dois dias antes.
+
+A saída definitiva é um token de **System User** do Business Manager, que não
+expira e enxerga todas as contas do Business.
 
 ### Pendente
 

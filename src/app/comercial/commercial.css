@@ -794,8 +794,9 @@
 @media (max-width:760px) { .kh-scheduler { padding:0; }.kh-scheduler-shell { width:100vw;height:100dvh;border:0;border-radius:0; }.kh-scheduler-toolbar { grid-template-columns:1fr auto;gap:8px;padding:9px 10px; }.kh-scheduler-brand h2 { font-size:15px; }.kh-scheduler-navigation { grid-column:1 / -1;grid-row:2;justify-content:center; }.kh-scheduler-close { grid-column:2;grid-row:1; }.kh-scheduler-layout { grid-template-columns:1fr; }.kh-scheduler-lead { display:none; }.kh-scheduler-confirm { grid-column:1;grid-template-columns:1fr 1fr; }.kh-scheduler-summary { display:none; }.kh-scheduler-actions { min-width:0; }.kh-scheduler-week { min-width:900px; }.kh-scheduler-floating-layer { inset:117px 0 0;padding:10px; }.kh-scheduler-event-editor,.kh-scheduler-event-details { width:100%;max-height:100%;border-radius:13px; }.kh-scheduler-editor-body,.kh-scheduler-event-details-body { padding:0 18px 18px; }.kh-scheduler-title-input { font-size:19px; }.kh-scheduler-event-editor > footer,.kh-scheduler-event-details > footer { padding:10px 12px; } }
 .kh-meeting-details { width:min(720px,100%); }
 .kh-meeting-details-body { display:grid;gap:14px;max-height:min(70vh,680px);overflow:auto;padding:20px; }
-.kh-meeting-hero { display:flex;align-items:center;gap:12px;border:1px solid rgba(255,73,97,.35);border-radius:12px;background:linear-gradient(135deg,rgba(125,17,39,.32),rgba(8,20,31,.92));padding:14px; }
-.kh-meeting-hero > span { width:48px;height:48px;display:grid;place-items:center;flex:0 0 auto;border-radius:10px;background:linear-gradient(145deg,#ff405d,#aa0e28);box-shadow:0 12px 30px rgba(151,15,40,.25);color:#fff; }
+.kh-meeting-hero { display:flex;align-items:center;gap:12px;border:1px solid rgba(66,133,244,.38);border-radius:12px;background:linear-gradient(135deg,rgba(22,73,122,.28),rgba(8,20,31,.92));padding:14px; }
+.kh-meeting-hero > span { width:48px;height:48px;display:grid;place-items:center;flex:0 0 auto;border:1px solid rgba(255,255,255,.72);border-radius:10px;background:#f8fbff;box-shadow:0 12px 30px rgba(0,0,0,.22); }
+.kh-meeting-hero .kh-google-meet-mark { width:34px;height:34px; }
 .kh-meeting-hero > div { min-width:0;display:grid;gap:4px; }
 .kh-meeting-hero strong { color:#f5faff;font-size:14px; }
 .kh-meeting-hero small { color:#9eb2c4;font-size:11px;line-height:1.45; }
@@ -1438,9 +1439,10 @@
 .kh-danilo-card .kh-card-entry { margin-top: 5px; color: #b8c8d8; }
 .kh-danilo-card .kh-card-meeting-time { display:flex;align-items:center;gap:5px;margin-top:6px;color:#d6b4ff;font-size:9px;font-weight:800;line-height:1.2; }
 .kh-danilo-card .kh-card-meeting-time svg { flex:0 0 auto;color:#aa75ff; }
-.kh-danilo-card .kh-card-meeting-preview { display:grid;grid-template-columns:40px minmax(0,1fr) 14px;align-items:center;gap:8px;width:100%;margin-top:7px;overflow:hidden;border:1px solid rgba(255,73,97,.38);border-radius:7px;background:linear-gradient(135deg,rgba(115,15,34,.34),rgba(19,29,44,.96));color:#f6fbff;padding:6px;text-align:left;font:inherit;cursor:pointer; }
-.kh-danilo-card .kh-card-meeting-preview:hover { border-color:rgba(255,92,113,.75);background:linear-gradient(135deg,rgba(145,19,43,.42),rgba(23,37,54,.98)); }
-.kh-card-meeting-thumbnail { width:40px;height:30px;display:grid;place-items:center;border-radius:5px;background:linear-gradient(145deg,#ff405d,#b30f2b);box-shadow:0 7px 18px rgba(162,17,43,.28);color:#fff; }
+.kh-danilo-card .kh-card-meeting-preview { display:grid;grid-template-columns:40px minmax(0,1fr) 14px;align-items:center;gap:8px;width:100%;margin-top:7px;overflow:hidden;border:1px solid rgba(66,133,244,.42);border-radius:7px;background:linear-gradient(135deg,rgba(22,73,122,.28),rgba(19,29,44,.96));color:#f6fbff;padding:6px;text-align:left;font:inherit;cursor:pointer; }
+.kh-danilo-card .kh-card-meeting-preview:hover { border-color:rgba(93,154,255,.8);background:linear-gradient(135deg,rgba(27,91,153,.38),rgba(23,37,54,.98)); }
+.kh-card-meeting-thumbnail { width:40px;height:30px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.72);border-radius:5px;background:#f8fbff;box-shadow:0 7px 18px rgba(0,0,0,.25); }
+.kh-card-meeting-thumbnail .kh-google-meet-mark { width:26px;height:26px; }
 .kh-card-meeting-copy { min-width:0;display:grid;gap:2px; }
 .kh-card-meeting-copy strong,.kh-card-meeting-copy small { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .kh-card-meeting-copy strong { color:#f7fbff;font-size:9px;font-weight:900; }
@@ -1468,50 +1470,9 @@
 .kh-danilo-card .kh-card-inbox:hover { border-color: #2ce6a3; background: #08714c; color: #fff; }
 .kh-danilo-card .kh-card-actions { width: 100%; box-sizing: border-box; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; min-height: 25px; padding: 0 2px 2px; }
 .kh-danilo-card .kh-card-actions .kh-card-inbox { margin-top: 0; }
-.kh-danilo-card .kh-card-start { min-height: 25px; border: 1px solid #2d8cff; border-radius: 4px; background: #0d5ec9; color: #fff; padding: 4px 9px; font: inherit; font-size: 9px; font-weight: 800; line-height: 1; cursor: pointer; }
-.kh-danilo-card .kh-card-start:hover:not(:disabled) { border-color: #69b0ff; background: #1678ed; }
-.kh-danilo-card .kh-card-start:disabled { cursor: wait; opacity: .65; }
 .kh-danilo-card .kh-card-owner { min-height: 25px; display: inline-flex; align-items: center; border: 1px solid #24405b; border-radius: 4px; background: #0b1724; color: #9bb1c8; padding: 4px 7px; font-size: 8px; font-weight: 700; }
 .kh-danilo-card .kh-card-owner-select { min-height: 25px; max-width: 92px; border: 1px solid #24405b; border-radius: 4px; background: #0b1724; color: #c5d7e8; padding: 3px 5px; font: inherit; font-size: 8px; font-weight: 700; cursor: pointer; }
 .kh-danilo-card .kh-card-owner-select:focus { outline: 2px solid rgba(45, 140, 255, .45); outline-offset: 1px; }
-
-/* Card anonimo da fila: nenhum dado do lead aparece antes da disputa. */
-.kh-start-card {
-  display: grid;
-  min-height: 174px;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid rgba(34, 211, 238, .65);
-  border-radius: 10px;
-  background: radial-gradient(circle at 50% 45%, rgba(8, 145, 178, .28), #06111d 68%);
-  box-shadow: inset 0 0 26px rgba(34, 211, 238, .1), 0 0 22px rgba(34, 211, 238, .16);
-  padding: 18px;
-}
-.kh-start-card-button {
-  width: min(100%, 230px);
-  min-height: 92px;
-  border: 2px solid #67e8f9;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #06b6d4, #2563eb);
-  box-shadow: 0 0 0 5px rgba(34, 211, 238, .1), 0 0 34px rgba(34, 211, 238, .72);
-  color: #fff;
-  font: inherit;
-  font-size: clamp(24px, 2.4vw, 34px);
-  font-weight: 950;
-  letter-spacing: .12em;
-  cursor: pointer;
-  animation: kh-start-pulse 1.6s ease-in-out infinite;
-}
-.kh-start-card-button:hover:not(:disabled) { transform: translateY(-2px) scale(1.025); filter: brightness(1.12); }
-.kh-start-card-button:focus-visible { outline: 3px solid #fef08a; outline-offset: 5px; }
-.kh-start-card-button:disabled { cursor: wait; opacity: .72; animation: none; }
-@keyframes kh-start-pulse {
-  0%, 100% { box-shadow: 0 0 0 5px rgba(34, 211, 238, .1), 0 0 24px rgba(34, 211, 238, .48); }
-  50% { box-shadow: 0 0 0 9px rgba(34, 211, 238, .04), 0 0 44px rgba(34, 211, 238, .88); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .kh-start-card-button { animation: none; }
-}
 
 .kh-next-sdr {
   display: flex;

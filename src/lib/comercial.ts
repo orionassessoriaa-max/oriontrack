@@ -97,8 +97,6 @@ export function recebeLeadNoRodizio(member: CommercialMember) {
 
 export type CommercialLead = {
   id: string;
-  /** Lead da fila ainda sem dono. Nenhum dado pessoal vem antes do START. */
-  fila_oculta?: boolean;
   nome: string;
   telefone: string | null;
   email: string | null;

@@ -14,10 +14,10 @@ import {
   Menu,
   Users,
   UserRound,
-  Video,
   X,
 } from "lucide-react";
 import { useCommercial } from "@/components/commercial/CommercialShell";
+import GoogleMeetIcon from "@/components/icons/GoogleMeetIcon";
 import type { CommercialLead } from "@/lib/comercial";
 
 type CalendarEvent = {
@@ -285,7 +285,7 @@ export default function CommercialMeetingScheduler({
                         return <button type="button" key={event.id} className={`kh-scheduler-event color-${eventColor(event)}`} style={{ top, height }} title={`${event.title} · ${start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`} aria-label={`Abrir ${event.title}`} onClick={() => showEventDetails(event)}><strong>{event.title}</strong><small>{start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}–{end.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></button>;
                       })}
                       {selectedOnDay && selectedDate && selectedEnd && (
-                        <div className="kh-scheduler-selection" style={{ top: ((minutesFromDayStart(selectedDate) - START_HOUR * 60) / 60) * HOUR_HEIGHT, height: Math.max(28, (durationMinutes / 60) * HOUR_HEIGHT) }}><Video size={13} /><strong>Nova reunião</strong><small>{selectedDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}–{selectedEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></div>
+                        <div className="kh-scheduler-selection" style={{ top: ((minutesFromDayStart(selectedDate) - START_HOUR * 60) / 60) * HOUR_HEIGHT, height: Math.max(28, (durationMinutes / 60) * HOUR_HEIGHT) }}><GoogleMeetIcon width={13} height={13} /><strong>Nova reunião</strong><small>{selectedDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}–{selectedEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></div>
                       )}
                       {today && nowMinutes >= 0 && nowMinutes <= (END_HOUR - START_HOUR) * 60 && <div className="kh-scheduler-now" style={{ top: (nowMinutes / 60) * HOUR_HEIGHT }}><i /></div>}
                     </div>
@@ -303,7 +303,7 @@ export default function CommercialMeetingScheduler({
             <div className="kh-scheduler-summary">
               <div><CalendarDays size={15} /><span>Data<strong>{selectedDate ? selectedDate.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" }) : "Nenhuma"}</strong></span></div>
               <div><Clock3 size={15} /><span>Horário<strong>{selectedDate && selectedEnd ? `${selectedDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} às ${selectedEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : `${durationMinutes} minutos`}</strong></span></div>
-              <div><Video size={15} /><span>Videoconferência<strong>Google Meet automático</strong></span></div>
+              <div><GoogleMeetIcon width={15} height={15} /><span>Videoconferência<strong>Google Meet automático</strong></span></div>
             </div>
             {(error || loadError) && <p className="kh-scheduler-error" role="alert">{error || loadError}</p>}
             <div className="kh-scheduler-actions"><button type="button" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving || loading || Boolean(loadError) || !selectedAt || !email.trim()}>{saving ? <Loader2 size={15} className="kh-spin" /> : <CalendarDays size={15} />}{saving ? "Criando evento..." : "Criar evento"}</button></div>
@@ -320,7 +320,7 @@ export default function CommercialMeetingScheduler({
                 <div className="kh-scheduler-editor-tabs"><strong>Evento</strong><span>Agenda comercial</span></div>
                 <div className="kh-scheduler-editor-row"><Clock3 size={20} /><div><strong>{selectedDate.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</strong><span>{selectedDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} – {selectedEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span><small>GMT-3 · Não se repete</small></div></div>
                 <label className="kh-scheduler-editor-row"><Users size={20} /><div><span>Convidado</span><input type="email" value={email} onChange={(event) => onEmailChange(event.target.value)} placeholder="cliente@empresa.com.br" required autoFocus /></div></label>
-                <div className="kh-scheduler-editor-row"><Video size={20} /><div><strong>Google Meet automático</strong><small>O link será criado e enviado ao convidado.</small></div></div>
+                <div className="kh-scheduler-editor-row"><GoogleMeetIcon width={20} height={20} /><div><strong>Google Meet automático</strong><small>O link será criado e enviado ao convidado.</small></div></div>
                 <div className="kh-scheduler-editor-row"><MapPin size={20} /><div><strong>Agenda Comercial Orion</strong><small>Evento ocupado · lembrete padrão da agenda</small></div></div>
                 <div className="kh-scheduler-editor-row"><AlignLeft size={20} /><div><strong>Dados do lead incluídos</strong><small>Empresa, telefone, e-mail e data de entrada serão adicionados à descrição.</small></div></div>
                 {error && <p className="kh-scheduler-error" role="alert">{error}</p>}
@@ -341,7 +341,7 @@ export default function CommercialMeetingScheduler({
                 <div className="kh-scheduler-event-details-body">
                   <div className="kh-scheduler-editor-row"><Clock3 size={20} /><div><strong>{eventStart.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</strong><span>{openEvent.allDay ? "Dia inteiro" : `${eventStart.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} – ${eventEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}</span></div></div>
                   <div className="kh-scheduler-editor-row"><Users size={20} /><div><strong>Convidados</strong>{openEvent.attendees.length ? <ul>{openEvent.attendees.map((attendee) => <li key={attendee.email}><span>{attendee.name || attendee.email}</span><small>{attendee.name ? attendee.email : attendee.responseStatus || "Convidado"}</small></li>)}</ul> : <small>Nenhum convidado informado.</small>}</div></div>
-                  {openEvent.meetLink && <div className="kh-scheduler-editor-row"><Video size={20} /><div><strong>Google Meet</strong><a href={openEvent.meetLink} target="_blank" rel="noreferrer">Entrar na videoconferência <ExternalLink size={13} /></a></div></div>}
+                  {openEvent.meetLink && <div className="kh-scheduler-editor-row"><GoogleMeetIcon width={20} height={20} /><div><strong>Google Meet</strong><a href={openEvent.meetLink} target="_blank" rel="noreferrer">Entrar na videoconferência <ExternalLink size={13} /></a></div></div>}
                   {openEvent.location && <div className="kh-scheduler-editor-row"><MapPin size={20} /><div><strong>Local</strong><span>{openEvent.location}</span></div></div>}
                   {openEvent.description && <div className="kh-scheduler-editor-row"><AlignLeft size={20} /><div><strong>Descrição</strong><p>{openEvent.description}</p></div></div>}
                 </div>

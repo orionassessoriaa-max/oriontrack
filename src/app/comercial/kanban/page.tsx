@@ -26,10 +26,10 @@ import {
   Trash2,
   Users,
   UserRound,
-  Video,
   X,
 } from "lucide-react";
 import { useCommercial } from "@/components/commercial/CommercialShell";
+import GoogleMeetIcon from "@/components/icons/GoogleMeetIcon";
 import CommercialDateRangeFilter, {
   type CommercialDatePreset,
 } from "@/components/commercial/CommercialDateRangeFilter";
@@ -41,7 +41,6 @@ import {
   recebeLeadNoRodizio,
   canManageCommercialStages,
   COMMERCIAL_STAGES,
-  LEO_COMMERCIAL_CLOSER_PROFILE_ID,
   currency,
   type CommercialContactCadence,
   type CommercialLead,
@@ -81,11 +80,6 @@ function localDateTimeValue(value: string | Date = new Date()) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-function isTestCommercialLead(lead: CommercialLead) {
-  return /\b(test|teste|dummy)\b/i.test(
-    [lead.nome, lead.email, lead.empresa, lead.origem].filter(Boolean).join(" "),
-  );
-}
 function formatLeadEntry(value: string | null | undefined) {
   if (!value) return "Entrada não informada";
   const date = new Date(value);
@@ -273,7 +267,7 @@ export default function CommercialKanbanPage() {
   const [saleBriefingLead, setSaleBriefingLead] = useState<CommercialLead | null>(null);
   const [saleSaving, setSaleSaving] = useState(false);
   const [briefingDownloading, setBriefingDownloading] = useState<string | null>(null);
-  const [startingId, setStartingId] = useState<string | null>(null);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
   const [meetingNow, setMeetingNow] = useState(() => Date.now());
   const [assignmentChoice, setAssignmentChoice] = useState<
     Record<string, string>
@@ -301,7 +295,7 @@ export default function CommercialKanbanPage() {
     if (!silent) setLoading(true);
     try {
       const payload = await api(
-        `/api/comercial/leads?queue=1&limit=${LEADS_PAGE_SIZE}&offset=0`,
+        `/api/comercial/leads?limit=${LEADS_PAGE_SIZE}&offset=0`,
       );
       const nextLeads = payload.leads || [];
       if (payload.stage_summaries) setStageSummaries(payload.stage_summaries);
@@ -323,7 +317,7 @@ export default function CommercialKanbanPage() {
     setLoadingMoreLeads(true);
     try {
       const payload = await api(
-        `/api/comercial/leads?queue=1&limit=${LEADS_PAGE_SIZE}&offset=${nextLeadOffset.current}`,
+        `/api/comercial/leads?limit=${LEADS_PAGE_SIZE}&offset=${nextLeadOffset.current}`,
       );
       const nextLeads = payload.leads || [];
       if (payload.stage_summaries) setStageSummaries(payload.stage_summaries);
@@ -348,7 +342,7 @@ export default function CommercialKanbanPage() {
       return;
     }
     const payload = await api(
-      `/api/comercial/leads?queue=1&limit=${LEADS_PAGE_SIZE}&updated_after=${encodeURIComponent(lastLeadSyncAt.current)}`,
+      `/api/comercial/leads?limit=${LEADS_PAGE_SIZE}&updated_after=${encodeURIComponent(lastLeadSyncAt.current)}`,
     );
     const changedLeads = payload.leads || [];
     if (payload.stage_summaries) setStageSummaries(payload.stage_summaries);
@@ -555,8 +549,6 @@ export default function CommercialKanbanPage() {
           (sdrFilter === "sem_responsavel"
             ? !lead.sdr_id
             : lead.sdr_id === sdrFilter);
-        // A fila anterior ao START nao expoe qualificacao ou data do lead.
-        if (lead.fila_oculta) return matchesSdr && mqlFilter === "todos";
         const matchesSearch = [lead.nome, lead.empresa, lead.telefone]
           .join(" ")
           .toLowerCase()
@@ -585,7 +577,6 @@ export default function CommercialKanbanPage() {
   );
   const allTimeRange = useMemo(() => {
     const dates = leads
-      .filter((lead) => !lead.fila_oculta)
       .map((lead) => new Date(lead.data_entrada))
       .filter((date) => !Number.isNaN(date.getTime()))
       .sort((a, b) => a.getTime() - b.getTime());
@@ -608,9 +599,7 @@ export default function CommercialKanbanPage() {
     if (!expandedLeadId) return null;
     const currentLead = leads.find((lead) => lead.id === expandedLeadId);
     if (!currentLead) return null;
-    const columnLeads = (grouped[currentLead.status] || []).filter(
-      (lead) => !(role === "sdr" && lead.fila_oculta && !lead.sdr_id),
-    );
+    const columnLeads = grouped[currentLead.status] || [];
     const currentIndex = columnLeads.findIndex((lead) => lead.id === expandedLeadId);
     if (currentIndex < 0) return null;
     return {
@@ -619,7 +608,7 @@ export default function CommercialKanbanPage() {
       previous: columnLeads[currentIndex - 1] || null,
       next: columnLeads[currentIndex + 1] || null,
     };
-  }, [expandedLeadId, grouped, leads, role]);
+  }, [expandedLeadId, grouped, leads]);
 
   async function moveLead(id: string, status: string) {
     const leadToMove = leads.find((item) => item.id === id);
@@ -1007,62 +996,18 @@ export default function CommercialKanbanPage() {
     router.push(`/comercial/inbox?${params.toString()}`);
   }
 
-  async function startLead(event: React.MouseEvent, lead: CommercialLead) {
-    event.stopPropagation();
-    const requestedSdrId = canAssignSdr
-      ? lead.sdr_id ||
-        assignmentChoice[lead.id] ||
-        sdrMembers[0]?.profile_id ||
-        ""
-      : "";
-    if (
-      startingId ||
-      lead.sdr_id ||
-      (canAssignSdr && !requestedSdrId) ||
-      (!canAssignSdr && role !== "sdr")
-    )
-      return;
-    setStartingId(lead.id);
-    try {
-      const payload = await api("/api/comercial/leads/start", {
-        method: "POST",
-        body: JSON.stringify(
-          canAssignSdr
-            ? { id: lead.id, sdr_id: requestedSdrId }
-            : { id: lead.id },
-        ),
-      });
-      setLeads((current) =>
-        current.map((item) =>
-          item.id === lead.id
-            ? payload.lead || { ...item, sdr_id: payload.sdr_id || currentProfileId }
-            : item,
-        ),
-      );
-    } catch (error) {
-      setStageError(
-        error instanceof Error
-          ? error.message
-          : "Nao foi possivel iniciar este lead.",
-      );
-      await load();
-    } finally {
-      setStartingId(null);
-    }
-  }
-
   async function changeLeadSdr(
     event: React.ChangeEvent<HTMLSelectElement>,
     lead: CommercialLead,
   ) {
     event.stopPropagation();
-    if (!canAssignSdr || startingId) return;
+    if (!canAssignSdr || assigningId) return;
     const sdrId = event.target.value || null;
     setAssignmentChoice((current) => ({ ...current, [lead.id]: sdrId || "" }));
-    setStartingId(lead.id);
+    setAssigningId(lead.id);
     try {
-      const payload = await api("/api/comercial/leads/start", {
-        method: "POST",
+      const payload = await api("/api/comercial/leads", {
+        method: "PATCH",
         body: JSON.stringify({ id: lead.id, sdr_id: sdrId }),
       });
       setLeads((current) =>
@@ -1080,7 +1025,7 @@ export default function CommercialKanbanPage() {
       );
       await load();
     } finally {
-      setStartingId(null);
+      setAssigningId(null);
     }
   }
 
@@ -1351,12 +1296,6 @@ export default function CommercialKanbanPage() {
             <section
               key={stage.id}
               className={`kh-kanban-column ${dropStage === stage.id ? "drop-target" : ""} ${stageDragging === stage.id ? "stage-dragging" : ""}`}
-              draggable={canEditCommercial && canManageStages && editingStage?.id !== stage.id}
-              onDragStart={(event) => {
-                event.stopPropagation();
-                if (canManageStages) setStageDragging(stage.id);
-              }}
-              onDragEnd={() => setStageDragging(null)}
               onDragOver={(event) => {
                 event.preventDefault();
                 if (dragging) setDropStage(stage.id);
@@ -1375,6 +1314,17 @@ export default function CommercialKanbanPage() {
               }}
             >
               <header
+                draggable={canEditCommercial && canManageStages && editingStage?.id !== stage.id}
+                onDragStart={(event) => {
+                  const target = event.target as HTMLElement;
+                  if (target.closest("button, input, form")) {
+                    event.preventDefault();
+                    return;
+                  }
+                  event.stopPropagation();
+                  if (canManageStages) setStageDragging(stage.id);
+                }}
+                onDragEnd={() => setStageDragging(null)}
                 style={
                   {
                     "--stage-color": editingStage?.id === stage.id
@@ -1460,21 +1410,6 @@ export default function CommercialKanbanPage() {
                   }
                 >
                   {statusLeads.map((lead) => {
-                    if (role === "sdr" && lead.fila_oculta && !lead.sdr_id) {
-                      return (
-                        <article key={lead.id} className="kh-start-card">
-                          <button
-                            type="button"
-                            className="kh-start-card-button"
-                            aria-label="Assumir nova oportunidade"
-                            disabled={startingId === lead.id}
-                            onClick={(event) => void startLead(event, lead)}
-                          >
-                            {startingId === lead.id ? "INICIANDO..." : "START"}
-                          </button>
-                        </article>
-                      );
-                    }
                     const assignedSdr = lead.sdr_id
                       ? memberMap.get(lead.sdr_id)
                       : null;
@@ -1482,7 +1417,6 @@ export default function CommercialKanbanPage() {
                       lead.sdr_id ||
                       assignmentChoice[lead.id] ||
                       "";
-                    const isTestLead = isTestCommercialLead(lead);
                     const mqlLevel = getCommercialMqlLevel(
                       lead.faturamento_mensal,
                       lead.investimento,
@@ -1493,14 +1427,16 @@ export default function CommercialKanbanPage() {
                     const cadenceLimitReached = isFmql && cadenceDay !== null && cadenceDay > 2;
                     const cadenceOverdue = cadenceLimitReached || isCadenceStageOverdue(lead);
                     const scheduledMeeting = isScheduledMeetingCard(lead.status);
-                    const canResolveThisMeeting = currentProfileId === LEO_COMMERCIAL_CLOSER_PROFILE_ID;
+                    const canResolveThisMeeting = isDevOps || canManageStages;
                     return (
                       <article
                         key={lead.id}
-                        draggable={canEditCommercial && (!scheduledMeeting || canResolveThisMeeting)}
+                        draggable={canEditCommercial}
                         onDragStart={(event) => {
                           event.stopPropagation();
-                          if (canEditCommercial && (!scheduledMeeting || canResolveThisMeeting)) {
+                          if (canEditCommercial) {
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData("text/plain", lead.id);
                             draggingRef.current = lead.id;
                             setDragging(lead.id);
                           }
@@ -1577,7 +1513,7 @@ export default function CommercialKanbanPage() {
                             <span>{meetingTimingLabel(lead.reuniao_agendada_at, meetingNow)}</span>
                           </div>
                         )}
-                        {lead.reuniao_link && (
+                        {scheduledMeeting && lead.reuniao_link && (
                           <button
                             type="button"
                             className="kh-card-meeting-preview"
@@ -1587,7 +1523,7 @@ export default function CommercialKanbanPage() {
                             }}
                           >
                             <span className="kh-card-meeting-thumbnail" aria-hidden="true">
-                              <Video size={18} />
+                              <GoogleMeetIcon className="kh-google-meet-mark" />
                             </span>
                             <span className="kh-card-meeting-copy">
                               <strong>Reunião no Google Meet</strong>
@@ -1642,7 +1578,7 @@ export default function CommercialKanbanPage() {
                               onChange={(event) =>
                                 void changeLeadSdr(event, lead)
                               }
-                              disabled={startingId === lead.id}
+                              disabled={assigningId === lead.id}
                             >
                               <option value="">Sem responsavel</option>
                               {sdrOptions.map((member) => (
@@ -1654,21 +1590,6 @@ export default function CommercialKanbanPage() {
                                 </option>
                               ))}
                             </select>
-                          )}
-                          {!isTestLead && !assignedSdr && (role === "sdr" || canAssignSdr) && (
-                            <button
-                              type="button"
-                              className="kh-card-start"
-                              disabled={
-                                startingId === lead.id ||
-                                (canAssignSdr && !selectedSdr)
-                              }
-                              onClick={(event) => void startLead(event, lead)}
-                            >
-                              {startingId === lead.id
-                                ? "Iniciando..."
-                                : "Start"}
-                            </button>
                           )}
                           {!canAssignSdr && role === "sdr" && assignedSdr && (
                             <span className="kh-card-owner">
@@ -1787,7 +1708,7 @@ export default function CommercialKanbanPage() {
             </header>
             <div className="kh-meeting-details-body">
               <div className="kh-meeting-hero">
-                <span aria-hidden="true"><Video size={24} /></span>
+                <span aria-hidden="true"><GoogleMeetIcon className="kh-google-meet-mark" /></span>
                 <div>
                   <strong>{meetingArtifactLabel(meetingDetailsLead.reuniao_artefatos_status)}</strong>
                   <small>{meetingDetailsLead.reuniao_agendada_at

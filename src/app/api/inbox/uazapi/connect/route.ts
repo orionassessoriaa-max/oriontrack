@@ -138,6 +138,43 @@ function readInstanceName(instance: any) {
   );
 }
 
+function connectedPhone(value: unknown) {
+  const digits = String(value || '').split('@')[0].replace(/\D/g, '');
+  // Uma linha brasileira válida vem do provedor como 55 + DDD + número.
+  return digits.length >= 12 && digits.startsWith('55') ? `+${digits}` : null;
+}
+
+async function syncConnectedProfilePhone(profile: WhatsappTargetProfile, number: string | null) {
+  const phone = connectedPhone(number);
+  if (!phone || phone === profile.telefone) return null;
+
+  const { error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .update({ telefone: phone })
+    .eq('id', profile.id);
+  if (profileError) throw profileError;
+
+  const { data: preference, error: preferenceReadError } = await supabaseAdmin
+    .from('notificacao_preferencias')
+    .select('whatsapp_enabled, tipos')
+    .eq('profile_id', profile.id)
+    .maybeSingle();
+  if (preferenceReadError) throw preferenceReadError;
+
+  const { error: preferenceError } = await supabaseAdmin
+    .from('notificacao_preferencias')
+    .upsert({
+      profile_id: profile.id,
+      telefone: phone,
+      whatsapp_enabled: preference?.whatsapp_enabled ?? true,
+      tipos: preference?.tipos || {},
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'profile_id' });
+  if (preferenceError) throw preferenceError;
+
+  return phone;
+}
+
 async function fetchUazapiInstanceStateFromList(instance: string): Promise<UazapiConnectionSnapshot> {
   const payload = await uazapiFetch('/instance/all', { method: 'GET' }, { useAdminAuth: true });
   const matches = asArray(payload).filter((item) => readInstanceName(item) === instance);
@@ -155,7 +192,7 @@ async function fetchUazapiInstanceStateFromList(instance: string): Promise<Uazap
     state: qrcode && normalizedState === 'close' ? 'connecting' : normalizedState,
     qrcode,
     disconnectReason: readUazapiDisconnectReason(found),
-    numero: String(found?.owner || found?.wid || found?.jid || '').split('@')[0] || null,
+    numero: String(found?.phone || found?.number || found?.owner || found?.wid || found?.jid || '').split('@')[0] || null,
   };
 }
 
@@ -274,7 +311,7 @@ async function fetchUazapiInstanceState(instance: string): Promise<UazapiConnect
         state,
         qrcode,
         disconnectReason: readUazapiDisconnectReason(payload),
-        numero: String(dono?.owner || dono?.wid || dono?.jid || '').split('@')[0] || null,
+        numero: String(dono?.phone || dono?.number || dono?.owner || dono?.wid || dono?.jid || '').split('@')[0] || null,
       };
     }
 
@@ -414,6 +451,17 @@ export async function GET(request: Request) {
 
     try {
       const snapshot = await fetchUazapiInstanceState(instance);
+      const synchronizedPhone = snapshot.state === 'open'
+        ? await syncConnectedProfilePhone(targetProfile, snapshot.numero)
+        : null;
+      if (synchronizedPhone) {
+        await writeAuditLog(request, guard.profile, {
+          action: 'whatsapp.connected_phone.sync',
+          entity_type: 'profile',
+          entity_id: targetProfile.id,
+          metadata: { instance, phone: synchronizedPhone },
+        });
+      }
       if (snapshot.state === 'open') {
         after(async () => {
           try {

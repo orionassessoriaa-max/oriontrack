@@ -1,0 +1,126 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "COLE_AQUI_O_WEBHOOK_DO_MAKE",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "evento",
+              "value": "lead.created"
+            },
+            {
+              "name": "origem_integracao",
+              "value": "orion_n8n"
+            },
+            {
+              "name": "idempotency_key",
+              "value": "={{ $('Webhook').item.json.body.respondent.respondent_id || '' }}"
+            },
+            {
+              "name": "data",
+              "value": "={{ $('Webhook').item.json.body.respondent.date || '' }}"
+            },
+            {
+              "name": "form_id",
+              "value": "={{ $('Webhook').item.json.body.form.form_id || '' }}"
+            },
+            {
+              "name": "form_nome",
+              "value": "={{ $('Webhook').item.json.body.form.form_name || '' }}"
+            },
+            {
+              "name": "nome",
+              "value": "={{ $('Webhook').item.json.body.respondent.answers['Qual o seu nome?'] || '' }}"
+            },
+            {
+              "name": "telefone",
+              "value": "={{ String($('Webhook').item.json.body.respondent.answers['Qual o seu Whatsapp?'] || '').replace(/\\D/g, '') }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $('Webhook').item.json.body.respondent.answers['Qual o seu melhor email?'] || $('Webhook').item.json.body.respondent.answers['Qual o seu e-mail?'] || $('Webhook').item.json.body.respondent.answers['Qual seu e-mail?'] || '' }}"
+            },
+            {
+              "name": "idades",
+              "value": "={{ $('Webhook').item.json.body.respondent.answers['Quais as idades para cotação?'] || $('Webhook').item.json.body.respondent.answers['Quais as idades das vidas para cotação?'] || '' }}"
+            },
+            {
+              "name": "cidade",
+              "value": "={{ $('Webhook').item.json.body.respondent.answers['Qual sua cidade?'] || '' }}"
+            },
+            {
+              "name": "possui_cnpj",
+              "value": "={{ $('Webhook').item.json.body.respondent.answers['Possui CNPJ?'] || '' }}"
+            },
+            {
+              "name": "tem_plano_ativo",
+              "value": "={{ $('Webhook').item.json.body.respondent.answers['Qual dessas opções encaixaria no seu perfil?'] || $('Webhook').item.json.body.respondent.answers['Possui plano ativo?'] || $('Webhook').item.json.body.respondent.answers['Em qual opção você melhor se encaixa?'] || '' }}"
+            },
+            {
+              "name": "plano_atual",
+              "value": "={{ $('Webhook').item.json.body.respondent.answers['Qual seu plano de saúde atual?'] || '' }}"
+            },
+            {
+              "name": "investimento",
+              "value": "={{ $('Webhook').item.json.body.respondent.answers['Quanto pretende investir para ter um plano de saúde?'] || $('Webhook').item.json.body.respondent.answers['Qual o custo do seu plano de saúde atual?'] || '' }}"
+            },
+            {
+              "name": "utm_source",
+              "value": "={{ $('Webhook').item.json.body.respondent.respondent_utms.utm_source || '' }}"
+            },
+            {
+              "name": "utm_medium",
+              "value": "={{ $('Webhook').item.json.body.respondent.respondent_utms.utm_medium || '' }}"
+            },
+            {
+              "name": "utm_campaign",
+              "value": "={{ $('Webhook').item.json.body.respondent.respondent_utms.utm_campaign || '' }}"
+            },
+            {
+              "name": "utm_term",
+              "value": "={{ $('Webhook').item.json.body.respondent.respondent_utms.utm_term || '' }}"
+            },
+            {
+              "name": "utm_content",
+              "value": "={{ $('Webhook').item.json.body.respondent.respondent_utms.utm_content || '' }}"
+            },
+            {
+              "name": "gclid",
+              "value": "={{ $('Webhook').item.json.body.respondent.respondent_utms.gclid || '' }}"
+            },
+            {
+              "name": "fbclid",
+              "value": "={{ $('Webhook').item.json.body.respondent.respondent_utms.fbclid || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1168,
+        160
+      ],
+      "id": "bc9b317f-8d08-4faf-8fb8-4d8704a526d5",
+      "name": "Enviar lead para Make",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {},
+  "pinData": {}
+}

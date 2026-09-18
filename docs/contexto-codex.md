@@ -214,24 +214,18 @@ corretor jurava não ter saído estava como `Read`.
   base64). `scripts/reparar-audios-cortados.mjs` rebaixou tudo para o bucket e
   liberou 4,8 MB. A rota de mídia rebaixa de novo quando encontra o teto.
 
-### Comercial: fila comum e Start do SDR
+### Comercial: rodízio automático dos SDRs
 
-Voltou a regra antiga: o lead novo entra **sem dono**, todos os SDRs são
-avisados, e quem apertar Start primeiro fica com ele.
+O lead novo recebe responsável na entrada pelo rodízio atômico do banco. Os
+elegíveis são Talita e Carlos Eduardo (Kadu), alternando um lead para cada,
+inclusive em entradas simultâneas. A fila de disputa e o botão Start foram
+removidos temporariamente.
 
-- `donoAutomaticoDoLead(nivel)` — só quem tem `comercial_membros.recebe_apenas_mql`
-  igual ao nível ganha dono na entrada. Hoje é só o Léo, com `S`.
-- `notifyCommercialLeadPool()` — avisa todos os SDRs ativos, ignorando
-  preferências: "Lead novo no CRM. Quem pegar primeiro fica com a oportunidade."
-- `POST /api/comercial/leads/start` — o update tem `.is('sdr_id', null)` como
-  trava de corrida; o segundo a clicar recebe 409. SDR não rouba lead com dono.
-- **Estado real em 25/08:** 11 leads criados pelo webhook, **0 assumidos pelo
-  Start**, 13 atribuídos na mão pelo Léo no seletor. A fila funciona (um lead
-  ficou 24 minutos sem dono), mas a coordenação distribui antes dos SDRs
-  reagirem. Falta decidir se o closer continua podendo atribuir.
-- **Pendente no banco:** `supabase/2026-08-24_fila_comum_de_leads.sql`, que faz o
-  SDR **enxergar** lead sem dono. Sem ele a fila é invisível. Conferir com
-  `select policyname, qual from pg_policies where tablename = 'comercial_leads';`
+- `donoAutomaticoDoLead(nivel)` chama `assign_next_commercial_sdr`.
+- O formulário, a importação por planilha e o webhook usam a mesma distribuição.
+- `supabase/migrations/20260918120000_restore_kripto_round_robin.sql` ativa apenas
+  Talita e Kadu no rodízio, religa a distribuição automática e reinicia a vez
+  pela Talita.
 
 ### Comercial: rodízio, sala e relatórios
 
@@ -371,10 +365,9 @@ Editar o `.ts` não muda produção.
 ## 7. Pendências abertas (25/08)
 
 **SQL que ainda não foi aplicado no Supabase** (aplicação é manual, no SQL Editor)
-1. `supabase/2026-08-24_fila_comum_de_leads.sql` — sem ele o SDR não enxerga lead
-   sem dono e a fila do Start é invisível. **É o mais urgente.**
-2. `supabase/2026-08-24_rodizio_por_nivel_mql.sql`
-3. `supabase/2026-08-24_voip_linha_por_operador.sql` — a coluna
+1. `supabase/migrations/20260918120000_restore_kripto_round_robin.sql` — restaura
+   o rodízio Talita/Kadu e precisa ser aplicado no Supabase.
+2. `supabase/2026-08-24_voip_linha_por_operador.sql` — a coluna
    `voip_device_id` já responde em produção, mas confirmar se este arquivo foi o
    aplicado.
 
@@ -384,18 +377,16 @@ Editar o `.ts` não muda produção.
 5. Bucket `inbox-media` é público: quem tem o link abre sem login.
 
 **Produto**
-6. Decidir se o closer continua podendo atribuir lead no seletor. Hoje ele
-   distribui antes de os SDRs apertarem Start, e o Start nunca é usado.
-7. Furo no contador de gasto de criativo: `jobs/route.ts` reserva e
+6. Furo no contador de gasto de criativo: `jobs/route.ts` reserva e
    `automation.ts` dá baixa, mas `library/route.ts` não passa pelo controle. Por
    isso `gasto_usd` fica zerado e os alertas nunca disparam.
-8. Qualidade de imagem configurável (`low` como padrão). Faz US$ 20 renderem 129
+7. Qualidade de imagem configurável (`low` como padrão). Faz US$ 20 renderem 129
    criativos em vez de 36.
-9. Comercial: os dois interruptores de primeiro contato estão `false`. Decidir
+8. Comercial: os dois interruptores de primeiro contato estão `false`. Decidir
    entre bot e IA e religar.
-10. Checklist só pode ser criado junto com a tarefa. Falta permitir acrescentar
+9. Checklist só pode ser criado junto com a tarefa. Falta permitir acrescentar
     item depois, no detalhe.
-11. Os checklists das predefinições "Edição de vídeo" e "Ajuste CRM" foram
+10. Os checklists das predefinições "Edição de vídeo" e "Ajuste CRM" foram
     chutados; o dono ainda não confirmou os itens reais.
 12. Cliente novo quer migrar 19.700 leads com histórico de mensagens. O banco
     hoje tem 18.774 leads e 29.409 mensagens numa instância de ~1 GB — a

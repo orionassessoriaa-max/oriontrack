@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
 import { donoAutomaticoDoLead } from '@/lib/commercialDistribution';
 import { getCommercialMqlLevel, isCommercialMql } from '@/lib/commercialQualification';
-import { notifyCommercialLeadAssignment, notifyCommercialLeadPool } from '@/lib/commercialLeadNotifications';
+import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 
 type CommercialLeadPayload = Record<string, unknown>;
 
@@ -320,7 +320,7 @@ export async function POST(request: Request) {
       url_lp: urlLp,
       fbclid,
       status,
-      // O payload externo nao escolhe SDR: todos os niveis entram na fila do START.
+      // O payload externo nao escolhe SDR: o rodizio atomico define o responsavel.
       sdr_id: fixedOwnerId,
       closer_id: closerId || null,
       lead_qualificado: isCommercialMql(faturamentoMensal, investimento, prioridade),
@@ -410,9 +410,7 @@ export async function POST(request: Request) {
       metadata: { origem: incoming.origem, campanha: incoming.campanha, sheet },
     });
     try {
-      // Sem dono, o lead entra na fila e os SDRs disputam pelo botao no grupo.
-      if (data.sdr_id) await notifyCommercialLeadAssignment(data);
-      else await notifyCommercialLeadPool(data);
+      await notifyCommercialLeadAssignment(data);
     } catch (notificationError) {
       console.error('commercial_lead_assignment_notification_failed', notificationError);
     }

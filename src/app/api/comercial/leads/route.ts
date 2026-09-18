@@ -6,10 +6,10 @@ import { startCommercialFirstContact } from '@/lib/commercialFirstContact';
 import { donoAutomaticoDoLead } from '@/lib/commercialDistribution';
 import { commercialCadenceMaxDay, getCommercialMqlLevel, isCommercialMql } from '@/lib/commercialQualification';
 import { cadenceDayFromStage } from '@/lib/comercialCadencia';
-import { notifyCommercialLeadAssignment, notifyCommercialLeadPool } from '@/lib/commercialLeadNotifications';
+import { notifyCommercialLeadAssignment } from '@/lib/commercialLeadNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { generateOnboardingBriefing } from '@/lib/commercialOnboardingBriefing';
-import { canAssignCommercialResponsible, LEO_COMMERCIAL_CLOSER_PROFILE_ID } from '@/lib/comercial';
+import { canAssignCommercialResponsible, canManageCommercialStages } from '@/lib/comercial';
 import { isGoogleCalendarConfigured, isValidCalendarGuestEmail, syncGoogleCalendarMeeting } from '@/lib/integrations/googleCalendar';
 import { enableMeetAutoTranscription, GoogleMeetPermissionError } from '@/lib/integrations/googleMeetArtifacts';
 
@@ -86,7 +86,6 @@ type CommercialStageSummary = {
 
 async function loadCommercialStageSummaries(
   guard: CommercialGuard,
-  includeQueue: boolean,
 ) {
   const summaries: Record<string, CommercialStageSummary> = {};
   const pageSize = 1000;
@@ -105,7 +104,6 @@ async function loadCommercialStageSummaries(
       query,
       guard.commercialRole,
       guard.profile.id,
-      includeQueue,
     );
     const { data, error } = await query;
     if (error) throw error;
@@ -132,7 +130,6 @@ export async function GET(request: Request) {
   const end = url.searchParams.get('end');
   const status = url.searchParams.get('status');
   const search = url.searchParams.get('search')?.trim();
-  const includeQueue = url.searchParams.get('queue') === '1';
   const updatedAfter = url.searchParams.get('updated_after');
   const requestedLimit = Number(url.searchParams.get('limit') || 200);
   const requestedOffset = Number(url.searchParams.get('offset') || 0);
@@ -148,7 +145,7 @@ export async function GET(request: Request) {
     .select('*')
     .order(updatedAfter ? 'updated_at' : 'data_entrada', { ascending: false })
     .range(offset, offset + limit - 1);
-  query = applyCommercialLeadScope(query, guard.commercialRole, guard.profile.id, includeQueue);
+  query = applyCommercialLeadScope(query, guard.commercialRole, guard.profile.id);
   if (updatedAfter) query = query.gt('updated_at', updatedAfter);
   if (start) query = query.gte('data_entrada', `${start}T00:00:00-03:00`);
   if (end) query = query.lte('data_entrada', `${end}T23:59:59-03:00`);
@@ -157,7 +154,7 @@ export async function GET(request: Request) {
 
   const [leadResult, stageSummaries] = await Promise.all([
     query,
-    loadCommercialStageSummaries(guard, includeQueue),
+    loadCommercialStageSummaries(guard),
   ]);
   const { data, error } = leadResult;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -189,16 +186,6 @@ export async function GET(request: Request) {
   }
   return NextResponse.json({
     leads: (data || []).map((lead) => {
-      // O SDR sabe apenas que existe uma oportunidade disponivel. Os dados
-      // pessoais so saem do servidor depois que o START atomico for vencido.
-      if (includeQueue && guard.commercialRole === 'sdr' && !lead.sdr_id) {
-        return {
-          id: lead.id,
-          status: lead.status,
-          sdr_id: null,
-          fila_oculta: true,
-        };
-      }
       const nextReturn = nextReturnByLead.get(lead.id);
       const proposal = proposalByLead.get(lead.id);
       return redactFinancialFields(enrichSaleFields({
@@ -280,8 +267,7 @@ export async function POST(request: Request) {
     metadata: { status: data.status, sdr_id: data.sdr_id, closer_id: data.closer_id },
   });
   try {
-    if (data.sdr_id) await notifyCommercialLeadAssignment(data);
-    else await notifyCommercialLeadPool(data);
+    await notifyCommercialLeadAssignment(data);
   } catch (notificationError) {
     console.error('commercial_lead_assignment_notification_failed', notificationError);
   }
@@ -303,8 +289,8 @@ export async function PATCH(request: Request) {
   const targetStatus = String(body.status || '').trim();
   const resolvingScheduledMeeting = isScheduledMeetingStage(allowed.status)
     && (isNoShowStage(targetStatus) || isCompletedMeetingStage(targetStatus));
-  if (resolvingScheduledMeeting && guard.profile.id !== LEO_COMMERCIAL_CLOSER_PROFILE_ID) {
-    return NextResponse.json({ error: 'Somente o Léo pode registrar reunião realizada ou no-show.' }, { status: 403 });
+  if (resolvingScheduledMeeting && !guard.isDevOps && !canManageCommercialStages(guard.commercialRole, guard.profile.id)) {
+    return NextResponse.json({ error: 'Apenas administradores ou o Léo podem registrar reunião realizada ou no-show.' }, { status: 403 });
   }
   const targetCadenceDay = cadenceDayFromStage(targetStatus);
   const cadenceMaxDay = commercialCadenceMaxDay(
@@ -475,7 +461,7 @@ export async function PATCH(request: Request) {
     update.no_show_count = Number(allowed.no_show_count || 0) + 1;
   } else if (statusChanged && isScheduledStage) {
     update.no_show = false;
-  } else if (statusChanged && isScheduledMeetingStage(allowed.status) && !isNoShowStage(targetStatus)) {
+  } else if (statusChanged && isScheduledMeetingStage(allowed.status) && isCompletedMeetingStage(targetStatus)) {
     update.reuniao_realizada_at = body.reuniao_realizada_at || new Date().toISOString();
     update.no_show = false;
   }
@@ -576,7 +562,7 @@ export async function PATCH(request: Request) {
     : statusChanged
     ? isNoShowStage(targetStatus)
       ? `Moveu o lead de ${allowed.status} para ${targetStatus}. No-show ${Number(data.no_show_count || 0)} registrado.`
-      : isScheduledMeetingStage(allowed.status) && !isScheduledMeetingStage(targetStatus)
+      : isScheduledMeetingStage(allowed.status) && isCompletedMeetingStage(targetStatus)
         ? `Moveu o lead de ${allowed.status} para ${targetStatus}. A reuniao foi marcada automaticamente como realizada.`
         : `Moveu o lead de ${allowed.status} para ${targetStatus}.`
     : `Atualizou ${changedFields.length} campo(s) do lead.`;

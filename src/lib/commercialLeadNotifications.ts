@@ -2,7 +2,6 @@ import { openaiFetch } from '@/lib/openaiUso';
 import 'server-only';
 
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
-import { commercialNotificationGroupId, sendCommercialGroupNotification, sendCommercialGroupClaimButton } from '@/lib/commercialNotificationGroup';
 import { getCommercialMqlLevel, isCommercialMql } from '@/lib/commercialQualification';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
@@ -124,53 +123,7 @@ async function loadCommercialNotificationProfiles(sdrId: string) {
   };
 }
 
-/**
- * Lead novo caiu na fila comum: todos os SDRs sao avisados e quem apertar Start
- * primeiro fica com ele. Sem dono definido, nao existe "agora e sua vez".
- */
-export async function notifyCommercialLeadPool(lead: CommercialLeadNotification) {
-  // O ID fica no botao assinado; os dados pessoais continuam ocultos ate o START.
-  const mensagem = [
-    'Lead novo no CRM. Quem pegar primeiro fica com a oportunidade!',
-    '',
-    '1, 2, 3... GO!!!!!!',
-    '',
-    'Abra o Kanban e aperte START para assumir.',
-  ].join('\n');
-  const groupId = commercialNotificationGroupId();
-  if (groupId) {
-    return sendCommercialGroupClaimButton(groupId, lead.id);
-  }
-
-  const { data: membros, error } = await supabaseAdmin
-    .from('comercial_membros')
-    .select('profile_id, papel, ativo')
-    // Lead novo e assunto de SDR. O closer continua no time, mas entra depois,
-    // na reuniao, e nao disputa a fila.
-    .eq('papel', 'sdr')
-    .eq('ativo', true);
-  if (error) throw error;
-
-  const ids = (membros || []).map((membro) => membro.profile_id);
-  if (!ids.length) return [];
-
-  const { data: perfis } = await supabaseAdmin
-    .from('profiles')
-    .select('id,nome,email,tipo_usuario,telefone')
-    .in('id', ids)
-    .in('status', ['active', 'ativo', 'Ativo']);
-
-  return sendApoloWhatsApp({
-    type: 'novo_lead',
-    title: 'Novo lead: START liberado',
-    message: mensagem,
-    profiles: (perfis || []) as NotificationProfile[],
-    respectPreferences: false,
-  });
-}
-
 export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotification) {
-  const groupId = commercialNotificationGroupId();
   const sdrId = String(lead.sdr_id || '').trim();
   if (!sdrId) return { sdr: [], coordinators: [] };
 
@@ -196,41 +149,22 @@ export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotific
     motivation,
   ].join('\n');
 
-  // O grupo e uma fila operacional, nao um canal para expor telefone, e-mail
-  // ou dados de qualificacao. O SDR encontra os dados completos no CRM.
-  const groupMessage = [
-    `SDR responsavel: ${targets.sdr.nome || 'Nao informado'}`,
-    '',
-    mqlLevel === 'S' ? 'Um novo Lead MQL S foi atribuido.' : 'Um novo lead foi atribuido.',
-    '',
-    `Nome: ${plain(lead.nome)}`,
-    '',
-    'Os dados de contato estao disponiveis no CRM.',
-  ].join('\n');
-
   const title = mqlLevel === 'S' ? 'Lead MQL S' : 'Agora e sua vez';
-  const [sdrResult, groupResult, coordinatorResult] = await Promise.all([
-    groupId ? Promise.resolve([]) : sendApoloWhatsApp({
+  const [sdrResult, coordinatorResult] = await Promise.all([
+    sendApoloWhatsApp({
       type: 'novo_lead',
       title,
       message: sdrMessage,
       profiles: [targets.sdr],
       respectPreferences: false,
     }),
-    groupId
-      ? sendCommercialGroupNotification(groupId, title, groupMessage)
-      : Promise.resolve([]),
-    // Com a fila no grupo, o coordenador acompanha ali. Evita o mesmo aviso
-    // no privado, que antes duplicava cada distribuicao para o Pedro.
-    groupId
-      ? Promise.resolve([])
-      : sendApoloWhatsApp({
-        type: 'novo_lead',
-        title: 'Nova oportunidade distribuida',
-        message: `${targets.sdr.nome || 'O SDR responsavel'} acabou de receber uma nova oportunidade.`,
-        profiles: targets.coordinators,
-        respectPreferences: false,
-      }),
+    sendApoloWhatsApp({
+      type: 'novo_lead',
+      title: 'Nova oportunidade distribuida',
+      message: `${targets.sdr.nome || 'O SDR responsavel'} acabou de receber uma nova oportunidade.`,
+      profiles: targets.coordinators,
+      respectPreferences: false,
+    }),
   ]);
 
   await supabaseAdmin.from('audit_logs').insert({
@@ -243,7 +177,6 @@ export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotific
     metadata: {
       sdr_id: targets.sdr.id,
       sdr_delivery: sdrResult.map((item) => ({ profile_id: item.profile_id, status: item.status, reason: 'reason' in item ? item.reason : null })),
-      group_delivery: groupResult,
       coordinator_delivery: coordinatorResult.map((item) => ({ profile_id: item.profile_id, status: item.status, reason: 'reason' in item ? item.reason : null })),
       apolo_instance: 'apolo_master_sender',
     },
@@ -251,9 +184,9 @@ export async function notifyCommercialLeadAssignment(lead: CommercialLeadNotific
     user_agent: 'Orion Track / Apolo Notificador',
   });
 
-  if (!groupResult.length && !sdrResult.some((item) => item.status === 'success')) {
+  if (!sdrResult.some((item) => item.status === 'success')) {
     throw new Error(`Apolo nao entregou o aviso ao SDR ${targets.sdr.nome || targets.sdr.id}.`);
   }
 
-  return { sdr: sdrResult, coordinators: coordinatorResult, group: groupResult };
+  return { sdr: sdrResult, coordinators: coordinatorResult };
 }
