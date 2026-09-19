@@ -37,7 +37,6 @@ import {
   type CommercialRole,
 } from "@/lib/comercial";
 import { canSelectOperationalTeam, DUAL_OPERATION_ACCESS_KEY } from "@/lib/teamSelection";
-import { PROPOSTA_KRIPTO_IDS } from "@/lib/propostaKripto";
 
 type CommercialContextValue = {
   role: CommercialRole | null;
@@ -47,6 +46,7 @@ type CommercialContextValue = {
   members: CommercialMember[];
   currentProfileId: string | null;
   canViewMetaInvestment: boolean;
+  canViewProposal: boolean;
   isDevOps: boolean;
   loading: boolean;
   error: string | null;
@@ -68,6 +68,7 @@ type CommercialAccessPayload = {
   members?: CommercialMember[];
   currentProfileId?: string | null;
   canViewMetaInvestment?: boolean;
+  canViewProposal?: boolean;
   isDevOps?: boolean;
 };
 
@@ -141,6 +142,9 @@ export default function CommercialShell({
   const [canViewMetaInvestment, setCanViewMetaInvestment] = useState(
     Boolean(initialCachedAccess?.canViewMetaInvestment),
   );
+  const [canViewProposal, setCanViewProposal] = useState(
+    Boolean(initialCachedAccess?.canViewProposal),
+  );
   const [isDevOps, setIsDevOps] = useState(
     Boolean(initialCachedAccess?.isDevOps),
   );
@@ -165,6 +169,7 @@ export default function CommercialShell({
     setMembers(payload.members || []);
     setCurrentProfileId(payload.currentProfileId || null);
     setCanViewMetaInvestment(Boolean(payload.canViewMetaInvestment));
+    setCanViewProposal(Boolean(payload.canViewProposal));
     setIsDevOps(Boolean(payload.isDevOps));
   }, []);
 
@@ -299,17 +304,14 @@ export default function CommercialShell({
     // A proposta mostra preco e condicao comercial, entao nao acompanha papel do
     // time: entra no menu so para o Leo e para quem administra. Esconder o item
     // e cosmetico; quem vale e a checagem da rota /api/comercial/proposta.
-    if (
-      isDevOps ||
-      (currentProfileId && PROPOSTA_KRIPTO_IDS.has(currentProfileId))
-    )
+    if (canViewProposal)
       itens.push({
         href: "/comercial/proposta",
         label: "Proposta",
         icon: FileText,
       });
     return itens;
-  }, [role, isDevOps, currentProfileId]);
+  }, [role, canViewProposal]);
   const currentMember = members.find(
     (member) => member.profile_id === currentProfileId,
   );
@@ -366,6 +368,7 @@ export default function CommercialShell({
     members,
     currentProfileId,
     canViewMetaInvestment,
+    canViewProposal,
     isDevOps,
     loading,
     error,

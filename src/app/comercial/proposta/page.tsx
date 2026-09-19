@@ -3,11 +3,9 @@
 import { Download, ExternalLink, FileText, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useCommercial } from '@/components/commercial/CommercialShell';
-import { PROPOSTA_KRIPTO_IDS } from '@/lib/propostaKripto';
 
 export default function PropostaKriptoPage() {
-  const { isDevOps, currentProfileId, loading } = useCommercial();
-  const liberado = isDevOps || Boolean(currentProfileId && PROPOSTA_KRIPTO_IDS.has(currentProfileId));
+  const { canViewProposal: liberado, loading } = useCommercial();
   const [propostas, setPropostas] = useState<Array<{ id: string; nome_cliente: string; lead_nome: string; created_at: string; updated_at: string | null }>>([]);
   const [leads, setLeads] = useState<Array<{ id: string; nome: string; empresa: string | null }>>([]);
   const [leadId, setLeadId] = useState('');

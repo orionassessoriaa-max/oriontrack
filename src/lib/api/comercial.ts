@@ -99,7 +99,7 @@ export async function requireCommercialUser(
       ? "visualizador"
       : member?.ativo
         ? member.papel
-        : isMaster || isDevOps
+        : base.profile.tipo_usuario === "admin" || isDevOps
           ? "coordenador"
           : null
   ) as CommercialRole | null;

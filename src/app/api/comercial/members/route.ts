@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireCommercialUser } from "@/lib/api/comercial";
 import { writeAuditLog } from "@/lib/api/security";
+import { podeVerPropostaKripto } from "@/lib/propostaKripto";
 
 export async function GET(request: Request) {
   const guard = await requireCommercialUser(request);
@@ -68,6 +69,7 @@ export async function GET(request: Request) {
     canViewCommercialLeadQualification:
       guard.canViewCommercialLeadQualification,
     canEditCommercial: guard.commercialRole !== "visualizador",
+    canViewProposal: podeVerPropostaKripto(guard.profile),
     isDevOps: guard.isDevOps,
   });
 }
