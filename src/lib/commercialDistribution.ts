@@ -11,13 +11,18 @@ export async function assignNextCommercialSdr(nivel?: CommercialMqlLevel | null)
   const { data, error } = await supabaseAdmin.rpc('assign_next_commercial_sdr', { p_nivel: nivel || null });
   if (!error) return String(data || '').trim() || null;
 
-  if (!/assign_next_commercial_sdr|schema cache|function/i.test(String(error.message || ''))) {
+  const errorMessage = String(error.message || '');
+  const unavailableFunction = /assign_next_commercial_sdr|schema cache|function/i.test(errorMessage);
+  const obsoleteStartGuard = /START bloqueado|tentativa de contato.+antes de assumir outro/i.test(errorMessage);
+
+  if (!unavailableFunction && !obsoleteStartGuard) {
     throw error;
   }
 
-  // Compatibilidade durante o primeiro deploy, antes de a migration entrar:
-  // escolhe o SDR ativo com menos leads. A funcao SQL assume no deploy seguinte
-  // e passa a garantir a ordem atomica.
+  // Compatibilidade durante o primeiro deploy e com bancos que ainda carregam
+  // a trava antiga do START. O START foi pausado e nao pode impedir a entrada
+  // automatica do n8n. Neste fallback, o proximo responsavel e o participante
+  // ativo do rodizio com menos leads, preservando o balanceamento Talita/Kadu.
   const { data: members, error: memberError } = await supabaseAdmin
     .from('comercial_membros')
     .select('*')
