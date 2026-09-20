@@ -131,7 +131,7 @@ export default function TrafficMetaAlertsPage() {
   const filteredRows = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
     return rows.filter((row) => {
-      const matchesSearch = !normalizedSearch || `${row.corretor_nome} ${row.concessionaria_nome || ''} ${row.meta_ad_account_name || ''}`
+      const matchesSearch = !normalizedSearch || `${row.concessionaria_nome || ''} ${row.meta_ad_account_name || ''}`
         .toLocaleLowerCase('pt-BR')
         .includes(normalizedSearch);
       const matchesManager = managerFilter === 'todos'
@@ -210,7 +210,7 @@ export default function TrafficMetaAlertsPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar corretor ou conta..."
+                placeholder="Buscar concessionária ou conta..."
                 className="w-full rounded-2xl border-none bg-slate-50 py-4 pl-11 pr-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
@@ -294,7 +294,7 @@ export default function TrafficMetaAlertsPage() {
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
-                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Corretor / Conta</th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Concessionária / Conta</th>
                 <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">CTR</th>
                 <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Leads</th>
                 <th className="px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">CPL</th>
@@ -353,9 +353,9 @@ export default function TrafficMetaAlertsPage() {
                       <Badge tone={badgeTone} text={badgeText} />
                     </td>
                     <td className="px-6 py-5">
-                      <p className="font-black text-gray-900">{row.corretor_nome}</p>
-                      <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-blue-600">{row.concessionaria_nome || 'Corretora nao identificada'} · {row.gestor_trafego_id ? managerNames[row.gestor_trafego_id] || 'Gestor nao identificado' : 'Sem gestor'}</p>
-                      <p className="mt-1 text-xs font-bold text-slate-500">{row.meta_ad_account_name || `act_${row.meta_ad_account_id}`}</p>
+                      <p className="font-black text-gray-900">{row.concessionaria_nome || 'Concessionária não identificada'}</p>
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-blue-600">{row.meta_ad_account_name || (row.meta_ad_account_id ? `act_${row.meta_ad_account_id}` : 'Conta não identificada')}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">Gestor: {row.gestor_trafego_id ? managerNames[row.gestor_trafego_id] || 'não identificado' : 'não definido'}</p>
                       {row.error && <p className="mt-2 max-w-md text-xs font-bold text-amber-600">{row.error}</p>}
                     </td>
                     <td className="px-6 py-5 text-sm font-black text-slate-700">{formatPercent(row.ctr)}</td>
