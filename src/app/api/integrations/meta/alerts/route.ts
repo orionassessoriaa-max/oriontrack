@@ -538,6 +538,23 @@ function resolveBrokerageMetaAccount(corretor: CorretorMeta, scopedCorretores: C
   };
 }
 
+function resolveBrokerageGestorId(corretor: CorretorMeta, scopedCorretores: CorretorMeta[]) {
+  const corretoraKey = concessionariaKey(corretor.nome_empresa || corretor.nome);
+  const group = corretoraKey
+    ? scopedCorretores.filter((item) => concessionariaKey(item.nome_empresa || item.nome) === corretoraKey)
+    : [corretor];
+  const counts = new Map<string, number>();
+
+  group.forEach((item) => {
+    const gestorId = String(item.gestor_trafego_id || '').trim();
+    if (gestorId) counts.set(gestorId, (counts.get(gestorId) || 0) + 1);
+  });
+
+  return [...counts.entries()]
+    .sort(([firstId, firstCount], [secondId, secondCount]) => secondCount - firstCount || firstId.localeCompare(secondId))[0]?.[0]
+    || null;
+}
+
 /**
  * Grava a fila do gestor. Recomendacao pendente identica e atualizada em vez de
  * duplicada, e pendencia que a regra deixou de emitir e descartada para a fila
@@ -787,6 +804,7 @@ export async function POST(request: Request) {
         : [corretor.id];
       return {
         ...resolveBrokerageMetaAccount(corretor, operationalCorretores),
+        gestor_trafego_id: resolveBrokerageGestorId(corretor, operationalCorretores),
         scoped_corretor_ids: scopedGroupIds,
       };
     });
