@@ -362,7 +362,11 @@ export default function TrafficMetaAlertsPage() {
                     <td className="px-6 py-5 text-sm font-black text-slate-700">{row.leads}</td>
                     <td className="px-6 py-5">
                       <span className={`rounded-full px-3 py-1 text-xs font-black ${row.cpl !== null && row.cpl >= cplThreshold ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
-                        {row.cpl === null ? 'N/A' : formatCurrency(row.cpl, row.currency)}
+                        {row.cpl === null
+                          ? Number(row.leads || 0) === 0
+                            ? 'Sem leads no período'
+                            : 'CPL indisponível'
+                          : formatCurrency(row.cpl, row.currency)}
                       </span>
                     </td>
                     <td className="px-6 py-5 text-sm font-black text-slate-700">{formatCurrency(row.spend, row.currency)}</td>
