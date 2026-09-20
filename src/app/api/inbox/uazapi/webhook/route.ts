@@ -786,6 +786,48 @@ function cleanContactDisplayName(value: any, fallback = 'Lead') {
   return cleaned || fallback;
 }
 
+function isPlaceholderContactName(value: unknown, phone: string) {
+  const text = String(value || '').trim();
+  if (!text) return true;
+
+  const normalized = text.toLowerCase();
+  const digits = text.replace(/\D/g, '');
+  const phoneDigits = phone.replace(/\D/g, '');
+  if (digits && digits === phoneDigits) return true;
+  if (!/[a-zà-ÿ]/i.test(text)) return true;
+
+  return ['lead', 'contato', 'contato whatsapp', 'cliente', 'desconhecido', 'unknown'].includes(normalized);
+}
+
+function readProviderContactName(body: any, phone: string) {
+  const candidates = [
+    body?.pushName,
+    body?.senderName,
+    body?.name,
+    body?.chat?.lead_fullName,
+    body?.chat?.lead_name,
+    body?.chat?.name,
+    body?.chat?.wa_contactName,
+    body?.chat?.wa_name,
+    body?.message?.senderName,
+    body?.message?.pushName,
+    body?.data?.pushName,
+    body?.data?.senderName,
+    body?.data?.name,
+    body?.data?.chat?.lead_fullName,
+    body?.data?.chat?.lead_name,
+    body?.data?.chat?.name,
+    body?.data?.chat?.wa_contactName,
+    body?.data?.chat?.wa_name,
+    body?.data?.message?.senderName,
+    body?.data?.message?.pushName,
+  ];
+
+  return candidates
+    .map((candidate) => String(candidate || '').trim())
+    .find((candidate) => !isPlaceholderContactName(candidate, phone)) || '';
+}
+
 async function transcribeAudio(base64: string, mimeType = 'audio/ogg') {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || !base64) return '';
@@ -1483,8 +1525,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: 'Not a CRM lead' });
     }
 
-    const providerContactName = body?.pushName || body?.senderName || body?.name || body?.data?.pushName || body?.data?.senderName || body?.data?.name;
-    const contactName = cleanContactDisplayName(lead?.nome || providerContactName, phone);
+    const providerContactName = readProviderContactName(body, phone);
+    const storedContactName = lead?.nome || currentConversation?.nome_contato;
+    const contactName = cleanContactDisplayName(
+      isPlaceholderContactName(storedContactName, phone) ? providerContactName : storedContactName,
+      'Contato WhatsApp',
+    );
+
+    if (lead?.id && providerContactName && isPlaceholderContactName(lead.nome, phone)) {
+      const { error: leadNameError } = commercialMode
+        ? await supabaseAdmin.from('comercial_leads').update({ nome: providerContactName, updated_at: new Date().toISOString() }).eq('id', lead.id)
+        : await supabaseAdmin.from('leads').update({ nome: providerContactName, updated_at: new Date().toISOString() }).eq('id', lead.id);
+      if (leadNameError) {
+        console.error('[uazapi_webhook] Falha ao atualizar nome do lead pelo perfil do WhatsApp:', leadNameError);
+      } else {
+        lead.nome = providerContactName;
+      }
+    }
 
     let conversation = currentConversation;
     if (!conversation) {
@@ -1514,7 +1571,12 @@ export async function POST(request: Request) {
         .from('whatsapp_conversas')
         .update({
           lead_id: commercialMode ? currentConversation.lead_id : (currentConversation.lead_id || lead?.id || null),
-          nome_contato: cleanContactDisplayName(lead?.nome || currentConversation.nome_contato || contactName, contactName),
+          nome_contato: cleanContactDisplayName(
+            isPlaceholderContactName(lead?.nome || currentConversation.nome_contato, phone)
+              ? providerContactName || contactName
+              : lead?.nome || currentConversation.nome_contato,
+            contactName,
+          ),
           telefone: currentConversation.telefone || phone,
           ultima_mensagem_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
