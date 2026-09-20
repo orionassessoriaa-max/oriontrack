@@ -364,7 +364,7 @@ export default function TrafficMetaAlertsPage() {
                       <span className={`rounded-full px-3 py-1 text-xs font-black ${row.cpl !== null && row.cpl >= cplThreshold ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
                         {row.cpl === null
                           ? Number(row.leads || 0) === 0
-                            ? 'Sem leads no período'
+                            ? 'S/L'
                             : 'CPL indisponível'
                           : formatCurrency(row.cpl, row.currency)}
                       </span>
