@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { supabase } from '@/lib/supabase/client';
-import { AlertTriangle, Clock3, Loader2, RefreshCw, Search, TrendingUp, WalletCards } from 'lucide-react';
+import { AlertTriangle, Building2, Clock3, Filter, Loader2, RefreshCw, Search, TrendingUp, UserRoundCog, WalletCards, X } from 'lucide-react';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 
 type MetaAlertRow = {
   corretor_id: string;
   corretor_nome: string;
+  concessionaria_nome?: string | null;
+  gestor_trafego_id?: string | null;
+  gestor_nome?: string | null;
   meta_ad_account_id: string | null;
   meta_ad_account_name: string | null;
   spend: number;
@@ -50,6 +53,9 @@ function dateDaysAgo(days: number) {
 export default function TrafficMetaAlertsPage() {
   const [rows, setRows] = useState<MetaAlertRow[]>([]);
   const [search, setSearch] = useState('');
+  const [managerFilter, setManagerFilter] = useState('todos');
+  const [alertFilter, setAlertFilter] = useState<'todos' | 'cpl_alto' | 'sem_saldo'>('todos');
+  const [managerNames, setManagerNames] = useState<Record<string, string>>({});
   const [dateStart, setDateStart] = useState(() => dateDaysAgo(6));
   const [dateEnd, setDateEnd] = useState(() => dateDaysAgo(0));
   const [presetLabel, setPresetLabel] = useState('Últimos 7 dias');
@@ -87,7 +93,18 @@ export default function TrafficMetaAlertsPage() {
 
       if (!response.ok) throw new Error(payload.error || 'Erro ao carregar avisos Meta.');
 
-      setRows(payload.accounts || []);
+      const accounts = (payload.accounts || []) as MetaAlertRow[];
+      const managerIds = Array.from(new Set(accounts.map((row) => row.gestor_trafego_id).filter(Boolean))) as string[];
+      if (managerIds.length > 0) {
+        const { data: managers } = await supabase
+          .from('profiles')
+          .select('id,nome')
+          .in('id', managerIds);
+        setManagerNames(Object.fromEntries((managers || []).map((manager) => [manager.id, manager.nome || 'Gestor sem nome'])));
+      } else {
+        setManagerNames({});
+      }
+      setRows(accounts);
       setCplThreshold(Number(payload.threshold_cpl) || 28);
       setUpdatedAt(payload.refreshed_at || new Date().toISOString());
     } catch (fetchError) {
@@ -113,27 +130,50 @@ export default function TrafficMetaAlertsPage() {
 
   const filteredRows = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
-    if (!normalizedSearch) return rows;
-    return rows.filter((row) =>
-      `${row.corretor_nome} ${row.meta_ad_account_name || ''}`
+    return rows.filter((row) => {
+      const matchesSearch = !normalizedSearch || `${row.corretor_nome} ${row.concessionaria_nome || ''} ${row.meta_ad_account_name || ''}`
         .toLocaleLowerCase('pt-BR')
-        .includes(normalizedSearch)
-    );
-  }, [rows, search]);
+        .includes(normalizedSearch);
+      const matchesManager = managerFilter === 'todos'
+        || (managerFilter === 'sem_gestor' ? !row.gestor_trafego_id : row.gestor_trafego_id === managerFilter);
+      const isNoBalance = row.billing_type === 'prepaid' && row.saldo !== null && Number(row.saldo) <= 0;
+      const matchesAlert = alertFilter === 'todos'
+        || (alertFilter === 'cpl_alto' && row.alerta_cpl_alto)
+        || (alertFilter === 'sem_saldo' && isNoBalance);
+      return matchesSearch && matchesManager && matchesAlert;
+    });
+  }, [alertFilter, managerFilter, rows, search]);
+
+  const managerOptions = useMemo(() => {
+    const ids = Array.from(new Set(rows.map((row) => row.gestor_trafego_id).filter(Boolean))) as string[];
+    return ids
+      .map((id) => ({ id, nome: managerNames[id] || 'Gestor nao identificado' }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [managerNames, rows]);
 
   const counters = useMemo(() => {
-    const highCpl = rows.filter((row) => row.alerta_cpl_alto).length;
-    const lowBalance = rows.filter((row) => row.alerta_saldo_baixo).length;
-    const totalSpend = rows.reduce((total, row) => total + Number(row.spend || 0), 0);
-    const totalLeads = rows.reduce((total, row) => total + Number(row.leads || 0), 0);
+    const highCpl = filteredRows.filter((row) => row.alerta_cpl_alto).length;
+    const noBalance = filteredRows.filter((row) => row.billing_type === 'prepaid' && row.saldo !== null && Number(row.saldo) <= 0).length;
+    const totalSpend = filteredRows.reduce((total, row) => total + Number(row.spend || 0), 0);
+    const totalLeads = filteredRows.reduce((total, row) => total + Number(row.leads || 0), 0);
+    const brokerages = new Set(filteredRows.map((row) => String(row.concessionaria_nome || row.meta_ad_account_name || row.corretor_nome).trim().toLocaleLowerCase('pt-BR')).filter(Boolean)).size;
     return {
       highCpl,
-      lowBalance,
+      noBalance,
+      brokerages,
       totalSpend,
       totalLeads,
       averageCpl: totalLeads > 0 ? totalSpend / totalLeads : null,
     };
-  }, [rows]);
+  }, [filteredRows]);
+
+  const hasActiveFilters = Boolean(search.trim() || managerFilter !== 'todos' || alertFilter !== 'todos');
+
+  const clearFilters = () => {
+    setSearch('');
+    setManagerFilter('todos');
+    setAlertFilter('todos');
+  };
 
   return (
     <InternalLayout>
@@ -153,16 +193,17 @@ export default function TrafficMetaAlertsPage() {
         </button>
       </div>
 
-      <div className="mb-6 grid gap-4 md:grid-cols-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Counter tone="red" label="CPL alto" value={String(counters.highCpl)} />
-        <Counter tone="amber" label="Saldo baixo" value={String(counters.lowBalance)} />
+        <Counter tone="amber" label="Sem saldo" value={String(counters.noBalance)} />
+        <Counter tone="blue" label="Corretoras" value={String(counters.brokerages)} />
         <Counter tone="emerald" label="Leads Orion" value={String(counters.totalLeads)} />
         <Counter tone="slate" label="CPL medio" value={formatCurrency(counters.averageCpl)} />
       </div>
 
       <div className="mb-6 rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-end justify-between">
-          <div className="flex-1 space-y-2 w-full">
+        <div className="grid gap-4 xl:grid-cols-[minmax(240px,1.2fr)_minmax(210px,0.7fr)_auto_minmax(300px,auto)] xl:items-end">
+          <div className="space-y-2 w-full">
             <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Nome</label>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -172,6 +213,40 @@ export default function TrafficMetaAlertsPage() {
                 placeholder="Buscar corretor ou conta..."
                 className="w-full rounded-2xl border-none bg-slate-50 py-4 pl-11 pr-4 text-sm font-bold focus:ring-2 focus:ring-blue-500/20"
               />
+            </div>
+          </div>
+          <div className="space-y-2 w-full">
+            <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Gestor responsavel</label>
+            <div className="relative">
+              <UserRoundCog className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <select
+                value={managerFilter}
+                onChange={(event) => setManagerFilter(event.target.value)}
+                className="w-full appearance-none rounded-2xl border-none bg-slate-50 py-4 pl-11 pr-9 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="todos">Todos os gestores</option>
+                {managerOptions.map((manager) => <option key={manager.id} value={manager.id}>{manager.nome}</option>)}
+                <option value="sem_gestor">Sem gestor</option>
+              </select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Situacao</label>
+            <div className="flex min-h-[52px] items-center gap-1 rounded-2xl bg-slate-50 p-1.5">
+              {([
+                ['todos', 'Todos'],
+                ['cpl_alto', 'CPL alto'],
+                ['sem_saldo', 'Sem saldo'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setAlertFilter(value)}
+                  className={`whitespace-nowrap rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${alertFilter === value ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-500 hover:bg-white hover:text-slate-800'}`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
           <div className="shrink-0 space-y-2 w-full md:w-auto">
@@ -187,6 +262,17 @@ export default function TrafficMetaAlertsPage() {
               }}
             />
           </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-2 text-blue-700"><Building2 size={13} /> {counters.brokerages} corretora{counters.brokerages === 1 ? '' : 's'}</span>
+            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-slate-600"><Filter size={13} /> {filteredRows.length} conta{filteredRows.length === 1 ? '' : 's'} exibida{filteredRows.length === 1 ? '' : 's'}</span>
+          </div>
+          {hasActiveFilters && (
+            <button type="button" onClick={clearFilters} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900">
+              <X size={13} /> Limpar filtros
+            </button>
+          )}
         </div>
       </div>
 
@@ -268,6 +354,7 @@ export default function TrafficMetaAlertsPage() {
                     </td>
                     <td className="px-6 py-5">
                       <p className="font-black text-gray-900">{row.corretor_nome}</p>
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-blue-600">{row.concessionaria_nome || 'Corretora nao identificada'} · {row.gestor_trafego_id ? managerNames[row.gestor_trafego_id] || 'Gestor nao identificado' : 'Sem gestor'}</p>
                       <p className="mt-1 text-xs font-bold text-slate-500">{row.meta_ad_account_name || `act_${row.meta_ad_account_id}`}</p>
                       {row.error && <p className="mt-2 max-w-md text-xs font-bold text-amber-600">{row.error}</p>}
                     </td>
