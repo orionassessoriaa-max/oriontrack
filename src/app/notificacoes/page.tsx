@@ -46,7 +46,7 @@ export default function NotificacoesPage() {
       saldo_baixo: true,
       cpl_alto: true,
       notificacao: true,
-      novo_lead: true,
+      novo_lead: false,
       suporte: true,
       demandas: true,
     } as Record<string, boolean>,
@@ -156,10 +156,10 @@ export default function NotificacoesPage() {
           saldo_baixo: true,
           cpl_alto: true,
           notificacao: true,
-          novo_lead: true,
           suporte: true,
           demandas: true,
           ...(payload.preferences.tipos || {}),
+          novo_lead: false,
         },
       });
     }
@@ -371,13 +371,13 @@ export default function NotificacoesPage() {
                 ['notificacao', 'Avisos gerais'],
                 ['saldo_baixo', 'Saldo baixo'],
                 ['cpl_alto', 'CPL alto'],
-                ['novo_lead', 'Novos leads'],
+                ['novo_lead', 'Novos leads no CRM'],
                 ['suporte', 'Suporte'],
                 ['demandas', 'Demandas'],
               ].map(([key, label]) => (
                 <label key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${
                   isDark ? 'border-white/5 bg-white/[0.02] text-slate-300' : 'border-gray-100 bg-slate-50 text-gray-600'
-                } ${key === 'novo_lead' ? 'cursor-not-allowed opacity-70' : ''}`} title={key === 'novo_lead' ? 'Configurado automaticamente pela concessionária' : undefined}>
+                } ${key === 'novo_lead' ? 'cursor-not-allowed opacity-70' : ''}`} title={key === 'novo_lead' ? 'Exibidos apenas dentro do Orion Track' : undefined}>
                   <input
                     type="checkbox"
                     disabled={key === 'novo_lead'}
@@ -388,7 +388,7 @@ export default function NotificacoesPage() {
                     }))}
                     className="h-3.5 w-3.5 rounded border-slate-400 text-blue-600 focus:ring-blue-500"
                   />
-                  {label}{key === 'novo_lead' ? ' · concessionária' : ''}
+                  {label}{key === 'novo_lead' ? ' · somente interno' : ''}
                 </label>
               ))}
             </div>

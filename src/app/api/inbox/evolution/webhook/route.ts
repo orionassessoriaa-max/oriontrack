@@ -4,6 +4,7 @@ import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone, profileIdFr
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { captureHospitalPreferenceAfterHandoff, continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
+import { isIgnoredInboxContact } from '@/lib/inboxIgnoredContacts';
 
 function readText(data: any) {
   return String(
@@ -316,6 +317,10 @@ export async function POST(request: Request) {
       if (otherPhone && otherPhone !== brokerPhone) {
         phone = otherPhone;
       }
+    }
+
+    if (isIgnoredInboxContact(phone)) {
+      return NextResponse.json({ ok: true, ignored: true, reason: 'internal_apolo_number' });
     }
 
     if (!message || !phone) return NextResponse.json({ ok: true, ignored: true });

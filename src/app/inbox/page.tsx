@@ -533,6 +533,7 @@ export default function BrokerInboxPage() {
       const member = responsibleProfileId ? teamMemberByProfileId.get(String(responsibleProfileId)) : null;
       return {
         ...row,
+        nome_contato: cleanInboxDisplayName(lead?.nome || row.nome_contato, row.telefone),
         status: row.status === 'aguardando' ? 'espera' : row.status === 'resolvida' ? 'fechada' : row.status,
         agentName: lead?.responsavel_membro?.nome || member?.nome || (responsibleProfileId && responsibleProfileId === profile?.id ? profile?.nome : null) || 'Fila Geral',
         responsibleProfileId,
@@ -764,6 +765,7 @@ export default function BrokerInboxPage() {
           const savedMember = savedResponsibleProfileId ? teamMemberByProfileId.get(String(savedResponsibleProfileId)) : null;
           matchedConv = {
             ...savedRow,
+            nome_contato: cleanInboxDisplayName(savedLead?.nome || savedRow.nome_contato, savedRow.telefone),
             status: savedRow.status === 'aguardando' ? 'espera' : savedRow.status === 'resolvida' ? 'fechada' : savedRow.status,
             agentName: savedLead?.responsavel_membro?.nome || savedMember?.nome || (savedResponsibleProfileId && savedResponsibleProfileId === profile?.id ? profile?.nome : null) || 'Fila Geral',
             responsibleProfileId: savedResponsibleProfileId,

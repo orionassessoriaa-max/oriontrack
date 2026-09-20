@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { recordCommercialTimelineEvent } from '@/lib/commercialTimeline';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
@@ -163,13 +162,13 @@ export async function handoffCommercialAiToSdr(leadId: string, reason: string, s
     'A conversa esta aberta no inbox comercial e a IA ja parou de responder.',
   ].filter((line) => line !== null).join('\n');
 
-  const delivery = await sendApoloWhatsApp({
-    type: 'novo_lead',
-    title: 'Lead qualificado pela IA',
-    message,
-    profiles: [sdrProfile],
-    respectPreferences: false,
+  const { error: notificationError } = await supabaseAdmin.from('notificacoes').insert({
+    titulo: 'Lead qualificado pela IA',
+    mensagem: message,
+    destinatario_profile_id: sdrProfile.id,
+    lida: false,
   });
+  if (notificationError) throw notificationError;
 
-  return { handed: true, notified: delivery.some((item) => item.status === 'success') };
+  return { handed: true, notified: true };
 }

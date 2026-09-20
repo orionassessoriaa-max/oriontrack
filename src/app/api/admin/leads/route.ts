@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeLeadStatus } from '@/lib/leadStatus';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
-import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
 import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
@@ -486,16 +485,6 @@ export async function POST(request: Request) {
           lida: false,
         }]);
 
-        try {
-          await sendApoloWhatsApp({
-            type: 'novo_lead',
-            title: 'Novo lead pronto para atendimento',
-            message,
-            profiles: [responsibleProfile],
-          });
-        } catch (waErr) {
-          console.error('[Manual lead] Failed sending WA notification:', waErr);
-        }
       }
     }
 

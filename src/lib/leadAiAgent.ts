@@ -2,7 +2,6 @@ import { openaiFetch } from '@/lib/openaiUso';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { configureUazapiWebhook, getUazapiInstanceConnection, normalizePhone, phoneMatchKey, sendUazapiTypingPresence, uazapiAiInstanceName, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { assinarMensagem, isUnityBrokerage } from '@/lib/atendimentoCompartilhado';
-import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 export const recentAiOutboundMessages = new Set<string>();
 
@@ -1510,12 +1509,6 @@ async function notifyResponsible(lead: LeadRow, summary: string, preferredAdmin?
       lida: false,
     }]);
 
-    await sendApoloWhatsApp({
-      type: 'novo_lead',
-      title: 'Lead pronto para atendimento',
-      message: msg,
-      profiles: [target],
-    });
   }
 }
 
@@ -1610,12 +1603,6 @@ export async function captureHospitalPreferenceAfterHandoff(input: {
       destinatario_profile_id: target.id,
       lida: false,
     }]);
-    await sendApoloWhatsApp({
-      type: 'novo_lead',
-      title: 'Atualização do lead',
-      message,
-      profiles: [target],
-    });
   }
 
   return { captured: true, preference };

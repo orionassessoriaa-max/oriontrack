@@ -31,7 +31,7 @@ const defaultTypeEnabled: Record<ApoloNotificationType, boolean> = {
   saldo_baixo: true,
   cpl_alto: true,
   notificacao: true,
-  novo_lead: true,
+  novo_lead: false,
   suporte: true,
   demandas: true,
 };
@@ -49,6 +49,15 @@ function firstName(nome?: string | null) {
 export async function sendApoloWhatsApp({ type, title, message, profiles, respectPreferences = true }: SendApoloOptions) {
   const uniqueProfiles = Array.from(new Map(profiles.filter((p) => p?.id).map((p) => [p.id, p])).values());
   if (uniqueProfiles.length === 0) return [];
+
+  // Leads novos ficam restritos ao sino e a bolinha do Apolo dentro do Orion Track.
+  if (type === 'novo_lead') {
+    return uniqueProfiles.map((profile) => ({
+      profile_id: profile.id,
+      status: 'skipped' as const,
+      reason: 'Notificacao disponivel somente no Orion Track.',
+    }));
+  }
 
   const { data: preferences, error } = await supabaseAdmin
     .from('notificacao_preferencias')

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import {
   MessageSquare,
   X,
@@ -14,14 +15,37 @@ import {
   Palette,
   Users,
   Settings,
-  ShieldCheck
+  ShieldCheck,
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { supabase } from '@/lib/supabase/client';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+}
+
+type ApoloNotification = {
+  id: string;
+  titulo: string;
+  mensagem: string;
+  destinatario_profile_id: string | null;
+  destinatario_tipo: string | null;
+  lida: boolean;
+  created_at: string;
+};
+
+function formatNotificationTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 interface TypewriterProps {
@@ -84,7 +108,71 @@ export default function ApoloAiWidget() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [typingComplete, setTypingComplete] = useState(false);
+  const [recentNotifications, setRecentNotifications] = useState<ApoloNotification[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const unreadNotifications = recentNotifications.filter((notification) => !notification.lida).length;
+
+  useEffect(() => {
+    if (!profile?.id) {
+      setRecentNotifications([]);
+      return;
+    }
+
+    const isForCurrentProfile = (notification: Partial<ApoloNotification>) => (
+      profile.tipo_usuario === 'admin'
+      || notification.destinatario_profile_id === profile.id
+      || notification.destinatario_tipo === profile.tipo_usuario
+      || notification.destinatario_tipo === 'todos'
+    );
+
+    const loadRecentNotifications = async () => {
+      let query = supabase
+        .from('notificacoes')
+        .select('id,titulo,mensagem,destinatario_profile_id,destinatario_tipo,lida,created_at')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (profile.tipo_usuario !== 'admin') {
+        query = query.or(`destinatario_profile_id.eq.${profile.id},destinatario_tipo.eq.${profile.tipo_usuario},destinatario_tipo.eq.todos`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('[Apolo] Falha ao carregar notificacoes:', error);
+        return;
+      }
+      setRecentNotifications((data || []) as ApoloNotification[]);
+    };
+
+    loadRecentNotifications();
+
+    const channel = supabase
+      .channel(`apolo-widget-notificacoes:${profile.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notificacoes' }, (payload) => {
+        const notification = payload.new as ApoloNotification;
+        if (!isForCurrentProfile(notification)) return;
+        setRecentNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)].slice(0, 5));
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notificacoes' }, (payload) => {
+        const notification = payload.new as ApoloNotification;
+        if (!isForCurrentProfile(notification)) return;
+        setRecentNotifications((current) => current.map((item) => item.id === notification.id ? notification : item));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, profile?.tipo_usuario]);
+
+  const markNotificationAsRead = async (notification: ApoloNotification) => {
+    if (notification.lida) return;
+    setRecentNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, lida: true } : item));
+    const { error } = await supabase.from('notificacoes').update({ lida: true }).eq('id', notification.id);
+    if (error) {
+      setRecentNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, lida: false } : item));
+    }
+  };
 
   // Determinar a mensagem de boas-vindas dinâmica baseado no cargo do usuário
   const welcomeMessage: Message = useMemo(() => {
@@ -349,10 +437,11 @@ export default function ApoloAiWidget() {
                 alt="Apolo"
                 className="h-7 w-7 object-contain animate-pulse"
               />
-              <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
-              </span>
+              {unreadNotifications > 0 && (
+                <span className="absolute -right-3 -top-3 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#070b16] bg-cyan-400 px-1 text-[9px] font-black text-slate-950 shadow-[0_0_16px_rgba(34,211,238,0.8)]">
+                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                </span>
+              )}
             </div>
           </motion.button>
         )}
@@ -409,6 +498,47 @@ export default function ApoloAiWidget() {
                 </button>
               </div>
             </div>
+
+            <section className="relative border-b border-white/5 bg-[#08101f]/80 px-5 py-3" aria-label="Ultimas notificacoes">
+              <div className="mb-2.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Bell size={13} className="text-cyan-400" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-300">Ultimas notificacoes</span>
+                  {unreadNotifications > 0 && (
+                    <span className="rounded-full bg-cyan-400/15 px-1.5 py-0.5 text-[9px] font-black text-cyan-300">
+                      {unreadNotifications} nova{unreadNotifications === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+                <Link href="/notificacoes" onClick={() => setIsOpen(false)} className="text-[9px] font-black uppercase tracking-wider text-cyan-400 transition-colors hover:text-cyan-200">
+                  Ver todas
+                </Link>
+              </div>
+
+              <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1 scrollbar-thin">
+                {recentNotifications.length === 0 ? (
+                  <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3 text-[10px] font-medium text-slate-500">
+                    Nenhuma notificacao recente.
+                  </div>
+                ) : recentNotifications.map((notification) => (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    onClick={() => markNotificationAsRead(notification)}
+                    className={`group flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${notification.lida ? 'border-white/5 bg-white/[0.02]' : 'border-cyan-400/20 bg-cyan-400/[0.06] hover:bg-cyan-400/[0.1]'}`}
+                  >
+                    <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${notification.lida ? 'bg-slate-700' : 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.85)]'}`} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <strong className="truncate text-[10px] font-extrabold text-slate-200">{notification.titulo || 'Notificacao'}</strong>
+                        <time className="shrink-0 text-[8px] font-bold text-slate-600">{formatNotificationTime(notification.created_at)}</time>
+                      </span>
+                      <span className="mt-0.5 line-clamp-2 block text-[9px] font-medium leading-relaxed text-slate-500 group-hover:text-slate-400">{notification.mensagem}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
 
             {/* Histórico de Mensagens */}
             <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6 scrollbar-thin">
