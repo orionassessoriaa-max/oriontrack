@@ -60,6 +60,7 @@ export default function AdminCentralPage() {
   const [alertsList, setAlertsList] = useState<any[]>([]);
   const [overdueTrafficRequests, setOverdueTrafficRequests] = useState<any[]>([]);
   const [showNoBalanceModal, setShowNoBalanceModal] = useState(false);
+  const [showCrmPendingModal, setShowCrmPendingModal] = useState(false);
   const [showPendingOnboardingModal, setShowPendingOnboardingModal] = useState(false);
   const [showNoBrokerageModal, setShowNoBrokerageModal] = useState(false);
   const [showNoMetaModal, setShowNoMetaModal] = useState(false);
@@ -438,11 +439,13 @@ export default function AdminCentralPage() {
       .filter((a) => Boolean(a.dados_crm_pendentes))
       .map((a) => {
         const cObj = corretoresList.find(c => c.id === a.corretor_id);
-        const gestorId = cObj ? inferGestorIdFromTeam(cObj, gestoresList) : null;
+        const gestorId = a.gestor_trafego_id || (cObj ? inferGestorIdFromTeam(cObj, gestoresList) : null);
         const gestorNome = gestoresList.find(g => g.id === gestorId)?.nome || 'Sem Gestor';
         return {
           corretor_id: a.corretor_id,
-          corretora_nome: cObj?.nome_empresa || a.meta_ad_account_name || a.corretor_nome,
+          meta_ad_account_id: a.meta_ad_account_id,
+          meta_ad_account_name: a.meta_ad_account_name || `act_${a.meta_ad_account_id}`,
+          corretora_nome: a.concessionaria_nome || cObj?.nome_empresa || a.meta_ad_account_name || a.corretor_nome,
           corretor_nome: a.corretor_nome,
           gestor_nome: gestorNome,
           spend: Number(a.spend || 0),
@@ -687,9 +690,10 @@ export default function AdminCentralPage() {
             <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-red-500/0 via-red-500/40 to-red-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
           </Link>
 
-          <Link
-            href="/trafego/avisos-meta"
-            className="group relative bg-[#090e1a]/85 border border-blue-500/10 hover:border-blue-500/40 p-6 rounded-2xl shadow-xl hover:shadow-[0_0_30px_rgba(59,130,246,0.12)] transition-all duration-300"
+          <button
+            type="button"
+            onClick={() => setShowCrmPendingModal(true)}
+            className="group relative bg-[#090e1a]/85 border border-blue-500/10 hover:border-blue-500/40 p-6 rounded-2xl text-left shadow-xl hover:shadow-[0_0_30px_rgba(59,130,246,0.12)] transition-all duration-300"
           >
             <div className="flex items-center justify-between mb-4">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">CRM pendente</p>
@@ -706,7 +710,7 @@ export default function AdminCentralPage() {
               Meta tem gasto, mas faltam leads importados no CRM <ArrowRight size={10} />
             </p>
             <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500/0 via-blue-500/40 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </Link>
+          </button>
 
           <Link
             href="/admin/suporte"
@@ -926,6 +930,49 @@ export default function AdminCentralPage() {
           ))}
         </div>
       </div>
+
+      {/* Modal: Contas com CRM Pendente */}
+      {mounted && showCrmPendingModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-[#090e1a]/95 border border-blue-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative">
+            <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" /> Contas com CRM pendente
+            </h3>
+            <p className="text-xs font-semibold text-slate-500 mb-6">Contas com investimento na Meta, mas sem lead Orion registrado no CRM no período.</p>
+
+            <div className="max-h-[360px] overflow-y-auto pr-1 space-y-3 scrollbar-none">
+              {crmPendingTrafficList.length === 0 ? (
+                <p className="text-sm font-semibold text-slate-500 text-center py-6">Nenhuma conta com CRM pendente.</p>
+              ) : (
+                crmPendingTrafficList.map((item) => (
+                  <div key={`${item.corretor_id}-${item.meta_ad_account_id}`} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-extrabold text-white truncate">{item.corretora_nome}</p>
+                      <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mt-0.5 truncate">{item.meta_ad_account_name}</p>
+                      <p className="text-[9px] font-semibold text-slate-500 mt-1">Gestor: {item.gestor_nome}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-600">Investido</p>
+                      <span className="mt-1 inline-block text-xs font-black text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-full">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.spend)}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCrmPendingModal(false)}
+              className="mt-6 w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold text-xs uppercase tracking-widest rounded-xl transition-all"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Modal: Concessionarias Sem Saldo */}
       {mounted && showNoBalanceModal && createPortal(
