@@ -6,7 +6,7 @@ const DEFAULT_TYPES = {
   saldo_baixo: true,
   cpl_alto: true,
   notificacao: true,
-  novo_lead: false,
+  novo_lead: true,
   suporte: true,
   demandas: true,
 };
@@ -92,7 +92,7 @@ export async function PATCH(request: Request) {
 
     const telefone = String(body.telefone || '').trim();
     const tipos = body.tipos && typeof body.tipos === 'object'
-      ? { ...DEFAULT_TYPES, ...body.tipos, novo_lead: false }
+      ? { ...DEFAULT_TYPES, ...body.tipos }
       : DEFAULT_TYPES;
 
     const payload = {

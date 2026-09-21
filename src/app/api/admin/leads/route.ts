@@ -7,6 +7,7 @@ import { isMissingLeadOriginColumn, resolveLeadOrigin } from '@/lib/leadOrigin';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import { buildLeadContactKey, buildLeadIdentityKey } from '@/lib/leadDuplicate';
 import { getLeadSpamReason } from '@/lib/leadSpam';
+import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 
 const ACTIVE_PROFILE_STATUSES = ['active', 'ativo', 'Ativo'];
 const LEAD_CREATOR_PROFILE_TYPES = [
@@ -484,6 +485,17 @@ export async function POST(request: Request) {
           remetente_profile_id: guard.profile.id,
           lida: false,
         }]);
+
+        try {
+          await sendApoloWhatsApp({
+            type: 'novo_lead',
+            title: 'Novo lead pronto para atendimento',
+            message,
+            profiles: [responsibleProfile],
+          });
+        } catch (waErr) {
+          console.error('[Manual lead] Failed sending WA notification:', waErr);
+        }
 
       }
     }

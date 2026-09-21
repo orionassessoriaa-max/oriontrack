@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { uazapiFetch, normalizePhone } from '@/lib/uazapi';
+import { isUnityBrokerage } from '@/lib/atendimentoCompartilhado';
 
 export const APOLO_MASTER_INSTANCE = 'apolo_master_sender';
 
@@ -31,7 +32,7 @@ const defaultTypeEnabled: Record<ApoloNotificationType, boolean> = {
   saldo_baixo: true,
   cpl_alto: true,
   notificacao: true,
-  novo_lead: false,
+  novo_lead: true,
   suporte: true,
   demandas: true,
 };
@@ -50,19 +51,66 @@ export async function sendApoloWhatsApp({ type, title, message, profiles, respec
   const uniqueProfiles = Array.from(new Map(profiles.filter((p) => p?.id).map((p) => [p.id, p])).values());
   if (uniqueProfiles.length === 0) return [];
 
-  // Leads novos ficam restritos ao sino e a bolinha do Apolo dentro do Orion Track.
+  let sendableProfiles = uniqueProfiles;
+  const skippedUnity: Array<{ profile_id: string; status: 'skipped'; reason: string }> = [];
+
+  // Somente a Unity optou por receber novos leads dentro do Orion Track. A
+  // regra e resolvida pelo vinculo atual do perfil, sem depender de cada rota
+  // lembrar de bloquear o WhatsApp da Unity.
   if (type === 'novo_lead') {
-    return uniqueProfiles.map((profile) => ({
-      profile_id: profile.id,
-      status: 'skipped' as const,
-      reason: 'Notificacao disponivel somente no Orion Track.',
-    }));
+    const { data: linkedProfiles, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, corretor_id, nome_empresa')
+      .in('id', uniqueProfiles.map((profile) => profile.id));
+
+    if (profileError) {
+      console.error('[Apolo notifications] brokerage lookup failed:', profileError);
+      return uniqueProfiles.map((profile) => ({
+        profile_id: profile.id,
+        status: 'failed' as const,
+        reason: 'Nao foi possivel confirmar a concessionaria do destinatario.',
+      }));
+    }
+
+    const brokerIds = Array.from(new Set(
+      (linkedProfiles || []).map((profile: any) => profile.corretor_id).filter(Boolean)
+    ));
+    const { data: brokers, error: brokerError } = brokerIds.length
+      ? await supabaseAdmin.from('corretores').select('id, nome_empresa').in('id', brokerIds)
+      : { data: [], error: null };
+
+    if (brokerError) {
+      console.error('[Apolo notifications] brokerage owner lookup failed:', brokerError);
+      return uniqueProfiles.map((profile) => ({
+        profile_id: profile.id,
+        status: 'failed' as const,
+        reason: 'Nao foi possivel confirmar a concessionaria do destinatario.',
+      }));
+    }
+
+    const brokerageById = new Map((brokers || []).map((broker: any) => [broker.id, broker.nome_empresa]));
+    const unityProfileIds = new Set(
+      (linkedProfiles || [])
+        .filter((profile: any) => isUnityBrokerage(profile.nome_empresa || brokerageById.get(profile.corretor_id)))
+        .map((profile: any) => profile.id)
+    );
+
+    sendableProfiles = uniqueProfiles.filter((profile) => !unityProfileIds.has(profile.id));
+    skippedUnity.push(...uniqueProfiles
+      .filter((profile) => unityProfileIds.has(profile.id))
+      .map((profile) => ({
+        profile_id: profile.id,
+        status: 'skipped' as const,
+        reason: 'Unity recebe novos leads somente dentro do Orion Track.',
+      })));
   }
+
+  if (sendableProfiles.length === 0) return skippedUnity;
 
   const { data: preferences, error } = await supabaseAdmin
     .from('notificacao_preferencias')
     .select('profile_id, whatsapp_enabled, telefone, tipos')
-    .in('profile_id', uniqueProfiles.map((profile) => profile.id));
+    .in('profile_id', sendableProfiles.map((profile) => profile.id));
 
   if (error) {
     console.error('[Apolo notifications] preference lookup failed:', error);
@@ -70,9 +118,14 @@ export async function sendApoloWhatsApp({ type, title, message, profiles, respec
   }
 
   const prefsByProfile = new Map((preferences || []).map((pref: any) => [pref.profile_id, pref]));
-  const results = [];
+  const results: Array<{
+    profile_id: string;
+    status: 'skipped' | 'failed' | 'success';
+    reason?: string;
+    phone?: string;
+  }> = [...skippedUnity];
  
-   for (const profile of uniqueProfiles) {
+   for (const profile of sendableProfiles) {
      const pref = prefsByProfile.get(profile.id) as any;
      if (respectPreferences && (!pref?.whatsapp_enabled || !isTypeEnabled(pref.tipos, type))) {
        results.push({ profile_id: profile.id, status: 'skipped', reason: 'Preferência desativada.' });

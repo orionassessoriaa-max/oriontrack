@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeLeadStatus } from '@/lib/leadStatus';
 import { rateLimit, writeAuditLog } from '@/lib/api/security';
 import { buildLeadContactKey, buildLeadDuplicateKey, buildLeadIdentityKey } from '@/lib/leadDuplicate';
+import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
 import { startLeadBotIfEligible } from '@/lib/leadBot';
@@ -715,6 +716,18 @@ export async function POST(request: Request) {
           lida: false,
         });
       }
+      if (recipients.length > 0) {
+        try {
+          await sendApoloWhatsApp({
+            type: 'novo_lead',
+            title: 'Novo lead disponível',
+            message: sharedMessage,
+            profiles: recipients,
+          });
+        } catch (waErr) {
+          console.error('[Webhook n8n] Failed sending shared queue WA notification:', waErr);
+        }
+      }
       notificationReport.owner_profiles_notified = recipients.map((recipient: any) => ({ id: recipient.id, nome: recipient.nome || null, tipo_usuario: recipient.tipo_usuario || null }));
       notificationReport.note = 'Fila compartilhada: todos os participantes foram avisados; a IA não assume a posse.';
       suppressStandardLeadNotifications = true;
@@ -791,6 +804,17 @@ export async function POST(request: Request) {
           }]);
         }
 
+        try {
+          await sendApoloWhatsApp({
+            type: 'novo_lead',
+            title: 'Novo lead recebido',
+            message: adminMsg,
+            profiles: ownerRecipients,
+          });
+        } catch (waErr) {
+          console.error('[Webhook n8n] Failed sending admin WA notification:', waErr);
+        }
+
       }
 
       // 2. Notify assigned member broker
@@ -819,6 +843,17 @@ export async function POST(request: Request) {
           destinatario_profile_id: memberProfile.id,
           lida: false,
         }]);
+
+        try {
+          await sendApoloWhatsApp({
+            type: 'novo_lead',
+            title: 'Novo lead pronto para atendimento',
+            message: memberMsg,
+            profiles: [memberProfile],
+          });
+        } catch (waErr) {
+          console.error('[Webhook n8n] Failed sending member WA notification:', waErr);
+        }
 
       }
     }
