@@ -241,6 +241,22 @@ function providerCreatedAt(value: unknown) {
 }
 
 async function historyInstanceNames(conversation: any, varrerCorretoraInteira: boolean) {
+  const compartilhado = await resolverAtendimentoCompartilhado(conversation?.corretor_id);
+  if (compartilhado.ativo) {
+    if (!compartilhado.instancia) {
+      console.warn('[inbox_messages] Historico compartilhado sem instancia valida.', {
+        conversationId: conversation?.id,
+        corretorId: conversation?.corretor_id,
+        error: compartilhado.erroConfiguracao,
+      });
+      return [];
+    }
+    return [{
+      instance: compartilhado.instancia,
+      senderName: compartilhado.donoNome || 'Equipe',
+    }];
+  }
+
   const profileIds = new Set<string>();
   if (conversation?.lead_id) {
     const { data: lead } = await supabaseAdmin
@@ -780,8 +796,13 @@ export async function GET(request: Request) {
       if (!page || page.length < pageSize) break;
     }
 
+    const visibleHistory = history.filter((message) => {
+      const status = String(message?.metadata?.send_status || '');
+      return status !== 'sending' && status !== 'failed';
+    });
+
     return NextResponse.json({
-      messages: dedupeMessages(history).map((message) => ({
+      messages: dedupeMessages(visibleHistory).map((message) => ({
         ...message,
         metadata: sanitizeProviderMetadata(message.metadata),
       })),
@@ -1004,6 +1025,11 @@ export async function POST(request: Request) {
     // numero, seja qual for o vendedor que clicou. Fora dela, nada muda: cada
     // perfil continua com a propria instancia.
     const compartilhado = await resolverAtendimentoCompartilhado(conversation.corretor_id || senderProfile.corretor_id);
+    if (compartilhado.ativo && !compartilhado.instancia) {
+      return NextResponse.json({
+        error: compartilhado.erroConfiguracao || 'O WhatsApp compartilhado ainda nao foi configurado.',
+      }, { status: 503 });
+    }
 
     if (conversation.lead_id && ['corretor', 'corretor_admin', 'corretor_membro'].includes(senderProfile.tipo_usuario)) {
       const { data: claimResult, error: claimError } = await supabaseAdmin.rpc('claim_shared_lead', {
@@ -1029,7 +1055,9 @@ export async function POST(request: Request) {
       }
     }
 
-    const instance = compartilhado.instancia || uazapiInstanceName(senderProfileId);
+    const instance = compartilhado.ativo
+      ? compartilhado.instancia!
+      : uazapiInstanceName(senderProfileId);
     const reservationProviderId = clientMessageId ? `orion-client:${clientMessageId}` : null;
     let messageTextDb = text;
     if (mediaBase64) {
@@ -1065,6 +1093,19 @@ export async function POST(request: Request) {
           .eq('conversa_id', conversationId)
           .eq('provider_message_id', reservationProviderId)
           .maybeSingle();
+
+        const existingStatus = String(existing?.metadata?.send_status || '');
+        if (existingStatus === 'failed') {
+          return NextResponse.json({
+            error: 'A tentativa anterior falhou. Confirme o status da conversa antes de tentar novamente.',
+            retryable: true,
+          }, { status: 409 });
+        }
+        if (existingStatus === 'sending') {
+          return NextResponse.json({
+            error: 'Esta mensagem ainda esta sendo processada. Aguarde alguns segundos antes de tentar novamente.',
+          }, { status: 409 });
+        }
 
         return NextResponse.json({
           success: true,
@@ -1228,9 +1269,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, message: inserted, conversation });
   } catch (error: any) {
     if (reservedMessageId) {
+      const { data: reserved } = await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .select('metadata')
+        .eq('id', reservedMessageId)
+        .maybeSingle();
       await supabaseAdmin
         .from('whatsapp_mensagens')
-        .delete()
+        .update({
+          metadata: {
+            ...(reserved?.metadata || {}),
+            send_status: 'failed',
+            failed_at: new Date().toISOString(),
+            error_message: String(error?.message || 'Falha desconhecida').slice(0, 500),
+          },
+        })
         .eq('id', reservedMessageId);
     }
     console.error('[POST /api/inbox/messages] ERROR:', error);

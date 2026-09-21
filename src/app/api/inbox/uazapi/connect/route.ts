@@ -2,6 +2,7 @@ import { after, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
 import { configureUazapiWebhook, ensureUazapiInstance, ensureUazapiWebhookConfigured, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
+import { resolverAtendimentoCompartilhado } from '@/lib/atendimentoCompartilhado';
 
 const WHATSAPP_TARGET_ROLES = ['corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const CAN_VIEW_AS_ROLES = ['admin', 'gestor_trafego', 'account_manager'] as const;
@@ -136,6 +137,26 @@ function readInstanceName(instance: any) {
     instance?.sessionkey ||
     ''
   );
+}
+
+async function resolveConnectionProfile(targetProfile: WhatsappTargetProfile) {
+  const compartilhado = await resolverAtendimentoCompartilhado(targetProfile.corretor_id);
+  if (!compartilhado.ativo) {
+    return { profile: targetProfile, compartilhado };
+  }
+  if (!compartilhado.instancia || !compartilhado.donoProfileId) {
+    throw new Error(compartilhado.erroConfiguracao || 'O WhatsApp compartilhado ainda nao foi configurado.');
+  }
+
+  const { data: owner, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, email, email_real, nome, tipo_usuario, corretor_id, telefone, status, is_admin_master, equipe_orion, nome_empresa')
+    .eq('id', compartilhado.donoProfileId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!owner) throw new Error('O responsavel pelo WhatsApp compartilhado nao foi encontrado.');
+
+  return { profile: owner as WhatsappTargetProfile, compartilhado };
 }
 
 function connectedPhone(value: unknown) {
@@ -340,23 +361,30 @@ export async function POST(request: Request) {
     }
 
     const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
+    const connection = await resolveConnectionProfile(targetProfile);
+    if (connection.compartilhado.ativo && connection.profile.id !== targetProfile.id) {
+      return NextResponse.json({
+        error: `O WhatsApp desta corretora e compartilhado e somente ${connection.profile.nome || 'o responsavel'} pode administrar a conexao.`,
+      }, { status: 403 });
+    }
+    const connectionProfile = connection.profile;
     const limited = rateLimit(request, 'inbox:uazapi:connect', {
       limit: 12,
       windowMs: 10 * 60_000,
-      key: targetProfile.id,
+      key: connectionProfile.id,
     });
     if (limited) return limited;
 
-    const instance = uazapiInstanceName(targetProfile.id);
+    const instance = connection.compartilhado.instancia || uazapiInstanceName(connectionProfile.id);
 
     await writeAuditLog(request, guard.profile, {
       action: 'whatsapp.terms.accept',
       entity_type: 'profile',
       entity_id: targetProfile.id,
       metadata: {
-        target_profile_id: targetProfile.id,
-        target_email: targetProfile.email_real || targetProfile.email,
-        target_role: targetProfile.tipo_usuario,
+        target_profile_id: connectionProfile.id,
+        target_email: connectionProfile.email_real || connectionProfile.email,
+        target_role: connectionProfile.tipo_usuario,
         terms_version: body.terms_version || 'whatsapp-inbox-v1',
         acceptance_text: 'Usuario aceitou conectar o WhatsApp ao Orion Track e permitir exibicao das conversas dos leads para atendimento comercial.',
       },
@@ -408,8 +436,8 @@ export async function POST(request: Request) {
       entity_type: 'whatsapp_instance',
       entity_id: instance,
       metadata: {
-        target_profile_id: targetProfile.id,
-        target_role: targetProfile.tipo_usuario,
+        target_profile_id: connectionProfile.id,
+        target_role: connectionProfile.tipo_usuario,
         recovered_non_reconnectable_session: recoveredSession,
         reset_transient_session: resetTransientSession,
       },
@@ -421,7 +449,9 @@ export async function POST(request: Request) {
       qrcode,
       state,
       connected: state === 'open',
-      targetProfile: targetPayload(targetProfile),
+      targetProfile: targetPayload(connectionProfile),
+      shared: connection.compartilhado.ativo,
+      canManageConnection: true,
       raw: qrcode ? undefined : payload,
     });
   } catch (error: any) {
@@ -440,25 +470,29 @@ export async function GET(request: Request) {
     if ('error' in guard) return guard.error;
 
     const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
+    const connection = await resolveConnectionProfile(targetProfile);
+    const connectionProfile = connection.profile;
     const limited = rateLimit(request, 'inbox:uazapi:status', {
       limit: 30,
       windowMs: 1 * 60_000,
+      // Cada vendedor consulta a mesma instancia compartilhada. O limite por
+      // perfil evita que a soma dos pollings de toda a equipe bloqueie todos.
       key: targetProfile.id,
     });
     if (limited) return limited;
 
-    const instance = uazapiInstanceName(targetProfile.id);
+    const instance = connection.compartilhado.instancia || uazapiInstanceName(connectionProfile.id);
 
     try {
       const snapshot = await fetchUazapiInstanceState(instance);
       const synchronizedPhone = snapshot.state === 'open'
-        ? await syncConnectedProfilePhone(targetProfile, snapshot.numero)
+        ? await syncConnectedProfilePhone(connectionProfile, snapshot.numero)
         : null;
       if (synchronizedPhone) {
         await writeAuditLog(request, guard.profile, {
           action: 'whatsapp.connected_phone.sync',
           entity_type: 'profile',
-          entity_id: targetProfile.id,
+          entity_id: connectionProfile.id,
           metadata: { instance, phone: synchronizedPhone },
         });
       }
@@ -480,7 +514,10 @@ export async function GET(request: Request) {
         numero: snapshot.numero,
         disconnectReason: snapshot.state === 'close' ? snapshot.disconnectReason : '',
         statusSource: 'provider',
-        targetProfile: targetPayload(targetProfile),
+        targetProfile: targetPayload(connectionProfile),
+        requestedProfile: targetPayload(targetProfile),
+        shared: connection.compartilhado.ativo,
+        canManageConnection: connectionProfile.id === targetProfile.id,
       }, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } });
     } catch (error: any) {
       return NextResponse.json({
@@ -488,7 +525,10 @@ export async function GET(request: Request) {
         instance,
         state: 'close',
         connected: false,
-        targetProfile: targetPayload(targetProfile),
+        targetProfile: targetPayload(connectionProfile),
+        requestedProfile: targetPayload(targetProfile),
+        shared: connection.compartilhado.ativo,
+        canManageConnection: connectionProfile.id === targetProfile.id,
       });
     }
   } catch (error: any) {
@@ -503,14 +543,21 @@ export async function DELETE(request: Request) {
     if ('error' in guard) return guard.error;
 
     const targetProfile = await resolveWhatsappTargetProfile(request, guard.profile);
+    const connection = await resolveConnectionProfile(targetProfile);
+    if (connection.compartilhado.ativo && connection.profile.id !== targetProfile.id) {
+      return NextResponse.json({
+        error: `O WhatsApp desta corretora e compartilhado e somente ${connection.profile.nome || 'o responsavel'} pode desconectar a conta.`,
+      }, { status: 403 });
+    }
+    const connectionProfile = connection.profile;
     const limited = rateLimit(request, 'inbox:uazapi:disconnect', {
       limit: 12,
       windowMs: 10 * 60_000,
-      key: targetProfile.id,
+      key: connectionProfile.id,
     });
     if (limited) return limited;
 
-    const instance = uazapiInstanceName(targetProfile.id);
+    const instance = connection.compartilhado.instancia || uazapiInstanceName(connectionProfile.id);
     const disconnectResults = await disconnectUazapiInstanceEverywhere(instance);
     const finalSnapshot = await fetchUazapiInstanceStateFromList(instance).catch((error) => {
       console.warn('[DELETE /api/inbox/uazapi/connect] Status check failed after disconnect for %s:', instance, error);
@@ -542,8 +589,8 @@ export async function DELETE(request: Request) {
       entity_type: 'whatsapp_instance',
       entity_id: instance,
       metadata: { 
-        target_profile_id: targetProfile.id, 
-        target_role: targetProfile.tipo_usuario,
+        target_profile_id: connectionProfile.id,
+        target_role: connectionProfile.tipo_usuario,
         disconnected_by: guard.profile.id,
         disconnected_by_role: guard.profile.tipo_usuario,
         final_state: finalSnapshot.state,
@@ -553,7 +600,8 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({
       success: true,
-      targetProfile: targetPayload(targetProfile),
+      targetProfile: targetPayload(connectionProfile),
+      shared: connection.compartilhado.ativo,
       state: finalSnapshot.state,
       attempts: disconnectResults,
       message: 'WhatsApp desconectado com sucesso.'

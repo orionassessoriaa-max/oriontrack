@@ -12,10 +12,22 @@ import { uazapiInstanceName } from '@/lib/uazapi';
  * A chave e por concessionaria e nasce desligada: corretora que ja opera com um
  * numero por pessoa continua exatamente como esta.
  */
-type Compartilhado = {
+export type AtendimentoCompartilhado = {
   ativo: boolean;
   instancia: string | null;
   assinarMensagens: boolean;
+  donoProfileId: string | null;
+  donoNome: string | null;
+  erroConfiguracao: string | null;
+};
+
+const DESATIVADO: AtendimentoCompartilhado = {
+  ativo: false,
+  instancia: null,
+  assinarMensagens: false,
+  donoProfileId: null,
+  donoNome: null,
+  erroConfiguracao: null,
 };
 
 export function isUnityBrokerage(nomeEmpresa?: string | null) {
@@ -26,8 +38,8 @@ export function isUnityBrokerage(nomeEmpresa?: string | null) {
     .toUpperCase() === 'UNITY SAUDE';
 }
 
-export async function resolverAtendimentoCompartilhado(corretorId?: string | null): Promise<Compartilhado> {
-  if (!corretorId) return { ativo: false, instancia: null, assinarMensagens: false };
+export async function resolverAtendimentoCompartilhado(corretorId?: string | null): Promise<AtendimentoCompartilhado> {
+  if (!corretorId) return DESATIVADO;
 
   const { data: corretora, error } = await supabaseAdmin
     .from('corretores')
@@ -37,16 +49,55 @@ export async function resolverAtendimentoCompartilhado(corretorId?: string | nul
 
   // Antes da migration a coluna nao existe: sem ela, o comportamento e o antigo.
   if (error || !corretora?.atendimento_compartilhado) {
-    return { ativo: false, instancia: null, assinarMensagens: false };
+    return DESATIVADO;
   }
 
   const assinarMensagens = isUnityBrokerage(corretora.nome_empresa);
 
   const donoId = corretora.numero_compartilhado_profile_id
     || (await donoPadraoDaConcessionaria(corretorId));
-  if (!donoId) return { ativo: true, instancia: null, assinarMensagens };
+  if (!donoId) {
+    return {
+      ativo: true,
+      instancia: null,
+      assinarMensagens,
+      donoProfileId: null,
+      donoNome: null,
+      erroConfiguracao: 'O WhatsApp compartilhado nao possui um perfil responsavel configurado.',
+    };
+  }
 
-  return { ativo: true, instancia: uazapiInstanceName(String(donoId)), assinarMensagens };
+  // O ID salvo no banco nunca pode apontar para outra corretora. Sem esta
+  // validacao, um erro de cadastro faria mensagens de uma operacao sairem pelo
+  // numero de outra empresa.
+  const { data: dono, error: donoError } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nome, corretor_id, tipo_usuario, status')
+    .eq('id', donoId)
+    .eq('corretor_id', corretorId)
+    .in('tipo_usuario', ['corretor', 'corretor_admin'])
+    .in('status', ['active', 'ativo', 'Ativo'])
+    .maybeSingle();
+
+  if (donoError || !dono) {
+    return {
+      ativo: true,
+      instancia: null,
+      assinarMensagens,
+      donoProfileId: null,
+      donoNome: null,
+      erroConfiguracao: 'O perfil responsavel pelo WhatsApp compartilhado e invalido ou esta inativo.',
+    };
+  }
+
+  return {
+    ativo: true,
+    instancia: uazapiInstanceName(String(dono.id)),
+    assinarMensagens,
+    donoProfileId: String(dono.id),
+    donoNome: String(dono.nome || 'Responsavel'),
+    erroConfiguracao: null,
+  };
 }
 
 /**

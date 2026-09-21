@@ -361,6 +361,8 @@ export default function BrokerInboxPage() {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [whatsAppOwnerName, setWhatsAppOwnerName] = useState('');
   const [whatsAppNumero, setWhatsAppNumero] = useState('');
+  const [usesSharedWhatsApp, setUsesSharedWhatsApp] = useState(false);
+  const [canManageWhatsAppConnection, setCanManageWhatsAppConnection] = useState(true);
 
   // Message states
   const [messages, setMessages] = useState<InboxMessage[]>([]);
@@ -370,6 +372,7 @@ export default function BrokerInboxPage() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const sendInFlightRef = useRef(false);
+  const sendRetryRef = useRef<{ fingerprint: string; id: string } | null>(null);
 
   // File states
   const [selectedAttachments, setSelectedAttachments] = useState<SelectedAttachment[]>([]);
@@ -499,9 +502,13 @@ export default function BrokerInboxPage() {
   const canManageTaskResponsible = ['admin', 'dev', 'corretor_admin'].includes(profile?.tipo_usuario || '');
   // A Unity usa um unico WhatsApp. Somente o Admin Master administra o QR e
   // enxerga o estado da conexao; integrantes trabalham normalmente no Inbox.
-  const isUnitySharedMember = profile?.nome_empresa === 'UNITY SAÚDE'
-    && profile?.id !== '8013d773-445e-40ff-86bf-5c37c3faf250';
-  const isUnityMaster = profile?.id === '8013d773-445e-40ff-86bf-5c37c3faf250';
+  const normalizedBrokerageName = String(profile?.nome_empresa || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+  const isUnitySharedMember = normalizedBrokerageName === 'UNITY SAUDE'
+    && profile?.tipo_usuario === 'corretor_membro';
   const taskResponsibleOptions = teamMembers.filter((member) => member.profile_id);
 
   // Load configuration from localStorage on mount
@@ -584,6 +591,8 @@ export default function BrokerInboxPage() {
         setWhatsappStatus(payload.state || 'close');
         setWhatsAppOwnerName(payload.targetProfile?.nome || profile?.nome || '');
         setWhatsAppNumero(String(payload.numero || ''));
+        setUsesSharedWhatsApp(payload.shared === true);
+        setCanManageWhatsAppConnection(payload.canManageConnection !== false);
         if (payload.connected) {
           setQrCode(null);
           setConnectError(null);
@@ -1651,7 +1660,22 @@ export default function BrokerInboxPage() {
     setSendError(null);
     const isNew = selectedConversation.id.startsWith('new-');
     const hasAudioData = isAudio && audioBase64Override;
-    const clientSendId = crypto.randomUUID();
+    const sendFingerprint = JSON.stringify({
+      conversation: selectedConversation.id,
+      text: finalMsg,
+      isAudio,
+      audioDuration,
+      audioSize: audioBase64Override?.length || 0,
+      attachments: originalAttachments.map((attachment) => ({
+        name: attachment.file.name,
+        size: attachment.file.size,
+        modified: attachment.file.lastModified,
+      })),
+    });
+    const clientSendId = sendRetryRef.current?.fingerprint === sendFingerprint
+      ? sendRetryRef.current.id
+      : crypto.randomUUID();
+    sendRetryRef.current = { fingerprint: sendFingerprint, id: clientSendId };
 
     try {
       const jobs = hasAudioData
@@ -1671,33 +1695,42 @@ export default function BrokerInboxPage() {
         else if (file?.type.startsWith('video/')) mediatype = 'video';
         else if (file?.type.startsWith('audio/')) mediatype = 'audio';
 
-        const response = await fetch('/api/inbox/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-            ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
-          },
-          body: JSON.stringify({
-            conversation_id: realConversation?.id || selectedConversation.id,
-            client_message_id: `${clientSendId}:${index}`,
-            mensagem: job.isAudio ? '[Audio Gravado]' : (index === 0 ? finalMsg : ''),
-            ...(isNew && !realConversation ? {
-              telefone: selectedConversation.telefone,
-              lead_id: selectedConversation.lead_id,
-              nome_contato: selectedConversation.nome_contato,
-            } : {}),
-            ...(job.preview ? {
-              media: job.preview,
-              mimetype: job.isAudio ? (audioMimeType || 'audio/ogg') : file?.type,
-              fileName: job.isAudio ? (audioMimeType?.includes('ogg') ? 'audio.ogg' : 'audio.webm') : file?.name,
-              mediatype: job.isAudio ? 'audio' : mediatype,
-            } : {}),
-          }),
-        });
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 45_000);
+        let response: Response;
+        try {
+          response = await fetch('/api/inbox/messages', {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+              ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+            },
+            body: JSON.stringify({
+              conversation_id: realConversation?.id || selectedConversation.id,
+              client_message_id: `${clientSendId}:${index}`,
+              mensagem: job.isAudio ? '[Audio Gravado]' : (index === 0 ? finalMsg : ''),
+              ...(isNew && !realConversation ? {
+                telefone: selectedConversation.telefone,
+                lead_id: selectedConversation.lead_id,
+                nome_contato: selectedConversation.nome_contato,
+              } : {}),
+              ...(job.preview ? {
+                media: job.preview,
+                mimetype: job.isAudio ? (audioMimeType || 'audio/ogg') : file?.type,
+                fileName: job.isAudio ? (audioMimeType?.includes('ogg') ? 'audio.ogg' : 'audio.webm') : file?.name,
+                mediatype: job.isAudio ? 'audio' : mediatype,
+              } : {}),
+            }),
+          });
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok) {
+          sendRetryRef.current = null;
           setSendError(payload.error || 'Nao consegui enviar agora.');
           void fetchConnectionStatus();
           if (!isAudio) {
@@ -1757,9 +1790,14 @@ export default function BrokerInboxPage() {
       if (realConversation) {
         setSelectedConversation(realConversation);
       }
+      sendRetryRef.current = null;
     } catch (err) {
       console.error(err);
-      setSendError('Nao consegui enviar agora. Tente novamente em instantes.');
+      setSendError(
+        err instanceof DOMException && err.name === 'AbortError'
+          ? 'O envio demorou mais que o esperado. Atualize a conversa antes de tentar novamente para evitar mensagem duplicada.'
+          : 'Nao consegui confirmar o envio. Atualize a conversa antes de tentar novamente.'
+      );
       if (!isAudio) {
         setMessageText(originalText);
         setSelectedAttachments(originalAttachments);
@@ -2706,7 +2744,7 @@ export default function BrokerInboxPage() {
       <div className="orion-inbox-shell h-[calc(100dvh-64px)] sm:h-[calc(100dvh-72px)] min-h-0 flex flex-col gap-0 overflow-hidden">
         
         {/* Connection status header bar */}
-        {!isUnitySharedMember && (isWhatsAppConnected ? (
+        {canManageWhatsAppConnection && (isWhatsAppConnected ? (
           <div className="orion-inbox-connection orion-inbox-connection-connected bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 hidden sm:flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 animate-in fade-in-50">
             <div className="orion-inbox-connection-info flex items-center gap-3">
               <div className="orion-inbox-whatsapp-icon relative flex items-center justify-center shrink-0">
@@ -2767,7 +2805,7 @@ export default function BrokerInboxPage() {
               >
               {connecting || whatsappStatus === 'connecting'
                 ? 'Gerando QR...'
-                : isUnityMaster ? 'Conectar WhatsApp Master' : 'Conectar Conta'}
+                : usesSharedWhatsApp ? 'Conectar WhatsApp Principal' : 'Conectar Conta'}
               </button>
             </div>
           </div>
