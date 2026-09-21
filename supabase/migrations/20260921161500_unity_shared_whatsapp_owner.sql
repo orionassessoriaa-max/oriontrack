@@ -21,8 +21,7 @@ begin
 
   update public.corretores
   set atendimento_compartilhado = true,
-      numero_compartilhado_profile_id = unity_whatsapp_owner_id,
-      updated_at = now()
+      numero_compartilhado_profile_id = unity_whatsapp_owner_id
   where id = unity_corretor_id;
 
   if not found then
