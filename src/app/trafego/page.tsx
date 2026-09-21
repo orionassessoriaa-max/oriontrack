@@ -13,7 +13,6 @@ import {
   ShieldAlert,
   Sparkles,
   Image as ImageIcon,
-  ListChecks,
   Pause,
   Play,
   PlugZap,
@@ -22,6 +21,10 @@ import {
   Ban,
   Maximize2,
   Paperclip,
+  Search,
+  RefreshCw,
+  Building2,
+  WalletCards,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -29,7 +32,6 @@ import Link from 'next/link';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
 import ManagerDemandButton from '@/components/trafego/ManagerDemandButton';
-import OrionCredCard from '@/components/creatives/OrionCredCard';
 import {
   ACTION_LABELS,
   TRACKING_LABELS,
@@ -38,9 +40,7 @@ import {
   formatBRL,
   isCardFunding,
   isPaymentError,
-  scoreAccount,
   type AccountLike,
-  type AccountStatus,
   type RecommendationAction,
   type TrackingStatus,
 } from '@/lib/trafego/rules';
@@ -157,10 +157,6 @@ export default function GestorDashboardPage() {
   const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([]);
   const [activeCreatives, setActiveCreatives] = useState<ActiveCreative[]>([]);
   const [recomendacoes, setRecomendacoes] = useState<Recomendacao[]>([]);
-  const [resumoIa, setResumoIa] = useState('');
-  const [orionCred, setOrionCred] = useState<{ available: number; used: number; limit: number; usage_percent: number; cycle_end: string | null } | null>(null);
-  const [analisesHoje, setAnalisesHoje] = useState(0);
-  const [ultimaAnalise, setUltimaAnalise] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [otimizando, setOtimizando] = useState(false);
@@ -173,6 +169,8 @@ export default function GestorDashboardPage() {
   // mostrar qualquer coisa, e a espera era sentida em toda visita. Sete dias e a
   // janela que o gestor usa para decidir; o resto continua a um clique.
   const [presetLabel, setPresetLabel] = useState('Últimos 7 dias');
+  const [buscaCarteira, setBuscaCarteira] = useState('');
+  const [filtroCarteira, setFiltroCarteira] = useState<'todas' | 'criticas' | 'saldo' | 'saudaveis' | 'sem_rastreio'>('todas');
 
   const [confirmando, setConfirmando] = useState<Recomendacao | null>(null);
   const [ativacaoPendente, setAtivacaoPendente] = useState<Recomendacao | null>(null);
@@ -192,30 +190,6 @@ export default function GestorDashboardPage() {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token || null;
   }
-
-  useEffect(() => {
-    const targetGestorId = gestorIdParam || (profile?.tipo_usuario === 'gestor_trafego' ? profile.id : null);
-    if (!targetGestorId) {
-      setOrionCred(null);
-      return;
-    }
-    let active = true;
-    const loadCredits = async () => {
-      const token = await getToken();
-      if (!token) return;
-      const url = new URL('/api/criativos/credits', window.location.origin);
-      if (gestorIdParam) url.searchParams.set('gestor_id', gestorIdParam);
-      const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
-      const payload = await response.json().catch(() => ({}));
-      if (active && response.ok) setOrionCred(payload);
-    };
-    void loadCredits();
-    const interval = window.setInterval(loadCredits, 30_000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [gestorIdParam, profile?.id, profile?.tipo_usuario]);
 
   async function carregar(
     analisar: boolean,
@@ -282,9 +256,6 @@ export default function GestorDashboardPage() {
       setMetaAccounts(payload.accounts || []);
       setActiveCreatives(payload.active_creatives || []);
       setRecomendacoes(payload.recomendacoes || []);
-      setAnalisesHoje(payload.analises_hoje || 0);
-      setUltimaAnalise(payload.ultima_analise_em || null);
-      setResumoIa(payload.portfolio_ai_review || '');
 
       if (analisar) {
         setAviso({
@@ -317,8 +288,6 @@ export default function GestorDashboardPage() {
     if (!response.ok) return;
     const payload = await response.json();
     setRecomendacoes(payload.recomendacoes || []);
-    setAnalisesHoje(payload.analises_hoje || 0);
-    setUltimaAnalise(payload.ultima_analise_em || null);
   }
 
   async function decidir(recomendacao: Recomendacao, decisao: 'aprovar' | 'ignorar', confirmar = false) {
@@ -492,88 +461,83 @@ export default function GestorDashboardPage() {
   const emAtencao = metaAccounts
     .map((conta) => ({ conta, status: classifyAccount(conta) }))
     .filter(({ status }) => status.tone !== 'emerald' && status.tone !== 'slate');
-  const alertasSaldo = metaAccounts
-    .filter((conta) =>
-      isPaymentError(conta)
-      || (!isCardFunding(conta) && conta.saldo !== null && conta.saldo <= TRAFFIC_RULES.lowBalance)
-    )
-    .map((conta) => {
-      if (isPaymentError(conta)) return { conta, status: classifyAccount(conta) };
-      const semSaldo = Number(conta.saldo) <= 0;
-      const status: AccountStatus = {
-        label: semSaldo ? 'Sem saldo' : 'Saldo baixo',
-        tone: semSaldo ? 'red' : 'amber',
-        detail: semSaldo
-          ? 'Conta pré-paga zerada. Recarregar para retomar as campanhas.'
-          : `Conta pré-paga com ${formatBRL(conta.saldo, conta.currency)} disponível.`,
-      };
-      return { conta, status };
-    });
-
   const criticas = recomendacoes.filter((item) => item.severidade === 'critico').length;
   const investimento = metaAccounts.reduce((soma, conta) => soma + Number(conta.spend || 0), 0);
   const leadsTotais = comRastreio.reduce((soma, conta) => soma + Number(conta.leads || 0), 0);
   const investimentoRastreado = comRastreio.reduce((soma, conta) => soma + Number(conta.spend || 0), 0);
   const cplMedio = leadsTotais > 0 ? investimentoRastreado / leadsTotais : null;
 
-  const ranking = metaAccounts.slice().sort((a, b) => scoreAccount(b) - scoreAccount(a));
-  const maxSpend = Math.max(...ranking.map((conta) => Number(conta.spend || 0)), 1);
+  const carteiraFiltrada = useMemo(() => {
+    const busca = buscaCarteira.trim().toLocaleLowerCase('pt-BR');
+    const prioridade = (conta: MetaAccount) => {
+      const status = classifyAccount(conta);
+      if (status.tone === 'red') return 0;
+      if (status.tone === 'amber' || status.tone === 'blue') return 1;
+      if (status.tone === 'slate') return 2;
+      return 3;
+    };
+
+    return metaAccounts
+      .filter((conta) => {
+        const status = classifyAccount(conta);
+        const correspondeBusca = !busca || `${conta.concessionaria_nome || ''} ${conta.meta_ad_account_name || ''}`
+          .toLocaleLowerCase('pt-BR')
+          .includes(busca);
+        const temAlertaSaldo = isPaymentError(conta)
+          || (!isCardFunding(conta) && conta.saldo !== null && Number(conta.saldo) <= TRAFFIC_RULES.lowBalance);
+        const correspondeFiltro = filtroCarteira === 'todas'
+          || (filtroCarteira === 'criticas' && status.tone === 'red')
+          || (filtroCarteira === 'saldo' && temAlertaSaldo)
+          || (filtroCarteira === 'saudaveis' && status.tone === 'emerald')
+          || (filtroCarteira === 'sem_rastreio' && conta.rastreio !== 'ativo');
+        return correspondeBusca && correspondeFiltro;
+      })
+      .sort((a, b) => prioridade(a) - prioridade(b)
+        || Number(b.cpl || 0) - Number(a.cpl || 0)
+        || String(a.concessionaria_nome || '').localeCompare(String(b.concessionaria_nome || ''), 'pt-BR'));
+  }, [buscaCarteira, filtroCarteira, metaAccounts]);
   const criativos = activeCreatives.slice().sort((a, b) => Number(b.spend || 0) - Number(a.spend || 0));
 
   return (
     <InternalLayout>
       <div className="orion-trafego" style={{ color: 'var(--tf-ink)' }}>
-        <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--tf-accent-ink)' }}>
-              Meta Ads + CRM
-            </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight sm:text-[34px]">Gestão de tráfego</h1>
-            <p className="mt-1.5 max-w-2xl text-sm" style={{ color: 'var(--tf-ink-soft)' }}>
-              As ações abaixo saem de regra fixa sobre os números do período. A IA só resume a carteira.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {profile?.tipo_usuario === 'gestor_trafego' ? <ManagerDemandButton /> : null}
-            <MetaDatePicker
-              startDate={dataInicio}
-              endDate={dataFim}
-              preset={presetLabel}
-              onChange={(inicio, fim, label) => {
-                setDataInicio(inicio);
-                setDataFim(fim);
-                setPresetLabel(label);
-                void carregar(false, { inicio, fim });
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => carregar(true)}
-              disabled={loading || otimizando}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold text-white transition disabled:opacity-60"
-              style={{ background: 'var(--tf-accent)' }}
-            >
-              {otimizando ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
-              {otimizando ? 'Analisando...' : 'Otimizar'}
-            </button>
+        <header className="relative mb-6 overflow-hidden rounded-[2rem] border border-cyan-500/20 bg-[#050d14] p-6 shadow-[0_24px_80px_rgba(0,190,220,0.08)] sm:p-8">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
+          <div className="pointer-events-none absolute inset-y-0 right-[34%] hidden w-px bg-gradient-to-b from-transparent via-cyan-400/20 to-transparent xl:block" />
+          <div className="relative grid gap-7 xl:grid-cols-[1fr_auto] xl:items-end">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-400">Operação Meta Ads + CRM</p>
+              <h1 className="mt-3 max-w-3xl text-4xl font-black uppercase leading-[0.92] tracking-[-0.04em] text-white sm:text-5xl">
+                Carteira sob controle.<br /><span className="text-cyan-400">Ação sem ruído.</span>
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-400">
+                Contas ordenadas por urgência real: risco crítico, atenção, integração pendente e operação saudável.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row xl:flex-col">
+              {profile?.tipo_usuario === 'gestor_trafego' ? <ManagerDemandButton /> : null}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => carregar(false)}
+                  disabled={loading || otimizando}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:border-cyan-400/40 hover:bg-cyan-400/10 disabled:opacity-60"
+                >
+                  <RefreshCw className={loading ? 'animate-spin' : ''} size={15} /> Atualizar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => carregar(true)}
+                  disabled={loading || otimizando}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 text-xs font-black uppercase tracking-wider text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
+                >
+                  {otimizando ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+                  {otimizando ? 'Analisando' : 'Gerar ações'}
+                </button>
+              </div>
+            </div>
           </div>
         </header>
-
-        <div className="mb-6 flex justify-end">
-          <OrionCredCard
-            holderName={profile?.nome || 'Gestor Orion'}
-            gestorId={profile?.id}
-            balance={orionCred?.available ?? null}
-            used={orionCred?.used || 0}
-            limit={orionCred?.limit || 0}
-            usagePercent={orionCred?.usage_percent || 0}
-            cycleEnd={orionCred?.cycle_end || undefined}
-            cycleLabel={orionCred?.cycle_end
-              ? `Ciclo até ${new Date(`${orionCred.cycle_end}T12:00:00`).toLocaleDateString('pt-BR')}`
-              : 'Ciclo de 20 dias'}
-          />
-        </div>
 
         {aviso ? (
           <div
@@ -616,42 +580,114 @@ export default function GestorDashboardPage() {
               <IntegrationBanner contas={semRastreio} />
             ) : null}
 
-            <Panel
-              className="mb-6"
-              title="Saldo e pagamentos"
-              subtitle={`Somente contas pré-pagas com saldo de ${formatBRL(TRAFFIC_RULES.lowBalance)} ou menos. Cartão aparece apenas com erro de pagamento.`}
-              badge={alertasSaldo.length > 0 ? `${alertasSaldo.length} alerta(s)` : undefined}
-              badgeTone={alertasSaldo.some(({ status }) => status.tone === 'red') ? 'red' : 'amber'}
-              collapsedByDefault
-            >
-              {alertasSaldo.length === 0 ? (
-                <Empty
-                  titulo="Nenhum alerta de saldo."
-                  texto="As contas pré-pagas estão acima do limite e não há erro de pagamento em cartão."
-                />
-              ) : (
-                <ul className="space-y-1.5">
-                  {alertasSaldo.map(({ conta, status }) => (
-                    <li key={`saldo-${conta.corretor_id}-${conta.meta_ad_account_id}`}>
-                      <Link
-                        href={`/trafego/otimizacoes?conta=${encodeURIComponent(conta.meta_ad_account_id || '')}`}
-                        className="tf-no-lift flex items-center gap-3 rounded-xl border px-3 py-2.5 transition"
-                        style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface)' }}
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-bold">{conta.concessionaria_nome || conta.corretor_nome}</span>
-                          <span className="mt-0.5 block truncate text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{status.detail}</span>
-                        </span>
-                        <Badge tone={status.tone} label={status.label} />
-                        <ChevronRight size={15} style={{ color: 'var(--tf-ink-mute)' }} />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
+            <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <TrafficMetric icon={Building2} label="Concessionárias" value={String(concessionarias.length)} detail={`${comRastreio.length} contas rastreadas`} tone="cyan" />
+              <TrafficMetric icon={AlertTriangle} label="Em atenção" value={String(emAtencao.length)} detail={`${criticas} ações críticas`} tone={emAtencao.length > 0 ? 'red' : 'slate'} />
+              <TrafficMetric icon={Users} label="Leads Orion" value={String(leadsTotais)} detail="Entraram no CRM no período" tone="emerald" />
+              <TrafficMetric icon={TrendingUp} label="CPL médio" value={cplMedio === null ? 'S/L' : formatBRL(cplMedio)} detail="Investimento dividido pelos leads" tone="cyan" />
+              <TrafficMetric icon={WalletCards} label="Investimento" value={formatBRL(investimento)} detail={`${metaAccounts.length} contas Meta`} tone="slate" />
+            </div>
 
-            {/* Faixa 1 — acao */}
+            <section className="mb-6 overflow-hidden rounded-[2rem] border border-cyan-500/15 bg-[#07111c] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
+              <div className="border-b border-white/5 p-5 sm:p-6">
+                <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-400">Visão da carteira</p>
+                    <h2 className="mt-2 text-2xl font-black text-white">Contas por urgência</h2>
+                    <p className="mt-1 text-xs text-slate-500">Críticas primeiro, depois atenção, integração pendente e saudáveis. Dentro do grupo, maior CPL primeiro.</p>
+                  </div>
+                  <MetaDatePicker
+                    startDate={dataInicio}
+                    endDate={dataFim}
+                    preset={presetLabel}
+                    onChange={(inicio, fim, label) => {
+                      setDataInicio(inicio);
+                      setDataFim(fim);
+                      setPresetLabel(label);
+                      void carregar(false, { inicio, fim });
+                    }}
+                  />
+                </div>
+
+                <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(260px,1fr)_auto] xl:items-center">
+                  <label className="relative block">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                    <input
+                      value={buscaCarteira}
+                      onChange={(event) => setBuscaCarteira(event.target.value)}
+                      placeholder="Buscar concessionária ou conta..."
+                      className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.04] pl-11 pr-4 text-sm font-bold text-white placeholder:text-slate-600"
+                    />
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 rounded-xl bg-white/[0.03] p-1.5">
+                    {([
+                      ['todas', 'Todas'],
+                      ['criticas', 'Críticas'],
+                      ['saldo', 'Saldo'],
+                      ['saudaveis', 'Saudáveis'],
+                      ['sem_rastreio', 'Sem rastreio'],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setFiltroCarteira(value)}
+                        className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-wider transition ${filtroCarteira === value ? 'bg-cyan-400 text-slate-950' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-left">
+                  <thead className="bg-white/[0.025]">
+                    <tr className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">
+                      <th className="px-6 py-4">Situação</th>
+                      <th className="px-6 py-4">Concessionária / conta</th>
+                      <th className="px-6 py-4 text-right">Leads</th>
+                      <th className="px-6 py-4 text-right">CPL</th>
+                      <th className="px-6 py-4 text-right">Investido</th>
+                      <th className="px-6 py-4 text-right">Saldo</th>
+                      <th className="px-6 py-4" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {carteiraFiltrada.length === 0 ? (
+                      <tr><td colSpan={7} className="px-6 py-14 text-center text-sm font-bold text-slate-500">Nenhuma conta encontrada para este filtro.</td></tr>
+                    ) : carteiraFiltrada.map((conta) => {
+                      const status = classifyAccount(conta);
+                      const semRastreioAtivo = conta.rastreio !== 'ativo';
+                      return (
+                        <tr key={`carteira-${conta.corretor_id}-${conta.meta_ad_account_id}`} className="transition hover:bg-cyan-400/[0.035]">
+                          <td className="px-6 py-4"><Badge tone={status.tone} label={status.label} /></td>
+                          <td className="max-w-[380px] px-6 py-4">
+                            <p className="truncate text-sm font-black text-white">{conta.concessionaria_nome || conta.corretor_nome}</p>
+                            <p className="mt-1 truncate text-[10px] font-black uppercase tracking-wider text-cyan-400">{conta.meta_ad_account_name || `act_${conta.meta_ad_account_id}`}</p>
+                            <p className="mt-1 truncate text-xs text-slate-500">{status.detail}</p>
+                          </td>
+                          <td className="px-6 py-4 text-right text-sm font-black tabular-nums text-slate-200">{conta.leads || 0}</td>
+                          <td className="px-6 py-4 text-right text-sm font-black tabular-nums" style={{ color: !semRastreioAtivo && Number(conta.cpl || 0) >= TRAFFIC_RULES.cplCritical ? 'var(--tf-crit)' : 'var(--tf-ink)' }}>
+                            {semRastreioAtivo || conta.cpl === null ? 'S/L' : formatBRL(conta.cpl, conta.currency)}
+                          </td>
+                          <td className="px-6 py-4 text-right text-sm font-bold tabular-nums text-slate-300">{formatBRL(conta.spend, conta.currency)}</td>
+                          <td className="px-6 py-4 text-right text-sm font-bold tabular-nums text-slate-400">{isCardFunding(conta) ? 'Cartão' : formatBRL(conta.saldo, conta.currency)}</td>
+                          <td className="px-6 py-4 text-right">
+                            <Link href={`/trafego/otimizacoes?conta=${encodeURIComponent(conta.meta_ad_account_id || '')}`} className="inline-flex h-9 items-center gap-1 rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 text-[10px] font-black uppercase tracking-wider text-cyan-300 transition hover:bg-cyan-400/15">Detalhar <ChevronRight size={13} /></Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <span>{carteiraFiltrada.length} de {metaAccounts.length} contas exibidas</span>
+                <span>Ordenação: urgência e CPL</span>
+              </div>
+            </section>
+
             <Panel
               className="mb-6"
               title="Ações recomendadas"
@@ -688,118 +724,6 @@ export default function GestorDashboardPage() {
                 </div>
               )}
             </Panel>
-
-            {/* Faixa 2 — leitura */}
-            <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Kpi
-                icon={Users}
-                label="Concessionárias"
-                value={String(concessionarias.length)}
-                detail={`${comRastreio.length} com rastreio ativo`}
-              />
-              <Kpi
-                icon={ListChecks}
-                label="Ações críticas"
-                value={String(criticas)}
-                detail={`${recomendacoes.length} no total da fila`}
-                tone={criticas > 0 ? 'red' : undefined}
-              />
-              <Kpi
-                icon={TrendingUp}
-                label="CPL médio"
-                value={cplMedio === null ? '—' : formatBRL(cplMedio)}
-                detail={cplMedio === null ? 'Sem leads rastreados no período' : `${leadsTotais} leads Orion no CRM`}
-              />
-              <Kpi
-                icon={Sparkles}
-                label="Análises hoje"
-                value={String(analisesHoje)}
-                detail={ultimaAnalise ? `Última: ${new Date(ultimaAnalise).toLocaleString('pt-BR')}` : 'Nenhuma análise registrada'}
-              />
-            </div>
-
-            <div className="mb-6 grid gap-4 xl:grid-cols-2">
-              <Panel title="Concessionárias em atenção" subtitle="Ordenadas por risco.">
-                {emAtencao.length === 0 ? (
-                  <Empty titulo="Nenhuma concessionária em atenção." texto="Todas as contas com rastreio ativo estão dentro das regras." />
-                ) : (
-                  <ul className="space-y-1.5">
-                    {emAtencao.slice(0, 6).map(({ conta, status }) => (
-                      <li key={`atencao-${conta.corretor_id}-${conta.meta_ad_account_id}`}>
-                        <Link
-                          href={`/trafego/otimizacoes?conta=${encodeURIComponent(conta.meta_ad_account_id || '')}`}
-                          className="tf-no-lift flex items-center gap-3 rounded-xl border px-3 py-2.5 transition"
-                          style={{ borderColor: 'var(--tf-border)', background: 'var(--tf-surface)' }}
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-bold">{conta.concessionaria_nome || conta.corretor_nome}</span>
-                            <span className="mt-0.5 block truncate text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{status.detail}</span>
-                          </span>
-                          <Badge tone={status.tone} label={status.label} />
-                          <ChevronRight size={15} style={{ color: 'var(--tf-ink-mute)' }} />
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Panel>
-
-              <Panel title="Leitura da IA" subtitle="Resumo da carteira. Não gera ação sozinha.">
-                {resumoIa ? (
-                  <p className="whitespace-pre-line text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>{resumoIa}</p>
-                ) : (
-                  <Empty titulo="Sem leitura da IA ainda." texto="Clique em Otimizar para gerar o resumo do período." />
-                )}
-              </Panel>
-            </div>
-
-            {/* Faixa 3 — contexto */}
-            <Collapsible title="Ranking da carteira" detail={`${ranking.length} conta(s) | ${formatBRL(investimento)} investidos no período`}>
-              {ranking.length === 0 ? (
-                <Empty titulo="Nenhuma conta Meta no período." texto="Confira se as concessionárias têm conta de anúncio vinculada." />
-              ) : (
-                <div className="space-y-3">
-                  {ranking.map((conta, index) => {
-                    const status = classifyAccount(conta);
-                    const semRastreioAtivo = conta.rastreio !== 'ativo';
-                    return (
-                      <div
-                        key={`rank-${conta.corretor_id}-${conta.meta_ad_account_id}`}
-                        className="grid gap-3 border-b pb-3 last:border-b-0 last:pb-0 lg:grid-cols-[28px_200px_1fr_120px] lg:items-center"
-                        style={{ borderColor: 'var(--tf-border)' }}
-                      >
-                        <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--tf-ink-mute)' }}>{index + 1}</span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-bold">{conta.concessionaria_nome || conta.corretor_nome}</p>
-                          <Badge tone={status.tone} label={status.label} />
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--tf-surface-2)' }}>
-                            <span
-                              className="block h-full rounded-full"
-                              style={{ width: `${Math.max(3, (Number(conta.spend || 0) / maxSpend) * 100)}%`, background: 'var(--tf-accent)' }}
-                            />
-                          </span>
-                          <span className="w-24 text-right text-sm font-semibold tabular-nums">{formatBRL(conta.spend, conta.currency)}</span>
-                        </div>
-                        <div className="lg:text-right">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>CPL</p>
-                          <p
-                            className="text-base font-black tabular-nums"
-                            style={{ color: semRastreioAtivo ? 'var(--tf-ink-mute)' : Number(conta.cpl || 0) >= 28 ? 'var(--tf-crit)' : 'var(--tf-ink)' }}
-                          >
-                            {semRastreioAtivo ? '—' : formatBRL(conta.cpl, conta.currency)}
-                          </p>
-                          <p className="text-[11px]" style={{ color: 'var(--tf-ink-mute)' }}>
-                            {semRastreioAtivo ? 'sem rastreio' : `${conta.leads || 0} leads`}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Collapsible>
 
             <Collapsible title="Criativos ativos" detail={`${criativos.length} anúncio(s) rodando`}>
               {criativos.length === 0 ? (
@@ -1284,7 +1208,7 @@ function Collapsible({ title, detail, children }: { title: string; detail?: stri
   );
 }
 
-function Kpi({
+function TrafficMetric({
   icon: Icon,
   label,
   value,
@@ -1295,21 +1219,24 @@ function Kpi({
   label: string;
   value: string;
   detail: string;
-  tone?: string;
+  tone: 'cyan' | 'red' | 'emerald' | 'slate';
 }) {
-  const cores = tone ? TONE_VAR[tone] : null;
+  const tones = {
+    cyan: 'border-cyan-400/20 bg-cyan-400/[0.07] text-cyan-300',
+    red: 'border-red-500/20 bg-red-500/[0.07] text-red-300',
+    emerald: 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300',
+    slate: 'border-white/10 bg-white/[0.035] text-slate-300',
+  };
 
   return (
-    <div
-      className="rounded-2xl border p-4"
-      style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
-    >
-      <div className="mb-3 flex items-center gap-2">
-        <Icon size={15} style={{ color: 'var(--tf-ink-mute)' }} />
-        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--tf-ink-mute)' }}>{label}</p>
+    <div className={`group relative overflow-hidden rounded-2xl border p-5 shadow-[0_16px_44px_rgba(0,0,0,0.12)] ${tones[tone]}`}>
+      <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-current opacity-[0.06] blur-2xl" />
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</p>
+        <span className="grid h-9 w-9 place-items-center rounded-xl border border-current/15 bg-current/10"><Icon size={16} /></span>
       </div>
-      <p className="text-3xl font-black tabular-nums" style={{ color: cores ? cores.fg : 'var(--tf-ink)' }}>{value}</p>
-      <p className="mt-1.5 text-xs" style={{ color: 'var(--tf-ink-soft)' }}>{detail}</p>
+      <p className="text-3xl font-black tabular-nums text-white">{value}</p>
+      <p className="mt-2 text-[11px] font-semibold text-slate-500">{detail}</p>
     </div>
   );
 }

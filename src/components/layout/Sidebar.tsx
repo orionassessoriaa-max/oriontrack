@@ -227,6 +227,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const adminMenu = [
     { icon: Home, label: 'Visão Geral', href: '/admin' },
     { icon: LayoutDashboard, label: 'Overview Vendas', href: '/overview' },
+    { icon: TrendingUp, label: 'Painel de Tráfego', href: '/trafego' },
     { icon: Building2, label: 'Concessionárias', href: '/admin/corretoras' },
     { icon: Shield, label: 'Usuários', href: '/admin/usuarios' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
