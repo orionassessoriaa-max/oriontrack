@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import InternalLayout from '@/components/layout/InternalLayout';
 import {
@@ -21,7 +21,9 @@ import {
   Users,
   Plus,
   ImageIcon,
-  ChevronDown
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Lead, LeadStatus } from '@/types';
@@ -329,33 +331,36 @@ export default function BrokerLeadsPage() {
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
   const [adPreview, setAdPreview] = useState<AdPreviewState>(null);
   const activeMetaCreativesRef = useRef<ActiveMetaCreative[] | null>(null);
-  const topTableScrollRef = useRef<HTMLDivElement | null>(null);
   const leadsTableScrollRef = useRef<HTMLDivElement | null>(null);
   const leadsTableRef = useRef<HTMLTableElement | null>(null);
-  const [tableScrollWidth, setTableScrollWidth] = useState(0);
   const [tableHasHorizontalOverflow, setTableHasHorizontalOverflow] = useState(false);
+  const [canScrollTableLeft, setCanScrollTableLeft] = useState(false);
+  const [canScrollTableRight, setCanScrollTableRight] = useState(false);
+
+  const updateTableScrollState = useCallback(() => {
+    const scroller = leadsTableScrollRef.current;
+    if (!scroller) return;
+    const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    setTableHasHorizontalOverflow(maxScrollLeft > 1);
+    setCanScrollTableLeft(scroller.scrollLeft > 1);
+    setCanScrollTableRight(scroller.scrollLeft < maxScrollLeft - 1);
+  }, []);
 
   useEffect(() => {
     const scroller = leadsTableScrollRef.current;
     const table = leadsTableRef.current;
     if (!scroller || !table) return;
 
-    const updateScrollWidth = () => {
-      setTableScrollWidth(scroller.scrollWidth);
-      setTableHasHorizontalOverflow(scroller.scrollWidth > scroller.clientWidth + 1);
-    };
-    const observer = new ResizeObserver(updateScrollWidth);
+    const observer = new ResizeObserver(updateTableScrollState);
     observer.observe(scroller);
     observer.observe(table);
     return () => observer.disconnect();
-  }, [error]);
+  }, [error, updateTableScrollState]);
 
-  function syncTableScroll(source: 'top' | 'table') {
-    const top = topTableScrollRef.current;
-    const table = leadsTableScrollRef.current;
-    if (!top || !table) return;
-    if (source === 'top' && table.scrollLeft !== top.scrollLeft) table.scrollLeft = top.scrollLeft;
-    if (source === 'table' && top.scrollLeft !== table.scrollLeft) top.scrollLeft = table.scrollLeft;
+  function moveTableColumns(direction: -1 | 1) {
+    const scroller = leadsTableScrollRef.current;
+    if (!scroller) return;
+    scroller.scrollBy({ left: direction * Math.max(320, scroller.clientWidth * 0.7), behavior: 'smooth' });
   }
 
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
@@ -1473,22 +1478,20 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="orion-leads-table-shell -mx-5 sm:-mx-6 lg:-mx-8">
-        {!error && (
-          <div className={`sticky top-[76px] z-20 border-b border-slate-200 bg-white/95 pb-2 pt-2 backdrop-blur ${tableHasHorizontalOverflow ? '' : 'hidden'}`}>
-            <p className="mb-1 px-5 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 lg:px-8">Role para os lados para ver todas as informações</p>
-            <div
-              ref={topTableScrollRef}
-              onScroll={() => syncTableScroll('top')}
-              className="scrollbar-visible overflow-x-auto overflow-y-hidden"
-              role="region"
-              aria-label="Rolagem horizontal da tabela de leads"
-              tabIndex={0}
-            >
-              <div style={{ width: tableScrollWidth, height: 1 }} aria-hidden="true" />
+        {!error && tableHasHorizontalOverflow && (
+          <div className="sticky top-[76px] z-20 flex justify-end px-5 py-2 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/95 p-1 text-white shadow-lg backdrop-blur">
+              <span className="px-2 text-[10px] font-black uppercase tracking-wider text-slate-300">Colunas</span>
+              <button type="button" onClick={() => moveTableColumns(-1)} disabled={!canScrollTableLeft} aria-label="Ver colunas anteriores" aria-controls="orion-leads-scroll" className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35">
+                <ChevronLeft size={17} />
+              </button>
+              <button type="button" onClick={() => moveTableColumns(1)} disabled={!canScrollTableRight} aria-label="Ver próximas colunas" aria-controls="orion-leads-scroll" className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35">
+                <ChevronRight size={17} />
+              </button>
             </div>
           </div>
         )}
-        <div ref={leadsTableScrollRef} onScroll={() => syncTableScroll('table')} className="scrollbar-visible overflow-x-auto overflow-y-visible px-5 sm:px-6 lg:px-8">
+        <div id="orion-leads-scroll" ref={leadsTableScrollRef} onScroll={updateTableScrollState} className="scrollbar-hidden overflow-x-auto overflow-y-visible px-5 sm:px-6 lg:px-8">
           {error ? (
             <div className="py-24 text-center">
               <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">

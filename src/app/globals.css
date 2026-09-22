@@ -3659,7 +3659,7 @@ body.theme-claro {
   margin-inline: 0 !important;
 }
 
-.theme-claro .orion-leads-table-shell > .scrollbar-visible {
+.theme-claro .orion-leads-table-shell > #orion-leads-scroll {
   padding-inline: 0 !important;
   border: 1px solid #e5e7eb !important;
   border-radius: 18px !important;
