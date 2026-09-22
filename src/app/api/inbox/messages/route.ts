@@ -823,6 +823,9 @@ export async function PATCH(request: Request) {
     if ('error' in guard) return guard.error;
 
     const body = await request.json().catch(() => ({}));
+    if (body.message_id) {
+      return await updateUnityMessage(request, guard.profile, body, 'edit');
+    }
     const conversationId = String(body.conversation_id || '').trim();
     const requestedStatus = String(body.status || '').trim().toLowerCase();
     const dbStatus = requestedStatus === 'fechada'
@@ -869,6 +872,115 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true, status: dbStatus, conversation_ids: updatedIds });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Nao foi possivel atualizar a conversa.' }, { status: 500 });
+  }
+}
+
+async function updateUnityMessage(
+  request: Request,
+  profile: ApiProfile,
+  body: any,
+  operation: 'edit' | 'delete',
+) {
+  const messageId = String(body.message_id || '').trim();
+  if (!messageId) return NextResponse.json({ error: 'Mensagem invalida.' }, { status: 400 });
+
+  const { data: message, error: messageError } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('id, conversa_id, direction, mensagem, provider_message_id, metadata, created_at, remetente')
+    .eq('id', messageId)
+    .maybeSingle();
+  if (messageError) throw messageError;
+  if (!message) return NextResponse.json({ error: 'Mensagem nao encontrada.' }, { status: 404 });
+
+  const conversation = await getConversation(message.conversa_id);
+  if (!(await isUnityBrokerage(conversation?.corretor_id)) || !(await canAccessConversation(profile, conversation))) {
+    return NextResponse.json({ error: 'Mensagem nao encontrada.' }, { status: 404 });
+  }
+  if (message.metadata?.deleted_at) {
+    return NextResponse.json({ error: 'Esta mensagem ja foi apagada.' }, { status: 409 });
+  }
+
+  const isOutbound = message.direction === 'outbound';
+  const providerId = String(message.provider_message_id || '').trim();
+  const providerReady = providerId && !providerId.startsWith('orion-client:');
+  const shared = await resolverAtendimentoCompartilhado(conversation.corretor_id);
+  const instance = shared.instancia;
+  if (isOutbound && (!providerReady || !instance)) {
+    return NextResponse.json({ error: 'Esta mensagem nao pode ser alterada no WhatsApp.' }, { status: 409 });
+  }
+
+  const now = new Date().toISOString();
+  let nextText = message.mensagem;
+  const nextMetadata = { ...(message.metadata || {}) };
+
+  if (operation === 'edit') {
+    if (!isOutbound || nextMetadata.sender_type !== 'human' || nextMetadata.media_mimetype || nextMetadata.mediaType) {
+      return NextResponse.json({ error: 'Apenas mensagens de texto enviadas pela equipe podem ser editadas.' }, { status: 400 });
+    }
+    if (Date.now() - new Date(message.created_at).getTime() > 15 * 60_000) {
+      return NextResponse.json({ error: 'O prazo de 15 minutos para editar esta mensagem terminou.' }, { status: 409 });
+    }
+    nextText = normalizeOutboundText(String(body.mensagem || ''));
+    if (!nextText || nextText.length > 4096) {
+      return NextResponse.json({ error: 'Escreva um texto com ate 4096 caracteres.' }, { status: 400 });
+    }
+    if (nextText === message.mensagem) return NextResponse.json({ success: true, message });
+
+    const whatsappText = shared.assinarMensagens
+      ? assinarMensagem(nextText, nextMetadata.sender_name || message.remetente || profile.nome)
+      : nextText;
+    await uazapiFetch('/message/edit', {
+      method: 'POST',
+      body: JSON.stringify({ id: providerId, text: whatsappText }),
+    }, { instanceName: instance! });
+    nextMetadata.edited_at = now;
+    nextMetadata.edited_by_profile_id = profile.id;
+    nextMetadata.previous_text = message.mensagem;
+  } else if (isOutbound) {
+    await uazapiFetch('/message/delete', {
+      method: 'POST',
+      body: JSON.stringify({ id: providerId }),
+    }, { instanceName: instance! });
+    nextMetadata.deleted_scope = 'whatsapp_everyone';
+    nextText = 'Mensagem apagada';
+  } else {
+    // Uma mensagem recebida so pode ser removida do historico do Orion.
+    // Mantemos a linha como marcador para que a sincronizacao nao a recrie.
+    nextMetadata.deleted_scope = 'orion_inbox';
+    nextText = 'Mensagem removida do Inbox';
+  }
+
+  if (operation === 'delete') {
+    nextMetadata.deleted_at = now;
+    nextMetadata.deleted_by_profile_id = profile.id;
+  }
+  const { data: updated, error: updateError } = await supabaseAdmin
+    .from('whatsapp_mensagens')
+    .update({ mensagem: nextText, metadata: nextMetadata })
+    .eq('id', message.id)
+    .select('*')
+    .single();
+  if (updateError) throw updateError;
+
+  await writeAuditLog(request, profile, {
+    action: operation === 'edit' ? 'whatsapp.message.edit' : 'whatsapp.message.delete',
+    entity_type: 'whatsapp_mensagem',
+    entity_id: message.id,
+    metadata: { conversation_id: message.conversa_id, scope: nextMetadata.deleted_scope || null },
+  });
+  return NextResponse.json({ success: true, message: updated });
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const guard = await requireApiUser(request, [...INBOX_ROLES]);
+    if ('error' in guard) return guard.error;
+    const limited = rateLimit(request, 'inbox:message:delete', { limit: 20, windowMs: 60_000, key: guard.profile.id });
+    if (limited) return limited;
+    const body = await request.json().catch(() => ({}));
+    return await updateUnityMessage(request, guard.profile, body, 'delete');
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Nao foi possivel apagar a mensagem.' }, { status: 500 });
   }
 }
 

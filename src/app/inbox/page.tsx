@@ -32,6 +32,7 @@ import {
   Mic,
   Plus,
   Trash2,
+  Pencil,
   Check,
   Search,
   Bot,
@@ -413,6 +414,10 @@ export default function BrokerInboxPage() {
   const messageFetchRequestRef = useRef(0);
   const messageFetchAbortRef = useRef<AbortController | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const [messageActionMenuId, setMessageActionMenuId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageText, setEditingMessageText] = useState('');
+  const [updatingMessageId, setUpdatingMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -509,6 +514,7 @@ export default function BrokerInboxPage() {
     .toUpperCase();
   const isUnitySharedMember = normalizedBrokerageName === 'UNITY SAUDE'
     && profile?.tipo_usuario === 'corretor_membro';
+  const isUnityInbox = normalizedBrokerageName === 'UNITY SAUDE';
   const taskResponsibleOptions = teamMembers.filter((member) => member.profile_id);
 
   // Load configuration from localStorage on mount
@@ -1108,11 +1114,11 @@ export default function BrokerInboxPage() {
         document.body.classList.contains('theme-claro') ||
         document.querySelector('.theme-claro') !== null
       );
-      const minHeight = isClaro ? 38 : 44;
+      const minHeight = isUnityInbox ? 76 : isClaro ? 38 : 44;
       const scrollHeight = textarea.scrollHeight;
-      textarea.style.height = `${Math.min(Math.max(scrollHeight, minHeight), 160)}px`;
+      textarea.style.height = `${Math.min(Math.max(scrollHeight, minHeight), isUnityInbox ? 240 : 160)}px`;
     }
-  }, [messageText]);
+  }, [messageText, isUnityInbox]);
 
 
   // Fetch Messages for Selected Conversation
@@ -1250,6 +1256,8 @@ export default function BrokerInboxPage() {
 
   useEffect(() => {
     setSendError(null);
+    setMessageActionMenuId(null);
+    setEditingMessageId(null);
     setLeadDetailsOpen(true);
     setDetailsPanelOpen(false);
     if (selectedConversation?.id) {
@@ -1805,6 +1813,49 @@ export default function BrokerInboxPage() {
     } finally {
       sendInFlightRef.current = false;
       setSendingMessage(false);
+    }
+  }
+
+  async function manageUnityMessage(message: InboxMessage, operation: 'edit' | 'delete') {
+    if (!isUnityInbox || updatingMessageId) return;
+    if (operation === 'delete') {
+      const scope = message.direction === 'outbound' ? 'para todos no WhatsApp' : 'do histórico do Orion';
+      if (!window.confirm(`Apagar esta mensagem ${scope}?`)) return;
+    }
+    const editedText = editingMessageText.trim();
+    if (operation === 'edit' && (!editedText || editedText === message.mensagem)) {
+      setEditingMessageId(null);
+      return;
+    }
+
+    setUpdatingMessageId(message.id);
+    setSendError(null);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Sua sessão expirou. Entre novamente.');
+      const response = await fetch('/api/inbox/messages', {
+        method: operation === 'edit' ? 'PATCH' : 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
+        body: JSON.stringify({
+          message_id: message.id,
+          ...(operation === 'edit' ? { mensagem: editedText } : {}),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.message) {
+        throw new Error(payload.error || 'Não foi possível alterar a mensagem.');
+      }
+      setMessages((current) => current.map((item) => item.id === message.id ? { ...item, ...payload.message } : item));
+      setEditingMessageId(null);
+      setMessageActionMenuId(null);
+    } catch (error: any) {
+      setSendError(error?.message || 'Não foi possível alterar a mensagem.');
+    } finally {
+      setUpdatingMessageId(null);
     }
   }
 
@@ -3167,6 +3218,11 @@ export default function BrokerInboxPage() {
                       )}
                       {displayChatMessages.map((message, index) => {
                       const isMine = message.direction === 'outbound';
+                      const isDeleted = Boolean(message.metadata?.deleted_at);
+                      const canEditMessage = isUnityInbox && isMine && !isDeleted
+                        && message.metadata?.sender_type === 'human'
+                        && !getMessageMediaKind(message)
+                        && Date.now() - new Date(message.created_at).getTime() <= 15 * 60_000;
                       const isPlaying = playingAudioId === message.id;
                       const isLoading = loadingAudioId === message.id;
                       const mediaKind = getMessageMediaKind(message);
@@ -3200,13 +3256,69 @@ export default function BrokerInboxPage() {
                                 ? 'bg-cyan-600 text-white rounded-tr-none' 
                                 : 'bg-slate-900 border border-white/5 text-slate-100 rounded-tl-none'
                           }`}>
-                            <div className={`text-[10px] font-black uppercase tracking-[0.08em] ${
+                            {isUnityInbox && !isDeleted && mediaKind !== 'call' && !String(message.id).startsWith('ai_') && (
+                              <div className="absolute right-2 top-2 z-20">
+                                <button
+                                  type="button"
+                                  onClick={() => setMessageActionMenuId((current) => current === message.id ? null : message.id)}
+                                  aria-label={`Opções da mensagem de ${senderName}`}
+                                  aria-expanded={messageActionMenuId === message.id}
+                                  className={`flex h-8 w-8 items-center justify-center rounded-full transition ${isMine ? 'text-white/80 hover:bg-white/20' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                                >
+                                  <ChevronDown size={16} />
+                                </button>
+                                {messageActionMenuId === message.id && (
+                                  <div className="absolute right-0 top-9 z-30 min-w-44 rounded-xl border border-white/10 bg-[#101d2b] p-1.5 text-left shadow-2xl">
+                                    {canEditMessage && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingMessageId(message.id);
+                                          setEditingMessageText(message.mensagem);
+                                          setMessageActionMenuId(null);
+                                        }}
+                                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-100 hover:bg-white/10"
+                                      >
+                                        <Pencil size={14} /> Editar
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => void manageUnityMessage(message, 'delete')}
+                                      disabled={updatingMessageId === message.id}
+                                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
+                                    >
+                                      <Trash2 size={14} /> {isMine ? 'Apagar para todos' : 'Remover do Inbox'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <div className={`pr-7 text-[10px] font-black uppercase tracking-[0.08em] ${
                               isMine ? 'text-white' : 'text-cyan-300'
                             }`}>
                               {senderName}
                             </div>
                             {/* Se for áudio */}
-                            {mediaKind === 'audio' ? (
+                            {isDeleted ? (
+                              <p className="text-xs italic opacity-80">{message.mensagem}</p>
+                            ) : editingMessageId === message.id ? (
+                              <div className="space-y-2">
+                                <textarea
+                                  value={editingMessageText}
+                                  onChange={(event) => setEditingMessageText(event.target.value)}
+                                  rows={3}
+                                  autoFocus
+                                  className="min-h-24 w-full min-w-52 resize-y rounded-xl border border-white/20 bg-slate-950/80 p-3 text-xs text-white outline-none focus:border-cyan-300"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button type="button" onClick={() => setEditingMessageId(null)} className="rounded-lg px-3 py-2 text-xs font-bold text-white/80 hover:bg-white/10">Cancelar</button>
+                                  <button type="button" onClick={() => void manageUnityMessage(message, 'edit')} disabled={updatingMessageId === message.id || !editingMessageText.trim()} className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">
+                                    {updatingMessageId === message.id ? 'Salvando...' : 'Salvar edição'}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : mediaKind === 'audio' ? (
                               audioUrls[message.id] ? (
                                 <div className="min-w-[260px] max-w-full space-y-1.5">
                                   <span className="block text-[10px] font-black uppercase tracking-wider">Mensagem de voz</span>
@@ -3367,7 +3479,8 @@ export default function BrokerInboxPage() {
                             ) : (
                               <p className="orion-inbox-message-body whitespace-pre-wrap break-words text-xs font-bold leading-normal [overflow-wrap:anywhere]">{message.mensagem}</p>
                             )}
-                            <div className="flex justify-end items-center text-[8px] font-black uppercase tracking-wider">
+                            <div className="flex justify-end items-center gap-1.5 text-[8px] font-black uppercase tracking-wider">
+                              {message.metadata?.edited_at && !isDeleted && <span className="opacity-70">Editada</span>}
                               <span className={`orion-inbox-message-time flex items-center gap-1 ${isMine ? 'text-cyan-200' : 'text-slate-500'}`}>
                                 {(() => {
                                   const recibo = reciboDaMensagem(message);
@@ -3555,10 +3668,10 @@ export default function BrokerInboxPage() {
                             void sendMessage();
                           }
                         }}
-                        rows={1}
+                        rows={isUnityInbox ? 3 : 1}
                         placeholder='Digite "/" para respostas rápidas ou escreva uma'
-                        className="min-w-0 flex-1 bg-slate-950 border border-white/5 rounded-2xl px-3 sm:px-4 py-3 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto"
-                        style={{ height: '44px' }}
+                        className={`min-w-0 flex-1 bg-slate-950 border border-white/5 rounded-2xl px-3 sm:px-4 py-3 font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto ${isUnityInbox ? 'text-sm leading-5' : 'text-xs'}`}
+                        style={{ height: isUnityInbox ? '76px' : '44px' }}
                       />
 
                       {/* Record Mic */}
@@ -3575,9 +3688,11 @@ export default function BrokerInboxPage() {
                       <button
                         onClick={() => sendMessage()}
                         disabled={!isWhatsAppConnected || sendingMessage || (!messageText.trim() && selectedAttachments.length === 0)}
-                        className="p-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl flex items-center justify-center cursor-pointer shrink-0 shadow-lg shadow-cyan-950/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+                        title="Enviar mensagem"
+                        aria-label="Enviar mensagem"
+                        className={`${isUnityInbox ? 'h-13 w-13' : 'p-3'} bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl flex items-center justify-center cursor-pointer shrink-0 shadow-lg shadow-cyan-950/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95`}
                       >
-                        {sendingMessage ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        {sendingMessage ? <Loader2 size={isUnityInbox ? 21 : 16} className="animate-spin" /> : <Send size={isUnityInbox ? 21 : 16} />}
                       </button>
                     </div>
                   )}
