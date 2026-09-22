@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { configureUazapiWebhook, getUazapiInstanceConnection, normalizePhone, phoneMatchKey, sendUazapiTypingPresence, uazapiAiInstanceName, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { assinarMensagem, isUnityBrokerage } from '@/lib/atendimentoCompartilhado';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
+import { assignLeadToNextTeamMember } from '@/lib/leadAssignment';
 
 export const recentAiOutboundMessages = new Set<string>();
 
@@ -34,6 +35,7 @@ export function isAiOutbound(phone: string, text: string) {
 
 const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
+const UNITY_SDR_PROFILE_ID = '7a7fde6f-f36f-4334-a20a-96972d7388ea';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
 const DEFAULT_ELEVENLABS_FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
 
@@ -813,12 +815,28 @@ function fallbackLeadAiContinuation(params: {
   const normalizedPrevious = normalizeAiText(previousOutboundText);
   let summary = params.sessionSummary || leadFacts(lead);
 
-  if (/hospital|clinica|rede|regiao/.test(normalizedPrevious)) {
+  if (/como voce se chama|qual (?:e )?o seu nome/.test(normalizedPrevious)) {
+    summary = setSummaryField(summary, 'Nome', customerText);
+  } else if (/quantas pessoas|quais (?:as )?idades|idades.*plano|plano.*idades/.test(normalizedPrevious)) {
+    summary = setSummaryField(summary, 'Idades', customerText);
+  } else if (/cnpj|mei|usando seu cpf|empresa.*pessoa fisica/.test(normalizedPrevious)) {
+    summary = setSummaryField(summary, 'CNPJ/MEI', customerText);
+  } else if (/qual cidade|de qual cidade|em qual cidade/.test(normalizedPrevious)) {
+    summary = setSummaryField(summary, 'Cidade', customerText);
+  } else if (/possui.*plano|tem.*plano|plano atualmente/.test(normalizedPrevious)) {
+    summary = setSummaryField(summary, 'Tem Plano Ativo?', customerText);
+  } else if (/qual.*plano atual|qual.*operadora|plano.*hoje/.test(normalizedPrevious)) {
+    summary = setSummaryField(summary, 'Plano Atual', customerText);
+  } else if (/quanto.*invest|investimento|faixa de valor|orcamento/.test(normalizedPrevious)) {
+    summary = setSummaryField(summary, 'Investimento', customerText);
+  } else if (/principal motivo|motivo.*buscar|reducao de custo.*rede de atendimento/.test(normalizedPrevious)) {
+    summary = setSummaryField(summary, 'Motivo', customerText);
+  } else if (/hospital|clinica|rede credenciada|preferencia.*regiao/.test(normalizedPrevious)) {
     summary = appendSummaryLine(summary, `*Hospital/Regiao*: ${customerText}`);
   } else if (/e-?mail/.test(normalizedPrevious) || /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/.test(customerText)) {
-    summary = appendSummaryLine(summary, `*Email*: ${customerText}`);
-  } else if (/\b(pagando|pagar|economizar|mais barato|reduzir|diminuir|caro)\b/.test(normalizedCustomer)) {
-    summary = appendSummaryLine(summary, `*Motivo*: ${customerText}`);
+    summary = setSummaryField(summary, 'Email', customerText);
+  } else if (/\b(pagando|pagar|economizar|mais barato|reduzir|reducao|custo|diminuir|caro)\b/.test(normalizedCustomer)) {
+    summary = setSummaryField(summary, 'Motivo', customerText);
   } else {
     summary = appendSummaryLine(summary, `*Observacao do lead*: ${customerText}`);
   }
@@ -828,9 +846,34 @@ function fallbackLeadAiContinuation(params: {
   const hospital = extractSummaryField(summary, 'Hospital/Regiao');
   const motive = extractSummaryField(summary, 'Motivo');
   const email = extractSummaryField(summary, 'Email');
+  const name = extractSummaryField(summary, 'Nome');
+  const ages = extractSummaryField(summary, 'Idades|Idade\\(s\\)');
+  const documentType = extractSummaryField(summary, 'CNPJ/MEI|Possui CNPJ/MEI');
+  const city = extractSummaryField(summary, 'Cidade');
+  const activePlan = extractSummaryField(summary, 'Tem\\s+Plano\\s+Ativo\\?|Tem\\s+plano\\s+de\\s+saude\\??');
+  const currentPlan = extractSummaryField(summary, 'Plano\\s+Atual');
+  const investment = extractSummaryField(summary, 'Investimento|Investimento pretendido');
 
   let reply: string;
-  if (!hasKnownValue(lead.hospital_preferencia) && !hasKnownValue(hospital)) {
+  if (!hasKnownValue(lead.nome) || /^contato whatsapp$/i.test(String(lead.nome || ''))) {
+    reply = hasKnownValue(name) ? 'Para quem seria o plano? Quantas pessoas e quais são as idades?' : 'Para começar, como você se chama?';
+  } else if (!hasKnownValue(lead.idades) && !hasKnownValue(ages)) {
+    reply = 'Para quem seria o plano? Quantas pessoas e quais são as idades?';
+  } else if (!hasKnownValue(lead.possui_cnpj) && !hasKnownValue(documentType)) {
+    reply = 'A cotação será pelo CPF ou você possui CNPJ ou MEI ativo?';
+  } else if (!hasKnownValue(lead.cidade) && !hasKnownValue(city)) {
+    reply = 'De qual cidade você é?';
+  } else if (!hasKnownValue(lead.tem_plano_ativo) && !hasKnownValue(activePlan)) {
+    reply = 'Você possui algum plano de saúde atualmente?';
+  } else if (
+    /\b(sim|tenho|possuo)\b/.test(normalizeAiText(activePlan || lead.tem_plano_ativo)) &&
+    !hasKnownValue(lead.plano_atual) &&
+    !hasKnownValue(currentPlan)
+  ) {
+    reply = 'Qual é o seu plano de saúde atual?';
+  } else if (!hasKnownValue(lead.investimento) && !hasKnownValue(investment)) {
+    reply = 'Qual faixa de investimento você pretende destinar ao plano?';
+  } else if (!hasKnownValue(lead.hospital_preferencia) && !hasKnownValue(hospital)) {
     reply = 'Entendi. Tem algum hospital ou clinica de preferencia na sua regiao?';
   } else if (!hasKnownValue(lead.motivo_busca) && !hasKnownValue(motive)) {
     reply = 'Anotado. E qual e o principal motivo para buscar um novo plano: reducao de custo, rede de atendimento ou alguma necessidade especifica?';
@@ -1471,12 +1514,81 @@ function formatResponsibleSummary(lead: LeadRow, summary: string) {
   ].filter(Boolean).join('\n');
 }
 
+async function assignQualifiedLead(lead: LeadRow) {
+  if (lead.responsavel_profile_id) return lead;
+
+  const broker = await findBroker(lead.corretor_id);
+  const configuredSdrId = isUnityBrokerage(broker?.nome_empresa)
+    ? UNITY_SDR_PROFILE_ID
+    : null;
+
+  if (configuredSdrId) {
+    const [{ data: sdr }, { data: member }] = await Promise.all([
+      supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('id', configuredSdrId)
+        .eq('corretor_id', lead.corretor_id)
+        .in('status', ['active', 'ativo', 'Ativo'])
+        .maybeSingle(),
+      supabaseAdmin
+        .from('corretor_time_membros')
+        .select('id')
+        .eq('profile_id', configuredSdrId)
+        .eq('corretor_id', lead.corretor_id)
+        .in('status', ['active', 'ativo', 'Ativo'])
+        .maybeSingle(),
+    ]);
+
+    if (sdr?.id) {
+      const now = new Date().toISOString();
+      const { error } = await supabaseAdmin
+        .from('leads')
+        .update({
+          responsavel_profile_id: sdr.id,
+          responsavel_membro_id: member?.id || null,
+          updated_at: now,
+        })
+        .eq('id', lead.id)
+        .is('responsavel_profile_id', null);
+      if (error) throw error;
+      if (member?.id) {
+        await supabaseAdmin.from('corretor_time_membros').update({ ultimo_lead_at: now }).eq('id', member.id);
+      }
+    }
+  }
+
+  if (!configuredSdrId) {
+    await assignLeadToNextTeamMember(lead.corretor_id, lead.id);
+  }
+
+  const { data: assigned } = await supabaseAdmin
+    .from('leads')
+    .select('responsavel_profile_id')
+    .eq('id', lead.id)
+    .maybeSingle();
+
+  // SDR configurado, mas inativo ou fora da equipe: usa o rodizio normal.
+  if (!assigned?.responsavel_profile_id && configuredSdrId) {
+    await assignLeadToNextTeamMember(lead.corretor_id, lead.id);
+    const { data: fallback } = await supabaseAdmin
+      .from('leads')
+      .select('responsavel_profile_id')
+      .eq('id', lead.id)
+      .maybeSingle();
+    return { ...lead, responsavel_profile_id: fallback?.responsavel_profile_id || null };
+  }
+
+  return { ...lead, responsavel_profile_id: assigned?.responsavel_profile_id || null };
+}
+
 async function notifyResponsible(lead: LeadRow, summary: string, preferredAdmin?: ProfileRow | null) {
-  const responsible = await findResponsibleProfile(lead.responsavel_profile_id);
+  const assignedLead = await assignQualifiedLead(lead);
+  const responsible = await findResponsibleProfile(assignedLead.responsavel_profile_id);
   // A IA pode usar um remetente configurado diferente do primeiro perfil da
   // corretora. O aviso precisa voltar para quem conduziu a conversa; na Invida
   // esse perfil e a Simiellen, mesmo quando o lead ainda nao tem responsavel.
-  const admin = preferredAdmin || await findAiAdmin(lead.corretor_id);
+  const admin = preferredAdmin || await findAiAdmin(assignedLead.corretor_id);
 
   const targets: any[] = [];
   if (responsible) {
@@ -1491,13 +1603,13 @@ async function notifyResponsible(lead: LeadRow, summary: string, preferredAdmin?
   for (const target of targets) {
     const isOwner = admin && target.id === admin.id;
     const bodyParts = [
-      `Atendimento inicial concluído para o lead *${plain(lead.nome)}*.`,
+      `Atendimento inicial concluído para o lead *${plain(assignedLead.nome)}*.`,
     ];
     if (isOwner && responsible && responsible.id !== admin.id) {
       bodyParts.push(`Agora é com o *${responsible.nome}*.`);
     }
     bodyParts.push('');
-    bodyParts.push(formatResponsibleSummary(lead, summary || leadFacts(lead)));
+    bodyParts.push(formatResponsibleSummary(assignedLead, summary || leadFacts(assignedLead)));
     bodyParts.push('');
     bodyParts.push('Agora é a hora do atendimento humano.');
 
@@ -1776,7 +1888,7 @@ function formatOperadoraName(name?: string | null) {
   return clean.charAt(0) + clean.slice(1).toLowerCase();
 }
 
-export async function startLeadAiIfEligible(leadId: string, options: { entryChannel?: 'whatsapp_ad' } = {}) {
+export async function startLeadAiIfEligible(leadId: string, options: { entryChannel?: 'whatsapp_ad' | 'whatsapp_organic' } = {}) {
   const { data: lead } = await supabaseAdmin
     .from('leads')
     .select('id, corretor_id, nome, telefone, idades, possui_cnpj, cnpj, tem_plano_ativo, plano_atual, investimento, cidade, utm_source, utm_medium, utm_campaign, utm_term, utm_content, responsavel_profile_id, operadora')
@@ -1844,8 +1956,11 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
 
   const opName = formatOperadoraName(lead.operadora);
   const cameFromWhatsAppAd = options.entryChannel === 'whatsapp_ad';
+  const cameFromOrganicWhatsApp = options.entryChannel === 'whatsapp_organic';
   const interestText = cameFromWhatsAppAd
     ? 'Vi que você veio pelo nosso anúncio no WhatsApp.'
+    : cameFromOrganicWhatsApp
+      ? 'Vi que você entrou em contato para conhecer nossos planos de saúde.'
     : opName
       ? `Você clicou em um anúncio nosso e preencheu o formulário de interesse da ${opName}.`
       : 'Você clicou em um anúncio nosso e preencheu o formulário de interesse em nossos planos de saúde.';
@@ -1855,7 +1970,7 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
     `Olá, ${leadFirstName(lead)}! Tudo bem?`,
     aiIntroLine(introIdentity, aiConfig.persona),
     interestText,
-    cameFromWhatsAppAd
+    cameFromWhatsAppAd || cameFromOrganicWhatsApp
       ? 'Para eu te ajudar certinho, como você se chama?'
       : initialLeadQuestion(lead),
   ].join('\n\n'));

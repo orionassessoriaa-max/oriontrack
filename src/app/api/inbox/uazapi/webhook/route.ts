@@ -356,6 +356,27 @@ function readProviderId(body: any) {
   );
 }
 
+function normalizedWebhookText(value: unknown) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isLegacyUnityAutomationMessage(profile: any, message: string) {
+  if (!normalizedWebhookText(profile?.nome_empresa).includes('unity saude')) return false;
+
+  const text = normalizedWebhookText(message).replace(/^\*ana julia\*:\s*/, '');
+  return [
+    'bem vindo a unity saude',
+    'somos canal de vendas, mas vou passar o contato correto',
+    'ola! sou a ana julia, da unity saude. para facilitar seu atendimento',
+    'ola! sou a ana julia, da unity saude. para agilizar sua cotacao',
+  ].some((prefix) => text.startsWith(prefix));
+}
+
 function stripDataUrl(value?: string | null) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -1511,7 +1532,26 @@ export async function POST(request: Request) {
       event.includes('SEND') ||
       isOutboundCall
     );
-    const receptiveConfig = !commercialMode && !lead && !fromMe
+
+    // A Unity ainda possui uma automacao antiga conectada ao WhatsApp Web.
+    // Ela nao foi enviada pela API do Orion, mas chega ao webhook como fromMe
+    // e concorria com a ISA nova. Apagamos somente os textos conhecidos dessa
+    // automacao e nao os tratamos como uma intervencao humana.
+    if (fromMe && isLegacyUnityAutomationMessage(profile, message)) {
+      if (providerId && instance) {
+        try {
+          await uazapiFetch('/message/delete', {
+            method: 'POST',
+            body: JSON.stringify({ id: providerId }),
+          }, { instanceName: instance });
+        } catch (deleteError) {
+          console.error('[uazapi_webhook] Falha ao apagar mensagem da automacao antiga da Unity:', deleteError);
+        }
+      }
+      return NextResponse.json({ ok: true, ignored: true, reason: 'legacy_unity_automation' });
+    }
+
+    const receptiveConfig = !commercialMode && !fromMe
       ? await getReceptiveAiConfig(profile!)
       : null;
     const currentConversation = commercialMode
@@ -1687,25 +1727,6 @@ export async function POST(request: Request) {
       conversation = { ...conversation, status: 'aberta' };
     }
 
-    if (!fromMe && !lead?.id && receptiveConfig) {
-      after(async () => {
-        try {
-          await handleReceptiveIncoming({
-            config: receptiveConfig,
-            conversationId: conversation.id,
-            corretorId: profile!.corretor_id,
-            phone,
-            contactName,
-            instance,
-            text: aiCustomerMessage || message,
-            payload: body,
-          });
-        } catch (receptiveError) {
-          console.error('[uazapi_webhook] Failed handling receptive AI:', receptiveError);
-        }
-      });
-    }
-
     if (fromMe && lead?.id) {
       after(async () => {
         try {
@@ -1728,9 +1749,26 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!fromMe && lead?.id) {
+    if (!fromMe && (lead?.id || receptiveConfig)) {
       after(async () => {
         try {
+          if (!commercialLead && receptiveConfig) {
+            const receptive = await handleReceptiveIncoming({
+              config: receptiveConfig,
+              conversationId: conversation.id,
+              corretorId: profile!.corretor_id,
+              phone,
+              contactName,
+              instance,
+              text: aiCustomerMessage || message,
+              payload: body,
+              leadId: lead?.id || null,
+            });
+            if (receptive.handled) return;
+          }
+
+          if (!lead?.id) return;
+
         if (hasAudio && !audioTranscript && !commercialLead) {
           await handoffLeadAiToResponsible(
             lead.id,
