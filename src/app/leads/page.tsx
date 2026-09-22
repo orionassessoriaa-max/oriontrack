@@ -329,6 +329,35 @@ export default function BrokerLeadsPage() {
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
   const [adPreview, setAdPreview] = useState<AdPreviewState>(null);
   const activeMetaCreativesRef = useRef<ActiveMetaCreative[] | null>(null);
+  const topTableScrollRef = useRef<HTMLDivElement | null>(null);
+  const leadsTableScrollRef = useRef<HTMLDivElement | null>(null);
+  const leadsTableRef = useRef<HTMLTableElement | null>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState(0);
+  const [tableHasHorizontalOverflow, setTableHasHorizontalOverflow] = useState(false);
+
+  useEffect(() => {
+    const scroller = leadsTableScrollRef.current;
+    const table = leadsTableRef.current;
+    if (!scroller || !table) return;
+
+    const updateScrollWidth = () => {
+      setTableScrollWidth(scroller.scrollWidth);
+      setTableHasHorizontalOverflow(scroller.scrollWidth > scroller.clientWidth + 1);
+    };
+    const observer = new ResizeObserver(updateScrollWidth);
+    observer.observe(scroller);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [error]);
+
+  function syncTableScroll(source: 'top' | 'table') {
+    const top = topTableScrollRef.current;
+    const table = leadsTableScrollRef.current;
+    if (!top || !table) return;
+    if (source === 'top' && table.scrollLeft !== top.scrollLeft) table.scrollLeft = top.scrollLeft;
+    if (source === 'table' && top.scrollLeft !== table.scrollLeft) top.scrollLeft = table.scrollLeft;
+  }
+
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
   const usesMyLeadsByDefault = isConexaoCorretora(profile?.nome_empresa);
   const isFacilita = isFacilitaCorretora(profile?.nome_empresa);
@@ -1444,7 +1473,22 @@ export default function BrokerLeadsPage() {
       </div>
 
       <div className="orion-leads-table-shell -mx-5 sm:-mx-6 lg:-mx-8">
-        <div className="scrollbar-visible overflow-x-auto overflow-y-visible px-5 sm:px-6 lg:px-8">
+        {!error && (
+          <div className={`sticky top-[76px] z-20 border-b border-slate-200 bg-white/95 pb-2 pt-2 backdrop-blur ${tableHasHorizontalOverflow ? '' : 'hidden'}`}>
+            <p className="mb-1 px-5 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:px-6 lg:px-8">Role para os lados para ver todas as informações</p>
+            <div
+              ref={topTableScrollRef}
+              onScroll={() => syncTableScroll('top')}
+              className="scrollbar-visible overflow-x-auto overflow-y-hidden"
+              role="region"
+              aria-label="Rolagem horizontal da tabela de leads"
+              tabIndex={0}
+            >
+              <div style={{ width: tableScrollWidth, height: 1 }} aria-hidden="true" />
+            </div>
+          </div>
+        )}
+        <div ref={leadsTableScrollRef} onScroll={() => syncTableScroll('table')} className="scrollbar-visible overflow-x-auto overflow-y-visible px-5 sm:px-6 lg:px-8">
           {error ? (
             <div className="py-24 text-center">
               <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">
@@ -1457,7 +1501,7 @@ export default function BrokerLeadsPage() {
               </button>
             </div>
           ) : (
-            <table className="orion-leads-table w-full min-w-[2820px] border-collapse text-left text-[13px]">
+            <table ref={leadsTableRef} className="orion-leads-table w-full min-w-[2820px] border-collapse text-left text-[13px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100">
                   <th className="w-12 border border-slate-200 px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">#</th>
