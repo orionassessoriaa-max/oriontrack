@@ -26,6 +26,8 @@ function readText(body: any) {
     body?.message?.text,
     body?.message?.caption,
     body?.message?.content,
+    body?.message?.buttonOrListid,
+    body?.message?.buttonOrListId,
     body?.message?.textMessage,
     body?.message?.extendedTextMessage?.text,
     body?.message?.imageMessage?.caption,
@@ -53,6 +55,8 @@ function readText(body: any) {
     body?.data?.message?.text,
     body?.data?.message?.caption,
     body?.data?.message?.content,
+    body?.data?.message?.buttonOrListid,
+    body?.data?.message?.buttonOrListId,
     body?.data?.message?.textMessage,
     body?.data?.message?.extendedTextMessage?.text,
     body?.data?.message?.imageMessage?.caption,
@@ -67,7 +71,7 @@ function readText(body: any) {
     body?.data?.message?.message?.text,
     body?.data?.message?.message?.extendedTextMessage?.text,
     // fallback: deep recursive search
-    deepPickStringByKey(body, ['conversation', 'text', 'caption', 'messageText', 'textMessage', 'body'])
+    deepPickStringByKey(body, ['conversation', 'text', 'caption', 'messageText', 'textMessage', 'buttonOrListid', 'buttonOrListId', 'body'])
   );
 }
 
