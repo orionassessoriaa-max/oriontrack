@@ -33,6 +33,8 @@ import {
   Plus,
   Trash2,
   Pencil,
+  Copy,
+  Reply,
   Check,
   Search,
   Bot,
@@ -417,9 +419,12 @@ export default function BrokerInboxPage() {
   const messageFetchAbortRef = useRef<AbortController | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [messageActionMenuId, setMessageActionMenuId] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ message: InboxMessage; conversationId: string } | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageText, setEditingMessageText] = useState('');
   const [updatingMessageId, setUpdatingMessageId] = useState<string | null>(null);
+
+  const activeReply = replyingTo && replyingTo.conversationId === selectedConversation?.id ? replyingTo.message : null;
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -1661,6 +1666,7 @@ export default function BrokerInboxPage() {
 
     const originalText = messageText;
     const originalAttachments = selectedAttachments;
+    const originalReply = activeReply;
 
     if (!isAudio) {
       setMessageText('');
@@ -1682,6 +1688,7 @@ export default function BrokerInboxPage() {
         size: attachment.file.size,
         modified: attachment.file.lastModified,
       })),
+      replyTo: originalReply?.id || null,
     });
     const clientSendId = sendRetryRef.current?.fingerprint === sendFingerprint
       ? sendRetryRef.current.id
@@ -1722,6 +1729,7 @@ export default function BrokerInboxPage() {
               conversation_id: realConversation?.id || selectedConversation.id,
               client_message_id: `${clientSendId}:${index}`,
               mensagem: job.isAudio ? '[Audio Gravado]' : (index === 0 ? finalMsg : ''),
+              ...(index === 0 && originalReply ? { reply_to_message_id: originalReply.id } : {}),
               ...(isNew && !realConversation ? {
                 telefone: selectedConversation.telefone,
                 lead_id: selectedConversation.lead_id,
@@ -1761,6 +1769,7 @@ export default function BrokerInboxPage() {
       if (insertedMessages.length === 0) {
         void fetchMessages(realConversation?.id || selectedConversation.id, { silent: true });
       }
+      setReplyingTo(null);
 
       const localMessages = insertedMessages.map((message) => {
         const isMsgAudio =
@@ -3256,8 +3265,12 @@ export default function BrokerInboxPage() {
                       const isDeleted = Boolean(message.metadata?.deleted_at);
                       const canEditMessage = isUnityInbox && isMine && !isDeleted
                         && message.metadata?.sender_type === 'human'
+                        && Boolean(normalizeWhatsAppMessageId(message.provider_message_id))
+                        && !String(message.provider_message_id || '').startsWith('orion-client:')
                         && !getMessageMediaKind(message)
                         && Date.now() - new Date(message.created_at).getTime() <= 15 * 60_000;
+                      const canReplyMessage = Boolean(normalizeWhatsAppMessageId(message.provider_message_id))
+                        && !String(message.provider_message_id || '').startsWith('orion-client:');
                       const isPlaying = playingAudioId === message.id;
                       const isLoading = loadingAudioId === message.id;
                       const mediaKind = getMessageMediaKind(message);
@@ -3303,8 +3316,31 @@ export default function BrokerInboxPage() {
                                   <ChevronDown size={16} />
                                 </button>
                                 {messageActionMenuId === message.id && (
-                                  <div className="absolute right-0 top-9 z-30 min-w-44 rounded-xl border border-white/10 bg-[#101d2b] p-1.5 text-left shadow-2xl">
-                                    {canEditMessage && (
+                                  <div className="absolute right-0 top-9 z-30 min-w-52 rounded-xl border border-white/10 bg-[#101d2b] p-1.5 text-left shadow-2xl">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setReplyingTo({ message, conversationId: selectedConversation.id });
+                                        setMessageActionMenuId(null);
+                                        composerRef.current?.focus();
+                                      }}
+                                      disabled={!canReplyMessage || !isWhatsAppConnected}
+                                      title={!canReplyMessage ? 'Esta mensagem não está disponível para resposta no WhatsApp' : undefined}
+                                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      <Reply size={14} /> Responder mensagem
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void navigator.clipboard.writeText(message.mensagem).catch(() => setSendError('Não foi possível copiar a mensagem.'));
+                                        setMessageActionMenuId(null);
+                                      }}
+                                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-100 hover:bg-white/10"
+                                    >
+                                      <Copy size={14} /> Copiar texto
+                                    </button>
+                                    {isMine && !mediaKind && (
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -3312,9 +3348,11 @@ export default function BrokerInboxPage() {
                                           setEditingMessageText(message.mensagem);
                                           setMessageActionMenuId(null);
                                         }}
-                                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-100 hover:bg-white/10"
+                                        disabled={!canEditMessage}
+                                        title={!canEditMessage ? 'O WhatsApp só permite editar textos enviados pela equipe nos primeiros 15 minutos' : undefined}
+                                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                                       >
-                                        <Pencil size={14} /> Editar
+                                        <Pencil size={14} /> Editar {!canEditMessage && <span className="ml-auto text-[10px] text-slate-400">até 15 min</span>}
                                       </button>
                                     )}
                                     <button
@@ -3334,6 +3372,12 @@ export default function BrokerInboxPage() {
                             }`}>
                               {senderName}
                             </div>
+                            {message.metadata?.reply_to_text && !isDeleted && (
+                              <div className={`min-w-0 rounded-lg border-l-2 px-2 py-1.5 text-[11px] ${isMine ? 'border-white/60 bg-white/10' : 'border-cyan-400 bg-white/5'}`}>
+                                <p className="font-black">{message.metadata.reply_to_sender || 'Mensagem respondida'}</p>
+                                <p className="max-w-64 truncate opacity-80">{message.metadata.reply_to_text}</p>
+                              </div>
+                            )}
                             {/* Se for áudio */}
                             {isDeleted ? (
                               <p className="text-xs italic opacity-80">{message.mensagem}</p>
@@ -3574,6 +3618,15 @@ export default function BrokerInboxPage() {
                   </div>
                 ) : (
                 <div className="orion-inbox-composer p-2.5 sm:p-4 border-t border-white/5 bg-[#050b16] shrink-0">
+                  {isUnityInbox && activeReply && (
+                    <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border-l-2 border-cyan-400 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
+                      <div className="min-w-0">
+                        <p className="font-black text-cyan-300">Respondendo a {inboxMessageSenderName(activeReply, 'Contato')}</p>
+                        <p className="truncate text-slate-300">{activeReply.mensagem}</p>
+                      </div>
+                      <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancelar resposta" className="rounded-lg p-1 text-slate-300 hover:bg-white/10 hover:text-white"><X size={16} /></button>
+                    </div>
+                  )}
                   
                   {/* Visualizadores de Anexos */}
                   {selectedAttachments.length > 0 && (

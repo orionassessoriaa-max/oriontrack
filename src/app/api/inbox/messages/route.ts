@@ -79,18 +79,19 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function sendTextWithSequenceFallback(instance: string, phone: string, text: string) {
+async function sendTextWithSequenceFallback(instance: string, phone: string, text: string, replyId?: string) {
   const cleanText = normalizeOutboundText(text);
-  const send = (message: string) => uazapiFetch('/send/text', {
+  const send = (message: string, quotedId?: string) => uazapiFetch('/send/text', {
     method: 'POST',
     body: JSON.stringify({
       number: phone,
       text: message,
+      ...(quotedId ? { replyid: quotedId } : {}),
     }),
   }, { instanceName: instance });
 
   try {
-    const payload = await send(cleanText);
+    const payload = await send(cleanText, replyId);
     return { payload, text: cleanText, split: false, count: 1 };
   } catch (error: any) {
     const message = String(error?.message || '');
@@ -102,8 +103,8 @@ async function sendTextWithSequenceFallback(instance: string, phone: string, tex
     }
 
     const payloads: any[] = [];
-    for (const chunk of chunks) {
-      payloads.push(await send(chunk));
+    for (const [index, chunk] of chunks.entries()) {
+      payloads.push(await send(chunk, index === 0 ? replyId : undefined));
       await wait(850);
     }
 
@@ -1007,6 +1008,7 @@ export async function POST(request: Request) {
     const phoneParam = String(body.telefone || '').trim();
     const leadIdParam = String(body.lead_id || '').trim();
     const nameParam = String(body.nome_contato || '').trim();
+    const replyToMessageId = String(body.reply_to_message_id || '').trim();
     const clientMessageId = String(body.client_message_id || '')
       .replace(/[^a-zA-Z0-9:_-]/g, '')
       .slice(0, 160);
@@ -1143,6 +1145,33 @@ export async function POST(request: Request) {
       }, { status: 503 });
     }
 
+    let replyTo: { id: string; providerId: string; text: string; sender: string } | null = null;
+    if (replyToMessageId) {
+      if (!(await isUnityBrokerage(conversation.corretor_id)) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(replyToMessageId)) {
+        return NextResponse.json({ error: 'Mensagem original inválida.' }, { status: 400 });
+      }
+      const { data: original, error: originalError } = await supabaseAdmin
+        .from('whatsapp_mensagens')
+        .select('id, conversa_id, provider_message_id, mensagem, remetente, metadata')
+        .eq('id', replyToMessageId)
+        .maybeSingle();
+      if (originalError) throw originalError;
+      const originalConversation = original ? await getConversation(original.conversa_id) : null;
+      const originalProviderId = normalizeWhatsAppMessageId(original?.provider_message_id);
+      if (!original || !originalConversation || originalConversation.corretor_id !== conversation.corretor_id
+        || normalizePhone(originalConversation.telefone) !== phone || original.metadata?.deleted_at
+        || !originalProviderId || String(original.provider_message_id).startsWith('orion-client:')
+        || !(await canAccessConversation(guard.profile, originalConversation))) {
+        return NextResponse.json({ error: 'Mensagem original indisponível para resposta.' }, { status: 409 });
+      }
+      replyTo = {
+        id: original.id,
+        providerId: originalProviderId,
+        text: String(original.mensagem || '').slice(0, 500),
+        sender: String(original.remetente || originalConversation.nome_contato || 'Contato').slice(0, 100),
+      };
+    }
+
     if (conversation.lead_id && ['corretor', 'corretor_admin', 'corretor_membro'].includes(senderProfile.tipo_usuario)) {
       const { data: claimResult, error: claimError } = await supabaseAdmin.rpc('claim_shared_lead', {
         target_lead_id: conversation.lead_id,
@@ -1193,6 +1222,7 @@ export async function POST(request: Request) {
             sender_profile_id: senderProfileId,
             sender_name: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
             sender_type: 'human',
+            ...(replyTo ? { reply_to_message_id: replyTo.id, reply_to_provider_id: replyTo.providerId, reply_to_text: replyTo.text, reply_to_sender: replyTo.sender } : {}),
           },
         }])
         .select('*')
@@ -1275,13 +1305,14 @@ export async function POST(request: Request) {
             : text) || undefined,
           mimetype: mimetype || undefined,
           delay: audioDelay,
+          ...(replyTo ? { replyid: replyTo.providerId } : {}),
         }),
       }, { instanceName: instance });
     } else {
       const textoEnviado = compartilhado.assinarMensagens
         ? assinarMensagem(text, senderProfile.nome || senderProfile.email_real || senderProfile.email)
         : text;
-      const result = await sendTextWithSequenceFallback(instance, phone, textoEnviado);
+      const result = await sendTextWithSequenceFallback(instance, phone, textoEnviado, replyTo?.providerId);
       payload = {
         ...(result.payload || {}),
         orion_sequence_sent: result.split,
@@ -1314,6 +1345,7 @@ export async function POST(request: Request) {
         sender_profile_id: senderProfileId,
         sender_name: senderProfile.nome || senderProfile.email_real || senderProfile.email || 'Orion',
         sender_type: 'human',
+        ...(replyTo ? { reply_to_message_id: replyTo.id, reply_to_provider_id: replyTo.providerId, reply_to_text: replyTo.text, reply_to_sender: replyTo.sender } : {}),
       }),
     };
 
