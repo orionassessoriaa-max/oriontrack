@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useState, useRef, useMemo, type ClipboardEvent } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
@@ -377,6 +377,8 @@ export default function BrokerInboxPage() {
 
   // File states
   const [selectedAttachments, setSelectedAttachments] = useState<SelectedAttachment[]>([]);
+  const [preparingAttachments, setPreparingAttachments] = useState(false);
+  const pendingAttachmentReadsRef = useRef(0);
 
   // Conversation filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -1638,6 +1640,7 @@ export default function BrokerInboxPage() {
   // Send message
   async function sendMessage(textOverride?: string, isAudio = false, audioDuration = '', audioBase64Override?: string, audioMimeType?: string) {
     if (!selectedConversation) return;
+    if (pendingAttachmentReadsRef.current > 0) return;
     const finalMsg = textOverride || messageText.trim();
     if (!finalMsg && selectedAttachments.length === 0 && !isAudio) return;
     if (sendInFlightRef.current) return;
@@ -2541,11 +2544,11 @@ export default function BrokerInboxPage() {
   };
 
   // Handlers for attachments
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = '';
+  const addAttachments = async (files: File[]) => {
     if (files.length === 0) return;
 
+    pendingAttachmentReadsRef.current += 1;
+    setPreparingAttachments(true);
     try {
       const attachments = await Promise.all(
         files.map(async (file) => ({
@@ -2555,10 +2558,42 @@ export default function BrokerInboxPage() {
         }))
       );
       setSelectedAttachments((current) => [...current, ...attachments]);
+      setSendError(null);
     } catch (err) {
       console.error(err);
       setSendError('Nao consegui carregar um dos arquivos selecionados.');
+    } finally {
+      pendingAttachmentReadsRef.current = Math.max(0, pendingAttachmentReadsRef.current - 1);
+      setPreparingAttachments(pendingAttachmentReadsRef.current > 0);
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    void addAttachments(files);
+  };
+
+  const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!isUnityInbox || sendingMessage) return;
+    const clipboardImages = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+    const images = clipboardImages.length
+      ? clipboardImages
+      : Array.from(event.clipboardData.files).filter((file) => file.type.startsWith('image/'));
+    if (!images.length) return;
+
+    event.preventDefault();
+    const files = images.map((file, index) => {
+      const extension = file.type.split('/')[1]?.replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '') || 'png';
+      return new File([file], `cotacao-colada-${Date.now()}-${index + 1}.${extension}`, {
+        type: file.type,
+        lastModified: Date.now(),
+      });
+    });
+    void addAttachments(files);
   };
 
   // Tab Filtering logic
@@ -3572,6 +3607,12 @@ export default function BrokerInboxPage() {
                     </div>
                   )}
 
+                  {isUnityInbox && preparingAttachments && (
+                    <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-cyan-300">
+                      <Loader2 size={14} className="animate-spin" /> Preparando anexo...
+                    </p>
+                  )}
+
                   {isRecording ? (
                     /* ESTADO DE GRAVAÇÃO DE ÁUDIO (Estilo Screenshot 4) */
                     <div className="flex items-center justify-between bg-slate-950 border border-cyan-500/20 px-4 py-3 rounded-2xl animate-in slide-in-from-bottom-2 duration-150 shrink-0">
@@ -3662,14 +3703,15 @@ export default function BrokerInboxPage() {
                         ref={composerRef}
                         value={messageText}
                         onChange={(e) => setMessageText(e.target.value)}
+                        onPaste={handleComposerPaste}
                         onKeyDown={(e) => {
                           if ((e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey) {
                             e.preventDefault();
-                            void sendMessage();
+                            if (pendingAttachmentReadsRef.current === 0) void sendMessage();
                           }
                         }}
                         rows={isUnityInbox ? 3 : 1}
-                        placeholder='Digite "/" para respostas rápidas ou escreva uma'
+                        placeholder={isUnityInbox ? 'Escreva uma mensagem ou cole a imagem da cotação (Ctrl+V)' : 'Digite "/" para respostas rápidas ou escreva uma'}
                         className={`min-w-0 flex-1 bg-slate-950 border border-white/5 rounded-2xl px-3 sm:px-4 py-3 font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto ${isUnityInbox ? 'text-sm leading-5' : 'text-xs'}`}
                         style={{ height: isUnityInbox ? '76px' : '44px' }}
                       />
@@ -3687,7 +3729,7 @@ export default function BrokerInboxPage() {
                       {/* Send Button */}
                       <button
                         onClick={() => sendMessage()}
-                        disabled={!isWhatsAppConnected || sendingMessage || (!messageText.trim() && selectedAttachments.length === 0)}
+                        disabled={!isWhatsAppConnected || sendingMessage || preparingAttachments || (!messageText.trim() && selectedAttachments.length === 0)}
                         title="Enviar mensagem"
                         aria-label="Enviar mensagem"
                         className={`${isUnityInbox ? 'h-13 w-13' : 'p-3'} bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl flex items-center justify-center cursor-pointer shrink-0 shadow-lg shadow-cyan-950/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95`}
