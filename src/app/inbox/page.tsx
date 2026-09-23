@@ -1041,6 +1041,18 @@ export default function BrokerInboxPage() {
           const currentSelected = selectedConversationRef.current;
           const belongsToVisibleInbox = visibleConversationIdsRef.current.has(newMsg.conversa_id);
 
+          // O payload bruto do Realtime chega antes do filtro de autoria da
+          // API. Integrantes recarregam a timeline autorizada em vez de anexar
+          // diretamente uma mensagem que pode ter vindo do celular de outro
+          // vendedor da mesma corretora.
+          if (profile?.tipo_usuario === 'corretor_membro') {
+            if (currentSelected && belongsToVisibleInbox) {
+              void fetchMessages(currentSelected.id, { silent: true });
+            }
+            if (belongsToVisibleInbox) scheduleInboxRefresh();
+            return;
+          }
+
           // O historico exibido pode unir mais de uma conversa do mesmo numero.
           // Atualize em tempo real qualquer parte dessa timeline unificada.
           if (currentSelected && belongsToVisibleInbox) {
@@ -1105,7 +1117,7 @@ export default function BrokerInboxPage() {
       }
       supabase.removeChannel(channel);
     };
-  }, [profile?.corretor_id]);
+  }, [profile?.corretor_id, profile?.tipo_usuario]);
 
   // Scroll to bottom when messages list changes
   useEffect(() => {

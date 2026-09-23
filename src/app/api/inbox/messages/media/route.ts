@@ -6,6 +6,10 @@ import { evolutionFetch, getEvolutionInstanceApiKey } from '@/lib/evolution';
 import { createDecipheriv, hkdfSync } from 'crypto';
 import { guardarMidiaForaDoBanco, removerBlobs } from '@/lib/inboxMedia';
 import { whatsappMessageIdCandidates } from '@/lib/whatsappMessageId';
+import {
+  inboxMessageProfileId,
+  memberCanViewInboxMessage,
+} from '@/lib/inboxMessageVisibility';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const MAX_CACHE_BASE64_BYTES = Number(process.env.INBOX_MEDIA_CACHE_MAX_BYTES || 256 * 1024);
@@ -581,6 +585,24 @@ async function canAccessConversation(profile: any, conversation: any) {
   return false;
 }
 
+async function canAccessMessage(profile: { id: string; tipo_usuario: string }, message: unknown) {
+  if (profile.tipo_usuario !== 'corretor_membro') return true;
+  const actorProfileId = inboxMessageProfileId(message);
+  const roles = new Map<string, string>();
+
+  if (actorProfileId && actorProfileId !== String(profile.id).toLowerCase()) {
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id,tipo_usuario')
+      .eq('id', actorProfileId)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) roles.set(String(data.id).toLowerCase(), String(data.tipo_usuario || '').toLowerCase());
+  }
+
+  return memberCanViewInboxMessage(profile.id, message, roles);
+}
+
 export async function GET(request: Request) {
   try {
     const guard = await requireApiUser(request, [...INBOX_ROLES]);
@@ -599,6 +621,9 @@ export async function GET(request: Request) {
     }
 
     if (!(await canAccessConversation(guard.profile, conversation))) {
+      return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+    }
+    if (!(await canAccessMessage(guard.profile, message))) {
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
     }
 

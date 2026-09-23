@@ -6,6 +6,10 @@ import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 import { guardarMidiaForaDoBanco, removerBlobs } from '@/lib/inboxMedia';
 import { assinarMensagem, resolverAtendimentoCompartilhado } from '@/lib/atendimentoCompartilhado';
 import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
+import {
+  inboxMessageProfileId,
+  memberCanViewInboxMessage,
+} from '@/lib/inboxMessageVisibility';
 
 const INBOX_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 const WHATSAPP_REJECTION_RE = /whatsapp server rejected|rejected this message|not an internal api error|server rejected/i;
@@ -560,10 +564,12 @@ async function canAccessConversation(profile: any, conversation: any) {
         .eq('id', conversation.lead_id)
         .maybeSingle();
       if (lead?.responsavel_profile_id === profile.id) return true;
-      if (await isUnityBrokerage(profile.corretor_id)) return false;
       if (!lead?.responsavel_profile_id && await canParticipateInSharedLead(profile.id, conversation.lead_id)) return true;
     }
-    if (commercialMember) return false;
+    // Integrante operacional nunca herda acesso apenas por pertencer ao mesmo
+    // cadastro de corretora. Sem este retorno, mensagens de outro vendedor
+    // vazavam porque todos compartilhavam o mesmo corretor_id.
+    return false;
   }
   if (!profile.corretor_id) return false;
   if (profile.corretor_id === conversation.corretor_id) return true;
@@ -727,6 +733,30 @@ async function findAccessibleConversationIdsByPhone(profile: any, conversation: 
   return Array.from(new Set([conversation.id, ...accessible])).filter(Boolean);
 }
 
+async function messageActorRoles(messages: unknown[]) {
+  const profileIds = Array.from(new Set(
+    messages.map(inboxMessageProfileId).filter(Boolean) as string[]
+  ));
+  if (!profileIds.length) return new Map<string, string>();
+
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id,tipo_usuario')
+    .in('id', profileIds);
+  if (error) throw error;
+
+  return new Map((data || []).map((profile) => [
+    String(profile.id).toLowerCase(),
+    String(profile.tipo_usuario || '').toLowerCase(),
+  ]));
+}
+
+async function canViewSpecificMessage(profile: ApiProfile, message: unknown) {
+  if (profile.tipo_usuario !== 'corretor_membro') return true;
+  const roles = await messageActorRoles([message]);
+  return memberCanViewInboxMessage(profile.id, message, roles);
+}
+
 export async function GET(request: Request) {
   try {
     const limited = rateLimit(request, 'inbox:messages:read', { limit: 120, windowMs: 60_000 });
@@ -797,9 +827,17 @@ export async function GET(request: Request) {
       if (!page || page.length < pageSize) break;
     }
 
+    const actorRoles = guard.profile.tipo_usuario === 'corretor_membro'
+      ? await messageActorRoles(history)
+      : new Map<string, string>();
     const visibleHistory = history.filter((message) => {
       const status = String(message?.metadata?.send_status || '');
-      return status !== 'sending' && status !== 'failed';
+      return status !== 'sending'
+        && status !== 'failed'
+        && (
+          guard.profile.tipo_usuario !== 'corretor_membro'
+          || memberCanViewInboxMessage(guard.profile.id, message, actorRoles)
+        );
     });
 
     return NextResponse.json({
@@ -895,6 +933,9 @@ async function updateUnityMessage(
 
   const conversation = await getConversation(message.conversa_id);
   if (!(await isUnityBrokerage(conversation?.corretor_id)) || !(await canAccessConversation(profile, conversation))) {
+    return NextResponse.json({ error: 'Mensagem nao encontrada.' }, { status: 404 });
+  }
+  if (!(await canViewSpecificMessage(profile, message))) {
     return NextResponse.json({ error: 'Mensagem nao encontrada.' }, { status: 404 });
   }
   if (message.metadata?.deleted_at) {
@@ -1161,7 +1202,8 @@ export async function POST(request: Request) {
       if (!original || !originalConversation || originalConversation.corretor_id !== conversation.corretor_id
         || normalizePhone(originalConversation.telefone) !== phone || original.metadata?.deleted_at
         || !originalProviderId || String(original.provider_message_id).startsWith('orion-client:')
-        || !(await canAccessConversation(guard.profile, originalConversation))) {
+        || !(await canAccessConversation(guard.profile, originalConversation))
+        || !(await canViewSpecificMessage(guard.profile, original))) {
         return NextResponse.json({ error: 'Mensagem original indisponível para resposta.' }, { status: 409 });
       }
       replyTo = {
