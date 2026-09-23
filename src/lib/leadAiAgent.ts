@@ -5,6 +5,7 @@ import { assinarMensagem, isUnityBrokerage } from '@/lib/atendimentoCompartilhad
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { assignLeadToNextTeamMember } from '@/lib/leadAssignment';
 import { extractAgendadoValue, isSchedulePrompt, looksLikeScheduleAnswer, parseScheduledTextToDate } from '@/lib/leadAiScheduling';
+import { enforceUnityRegionalReply, isUnityCoverageQuestion, UNITY_PLAN_GUARDRAILS } from '@/lib/unityAiRules';
 
 export const recentAiOutboundMessages = new Set<string>();
 
@@ -811,6 +812,19 @@ function nextQuestionAfterNoHospitalPreference(lead: LeadRow, summary: string, s
   }
 
   return 'Entendi, vou considerar opcoes com uma rede ampla. Que dia e horario voce esta mais confortavel para uma ligacao rapida?';
+}
+
+function nextQuestionAfterUnityCoverage(lead: LeadRow, summary: string, skipCallQuestion = false) {
+  if (!hasKnownValue(lead.investimento) && !hasKnownValue(extractSummaryField(summary, 'Investimento'))) {
+    return 'Qual faixa de investimento você pretende destinar ao plano por mês?';
+  }
+  if (!hasKnownValue(lead.email) && !hasKnownValue(extractSummaryField(summary, 'Email|E-mail'))) {
+    return 'Qual é o melhor e-mail para eu deixar a proposta organizada?';
+  }
+  if (skipCallQuestion) {
+    return 'Com essas informações, vou encaminhar seu atendimento para a equipe dar continuidade.';
+  }
+  return 'Que dia e horário você está mais confortável para uma ligação rápida?';
 }
 
 function fallbackLeadAiContinuation(params: {
@@ -1777,7 +1791,9 @@ export async function askAline(
   ].join('\n');
   const brokerageRules = isFacilitaBrokerage(corretoraNome)
     ? `\n\n${FACILITA_NO_CALL_GUARDRAILS}`
-    : '';
+    : isUnityBrokerage(corretoraNome)
+      ? `\n\n${UNITY_PLAN_GUARDRAILS}`
+      : '';
   const system = `${clockRule}\n\n${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}${brokerageRules}\n\n${nameRule}\n\n${handoffContactRule(contactMode, pessoa)}\n\nResponda exclusivamente com um objeto JSON valido, sem markdown, contendo reply (texto), handoff (booleano) e summary (texto).`;
   const lastMessage = messages[messages.length - 1];
   const alreadyHasCustomerMessage =
@@ -2016,14 +2032,22 @@ export async function continueLeadAiFromIncoming(options: {
   // Registra a chegada antes de qualquer chamada externa. Assim, se o processo
   // for interrompido, o monitor sabe que existe uma resposta pendente e pode
   // retomá-la sem classificar o lead como silencioso.
-  await supabaseAdmin
+  const customerMessageAt = new Date().toISOString();
+  const { data: claimedSession, error: claimError } = await supabaseAdmin
     .from('lead_ai_sessions')
     .update({
-      last_customer_message_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      last_customer_message_at: customerMessageAt,
+      updated_at: customerMessageAt,
     })
     .eq('id', session.id)
-    .eq('status', 'active');
+    .eq('status', 'active')
+    .eq('updated_at', session.updated_at)
+    .select('id')
+    .maybeSingle();
+  if (claimError) throw claimError;
+  if (!claimedSession) {
+    return { handled: false, reason: 'Duplicate call blocked by persistent session lock.' };
+  }
 
   const { data: lead } = await supabaseAdmin
     .from('leads')
@@ -2287,8 +2311,19 @@ export async function continueLeadAiFromIncoming(options: {
     return { handled: true, handoff: false, deterministic: 'hospital_without_preference' };
   }
 
+  const unityCoverageAnswer = signSenderName && isUnityCoverageQuestion(previousOutboundText);
   let ai: any;
-  if (isCallRefusal(options.customerMessage, previousOutboundText)) {
+  if (unityCoverageAnswer) {
+    const summary = setSummaryField(session.summary || leadFacts(lead), 'Cobertura', 'Regional');
+    ai = {
+      handoff: false,
+      reply: enforceUnityRegionalReply(
+        `O atendimento da Unity considera cobertura regional. ${nextQuestionAfterUnityCoverage(lead, summary, skipCallQuestion)}`,
+        nextQuestionAfterUnityCoverage(lead, summary, skipCallQuestion),
+      ),
+      summary,
+    };
+  } else if (isCallRefusal(options.customerMessage, previousOutboundText)) {
     ai = {
       handoff: true,
       reply: callRefusalHandoffReply(lead, contactMode, contactIdentity.displayName),
@@ -2334,12 +2369,20 @@ export async function continueLeadAiFromIncoming(options: {
   let summary = ai.summary || session.summary || null;
   let reply = customerReplyForFollowUp(String(ai.reply || '').trim(), lead, Boolean(previousOutboundText));
 
-  if (reply && normalizeAiText(reply).trim() === normalizeAiText(previousOutboundText).trim()) {
+  if (signSenderName) {
+    reply = enforceUnityRegionalReply(reply, nextQuestionAfterUnityCoverage(lead, summary || '', skipCallQuestion));
+  }
+
+  const replySignature = cleanSignatureText(reply);
+  const repeatsRecentAiReply = Boolean(replySignature) && recentOutboundTexts.some(
+    (text) => cleanSignatureText(text) === replySignature
+  );
+  if (reply && repeatsRecentAiReply) {
     return await handoffAiFailure({
       session,
       lead,
       adminProfile,
-      reason: 'a resposta gerada repetiria a ultima pergunta; atendimento encaminhado para uma pessoa.',
+      reason: 'a resposta gerada repetiria uma mensagem recente; atendimento encaminhado para uma pessoa.',
     });
   }
 

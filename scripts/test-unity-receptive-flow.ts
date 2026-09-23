@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { isClickToWhatsAppAd } from '../src/lib/receptiveAdDetection';
 import { extractAgendadoValue, isSchedulePrompt, looksLikeScheduleAnswer, parseScheduledTextToDate } from '../src/lib/leadAiScheduling';
+import { enforceUnityRegionalReply, isUnityCoverageQuestion } from '../src/lib/unityAiRules';
 
 const productionInstagramPayload = {
   message: {
@@ -37,4 +38,13 @@ assert.equal(extractAgendadoValue(`Nome: Teste\nAgendado: ${answer}`), answer);
 const parsed = parseScheduledTextToDate(answer, new Date('2026-09-23T15:00:00.000Z'));
 assert.equal(parsed?.toISOString(), '2026-09-24T17:00:00.000Z', '14h de Sao Paulo deve ser persistido como 17h UTC');
 
-console.log('Unity receptive flow: 9 verificacoes aprovadas.');
+assert.equal(isUnityCoverageQuestion('Você prefere cobertura nacional ou regional?'), true);
+assert.equal(
+  enforceUnityRegionalReply(
+    'Certo, a cobertura será nacional. Para finalizar, qual é o investimento que você pretende fazer por mês no plano?',
+    'Qual é o investimento pretendido?',
+  ),
+  'Na Unity, trabalhamos somente com planos de cobertura regional. Para finalizar, qual é o investimento que você pretende fazer por mês no plano?'
+);
+
+console.log('Unity receptive flow: 11 verificacoes aprovadas.');
