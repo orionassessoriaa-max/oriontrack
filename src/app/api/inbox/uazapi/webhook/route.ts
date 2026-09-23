@@ -1175,8 +1175,14 @@ async function findConversation(corretorId: string, phone: string, leadId?: stri
 
   const rows = data || [];
   const exact = rows.find((row) => normalizePhone(row?.telefone) === digits);
-  if (digits.length >= 12) return exact || null;
-  return exact || rows[0] || null;
+  if (exact) return exact;
+
+  // O WhatsApp pode devolver celulares brasileiros sem o nono digito mesmo
+  // quando o CRM os gravou com ele. Nao podemos exigir igualdade literal aqui:
+  // isso deixava a mensagem somente no provedor e fora da conversa existente.
+  const key = phoneMatchKey(digits);
+  const equivalent = rows.find((row) => phoneMatchKey(row?.telefone) === key);
+  return equivalent || null;
 }
 
 /**
