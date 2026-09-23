@@ -428,11 +428,6 @@ export default function CrmPage() {
   const requestedLeadIdRef = useRef<string | null>(null);
   const requestedScopeViewRef = useRef<CrmScopeView | null>(null);
   const isTeamMemberProfile = profile?.tipo_usuario === 'corretor_membro';
-  const isUnityTeamMember = isTeamMemberProfile && String(profile?.nome_empresa || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toUpperCase() === 'UNITY SAUDE';
   const usesMyLeadsByDefault = String(profile?.nome_empresa || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -696,10 +691,8 @@ export default function CrmPage() {
         if (corretorIds.length > 0) {
           query = query.in('corretor_id', corretorIds);
         }
-        if (isUnityTeamMember) {
+        if (profile.tipo_usuario === 'corretor_membro') {
           query = query.eq('responsavel_profile_id', profile.id);
-        } else if (profile.tipo_usuario === 'corretor_membro') {
-          query = query.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
         }
 
         const queryRes = await query;
@@ -1118,14 +1111,16 @@ export default function CrmPage() {
       });
     }
 
-    dealershipBrokers.forEach((broker) => {
-      if (profile?.corretor_id === broker.id && teamMembers.some((member) => member.profile_id === profile.id)) return;
-      options.push({
-        value: `broker:${broker.id}`,
-        label: broker.nome,
-        desc: 'Conta da concessionaria',
+    if (!isTeamMemberProfile) {
+      dealershipBrokers.forEach((broker) => {
+        if (profile?.corretor_id === broker.id && teamMembers.some((member) => member.profile_id === profile.id)) return;
+        options.push({
+          value: `broker:${broker.id}`,
+          label: broker.nome,
+          desc: 'Conta da concessionaria',
+        });
       });
-    });
+    }
 
     const uniqueOptions: typeof options = [];
     const seen = new Set<string>();
