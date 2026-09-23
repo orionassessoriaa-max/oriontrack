@@ -113,7 +113,14 @@ export default function AdminCentralPage() {
   }, [profile?.id]);
 
   useEffect(() => {
-    fetchStats();
+    const refresh = () => void fetchStats();
+    refresh();
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+    };
   }, []);
 
   const fetchStats = async () => {

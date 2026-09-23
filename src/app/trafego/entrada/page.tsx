@@ -235,12 +235,6 @@ export default function EntradaGestorPage() {
     }
   };
 
-  const dataComplete = Boolean(
-    formData.facebook_login.trim() &&
-    formData.facebook_senha.trim() &&
-    strategies.length > 0
-  );
-
   const addStrategy = () => {
     const operadora = operatorChoice === 'Outros' ? operatorOther.trim() : operatorChoice;
     const regiao = regionChoice === 'Outros' ? regionOther.trim() : regionChoice;
@@ -273,20 +267,27 @@ export default function EntradaGestorPage() {
     setSaving(true);
     setSaved(false);
     setSaveMessage('Entrada salva com sucesso.');
-    const onboarding_status = formData.campanhas_ativas
-      ? 'campanhas_ativas'
-      : dataComplete
-        ? 'dados_completos'
-        : 'pendente';
-
     if (!strategies.length) {
       setSaving(false);
       return setError('Adicione pelo menos uma combinacao de operadora e regiao.');
     }
+    const onboarding_status = formData.campanhas_ativas
+      ? 'campanhas_ativas'
+      : 'dados_completos';
     const operadoras = Array.from(new Set(strategies.map((item) => item.operadora)));
     const regioes = Array.from(new Set(strategies.map((item) => item.regiao)));
 
-    const { error: updateError } = await supabase
+    // A entrada pertence a concessionaria, embora a tabela ainda armazene os
+    // dados por corretor. Atualizar apenas o representante selecionado deixava
+    // outros registros da mesma empresa como pendentes no painel do admin.
+    const selectedCompany = String(selectedCorretor?.nome_empresa || '').trim().toLocaleLowerCase('pt-BR');
+    const companyMemberIds = selectedCompany
+      ? corretores
+          .filter((item) => String(item.nome_empresa || '').trim().toLocaleLowerCase('pt-BR') === selectedCompany)
+          .map((item) => item.id)
+      : [selectedId];
+
+    const { data: updatedRows, error: updateError } = await supabase
       .from('corretores')
       .update({
         facebook_login: formData.facebook_login || null,
@@ -297,11 +298,12 @@ export default function EntradaGestorPage() {
         onboarding_status,
         observacoes: formData.observacoes || null,
       })
-      .eq('id', selectedId);
+      .in('id', companyMemberIds)
+      .select('id');
 
-    if (updateError) {
+    if (updateError || !updatedRows?.length) {
       setSaving(false);
-      alert('Erro ao salvar entrada: ' + updateError.message);
+      alert('Erro ao salvar entrada: ' + (updateError?.message || 'nenhum registro foi atualizado'));
       return;
     }
 
@@ -327,7 +329,7 @@ export default function EntradaGestorPage() {
     if (!strategyResponse.ok) return setError(strategyPayload.error || 'Entrada salva, mas a estrategia nao foi sincronizada.');
     setSaveMessage(strategyPayload.message || 'Entrada salva com sucesso.');
     setSaved(true);
-    setCorretores(prev => prev.map(c => c.id === selectedId ? {
+    setCorretores(prev => prev.map(c => companyMemberIds.includes(c.id) ? {
       ...c,
       facebook_login: formData.facebook_login,
       facebook_senha: formData.facebook_senha,
