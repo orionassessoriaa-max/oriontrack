@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizePhone, sendUazapiTypingPresence, uazapiFetch } from '@/lib/uazapi';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 import { assinarMensagem } from '@/lib/atendimentoCompartilhado';
+import { isClickToWhatsAppAd } from '@/lib/receptiveAdDetection';
 
 type ReceptiveProfile = {
   id: string;
@@ -56,17 +57,6 @@ function deepValue(value: unknown, keys: string[], depth = 0): string {
     if (found) return found;
   }
   return '';
-}
-
-function isClickToWhatsAppAd(payload: unknown) {
-  const clickId = deepValue(payload, ['ctwa_clid']);
-  if (clickId) return true;
-
-  const sourceType = normalized(deepValue(payload, ['source_type']));
-  if (sourceType === 'ad' || sourceType.includes('advert')) return true;
-
-  const sourceUrl = normalized(deepValue(payload, ['sourceurl', 'source_url']));
-  return sourceUrl.includes('facebook.com/ads') || sourceUrl.includes('instagram.com/ads');
 }
 
 function selectedEntry(payload: unknown, text: string): EntryChoice | null {

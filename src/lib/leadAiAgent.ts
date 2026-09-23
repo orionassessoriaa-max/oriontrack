@@ -4,6 +4,7 @@ import { configureUazapiWebhook, getUazapiInstanceConnection, normalizePhone, ph
 import { assinarMensagem, isUnityBrokerage } from '@/lib/atendimentoCompartilhado';
 import { sendApoloWhatsApp } from '@/lib/apoloNotifications';
 import { assignLeadToNextTeamMember } from '@/lib/leadAssignment';
+import { extractAgendadoValue, isSchedulePrompt, looksLikeScheduleAnswer, parseScheduledTextToDate } from '@/lib/leadAiScheduling';
 
 export const recentAiOutboundMessages = new Set<string>();
 
@@ -901,51 +902,6 @@ function fallbackLeadAiContinuation(params: {
     summary,
     fallback: true,
   };
-}
-
-function isSchedulePrompt(text?: string | null) {
-  const normalized = normalizeAiText(text);
-  return (
-    normalized.includes('ligacao rapida de 15 minutos') ||
-    normalized.includes('ligacao de 15 minutos') ||
-    normalized.includes('ligacao de 5 minutos') ||
-    normalized.includes('ligacao rapida') ||
-    normalized.includes('dia e horario') ||
-    normalized.includes('dia e hora') ||
-    normalized.includes('horario voce esta mais confortavel') ||
-    normalized.includes('mais confortavel pra voce') ||
-    normalized.includes('mais confortavel para voce') ||
-    normalized.includes('disponibilidade para uma ligacao') ||
-    normalized.includes('quando fica melhor') ||
-    normalized.includes('qual melhor horario') ||
-    normalized.includes('melhor horario')
-  );
-}
-
-function looksLikeScheduleAnswer(text?: string | null) {
-  const normalized = normalizeAiText(text);
-  if (!normalized.trim()) return false;
-
-  const hasFlexibleDay =
-    /\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(normalized) ||
-    /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/.test(normalized);
-  const hasFlexibleTime =
-    /\b\d{1,2}\s*h(?:oras?)?\b/.test(normalized) ||
-    /\b\d{1,2}:\d{2}\b/.test(normalized) ||
-    /\b(?:as|a partir das|depois das|antes das)\s*\d{1,2}\b/.test(normalized) ||
-    /\b(manha|tarde|noite)\b/.test(normalized);
-
-  if (hasFlexibleDay && hasFlexibleTime) return true;
-
-  const hasDay =
-    /\b(hoje|amanha|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b/.test(normalized) ||
-    /\b\d{1,2}\/\d{1,2}\b/.test(normalized);
-  const hasTime =
-    /\b\d{1,2}\s*h(?:oras?)?\b/.test(normalized) ||
-    /\b\d{1,2}:\d{2}\b/.test(normalized) ||
-    /\b(?:as|às)\s*\d{1,2}\b/.test(normalized);
-
-  return hasDay && hasTime;
 }
 
 function handoffScheduleReply(lead: LeadRow, mode: HandoffContactMode, pessoa?: string) {
@@ -2696,97 +2652,6 @@ async function recoverStalledLeadAiSessions() {
   }
   return recovered;
 }
-function extractAgendadoValue(summary?: string | null): string | null {
-  if (!summary) return null;
-  const match = summary.match(/(?:\*?Agendado\*?:?\s*)([^\r\n]+)/i);
-  if (match && match[1]) {
-    const value = match[1].trim();
-    const lowerVal = value.toLowerCase();
-    if (lowerVal && lowerVal !== 'false' && lowerVal !== 'não' && lowerVal !== 'nao' && lowerVal !== 'null' && lowerVal !== 'no') {
-      return value;
-    }
-  }
-  return null;
-}
-
-function saoPauloDateParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date);
-
-  return {
-    year: Number(parts.find((part) => part.type === 'year')?.value),
-    month: Number(parts.find((part) => part.type === 'month')?.value),
-    day: Number(parts.find((part) => part.type === 'day')?.value),
-  };
-}
-
-function saoPauloDateAt(year: number, month: number, day: number, hour: number, minute: number) {
-  return new Date(Date.UTC(year, month - 1, day, hour + 3, minute, 0, 0));
-}
-
-function addLocalDays(date: { year: number; month: number; day: number }, days: number) {
-  const utcNoon = new Date(Date.UTC(date.year, date.month - 1, date.day + days, 12, 0, 0, 0));
-  return {
-    year: utcNoon.getUTCFullYear(),
-    month: utcNoon.getUTCMonth() + 1,
-    day: utcNoon.getUTCDate(),
-  };
-}
-
-function parseScheduledTextToDate(scheduledText: string, reference = new Date()) {
-  const raw = String(scheduledText || '').trim();
-  const normalized = normalizeAiText(raw);
-  const timeMatch =
-    normalized.match(/\b(?:as|às|a partir das|depois das|antes das)\s*(\d{1,2})(?::|h)?\s*(\d{2})?\b/) ||
-    normalized.match(/\b(\d{1,2})(?::|h)\s*(\d{2})?\b/);
-
-  if (!timeMatch) return null;
-
-  const hour = Number(timeMatch[1]);
-  const minute = Number(timeMatch[2] || '0');
-  if (!Number.isFinite(hour) || hour < 0 || hour > 23 || !Number.isFinite(minute) || minute < 0 || minute > 59) {
-    return null;
-  }
-
-  const today = saoPauloDateParts(reference);
-  let target = today;
-
-  const dateMatch = normalized.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
-  if (dateMatch) {
-    const yearText = dateMatch[3];
-    const year = yearText ? Number(yearText.length === 2 ? `20${yearText}` : yearText) : today.year;
-    target = { year, month: Number(dateMatch[2]), day: Number(dateMatch[1]) };
-  } else if (/\bamanha\b/.test(normalized)) {
-    target = addLocalDays(today, 1);
-  } else if (/\bhoje\b/.test(normalized)) {
-    target = today;
-  } else {
-    const weekDays: Record<string, number> = {
-      domingo: 0,
-      segunda: 1,
-      terca: 2,
-      quarta: 3,
-      quinta: 4,
-      sexta: 5,
-      sabado: 6,
-    };
-    const weekDayKey = Object.keys(weekDays).find((key) => new RegExp(`\\b${key}\\b`).test(normalized)); // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- key vem do objeto fixo weekDays
-    if (weekDayKey) {
-      const currentDate = saoPauloDateAt(today.year, today.month, today.day, 12, 0);
-      const currentWeekDay = currentDate.getUTCDay();
-      let diff = weekDays[weekDayKey] - currentWeekDay;
-      if (diff <= 0) diff += 7;
-      target = addLocalDays(today, diff);
-    }
-  }
-
-  return saoPauloDateAt(target.year, target.month, target.day, hour, minute);
-}
-
 async function createAutoScheduledTask(lead: LeadRow, scheduledText: string, fallbackProfileId?: string | null) {
   try {
     const { data: existing } = await supabaseAdmin
