@@ -123,7 +123,7 @@ export default function AdminCentralPage() {
     };
   }, []);
 
-  const fetchStats = async () => {
+  async function fetchStats() {
     setLoading(true);
     try {
       // 1. Total Corretores
@@ -258,7 +258,7 @@ export default function AdminCentralPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   // Computations
   const noBalanceList = useMemo(() => {

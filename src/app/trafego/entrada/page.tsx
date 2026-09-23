@@ -267,10 +267,6 @@ export default function EntradaGestorPage() {
     setSaving(true);
     setSaved(false);
     setSaveMessage('Entrada salva com sucesso.');
-    if (!strategies.length) {
-      setSaving(false);
-      return setError('Adicione pelo menos uma combinacao de operadora e regiao.');
-    }
     const onboarding_status = formData.campanhas_ativas
       ? 'campanhas_ativas'
       : 'dados_completos';
@@ -307,27 +303,34 @@ export default function EntradaGestorPage() {
       return;
     }
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (!token) {
-      setSaving(false);
-      return setError('Sessao expirada ao sincronizar a estrategia.');
+    let strategyMessage = 'Entrada salva com sucesso.';
+    if (strategies.length) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setSaving(false);
+        return setError('Sessao expirada ao sincronizar a estrategia.');
+      }
+      const strategyResponse = await fetch('/api/trafego/estrategias', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          corretor_id: selectedId,
+          gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
+            ? profile.id
+            : undefined,
+          estrategias: strategies.map(({ operadora, regiao, creative_prompt }) => ({ operadora, regiao, creative_prompt })),
+        }),
+      });
+      const strategyPayload = await strategyResponse.json().catch(() => ({}));
+      if (!strategyResponse.ok) {
+        setSaving(false);
+        return setError(strategyPayload.error || 'Entrada salva, mas a estrategia nao foi sincronizada.');
+      }
+      strategyMessage = strategyPayload.message || strategyMessage;
     }
-    const strategyResponse = await fetch('/api/trafego/estrategias', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        corretor_id: selectedId,
-        gestor_id: actualProfile?.tipo_usuario === 'admin' && profile?.tipo_usuario === 'gestor_trafego'
-          ? profile.id
-          : undefined,
-        estrategias: strategies.map(({ operadora, regiao, creative_prompt }) => ({ operadora, regiao, creative_prompt })),
-      }),
-    });
-    const strategyPayload = await strategyResponse.json().catch(() => ({}));
     setSaving(false);
-    if (!strategyResponse.ok) return setError(strategyPayload.error || 'Entrada salva, mas a estrategia nao foi sincronizada.');
-    setSaveMessage(strategyPayload.message || 'Entrada salva com sucesso.');
+    setSaveMessage(strategyMessage);
     setSaved(true);
     setCorretores(prev => prev.map(c => companyMemberIds.includes(c.id) ? {
       ...c,
