@@ -578,12 +578,7 @@ function isAffirmativeAnswer(text?: string | null) {
 }
 
 function isDocumentTypeAnswer(text?: string | null) {
-  const normalized = normalizeAiText(text)
-    .replace(/[^a-z0-9\s/]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return /\b(cnpj|mei|cpf|pessoa fisica|pessoa juridica|empresa|empresarial)\b/.test(normalized);
+  return documentChoiceFromAnswer(text) !== null;
 }
 
 function isGreetingOnly(text?: string | null) {
@@ -699,8 +694,23 @@ function isCnpjConfirmationQuestion(text?: string | null) {
   return (
     normalized.includes('simulacao empresarial') ||
     normalized.includes('simulacao pelo cpf') ||
-    normalized.includes('cnpj/mei ou pelo cpf')
+    normalized.includes('cnpj/mei ou pelo cpf') ||
+    (normalized.includes('cotacao sera pelo cpf') && normalized.includes('cnpj ou mei ativo'))
   );
+}
+
+function documentChoiceFromAnswer(text?: string | null): 'Sim' | 'Tenho MEI' | 'Não' | null {
+  const normalized = normalizeAiText(text);
+  const raw = String(text || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (/^[\d.\-/\s]+$/.test(raw) && digits.length === 11) return 'Não';
+  if (/^[\d.\-/\s]+$/.test(raw) && digits.length === 14) return 'Sim';
+  if (/\b(cpf|pessoa fisica)\b/.test(normalized) || /\b(nao|sem)\b.{0,35}\b(cnpj|mei)\b/.test(normalized)) {
+    return 'Não';
+  }
+  if (/\bmei\b/.test(normalized)) return 'Tenho MEI';
+  if (/\b(cnpj|pessoa juridica|empresa|empresarial)\b/.test(normalized)) return 'Sim';
+  return null;
 }
 
 function isHospitalPreferenceQuestion(text?: string | null) {
@@ -782,7 +792,7 @@ function nextQuestionAfterCity(lead: LeadRow, skipCallQuestion = false) {
 }
 
 function nextQuestionAfterCnpjConfirmation(lead: LeadRow, askCity: boolean, skipCallQuestion = false) {
-  if (askCity) return 'De qual cidade você é?';
+  if (askCity && !hasKnownValue(lead.cidade)) return 'De qual cidade você é?';
   return nextQuestionAfterCity(lead, skipCallQuestion);
 }
 
@@ -1812,7 +1822,7 @@ export async function askAline(
   const brokerageRules = isFacilitaBrokerage(corretoraNome)
     ? `\n\n${FACILITA_NO_CALL_GUARDRAILS}`
     : '';
-  const system = `${clockRule}\n\n${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}${brokerageRules}\n\n${nameRule}\n\n${handoffContactRule(contactMode, pessoa)}`;
+  const system = `${clockRule}\n\n${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}${brokerageRules}\n\n${nameRule}\n\n${handoffContactRule(contactMode, pessoa)}\n\nResponda exclusivamente com um objeto JSON valido, sem markdown, contendo reply (texto), handoff (booleano) e summary (texto).`;
   const lastMessage = messages[messages.length - 1];
   const alreadyHasCustomerMessage =
     lastMessage?.role === 'user' &&
@@ -2222,6 +2232,17 @@ export async function continueLeadAiFromIncoming(options: {
       return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
     }
 
+    const documentChoice = documentChoiceFromAnswer(options.customerMessage);
+    let summary = appendSummaryLine(session.summary || leadFacts(lead), `*CNPJ/CPF confirmado*: ${options.customerMessage.trim()}`);
+    if (documentChoice) {
+      summary = setSummaryField(summary, 'Possui CNPJ/MEI', documentChoice);
+      const { error: leadUpdateError } = await supabaseAdmin
+        .from('leads')
+        .update({ possui_cnpj: documentChoice })
+        .eq('id', lead.id);
+      if (leadUpdateError) throw leadUpdateError;
+    }
+
     const reply = customerReplyForFollowUp(
       nextQuestionAfterCnpjConfirmation(lead, !isDaniloAi(adminProfile), skipCallQuestion),
       lead,
@@ -2238,7 +2259,7 @@ export async function continueLeadAiFromIncoming(options: {
     await supabaseAdmin
       .from('lead_ai_sessions')
       .update({
-        summary: appendSummaryLine(session.summary || leadFacts(lead), `*CNPJ/CPF confirmado*: ${options.customerMessage.trim()}`),
+        summary,
         last_customer_message_at: new Date().toISOString(),
         last_ai_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -2356,6 +2377,15 @@ export async function continueLeadAiFromIncoming(options: {
   let handoff = Boolean(ai.handoff);
   let summary = ai.summary || session.summary || null;
   let reply = customerReplyForFollowUp(String(ai.reply || '').trim(), lead, Boolean(previousOutboundText));
+
+  if (reply && normalizeAiText(reply).trim() === normalizeAiText(previousOutboundText).trim()) {
+    return await handoffAiFailure({
+      session,
+      lead,
+      adminProfile,
+      reason: 'a resposta gerada repetiria a ultima pergunta; atendimento encaminhado para uma pessoa.',
+    });
+  }
 
   if (scheduleConfirmed) {
     handoff = true;
