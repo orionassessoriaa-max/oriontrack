@@ -242,6 +242,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: CheckCircle2, label: 'Tarefas', href: '/equipe/apollo/tarefas' },
     { icon: Calculator, label: 'Simulador', href: '/simulador' },
     { icon: Globe, label: 'Paginas', href: '/admin/paginas' },
+    { icon: FileText, label: 'Onboard', href: '/admin/onboard' },
     { icon: Settings, label: 'Meta Ads', href: '/admin/meta' },
     { icon: Bot, label: 'Apolo WhatsApp', href: '/admin/configuracoes' },
     { icon: Trophy, label: 'Meu time', href: '/equipe/apollo' },
