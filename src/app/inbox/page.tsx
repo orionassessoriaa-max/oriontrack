@@ -419,6 +419,7 @@ export default function BrokerInboxPage() {
   const messageFetchAbortRef = useRef<AbortController | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [messageActionMenuId, setMessageActionMenuId] = useState<string | null>(null);
+  const [messageActionMenuOpensUp, setMessageActionMenuOpensUp] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ message: InboxMessage; conversationId: string } | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageText, setEditingMessageText] = useState('');
@@ -3241,6 +3242,7 @@ export default function BrokerInboxPage() {
                 {/* Mensagens list */}
                 <div
                   ref={messagesContainerRef}
+                  onScroll={() => setMessageActionMenuId(null)}
                   className="orion-inbox-messages flex-1 overflow-y-auto bg-[#050b16] p-3 sm:p-5 space-y-3 sm:space-y-4"
                 >
                   {loadingMessages ? (
@@ -3308,7 +3310,12 @@ export default function BrokerInboxPage() {
                               <div className="absolute right-2 top-2 z-20">
                                 <button
                                   type="button"
-                                  onClick={() => setMessageActionMenuId((current) => current === message.id ? null : message.id)}
+                                  onClick={(event) => {
+                                    const containerBottom = messagesContainerRef.current?.getBoundingClientRect().bottom ?? window.innerHeight;
+                                    const buttonBottom = event.currentTarget.getBoundingClientRect().bottom;
+                                    setMessageActionMenuOpensUp(containerBottom - buttonBottom < 220);
+                                    setMessageActionMenuId((current) => current === message.id ? null : message.id);
+                                  }}
                                   aria-label={`Opções da mensagem de ${senderName}`}
                                   aria-expanded={messageActionMenuId === message.id}
                                   className={`flex h-8 w-8 items-center justify-center rounded-full transition ${isMine ? 'text-white/80 hover:bg-white/20' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
@@ -3316,7 +3323,7 @@ export default function BrokerInboxPage() {
                                   <ChevronDown size={16} />
                                 </button>
                                 {messageActionMenuId === message.id && (
-                                  <div className="absolute right-0 top-9 z-30 min-w-52 rounded-xl border border-white/10 bg-[#101d2b] p-1.5 text-left shadow-2xl">
+                                  <div className={`orion-unity-message-menu absolute right-0 z-30 min-w-52 rounded-xl border border-white/10 bg-[#101d2b] p-1.5 text-left shadow-2xl ${messageActionMenuOpensUp ? 'bottom-9' : 'top-9'}`}>
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -3619,7 +3626,7 @@ export default function BrokerInboxPage() {
                 ) : (
                 <div className="orion-inbox-composer p-2.5 sm:p-4 border-t border-white/5 bg-[#050b16] shrink-0">
                   {isUnityInbox && activeReply && (
-                    <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border-l-2 border-cyan-400 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
+                    <div className="orion-unity-reply-preview mb-3 flex items-start justify-between gap-3 rounded-xl border-l-2 border-cyan-400 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
                       <div className="min-w-0">
                         <p className="font-black text-cyan-300">Respondendo a {inboxMessageSenderName(activeReply, 'Contato')}</p>
                         <p className="truncate text-slate-300">{activeReply.mensagem}</p>
@@ -3765,7 +3772,7 @@ export default function BrokerInboxPage() {
                         }}
                         rows={isUnityInbox ? 3 : 1}
                         placeholder={isUnityInbox ? 'Escreva uma mensagem ou cole a imagem da cotação (Ctrl+V)' : 'Digite "/" para respostas rápidas ou escreva uma'}
-                        className={`min-w-0 flex-1 bg-slate-950 border border-white/5 rounded-2xl px-3 sm:px-4 py-3 font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto ${isUnityInbox ? 'text-sm leading-5' : 'text-xs'}`}
+                        className={`min-w-0 flex-1 bg-slate-950 border border-white/5 rounded-2xl px-3 sm:px-4 py-3 font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto ${isUnityInbox ? 'orion-inbox-unity-input text-sm leading-5' : 'text-xs'}`}
                         style={{ height: isUnityInbox ? '76px' : '44px' }}
                       />
 
