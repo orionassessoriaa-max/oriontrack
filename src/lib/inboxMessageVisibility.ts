@@ -52,19 +52,25 @@ export function memberCanViewInboxMessage(
   roleByProfileId: ReadonlyMap<string, string> = new Map(),
 ) {
   const viewerId = String(viewerProfileId || '').trim().toLowerCase();
-  const actorProfileId = inboxMessageProfileId(message);
   const source = record(message);
   const metadata = record(source.metadata);
+
+  // Em mensagem recebida, a instancia identifica o WhatsApp que recebeu o
+  // arquivo, nao a pessoa que escreveu. Antes ela era tratada como autoria do
+  // dono da instancia e integrantes autorizados na conversa recebiam 403 ao
+  // tentar abrir audios, imagens e documentos enviados pelo cliente.
+  if (source.direction === 'inbound') return true;
+
+  const actorProfileId = inboxMessageProfileId(message);
 
   if (actorProfileId) {
     if (actorProfileId === viewerId) return true;
     return SUPERVISOR_ROLES.has(String(roleByProfileId.get(actorProfileId) || '').toLowerCase());
   }
 
-  // Respostas da IA e mensagens antigas recebidas sem identificador de
-  // instancia pertencem ao atendimento do lead. Uma mensagem humana enviada
-  // sem autoria comprovada nao pode vazar para outro integrante.
+  // Respostas da IA pertencem ao atendimento do lead. Uma mensagem humana
+  // enviada sem autoria comprovada nao pode vazar para outro integrante.
   if (metadata.ai_agent === true || metadata.sender_type === 'ai') return true;
-  return source.direction === 'inbound';
+  return false;
 }
 
