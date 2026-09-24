@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Bell, Loader2, RefreshCw, ShieldAlert, HelpCircle, Send, Settings, Save, Sparkles, TrendingUp, DollarSign, Smartphone } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import UnityWhatsAppConnection from '@/components/inbox/UnityWhatsAppConnection';
 
 type Notification = {
   id: string;
@@ -295,6 +296,8 @@ export default function NotificacoesPage() {
         </button>
       </div>
 
+      <UnityWhatsAppConnection isDark={isDark} />
+
       {/* Central de Chamados e Suporte (Central de Ajuda CTA) */}
       <div className={`mb-8 rounded-[2rem] border p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-6 transition-all duration-300 ${
         isDark 
@@ -337,7 +340,7 @@ export default function NotificacoesPage() {
             <div>
               <h3 className={`text-base font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>Preferencias de notificacoes</h3>
               <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
-                Escolha quais avisos chegam no WhatsApp. A conexao da conta fica no Inbox; a Chave Mestra do Apolo continua nas configuracoes do sistema.
+                Escolha quais avisos chegam no WhatsApp. A conexao da Unity fica nesta pagina; a Chave Mestra do Apolo continua nas configuracoes do sistema.
               </p>
             </div>
           </div>

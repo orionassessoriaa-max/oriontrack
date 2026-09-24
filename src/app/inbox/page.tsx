@@ -2858,7 +2858,7 @@ export default function BrokerInboxPage() {
       <div className={`orion-inbox-shell h-[calc(100dvh-64px)] sm:h-[calc(100dvh-72px)] min-h-0 flex flex-col gap-0 overflow-hidden ${isUnityInbox ? 'orion-unity-inbox' : ''} ${isUnityInbox && unityExpanded ? 'orion-unity-inbox-expanded' : ''} ${isUnityInbox && !unityConversationListOpen ? 'orion-unity-list-closed' : ''}`}>
         
         {/* Connection status header bar */}
-        {canManageWhatsAppConnection && (isWhatsAppConnected ? (
+        {!isUnityInbox && canManageWhatsAppConnection && (isWhatsAppConnected ? (
           <div className="orion-inbox-connection orion-inbox-connection-connected bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 hidden sm:flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 animate-in fade-in-50">
             <div className="orion-inbox-connection-info flex items-center gap-3">
               <div className="orion-inbox-whatsapp-icon relative flex items-center justify-center shrink-0">
@@ -2926,7 +2926,7 @@ export default function BrokerInboxPage() {
         ))}
 
         {/* QR Code Scan modal/container if connection is active */}
-        {qrCode && (
+        {!isUnityInbox && qrCode && (
           <div className="bg-slate-900/90 border border-blue-500/20 rounded-3xl p-6 flex flex-col items-center justify-center text-center shrink-0 animate-in zoom-in-95">
             <QrCode className="text-cyan-400 animate-pulse mb-3" size={32} />
             <h3 className="text-sm font-black text-white uppercase tracking-wider">Escaneie o QR Code no seu Celular</h3>
