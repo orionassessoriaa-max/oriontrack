@@ -192,7 +192,26 @@ body.editing .pop{opacity:1;visibility:visible;pointer-events:auto;transform:tra
 .hz li{font-size:15px;font-weight:300;color:var(--paper);padding-left:20px;position:relative}
 .hz li:before{content:"";position:absolute;left:0;top:9px;width:7px;height:7px;border-radius:50%;background:var(--blue-lift)}
 
-/* ---------- 6-10. case studies ---------- */
+/* ---------- 6. desafios e riscos ---------- */
+.risk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:auto 0}
+.risk-card{
+  min-height:188px;padding:30px 28px;border:1px solid var(--line);border-radius:16px;
+  background:linear-gradient(145deg,rgba(13,22,39,.96),rgba(6,11,21,.96));
+  display:flex;flex-direction:column;justify-content:space-between;gap:24px;
+  position:relative;overflow:hidden;
+}
+.risk-card:after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
+  background:linear-gradient(90deg,#FF7A45,var(--blue-lift));opacity:.82;
+}
+.risk-num{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;
+  color:#FF9A70;
+}
+.risk-card h3{font-size:24px;font-weight:500;line-height:1.18;letter-spacing:-.02em;max-width:16ch}
+.risk-card p{font-size:14px;font-weight:300;color:var(--muted);line-height:1.45}
+
+/* ---------- 7-11. case studies ---------- */
 .case{display:grid;grid-template-columns:412px 1fr;gap:50px;align-items:stretch;height:100%}
 .case-left{display:flex;flex-direction:column;gap:18px;min-height:0}
 .case-left .s-title{font-size:42px}
@@ -715,7 +734,42 @@ body.editing [contenteditable]{outline:none!important}
       </div>
     </section>
 
-    <!-- 6 ─ case 1 -->
+    <!-- 6 ─ desafios e riscos -->
+    <section class="slide" aria-label="Desafios e riscos do projeto">
+      <div class="s-head">
+        <p class="eyebrow" data-e="" spellcheck="false">Pontos de atenção</p>
+        <h2 class="s-title" data-e="" spellcheck="false"><span class="lt">Desafios e riscos</span><br>do <em>projeto</em></h2>
+        <p class="s-sub" data-e="" spellcheck="false">Fatores que podem limitar a velocidade de aprendizado, otimização e escala da operação.</p>
+      </div>
+      <div class="risk-grid">
+        <article class="risk-card">
+          <span class="risk-num">RISCO 01</span>
+          <h3 data-e="" spellcheck="false">Conta de anúncio sem saldo</h3>
+        </article>
+        <article class="risk-card">
+          <span class="risk-num">RISCO 02</span>
+          <h3 data-e="" spellcheck="false">Custo por lead mais alto no início</h3>
+        </article>
+        <article class="risk-card">
+          <span class="risk-num">RISCO 03</span>
+          <h3 data-e="" spellcheck="false">Ausência de criativos para otimização</h3>
+        </article>
+        <article class="risk-card">
+          <span class="risk-num">RISCO 04</span>
+          <h3 data-e="" spellcheck="false">Tempo de resposta acima de 10 min para novos leads</h3>
+        </article>
+        <article class="risk-card">
+          <span class="risk-num">RISCO 05</span>
+          <h3 data-e="" spellcheck="false">Ausência de follow-up</h3>
+        </article>
+        <article class="risk-card">
+          <span class="risk-num">RISCO 06</span>
+          <h3 data-e="" spellcheck="false">Ausência de repescagem de leads da base</h3>
+        </article>
+      </div>
+    </section>
+
+    <!-- 7 ─ case 1 -->
     <section class="slide" aria-label="Estudo de caso Araújo Security">
       <div class="case">
         <div class="case-left">
