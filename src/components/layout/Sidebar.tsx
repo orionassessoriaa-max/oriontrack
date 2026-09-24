@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import {
   Activity,
   ArrowLeftRight,
+  BarChart3,
   Bell,
   Bot,
   Building2,
@@ -228,6 +229,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Home, label: 'Visão Geral', href: '/admin' },
     { icon: LayoutDashboard, label: 'Overview Vendas', href: '/overview' },
     { icon: TrendingUp, label: 'Painel de Tráfego', href: '/trafego' },
+    { icon: BarChart3, label: 'Win Rate Criativos', href: '/equipe/apollo/criativos' },
     { icon: Building2, label: 'Concessionárias', href: '/admin/corretoras' },
     { icon: Shield, label: 'Usuários', href: '/admin/usuarios' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
@@ -259,6 +261,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Home, label: 'Dashboard', href: '/trafego' },
     { icon: LayoutDashboard, label: 'Overview Vendas', href: '/overview' },
     { icon: TrendingUp, label: 'Otimizações', href: '/trafego/otimizacoes' },
+    { icon: BarChart3, label: 'Win Rate Criativos', href: '/equipe/apollo/criativos' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: Building2, label: 'Concessionárias', href: '/admin/corretoras' },
     { icon: Palette, label: 'Criativos', href: '/criativos' },
@@ -275,6 +278,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const designerMenu = [
     { icon: Palette, label: 'Designer', href: '/designer' },
+    { icon: BarChart3, label: 'Win Rate Criativos', href: '/equipe/apollo/criativos' },
     { icon: LayoutDashboard, label: 'Overview Vendas', href: '/overview' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: FileText, label: 'Ofertas', href: '/designer/ofertas' },
@@ -286,6 +290,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
 
   const accountMenu = [
     { icon: Home, label: 'Account', href: '/account' },
+    { icon: BarChart3, label: 'Win Rate Criativos', href: '/equipe/apollo/criativos' },
     { icon: LayoutDashboard, label: 'Overview Vendas', href: '/overview' },
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: Users, label: 'Corretores', href: '/account/corretores' },
