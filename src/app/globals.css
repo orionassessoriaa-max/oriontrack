@@ -4534,3 +4534,91 @@ html.theme-noturno .orion-trafego {
 .theme-claro .orion-inbox-composer .orion-unity-reply-preview p:last-child {
   color: #475569 !important;
 }
+
+/* A Unity usa o Inbox como mesa de atendimento e precisa priorizar a conversa. */
+@media (min-width: 1024px) {
+  .orion-unity-inbox {
+    height: calc(100dvh - 112px) !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  .orion-unity-inbox-expanded {
+    height: 100dvh !important;
+  }
+
+  .orion-unity-inbox .orion-inbox-panel,
+  .theme-claro .orion-unity-inbox .orion-inbox-panel {
+    grid-template-columns: 360px minmax(0, 1fr) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .orion-unity-inbox.orion-unity-list-closed .orion-inbox-panel,
+  .theme-claro .orion-unity-inbox.orion-unity-list-closed .orion-inbox-panel {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .orion-unity-inbox.orion-unity-list-closed .orion-inbox-list {
+    display: none !important;
+  }
+
+  .orion-unity-inbox .orion-inbox-messages {
+    padding-inline: clamp(24px, 5vw, 88px) !important;
+  }
+
+  .orion-unity-inbox .orion-inbox-message-bubble {
+    max-width: min(72%, 780px) !important;
+    font-size: 14px !important;
+  }
+
+  .orion-unity-inbox .orion-unity-details {
+    top: 0 !important;
+    width: min(400px, 92vw) !important;
+    background: #111b21 !important;
+  }
+}
+
+.theme-claro .orion-unity-inbox .orion-unity-details {
+  background: #ffffff !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-unity-layout-button {
+  border-color: #d8dee4 !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  -webkit-text-fill-color: #334155 !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-unity-layout-button:hover {
+  background: #eef4f7 !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-inbox-unity-input {
+  border-color: #d8dee4 !important;
+  background: #ffffff !important;
+  color: #111b21 !important;
+  -webkit-text-fill-color: #111b21 !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-inbox-unity-input::placeholder {
+  color: #667781 !important;
+  -webkit-text-fill-color: #667781 !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-unity-message-menu,
+.theme-claro .orion-unity-inbox .orion-unity-message-menu * {
+  color: #263442 !important;
+  -webkit-text-fill-color: #263442 !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-unity-message-menu svg {
+  stroke: currentColor !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-unity-message-menu button:last-child,
+.theme-claro .orion-unity-inbox .orion-unity-message-menu button:last-child * {
+  color: #be123c !important;
+  -webkit-text-fill-color: #be123c !important;
+}

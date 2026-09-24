@@ -8,7 +8,7 @@ import { AlertCircle, Loader2, LogOut, RefreshCw } from 'lucide-react';
 import ApoloAiWidget from '@/components/ui/ApoloAiWidget';
 import { canSelectOperationalTeam, TEAM_SELECTION_STORAGE_KEY } from '@/lib/teamSelection';
 
-export default function InternalLayout({ children }: { children: React.ReactNode }) {
+export default function InternalLayout({ children, immersive = false }: { children: React.ReactNode; immersive?: boolean }) {
   const { profile, actualProfile, loading, user, signOut, refreshProfile, isViewingAsCorretor } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -202,13 +202,13 @@ export default function InternalLayout({ children }: { children: React.ReactNode
     <div className={`flex min-h-screen flex-col transition-colors duration-300 ${
       isDark ? 'bg-[#020617] text-white' : 'bg-[#f8fafc] text-slate-800'
     }`}>
-      <Sidebar onCollapsedChange={setSidebarCollapsed} />
-      <main className="w-full min-w-0 px-3 py-5 pt-24 transition-all duration-300 sm:px-5 sm:py-7 lg:p-7 lg:pt-28">
+      {!immersive && <Sidebar onCollapsedChange={setSidebarCollapsed} />}
+      <main className={`w-full min-w-0 transition-all duration-300 ${immersive ? 'h-dvh overflow-hidden p-0' : 'px-3 py-5 pt-24 sm:px-5 sm:py-7 lg:p-7 lg:pt-28'}`}>
         <div className="mx-auto max-w-none transition-all duration-300">
           {children}
         </div>
       </main>
-      <ApoloAiWidget />
+      {!immersive && <ApoloAiWidget />}
     </div>
   );
 }

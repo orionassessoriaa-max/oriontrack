@@ -49,7 +49,11 @@ import {
   Phone,
   ChevronDown,
   PanelRight,
-  ExternalLink
+  ExternalLink,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 
 const SEM_INTERESSE_MOTIVOS = [
@@ -459,6 +463,8 @@ export default function BrokerInboxPage() {
   const [leadInfo, setLeadInfo] = useState<any>(null);
   const [leadDetailsOpen, setLeadDetailsOpen] = useState(false);
   const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);
+  const [unityExpanded, setUnityExpanded] = useState(true);
+  const [unityConversationListOpen, setUnityConversationListOpen] = useState(true);
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
 
   // Apolo Bot & Close Reason Modal States
@@ -2848,8 +2854,8 @@ export default function BrokerInboxPage() {
   }, [filteredChatMessages, mediaUrls, mediaLoadErrors, fetchMessageMedia]);
 
   return (
-    <InternalLayout>
-      <div className="orion-inbox-shell h-[calc(100dvh-64px)] sm:h-[calc(100dvh-72px)] min-h-0 flex flex-col gap-0 overflow-hidden">
+    <InternalLayout immersive={isUnityInbox && unityExpanded}>
+      <div className={`orion-inbox-shell h-[calc(100dvh-64px)] sm:h-[calc(100dvh-72px)] min-h-0 flex flex-col gap-0 overflow-hidden ${isUnityInbox ? 'orion-unity-inbox' : ''} ${isUnityInbox && unityExpanded ? 'orion-unity-inbox-expanded' : ''} ${isUnityInbox && !unityConversationListOpen ? 'orion-unity-list-closed' : ''}`}>
         
         {/* Connection status header bar */}
         {canManageWhatsAppConnection && (isWhatsAppConnected ? (
@@ -3135,10 +3141,34 @@ export default function BrokerInboxPage() {
                     </div>
                   </div>
                   <div className="orion-inbox-chat-actions -mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+                    {isUnityInbox && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setUnityConversationListOpen((current) => !current)}
+                          className="orion-unity-layout-button hidden shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-slate-200 transition hover:bg-white/10 lg:inline-flex"
+                          aria-label={unityConversationListOpen ? 'Recolher conversas' : 'Mostrar conversas'}
+                          title={unityConversationListOpen ? 'Recolher conversas' : 'Mostrar conversas'}
+                        >
+                          {unityConversationListOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+                          <span className="hidden 2xl:inline">Conversas</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setUnityExpanded((current) => !current)}
+                          className="orion-unity-layout-button inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-slate-200 transition hover:bg-white/10"
+                          aria-label={unityExpanded ? 'Mostrar menu do Orion' : 'Expandir atendimento'}
+                          title={unityExpanded ? 'Mostrar menu do Orion' : 'Expandir atendimento'}
+                        >
+                          {unityExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                          <span className="hidden 2xl:inline">{unityExpanded ? 'Restaurar' : 'Expandir'}</span>
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={() => { setLeadDetailsOpen(true); setDetailsPanelOpen(true); }}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 transition hover:bg-cyan-500/20 xl:hidden"
+                      className={`shrink-0 items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-cyan-300 transition hover:bg-cyan-500/20 ${isUnityInbox ? 'inline-flex' : 'inline-flex xl:hidden'}`}
                     >
                       <PanelRight size={13} />
                       Dados do lead
@@ -3830,8 +3860,8 @@ export default function BrokerInboxPage() {
 
           {/* COLUMN 3: RIGHT SIDEBAR - LEAD DETAILS PANEL */}
           {detailsPanelOpen && <button type="button" aria-label="Fechar dados do lead" onClick={() => setDetailsPanelOpen(false)} className="fixed inset-0 z-[90] bg-slate-950/65 xl:hidden" />}
-          <div className={`orion-inbox-details fixed bottom-0 right-0 top-0 sm:top-[72px] z-[100] flex w-[min(380px,100vw)] flex-col space-y-6 overflow-y-auto border-l border-white/10 bg-[#07111f] p-5 shadow-2xl transition-transform duration-200 xl:static xl:z-auto xl:h-full xl:w-auto xl:translate-x-0 xl:border-l-0 xl:bg-slate-900/20 xl:shadow-none ${detailsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-            <div className="flex items-center justify-between border-b border-white/5 pb-3 xl:hidden">
+          <div className={`orion-inbox-details fixed bottom-0 right-0 top-0 sm:top-[72px] z-[100] flex w-[min(380px,100vw)] flex-col space-y-6 overflow-y-auto border-l border-white/10 bg-[#07111f] p-5 shadow-2xl transition-transform duration-200 ${isUnityInbox ? 'orion-unity-details' : 'xl:static xl:z-auto xl:h-full xl:w-auto xl:translate-x-0 xl:border-l-0 xl:bg-slate-900/20 xl:shadow-none'} ${detailsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className={`items-center justify-between border-b border-white/5 pb-3 ${isUnityInbox ? 'flex' : 'flex xl:hidden'}`}>
               <span className="text-xs font-black uppercase tracking-wider text-white">Dados do lead</span>
               <button type="button" onClick={() => setDetailsPanelOpen(false)} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Fechar painel"><X size={16} /></button>
             </div>
