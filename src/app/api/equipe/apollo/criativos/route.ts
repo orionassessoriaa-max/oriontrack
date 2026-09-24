@@ -173,7 +173,10 @@ async function readMetaInsights(accountId: string, since: string, until: string,
     const chunk = ids.slice(index, index + 50);
     const detailsUrl = new URL(`https://graph.facebook.com/${graphVersion}/`);
     detailsUrl.searchParams.set('ids', chunk.join(','));
-    detailsUrl.searchParams.set('fields', 'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,title}');
+    detailsUrl.searchParams.set(
+      'fields',
+      'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,title,body,object_story_spec}'
+    );
     detailsUrl.searchParams.set('access_token', accessToken);
     const response = await metaCachedFetch(detailsUrl.toString(), {
       ttlSeconds: 3600,
@@ -314,12 +317,19 @@ export async function GET(request: Request) {
         const quotes = attributed.filter((lead) => leadStage(lead).quote).length;
         const revenue = attributed.reduce((total, lead) => total + leadRevenue(lead), 0);
         const creative = ad.detail?.creative || {};
+        const linkData = creative.object_story_spec?.link_data || {};
+        const videoData = creative.object_story_spec?.video_data || {};
         return {
           id: `${accountId}:${key}`,
           ad_ids: ad.ids,
           ad_name: ad.name,
           creative_name: creative.name || null,
-          title: creative.title || null,
+          creative_id: creative.id ? String(creative.id) : null,
+          title: creative.title || linkData.name || videoData.title || null,
+          primary_text: creative.body || linkData.message || videoData.message || null,
+          description: linkData.description || videoData.link_description || null,
+          destination_url: linkData.link || videoData.call_to_action?.value?.link || null,
+          call_to_action: linkData.call_to_action?.type || videoData.call_to_action?.type || null,
           image_url: creative.image_url || creative.thumbnail_url || null,
           client_id: accountId,
           client_name: account.nome_empresa || account.meta_ad_account_name || account.nome || 'Sem nome',

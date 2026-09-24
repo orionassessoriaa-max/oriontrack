@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { supabase } from '@/lib/supabase/client';
 import {
@@ -19,6 +19,7 @@ import {
   ShoppingCart,
   Target,
   TrendingUp,
+  X,
 } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -27,7 +28,12 @@ type CreativeRow = {
   ad_ids: string[];
   ad_name: string;
   creative_name?: string | null;
+  creative_id?: string | null;
   title?: string | null;
+  primary_text?: string | null;
+  description?: string | null;
+  destination_url?: string | null;
+  call_to_action?: string | null;
   image_url?: string | null;
   client_id: string;
   client_name: string;
@@ -141,8 +147,10 @@ export default function ApolloCreativePerformancePage() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('sales');
   const [fromIntegration, setFromIntegration] = useState(false);
+  const [selectedCreative, setSelectedCreative] = useState<CreativeRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -170,6 +178,37 @@ export default function ApolloCreativePerformancePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!selectedCreative) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSelectedCreative(null);
+        return;
+      }
+      if (event.key !== 'Tab' || !modalRef.current) return;
+      const focusable = Array.from(modalRef.current.querySelectorAll<HTMLElement>(
+        'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )).filter((element) => !element.hasAttribute('disabled'));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedCreative]);
 
   const visibleRows = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('pt-BR');
@@ -304,7 +343,7 @@ export default function ApolloCreativePerformancePage() {
             </div>
             <div className={styles.topList}>
               {topFive.map((row, index) => (
-                <article key={row.id} className={styles.topRow}>
+                <button key={row.id} type="button" className={styles.topRow} onClick={() => setSelectedCreative(row)}>
                   <span className={styles.position}>{String(index + 1).padStart(2, '0')}</span>
                   <div className={styles.topIdentity}>
                     <strong>{row.ad_name}</strong><small>{row.client_name}</small>
@@ -313,7 +352,7 @@ export default function ApolloCreativePerformancePage() {
                     <span style={{ width: `${Math.max(6, (row.sales / topSales) * 100)}%` }} />
                   </div>
                   <div className={styles.topValue}><strong>{row.sales}</strong><small>vendas</small></div>
-                </article>
+                </button>
               ))}
               {!loading && topFive.length === 0 && <div className={styles.empty}>Nenhum criativo encontrado neste período.</div>}
               {loading && <div className={styles.loading}><Loader2 className="animate-spin" /> Calculando atribuição...</div>}
@@ -366,12 +405,12 @@ export default function ApolloCreativePerformancePage() {
                   <tr key={row.id}>
                     <td><span className={styles.rankNumber}>{index + 1}</span></td>
                     <td>
-                      <div className={styles.creativeCell}>
+                      <button type="button" className={styles.creativeCell} onClick={() => setSelectedCreative(row)} aria-label={`Abrir detalhes do criativo ${row.ad_name}`}>
                         <div className={styles.thumb}>
                           {row.image_url ? <img src={row.image_url} alt="" /> : <ImageIcon size={18} />}
                         </div>
                         <div><strong>{row.ad_name}</strong><small>{row.client_name}</small></div>
-                      </div>
+                      </button>
                     </td>
                     <td>{money(row.spend)}</td><td>{row.leads}</td><td>{row.quotes}</td><td>{row.negotiations}</td>
                     <td><strong className={styles.saleValue}>{row.sales}</strong></td>
@@ -402,6 +441,80 @@ export default function ApolloCreativePerformancePage() {
           Última atualização: {payload?.refreshed_at ? new Date(payload.refreshed_at).toLocaleString('pt-BR') : '—'}.
           Os números respeitam o período de entrada do lead e não estimam vendas sem identificação no CRM.
         </footer>
+
+        {selectedCreative && (
+          <div className={styles.modalBackdrop} onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSelectedCreative(null);
+          }}>
+            <div
+              ref={modalRef}
+              className={styles.creativeModal}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="creative-detail-title"
+            >
+              <header className={styles.modalHeader}>
+                <div>
+                  <span>Detalhes do criativo</span>
+                  <h2 id="creative-detail-title">{selectedCreative.ad_name}</h2>
+                  <p>{selectedCreative.client_name}</p>
+                </div>
+                <button type="button" autoFocus onClick={() => setSelectedCreative(null)} aria-label="Fechar detalhes do criativo">
+                  <X size={19} />
+                </button>
+              </header>
+
+              <div className={styles.modalBody}>
+                <div className={styles.creativePreview}>
+                  {selectedCreative.image_url
+                    ? <img src={selectedCreative.image_url} alt={`Criativo ${selectedCreative.ad_name}`} />
+                    : <div className={styles.previewFallback}><ImageIcon size={34} /><span>Prévia não fornecida pela Meta</span></div>}
+                </div>
+
+                <div className={styles.creativeDetails}>
+                  <div className={styles.modalBadges}>
+                    <span>{selectedCreative.status === 'ACTIVE' ? 'Ativo' : selectedCreative.status}</span>
+                    <span>{selectedCreative.ad_ids.length > 1 ? `${selectedCreative.ad_ids.length} anúncios agrupados` : '1 anúncio'}</span>
+                  </div>
+
+                  <section className={styles.copyBlock}>
+                    <span>Título</span>
+                    <h3>{selectedCreative.title || 'Título não informado pela Meta'}</h3>
+                  </section>
+
+                  <section className={styles.copyBlock}>
+                    <span>Legenda / texto principal</span>
+                    <p>{selectedCreative.primary_text || 'Legenda não informada pela Meta.'}</p>
+                  </section>
+
+                  {selectedCreative.description && (
+                    <section className={styles.copyBlock}>
+                      <span>Descrição</span>
+                      <p>{selectedCreative.description}</p>
+                    </section>
+                  )}
+
+                  <dl className={styles.infoGrid}>
+                    <div><dt>Nome interno</dt><dd>{selectedCreative.creative_name || '—'}</dd></div>
+                    <div><dt>Chamada</dt><dd>{selectedCreative.call_to_action || '—'}</dd></div>
+                    <div><dt>ID do criativo</dt><dd>{selectedCreative.creative_id || '—'}</dd></div>
+                    <div><dt>ID do anúncio</dt><dd>{selectedCreative.ad_ids.join(', ') || '—'}</dd></div>
+                    <div className={styles.infoWide}><dt>Destino</dt><dd>{selectedCreative.destination_url || '—'}</dd></div>
+                  </dl>
+
+                  <div className={styles.modalMetrics}>
+                    <div><span>Investimento</span><strong>{money(selectedCreative.spend)}</strong></div>
+                    <div><span>Leads</span><strong>{selectedCreative.leads}</strong></div>
+                    <div><span>Vendas</span><strong>{selectedCreative.sales}</strong></div>
+                    <div><span>Win rate</span><strong>{percent(selectedCreative.win_rate)}</strong></div>
+                    <div><span>Receita</span><strong>{money(selectedCreative.revenue)}</strong></div>
+                    <div><span>ROAS</span><strong>{decimal(selectedCreative.roas, 'x')}</strong></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </InternalLayout>
   );
