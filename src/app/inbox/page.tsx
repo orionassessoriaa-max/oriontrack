@@ -4499,8 +4499,8 @@ export default function BrokerInboxPage() {
                   <div className="space-y-3.5 shrink-0 border-t border-white/5 pt-4">
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Respostas rápidas</label>
-                        <p className="mt-1 text-[9px] font-semibold text-slate-500">Digite / e o título para usar no atendimento.</p>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Minhas respostas rápidas</label>
+                        <p className="mt-1 text-[9px] font-semibold text-slate-500">Visíveis somente neste acesso. Digite / e o título para usar.</p>
                       </div>
                       <button
                         type="button"

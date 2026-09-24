@@ -81,24 +81,32 @@ function sanitizeQuickReplies(value: unknown): UnityQuickReply[] {
   });
 }
 
-function readConfig(rows: any[]) {
+function readStoredConfig(rows: any[]) {
   for (const row of rows) {
     const config = row?.operadoras_info?.unity_inbox_config;
-    if (config) {
-      return {
-        labels: sanitizeLabels(config.labels),
-        quickReplies: sanitizeQuickReplies(config.quickReplies),
-      };
-    }
+    if (config && typeof config === 'object') return config as Record<string, unknown>;
   }
-  return { labels: [], quickReplies: [] };
+  return {};
+}
+
+function readConfig(rows: any[], profileId: string) {
+  const config = readStoredConfig(rows);
+  const repliesByProfile = config.quickRepliesByProfile;
+  const personalReplies = repliesByProfile && typeof repliesByProfile === 'object'
+    ? (repliesByProfile as Record<string, unknown>)[profileId]
+    : [];
+
+  return {
+    labels: sanitizeLabels(config.labels),
+    quickReplies: sanitizeQuickReplies(personalReplies),
+  };
 }
 
 export async function GET(request: Request) {
   try {
     const context = await resolveUnityContext(request);
     if ('response' in context) return context.response;
-    return NextResponse.json(readConfig(context.companyRows), { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(readConfig(context.companyRows, context.target.id), { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {
     console.error('[unity_inbox_config] GET error:', error);
     return NextResponse.json({ error: error?.message || 'Erro ao carregar configuracao.' }, { status: 500 });
@@ -116,15 +124,30 @@ export async function PATCH(request: Request) {
     });
     if (limited) return limited;
     const body = await request.json().catch(() => ({}));
-    const current = readConfig(context.companyRows);
+    const storedConfig = readStoredConfig(context.companyRows);
+    const current = readConfig(context.companyRows, context.target.id);
     const labels = body.labels === undefined ? current.labels : sanitizeLabels(body.labels);
     const quickReplies = body.quickReplies === undefined ? current.quickReplies : sanitizeQuickReplies(body.quickReplies);
+    const storedRepliesByProfile = storedConfig.quickRepliesByProfile && typeof storedConfig.quickRepliesByProfile === 'object'
+      ? storedConfig.quickRepliesByProfile as Record<string, unknown>
+      : {};
+    const quickRepliesByProfile = {
+      ...storedRepliesByProfile,
+      [context.target.id]: quickReplies,
+    };
+    // O formato antigo era coletivo; ele nao pode continuar expondo respostas entre acessos.
+    const { quickReplies: _sharedReplies, ...configWithoutSharedReplies } = storedConfig;
 
     for (const row of context.companyRows) {
       const operadorasInfo = row.operadoras_info && typeof row.operadoras_info === 'object' ? row.operadoras_info : {};
       const { error } = await supabaseAdmin
         .from('corretores')
-        .update({ operadoras_info: { ...operadorasInfo, unity_inbox_config: { labels, quickReplies } } })
+        .update({
+          operadoras_info: {
+            ...operadorasInfo,
+            unity_inbox_config: { ...configWithoutSharedReplies, labels, quickRepliesByProfile },
+          },
+        })
         .eq('id', row.id);
       if (error) throw error;
     }
