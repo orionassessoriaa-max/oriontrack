@@ -171,12 +171,17 @@ async function readMetaInsights(accountId: string, since: string, until: string,
   const details = new Map<string, any>();
   for (let index = 0; index < ids.length; index += 50) {
     const chunk = ids.slice(index, index + 50);
-    const detailsUrl = new URL(`https://graph.facebook.com/${graphVersion}/`);
-    detailsUrl.searchParams.set('ids', chunk.join(','));
+    const detailsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${accountId}/ads`);
     detailsUrl.searchParams.set(
       'fields',
-      'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,title,body,object_story_spec}'
+      'id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,image_hash,title,body,video_id,object_story_spec,asset_feed_spec}'
     );
+    // A Meta removeu o parametro global "ids" nas versoes atuais. O filtro da
+    // conta preserva a consulta em lote sem multiplicar chamadas por anuncio.
+    detailsUrl.searchParams.set('filtering', JSON.stringify([
+      { field: 'id', operator: 'IN', value: chunk },
+    ]));
+    detailsUrl.searchParams.set('limit', '50');
     detailsUrl.searchParams.set('access_token', accessToken);
     const response = await metaCachedFetch(detailsUrl.toString(), {
       ttlSeconds: 3600,
@@ -184,7 +189,9 @@ async function readMetaInsights(accountId: string, since: string, until: string,
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload.error) continue;
-    Object.entries(payload).forEach(([id, detail]) => details.set(id, detail));
+    (payload.data || []).forEach((detail: any) => {
+      if (detail?.id) details.set(String(detail.id), detail);
+    });
   }
 
   return { rows, details };
@@ -319,18 +326,30 @@ export async function GET(request: Request) {
         const creative = ad.detail?.creative || {};
         const linkData = creative.object_story_spec?.link_data || {};
         const videoData = creative.object_story_spec?.video_data || {};
+        const photoData = creative.object_story_spec?.photo_data || {};
+        const assetFeed = creative.asset_feed_spec || {};
+        const assetImage = (assetFeed.images || []).find((item: any) => item?.url)?.url || null;
+        const assetVideo = (assetFeed.videos || []).find((item: any) => item?.thumbnail_url)?.thumbnail_url || null;
+        const assetTitle = (assetFeed.titles || []).find((item: any) => item?.text)?.text || null;
+        const assetBody = (assetFeed.bodies || []).find((item: any) => item?.text)?.text || null;
+        const assetDescription = (assetFeed.descriptions || []).find((item: any) => item?.text)?.text || null;
+        const assetLink = (assetFeed.link_urls || []).find((item: any) => item?.website_url)?.website_url || null;
+        const assetCallToAction = (assetFeed.call_to_actions || []).find((item: any) => item?.type)?.type
+          || assetFeed.call_to_action_types?.[0]
+          || null;
         return {
           id: `${accountId}:${key}`,
           ad_ids: ad.ids,
           ad_name: ad.name,
           creative_name: creative.name || null,
           creative_id: creative.id ? String(creative.id) : null,
-          title: creative.title || linkData.name || videoData.title || null,
-          primary_text: creative.body || linkData.message || videoData.message || null,
-          description: linkData.description || videoData.link_description || null,
-          destination_url: linkData.link || videoData.call_to_action?.value?.link || null,
-          call_to_action: linkData.call_to_action?.type || videoData.call_to_action?.type || null,
-          image_url: creative.image_url || creative.thumbnail_url || null,
+          title: creative.title || linkData.name || videoData.title || assetTitle || null,
+          primary_text: creative.body || linkData.message || videoData.message || photoData.caption || assetBody || null,
+          description: linkData.description || videoData.link_description || assetDescription || null,
+          destination_url: linkData.link || videoData.call_to_action?.value?.link || assetLink || null,
+          call_to_action: linkData.call_to_action?.type || videoData.call_to_action?.type || assetCallToAction || null,
+          image_url: creative.image_url || assetImage || assetVideo || creative.thumbnail_url || null,
+          thumbnail_url: creative.thumbnail_url || assetVideo || assetImage || null,
           client_id: accountId,
           client_name: account.nome_empresa || account.meta_ad_account_name || account.nome || 'Sem nome',
           account_name: account.meta_ad_account_name || null,

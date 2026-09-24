@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { supabase } from '@/lib/supabase/client';
 import {
@@ -35,6 +36,7 @@ type CreativeRow = {
   destination_url?: string | null;
   call_to_action?: string | null;
   image_url?: string | null;
+  thumbnail_url?: string | null;
   client_id: string;
   client_name: string;
   account_name?: string | null;
@@ -151,6 +153,12 @@ export default function ApolloCreativePerformancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
+  const modalTriggerRef = useRef<HTMLElement | null>(null);
+
+  const openCreative = useCallback((creative: CreativeRow, trigger: HTMLElement) => {
+    modalTriggerRef.current = trigger;
+    setSelectedCreative(creative);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,8 +189,15 @@ export default function ApolloCreativePerformancePage() {
 
   useEffect(() => {
     if (!selectedCreative) return;
+    const scrollY = window.scrollY;
     const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
     document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setSelectedCreative(null);
@@ -206,6 +221,11 @@ export default function ApolloCreativePerformancePage() {
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo(0, scrollY);
+      modalTriggerRef.current?.focus({ preventScroll: true });
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [selectedCreative]);
@@ -343,7 +363,7 @@ export default function ApolloCreativePerformancePage() {
             </div>
             <div className={styles.topList}>
               {topFive.map((row, index) => (
-                <button key={row.id} type="button" className={styles.topRow} onClick={() => setSelectedCreative(row)}>
+                <button key={row.id} type="button" className={styles.topRow} onClick={(event) => openCreative(row, event.currentTarget)}>
                   <span className={styles.position}>{String(index + 1).padStart(2, '0')}</span>
                   <div className={styles.topIdentity}>
                     <strong>{row.ad_name}</strong><small>{row.client_name}</small>
@@ -405,9 +425,9 @@ export default function ApolloCreativePerformancePage() {
                   <tr key={row.id}>
                     <td><span className={styles.rankNumber}>{index + 1}</span></td>
                     <td>
-                      <button type="button" className={styles.creativeCell} onClick={() => setSelectedCreative(row)} aria-label={`Abrir detalhes do criativo ${row.ad_name}`}>
+                      <button type="button" className={styles.creativeCell} onClick={(event) => openCreative(row, event.currentTarget)} aria-label={`Abrir detalhes do criativo ${row.ad_name}`}>
                         <div className={styles.thumb}>
-                          {row.image_url ? <img src={row.image_url} alt="" /> : <ImageIcon size={18} />}
+                          {row.image_url || row.thumbnail_url ? <img src={row.image_url || row.thumbnail_url || ''} alt="" referrerPolicy="no-referrer" /> : <ImageIcon size={18} />}
                         </div>
                         <div><strong>{row.ad_name}</strong><small>{row.client_name}</small></div>
                       </button>
@@ -442,7 +462,7 @@ export default function ApolloCreativePerformancePage() {
           Os números respeitam o período de entrada do lead e não estimam vendas sem identificação no CRM.
         </footer>
 
-        {selectedCreative && (
+        {selectedCreative && typeof document !== 'undefined' && createPortal(
           <div className={styles.modalBackdrop} onMouseDown={(event) => {
             if (event.target === event.currentTarget) setSelectedCreative(null);
           }}>
@@ -466,8 +486,8 @@ export default function ApolloCreativePerformancePage() {
 
               <div className={styles.modalBody}>
                 <div className={styles.creativePreview}>
-                  {selectedCreative.image_url
-                    ? <img src={selectedCreative.image_url} alt={`Criativo ${selectedCreative.ad_name}`} />
+                  {selectedCreative.image_url || selectedCreative.thumbnail_url
+                    ? <img src={selectedCreative.image_url || selectedCreative.thumbnail_url || ''} alt={`Criativo ${selectedCreative.ad_name}`} referrerPolicy="no-referrer" />
                     : <div className={styles.previewFallback}><ImageIcon size={34} /><span>Prévia não fornecida pela Meta</span></div>}
                 </div>
 
@@ -513,7 +533,8 @@ export default function ApolloCreativePerformancePage() {
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </InternalLayout>
