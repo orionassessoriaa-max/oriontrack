@@ -273,44 +273,35 @@ export default function EntradaGestorPage() {
     const operadoras = Array.from(new Set(strategies.map((item) => item.operadora)));
     const regioes = Array.from(new Set(strategies.map((item) => item.regiao)));
 
-    // A entrada pertence a concessionaria, embora a tabela ainda armazene os
-    // dados por corretor. Atualizar apenas o representante selecionado deixava
-    // outros registros da mesma empresa como pendentes no painel do admin.
-    const selectedCompany = String(selectedCorretor?.nome_empresa || '').trim().toLocaleLowerCase('pt-BR');
-    const companyMemberIds = selectedCompany
-      ? corretores
-          .filter((item) => String(item.nome_empresa || '').trim().toLocaleLowerCase('pt-BR') === selectedCompany)
-          .map((item) => item.id)
-      : [selectedId];
-
-    const { data: updatedRows, error: updateError } = await supabase
-      .from('corretores')
-      .update({
-        facebook_login: formData.facebook_login || null,
-        facebook_senha: formData.facebook_senha || null,
-        regioes_campanha: regioes.join(', ') || null,
-        operadoras_info: { selecionadas: operadoras },
-        campanhas_ativas: formData.campanhas_ativas,
-        onboarding_status,
-        observacoes: formData.observacoes || null,
-      })
-      .in('id', companyMemberIds)
-      .select('id');
-
-    if (updateError || !updatedRows?.length) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
       setSaving(false);
-      alert('Erro ao salvar entrada: ' + (updateError?.message || 'nenhum registro foi atualizado'));
-      return;
+      return setError('Sessao expirada. Entre novamente.');
     }
+
+    const saveResponse = await fetch('/api/corretores/options', {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        corretor_id: selectedId,
+        facebook_login: formData.facebook_login,
+        facebook_senha: formData.facebook_senha,
+        regioes_campanha: regioes.join(', '),
+        operadoras,
+        campanhas_ativas: formData.campanhas_ativas,
+        observacoes: formData.observacoes,
+      }),
+    });
+    const savePayload = await saveResponse.json().catch(() => ({}));
+    if (!saveResponse.ok) {
+      setSaving(false);
+      return setError(savePayload.error || 'Erro ao salvar a entrada.');
+    }
+    const companyMemberIds = (savePayload.updated_ids || []) as string[];
 
     let strategyMessage = 'Entrada salva com sucesso.';
     if (strategies.length) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) {
-        setSaving(false);
-        return setError('Sessao expirada ao sincronizar a estrategia.');
-      }
       const strategyResponse = await fetch('/api/trafego/estrategias', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -342,6 +333,7 @@ export default function EntradaGestorPage() {
       onboarding_status,
       observacoes: formData.observacoes,
     } : c));
+    await fetchCorretores(true);
   };
 
   return (

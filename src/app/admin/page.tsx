@@ -136,7 +136,7 @@ export default function AdminCentralPage() {
           .in('status', ['active', 'ativo', 'Ativo']),
         supabase
           .from('corretores')
-          .select('id, nome, gestor_trafego_id, time_operacional, onboarding_status, status, nome_empresa, meta_ad_account_id, meta_ad_account_name'),
+          .select('id, nome, gestor_trafego_id, time_operacional, onboarding_status, campanhas_ativas, status, nome_empresa, meta_ad_account_id, meta_ad_account_name'),
         supabase
           .from('corretoras')
           .select('id, nome, status, meta_ad_account_id, meta_ad_account_name')
@@ -313,7 +313,7 @@ export default function AdminCentralPage() {
 
     return Array.from(concessionarias.values())
       .filter(({ corretores }) => corretores.every(c =>
-        !c.onboarding_status || c.onboarding_status === 'pendente'
+        !c.campanhas_ativas && (!c.onboarding_status || c.onboarding_status === 'pendente')
       ))
       .map(({ id, nome, corretores }) => {
         const corretorComGestor = corretores.find(c => inferGestorIdFromTeam(c, gestoresList));
