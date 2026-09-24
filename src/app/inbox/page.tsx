@@ -3155,7 +3155,11 @@ export default function BrokerInboxPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setUnityExpanded((current) => !current)}
+                          onClick={() => setUnityExpanded((current) => {
+                            const nextExpanded = !current;
+                            if (!nextExpanded) setDetailsPanelOpen(false);
+                            return nextExpanded;
+                          })}
                           className="orion-unity-layout-button inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-slate-200 transition hover:bg-white/10"
                           aria-label={unityExpanded ? 'Mostrar menu do Orion' : 'Expandir atendimento'}
                           title={unityExpanded ? 'Mostrar menu do Orion' : 'Expandir atendimento'}
@@ -3860,7 +3864,7 @@ export default function BrokerInboxPage() {
 
           {/* COLUMN 3: RIGHT SIDEBAR - LEAD DETAILS PANEL */}
           {detailsPanelOpen && <button type="button" aria-label="Fechar dados do lead" onClick={() => setDetailsPanelOpen(false)} className="fixed inset-0 z-[90] bg-slate-950/65 xl:hidden" />}
-          <div className={`orion-inbox-details fixed bottom-0 right-0 top-0 sm:top-[72px] z-[100] flex w-[min(380px,100vw)] flex-col space-y-6 overflow-y-auto border-l border-white/10 bg-[#07111f] p-5 shadow-2xl transition-transform duration-200 ${isUnityInbox ? 'orion-unity-details' : 'xl:static xl:z-auto xl:h-full xl:w-auto xl:translate-x-0 xl:border-l-0 xl:bg-slate-900/20 xl:shadow-none'} ${detailsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          <div className={`orion-inbox-details fixed bottom-0 right-0 top-0 sm:top-[72px] z-[100] flex w-[min(380px,100vw)] flex-col space-y-6 overflow-y-auto border-l border-white/10 bg-[#07111f] p-5 shadow-2xl transition-transform duration-200 ${isUnityInbox ? 'orion-unity-details' : 'xl:static xl:z-auto xl:h-full xl:w-auto xl:translate-x-0 xl:border-l-0 xl:bg-slate-900/20 xl:shadow-none'} ${detailsPanelOpen ? 'visible translate-x-0' : `translate-x-full ${isUnityInbox ? 'invisible pointer-events-none' : ''}`}`}>
             <div className={`items-center justify-between border-b border-white/5 pb-3 ${isUnityInbox ? 'flex' : 'flex xl:hidden'}`}>
               <span className="text-xs font-black uppercase tracking-wider text-white">Dados do lead</span>
               <button type="button" onClick={() => setDetailsPanelOpen(false)} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Fechar painel"><X size={16} /></button>

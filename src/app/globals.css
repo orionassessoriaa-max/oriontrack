@@ -4573,6 +4573,42 @@ html.theme-noturno .orion-trafego {
     font-size: 14px !important;
   }
 
+  .orion-unity-inbox .orion-inbox-chat-header,
+  .theme-claro .orion-unity-inbox .orion-inbox-chat-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 12px !important;
+    min-height: 66px !important;
+    padding: 8px 14px !important;
+  }
+
+  .orion-unity-inbox .orion-inbox-chat-title {
+    min-width: 0 !important;
+  }
+
+  .orion-unity-inbox .orion-inbox-chat-title h2 {
+    max-width: min(34vw, 360px) !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .orion-unity-inbox .orion-inbox-chat-actions,
+  .theme-claro .orion-unity-inbox .orion-inbox-chat-actions {
+    flex-wrap: nowrap !important;
+    justify-content: flex-end !important;
+    max-width: none !important;
+    padding-bottom: 0 !important;
+  }
+
+  .orion-unity-inbox .orion-inbox-chat-header button,
+  .theme-claro .orion-unity-inbox .orion-inbox-chat-header button {
+    min-height: 34px !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
   .orion-unity-inbox .orion-unity-details {
     top: 0 !important;
     width: min(400px, 92vw) !important;
