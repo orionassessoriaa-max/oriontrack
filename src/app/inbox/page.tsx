@@ -122,6 +122,8 @@ type SelectedAttachment = {
   file: File;
   preview: string;
 };
+type UnityLabel = { id: string; name: string; color: string };
+type UnityQuickReply = { id: string; title: string; text: string };
 
 type ConversationBox = 'active' | 'followup' | 'closed';
 
@@ -335,6 +337,24 @@ const TEMPLATES_PADRAO = [
   { id: '4', title: 'Pesquisa de Satisfação', text: 'O que achou do nosso atendimento hoje? Sua opinião é muito importante para nós!' }
 ];
 
+const UNITY_LEGACY_LABELS = new Set([
+  'lead frio',
+  'lead quente',
+  'aguardando',
+  'aguardando retorno',
+  'sem interesse',
+  'documentacao enviada',
+]);
+
+function visibleUnityTags(value: unknown, isUnity: boolean, configuredLabels: UnityLabel[] = []) {
+  const tags = Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+  if (!isUnity) return tags;
+  const configuredNames = new Set(configuredLabels.map((label) => label.name.toLocaleLowerCase('pt-BR')));
+  return tags.filter((tag) => !UNITY_LEGACY_LABELS.has(
+    tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR'),
+  ) || configuredNames.has(tag.toLocaleLowerCase('pt-BR')));
+}
+
 const QUICK_EMOJIS = ['😀', '😊', '🙏', '👍', '✅', '🚀', '📌', '📄', '💬', '📲', '💙', '🔥'];
 
 /**
@@ -451,6 +471,14 @@ export default function BrokerInboxPage() {
   // Sidebar controls
   const [newNote, setNewNote] = useState('');
   const [selectedTag, setSelectedTag] = useState('');
+  const [unityLabels, setUnityLabels] = useState<UnityLabel[]>([]);
+  const [unityQuickReplies, setUnityQuickReplies] = useState<UnityQuickReply[]>([]);
+  const [labelDraft, setLabelDraft] = useState({ name: '', color: '#06b6d4' });
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [showLabelEditor, setShowLabelEditor] = useState(false);
+  const [quickReplyDraft, setQuickReplyDraft] = useState({ title: '', text: '' });
+  const [editingQuickReplyId, setEditingQuickReplyId] = useState<string | null>(null);
+  const [savingUnityConfig, setSavingUnityConfig] = useState(false);
 
   // Custom Fields & CRM Status States
   const [customFieldName, setCustomFieldName] = useState('');
@@ -567,7 +595,7 @@ export default function BrokerInboxPage() {
         leadStatus: lead?.status || null,
         expirationTime: '03/06 às 23:07',
         protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
-        tags: row.tags || ['Lead Frio'],
+        tags: visibleUnityTags(row.tags, isUnityInbox, unityLabels),
         notes: row.notes || [],
         source: 'Meta',
         aiActive: row.aiActive ?? false,
@@ -590,6 +618,48 @@ export default function BrokerInboxPage() {
     const refreshed = await supabase.auth.refreshSession();
     return refreshed.data.session?.access_token || session?.access_token || '';
   }
+
+  async function patchUnityConfig(payload: Record<string, unknown>) {
+    const token = await getToken();
+    if (!token || !profile?.id) throw new Error('Sessao expirada. Entre novamente.');
+    const response = await fetch('/api/inbox/unity-config', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'x-orion-view-profile-id': profile.id,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Nao foi possivel salvar a configuracao da Unity.');
+    return data;
+  }
+
+  async function fetchUnityConfig() {
+    if (!isUnityInbox || !profile?.id) return;
+    const token = await getToken();
+    if (!token) return;
+    try {
+      const response = await fetch('/api/inbox/unity-config', {
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-orion-view-profile-id': profile.id,
+        },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Nao foi possivel carregar etiquetas e respostas rapidas.');
+      setUnityLabels(Array.isArray(data.labels) ? data.labels : []);
+      setUnityQuickReplies(Array.isArray(data.quickReplies) ? data.quickReplies : []);
+    } catch (configError) {
+      console.error('[unity_inbox_config] load error:', configError);
+    }
+  }
+
+  useEffect(() => {
+    void fetchUnityConfig();
+  }, [isUnityInbox, profile?.id]);
 
   // Fetch connection status
   async function fetchConnectionStatus() {
@@ -801,7 +871,7 @@ export default function BrokerInboxPage() {
             leadStatus: savedLead?.status || null,
             expirationTime: '03/06 Ã s 23:07',
             protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
-            tags: savedRow.tags || ['Lead Frio'],
+            tags: visibleUnityTags(savedRow.tags, isUnityInbox, unityLabels),
             notes: savedRow.notes || [],
             source: 'Meta',
             aiActive: savedRow.aiActive ?? false,
@@ -846,7 +916,7 @@ export default function BrokerInboxPage() {
           agentName: profile?.nome || 'Bianca Alves',
           expirationTime: '03/06 às 23:07',
           protocolNumber: `20260529${Math.floor(10000000 + Math.random() * 90000000)}`,
-          tags: ['Aguardando'],
+          tags: [],
           notes: [],
           source: 'Meta Ads',
           aiActive: false,
@@ -1402,7 +1472,9 @@ export default function BrokerInboxPage() {
         setLeadDetailsOpen(true);
         setSelectedConversation((current) => current?.lead_id === leadId ? {
           ...current,
-          tags: data.etiqueta ? [data.etiqueta] : current.tags || [],
+          tags: data.etiqueta && visibleUnityTags([data.etiqueta], isUnityInbox, unityLabels).length
+            ? visibleUnityTags([data.etiqueta], isUnityInbox, unityLabels)
+            : visibleUnityTags(current.tags, isUnityInbox, unityLabels),
         } : current);
     } else {
       setLeadInfo(null);
@@ -2496,6 +2568,12 @@ export default function BrokerInboxPage() {
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
 
+    if (isUnityInbox && !selectedConversation.id.startsWith('new-')) {
+      await patchUnityConfig({ conversation_id: selectedConversation.id, tags: updatedTags }).catch((tagError) => {
+        console.error('[unity_inbox_config] tag add error:', tagError);
+      });
+    }
+
     if (selectedConversation.lead_id) {
       await supabase
         .from('leads')
@@ -2516,6 +2594,12 @@ export default function BrokerInboxPage() {
     setSelectedConversation(updated);
     setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
 
+    if (isUnityInbox && !selectedConversation.id.startsWith('new-')) {
+      await patchUnityConfig({ conversation_id: selectedConversation.id, tags: updatedTags }).catch((tagError) => {
+        console.error('[unity_inbox_config] tag remove error:', tagError);
+      });
+    }
+
     if (selectedConversation.lead_id) {
       await supabase
         .from('leads')
@@ -2526,6 +2610,101 @@ export default function BrokerInboxPage() {
         titulo: 'Etiqueta removida',
         descricao: tag,
       });
+    }
+  };
+
+  const saveUnityLabel = async () => {
+    const name = labelDraft.name.trim();
+    if (!name) return;
+    const duplicate = unityLabels.some((label) => label.id !== editingLabelId && label.name.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'));
+    if (duplicate) return setSendError('Ja existe uma etiqueta com esse nome.');
+
+    const previous = editingLabelId ? unityLabels.find((label) => label.id === editingLabelId) : null;
+    const nextLabels = editingLabelId
+      ? unityLabels.map((label) => label.id === editingLabelId ? { ...label, name, color: labelDraft.color } : label)
+      : [...unityLabels, { id: crypto.randomUUID(), name, color: labelDraft.color }];
+
+    setSavingUnityConfig(true);
+    try {
+      await patchUnityConfig({ labels: nextLabels, quickReplies: unityQuickReplies });
+      setUnityLabels(nextLabels);
+      if (previous && previous.name !== name && selectedConversation?.tags?.includes(previous.name)) {
+        const nextTags = selectedConversation.tags.map((tag) => tag === previous.name ? name : tag);
+        const updated = { ...selectedConversation, tags: nextTags };
+        setSelectedConversation(updated);
+        setConversations((current) => current.map((conversation) => conversation.id === updated.id ? updated : conversation));
+        if (!selectedConversation.id.startsWith('new-')) {
+          await patchUnityConfig({ conversation_id: selectedConversation.id, tags: nextTags });
+        }
+        if (selectedConversation.lead_id) {
+          await supabase.from('leads').update({ etiqueta: nextTags[0] || null, updated_at: new Date().toISOString() }).eq('id', selectedConversation.lead_id);
+        }
+      }
+      setLabelDraft({ name: '', color: '#06b6d4' });
+      setEditingLabelId(null);
+      setShowLabelEditor(false);
+      setSendError(null);
+    } catch (labelError: any) {
+      setSendError(labelError?.message || 'Nao foi possivel salvar a etiqueta.');
+    } finally {
+      setSavingUnityConfig(false);
+    }
+  };
+
+  const deleteUnityLabel = async (label: UnityLabel) => {
+    if (!window.confirm(`Apagar a etiqueta "${label.name}"?`)) return;
+    const nextLabels = unityLabels.filter((item) => item.id !== label.id);
+    setSavingUnityConfig(true);
+    try {
+      await patchUnityConfig({ labels: nextLabels, quickReplies: unityQuickReplies });
+      setUnityLabels(nextLabels);
+      if (selectedConversation?.tags?.includes(label.name)) await handleRemoveTag(label.name);
+    } catch (labelError: any) {
+      setSendError(labelError?.message || 'Nao foi possivel apagar a etiqueta.');
+    } finally {
+      setSavingUnityConfig(false);
+    }
+  };
+
+  const saveUnityQuickReply = async () => {
+    const title = quickReplyDraft.title.trim().replace(/^\/+/, '');
+    const text = quickReplyDraft.text.trim();
+    if (!title || !text) return;
+    const duplicate = unityQuickReplies.some((reply) => reply.id !== editingQuickReplyId && reply.title.toLocaleLowerCase('pt-BR') === title.toLocaleLowerCase('pt-BR'));
+    if (duplicate) return setSendError('Ja existe uma resposta rapida com esse titulo.');
+
+    const nextReplies = editingQuickReplyId
+      ? unityQuickReplies.map((reply) => reply.id === editingQuickReplyId ? { ...reply, title, text } : reply)
+      : [...unityQuickReplies, { id: crypto.randomUUID(), title, text }];
+    setSavingUnityConfig(true);
+    try {
+      await patchUnityConfig({ labels: unityLabels, quickReplies: nextReplies });
+      setUnityQuickReplies(nextReplies);
+      setQuickReplyDraft({ title: '', text: '' });
+      setEditingQuickReplyId(null);
+      setSendError(null);
+    } catch (replyError: any) {
+      setSendError(replyError?.message || 'Nao foi possivel salvar a resposta rapida.');
+    } finally {
+      setSavingUnityConfig(false);
+    }
+  };
+
+  const deleteUnityQuickReply = async (replyId: string) => {
+    if (!window.confirm('Apagar esta resposta rapida?')) return;
+    const nextReplies = unityQuickReplies.filter((reply) => reply.id !== replyId);
+    setSavingUnityConfig(true);
+    try {
+      await patchUnityConfig({ labels: unityLabels, quickReplies: nextReplies });
+      setUnityQuickReplies(nextReplies);
+      if (editingQuickReplyId === replyId) {
+        setEditingQuickReplyId(null);
+        setQuickReplyDraft({ title: '', text: '' });
+      }
+    } catch (replyError: any) {
+      setSendError(replyError?.message || 'Nao foi possivel apagar a resposta rapida.');
+    } finally {
+      setSavingUnityConfig(false);
     }
   };
 
@@ -2823,6 +3002,14 @@ export default function BrokerInboxPage() {
         return reactions.length ? { ...message, reactions: Array.from(new Set(reactions)) } : message;
       });
   }, [filteredChatMessages]);
+
+  const unityQuickReplyMatches = useMemo(() => {
+    if (!isUnityInbox || !messageText.startsWith('/')) return [];
+    const query = messageText.slice(1).trim().toLocaleLowerCase('pt-BR');
+    return unityQuickReplies
+      .filter((reply) => !query || reply.title.toLocaleLowerCase('pt-BR').includes(query))
+      .slice(0, 6);
+  }, [isUnityInbox, messageText, unityQuickReplies]);
 
   // Carrega sozinho a previa das imagens da conversa aberta.
   //
@@ -3393,6 +3580,19 @@ export default function BrokerInboxPage() {
                                     >
                                       <Copy size={14} /> Copiar texto
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingQuickReplyId(null);
+                                        setQuickReplyDraft({ title: '', text: message.mensagem });
+                                        setLeadDetailsOpen(true);
+                                        setDetailsPanelOpen(true);
+                                        setMessageActionMenuId(null);
+                                      }}
+                                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-100 hover:bg-white/10"
+                                    >
+                                      <Plus size={14} /> Adicionar às respostas rápidas
+                                    </button>
                                     {isMine && !mediaKind && (
                                       <button
                                         type="button"
@@ -3804,6 +4004,25 @@ export default function BrokerInboxPage() {
                         </div>
                       )}
 
+                      {isUnityInbox && unityQuickReplyMatches.length > 0 && (
+                        <div className="orion-unity-quick-suggestions absolute bottom-[88px] left-0 right-0 z-30 overflow-hidden rounded-2xl border border-white/10 bg-[#111b21] p-1.5 shadow-2xl sm:left-12 sm:right-14">
+                          {unityQuickReplyMatches.map((reply) => (
+                            <button
+                              key={reply.id}
+                              type="button"
+                              onClick={() => {
+                                setMessageText(reply.text);
+                                window.setTimeout(() => composerRef.current?.focus(), 0);
+                              }}
+                              className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/10"
+                            >
+                              <span className="shrink-0 text-xs font-black text-emerald-400">/{reply.title}</span>
+                              <span className="line-clamp-2 text-xs font-semibold text-slate-300">{reply.text}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Text Input */}
                       <textarea
                         ref={composerRef}
@@ -3811,13 +4030,25 @@ export default function BrokerInboxPage() {
                         onChange={(e) => setMessageText(e.target.value)}
                         onPaste={handleComposerPaste}
                         onKeyDown={(e) => {
+                          if (isUnityInbox && (e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey) {
+                            if (messageText.startsWith('/') && unityQuickReplyMatches.length > 0) {
+                              e.preventDefault();
+                              setMessageText(unityQuickReplyMatches[0].text);
+                              return;
+                            }
+                            if (messageText.endsWith('\n') && (messageText.trim() || selectedAttachments.length > 0)) {
+                              e.preventDefault();
+                              if (pendingAttachmentReadsRef.current === 0) void sendMessage();
+                            }
+                            return;
+                          }
                           if ((e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey) {
                             e.preventDefault();
                             if (pendingAttachmentReadsRef.current === 0) void sendMessage();
                           }
                         }}
                         rows={isUnityInbox ? 3 : 1}
-                        placeholder={isUnityInbox ? 'Escreva uma mensagem ou cole a imagem da cotação (Ctrl+V)' : 'Digite "/" para respostas rápidas ou escreva uma'}
+                        placeholder={isUnityInbox ? 'Escreva, cole uma imagem ou digite / para respostas rápidas' : 'Digite "/" para respostas rápidas ou escreva uma'}
                         className={`min-w-0 flex-1 bg-slate-950 border border-white/5 rounded-2xl px-3 sm:px-4 py-3 font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto ${isUnityInbox ? 'orion-inbox-unity-input text-sm leading-5' : 'text-xs'}`}
                         style={{ height: isUnityInbox ? '76px' : '44px' }}
                       />
@@ -4063,15 +4294,30 @@ export default function BrokerInboxPage() {
 
                 {/* Tags manager */}
                 <div className="space-y-2 shrink-0">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Etiquetas</label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Etiquetas</label>
+                    {isUnityInbox && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingLabelId(null);
+                          setLabelDraft({ name: '', color: '#06b6d4' });
+                          setShowLabelEditor(true);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-cyan-500/10 px-2 py-1 text-[9px] font-black text-cyan-400 hover:bg-cyan-500/20"
+                      >
+                        <Plus size={11} /> Nova etiqueta
+                      </button>
+                    )}
+                  </div>
                   <select
                     value={selectedTag}
                     onChange={(e) => {
                       const value = e.target.value;
-                      if (value === '__nova_etiqueta__') {
-                        const novaEtiqueta = window.prompt('Nome da nova etiqueta');
-                        if (novaEtiqueta?.trim()) handleAddTag(novaEtiqueta);
-                      } else {
+                      if (!isUnityInbox && value === '__nova_etiqueta__') {
+                        const newTag = window.prompt('Nome da nova etiqueta');
+                        if (newTag?.trim()) handleAddTag(newTag);
+                      } else if (value) {
                         handleAddTag(value);
                       }
                       setSelectedTag('');
@@ -4079,24 +4325,70 @@ export default function BrokerInboxPage() {
                     className="w-full bg-slate-950 border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/50"
                   >
                     <option value="">Selecione uma etiqueta...</option>
-                    <option value="__nova_etiqueta__">+ Adicionar etiqueta</option>
-                    <option value="Lead Quente">Lead Quente</option>
-                    <option value="Aguardando Retorno">Aguardando Retorno</option>
-                    <option value="Sem Interesse">Sem Interesse</option>
-                    <option value="Documentação Enviada">Documentação Enviada</option>
+                    {isUnityInbox
+                      ? unityLabels.map((label) => <option key={label.id} value={label.name}>{label.name}</option>)
+                      : <option value="__nova_etiqueta__">+ Adicionar etiqueta</option>}
                   </select>
+
+                  {isUnityInbox && showLabelEditor && (
+                    <div className="space-y-2 rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={labelDraft.name}
+                          onChange={(event) => setLabelDraft((current) => ({ ...current, name: event.target.value }))}
+                          placeholder="Nome da etiqueta"
+                          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs font-bold text-white outline-none focus:border-cyan-500/50"
+                        />
+                        <input
+                          type="color"
+                          value={labelDraft.color}
+                          onChange={(event) => setLabelDraft((current) => ({ ...current, color: event.target.value }))}
+                          className="h-9 w-11 cursor-pointer rounded-lg border border-white/10 bg-transparent p-1"
+                          aria-label="Cor da etiqueta"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setShowLabelEditor(false)} className="rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-400 hover:bg-white/5">Cancelar</button>
+                        <button type="button" onClick={() => void saveUnityLabel()} disabled={savingUnityConfig || !labelDraft.name.trim()} className="rounded-lg bg-cyan-600 px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-50">Salvar</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {isUnityInbox && unityLabels.length > 0 && (
+                    <div className="space-y-1.5 rounded-xl border border-white/5 bg-slate-950/30 p-2">
+                      {unityLabels.map((label) => (
+                        <div key={label.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5">
+                          <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
+                          <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-slate-300">{label.name}</span>
+                          <button type="button" onClick={() => {
+                            setEditingLabelId(label.id);
+                            setLabelDraft({ name: label.name, color: label.color });
+                            setShowLabelEditor(true);
+                          }} className="rounded-md p-1 text-slate-500 hover:bg-white/10 hover:text-cyan-400" aria-label={`Editar ${label.name}`}><Pencil size={11} /></button>
+                          <button type="button" onClick={() => void deleteUnityLabel(label)} className="rounded-md p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400" aria-label={`Apagar ${label.name}`}><Trash2 size={11} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Render current tags */}
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {selectedConversation.tags?.map((t, idx) => (
+                    {selectedConversation.tags?.map((t, idx) => {
+                      const labelDefinition = unityLabels.find((label) => label.name === t);
+                      return (
                       <span
                         key={idx}
                         className="rounded-lg bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-1 text-[9px] font-extrabold text-cyan-400 flex items-center gap-1"
+                        style={isUnityInbox && labelDefinition ? {
+                          color: labelDefinition.color,
+                          borderColor: `${labelDefinition.color}55`,
+                          backgroundColor: `${labelDefinition.color}18`,
+                        } : undefined}
                       >
                         {t}
                         <button onClick={() => handleRemoveTag(t)} className="text-[8px] hover:text-white">✕</button>
                       </span>
-                    ))}
+                    )})}
                   </div>
                 </div>
 
@@ -4203,8 +4495,77 @@ export default function BrokerInboxPage() {
                   </div>
                 </div>
 
+                {isUnityInbox && (
+                  <div className="space-y-3.5 shrink-0 border-t border-white/5 pt-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Respostas rápidas</label>
+                        <p className="mt-1 text-[9px] font-semibold text-slate-500">Digite / e o título para usar no atendimento.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingQuickReplyId(null);
+                          setQuickReplyDraft({ title: '', text: '' });
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-cyan-500/10 px-2 py-1 text-[9px] font-black text-cyan-400 hover:bg-cyan-500/20"
+                      >
+                        <Plus size={11} /> Nova
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 rounded-xl border border-white/5 bg-slate-950/40 p-3">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-cyan-400">/</span>
+                        <input
+                          value={quickReplyDraft.title}
+                          onChange={(event) => setQuickReplyDraft((current) => ({ ...current, title: event.target.value.replace(/^\/+/, '') }))}
+                          placeholder="titulo"
+                          className="w-full rounded-lg border border-white/10 bg-slate-950 py-2 pl-6 pr-3 text-xs font-bold text-white outline-none focus:border-cyan-500/50"
+                        />
+                      </div>
+                      <textarea
+                        value={quickReplyDraft.text}
+                        onChange={(event) => setQuickReplyDraft((current) => ({ ...current, text: event.target.value }))}
+                        placeholder="Texto da resposta rápida"
+                        rows={4}
+                        className="w-full resize-y rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs font-semibold text-white outline-none focus:border-cyan-500/50"
+                      />
+                      <div className="flex justify-end gap-2">
+                        {(editingQuickReplyId || quickReplyDraft.title || quickReplyDraft.text) && (
+                          <button type="button" onClick={() => {
+                            setEditingQuickReplyId(null);
+                            setQuickReplyDraft({ title: '', text: '' });
+                          }} className="rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-400 hover:bg-white/5">Limpar</button>
+                        )}
+                        <button type="button" onClick={() => void saveUnityQuickReply()} disabled={savingUnityConfig || !quickReplyDraft.title.trim() || !quickReplyDraft.text.trim()} className="rounded-lg bg-cyan-600 px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-50">
+                          {editingQuickReplyId ? 'Atualizar' : 'Salvar'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {unityQuickReplies.length > 0 ? unityQuickReplies.map((reply) => (
+                        <div key={reply.id} className="group rounded-xl border border-white/5 bg-slate-950/40 p-3">
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => setMessageText(reply.text)} className="min-w-0 flex-1 truncate text-left text-[10px] font-black text-cyan-400">/{reply.title}</button>
+                            <button type="button" onClick={() => {
+                              setEditingQuickReplyId(reply.id);
+                              setQuickReplyDraft({ title: reply.title, text: reply.text });
+                            }} className="rounded-md p-1 text-slate-500 hover:bg-white/10 hover:text-cyan-400" aria-label={`Editar ${reply.title}`}><Pencil size={11} /></button>
+                            <button type="button" onClick={() => void deleteUnityQuickReply(reply.id)} className="rounded-md p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400" aria-label={`Apagar ${reply.title}`}><Trash2 size={11} /></button>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-[10px] font-semibold leading-relaxed text-slate-400">{reply.text}</p>
+                        </div>
+                      )) : (
+                        <p className="py-3 text-center text-[9px] font-black uppercase tracking-wider text-slate-600">Nenhuma resposta rápida criada</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Custom attributes editable section */}
-                <div className="space-y-3.5 shrink-0 border-t border-white/5 pt-4">
+                {!isUnityInbox && <div className="space-y-3.5 shrink-0 border-t border-white/5 pt-4">
                   <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Campos Personalizados</label>
                   
                   {/* Inputs for custom key-value addition */}
@@ -4257,7 +4618,7 @@ export default function BrokerInboxPage() {
                       </div>
                     )}
                   </div>
-                </div>
+                </div>}
               </>
             ) : (
               <div className="h-full flex items-center justify-center text-center text-2xs text-slate-500 uppercase tracking-widest font-black">

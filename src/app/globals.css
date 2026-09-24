@@ -4658,3 +4658,23 @@ html.theme-noturno .orion-trafego {
   color: #be123c !important;
   -webkit-text-fill-color: #be123c !important;
 }
+
+.theme-claro .orion-unity-inbox .orion-unity-quick-suggestions {
+  border-color: #d8dee4 !important;
+  background: #ffffff !important;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18) !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-unity-quick-suggestions button:hover {
+  background: #eef4f7 !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-unity-quick-suggestions button span:first-child {
+  color: #047857 !important;
+  -webkit-text-fill-color: #047857 !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-unity-quick-suggestions button span:last-child {
+  color: #334155 !important;
+  -webkit-text-fill-color: #334155 !important;
+}
