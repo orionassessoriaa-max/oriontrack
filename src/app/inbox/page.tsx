@@ -491,7 +491,7 @@ export default function BrokerInboxPage() {
   const [leadInfo, setLeadInfo] = useState<any>(null);
   const [leadDetailsOpen, setLeadDetailsOpen] = useState(false);
   const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);
-  const [unityExpanded, setUnityExpanded] = useState(true);
+  const [unityExpanded, setUnityExpanded] = useState(false);
   const [unityConversationListOpen, setUnityConversationListOpen] = useState(true);
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
 
