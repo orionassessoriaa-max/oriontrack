@@ -64,8 +64,10 @@ async function readAllLeads(start: string | null, end: string) {
 
 async function readNegotiatedLeadIds(leadIds: string[]) {
   const negotiated = new Set<string>();
-  for (let index = 0; index < leadIds.length; index += 400) {
-    const chunk = leadIds.slice(index, index + 400);
+  // Lotes menores evitam estourar o limite da URL do PostgREST porque o
+  // filtro IN envia cada UUID na propria query string.
+  for (let index = 0; index < leadIds.length; index += 50) {
+    const chunk = leadIds.slice(index, index + 50);
     const { data, error } = await supabaseAdmin
       .from('comercial_lead_interacoes')
       .select('lead_id,metadata')
