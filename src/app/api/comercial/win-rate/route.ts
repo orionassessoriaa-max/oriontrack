@@ -251,7 +251,7 @@ export async function GET(request: Request) {
           creative_name: creative.name || null,
           title: creative.title || linkData.name || videoData.title || assetFeed.titles?.[0]?.text || null,
           primary_text: creative.body || linkData.message || videoData.message || assetFeed.bodies?.[0]?.text || null,
-          image_url: creative.image_url || creative.thumbnail_url || assetFeed.images?.[0]?.url || assetFeed.videos?.[0]?.thumbnail_url || null,
+          image_url: creative.image_url || videoData.image_url || linkData.picture || assetFeed.images?.[0]?.url || assetFeed.videos?.[0]?.thumbnail_url || creative.thumbnail_url || null,
           status: String(detail.effective_status || detail.status || 'HISTORICO').toUpperCase(),
           impressions: group.impressions,
           clicks: group.clicks,
