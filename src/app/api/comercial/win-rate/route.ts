@@ -8,9 +8,13 @@ const KRIPTO_META_ACCOUNT_ID = '1531044161152262';
 
 type LeadRow = {
   id: string;
+  nome: string;
   status: string | null;
   data_entrada: string;
   reuniao_realizada_at: string | null;
+  fechado_at: string | null;
+  valor_fechado: number | string | null;
+  valor_negociacao: number | string | null;
   utm_content: string | null;
   utm_term: string | null;
 };
@@ -18,8 +22,10 @@ type LeadRow = {
 type MetaInsight = {
   ad_id?: string;
   ad_name?: string;
+  spend?: string;
   impressions?: string;
   clicks?: string;
+  ctr?: string;
 };
 
 function normalize(value: unknown) {
@@ -49,7 +55,7 @@ async function readAllLeads(start: string | null, end: string) {
   for (let offset = 0; ; offset += 1000) {
     let query = supabaseAdmin
       .from('comercial_leads')
-      .select('id,status,data_entrada,reuniao_realizada_at,utm_content,utm_term')
+      .select('id,nome,status,data_entrada,reuniao_realizada_at,fechado_at,valor_fechado,valor_negociacao,utm_content,utm_term')
       .lte('data_entrada', `${end}T23:59:59-03:00`)
       .order('data_entrada', { ascending: true })
       .range(offset, offset + 999);
@@ -84,7 +90,7 @@ async function readNegotiatedLeadIds(leadIds: string[]) {
 async function readMetaCreatives(since: string, until: string, accessToken: string) {
   const graphVersion = process.env.META_GRAPH_VERSION || 'v23.0';
   const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${KRIPTO_META_ACCOUNT_ID}/insights`);
-  insightsUrl.searchParams.set('fields', 'ad_id,ad_name,impressions,clicks');
+  insightsUrl.searchParams.set('fields', 'ad_id,ad_name,spend,impressions,clicks,ctr');
   insightsUrl.searchParams.set('level', 'ad');
   insightsUrl.searchParams.set('limit', '500');
   insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
@@ -170,8 +176,10 @@ export async function GET(request: Request) {
       id: string;
       adIds: string[];
       name: string;
+      spend: number;
       impressions: number;
       clicks: number;
+      ctrWeighted: number;
       detail: any;
       leads: LeadRow[];
     }>();
@@ -185,14 +193,18 @@ export async function GET(request: Request) {
         id: key,
         adIds: [],
         name,
+        spend: 0,
         impressions: 0,
         clicks: 0,
+        ctrWeighted: 0,
         detail: null,
         leads: [],
       };
       current.adIds.push(adId);
+      current.spend += numberValue(insight.spend);
       current.impressions += numberValue(insight.impressions);
       current.clicks += numberValue(insight.clicks);
+      current.ctrWeighted += numberValue(insight.ctr) * numberValue(insight.impressions);
       const detail = meta.details.get(adId);
       if (!current.detail?.creative && detail?.creative) current.detail = detail;
       groups.set(key, current);
@@ -217,8 +229,10 @@ export async function GET(request: Request) {
           id: `utm:${contentKey}`,
           adIds: [],
           name: String(lead.utm_content),
+          spend: 0,
           impressions: 0,
           clicks: 0,
+          ctrWeighted: 0,
           detail: null,
           leads: [],
         };
@@ -233,35 +247,63 @@ export async function GET(request: Request) {
       return status.includes('negociacao') || status === 'negocio fechado' || negotiatedHistory.has(lead.id);
     };
     const isSale = (lead: LeadRow) => normalize(lead.status) === 'negocio fechado';
+    const leadRevenue = (lead: LeadRow) => isSale(lead)
+      ? numberValue(lead.valor_fechado) || numberValue(lead.valor_negociacao)
+      : 0;
+    const leadSummary = (lead: LeadRow) => ({
+      id: lead.id,
+      name: lead.nome,
+      status: lead.status || 'Sem etapa',
+      value: isSale(lead) ? leadRevenue(lead) : numberValue(lead.valor_negociacao),
+      entered_at: lead.data_entrada,
+      closed_at: lead.fechado_at,
+    });
     const creatives = Array.from(groups.values())
-      .filter((group) => group.leads.length > 0)
       .map((group) => {
         const detail = group.detail || {};
         const creative = detail.creative || {};
         const linkData = creative.object_story_spec?.link_data || {};
         const videoData = creative.object_story_spec?.video_data || {};
         const assetFeed = creative.asset_feed_spec || {};
-        const meetings = group.leads.filter((lead) => Boolean(lead.reuniao_realizada_at)).length;
-        const negotiations = group.leads.filter(hasNegotiated).length;
-        const sales = group.leads.filter(isSale).length;
+        const meetingLeads = group.leads.filter((lead) => Boolean(lead.reuniao_realizada_at));
+        const negotiationLeads = group.leads.filter(hasNegotiated);
+        const saleLeads = group.leads.filter(isSale);
+        const revenue = saleLeads.reduce((total, lead) => total + leadRevenue(lead), 0);
+        const description = linkData.description || videoData.link_description || assetFeed.descriptions?.[0]?.text || null;
+        const destinationUrl = linkData.link || videoData.call_to_action?.value?.link || assetFeed.link_urls?.[0]?.website_url || null;
+        const callToAction = linkData.call_to_action?.type || videoData.call_to_action?.type || assetFeed.call_to_action_types?.[0] || null;
         return {
           id: group.id,
           ad_ids: group.adIds,
           ad_name: group.name,
           creative_name: creative.name || null,
+          creative_id: creative.id ? String(creative.id) : null,
           title: creative.title || linkData.name || videoData.title || assetFeed.titles?.[0]?.text || null,
           primary_text: creative.body || linkData.message || videoData.message || assetFeed.bodies?.[0]?.text || null,
+          description,
+          destination_url: destinationUrl,
+          call_to_action: callToAction,
           image_url: creative.image_url || videoData.image_url || linkData.picture || assetFeed.images?.[0]?.url || assetFeed.videos?.[0]?.thumbnail_url || creative.thumbnail_url || null,
+          thumbnail_url: creative.thumbnail_url || null,
           status: String(detail.effective_status || detail.status || 'HISTORICO').toUpperCase(),
+          spend: group.spend,
           impressions: group.impressions,
           clicks: group.clicks,
+          ctr: group.impressions > 0 ? group.ctrWeighted / group.impressions : 0,
           leads: group.leads.length,
-          meetings,
-          negotiations,
-          sales,
-          meeting_rate: rate(meetings, group.leads.length),
-          negotiation_rate: rate(negotiations, group.leads.length),
-          sales_rate: rate(sales, group.leads.length),
+          meetings: meetingLeads.length,
+          negotiations: negotiationLeads.length,
+          sales: saleLeads.length,
+          revenue,
+          cpl: group.leads.length > 0 ? group.spend / group.leads.length : null,
+          cac: saleLeads.length > 0 ? group.spend / saleLeads.length : null,
+          roas: group.spend > 0 ? revenue / group.spend : null,
+          meeting_rate: rate(meetingLeads.length, group.leads.length),
+          negotiation_rate: rate(negotiationLeads.length, group.leads.length),
+          sales_rate: rate(saleLeads.length, group.leads.length),
+          negotiation_leads: negotiationLeads.map(leadSummary),
+          sale_leads: saleLeads.map(leadSummary),
+          sample: group.leads.length >= 20 ? 'confiavel' : group.leads.length >= 10 ? 'moderada' : 'baixa',
         };
       })
       .sort((a, b) => b.sales - a.sales || b.negotiations - a.negotiations || b.meetings - a.meetings || b.leads - a.leads);
@@ -269,6 +311,12 @@ export async function GET(request: Request) {
     const meetings = leads.filter((lead) => Boolean(lead.reuniao_realizada_at)).length;
     const negotiations = leads.filter(hasNegotiated).length;
     const sales = leads.filter(isSale).length;
+    const attributedLeads = creatives.reduce((total, creative) => total + creative.leads, 0);
+    const spend = creatives.reduce((total, creative) => total + creative.spend, 0);
+    const revenue = creatives.reduce((total, creative) => total + creative.revenue, 0);
+    const attributedMeetings = creatives.reduce((total, creative) => total + creative.meetings, 0);
+    const attributedNegotiations = creatives.reduce((total, creative) => total + creative.negotiations, 0);
+    const attributedSales = creatives.reduce((total, creative) => total + creative.sales, 0);
 
     return NextResponse.json({
       scope: 'orion',
@@ -277,17 +325,29 @@ export async function GET(request: Request) {
         leads: leads.length,
         attributed,
         attribution_rate: rate(attributed, leads.length),
+        spend,
+        revenue,
+        cac: attributedSales > 0 ? spend / attributedSales : null,
+        roas: spend > 0 ? revenue / spend : null,
         meetings,
         negotiations,
         sales,
-        meeting_rate: rate(meetings, leads.length),
-        negotiation_rate: rate(negotiations, leads.length),
-        sales_rate: rate(sales, leads.length),
+        attributed_meetings: attributedMeetings,
+        attributed_negotiations: attributedNegotiations,
+        attributed_sales: attributedSales,
+        meeting_rate: rate(attributedMeetings, attributedLeads),
+        negotiation_rate: rate(attributedNegotiations, attributedLeads),
+        sales_rate: rate(attributedSales, attributedLeads),
       },
       creatives,
       meta_error: metaError,
       refreshed_at: new Date().toISOString(),
-    });
+      criteria: {
+        minimum_sample: 10,
+        attribution: 'Nome ou ID do anuncio registrado na UTM do lead.',
+        period: 'Data de entrada do lead e investimento da Meta no mesmo intervalo.',
+      },
+    }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return NextResponse.json({
       error: error instanceof Error ? error.message : 'Erro ao calcular o Win Rate da Orion.',
