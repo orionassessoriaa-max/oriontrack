@@ -175,23 +175,8 @@ async function syncConnectedProfilePhone(profile: WhatsappTargetProfile, number:
     .eq('id', profile.id);
   if (profileError) throw profileError;
 
-  const { data: preference, error: preferenceReadError } = await supabaseAdmin
-    .from('notificacao_preferencias')
-    .select('whatsapp_enabled, tipos')
-    .eq('profile_id', profile.id)
-    .maybeSingle();
-  if (preferenceReadError) throw preferenceReadError;
-
-  const { error: preferenceError } = await supabaseAdmin
-    .from('notificacao_preferencias')
-    .upsert({
-      profile_id: profile.id,
-      telefone: phone,
-      whatsapp_enabled: preference?.whatsapp_enabled ?? true,
-      tipos: preference?.tipos || {},
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'profile_id' });
-  if (preferenceError) throw preferenceError;
+  // O numero do Inbox identifica a sessao conectada. A preferencia de aviso
+  // e independente e nao pode ser substituida ao consultar ou conectar o QR.
 
   return phone;
 }

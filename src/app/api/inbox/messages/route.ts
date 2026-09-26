@@ -1,5 +1,6 @@
 import { after, NextResponse } from 'next/server';
 import { ApiProfile, rateLimit, requireApiUser, writeAuditLog } from '@/lib/api/security';
+import { isIgnoredInboxContact } from '@/lib/inboxIgnoredContacts';
 import { uazapiFetch, uazapiInstanceName, normalizePhone } from '@/lib/uazapi';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
@@ -471,7 +472,7 @@ async function getConversation(id: string) {
     .maybeSingle();
 
   if (error) throw error;
-  return data;
+  return data && !isIgnoredInboxContact(data.telefone) ? data : null;
 }
 
 async function isUnityBrokerage(corretorId: string | null | undefined) {

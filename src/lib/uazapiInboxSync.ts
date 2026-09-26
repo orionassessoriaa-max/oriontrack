@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isIgnoredInboxContact } from '@/lib/inboxIgnoredContacts';
 import { normalizePhone, phoneMatchKey, uazapiFetch, uazapiInstanceName } from '@/lib/uazapi';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 
@@ -152,6 +153,7 @@ async function runRecentSync(profileId: string, conversations: InboxConversation
   const senderName = String(sender?.nome || 'Corretor');
   const byPhone = new Map<string, InboxConversationForSync>();
   for (const conversation of conversations) {
+    if (isIgnoredInboxContact(conversation.telefone)) continue;
     const key = phoneMatchKey(conversation.telefone);
     if (key && !byPhone.has(key)) byPhone.set(key, conversation);
   }

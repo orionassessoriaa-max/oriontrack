@@ -111,28 +111,8 @@ export async function PATCH(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    if (telefone) {
-      const { error: profileUpdateError } = await supabaseAdmin
-        .from('profiles')
-        .update({ telefone })
-        .eq('id', target.id);
-
-      if (profileUpdateError) {
-        return NextResponse.json({ error: profileUpdateError.message }, { status: 500 });
-      }
-
-      if (target.corretor_id && ['corretor', 'corretor_admin'].includes(target.tipo_usuario)) {
-        const { error: brokerUpdateError } = await supabaseAdmin
-          .from('corretores')
-          .update({ telefone })
-          .eq('id', target.corretor_id);
-
-        if (brokerUpdateError) {
-          return NextResponse.json({ error: brokerUpdateError.message }, { status: 500 });
-        }
-      }
-    }
-
+    // Este numero pertence apenas ao Apolo Notificador. O telefone do perfil
+    // continua refletindo a linha conectada ao Inbox, sem misturar os canais.
     return NextResponse.json({ success: true, preferences: data });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro ao salvar preferencias.' }, { status: 500 });

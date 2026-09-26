@@ -1,5 +1,6 @@
 import { after, NextResponse } from 'next/server';
 import { ApiProfile, requireApiUser } from '@/lib/api/security';
+import { isIgnoredInboxContact } from '@/lib/inboxIgnoredContacts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { syncRecentInboxChats } from '@/lib/uazapiInboxSync';
 import { UserRole } from '@/types';
@@ -81,7 +82,9 @@ async function listConversations(corretorIds: string[], assignedLeadIds: string[
 
   const { data, error } = await query;
   if (error) throw error;
-  const page = data || [];
+  // Numeros internos nunca pertencem ao funil e nao podem reaparecer mesmo
+  // se algum provedor ou importacao gravar uma conversa fora do webhook.
+  const page = (data || []).filter((conversation) => !isIgnoredInboxContact(conversation.telefone));
   return {
     conversations: page.slice(0, limit),
     hasMore: page.length > limit,
