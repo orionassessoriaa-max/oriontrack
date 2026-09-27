@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase/client';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 import { getLeadStatusStyle, normalizeLeadStatus } from '@/lib/leadStatus';
 import { DEFAULT_KANBAN_STAGES, KanbanStage, getKanbanStageLabel, normalizeKanbanStages } from '@/lib/kanbanStages';
+import type { UnityMacro } from '@/lib/unityMacros';
+import UnityMacroMenu from '@/components/inbox/UnityMacroMenu';
 import {
   CheckCircle2, 
   Loader2, 
@@ -473,6 +475,8 @@ export default function BrokerInboxPage() {
   const [selectedTag, setSelectedTag] = useState('');
   const [unityLabels, setUnityLabels] = useState<UnityLabel[]>([]);
   const [unityQuickReplies, setUnityQuickReplies] = useState<UnityQuickReply[]>([]);
+  const [unityMacros, setUnityMacros] = useState<UnityMacro[]>([]);
+  const [executingMacroId, setExecutingMacroId] = useState<string | null>(null);
   const [labelDraft, setLabelDraft] = useState({ name: '', color: '#06b6d4' });
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [showLabelEditor, setShowLabelEditor] = useState(false);
@@ -652,6 +656,7 @@ export default function BrokerInboxPage() {
       if (!response.ok) throw new Error(data.error || 'Nao foi possivel carregar etiquetas e respostas rapidas.');
       setUnityLabels(Array.isArray(data.labels) ? data.labels : []);
       setUnityQuickReplies(Array.isArray(data.quickReplies) ? data.quickReplies : []);
+      setUnityMacros(Array.isArray(data.macros) ? data.macros : []);
     } catch (configError) {
       console.error('[unity_inbox_config] load error:', configError);
     }
@@ -1734,16 +1739,24 @@ export default function BrokerInboxPage() {
   }
 
   // Send message
-  async function sendMessage(textOverride?: string, isAudio = false, audioDuration = '', audioBase64Override?: string, audioMimeType?: string) {
-    if (!selectedConversation) return;
-    if (pendingAttachmentReadsRef.current > 0) return;
+  async function sendMessage(
+    textOverride?: string,
+    isAudio = false,
+    audioDuration = '',
+    audioBase64Override?: string,
+    audioMimeType?: string,
+    options: { preserveComposer?: boolean } = {},
+  ) {
+    if (!selectedConversation) return false;
+    if (pendingAttachmentReadsRef.current > 0) return false;
     const finalMsg = textOverride || messageText.trim();
-    if (!finalMsg && selectedAttachments.length === 0 && !isAudio) return;
-    if (sendInFlightRef.current) return;
+    const attachmentsForSend = options.preserveComposer ? [] : selectedAttachments;
+    if (!finalMsg && attachmentsForSend.length === 0 && !isAudio) return false;
+    if (sendInFlightRef.current) return false;
     if (!isWhatsAppConnected) {
       setSendError('O WhatsApp esta desconectado. Reconecte a conta pelo QR Code antes de enviar.');
       void fetchConnectionStatus();
-      return;
+      return false;
     }
 
     sendInFlightRef.current = true;
@@ -1752,14 +1765,14 @@ export default function BrokerInboxPage() {
     if (!token) {
       setSendError('Sessao expirada. Entre novamente.');
       sendInFlightRef.current = false;
-      return;
+      return false;
     }
 
     const originalText = messageText;
-    const originalAttachments = selectedAttachments;
-    const originalReply = activeReply;
+    const originalAttachments = attachmentsForSend;
+    const originalReply = options.preserveComposer ? null : activeReply;
 
-    if (!isAudio) {
+    if (!isAudio && !options.preserveComposer) {
       setMessageText('');
       setSelectedAttachments([]);
     }
@@ -1843,11 +1856,11 @@ export default function BrokerInboxPage() {
           sendRetryRef.current = null;
           setSendError(payload.error || 'Nao consegui enviar agora.');
           void fetchConnectionStatus();
-          if (!isAudio) {
+          if (!isAudio && !options.preserveComposer) {
             setMessageText(originalText);
             setSelectedAttachments(originalAttachments);
           }
-          return;
+          return false;
         }
 
         if (payload.message) insertedMessages.push(payload.message);
@@ -1902,6 +1915,7 @@ export default function BrokerInboxPage() {
         setSelectedConversation(realConversation);
       }
       sendRetryRef.current = null;
+      return true;
     } catch (err) {
       console.error(err);
       setSendError(
@@ -1909,13 +1923,91 @@ export default function BrokerInboxPage() {
           ? 'O envio demorou mais que o esperado. Atualize a conversa antes de tentar novamente para evitar mensagem duplicada.'
           : 'Nao consegui confirmar o envio. Atualize a conversa antes de tentar novamente.'
       );
-      if (!isAudio) {
+      if (!isAudio && !options.preserveComposer) {
         setMessageText(originalText);
         setSelectedAttachments(originalAttachments);
       }
+      return false;
     } finally {
       sendInFlightRef.current = false;
       setSendingMessage(false);
+    }
+  }
+
+  async function executeUnityMacro(macro: UnityMacro) {
+    if (!isUnityInbox || !selectedConversation || selectedConversation.id.startsWith('new-') || executingMacroId) return false;
+
+    const conversation = selectedConversation;
+    let messageWasSent = false;
+    setExecutingMacroId(macro.id);
+    setSendError(null);
+    try {
+      const sent = await sendMessage(macro.text, false, '', undefined, undefined, { preserveComposer: true });
+      if (!sent) throw new Error('A mensagem nao foi confirmada. As acoes da macro nao foram executadas.');
+      messageWasSent = true;
+
+      const labelNames = unityLabels
+        .filter((label) => macro.actions.labelIds.includes(label.id))
+        .map((label) => label.name);
+      if (labelNames.length > 0) {
+        const nextTags = Array.from(new Set([...(conversation.tags || []), ...labelNames]));
+        await patchUnityConfig({ conversation_id: conversation.id, tags: nextTags });
+        const updatedConversation = { ...conversation, tags: nextTags };
+        setSelectedConversation(updatedConversation);
+        setConversations((current) => current.map((item) => item.id === conversation.id ? updatedConversation : item));
+
+        if (conversation.lead_id) {
+          const { error: labelError } = await supabase
+            .from('leads')
+            .update({ etiqueta: nextTags[0] || null, updated_at: new Date().toISOString() })
+            .eq('id', conversation.lead_id);
+          if (labelError) throw labelError;
+        }
+      }
+
+      if (macro.actions.status) {
+        if (!conversation.lead_id) throw new Error('A mensagem foi enviada, mas esta conversa nao possui lead para alterar a etapa.');
+        const token = await getToken();
+        const response = await fetch(`/api/crm/leads/${conversation.lead_id}/status`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: macro.actions.status }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'A mensagem foi enviada, mas a etapa nao foi atualizada.');
+        setLeadStatus(macro.actions.status);
+        setConversations((current) => current.map((item) => item.id === conversation.id
+          ? { ...item, leadStatus: macro.actions.status }
+          : item));
+      }
+
+      if (macro.actions.closeConversation) {
+        const closed = await updateConversationStatus('fechada');
+        if (!closed) throw new Error('A mensagem foi enviada, mas o atendimento nao foi encerrado.');
+      }
+
+      await logLeadActivity({
+        tipo: 'sistema',
+        titulo: `Macro executada: ${macro.title}`,
+        descricao: [
+          'Mensagem enviada',
+          labelNames.length ? `Etiquetas: ${labelNames.join(', ')}` : '',
+          macro.actions.status ? `Etapa: ${macro.actions.status}` : '',
+          macro.actions.closeConversation ? 'Atendimento encerrado' : '',
+        ].filter(Boolean).join(' | '),
+      }).catch(() => null);
+      return true;
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : 'Nao foi possivel executar a macro.';
+      // A mensagem nao pode ser repetida quando uma acao posterior falha.
+      const message = messageWasSent
+        ? `${detail} A mensagem ja foi enviada; nao execute a macro novamente para evitar duplicidade.`
+        : detail;
+      setSendError(message);
+      alert(message);
+      return false;
+    } finally {
+      setExecutingMacroId(null);
     }
   }
 
@@ -3355,6 +3447,15 @@ export default function BrokerInboxPage() {
                           <span className="hidden 2xl:inline">{unityExpanded ? 'Restaurar' : 'Expandir'}</span>
                         </button>
                       </>
+                    )}
+                    {isUnityInbox && !selectedConversation.id.startsWith('new-') && (
+                      <UnityMacroMenu
+                        macros={unityMacros}
+                        labels={unityLabels}
+                        stages={kanbanStages}
+                        executingId={executingMacroId}
+                        onExecute={executeUnityMacro}
+                      />
                     )}
                     <button
                       type="button"

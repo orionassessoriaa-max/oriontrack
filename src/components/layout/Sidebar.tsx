@@ -303,12 +303,21 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   ];
 
   const canSeeFerramentas = canUseFerramentasPreview(profile as any);
+  const isUnityProfile = String(profile?.nome_empresa || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase() === 'UNITY SAUDE';
+  const unityMacrosMenu = isUnityProfile
+    ? [{ icon: Sparkles, label: 'Macros', href: '/inbox/macros' }]
+    : [];
 
   const corretorMenu = [
     { icon: Home, label: 'Início', href: '/dashboard' },
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
+    ...unityMacrosMenu,
     { icon: Bot, label: 'IA', href: '/ia' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
     { icon: Globe, label: 'Minha Página', href: '/minha-pagina' },
@@ -326,6 +335,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Users, label: 'Leads', href: '/leads' },
     { icon: Inbox, label: 'CRM', href: '/crm' },
     { icon: MessageSquare, label: 'Inbox', href: '/inbox' },
+    ...unityMacrosMenu,
     { icon: Bot, label: 'IA', href: '/ia' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
     ...(canSeeFerramentas ? [{ icon: Sparkles, label: 'Ferramentas', href: '/ferramentas' }] : []),

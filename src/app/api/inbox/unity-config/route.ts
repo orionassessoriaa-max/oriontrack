@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { sanitizeUnityMacros } from '@/lib/unityMacros';
 
 const ALLOWED_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 
@@ -92,13 +93,18 @@ function readStoredConfig(rows: any[]) {
 function readConfig(rows: any[], profileId: string) {
   const config = readStoredConfig(rows);
   const repliesByProfile = config.quickRepliesByProfile;
+  const macrosByProfile = config.macrosByProfile;
   const personalReplies = repliesByProfile && typeof repliesByProfile === 'object'
     ? (repliesByProfile as Record<string, unknown>)[profileId]
+    : [];
+  const personalMacros = macrosByProfile && typeof macrosByProfile === 'object'
+    ? (macrosByProfile as Record<string, unknown>)[profileId]
     : [];
 
   return {
     labels: sanitizeLabels(config.labels),
     quickReplies: sanitizeQuickReplies(personalReplies),
+    macros: sanitizeUnityMacros(personalMacros),
   };
 }
 
@@ -128,6 +134,7 @@ export async function PATCH(request: Request) {
     const current = readConfig(context.companyRows, context.target.id);
     const labels = body.labels === undefined ? current.labels : sanitizeLabels(body.labels);
     const quickReplies = body.quickReplies === undefined ? current.quickReplies : sanitizeQuickReplies(body.quickReplies);
+    const macros = body.macros === undefined ? current.macros : sanitizeUnityMacros(body.macros);
     const storedRepliesByProfile = storedConfig.quickRepliesByProfile && typeof storedConfig.quickRepliesByProfile === 'object'
       ? storedConfig.quickRepliesByProfile as Record<string, unknown>
       : {};
@@ -135,8 +142,16 @@ export async function PATCH(request: Request) {
       ...storedRepliesByProfile,
       [context.target.id]: quickReplies,
     };
+    const storedMacrosByProfile = storedConfig.macrosByProfile && typeof storedConfig.macrosByProfile === 'object'
+      ? storedConfig.macrosByProfile as Record<string, unknown>
+      : {};
+    const macrosByProfile = {
+      ...storedMacrosByProfile,
+      [context.target.id]: macros,
+    };
     // O formato antigo era coletivo; ele nao pode continuar expondo respostas entre acessos.
-    const { quickReplies: _sharedReplies, ...configWithoutSharedReplies } = storedConfig;
+    const configWithoutSharedReplies = { ...storedConfig };
+    delete configWithoutSharedReplies.quickReplies;
 
     for (const row of context.companyRows) {
       const operadorasInfo = row.operadoras_info && typeof row.operadoras_info === 'object' ? row.operadoras_info : {};
@@ -145,7 +160,7 @@ export async function PATCH(request: Request) {
         .update({
           operadoras_info: {
             ...operadorasInfo,
-            unity_inbox_config: { ...configWithoutSharedReplies, labels, quickRepliesByProfile },
+            unity_inbox_config: { ...configWithoutSharedReplies, labels, quickRepliesByProfile, macrosByProfile },
           },
         })
         .eq('id', row.id);
@@ -171,7 +186,7 @@ export async function PATCH(request: Request) {
       if (tagError) throw tagError;
     }
 
-    return NextResponse.json({ ok: true, labels, quickReplies });
+    return NextResponse.json({ ok: true, labels, quickReplies, macros });
   } catch (error: any) {
     console.error('[unity_inbox_config] PATCH error:', error);
     return NextResponse.json({ error: error?.message || 'Erro ao salvar configuracao.' }, { status: 500 });
