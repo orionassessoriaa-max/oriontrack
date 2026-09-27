@@ -1,0 +1,229 @@
+/* ============================================================================
+   Sistema Orion — camada de tokens
+   ----------------------------------------------------------------------------
+   Este arquivo NAO altera nenhuma tela. Ele so declara variaveis. Nenhuma regra
+   aqui pinta elemento nenhum, entao subir isso nao muda um pixel do CRM.
+   A adocao acontece depois, tela por tela, trocando cor solta por token.
+
+   Tres camadas, e a ordem importa:
+
+     1. PRIMITIVO   o pigmento. --o-petroleo-600 e um tom, nao um papel.
+     2. SEMANTICO   o papel. --o-acento e "a cor de acao", seja ela qual for.
+     3. COMPONENTE  o ajuste de uma peca, quando ela precisa fugir do semantico.
+
+   Tela escreve SEMPRE camada 2 ou 3. Escrever camada 1 numa tela e o mesmo erro
+   de escrever o hex na mao: amarra o papel ao pigmento e quebra o tema noturno.
+
+   O prefixo --o- foi escolhido por nao existir em nenhum lugar do projeto hoje,
+   entao nada aqui colide com as variaveis que ja rodam (--background, --tf-*,
+   --orion-*). Conferido em 27/09/2026.
+
+   ATENCAO ao editar: o globals.css tem uma regra dentro de @layer components que
+   forca fundo escuro em todo campo de formulario. Sobrescrita fora da camada
+   perde mesmo com !important, porque para declaracoes !important a cascata de
+   camadas inverte. Quando chegar a hora de aplicar os tokens nos campos, a regra
+   precisa estar DENTRO de @layer components.
+
+   E o Turbopack serve CSS velho depois de editar: se a mudanca "nao fez efeito",
+   apague .next/dev e reinicie antes de debugar cascata.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   1. PRIMITIVO
+   O azul petroleo nao e novo: e a paleta escolhida pelo dono em agosto de 2026.
+   O cinza foi puxado de leve para o mesmo tom, para o acento assentar no fundo
+   em vez de flutuar. Cinza neutro puro ao lado de petroleo parece descuido.
+   --------------------------------------------------------------------------- */
+:root {
+  --o-petroleo-700: #0e4453;
+  --o-petroleo-600: #14566a;
+  --o-petroleo-500: #1c6b83;
+  --o-petroleo-300: #7fc4d8;
+  --o-petroleo-200: #a3d6e5;
+  --o-petroleo-100: #bfe3ee;
+  --o-petroleo-050: #e4eef1;
+  --o-petroleo-borda: #c9dee3;
+  --o-petroleo-tinta: #0f4c5c;
+
+  --o-ardosia-000: #ffffff;
+  --o-ardosia-050: #f6f8f9;
+  --o-ardosia-100: #f0f4f5;
+  --o-ardosia-200: #dfe5e8;
+  --o-ardosia-300: #c9d3d7;
+  --o-ardosia-500: #7d8e95;
+  --o-ardosia-600: #4a5c63;
+  --o-ardosia-900: #0f1d22;
+
+  /* Um preto so, no lugar dos sete que existiam espalhados pelo projeto. */
+  --o-noite-900: #0b1316;
+  --o-noite-800: #111c20;
+  --o-noite-700: #16242a;
+  --o-noite-600: #24363c;
+  --o-noite-500: #334a52;
+  --o-noite-300: #7b8c93;
+  --o-noite-200: #a3b4ba;
+  --o-noite-050: #e8eef0;
+  --o-noite-acento: #16323b;
+
+  /* Estado. Cor de estado nao e cor de marca: so aparece quando ha estado. */
+  --o-verde-600: #2f6b4f;
+  --o-verde-050: #e6f1ea;
+  --o-verde-300: #7fc9a3;
+  --o-verde-900: #122b21;
+
+  --o-ambar-600: #8a5a12;
+  --o-ambar-050: #faefdc;
+  --o-ambar-300: #e0b464;
+  --o-ambar-900: #2e2413;
+
+  --o-tijolo-600: #9a3327;
+  --o-tijolo-050: #f8e7e4;
+  --o-tijolo-300: #e79b90;
+  --o-tijolo-900: #2f1a17;
+}
+
+/* ---------------------------------------------------------------------------
+   2. SEMANTICO
+   O app nasce escuro e o claro e override por classe no html, entao o :root
+   carrega o noturno e .theme-claro troca os papeis. Manter os dois blocos
+   completos: token definido so num deles vira texto de um tema no fundo do outro.
+   --------------------------------------------------------------------------- */
+:root,
+html.theme-noturno {
+  --o-bg:          var(--o-noite-900);
+  --o-surface:     var(--o-noite-800);
+  --o-surface-2:   var(--o-noite-700);
+  --o-line:        var(--o-noite-600);
+  --o-line-forte:  var(--o-noite-500);
+
+  --o-ink:         var(--o-noite-050);
+  --o-ink-2:       var(--o-noite-200);
+  --o-ink-3:       var(--o-noite-300);
+
+  /* O acento CLAREIA no escuro em vez de escurecer: petroleo #14566a sobre
+     #0b1316 nao alcanca contraste de leitura. E a unica cor que troca de tom
+     entre os dois temas; o resto so troca de papel. */
+  --o-acento:       var(--o-petroleo-300);
+  --o-acento-hover: var(--o-petroleo-200);
+  --o-acento-suave: var(--o-noite-acento);
+  --o-acento-tinta: var(--o-petroleo-100);
+  /* Texto que vai POR CIMA do acento solido. */
+  --o-acento-sobre: #071316;
+
+  --o-ok:            var(--o-verde-300);
+  --o-ok-suave:      var(--o-verde-900);
+  --o-atencao:       var(--o-ambar-300);
+  --o-atencao-suave: var(--o-ambar-900);
+  --o-erro:          var(--o-tijolo-300);
+  --o-erro-suave:    var(--o-tijolo-900);
+
+  --o-sombra: 0 6px 20px rgb(0 0 0 / .45);
+}
+
+html.theme-claro {
+  --o-bg:          var(--o-ardosia-050);
+  --o-surface:     var(--o-ardosia-000);
+  --o-surface-2:   var(--o-ardosia-100);
+  --o-line:        var(--o-ardosia-200);
+  --o-line-forte:  var(--o-petroleo-borda);
+
+  --o-ink:         var(--o-ardosia-900);
+  --o-ink-2:       var(--o-ardosia-600);
+  --o-ink-3:       var(--o-ardosia-500);
+
+  --o-acento:       var(--o-petroleo-600);
+  --o-acento-hover: var(--o-petroleo-700);
+  --o-acento-suave: var(--o-petroleo-050);
+  --o-acento-tinta: var(--o-petroleo-tinta);
+  --o-acento-sobre: #ffffff;
+
+  --o-ok:            var(--o-verde-600);
+  --o-ok-suave:      var(--o-verde-050);
+  --o-atencao:       var(--o-ambar-600);
+  --o-atencao-suave: var(--o-ambar-050);
+  --o-erro:          var(--o-tijolo-600);
+  --o-erro-suave:    var(--o-tijolo-050);
+
+  --o-sombra: 0 6px 18px rgb(15 29 34 / .10);
+}
+
+/* ---------------------------------------------------------------------------
+   Forma, ritmo e tempo. Nao mudam com o tema.
+   --------------------------------------------------------------------------- */
+:root {
+  /* Dois raios, so. 6px no que se clica, 10px no que se agrupa. Cartao de 16px
+     ou mais e cara de cartaz, nao de ferramenta de trabalho. */
+  --o-raio-controle: 6px;
+  --o-raio-caixa: 10px;
+  --o-borda: 1px;
+
+  /* Escala de espaco. Valor fora dela e erro: e assim que 1.059 cores nasceram. */
+  --o-esp-1: 4px;
+  --o-esp-2: 8px;
+  --o-esp-3: 12px;
+  --o-esp-4: 16px;
+  --o-esp-5: 24px;
+  --o-esp-6: 32px;
+  --o-esp-7: 48px;
+
+  /* Tipo. Geist na interface, Plex Mono em numero e identificador. O peso 900
+     nao existe nesta escala de proposito: quando tudo grita, nada destaca. */
+  --o-fonte-ui: "Geist", "IBM Plex Sans", system-ui, sans-serif;
+  --o-fonte-dado: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+
+  --o-txt-titulo: 28px;
+  --o-txt-secao: 20px;
+  --o-txt-cartao: 15px;
+  --o-txt-corpo: 15px;
+  --o-txt-apoio: 13.5px;
+  --o-txt-rotulo: 11px;
+
+  --o-peso-normal: 400;
+  --o-peso-medio: 500;
+  --o-peso-forte: 600;
+
+  --o-rotulo-espaco: .1em;
+
+  /* Movimento so onde muda estado. Laco infinito apenas carregando de verdade. */
+  --o-tempo-estado: 120ms;
+  --o-tempo-entrada: 200ms;
+  --o-curva: cubic-bezier(.2, .8, .3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --o-tempo-estado: 0ms;
+    --o-tempo-entrada: 0ms;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   3. COMPONENTE
+   So entra aqui a peca que precisa de um valor proprio. Se o componente usa o
+   semantico direto, ele nao aparece nesta secao.
+   --------------------------------------------------------------------------- */
+:root {
+  --o-btn-bg: var(--o-acento);
+  --o-btn-bg-hover: var(--o-acento-hover);
+  --o-btn-ink: var(--o-acento-sobre);
+  --o-btn-altura: 38px;
+  --o-btn-padding: 10px 15px;
+
+  --o-campo-bg: var(--o-surface);
+  --o-campo-borda: var(--o-line-forte);
+  --o-campo-ink: var(--o-ink);
+  --o-campo-placeholder: var(--o-ink-3);
+  --o-campo-foco: var(--o-acento);
+
+  --o-cartao-bg: var(--o-surface);
+  --o-cartao-borda: var(--o-line);
+  --o-cartao-padding: var(--o-esp-4);
+
+  --o-tabela-cabecalho-ink: var(--o-ink-3);
+  --o-tabela-linha: var(--o-line);
+
+  /* Contorno de foco. Teclado e como parte da equipe trabalha o dia inteiro. */
+  --o-foco-cor: var(--o-acento);
+  --o-foco-largura: 2px;
+  --o-foco-afastamento: 2px;
+}

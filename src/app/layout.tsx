@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+// Depois do globals de proposito: o tokens.css so declara variaveis, e vindo
+// por ultimo nenhuma delas e sobrescrita pelo :root gigante do globals.
+import "./tokens.css";
 import AuthProvider from "@/components/providers/AuthProvider";
 import DatePickerEnhancer from "@/components/ui/DatePickerEnhancer";
 import EscapeToClose from "@/components/ui/EscapeToClose";
