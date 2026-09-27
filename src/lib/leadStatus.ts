@@ -12,6 +12,7 @@ export const LEAD_STATUSES: LeadStatus[] = [
 ];
 
 export const LEGACY_LEAD_STATUS_MAP: Record<string, LeadStatus> = {
+  'Oportunidade': 'Aguardando atendimento',
   'CotaÃ§Ã£o enviada': 'Cotação enviada',
   'RegiÃ£o sem comercializaÃ§Ã£o': 'Região sem comercialização',
   'Telefone nÃ£o existe': 'Telefone não existe',

@@ -261,7 +261,7 @@ async function createSalesLead(options: { corretorId: string; phone: string; con
       corretor_id: options.corretorId,
       nome: options.contactName || 'Contato WhatsApp',
       telefone: normalizePhone(options.phone),
-      status: 'Oportunidade',
+      status: 'Aguardando atendimento',
       origem: 'Orion',
       utm_source: options.source === 'click_to_whatsapp' ? 'meta' : 'whatsapp',
       utm_medium: 'whatsapp',
