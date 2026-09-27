@@ -568,7 +568,7 @@ export default function ApolloTasksPage() {
                         return {
                           id: task.id,
                           titulo: task.titulo,
-                          nota: `Responsavel: ${displayName(task.responsavel)}`,
+                          nota: `Responsavel: ${displayName(task.responsavel)} · Criada por: ${displayName(task.criado_por)}`,
                           detalhe: (
                             <>
                               {task.descricao && <p className="text-xs leading-5 text-slate-300">{task.descricao}</p>}
