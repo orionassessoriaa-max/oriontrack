@@ -35,7 +35,6 @@ import {
   Bot,
   Timer,
   ArrowLeft,
-  Sparkles,
   Activity,
   History,
   UserCheck,

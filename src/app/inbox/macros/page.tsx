@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
+  AlertTriangle,
   Archive,
   ArrowLeft,
   CheckCircle2,
@@ -16,7 +17,6 @@ import {
   Tag,
   Trash2,
   UserRound,
-  WandSparkles,
 } from 'lucide-react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -208,7 +208,7 @@ export default function UnityMacrosPage() {
     return (
       <InternalLayout>
         <div className={styles.denied}>
-          <WandSparkles size={28} />
+          <MessageSquareText size={28} />
           <h1>Macros exclusivas da Unity</h1>
           <p>Este recurso nao esta habilitado para esta operacao.</p>
           <Link href="/inbox">Voltar ao Inbox</Link>
@@ -235,7 +235,7 @@ export default function UnityMacrosPage() {
 
         {notice && (
           <div className={`${styles.notice} ${notice.tone === 'success' ? styles.success : styles.error}`}>
-            {notice.tone === 'success' ? <CheckCircle2 size={17} /> : <WandSparkles size={17} />}
+            {notice.tone === 'success' ? <CheckCircle2 size={17} /> : <AlertTriangle size={17} />}
             {notice.text}
           </div>
         )}
@@ -269,7 +269,7 @@ export default function UnityMacrosPage() {
                   <Pencil size={14} />
                 </button>
               )) : (
-                <div className={styles.empty}><WandSparkles size={25} /><strong>Nenhuma macro ainda</strong><span>Crie a primeira para usar no Inbox.</span></div>
+                <div className={styles.empty}><MessageSquareText size={25} /><strong>Nenhuma macro ainda</strong><span>Crie a primeira para usar no Inbox.</span></div>
               )}
             </div>
           </aside>
@@ -298,7 +298,7 @@ export default function UnityMacrosPage() {
             </div>
 
             <div className={styles.actionsBlock}>
-              <div className={styles.sectionHeading}><WandSparkles size={17} /><div><strong>Acoes depois do envio</strong><span>A mensagem sempre vai primeiro. Se o envio falhar, nenhuma acao seguinte e executada.</span></div></div>
+              <div className={styles.sectionHeading}><CheckCircle2 size={17} /><div><strong>Acoes depois do envio</strong><span>A mensagem sempre vai primeiro. Se o envio falhar, nenhuma acao seguinte e executada.</span></div></div>
 
               <label className={`${styles.actionCard} ${draft.actions.closeConversation ? styles.actionCardActive : ''}`}>
                 <input type="checkbox" checked={draft.actions.closeConversation} onChange={(event) => setDraft((current) => ({ ...current, actions: { ...current.actions, closeConversation: event.target.checked } }))} />

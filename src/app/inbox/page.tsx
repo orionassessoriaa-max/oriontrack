@@ -40,7 +40,6 @@ import {
   Check,
   Search,
   Bot,
-  Sparkles,
   Settings,
   Play,
   Pause,

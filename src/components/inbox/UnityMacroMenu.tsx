@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Archive, CheckCircle2, Layers3, Loader2, Settings2, Sparkles, Tag, X } from 'lucide-react';
+import { Archive, CheckCircle2, Layers3, Loader2, MessageSquareText, Settings2, Tag, X } from 'lucide-react';
 import type { KanbanStage } from '@/lib/kanbanStages';
 import type { UnityMacro } from '@/lib/unityMacros';
 import styles from './UnityMacroMenu.module.css';
@@ -44,7 +44,7 @@ export default function UnityMacroMenu({
   return (
     <div className={styles.root}>
       <button type="button" className={styles.trigger} onClick={() => setOpen((current) => !current)}>
-        <Sparkles size={14} /> Macros
+        <MessageSquareText size={14} /> Macros
       </button>
 
       {open && (
@@ -56,7 +56,7 @@ export default function UnityMacroMenu({
           <div className={styles.list}>
             {macros.length ? macros.map((macro) => (
               <button key={macro.id} type="button" onClick={() => setSelected(macro)}>
-                <span><Sparkles size={14} /></span>
+                <span><MessageSquareText size={14} /></span>
                 <div><strong>{macro.title}</strong><small>{macro.text}</small></div>
               </button>
             )) : (
@@ -70,7 +70,7 @@ export default function UnityMacroMenu({
         <div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="macro-confirm-title">
           <div className={styles.dialog}>
             <button className={styles.close} type="button" onClick={() => setSelected(null)} aria-label="Fechar"><X size={16} /></button>
-            <span className={styles.dialogIcon}><Sparkles size={21} /></span>
+            <span className={styles.dialogIcon}><MessageSquareText size={21} /></span>
             <p className={styles.kicker}>Confirmar macro</p>
             <h2 id="macro-confirm-title">{selected.title}</h2>
             <div className={styles.message}>{selected.text}</div>
@@ -83,7 +83,7 @@ export default function UnityMacroMenu({
             <div className={styles.footer}>
               <button type="button" onClick={() => setSelected(null)}>Cancelar</button>
               <button type="button" disabled={Boolean(executingId)} onClick={() => void execute()}>
-                {executingId === selected.id ? <Loader2 className={styles.spin} size={16} /> : <Sparkles size={16} />}
+                {executingId === selected.id ? <Loader2 className={styles.spin} size={16} /> : <CheckCircle2 size={16} />}
                 {executingId === selected.id ? 'Executando...' : 'Executar macro'}
               </button>
             </div>

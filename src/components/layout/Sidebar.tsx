@@ -35,7 +35,6 @@ import {
   RotateCcw,
   Settings,
   Shield,
-  Sparkles,
   Sun,
   TrendingUp,
   Trophy,
@@ -235,7 +234,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: Activity, label: 'Temperatura', href: '/atendimento-analise' },
     { icon: Cpu, label: 'IA', href: '/admin/ia' },
     { icon: GitBranch, label: 'Bot', href: '/admin/bot' },
-    { icon: Sparkles, label: 'Ferramentas', href: '/admin/ferramentas' },
+    { icon: Settings, label: 'Ferramentas', href: '/admin/ferramentas' },
     { icon: Users, label: 'Corretores', href: '/admin/corretores' },
     { icon: UserCog, label: 'Gestores de Tráfego', href: '/admin/gestores' },
     { icon: Palette, label: 'Designer', href: '/admin/designers' },
@@ -309,7 +308,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     .trim()
     .toUpperCase() === 'UNITY SAUDE';
   const unityMacrosMenu = isUnityProfile
-    ? [{ icon: Sparkles, label: 'Macros', href: '/inbox/macros' }]
+    ? [{ icon: MessageSquare, label: 'Macros', href: '/inbox/macros' }]
     : [];
 
   const corretorMenu = [
@@ -322,7 +321,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
     { icon: Globe, label: 'Minha Página', href: '/minha-pagina' },
     { icon: Palette, label: 'Solicitar Criativo', href: '/criativos' },
-    ...(canSeeFerramentas ? [{ icon: Sparkles, label: 'Ferramentas', href: '/ferramentas' }] : []),
+    ...(canSeeFerramentas ? [{ icon: Settings, label: 'Ferramentas', href: '/ferramentas' }] : []),
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: Trophy, label: 'Meu time', href: '/time' },
     { icon: ClipboardList, label: 'Histórico', href: '/historico' },
@@ -338,7 +337,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     ...unityMacrosMenu,
     { icon: Bot, label: 'IA', href: '/ia' },
     { icon: CheckCircle2, label: 'Tarefas', href: '/tarefas' },
-    ...(canSeeFerramentas ? [{ icon: Sparkles, label: 'Ferramentas', href: '/ferramentas' }] : []),
+    ...(canSeeFerramentas ? [{ icon: Settings, label: 'Ferramentas', href: '/ferramentas' }] : []),
     { icon: Calculator, label: 'Simulador em dev', href: '/simulador' },
     { icon: ClipboardList, label: 'Histórico', href: '/historico' },
     { icon: Bell, label: 'Notificações', href: '/notificacoes' },
