@@ -5,8 +5,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { syncRecentInboxChats } from '@/lib/uazapiInboxSync';
 import { UserRole } from '@/types';
 
-const INBOX_LIST_ROLES = ['admin', 'account_manager', 'corretor', 'corretor_admin'] as const;
-const INBOX_TARGET_ROLES = ['account_manager', 'corretor', 'corretor_admin'] as const;
+const INBOX_LIST_ROLES = ['admin', 'account_manager', 'corretor', 'corretor_admin', 'corretor_membro'] as const;
+const INBOX_TARGET_ROLES = ['account_manager', 'corretor', 'corretor_admin', 'corretor_membro'] as const;
 
 type InboxTargetProfile = ApiProfile & {
   nome_empresa?: string | null;
@@ -62,17 +62,29 @@ async function listAssignedLeadIds(profileId: string) {
   return ids;
 }
 
-async function listConversations(corretorIds: string[], assignedLeadIds: string[], offset: number, limit: number) {
+async function listConversations(
+  corretorIds: string[],
+  assignedLeadIds: string[],
+  offset: number,
+  limit: number,
+  memberProfileId: string | null
+) {
   let query = supabaseAdmin
     .from('whatsapp_conversas')
-    .select('*,leads(id,nome,status,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))')
+    .select(memberProfileId
+      ? '*,leads!inner(id,nome,status,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))'
+      : '*,leads(id,nome,status,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))')
     .order('ultima_mensagem_at', { ascending: false })
     .order('id', { ascending: true })
     // Busca um item extra para informar se existe historico a carregar, sem
     // fazer uma contagem cara a cada atualizacao do Inbox.
     .range(offset, offset + limit);
 
-  if (assignedLeadIds.length > 0) {
+  if (memberProfileId) {
+    // Integrantes so recebem conversas de leads formalmente atribuidos a eles.
+    // Isso evita que a conta compartilhada da corretora exponha a fila inteira.
+    query = query.eq('leads.responsavel_profile_id', memberProfileId);
+  } else if (assignedLeadIds.length > 0) {
     query = query.or(
       `corretor_id.in.(${corretorIds.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
     );
@@ -147,8 +159,16 @@ export async function GET(request: Request) {
       }
     }
 
-    const assignedLeadIds = await listAssignedLeadIds(target.id);
-    const page = await listConversations(corretorIds, assignedLeadIds, offset, limit);
+    const assignedLeadIds = target.tipo_usuario === 'corretor_membro'
+      ? []
+      : await listAssignedLeadIds(target.id);
+    const page = await listConversations(
+      corretorIds,
+      assignedLeadIds,
+      offset,
+      limit,
+      target.tipo_usuario === 'corretor_membro' ? target.id : null
+    );
     const conversations = page.conversations;
     after(async () => {
       await syncRecentInboxChats(target.id, conversations);

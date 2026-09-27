@@ -60,7 +60,7 @@ export async function GET(request: Request) {
     .order('updated_at', { ascending: false });
   if (brokerIds?.length) leadsQuery = leadsQuery.in('corretor_id', brokerIds);
   if (profile.tipo_usuario === 'corretor_membro') {
-    leadsQuery = leadsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`);
+    leadsQuery = leadsQuery.eq('responsavel_profile_id', profile.id);
   }
   const { data: leadsData, error: leadsError } = await leadsQuery;
   if (leadsError) return NextResponse.json({ error: leadsError.message }, { status: 500 });

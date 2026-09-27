@@ -489,31 +489,6 @@ async function isUnityBrokerage(corretorId: string | null | undefined) {
     .toUpperCase() === 'UNITY SAUDE';
 }
 
-async function canParticipateInSharedLead(profileId: string, leadId: string) {
-  const { data: lead } = await supabaseAdmin
-    .from('leads')
-    .select('responsavel_profile_id, corretor:corretor_id(nome_empresa)')
-    .eq('id', leadId)
-    .maybeSingle();
-  if (!lead || lead.responsavel_profile_id) return false;
-  const broker = Array.isArray(lead.corretor) ? lead.corretor[0] : lead.corretor;
-  const brokerageName = String((broker as any)?.nome_empresa || '').trim();
-  if (!brokerageName) return false;
-  const { data: config } = await supabaseAdmin.from('corretoras')
-    .select('distribuicao_modelo').ilike('nome', brokerageName).maybeSingle();
-  if (config?.distribuicao_modelo !== 'fila_compartilhada') return false;
-  const { data: membership } = await supabaseAdmin.from('corretor_time_membros')
-    .select('id, time:time_id!inner(ativo, corretor:corretor_id!inner(nome_empresa))')
-    .eq('profile_id', profileId)
-    .in('status', ['active', 'ativo', 'Ativo'])
-    .neq('participa_rodizio', false);
-  return (membership || []).some((item: any) => {
-    const team = Array.isArray(item.time) ? item.time[0] : item.time;
-    const owner = Array.isArray(team?.corretor) ? team.corretor[0] : team?.corretor;
-    return team?.ativo !== false && String(owner?.nome_empresa || '').trim().toLowerCase() === brokerageName.toLowerCase();
-  });
-}
-
 async function canAccessConversation(profile: any, conversation: any) {
   if (!conversation) return false;
   if (profile.tipo_usuario === 'admin' || profile.tipo_usuario === 'account_manager') return true;
@@ -565,7 +540,6 @@ async function canAccessConversation(profile: any, conversation: any) {
         .eq('id', conversation.lead_id)
         .maybeSingle();
       if (lead?.responsavel_profile_id === profile.id) return true;
-      if (!lead?.responsavel_profile_id && await canParticipateInSharedLead(profile.id, conversation.lead_id)) return true;
     }
     // Integrante operacional nunca herda acesso apenas por pertencer ao mesmo
     // cadastro de corretora. Sem este retorno, mensagens de outro vendedor
@@ -1102,11 +1076,7 @@ export async function POST(request: Request) {
           .select('responsavel_profile_id')
           .eq('id', leadIdParam)
           .maybeSingle();
-        const strictUnityAccess = await isUnityBrokerage(guard.profile.corretor_id);
-        const canUseSharedQueue = !strictUnityAccess
-          && !leadAccess?.responsavel_profile_id
-          && await canParticipateInSharedLead(guard.profile.id, leadIdParam);
-        if (leadAccess?.responsavel_profile_id !== guard.profile.id && !canUseSharedQueue) {
+        if (leadAccess?.responsavel_profile_id !== guard.profile.id) {
           return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
         }
       }

@@ -557,8 +557,6 @@ export default function BrokerInboxPage() {
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toUpperCase();
-  const isUnitySharedMember = normalizedBrokerageName === 'UNITY SAUDE'
-    && profile?.tipo_usuario === 'corretor_membro';
   const isUnityInbox = normalizedBrokerageName === 'UNITY SAUDE';
   const taskResponsibleOptions = teamMembers.filter((member) => member.profile_id);
 
@@ -769,60 +767,37 @@ export default function BrokerInboxPage() {
     const data: any[] = [];
     let followUpLoadedByApi = false;
 
-    if (isTeamMember) {
-      // Integrantes continuam sujeitos ao filtro exclusivo do proprio lead.
-      const conversationPageSize = 500;
-      for (let from = 0; ; from += conversationPageSize) {
-        let conversationsQuery = supabase
-          .from('whatsapp_conversas')
-          .select('*,leads!inner(id,nome,status,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))')
-          .order('ultima_mensagem_at', { ascending: false })
-          .order('id', { ascending: true })
-          .range(from, from + conversationPageSize - 1)
-          .in('corretor_id', idsToFetch);
+    // Toda listagem passa pelo backend. Para integrantes, a rota aplica a
+    // atribuicao do lead antes de devolver qualquer dado da conversa.
+    const token = await getToken();
+    if (!token) throw new Error('Sessao expirada. Entre novamente.');
 
-        conversationsQuery = isUnitySharedMember
-          ? conversationsQuery.eq('leads.responsavel_profile_id', profile.id)
-          : conversationsQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
-
-        const { data: page, error } = await conversationsQuery;
-        if (error) throw error;
-        data.push(...(page || []));
-        if (!page || page.length < conversationPageSize) break;
-      }
-    } else {
-      // A listagem passa pelo backend para respeitar a conta visualizada pelo
-      // admin e nao depender das politicas RLS da sessao original do navegador.
-      const token = await getToken();
-      if (!token) throw new Error('Sessao expirada. Entre novamente.');
-
-      const response = await fetch('/api/inbox/conversations?limit=100&offset=0', {
-        method: 'GET',
-        cache: 'no-store',
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'x-orion-view-profile-id': profile.id,
-        },
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Nao foi possivel carregar as conversas.');
-      }
-
-      idsToFetch = Array.isArray(payload.corretorIds) && payload.corretorIds.length
-        ? payload.corretorIds.map(String)
-        : idsToFetch;
-      assignedLeadIds = Array.isArray(payload.assignedLeadIds)
-        ? payload.assignedLeadIds.map(String)
-        : [];
-      if (!isSilent) {
-        nextConversationOffsetRef.current = typeof payload.nextOffset === 'number' ? payload.nextOffset : null;
-        setHasMoreConversations(payload.hasMore === true);
-      }
-      data.push(...(Array.isArray(payload.conversations) ? payload.conversations : []));
-      followUpLoadedByApi = true;
+    const response = await fetch('/api/inbox/conversations?limit=100&offset=0', {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'x-orion-view-profile-id': profile.id,
+      },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Nao foi possivel carregar as conversas.');
     }
+
+    idsToFetch = Array.isArray(payload.corretorIds) && payload.corretorIds.length
+      ? payload.corretorIds.map(String)
+      : idsToFetch;
+    assignedLeadIds = Array.isArray(payload.assignedLeadIds)
+      ? payload.assignedLeadIds.map(String)
+      : [];
+    if (!isSilent) {
+      nextConversationOffsetRef.current = typeof payload.nextOffset === 'number' ? payload.nextOffset : null;
+      setHasMoreConversations(payload.hasMore === true);
+    }
+    data.push(...(Array.isArray(payload.conversations) ? payload.conversations : []));
+    followUpLoadedByApi = true;
     inboxCorretorIdsRef.current = new Set(idsToFetch);
 
     const rows = mapInboxRows(data);
@@ -846,18 +821,14 @@ export default function BrokerInboxPage() {
           .order('ultima_mensagem_at', { ascending: false })
           .limit(1);
 
-        if (assignedLeadIds.length > 0) {
+        if (isTeamMember) {
+          savedConversationQuery = savedConversationQuery.eq('leads.responsavel_profile_id', profile.id);
+        } else if (assignedLeadIds.length > 0) {
           savedConversationQuery = savedConversationQuery.or(
             `corretor_id.in.(${idsToFetch.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
           );
         } else {
           savedConversationQuery = savedConversationQuery.in('corretor_id', idsToFetch);
-        }
-
-        if (isTeamMember) {
-          savedConversationQuery = isUnitySharedMember
-            ? savedConversationQuery.eq('leads.responsavel_profile_id', profile.id)
-            : savedConversationQuery.or(`responsavel_profile_id.eq.${profile.id},responsavel_profile_id.is.null`, { referencedTable: 'leads' });
         }
 
         const { data: savedConversations } = await savedConversationQuery;
@@ -894,9 +865,7 @@ export default function BrokerInboxPage() {
             .select('nome,responsavel_profile_id')
             .eq('id', leadId)
             .maybeSingle();
-          const cannotOpenLead = isUnitySharedMember
-            ? leadData?.responsavel_profile_id !== profile.id
-            : Boolean(leadData?.responsavel_profile_id && leadData.responsavel_profile_id !== profile.id);
+          const cannotOpenLead = leadData?.responsavel_profile_id !== profile.id;
           if (isTeamMember && cannotOpenLead) {
             setConversations(rows);
             setSelectedConversation(rows[0] || null);
@@ -1002,7 +971,7 @@ export default function BrokerInboxPage() {
 
   async function loadMoreConversations() {
     const offset = nextConversationOffsetRef.current;
-    if (profile?.tipo_usuario === 'corretor_membro' || offset === null || loadingMoreConversationsRef.current) return;
+    if (offset === null || loadingMoreConversationsRef.current) return;
     const token = await getToken();
     if (!token) return;
 
