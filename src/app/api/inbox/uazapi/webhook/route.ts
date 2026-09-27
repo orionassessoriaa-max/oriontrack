@@ -11,7 +11,7 @@ import { ensureCommercialConversation, findCommercialConversation, isCommercialA
 import { normalizeWhatsAppMessageId, whatsappMessageIdCandidates } from '@/lib/whatsappMessageId';
 import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 import { getReceptiveAiConfig, handleReceptiveIncoming } from '@/lib/receptiveAi';
-import { isIgnoredInboxContact } from '@/lib/inboxIgnoredContacts';
+import { isIgnoredInboxContact, isIgnoredInboxSource } from '@/lib/inboxIgnoredContacts';
 
 function readText(body: any) {
   return pickString(
@@ -1365,6 +1365,12 @@ export async function POST(request: Request) {
     // Aceitamos qualquer evento que contenha MESSAGE, SEND, ou seja um Call.
     if (event && !event.includes('MESSAGE') && !event.includes('SEND') && !callEvent) {
       return NextResponse.json({ ok: true, ignored: true });
+    }
+
+    const ownerPhone = normalizePhone(readOwnerJid(body).split('@')[0]);
+    // Numeros internos da Orion nao podem usar o CRM de uma corretora como historico pessoal.
+    if (isIgnoredInboxSource(instance, ownerPhone)) {
+      return NextResponse.json({ ok: true, ignored: true, reason: 'internal_orion_source' });
     }
 
     const providerId = readProviderId(body);

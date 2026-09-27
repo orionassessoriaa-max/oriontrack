@@ -3,6 +3,10 @@ const IGNORED_INBOX_PHONE_KEYS = new Set([
   '6192370710', // Numero interno do Apolo Notificador.
 ]);
 
+const IGNORED_INBOX_INSTANCES = new Set([
+  'apolo_master_sender',
+]);
+
 function phoneKey(value: unknown) {
   let digits = String(value || '').replace(/\D/g, '');
   if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
@@ -20,4 +24,9 @@ function phoneKey(value: unknown) {
 
 export function isIgnoredInboxContact(value: unknown) {
   return IGNORED_INBOX_PHONE_KEYS.has(phoneKey(value));
+}
+
+export function isIgnoredInboxSource(instance: unknown, ownerPhone: unknown) {
+  const instanceKey = String(instance || '').trim().toLowerCase();
+  return IGNORED_INBOX_INSTANCES.has(instanceKey) || isIgnoredInboxContact(ownerPhone);
 }

@@ -4,7 +4,7 @@ import { evolutionFetch, getEvolutionInstanceApiKey, normalizePhone, profileIdFr
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { captureHospitalPreferenceAfterHandoff, continueLeadAiFromIncoming, handoffLeadAiToResponsible, isAiOutbound, stopLeadAiForHumanTakeover } from '@/lib/leadAiAgent';
 import { ensureLeadAiTimeoutScheduler } from '@/lib/leadAiTimeoutScheduler';
-import { isIgnoredInboxContact } from '@/lib/inboxIgnoredContacts';
+import { isIgnoredInboxContact, isIgnoredInboxSource } from '@/lib/inboxIgnoredContacts';
 
 function readText(data: any) {
   return String(
@@ -249,6 +249,10 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (!profile?.corretor_id) return NextResponse.json({ ok: true, ignored: true });
+    // A conta conectada tambem precisa ser validada; filtrar so o contato remoto nao evita vazamento entre instancias.
+    if (isIgnoredInboxSource(instance, profile.telefone)) {
+      return NextResponse.json({ ok: true, ignored: true, reason: 'internal_orion_source' });
+    }
 
     let message = callEvent ? readCallText(body, data) : readText(data);
     const audioMessage = getAudioMessage(data);
