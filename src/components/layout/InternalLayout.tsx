@@ -53,8 +53,8 @@ export default function InternalLayout({ children, immersive = false }: { childr
         const isTeamRoute = pathname.startsWith('/equipe');
         const isAnalysisRoute = pathname.startsWith('/atendimento-analise');
         const isSharedRoute = pathname === '/perfil' || pathname === '/notificacoes' || pathname.startsWith('/apolo-one') || pathname.startsWith('/ajuda');
-        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/inbox', '/historico', '/minha-pagina', '/time', '/ferramentas', '/ia'].some(p => pathname.startsWith(p)) || isCreativeRoute;
-        const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/historico', '/minha-pagina', '/simulador', '/inbox', '/time', '/ferramentas', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos', '/ia'].some(p => pathname.startsWith(p));
+        const isBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/inbox', '/historico', '/minha-pagina', '/time', '/ferramentas', '/ia', '/win-rate'].some(p => pathname.startsWith(p)) || isCreativeRoute;
+        const isLimitedBrokerRoute = ['/dashboard', '/kanban', '/crm', '/tarefas', '/leads', '/historico', '/minha-pagina', '/simulador', '/inbox', '/time', '/ferramentas', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos', '/ia', '/win-rate'].some(p => pathname.startsWith(p));
 
         if (pathname.startsWith('/financeiro')) {
           router.push('/dashboard');
@@ -79,7 +79,7 @@ export default function InternalLayout({ children, immersive = false }: { childr
           if (!pathname.startsWith('/comercial')) router.push('/comercial');
         }
         else if (isCorretorMember) {
-          const isMemberRoute = ['/dashboard', '/crm', '/tarefas', '/leads', '/historico', '/simulador', '/inbox', '/ferramentas', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos', '/ia'].some(p => pathname.startsWith(p));
+          const isMemberRoute = ['/dashboard', '/crm', '/tarefas', '/leads', '/historico', '/simulador', '/inbox', '/ferramentas', '/perfil', '/notificacoes', '/apolo-one', '/ajuda', '/criativos', '/ia', '/win-rate'].some(p => pathname.startsWith(p));
           if (!isMemberRoute) router.push('/dashboard');
         }
         // 2. Traffic Manager Access: Traffic routes + Broker List (to select for reports)

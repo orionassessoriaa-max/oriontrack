@@ -51,7 +51,7 @@
 .error span { flex: 1; }
 .error button { border: 0; background: transparent; color: inherit; font-weight: 850; text-decoration: underline; }
 
-.metricGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.metricGrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .metricCard { position: relative; min-height: 152px; padding: 18px; border: 1px solid var(--cp-line); border-radius: 16px; background: var(--cp-panel); overflow: hidden; }
 .metricCard::after { content: ''; position: absolute; right: -24px; bottom: -42px; width: 90px; height: 90px; border-radius: 999px; background: var(--cp-accent-soft); filter: blur(4px); }
 .metricIcon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; background: var(--cp-accent-soft); color: var(--cp-accent); }
@@ -67,7 +67,7 @@
 .panelHeader h2, .rankingHeader h2 { margin: 5px 0 0; font-size: 18px; letter-spacing: -.025em; }
 .panelHeader small { color: var(--cp-muted); font-size: 10px; font-weight: 700; }
 .topList { display: grid; gap: 6px; margin-top: 18px; }
-.topRow { display: grid; width: 100%; grid-template-columns: 30px minmax(150px, .8fr) minmax(100px, 1fr) 56px; align-items: center; gap: 12px; min-height: 50px; padding: 8px 10px; border: 1px solid transparent; border-radius: 11px; background: var(--cp-panel-2); color: var(--cp-text); text-align: left; }
+.topRow { display: grid; width: 100%; grid-template-columns: 30px minmax(150px, .8fr) minmax(100px, 1fr) 132px; align-items: center; gap: 12px; min-height: 50px; padding: 8px 10px; border: 1px solid transparent; border-radius: 11px; background: var(--cp-panel-2); color: var(--cp-text); text-align: left; }
 .topRow:hover, .topRow:focus-visible { border-color: var(--cp-accent); outline: none; }
 .position { color: var(--cp-muted); font-size: 10px; font-weight: 850; }
 .topIdentity { display: grid; gap: 3px; overflow: hidden; }
@@ -94,7 +94,7 @@
 .searchBox input, .sortBox select { min-height: 40px !important; width: 100%; border: 0 !important; background: transparent !important; color: var(--cp-text) !important; -webkit-text-fill-color: var(--cp-text) !important; outline: 0 !important; padding: 0 !important; font-size: 11px; font-weight: 700; }
 .sortBox select { min-width: 150px; }
 .tableWrap { overflow-x: auto; }
-.tableWrap table { width: 100%; min-width: 1160px; border-collapse: collapse; }
+.tableWrap table { width: 100%; min-width: 1380px; border-collapse: collapse; }
 .tableWrap th { padding: 12px 13px; border-bottom: 1px solid var(--cp-line); color: var(--cp-muted); text-align: left; font-size: 8px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
 .tableWrap td { padding: 12px 13px; border-bottom: 1px solid color-mix(in srgb, var(--cp-line) 75%, transparent); color: var(--cp-text); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .tableWrap tbody tr:hover { background: var(--cp-accent-soft); }
@@ -207,7 +207,7 @@
   .fieldWide { grid-column: auto; }
   .periodButtons { overflow-x: auto; }
   .metricCard { min-height: 132px; }
-  .topRow { grid-template-columns: 26px minmax(0, 1fr) 50px; }
+  .topRow { grid-template-columns: 26px minmax(0, 1fr) 110px; }
   .barTrack { display: none; }
   .modalHeader, .creativeDetails { padding: 16px; }
   .creativePreview { min-height: 240px; padding: 14px; }

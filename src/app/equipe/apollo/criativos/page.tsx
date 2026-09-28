@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePathname } from 'next/navigation';
 import InternalLayout from '@/components/layout/InternalLayout';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import {
   AlertCircle,
@@ -12,6 +14,8 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Filter,
+  FileCheck2,
+  Handshake,
   Image as ImageIcon,
   Loader2,
   RefreshCw,
@@ -92,7 +96,7 @@ type Payload = {
   criteria: { minimum_sample: number; attribution: string; sale: string };
 };
 
-type SortKey = 'sales' | 'win_rate' | 'roas' | 'leads' | 'cost_per_sale';
+type SortKey = 'sales' | 'win_rate' | 'quotes' | 'quote_rate' | 'negotiations' | 'negotiation_rate' | 'roas' | 'leads' | 'cost_per_sale';
 
 function dateValue(date: Date) {
   const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -124,11 +128,13 @@ function decimal(value: number | null | undefined, suffix = '') {
 
 function sortRows(rows: CreativeRow[], sort: SortKey, minimumSample: number) {
   return [...rows].sort((a, b) => {
-    if (sort === 'win_rate') {
+    if (sort === 'win_rate' || sort === 'quote_rate' || sort === 'negotiation_rate') {
       const aQualified = a.leads >= minimumSample;
       const bQualified = b.leads >= minimumSample;
       if (aQualified !== bQualified) return bQualified ? 1 : -1;
-      return b.win_rate - a.win_rate || b.sales - a.sales || b.leads - a.leads;
+      const aRate = sort === 'quote_rate' ? a.quote_rate : sort === 'negotiation_rate' ? a.negotiation_rate : a.win_rate;
+      const bRate = sort === 'quote_rate' ? b.quote_rate : sort === 'negotiation_rate' ? b.negotiation_rate : b.win_rate;
+      return bRate - aRate || b.sales - a.sales || b.leads - a.leads;
     }
     if (sort === 'cost_per_sale') {
       const aValue = a.cost_per_sale ?? Number.POSITIVE_INFINITY;
@@ -137,11 +143,16 @@ function sortRows(rows: CreativeRow[], sort: SortKey, minimumSample: number) {
     }
     if (sort === 'roas') return (b.roas ?? -1) - (a.roas ?? -1) || b.revenue - a.revenue;
     if (sort === 'leads') return b.leads - a.leads || b.sales - a.sales;
+    if (sort === 'quotes') return b.quotes - a.quotes || b.quote_rate - a.quote_rate || b.leads - a.leads;
+    if (sort === 'negotiations') return b.negotiations - a.negotiations || b.negotiation_rate - a.negotiation_rate || b.leads - a.leads;
     return b.sales - a.sales || b.win_rate - a.win_rate || b.leads - a.leads;
   });
 }
 
 export default function ApolloCreativePerformancePage() {
+  const { profile } = useAuth();
+  const pathname = usePathname();
+  const isBrokerView = pathname.startsWith('/win-rate');
   const [payload, setPayload] = useState<Payload | null>(null);
   const [dateStart, setDateStart] = useState(() => daysAgo(29));
   const [dateEnd, setDateEnd] = useState(() => dateValue(new Date()));
@@ -171,7 +182,10 @@ export default function ApolloCreativePerformancePage() {
       if (fromIntegration) params.set('desde_integracao', '1');
       const response = await fetch(`/api/equipe/apollo/criativos?${params.toString()}`, {
         cache: 'no-store',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+        },
       });
       const nextPayload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(nextPayload.error || 'Nao foi possivel carregar a performance.');
@@ -181,7 +195,7 @@ export default function ApolloCreativePerformancePage() {
     } finally {
       setLoading(false);
     }
-  }, [dateEnd, dateStart, fromIntegration]);
+  }, [dateEnd, dateStart, fromIntegration, profile?.id]);
 
   useEffect(() => {
     void load();
@@ -255,6 +269,8 @@ export default function ApolloCreativePerformancePage() {
   const crmLeads = selectedClient?.leads_total ?? payload?.summary.total_crm_leads ?? 0;
   const attributedLeads = selectedClient?.attributed_leads ?? payload?.summary.attributed_leads ?? 0;
   const attributionRate = crmLeads > 0 ? (attributedLeads / crmLeads) * 100 : 0;
+  const quoteRate = filteredSummary.leads > 0 ? (filteredSummary.quotes / filteredSummary.leads) * 100 : 0;
+  const negotiationRate = filteredSummary.leads > 0 ? (filteredSummary.negotiations / filteredSummary.leads) * 100 : 0;
   const winRate = filteredSummary.leads > 0 ? (filteredSummary.sales / filteredSummary.leads) * 100 : 0;
   const roas = filteredSummary.spend > 0 ? filteredSummary.revenue / filteredSummary.spend : null;
   const costPerSale = filteredSummary.sales > 0 ? filteredSummary.spend / filteredSummary.sales : null;
@@ -273,8 +289,8 @@ export default function ApolloCreativePerformancePage() {
         <header className={styles.header}>
           <div>
             <div className={styles.eyebrow}><BarChart3 size={14} /> Inteligência de criativos</div>
-            <h1>Performance que chega até a venda.</h1>
-            <p>Investimento da Meta conectado ao avanço real de cada lead no CRM.</p>
+            <h1>Do anúncio à cotação, negociação e venda.</h1>
+            <p>{isBrokerView ? `Performance dos criativos da ${profile?.nome_empresa || 'sua concessionária'}, sem dados de outras operações.` : 'Investimento da Meta conectado ao avanço real de cada lead no CRM.'}</p>
           </div>
           <button type="button" className={styles.refreshButton} onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
@@ -311,10 +327,10 @@ export default function ApolloCreativePerformancePage() {
             <input type="date" value={dateEnd} min={dateStart} onChange={(event) => setDateEnd(event.target.value)} />
           </label>
           <label className={styles.fieldWide}>
-            <span>Cliente</span>
+            <span>{isBrokerView ? 'Concessionária' : 'Cliente'}</span>
             <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
-              <option value="todos">Toda a Orion</option>
-              {(payload?.clients || []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+              <option value="todos">{isBrokerView ? (payload?.clients[0]?.name || profile?.nome_empresa || 'Minha concessionária') : 'Toda a Orion'}</option>
+              {!isBrokerView && (payload?.clients || []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
             </select>
           </label>
         </section>
@@ -339,9 +355,19 @@ export default function ApolloCreativePerformancePage() {
             <small>{percent(attributionRate)} de cobertura do CRM</small>
           </article>
           <article className={styles.metricCard}>
+            <span className={styles.metricIcon}><FileCheck2 size={17} /></span>
+            <p>Cotações</p><strong>{filteredSummary.quotes}</strong>
+            <small>{percent(quoteRate)} de win rate</small>
+          </article>
+          <article className={styles.metricCard}>
+            <span className={styles.metricIcon}><Handshake size={17} /></span>
+            <p>Negociações</p><strong>{filteredSummary.negotiations}</strong>
+            <small>{percent(negotiationRate)} de win rate</small>
+          </article>
+          <article className={styles.metricCard}>
             <span className={styles.metricIcon}><ShoppingCart size={17} /></span>
             <p>Vendas</p><strong>{filteredSummary.sales}</strong>
-            <small>{percent(winRate)} de win rate</small>
+            <small>{percent(winRate)} de win rate de venda</small>
           </article>
           <article className={styles.metricCard}>
             <span className={styles.metricIcon}><BadgeDollarSign size={17} /></span>
@@ -358,8 +384,8 @@ export default function ApolloCreativePerformancePage() {
         <div className={styles.contentGrid}>
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
-              <div><span>Top 5</span><h2>Quem está vendendo</h2></div>
-              <small>Ranking por vendas</small>
+              <div><span>Top 5</span><h2>Quem avança no funil</h2></div>
+              <small>Cotação · negociação · venda</small>
             </div>
             <div className={styles.topList}>
               {topFive.map((row, index) => (
@@ -371,7 +397,7 @@ export default function ApolloCreativePerformancePage() {
                   <div className={styles.barTrack} aria-label={`${row.sales} vendas`}>
                     <span style={{ width: `${Math.max(6, (row.sales / topSales) * 100)}%` }} />
                   </div>
-                  <div className={styles.topValue}><strong>{row.sales}</strong><small>vendas</small></div>
+                  <div className={styles.topValue}><strong>{row.quotes} · {row.negotiations} · {row.sales}</strong><small>cot · neg · vendas</small></div>
                 </button>
               ))}
               {!loading && topFive.length === 0 && <div className={styles.empty}>Nenhum criativo encontrado neste período.</div>}
@@ -386,6 +412,8 @@ export default function ApolloCreativePerformancePage() {
             <p>{attributedLeads} de {crmLeads} leads do CRM foram ligados a um anúncio.</p>
             <div className={styles.coverageTrack}><span style={{ width: `${Math.min(100, attributionRate)}%` }} /></div>
             <ul>
+              <li><CheckCircle2 size={13} /> Cotação: chegou à cotação ou avançou além</li>
+              <li><CheckCircle2 size={13} /> Negociação: chegou à negociação ou venda</li>
               <li><CheckCircle2 size={13} /> Venda: etapa marcada no CRM</li>
               <li><CheckCircle2 size={13} /> Win rate mínimo: 10 leads</li>
               <li><CheckCircle2 size={13} /> Receita: valor da venda registrada</li>
@@ -405,7 +433,11 @@ export default function ApolloCreativePerformancePage() {
                 <ArrowDownUp size={15} />
                 <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)} aria-label="Ordenar ranking">
                   <option value="sales">Mais vendas</option>
-                  <option value="win_rate">Maior win rate</option>
+                  <option value="win_rate">Maior win rate de venda</option>
+                  <option value="quotes">Mais cotações</option>
+                  <option value="quote_rate">Maior win rate de cotação</option>
+                  <option value="negotiations">Mais negociações</option>
+                  <option value="negotiation_rate">Maior win rate de negociação</option>
                   <option value="roas">Maior ROAS</option>
                   <option value="leads">Mais leads</option>
                   <option value="cost_per_sale">Menor custo por venda</option>
@@ -418,7 +450,7 @@ export default function ApolloCreativePerformancePage() {
             <table>
               <thead><tr>
                 <th>#</th><th>Criativo</th><th>Investimento</th><th>Leads</th><th>Cotações</th>
-                <th>Negociações</th><th>Vendas</th><th>Win rate</th><th>Custo/venda</th><th>Receita</th><th>ROAS</th>
+                <th>Win cotação</th><th>Negociações</th><th>Win negociação</th><th>Vendas</th><th>Win venda</th><th>Custo/venda</th><th>Receita</th><th>ROAS</th>
               </tr></thead>
               <tbody>
                 {visibleRows.map((row, index) => (
@@ -432,7 +464,7 @@ export default function ApolloCreativePerformancePage() {
                         <div><strong>{row.ad_name}</strong><small>{row.client_name}</small></div>
                       </button>
                     </td>
-                    <td>{money(row.spend)}</td><td>{row.leads}</td><td>{row.quotes}</td><td>{row.negotiations}</td>
+                    <td>{money(row.spend)}</td><td>{row.leads}</td><td>{row.quotes}</td><td>{percent(row.quote_rate)}</td><td>{row.negotiations}</td><td>{percent(row.negotiation_rate)}</td>
                     <td><strong className={styles.saleValue}>{row.sales}</strong></td>
                     <td>
                       <div className={styles.rateCell}><strong>{percent(row.win_rate)}</strong>
@@ -525,8 +557,10 @@ export default function ApolloCreativePerformancePage() {
                   <div className={styles.modalMetrics}>
                     <div><span>Investimento</span><strong>{money(selectedCreative.spend)}</strong></div>
                     <div><span>Leads</span><strong>{selectedCreative.leads}</strong></div>
+                    <div><span>Cotações</span><strong>{selectedCreative.quotes} · {percent(selectedCreative.quote_rate)}</strong></div>
+                    <div><span>Negociações</span><strong>{selectedCreative.negotiations} · {percent(selectedCreative.negotiation_rate)}</strong></div>
                     <div><span>Vendas</span><strong>{selectedCreative.sales}</strong></div>
-                    <div><span>Win rate</span><strong>{percent(selectedCreative.win_rate)}</strong></div>
+                    <div><span>Win venda</span><strong>{percent(selectedCreative.win_rate)}</strong></div>
                     <div><span>Receita</span><strong>{money(selectedCreative.revenue)}</strong></div>
                     <div><span>ROAS</span><strong>{decimal(selectedCreative.roas, 'x')}</strong></div>
                   </div>

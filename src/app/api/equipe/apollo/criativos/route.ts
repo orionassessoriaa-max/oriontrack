@@ -43,6 +43,7 @@ type MetaInsight = {
 };
 
 const INTERNAL_ROLES = ['admin', 'gestor_trafego', 'designer', 'account_manager'] as const;
+const BROKER_ROLES = ['corretor', 'corretor_admin', 'corretor_membro'] as const;
 
 function normalizeText(value: unknown) {
   return String(value || '')
@@ -237,11 +238,27 @@ async function loadAccounts() {
 
 export async function GET(request: Request) {
   try {
-    const guard = await requireApiUser(request, INTERNAL_ROLES as any);
+    const guard = await requireApiUser(request, [...INTERNAL_ROLES, ...BROKER_ROLES] as any);
     if ('error' in guard) return guard.error;
-    if (guard.profile.equipe_orion && guard.profile.equipe_orion !== 'apollo' && guard.profile.tipo_usuario !== 'admin') {
+    const isInternal = (INTERNAL_ROLES as readonly string[]).includes(guard.profile.tipo_usuario);
+    let scopedProfile = guard.profile;
+    const requestedProfileId = request.headers.get('x-orion-view-profile-id');
+    if (isInternal && requestedProfileId && requestedProfileId !== guard.profile.id) {
+      const target = await supabaseAdmin
+        .from('profiles')
+        .select('id,tipo_usuario,corretor_id')
+        .eq('id', requestedProfileId)
+        .maybeSingle();
+      if (target.error) throw target.error;
+      if (target.data && (BROKER_ROLES as readonly string[]).includes(String(target.data.tipo_usuario))) {
+        scopedProfile = { ...guard.profile, ...target.data };
+      }
+    }
+    const hasBrokerScope = !isInternal || scopedProfile.id !== guard.profile.id;
+    if (!hasBrokerScope && guard.profile.equipe_orion && guard.profile.equipe_orion !== 'apollo' && guard.profile.tipo_usuario !== 'admin') {
       return forbidden('Pagina exclusiva do Time Apollo.');
     }
+    if (hasBrokerScope && !scopedProfile.corretor_id) return forbidden('Concessionaria nao vinculada ao perfil.');
     const limited = rateLimit(request, 'apollo:creative-performance', {
       limit: 30,
       windowMs: 5 * 60_000,
@@ -253,7 +270,14 @@ export async function GET(request: Request) {
     if (!accessToken) return NextResponse.json({ error: 'Integracao Meta indisponivel.' }, { status: 503 });
 
     const { since, until, fromIntegration } = resolveRange(request.url);
-    const accounts = await loadAccounts();
+    let accounts = await loadAccounts();
+    if (hasBrokerScope) {
+      // O escopo vem do vinculo autenticado, nunca de um parametro enviado pela tela.
+      accounts = accounts.filter((account) => account.brokerIds.includes(String(scopedProfile.corretor_id)));
+      if (accounts.length === 0) {
+        return NextResponse.json({ error: 'Conta Meta nao vinculada a esta concessionaria.' }, { status: 404 });
+      }
+    }
     const results = await settleInBatches(accounts, async (account) => {
       const accountId = normalizeAccountId(account.meta_ad_account_id);
       let effectiveSince = since;
