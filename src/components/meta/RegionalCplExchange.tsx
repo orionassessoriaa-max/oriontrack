@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle, ArrowDown, ArrowUp, BarChart3, CalendarDays, ChevronRight,
-  CircleDollarSign, Image as ImageIcon, Loader2, MapPinned, RefreshCw, Search, UsersRound, X,
+  Building2, CircleDollarSign, Image as ImageIcon, Loader2, MapPinned, RefreshCw,
+  Search, Target, TrendingUp, UsersRound, WalletCards, X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import styles from './RegionalCplExchange.module.css';
@@ -150,7 +151,6 @@ export default function RegionalCplExchange({ scope }: { scope: 'apollo' | 'krip
     });
   }, [payload, search, sort]);
 
-  const maxCpl = Math.max(1, ...regions.map((region) => region.cpl || 0));
   const averageCpl = payload?.summary.cpl || 0;
 
   function status(region: Region) {
@@ -168,82 +168,73 @@ export default function RegionalCplExchange({ scope }: { scope: 'apollo' | 'krip
   return (
     <main className={styles.page}>
       <header className={styles.hero}>
-        <div>
-          <span className={styles.eyebrow}><BarChart3 size={14} /> Inteligência regional · Meta Ads</span>
-          <h1>Bolsa de CPL</h1>
-          <p>O preço real do lead em cada região e o criativo que está puxando o melhor resultado.</p>
+        <div className={styles.heroGrid}>
+          <div>
+            <span className={styles.eyebrow}><BarChart3 size={14} /> Inteligência regional Meta Ads</span>
+            <h1>Custo médio por estado.<br /><em>Visão sem distorção.</em></h1>
+            <p>Somamos investimento e leads de todas as concessionárias que anunciam em cada estado. O CPL estadual é investimento total dividido pelos leads totais.</p>
+          </div>
+          <button type="button" className={styles.refresh} onClick={() => void load()} disabled={loading}>
+            {loading ? <Loader2 size={16} className={styles.spin} /> : <RefreshCw size={16} />} Atualizar dados
+          </button>
         </div>
-        <button type="button" className={styles.refresh} onClick={() => void load()} disabled={loading}>
-          {loading ? <Loader2 size={16} className={styles.spin} /> : <RefreshCw size={16} />} Atualizar cotações
-        </button>
       </header>
-
-      <section className={styles.filters} aria-label="Filtros da Bolsa de CPL">
-        <div className={styles.quickPeriods}>
-          {[7, 30, 90].map((days) => (
-            <button type="button" key={days} onClick={() => applyDays(days)} className={dateStart === daysAgo(days - 1) ? styles.activePeriod : ''}>{days} dias</button>
-          ))}
-        </div>
-        <label><span>De</span><input type="date" value={dateStart} max={dateEnd} onChange={(event) => setDateStart(event.target.value)} /></label>
-        <label><span>Até</span><input type="date" value={dateEnd} min={dateStart} onChange={(event) => setDateEnd(event.target.value)} /></label>
-        <div className={styles.source}><span>Fonte</span><strong>Meta Ads · entrega regional</strong></div>
-      </section>
 
       {error && <div className={styles.error} role="alert"><AlertCircle size={18} /><span>{error}</span><button type="button" onClick={() => void load()}>Tentar novamente</button></div>}
 
-      <section className={styles.tape} aria-label="Resumo do período">
-        <article><span>CPL médio</span><strong>{money(payload?.summary.cpl)}</strong><small>referência da bolsa</small></article>
-        <article><span>Investimento</span><strong>{money(payload?.summary.spend)}</strong><small>{payload?.summary.accounts || 0} contas analisadas</small></article>
-        <article><span>Leads Meta</span><strong>{compact(payload?.summary.leads || 0)}</strong><small>{payload?.summary.regions || 0} regiões com entrega</small></article>
-        <article><span>CTR médio</span><strong>{percent(payload?.summary.ctr)}</strong><small>{compact(payload?.summary.impressions || 0)} impressões</small></article>
+      <section className={styles.metrics} aria-label="Resumo do período">
+        <article className={styles.metricCyan}><span><MapPinned size={17} /></span><p>Estados</p><strong>{payload?.summary.regions || 0}</strong><small>com investimento no período</small></article>
+        <article className={styles.metricBlue}><span><Building2 size={17} /></span><p>Concessionárias</p><strong>{payload?.summary.accounts || 0}</strong><small>contas Meta consolidadas</small></article>
+        <article className={styles.metricEmerald}><span><Target size={17} /></span><p>Leads Meta</p><strong>{compact(payload?.summary.leads || 0)}</strong><small>conversões reportadas</small></article>
+        <article className={styles.metricCyan}><span><TrendingUp size={17} /></span><p>CPL médio geral</p><strong>{money(payload?.summary.cpl)}</strong><small>investimento dividido pelos leads</small></article>
+        <article className={styles.metricSlate}><span><WalletCards size={17} /></span><p>Investimento</p><strong>{money(payload?.summary.spend)}</strong><small>todas as regiões somadas</small></article>
       </section>
 
       <section className={styles.board}>
         <div className={styles.boardHeader}>
-          <div><span>Mercado regional</span><h2>Cotação do lead por região</h2></div>
+          <div className={styles.boardTop}>
+            <div><span>Visão consolidada</span><h2>CPL médio por estado</h2><p>Cada estado reúne todas as concessionárias com entrega naquela região.</p></div>
+            <div className={styles.periodControls}>
+              <div className={styles.quickPeriods}>
+                {[7, 30, 90].map((days) => <button type="button" key={days} onClick={() => applyDays(days)} className={dateStart === daysAgo(days - 1) ? styles.activePeriod : ''}>{days} dias</button>)}
+              </div>
+              <label><span>De</span><input type="date" value={dateStart} max={dateEnd} onChange={(event) => setDateStart(event.target.value)} /></label>
+              <label><span>Até</span><input type="date" value={dateEnd} min={dateStart} onChange={(event) => setDateEnd(event.target.value)} /></label>
+            </div>
+          </div>
           <div className={styles.boardControls}>
-            <label className={styles.search}><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar região, cliente ou criativo" /></label>
-            <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)} aria-label="Ordenar regiões">
-              <option value="volume">Maior volume</option>
-              <option value="cpl_low">Menor CPL</option>
-              <option value="cpl_high">Maior CPL</option>
-              <option value="variation">Maior alta</option>
-            </select>
+            <label className={styles.search}><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar estado ou concessionária..." /></label>
+            <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)} aria-label="Ordenar estados"><option value="volume">Mais leads</option><option value="cpl_low">Menor CPL</option><option value="cpl_high">Maior CPL</option><option value="variation">Maior alta</option></select>
           </div>
         </div>
 
-        <div className={styles.legend}><span><i className={styles.goodDot} /> abaixo da média</span><span><i className={styles.attentionDot} /> faixa da média</span><span><i className={styles.highDot} /> acima da média</span></div>
-
-        <div className={styles.columns} aria-hidden="true"><span>Região</span><span>Cotação do CPL</span><span>Leads</span><span>Variação</span><span>Melhor criativo</span><span /></div>
-        <div className={styles.rows}>
-          {regions.map((region) => {
-            const state = status(region);
-            const width = region.cpl ? Math.max(4, (region.cpl / maxCpl) * 100) : 0;
-            return (
-              <button type="button" className={styles.row} key={region.id} onClick={() => setSelected(region)}>
-                <div className={styles.regionName}><span className={`${styles.stateMark} ${styles[state]}`} /><div><strong>{region.name}</strong><small>{region.client_count} {region.client_count === 1 ? 'cliente' : 'clientes'}</small></div></div>
-                <div className={styles.quote}><strong>{money(region.cpl)}</strong><div className={styles.track}><span className={styles[state]} style={{ width: `${width}%` }} /></div></div>
-                <div className={styles.numeric}><strong>{region.leads}</strong><small>{money(region.spend)} investidos</small></div>
-                <div className={`${styles.variation} ${(region.variation_percent || 0) <= 0 ? styles.down : styles.up}`}>
-                  {region.variation_percent === null ? <span>—</span> : region.variation_percent <= 0 ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
-                  <strong>{variationLabel(region.variation_percent)}</strong>
-                </div>
-                <div className={styles.creativeCell}>
-                  <div className={styles.thumb}>{region.best_creative?.image_url ? <img src={region.best_creative.image_url} alt="" referrerPolicy="no-referrer" /> : <ImageIcon size={17} />}</div>
-                  <div><strong>{region.best_creative?.name || 'Sem conversão atribuída'}</strong><small>{region.best_creative ? `${region.best_creative.client_name} · ${money(region.best_creative.cpl)}` : 'Aguardando leads na Meta'}</small></div>
-                </div>
-                <ChevronRight size={17} className={styles.chevron} />
-              </button>
-            );
-          })}
-          {!loading && regions.length === 0 && !error && <div className={styles.empty}><MapPinned size={28} /><strong>Nenhuma região encontrada</strong><span>A Meta não retornou investimento regional para estes filtros.</span></div>}
-          {loading && !payload && <div className={styles.empty}><Loader2 size={28} className={styles.spin} /><strong>Atualizando a bolsa</strong><span>Consolidando investimento, leads e criativos por região.</span></div>}
+        <div className={styles.tableWrap}>
+          <table>
+            <thead><tr><th>Estado</th><th className={styles.right}>Concessionárias</th><th className={styles.right}>Leads Meta</th><th className={styles.right}>CPL médio</th><th className={styles.right}>Investimento</th><th>Melhor criativo do estado</th><th /></tr></thead>
+            <tbody>
+              {regions.map((region) => {
+                const state = status(region);
+                return <tr key={region.id} onClick={() => setSelected(region)} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') setSelected(region); }}>
+                  <td><div className={styles.regionName}><span className={`${styles.stateMark} ${styles[state]}`} /><div><strong>{region.name}</strong><small>{region.impressions.toLocaleString('pt-BR')} impressões · CTR {percent(region.ctr)}</small></div></div></td>
+                  <td className={styles.right}><strong className={styles.tableNumber}>{region.client_count}</strong><small className={styles.mobileHint}> contas</small></td>
+                  <td className={styles.right}><strong className={styles.tableNumber}>{region.leads}</strong></td>
+                  <td className={styles.right}><span className={`${styles.cplBadge} ${styles[state]}`}>{money(region.cpl)}</span><small className={`${styles.delta} ${(region.variation_percent || 0) <= 0 ? styles.down : styles.up}`}>{region.variation_percent === null ? 'sem comparativo' : <>{region.variation_percent <= 0 ? <ArrowDown size={11} /> : <ArrowUp size={11} />}{variationLabel(region.variation_percent)}</>}</small></td>
+                  <td className={styles.right}><strong className={styles.tableNumber}>{money(region.spend)}</strong></td>
+                  <td><div className={styles.creativeCell}><div className={styles.thumb}>{region.best_creative?.image_url ? <img src={region.best_creative.image_url} alt="" referrerPolicy="no-referrer" /> : <ImageIcon size={17} />}</div><div><strong>{region.best_creative?.name || 'Sem lead atribuído'}</strong><small>{region.best_creative ? `${region.best_creative.client_name} · CPL ${money(region.best_creative.cpl)}` : 'Aguardando conversões na Meta'}</small></div></div></td>
+                  <td><ChevronRight size={17} className={styles.chevron} /></td>
+                </tr>;
+              })}
+              {!loading && regions.length === 0 && !error && <tr><td colSpan={7}><div className={styles.empty}><MapPinned size={28} /><strong>Nenhum estado encontrado</strong><span>A Meta não retornou investimento regional para estes filtros.</span></div></td></tr>}
+              {loading && !payload && <tr><td colSpan={7}><div className={styles.empty}><Loader2 size={28} className={styles.spin} /><strong>Consolidando os estados</strong><span>Somando investimento e leads de todas as concessionárias.</span></div></td></tr>}
+            </tbody>
+          </table>
         </div>
+        <div className={styles.boardFooter}><span>{regions.length} de {payload?.summary.regions || 0} estados exibidos</span><span>Fonte: Meta Ads · CPL ponderado por investimento e leads</span></div>
       </section>
 
       {payload?.errors.length ? <details className={styles.partial}><summary>{payload.errors.length} conta(s) não responderam nesta atualização</summary>{payload.errors.map((item) => <p key={item.account}><strong>{item.account}:</strong> {item.message}</p>)}</details> : null}
 
-      <footer className={styles.note}><CalendarDays size={14} /><span>CPL calculado com as conversões de lead reportadas pela Meta. Região corresponde ao local de entrega informado pela plataforma.</span></footer>
+      <footer className={styles.note}><CalendarDays size={14} /><span>Exemplo: se três concessionárias investirem R$ 3.000 e gerarem 100 leads na Paraíba, o CPL médio do estado será R$ 30.</span></footer>
 
       {selected && (
         <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}>
