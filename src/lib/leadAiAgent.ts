@@ -2109,9 +2109,13 @@ export async function continueLeadAiFromIncoming(options: {
     .map((item) => String(item.metadata?.ai_text || item.mensagem || ''));
   const recentInitialConfirmation = recentOutboundTexts.some(isInitialConfirmationQuestion);
   const recentCnpjConfirmation = recentOutboundTexts.some(isCnpjConfirmationQuestion);
-  const scheduleConfirmed =
-    looksLikeScheduleAnswer(options.customerMessage) &&
-    (isSchedulePrompt(previousOutboundText) || recentOutboundTexts.some(isSchedulePrompt));
+  const scheduleReference = new Date();
+  const isSchedulingConversation =
+    isSchedulePrompt(previousOutboundText) || recentOutboundTexts.some(isSchedulePrompt);
+  const requestedScheduleAt = isSchedulingConversation && looksLikeScheduleAnswer(options.customerMessage)
+    ? parseScheduledTextToDate(options.customerMessage, scheduleReference)
+    : null;
+  const scheduleConfirmed = Boolean(requestedScheduleAt);
   const noHospitalPreference =
     isHospitalPreferenceQuestion(previousOutboundText) &&
     isNoHospitalPreferenceAnswer(options.customerMessage);
@@ -2190,6 +2194,31 @@ export async function continueLeadAiFromIncoming(options: {
   if (scheduleConfirmed) {
     if (!(await isLeadAiSessionActive(session.id))) {
       return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
+    // Data e horario explicitos nao ficam a cargo do modelo. Isso evita que o
+    // contexto anterior (por exemplo, "amanha") transforme "hoje, 15h" em
+    // outro dia, ou que um horario futuro seja tratado como se ja tivesse passado.
+    if (requestedScheduleAt && requestedScheduleAt.getTime() <= scheduleReference.getTime()) {
+      const reply = 'Esse horário já passou. Você poderia me informar outro dia e horário a partir de agora?';
+      registerAiOutbound(lead.telefone || '', reply);
+      const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
+      await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+        ...(payload || {}),
+        instance: aiInstanceName(adminProfile),
+        ai_agent: aiConfig.persona,
+      });
+
+      await supabaseAdmin
+        .from('lead_ai_sessions')
+        .update({
+          last_customer_message_at: new Date().toISOString(),
+          last_ai_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', session.id);
+
+      return { handled: true, handoff: false, deterministic: 'past_schedule_rejected' };
     }
 
     return await finalizeScheduledHandoff({

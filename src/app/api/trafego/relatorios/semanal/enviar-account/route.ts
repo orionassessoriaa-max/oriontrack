@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { OPERATIONAL_COORDINATOR_PROFILE_IDS } from '@/lib/users';
 
 type Profile = { id: string; tipo_usuario: string; nome?: string | null };
-type AccountManagerProfile = {
+type ReportRecipientProfile = {
   id: string;
   nome: string | null;
   tipo_usuario: string;
@@ -34,10 +35,15 @@ function normalize(value?: string | null) {
     .toLowerCase();
 }
 
-function isAccountMember(member: TeamMember) {
+function isReportRecipientMember(member: TeamMember) {
   const role = normalize(member.tipo_usuario);
   const cargo = normalize(member.cargo);
-  return role === 'account_manager' || cargo.includes('account') || cargo.includes('gestor de projetos');
+  return (
+    role === 'account_manager'
+    || cargo.includes('account')
+    || cargo.includes('gestor de projetos')
+    || Boolean(member.profile_id && OPERATIONAL_COORDINATOR_PROFILE_IDS.has(member.profile_id))
+  );
 }
 
 async function requireAccess(request: Request) {
@@ -89,13 +95,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Este relatório não pertence ao gestor selecionado.' }, { status: 403 });
     }
     if (report.status === 'ENVIADO') {
-      return NextResponse.json({ success: true, status: 'ENVIADO', message: 'Este relatório já foi enviado ao Account Manager.' });
+      return NextResponse.json({ success: true, status: 'ENVIADO', message: 'Este relatório já foi enviado aos responsáveis do Apollo.' });
     }
 
     const items = (Array.isArray(report.itens) ? report.itens : []) as WeeklyItem[];
     if (!items.length) return NextResponse.json({ error: 'O relatório não possui concessionárias.' }, { status: 400 });
     const corretorIds = Array.from(new Set(items.flatMap((item) => item.corretor_ids?.length ? item.corretor_ids : [item.corretor_id])));
-    const [{ data: corretores, error: corretoresError }, { data: managers, error: managersError }] = await Promise.all([
+    const [
+      { data: corretores, error: corretoresError },
+      { data: managers, error: managersError },
+      { data: coordinators, error: coordinatorsError },
+    ] = await Promise.all([
       supabaseAdmin
         .from('corretores')
         .select('id, nome, nome_empresa, time_operacional')
@@ -105,13 +115,28 @@ export async function POST(request: Request) {
         .select('id, nome, tipo_usuario')
         .eq('tipo_usuario', 'account_manager')
         .in('status', ['active', 'ativo', 'Ativo']),
+      supabaseAdmin
+        .from('profiles')
+        .select('id, nome, tipo_usuario')
+        .in('id', Array.from(OPERATIONAL_COORDINATOR_PROFILE_IDS))
+        .in('status', ['active', 'ativo', 'Ativo']),
     ]);
     if (corretoresError) return NextResponse.json({ error: corretoresError.message }, { status: 500 });
     if (managersError) return NextResponse.json({ error: managersError.message }, { status: 500 });
+    if (coordinatorsError) return NextResponse.json({ error: coordinatorsError.message }, { status: 500 });
 
-    const accountManagers = (managers || []) as AccountManagerProfile[];
+    const activeCoordinators = (coordinators || []) as ReportRecipientProfile[];
+    const coordinatorProfileIds = new Set(activeCoordinators.map((profile) => profile.id));
+    const recipients = Array.from(new Map(
+      [...(managers || []), ...activeCoordinators]
+        .map((profile) => [profile.id, profile as ReportRecipientProfile])
+    ).values());
     const brokerRows = (corretores || []) as CorretorTeamRow[];
-    const itemsByManager = new Map<string, WeeklyItem[]>();
+    // O Coordenador Operacional acompanha a operacao inteira do Apollo, nao
+    // apenas as concessionarias onde ainda consta como antigo Account Manager.
+    const itemsByRecipient = new Map<string, WeeklyItem[]>(
+      activeCoordinators.map((profile) => [profile.id, [...items]])
+    );
     const missing: string[] = [];
 
     items.forEach((item) => {
@@ -119,42 +144,43 @@ export async function POST(request: Request) {
       const teamMembers = brokerRows
         .filter((broker) => ids.includes(broker.id))
         .flatMap((broker) => Array.isArray(broker.time_operacional) ? broker.time_operacional as TeamMember[] : [])
-        .filter(isAccountMember);
-      const assignedManagers = accountManagers.filter((manager) =>
+        .filter(isReportRecipientMember);
+      const assignedRecipients = recipients.filter((recipient) =>
+        !coordinatorProfileIds.has(recipient.id) &&
         teamMembers.some((member) =>
-          (member.profile_id && member.profile_id === manager.id)
-          || normalize(member.nome) === normalize(manager.nome)
+          (member.profile_id && member.profile_id === recipient.id)
+          || normalize(member.nome) === normalize(recipient.nome)
         )
       );
 
-      if (!assignedManagers.length) {
+      if (!assignedRecipients.length && !activeCoordinators.length) {
         missing.push(item.concessionaria);
         return;
       }
-      assignedManagers.forEach((manager) => {
-        itemsByManager.set(manager.id, [...(itemsByManager.get(manager.id) || []), item]);
+      assignedRecipients.forEach((recipient) => {
+        itemsByRecipient.set(recipient.id, [...(itemsByRecipient.get(recipient.id) || []), item]);
       });
     });
 
     if (missing.length) {
       return NextResponse.json({
-        error: `Atribua um Account Manager no time operacional destas concessionárias: ${missing.join(', ')}.`,
+        error: `Atribua um Account Manager ou Coordenador Operacional no time destas concessionárias: ${missing.join(', ')}.`,
       }, { status: 400 });
     }
 
     const period = `${report.data_inicio} a ${report.data_fim}`;
-    const notifications = accountManagers
-      .filter((manager) => itemsByManager.has(manager.id))
-      .map((manager) => {
-        const managerItems = itemsByManager.get(manager.id) || [];
-        const content = managerItems
+    const notifications = recipients
+      .filter((recipient) => itemsByRecipient.has(recipient.id))
+      .map((recipient) => {
+        const recipientItems = itemsByRecipient.get(recipient.id) || [];
+        const content = recipientItems
           .map((item) => `${item.concessionaria}\n${item.mensagem}`)
           .join('\n\n--------------------\n\n');
         return {
           titulo: 'Relatório semanal de tráfego recebido',
           mensagem: `${scopedProfile.nome || 'O gestor de tráfego'} enviou o relatório de ${period}.\n\n${content}`,
           remetente_profile_id: guard.profile.id,
-          destinatario_profile_id: manager.id,
+          destinatario_profile_id: recipient.id,
           destinatario_tipo: null,
           lida: false,
         };
@@ -175,7 +201,8 @@ export async function POST(request: Request) {
       entity_id: reportId,
       metadata: {
         gestor_id: scopedProfile.id,
-        account_manager_ids: Array.from(itemsByManager.keys()),
+        account_manager_ids: Array.from(itemsByRecipient.keys()),
+        recipient_profile_ids: Array.from(itemsByRecipient.keys()),
         concessionarias: items.map((item) => item.concessionaria),
       },
     });
@@ -183,11 +210,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       status: 'ENVIADO',
-      message: `Relatório enviado para ${itemsByManager.size} Account Manager(s).`,
+      message: `Relatório enviado para ${itemsByRecipient.size} responsável(is) do Apollo.`,
     });
   } catch (error: unknown) {
     return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Erro ao enviar relatório para o Account Manager.',
+      error: error instanceof Error ? error.message : 'Erro ao enviar relatório para os responsáveis do Apollo.',
     }, { status: 500 });
   }
 }

@@ -476,10 +476,10 @@ export default function TrafficReportsPage() {
         }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar o relatório para o Account Manager.');
-      setWeeklySendMessage(payload.message || 'Relatório enviado para o Account Manager.');
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar o relatório para os responsáveis do Apollo.');
+      setWeeklySendMessage(payload.message || 'Relatório enviado para os responsáveis do Apollo.');
     } catch (err: any) {
-      setWeeklyError(err.message || 'Erro ao enviar relatório para o Account Manager.');
+      setWeeklyError(err.message || 'Erro ao enviar relatório para os responsáveis do Apollo.');
     } finally {
       setWeeklySending(false);
     }
@@ -558,7 +558,7 @@ export default function TrafficReportsPage() {
             <div><p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Prévia para revisão</p><h2 className="mt-1 text-2xl font-black text-slate-900">Mensagens da semana</h2><p className="mt-1 text-sm text-slate-500">Relatório {weeklyReportId ? `#${weeklyReportId.slice(0, 8)}` : ''} salvo no histórico. Revise antes de enviar.</p></div>
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={sendWeeklyToAccount} disabled={weeklySending || !weeklyReportId} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
-                {weeklySending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Enviar para Account Manager
+                {weeklySending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Enviar para responsáveis
               </button>
               <button type="button" onClick={copyWeeklyReport} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50" aria-live="polite">
                 {weeklyCopiedTarget === 'all' ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
@@ -597,7 +597,7 @@ export default function TrafficReportsPage() {
       )}
 
       <section className="mb-10 rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-6"><p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Destinos WhatsApp</p><h2 className="mt-1 text-xl font-black text-slate-900">Cadastrar grupo por concessionária</h2><p className="mt-1 text-sm text-slate-500">Os grupos são destinos externos. O envio para Account Manager acontece internamente pelo usuário atribuído no time operacional.</p></div>
+        <div className="mb-6"><p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">Destinos WhatsApp</p><h2 className="mt-1 text-xl font-black text-slate-900">Cadastrar grupo por concessionária</h2><p className="mt-1 text-sm text-slate-500">Os grupos são destinos externos. O envio interno considera o Account Manager ou Coordenador Operacional atribuído no time.</p></div>
         <form onSubmit={saveDestination} className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <select required value={destinationForm.corretor_id} onChange={(e) => setDestinationForm({ ...destinationForm, corretor_id: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-700"><option value="">Concessionária</option>{corretores.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select>
           <input required value={destinationForm.nome} onChange={(e) => setDestinationForm({ ...destinationForm, nome: e.target.value })} placeholder="Nome do destino" className="rounded-xl border border-slate-200 px-3 py-3 text-sm" />

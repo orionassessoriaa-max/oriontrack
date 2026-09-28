@@ -20,7 +20,11 @@ export function isSchedulePrompt(text?: string | null) {
     normalized.includes('disponibilidade para uma ligacao') ||
     normalized.includes('quando fica melhor') ||
     normalized.includes('qual melhor horario') ||
-    normalized.includes('melhor horario')
+    normalized.includes('melhor horario') ||
+    normalized.includes('horario especifico') ||
+    normalized.includes('tarde de amanha') ||
+    normalized.includes('manha de amanha') ||
+    normalized.includes('noite de amanha')
   );
 }
 
@@ -32,7 +36,7 @@ export function looksLikeScheduleAnswer(text?: string | null) {
     /\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(normalized) ||
     /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/.test(normalized);
   const hasTime =
-    /\b\d{1,2}\s*h(?:oras?)?\b/.test(normalized) ||
+    /\b\d{1,2}\s*h(?:oras?|rs?)?\b/.test(normalized) ||
     /\b\d{1,2}:\d{2}\b/.test(normalized) ||
     /\b(?:as|a partir das|depois das|antes das)\s*\d{1,2}\b/.test(normalized) ||
     /\b(manha|tarde|noite)\b/.test(normalized);
@@ -77,7 +81,8 @@ export function parseScheduledTextToDate(scheduledText: string, reference = new 
   const normalized = normalizeSchedulingText(scheduledText).trim();
   const timeMatch =
     normalized.match(/\b(?:as|a partir das|depois das|antes das)\s*(\d{1,2})(?::|h)?\s*(\d{2})?\b/) ||
-    normalized.match(/\b(\d{1,2})(?::|h)\s*(\d{2})?\b/);
+    normalized.match(/\b(\d{1,2}):(\d{2})\b/) ||
+    normalized.match(/\b(\d{1,2})\s*h(?:oras?|rs?)?\s*(\d{2})?\b/);
   if (!timeMatch) return null;
 
   const hour = Number(timeMatch[1]);

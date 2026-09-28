@@ -524,6 +524,7 @@ export default function BrokerInboxPage() {
   ]);
   const [selectedFlowStepId, setSelectedFlowStepId] = useState('step_welcome');
   const [closeReason, setCloseReason] = useState('');
+  const [closeOtherReason, setCloseOtherReason] = useState('');
   const [closingConversation, setClosingConversation] = useState(false);
 
   // Kept internally for backward compatibility; these legacy tools are no
@@ -2325,6 +2326,7 @@ export default function BrokerInboxPage() {
 
   const handleEndChat = () => {
     setCloseReason('');
+    setCloseOtherReason('');
     setShowCloseReasonModal(true);
   };
 
@@ -5297,6 +5299,27 @@ export default function BrokerInboxPage() {
                   </button>
                 ))}
               </div>
+
+              {closeReason === 'Outro motivo' && (
+                <label className="block space-y-2">
+                  <span className="text-2xs block font-extrabold uppercase tracking-wider text-slate-400">
+                    Descreva o motivo
+                  </span>
+                  <textarea
+                    autoFocus
+                    required
+                    rows={3}
+                    maxLength={180}
+                    value={closeOtherReason}
+                    onChange={(event) => setCloseOtherReason(event.target.value)}
+                    placeholder="Explique por que este atendimento está sendo encerrado"
+                    className="w-full resize-none rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-3 text-xs font-bold text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10"
+                  />
+                  <span className="block text-right text-[9px] font-bold text-slate-500">
+                    {closeOtherReason.length}/180
+                  </span>
+                </label>
+              )}
             </div>
 
             <div className="p-6 border-t border-white/5 bg-slate-950/20 flex gap-3 justify-end shrink-0">
@@ -5305,6 +5328,7 @@ export default function BrokerInboxPage() {
                 onClick={() => {
                   setShowCloseReasonModal(false);
                   setCloseReason('');
+                  setCloseOtherReason('');
                 }}
                 className="px-5 py-2.5 rounded-xl bg-white/5 text-xs font-black uppercase tracking-wider text-slate-400 hover:bg-white/10 transition-all cursor-pointer"
               >
@@ -5312,14 +5336,17 @@ export default function BrokerInboxPage() {
               </button>
               <button
                 type="button"
-                disabled={!closeReason || closingConversation}
+                disabled={!closeReason || (closeReason === 'Outro motivo' && !closeOtherReason.trim()) || closingConversation}
                 onClick={async () => {
                   if (!selectedConversation || !closeReason || closingConversation) return;
+                  const selectedReason = closeReason === 'Outro motivo'
+                    ? closeOtherReason.trim()
+                    : closeReason;
+                  if (!selectedReason) return;
                   setClosingConversation(true);
 
                   try {
                     const conversationToClose = selectedConversation;
-                    const selectedReason = closeReason;
                     const closed = await updateConversationStatus('fechada');
                     if (!closed) throw new Error('Nao foi possivel salvar o encerramento.');
 
@@ -5338,6 +5365,7 @@ export default function BrokerInboxPage() {
 
                     setShowCloseReasonModal(false);
                     setCloseReason('');
+                    setCloseOtherReason('');
                     alert('Conversa encerrada e removida da caixa ativa.');
                   } catch (error: unknown) {
                     console.error('Erro ao encerrar conversa:', error);
