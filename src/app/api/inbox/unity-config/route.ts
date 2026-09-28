@@ -33,7 +33,7 @@ async function resolveUnityContext(request: Request) {
     target = data;
   }
 
-  if (normalizedCompany(target.nome_empresa) !== 'UNITY SAUDE' || !target.corretor_id) {
+  if (!target.corretor_id) {
     return { response: NextResponse.json({ error: 'Configuracao disponivel somente para a Unity.' }, { status: 403 }) };
   }
 
