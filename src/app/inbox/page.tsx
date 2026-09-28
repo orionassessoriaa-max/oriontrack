@@ -168,6 +168,12 @@ function inboxMessageSenderName(message: InboxMessage, fallback = 'Contato') {
     ? metadata.ai_agent || metadata.sender_name || message.remetente
     : message.remetente;
 
+  // O historico antigo da Unity usa Hebert como remetente das automacoes do
+  // Agendor. O rotulo evita atribuir essas mensagens a uma pessoa da equipe.
+  if (message.direction === 'outbound' && /hebert/i.test(String(attributedSender || ''))) {
+    return 'AGENDOR';
+  }
+
   return cleanInboxDisplayName(attributedSender, fallback);
 }
 
@@ -476,6 +482,8 @@ export default function BrokerInboxPage() {
   const [unityQuickReplies, setUnityQuickReplies] = useState<UnityQuickReply[]>([]);
   const [unityMacros, setUnityMacros] = useState<UnityMacro[]>([]);
   const [executingMacroId, setExecutingMacroId] = useState<string | null>(null);
+  const [pausedMacroId, setPausedMacroId] = useState<string | null>(null);
+  const macroExecutionRef = useRef<{ macroId: string; paused: boolean; resume: (() => void) | null } | null>(null);
   const [labelDraft, setLabelDraft] = useState({ name: '', color: '#06b6d4' });
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [showLabelEditor, setShowLabelEditor] = useState(false);
@@ -1902,17 +1910,74 @@ export default function BrokerInboxPage() {
     }
   }
 
+  function pauseUnityMacro(macroId: string) {
+    const control = macroExecutionRef.current;
+    if (!control || control.macroId !== macroId) return;
+    control.paused = true;
+    setPausedMacroId(macroId);
+  }
+
+  function resumeUnityMacro(macroId: string) {
+    const control = macroExecutionRef.current;
+    if (!control || control.macroId !== macroId) return;
+    control.paused = false;
+    setPausedMacroId(null);
+    control.resume?.();
+    control.resume = null;
+  }
+
+  async function waitForMacroResume(control: { paused: boolean; resume: (() => void) | null }) {
+    while (control.paused) {
+      await new Promise<void>((resolve) => { control.resume = resolve; });
+    }
+  }
+
+  async function waitMacroInterval(seconds: number, control: { paused: boolean; resume: (() => void) | null }) {
+    let remaining = Math.max(0, seconds * 1000);
+    while (remaining > 0) {
+      await waitForMacroResume(control);
+      const slice = Math.min(250, remaining);
+      await new Promise((resolve) => window.setTimeout(resolve, slice));
+      remaining -= slice;
+    }
+    await waitForMacroResume(control);
+  }
+
   async function executeUnityMacro(macro: UnityMacro) {
     if (!isUnityInbox || !selectedConversation || selectedConversation.id.startsWith('new-') || executingMacroId) return false;
 
     const conversation = selectedConversation;
     let messageWasSent = false;
+    let sentMessages = 0;
+    const control = { macroId: macro.id, paused: false, resume: null as (() => void) | null };
+    macroExecutionRef.current = control;
     setExecutingMacroId(macro.id);
+    setPausedMacroId(null);
     setSendError(null);
     try {
-      const sent = await sendMessage(macro.text, false, '', undefined, undefined, { preserveComposer: true });
-      if (!sent) throw new Error('A mensagem nao foi confirmada. As acoes da macro nao foram executadas.');
-      messageWasSent = true;
+      for (let index = 0; index < macro.messages.length; index += 1) {
+        await waitForMacroResume(control);
+        if (selectedConversationRef.current?.id !== conversation.id) {
+          throw new Error('A conversa aberta mudou. A sequencia foi interrompida para nao enviar ao contato errado.');
+        }
+        const macroMessage = macro.messages[index];
+        const sent = macroMessage.type === 'audio'
+          ? await sendMessage(
+              '[Audio Gravado]',
+              true,
+              macroMessage.audioDuration || '',
+              macroMessage.audioBase64,
+              macroMessage.audioMimeType,
+              { preserveComposer: true },
+            )
+          : await sendMessage(macroMessage.text, false, '', undefined, undefined, { preserveComposer: true });
+        if (!sent) throw new Error(`A mensagem ${index + 1} nao foi confirmada. As acoes finais nao foram executadas.`);
+        sentMessages += 1;
+        messageWasSent = true;
+        if (index < macro.messages.length - 1) {
+          await waitMacroInterval(macro.intervalSeconds, control);
+        }
+      }
 
       const labelNames = unityLabels
         .filter((label) => macro.actions.labelIds.includes(label.id))
@@ -1959,6 +2024,7 @@ export default function BrokerInboxPage() {
         titulo: `Macro executada: ${macro.title}`,
         descricao: [
           'Mensagem enviada',
+          `Sequencia: ${sentMessages} mensagem(ns)`,
           labelNames.length ? `Etiquetas: ${labelNames.join(', ')}` : '',
           macro.actions.status ? `Etapa: ${macro.actions.status}` : '',
           macro.actions.closeConversation ? 'Atendimento encerrado' : '',
@@ -1969,13 +2035,15 @@ export default function BrokerInboxPage() {
       const detail = error instanceof Error ? error.message : 'Nao foi possivel executar a macro.';
       // A mensagem nao pode ser repetida quando uma acao posterior falha.
       const message = messageWasSent
-        ? `${detail} A mensagem ja foi enviada; nao execute a macro novamente para evitar duplicidade.`
+        ? `${detail} ${sentMessages} mensagem(ns) ja foram enviadas; retome somente depois de conferir a conversa.`
         : detail;
       setSendError(message);
       alert(message);
       return false;
     } finally {
+      if (macroExecutionRef.current === control) macroExecutionRef.current = null;
       setExecutingMacroId(null);
+      setPausedMacroId(null);
     }
   }
 
@@ -3422,7 +3490,10 @@ export default function BrokerInboxPage() {
                         labels={unityLabels}
                         stages={kanbanStages}
                         executingId={executingMacroId}
+                        pausedId={pausedMacroId}
                         onExecute={executeUnityMacro}
+                        onPause={pauseUnityMacro}
+                        onResume={resumeUnityMacro}
                       />
                     )}
                     <button

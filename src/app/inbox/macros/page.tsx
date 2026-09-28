@@ -1,19 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
+  AudioLines,
   Archive,
   ArrowLeft,
   CheckCircle2,
   Layers3,
   Loader2,
+  Mic,
   MessageSquareText,
   Pencil,
   Plus,
   Save,
   Search,
+  Square,
   Tag,
   Trash2,
   UserRound,
@@ -22,7 +25,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import type { KanbanStage } from '@/lib/kanbanStages';
-import type { UnityMacro } from '@/lib/unityMacros';
+import type { UnityMacro, UnityMacroMessage } from '@/lib/unityMacros';
 import styles from './page.module.css';
 
 type UnityLabel = { id: string; name: string; color: string };
@@ -31,8 +34,14 @@ type Draft = Omit<UnityMacro, 'id'>;
 const EMPTY_DRAFT: Draft = {
   title: '',
   text: '',
+  messages: [{ id: 'mensagem-1', type: 'text', text: '' }],
+  intervalSeconds: 3,
   actions: { closeConversation: false, status: null, labelIds: [] },
 };
+
+function emptyMessage(index: number): UnityMacroMessage {
+  return { id: `mensagem-${index + 1}-${crypto.randomUUID()}`, type: 'text', text: '' };
+}
 
 function normalizedCompany(value: unknown) {
   return String(value || '')
@@ -52,7 +61,13 @@ export default function UnityMacrosPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [recordingIndex, setRecordingIndex] = useState<number | null>(null);
+  const [recordSeconds, setRecordSeconds] = useState(0);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recorderChunksRef = useRef<Blob[]>([]);
+  const recorderStreamRef = useRef<MediaStream | null>(null);
+  const recorderTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isUnity = normalizedCompany(profile?.nome_empresa) === 'UNITY SAUDE';
   const profileId = profile?.id || '';
@@ -117,11 +132,114 @@ export default function UnityMacrosPage() {
     setNotice(null);
   }
 
+  function stopRecorderTracks() {
+    if (recorderTimerRef.current) clearInterval(recorderTimerRef.current);
+    recorderTimerRef.current = null;
+    recorderStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recorderStreamRef.current = null;
+  }
+
+  useEffect(() => () => {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      recorderRef.current.onstop = null;
+      recorderRef.current.stop();
+    }
+    stopRecorderTracks();
+  }, []);
+
+  function setMessageCount(value: number) {
+    const count = Math.min(10, Math.max(1, value || 1));
+    setDraft((current) => {
+      const messages = current.messages.slice(0, count);
+      while (messages.length < count) messages.push(emptyMessage(messages.length));
+      return { ...current, messages };
+    });
+  }
+
+  function updateMessage(index: number, update: Partial<UnityMacroMessage>) {
+    setDraft((current) => ({
+      ...current,
+      messages: current.messages.map((message, messageIndex) => messageIndex === index
+        ? { ...message, ...update }
+        : message),
+    }));
+  }
+
+  async function startAudioRecording(index: number) {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setNotice({ tone: 'error', text: 'Este navegador nao permite gravar audio. Use Chrome ou Edge atualizado.' });
+      return;
+    }
+    try {
+      setNotice(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+      ].find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      recorderStreamRef.current = stream;
+      recorderChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recorderChunksRef.current.push(event.data);
+      };
+      recorder.start(250);
+      setRecordingIndex(index);
+      setRecordSeconds(0);
+      recorderTimerRef.current = setInterval(() => setRecordSeconds((seconds) => seconds + 1), 1000);
+    } catch {
+      stopRecorderTracks();
+      setNotice({ tone: 'error', text: 'Libere o microfone no navegador para gravar o audio da macro.' });
+    }
+  }
+
+  function finishAudioRecording() {
+    const recorder = recorderRef.current;
+    const index = recordingIndex;
+    if (!recorder || recorder.state === 'inactive' || index === null) return;
+    const duration = Math.max(recordSeconds, 1);
+    recorder.onstop = () => {
+      const blob = new Blob(recorderChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+      stopRecorderTracks();
+      recorderRef.current = null;
+      setRecordingIndex(null);
+      if (!blob.size) {
+        setNotice({ tone: 'error', text: 'A gravacao ficou vazia. Grave novamente.' });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = String(reader.result || '');
+        const audioBase64 = dataUrl.includes(';base64,') ? dataUrl.split(';base64,')[1] : '';
+        if (!audioBase64 || audioBase64.length > 3_000_000) {
+          setNotice({ tone: 'error', text: 'O audio ficou grande demais. Grave uma mensagem mais curta.' });
+          return;
+        }
+        const minutes = Math.floor(duration / 60).toString().padStart(2, '0');
+        const seconds = (duration % 60).toString().padStart(2, '0');
+        updateMessage(index, {
+          type: 'audio',
+          text: '',
+          audioBase64,
+          audioMimeType: recorder.mimeType || 'audio/webm',
+          audioDuration: `${minutes}:${seconds}`,
+        });
+      };
+      reader.readAsDataURL(blob);
+    };
+    recorder.stop();
+  }
+
   function editMacro(macro: UnityMacro) {
     setEditingId(macro.id);
     setDraft({
       title: macro.title,
       text: macro.text,
+      messages: macro.messages.map((message) => ({ ...message })),
+      intervalSeconds: macro.intervalSeconds,
       actions: {
         closeConversation: macro.actions.closeConversation,
         status: macro.actions.status,
@@ -144,9 +262,11 @@ export default function UnityMacrosPage() {
 
   async function saveMacro() {
     const title = draft.title.trim();
-    const text = draft.text.trim();
-    if (!title || !text) {
-      setNotice({ tone: 'error', text: 'Informe o nome e a mensagem da macro.' });
+    const validMessages = draft.messages.filter((message) => message.type === 'audio'
+      ? Boolean(message.audioBase64)
+      : Boolean(message.text.trim()));
+    if (!title || validMessages.length !== draft.messages.length) {
+      setNotice({ tone: 'error', text: 'Informe o nome e complete todas as mensagens da sequencia.' });
       return;
     }
     if (macros.some((macro) => macro.id !== editingId && macro.title.toLocaleLowerCase('pt-BR') === title.toLocaleLowerCase('pt-BR'))) {
@@ -157,7 +277,9 @@ export default function UnityMacrosPage() {
     const item: UnityMacro = {
       id: editingId || crypto.randomUUID(),
       title,
-      text,
+      text: validMessages.find((message) => message.type === 'text')?.text.trim() || '[Mensagem de voz]',
+      messages: validMessages,
+      intervalSeconds: Math.min(120, Math.max(0, draft.intervalSeconds || 0)),
       actions: draft.actions,
     };
     const next = editingId
@@ -260,6 +382,8 @@ export default function UnityMacrosPage() {
                     <strong>{macro.title}</strong>
                     <small>{macro.text}</small>
                     <span className={styles.actionSummary}>
+                      <i><MessageSquareText size={11} /> {macro.messages.length} msg</i>
+                      {macro.messages.some((message) => message.type === 'audio') && <i><AudioLines size={11} /> audio</i>}
                       {macro.actions.closeConversation && <i><Archive size={11} /> encerra</i>}
                       {macro.actions.status && <i><Layers3 size={11} /> muda etapa</i>}
                       {macro.actions.labelIds.length > 0 && <i><Tag size={11} /> etiqueta</i>}
@@ -290,11 +414,67 @@ export default function UnityMacrosPage() {
                 <span>Nome da macro</span>
                 <input maxLength={60} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Ex.: Finalizar com despedida" />
               </label>
-              <label className={`${styles.field} ${styles.messageField}`}>
-                <span>Mensagem enviada ao cliente</span>
-                <textarea maxLength={4000} rows={8} value={draft.text} onChange={(event) => setDraft((current) => ({ ...current, text: event.target.value }))} placeholder="Escreva a mensagem exatamente como o cliente deve receber." />
-                <small>{draft.text.length}/4000</small>
-              </label>
+              <div className={styles.sequenceConfig}>
+                <label className={styles.field}>
+                  <span>Quantidade de mensagens</span>
+                  <input type="number" min={1} max={10} value={draft.messages.length} onChange={(event) => setMessageCount(Number(event.target.value))} />
+                </label>
+                <label className={styles.field}>
+                  <span>Intervalo entre mensagens</span>
+                  <div className={styles.secondsInput}>
+                    <input type="number" min={0} max={120} value={draft.intervalSeconds} onChange={(event) => setDraft((current) => ({ ...current, intervalSeconds: Math.min(120, Math.max(0, Number(event.target.value) || 0)) }))} />
+                    <b>segundos</b>
+                  </div>
+                </label>
+              </div>
+
+              <div className={styles.sequenceList}>
+                {draft.messages.map((message, index) => {
+                  const isRecordingThis = recordingIndex === index;
+                  const audioUrl = message.audioBase64
+                    ? `data:${message.audioMimeType || 'audio/webm'};base64,${message.audioBase64}`
+                    : '';
+                  return (
+                    <div className={styles.sequenceItem} key={message.id}>
+                      <div className={styles.sequenceRail}><span>{index + 1}</span>{index < draft.messages.length - 1 && <i />}</div>
+                      <div className={styles.sequenceContent}>
+                        <div className={styles.sequenceHeader}>
+                          <div><strong>Mensagem {index + 1}</strong><small>{message.type === 'audio' ? 'Audio gravado' : 'Texto'}</small></div>
+                          <div className={styles.typeSwitch}>
+                            <button type="button" className={message.type === 'text' ? styles.typeActive : ''} onClick={() => updateMessage(index, { type: 'text', audioBase64: undefined, audioMimeType: undefined, audioDuration: undefined })}>Texto</button>
+                            <button type="button" className={message.type === 'audio' ? styles.typeActive : ''} onClick={() => updateMessage(index, { type: 'audio', text: '' })}>Audio</button>
+                          </div>
+                        </div>
+
+                        {message.type === 'text' ? (
+                          <label className={`${styles.field} ${styles.messageField}`}>
+                            <textarea maxLength={4000} rows={4} value={message.text} onChange={(event) => updateMessage(index, { text: event.target.value })} placeholder="Escreva exatamente como o cliente deve receber." />
+                            <small>{message.text.length}/4000</small>
+                          </label>
+                        ) : (
+                          <div className={styles.audioRecorder}>
+                            {audioUrl ? (
+                              <>
+                                <AudioLines size={18} />
+                                <audio controls preload="metadata" src={audioUrl} />
+                                <button type="button" onClick={() => updateMessage(index, { audioBase64: undefined, audioMimeType: undefined, audioDuration: undefined })}>Gravar novamente</button>
+                              </>
+                            ) : isRecordingThis ? (
+                              <>
+                                <span className={styles.recordingDot} />
+                                <strong>Gravando {Math.floor(recordSeconds / 60).toString().padStart(2, '0')}:{(recordSeconds % 60).toString().padStart(2, '0')}</strong>
+                                <button type="button" className={styles.stopRecording} onClick={finishAudioRecording}><Square size={13} /> Finalizar</button>
+                              </>
+                            ) : (
+                              <button type="button" disabled={recordingIndex !== null} className={styles.recordButton} onClick={() => void startAudioRecording(index)}><Mic size={16} /> Gravar audio</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className={styles.actionsBlock}>
@@ -332,8 +512,8 @@ export default function UnityMacrosPage() {
             </div>
 
             <footer className={styles.editorFooter}>
-              <p>A macro ficara disponivel no topo da conversa do Inbox somente para o seu acesso.</p>
-              <button type="button" onClick={() => void saveMacro()} disabled={saving || !draft.title.trim() || !draft.text.trim()}>
+              <p>A sequencia ficara disponivel no Inbox somente para o seu acesso. Play inicia e pausa interrompe antes da proxima mensagem.</p>
+              <button type="button" onClick={() => void saveMacro()} disabled={saving || recordingIndex !== null || !draft.title.trim()}>
                 {saving ? <Loader2 className={styles.spin} size={17} /> : <Save size={17} />}
                 {editingId ? 'Salvar alteracoes' : 'Criar macro'}
               </button>

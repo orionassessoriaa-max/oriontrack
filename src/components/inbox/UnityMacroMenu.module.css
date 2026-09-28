@@ -7,13 +7,19 @@
 .menuHeader strong { margin-top: 3px; color: #f8fafc; font-size: 11px; }
 .menuHeader a { display: inline-flex; align-items: center; gap: 5px; color: #67e8f9; font-size: 9px; font-weight: 900; text-decoration: none; }
 .list { max-height: 310px; overflow-y: auto; padding: 7px; }
-.list > button { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 11px; background: transparent; color: #f8fafc; text-align: left; cursor: pointer; }
-.list > button:hover { background: rgba(255,255,255,.07); }
-.list > button > span { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 9px; background: rgba(34,211,238,.1); color: #67e8f9; }
-.list > button div { min-width: 0; }
+.macroRow { display: flex; align-items: center; gap: 5px; border-radius: 11px; transition: .18s ease; }
+.macroRow:hover, .macroRunning { background: rgba(255,255,255,.07); }
+.macroRunning { box-shadow: inset 2px 0 0 #22d3ee; }
+.macroInfo { display: flex; min-width: 0; flex: 1; align-items: flex-start; gap: 10px; padding: 10px; border: 0; background: transparent; color: #f8fafc; text-align: left; cursor: pointer; }
+.macroInfo > span { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 9px; background: rgba(34,211,238,.1); color: #67e8f9; }
+.macroInfo div { min-width: 0; }
 .list strong, .list small { display: block; }
 .list strong { font-size: 10px; }
 .list small { margin-top: 4px; overflow: hidden; color: #8da0b2; font-size: 9px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.transport { display: inline-flex; gap: 3px; padding-right: 7px; }
+.transport button { display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(255,255,255,.04); color: #67e8f9; cursor: pointer; }
+.transport button:last-child { color: #fbbf24; }
+.transport button:disabled { cursor: not-allowed; opacity: .28; }
 .empty { padding: 24px; color: #8da0b2; text-align: center; font-size: 10px; font-weight: 750; }
 .empty a { display: block; margin-top: 7px; color: #67e8f9; font-weight: 900; }
 .overlay { position: fixed; z-index: 220; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(2,6,23,.82); backdrop-filter: blur(8px); }
@@ -37,8 +43,9 @@
 
 :global(.theme-claro) .menu { border-color: rgba(20,86,106,.18); background: #fff; box-shadow: 0 24px 60px rgba(20,50,60,.18); }
 :global(.theme-claro) .menuHeader { border-color: rgba(20,86,106,.12); }
-:global(.theme-claro) .menuHeader strong, :global(.theme-claro) .list > button { color: #16343e; }
-:global(.theme-claro) .list > button:hover { background: #eef6f8; }
+:global(.theme-claro) .menuHeader strong, :global(.theme-claro) .macroInfo { color: #16343e; }
+:global(.theme-claro) .macroRow:hover, :global(.theme-claro) .macroRunning { background: #eef6f8; }
+:global(.theme-claro) .transport button { border-color: rgba(20,86,106,.15); background: #f3f8fa; }
 :global(.theme-claro) .list small, :global(.theme-claro) .empty, :global(.theme-claro) .menuHeader span { color: #66808a; }
 :global(.theme-claro) .overlay { background: rgba(18,43,52,.55); }
 :global(.theme-claro) .dialog { border-color: rgba(20,86,106,.2); background: #fff; color: #16343e; box-shadow: 0 30px 80px rgba(20,50,60,.24); }

@@ -81,6 +81,30 @@
 .field input:focus, .field textarea:focus, .selectAction select:focus { border-color: var(--macro-border-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--macro-accent) 9%, transparent); }
 .messageField { position: relative; }
 .messageField > small { position: absolute; right: 12px; bottom: 10px; color: var(--macro-muted); font-size: 9px; font-weight: 800; }
+.sequenceConfig { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(220px, 1fr); gap: 14px; }
+.secondsInput { position: relative; }
+.secondsInput input { padding-right: 78px; }
+.secondsInput b { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--macro-muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.sequenceList { display: grid; gap: 0; padding: 5px 0 2px; }
+.sequenceItem { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; }
+.sequenceRail { display: grid; grid-template-rows: 30px minmax(18px, 1fr); justify-items: center; }
+.sequenceRail span { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--macro-border-strong); border-radius: 50%; background: color-mix(in srgb, var(--macro-accent) 13%, var(--macro-panel)); color: var(--macro-accent); font-size: 10px; font-weight: 950; }
+.sequenceRail i { width: 1px; height: 100%; background: linear-gradient(var(--macro-border-strong), transparent); }
+.sequenceContent { margin-bottom: 14px; padding: 14px; border: 1px solid var(--macro-border); border-radius: 16px; background: var(--macro-panel-soft); }
+.sequenceHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sequenceHeader strong, .sequenceHeader small { display: block; }
+.sequenceHeader strong { font-size: 11px; }
+.sequenceHeader small { margin-top: 2px; color: var(--macro-muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.typeSwitch { display: inline-flex; padding: 3px; border: 1px solid var(--macro-border); border-radius: 10px; background: var(--macro-bg); }
+.typeSwitch button { padding: 6px 9px; border: 0; border-radius: 7px; background: transparent; color: var(--macro-muted); font-size: 8px; font-weight: 900; text-transform: uppercase; cursor: pointer; }
+.typeSwitch .typeActive { background: var(--macro-accent); color: #02131a; }
+.audioRecorder { display: flex; min-height: 64px; align-items: center; gap: 11px; padding: 10px 12px; border: 1px dashed var(--macro-border-strong); border-radius: 13px; background: var(--macro-bg); color: var(--macro-accent); }
+.audioRecorder audio { min-width: 180px; height: 34px; flex: 1; }
+.audioRecorder button { margin-left: auto; padding: 8px 10px; border: 1px solid var(--macro-border); border-radius: 9px; background: var(--macro-panel); color: var(--macro-text); font-size: 9px; font-weight: 900; cursor: pointer; }
+.audioRecorder .recordButton { display: inline-flex; margin: auto; align-items: center; gap: 7px; border-color: var(--macro-border-strong); color: var(--macro-accent); }
+.audioRecorder .stopRecording { display: inline-flex; align-items: center; gap: 6px; border-color: rgba(244,63,94,.3); color: #fb7185; }
+.recordingDot { width: 9px; height: 9px; border-radius: 50%; background: #f43f5e; box-shadow: 0 0 0 5px rgba(244,63,94,.12); animation: recordPulse 1.2s ease-in-out infinite; }
+.audioRecorder > strong { color: var(--macro-text); font-size: 10px; }
 .actionsBlock { display: grid; gap: 12px; padding-top: 24px; border-top: 1px solid var(--macro-border); }
 .sectionHeading { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; color: var(--macro-accent); }
 .sectionHeading strong, .sectionHeading span { display: block; }
@@ -112,6 +136,7 @@
 .denied h1, .denied p { margin: 0; }
 .denied a { margin-top: 10px; color: #0891b2; font-weight: 900; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes recordPulse { 50% { opacity: .45; transform: scale(.8); } }
 
 @media (max-width: 920px) {
   .hero { align-items: flex-start; flex-direction: column; padding: 26px; }
@@ -128,4 +153,11 @@
   .selectAction select { grid-column: 1 / -1; }
   .editorFooter { align-items: stretch; flex-direction: column; }
   .editorFooter button { width: 100%; }
+  .sequenceConfig { grid-template-columns: 1fr; }
+  .sequenceItem { grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
+  .sequenceRail span { width: 26px; height: 26px; }
+  .sequenceHeader { align-items: flex-start; flex-direction: column; }
+  .audioRecorder { align-items: stretch; flex-direction: column; }
+  .audioRecorder audio { width: 100%; min-width: 0; }
+  .audioRecorder button { width: 100%; margin-left: 0; }
 }
