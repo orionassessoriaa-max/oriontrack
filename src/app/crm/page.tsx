@@ -43,6 +43,7 @@ import {
   FileDown
 } from 'lucide-react';
 import OrionMark from '@/components/ui/OrionMark';
+import MetaDatePicker from '@/components/ui/MetaDatePicker';
 
 type WhatsAppConversa = {
   id: string;
@@ -59,6 +60,17 @@ type WhatsAppConversa = {
 type MetricFilter = 'todos' | 'sem_resposta' | 'sem_resposta_time' | 'parados_time' | 'vendas_time' | 'tarefas' | 'hoje' | 'cadencia' | 'fit_icp';
 type CrmScopeView = 'meus' | 'todos_concessionaria' | 'sem_responsavel' | `member:${string}` | `broker:${string}`;
 type KanbanColumn = { id: LeadStatus; label: string; desc: string; saleEquivalent?: boolean };
+
+function saoPauloDateValue() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+
+function leadEntryDate(lead: Lead) {
+  const value = String(lead.data_entrada || lead.created_at || '');
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : '';
+}
 
 const DEFAULT_COLUMNS: KanbanColumn[] = [
   { id: 'Aguardando atendimento', label: 'Oportunidade', desc: 'Entrou e precisa de primeiro contato' },
@@ -374,6 +386,9 @@ export default function CrmPage() {
   const [search, setSearch] = useState('');
   const [pageFilter, setPageFilter] = useState('todas');
   const [originFilter, setOriginFilter] = useState('todas');
+  const [boardPeriodStart, setBoardPeriodStart] = useState('');
+  const [boardPeriodEnd, setBoardPeriodEnd] = useState('');
+  const [boardPeriodLabel, setBoardPeriodLabel] = useState('Todo o período');
   const [leadOriginConfigs, setLeadOriginConfigs] = useState<LeadOriginConfig[]>([]);
   const [leadLabelConfigs, setLeadLabelConfigs] = useState<LeadLabelConfig[]>([]);
   const [leadSettingsEnabled, setLeadSettingsEnabled] = useState(false);
@@ -1163,31 +1178,46 @@ export default function CrmPage() {
     });
   }, [leads, crmScopeView, canUseDealershipViews, teamMembers, profile?.id, profile?.corretor_id, simulatedCorretorId]);
 
-  const scopedLeadIds = useMemo(() => new Set(viewScopedLeads.map((lead) => lead.id)), [viewScopedLeads]);
-  const staleLeadIds = useMemo(() => new Set(viewScopedLeads.filter(isStale).map((lead) => lead.id)), [viewScopedLeads]);
+  const boardOldestDate = useMemo(() => viewScopedLeads
+    .map(leadEntryDate)
+    .filter(Boolean)
+    .sort()[0] || saoPauloDateValue(), [viewScopedLeads]);
+  const activeBoardPeriodStart = boardPeriodLabel === 'Todo o período' ? boardOldestDate : boardPeriodStart;
+  const activeBoardPeriodEnd = boardPeriodLabel === 'Todo o período' ? saoPauloDateValue() : boardPeriodEnd;
+  const periodScopedLeads = useMemo(() => {
+    if (boardPeriodLabel === 'Todo o período') return viewScopedLeads;
+    if (!activeBoardPeriodStart || !activeBoardPeriodEnd) return viewScopedLeads;
+    return viewScopedLeads.filter((lead) => {
+      const date = leadEntryDate(lead);
+      return Boolean(date && date >= activeBoardPeriodStart && date <= activeBoardPeriodEnd);
+    });
+  }, [activeBoardPeriodEnd, activeBoardPeriodStart, boardPeriodLabel, viewScopedLeads]);
+
+  const scopedLeadIds = useMemo(() => new Set(periodScopedLeads.map((lead) => lead.id)), [periodScopedLeads]);
+  const staleLeadIds = useMemo(() => new Set(periodScopedLeads.filter(isStale).map((lead) => lead.id)), [periodScopedLeads]);
   const assignedTeamLeadIds = useMemo(() => new Set(
-    viewScopedLeads
+    periodScopedLeads
       .filter((lead) => teamMembers.some((member) => (
         lead.responsavel_membro_id === member.id ||
         (!!member.profile_id && lead.responsavel_profile_id === member.profile_id)
       )))
       .map((lead) => lead.id)
-  ), [viewScopedLeads, teamMembers]);
+  ), [periodScopedLeads, teamMembers]);
   const teamNoReplyLeadIds = useMemo(() => new Set(
-    viewScopedLeads
+    periodScopedLeads
       .filter((lead) => assignedTeamLeadIds.has(lead.id) && isTeamLeadWithoutResponse(lead.status))
       .map((lead) => lead.id)
-  ), [viewScopedLeads, assignedTeamLeadIds]);
+  ), [periodScopedLeads, assignedTeamLeadIds]);
   const stalledTeamLeadIds = useMemo(() => new Set(
-    viewScopedLeads
+    periodScopedLeads
       .filter((lead) => assignedTeamLeadIds.has(lead.id) && isTeamLeadStalled(lead))
       .map((lead) => lead.id)
-  ), [viewScopedLeads, assignedTeamLeadIds]);
+  ), [periodScopedLeads, assignedTeamLeadIds]);
   const soldTeamLeadIds = useMemo(() => new Set(
-    viewScopedLeads
+    periodScopedLeads
       .filter((lead) => assignedTeamLeadIds.has(lead.id) && isTeamLeadSale(lead.status))
       .map((lead) => lead.id)
-  ), [viewScopedLeads, assignedTeamLeadIds]);
+  ), [periodScopedLeads, assignedTeamLeadIds]);
   const openTaskLeadIds = useMemo(() => new Set(tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id)).map((task) => task.lead_id)), [tarefas, scopedLeadIds]);
   const todayTaskLeadIds = useMemo(() => {
     const today = new Date().toDateString();
@@ -1198,10 +1228,10 @@ export default function CrmPage() {
     );
   }, [tarefas, scopedLeadIds]);
   const fitLeadIds = useMemo(() => new Set(
-    viewScopedLeads
+    periodScopedLeads
       .filter((lead) => getLeadQualification(lead, tipoCampanha).tone === 'good')
       .map((lead) => lead.id)
-  ), [viewScopedLeads, tipoCampanha]);
+  ), [periodScopedLeads, tipoCampanha]);
 
   const leadStatusColumns = useMemo(() => {
     const seen = new Set<string>();
@@ -1234,7 +1264,7 @@ export default function CrmPage() {
 
   const filteredLeads = useMemo(() => {
     const term = search.toLowerCase();
-    const nextLeads = viewScopedLeads.filter((lead) => {
+    const nextLeads = periodScopedLeads.filter((lead) => {
       const leadPage = lead.operadora || '';
       const searchMatch = `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.status} ${lead.operadora || ''} ${lead.origem || ''} ${lead.observacoes || ''}`.toLowerCase().includes(term);
       const pageMatch = pageFilter === 'todas' || (pageFilter === '__sem_pagina__' ? !leadPage : leadPage === pageFilter);
@@ -1253,7 +1283,7 @@ export default function CrmPage() {
     });
 
     return nextLeads;
-  }, [viewScopedLeads, search, pageFilter, originFilter, metricFilter, staleLeadIds, teamNoReplyLeadIds, stalledTeamLeadIds, soldTeamLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
+  }, [periodScopedLeads, search, pageFilter, originFilter, metricFilter, staleLeadIds, teamNoReplyLeadIds, stalledTeamLeadIds, soldTeamLeadIds, openTaskLeadIds, todayTaskLeadIds, fitLeadIds]);
 
   const boardColumns = useMemo(() => {
     const existingStatusColumns = leadStatusColumns.filter((statusColumn) => (
@@ -1264,19 +1294,19 @@ export default function CrmPage() {
   }, [columns, leadStatusColumns]);
 
   const pageOptions = useMemo(() => {
-    const pages = viewScopedLeads.map((lead) => lead.operadora || '').filter(Boolean);
+    const pages = periodScopedLeads.map((lead) => lead.operadora || '').filter(Boolean);
     return Array.from(new Set(pages)).sort((a, b) => a.localeCompare(b));
-  }, [viewScopedLeads]);
+  }, [periodScopedLeads]);
 
   const originOptions = useMemo(() => {
-    const origins = viewScopedLeads.map((lead) => lead.origem || '').filter(Boolean);
+    const origins = periodScopedLeads.map((lead) => lead.origem || '').filter(Boolean);
     return Array.from(new Set(origins)).sort((a, b) => a.localeCompare(b));
-  }, [viewScopedLeads]);
+  }, [periodScopedLeads]);
 
   const staleCount = staleLeadIds.size;
   const openTasks = tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id)).length;
   const todayTasks = tarefas.filter((task) => task.status === 'pendente' && scopedLeadIds.has(task.lead_id) && task.vencimento && new Date(task.vencimento).toDateString() === new Date().toDateString()).length;
-  const fitStats = viewScopedLeads.reduce(
+  const fitStats = periodScopedLeads.reduce(
     (acc, lead) => {
       const qualification = getLeadQualification(lead, tipoCampanha);
       if (qualification.tone === 'good') acc.good += 1;
@@ -1824,6 +1854,20 @@ export default function CrmPage() {
               {originOptions.map((origin) => <option key={origin} value={origin}>{origin}</option>)}
               <option value="__sem_origem__">Sem origem</option>
             </select>
+            <MetaDatePicker
+              className="w-full lg:w-[350px] lg:min-w-[350px]"
+              startDate={activeBoardPeriodStart}
+              endDate={activeBoardPeriodEnd}
+              preset={boardPeriodLabel}
+              rollingThroughToday
+              onChange={(startDate, endDate, presetLabel) => {
+                setBoardPeriodStart(startDate <= endDate ? startDate : endDate);
+                setBoardPeriodEnd(startDate <= endDate ? endDate : startDate);
+                setBoardPeriodLabel(presetLabel);
+                setMetricFilter('todos');
+                setVisibleLimits({});
+              }}
+            />
             {crmScopeOptions.length > 1 && (
               <select
                 value={crmScopeView}
@@ -1932,7 +1976,7 @@ export default function CrmPage() {
       {crmView === 'board' ? (
         <>
           <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-5">
-            <Stat label="Leads" value={viewScopedLeads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="border-gray-100 bg-white text-slate-600" />
+            <Stat label="Leads" value={periodScopedLeads.length} icon={Target} active={metricFilter === 'todos'} onClick={() => setMetricFilter('todos')} className="border-gray-100 bg-white text-slate-600" />
             <Stat label="Sem resposta" value={staleCount} icon={AlertTriangle} active={metricFilter === 'sem_resposta'} onClick={() => setMetricFilter('sem_resposta')} className="border-amber-100 bg-amber-50 text-amber-700" />
             <Stat label="Tarefas" value={openTasks} icon={Clock} active={false} onClick={() => { window.location.href = '/tarefas'; }} className="border-blue-100 bg-blue-50 text-blue-700" />
             <Stat label="Hoje" value={todayTasks} icon={CheckCircle2} active={metricFilter === 'hoje'} onClick={() => setMetricFilter('hoje')} className="border-emerald-100 bg-emerald-50 text-emerald-700" />
@@ -1955,7 +1999,7 @@ export default function CrmPage() {
           {crmScopeOptions.length > 1 && (
             <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-cyan-100 bg-cyan-50 px-5 py-4 text-sm font-bold text-cyan-800">
               <UserCheck size={16} />
-              <span>Visualizacao: {crmScopeOptions.find((option) => option.value === crmScopeView)?.label || 'Meus leads'} ({viewScopedLeads.length})</span>
+              <span>Visualizacao: {crmScopeOptions.find((option) => option.value === crmScopeView)?.label || 'Meus leads'} ({periodScopedLeads.length})</span>
               {crmScopeView !== 'todos_concessionaria' && (
                 <button
                   type="button"

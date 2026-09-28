@@ -9,6 +9,7 @@ interface MetaDatePickerProps {
   onChange: (startDate: string, endDate: string, presetLabel: string) => void;
   className?: string;
   preset?: string;
+  rollingThroughToday?: boolean;
 }
 
 export default function MetaDatePicker({
@@ -17,6 +18,7 @@ export default function MetaDatePicker({
   onChange,
   className = '',
   preset = 'Este mês',
+  rollingThroughToday = false,
 }: MetaDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [tempStart, setTempStart] = useState(startDate);
@@ -104,18 +106,18 @@ export default function MetaDatePicker({
         label = 'Últimos 4 dias';
         break;
       case '7dias':
-        end = getYesterday();
+        end = rollingThroughToday ? d : getYesterday();
         start = addDays(end, -6);
         label = 'Últimos 7 dias';
         break;
       case '30dias':
-        end = getYesterday();
+        end = rollingThroughToday ? d : getYesterday();
         start = addDays(end, -29);
         label = 'Últimos 30 dias';
         break;
       case 'este_mes':
         start = new Date(d.getFullYear(), d.getMonth(), 1);
-        end = getYesterday();
+        end = rollingThroughToday ? d : getYesterday();
         label = 'Este mês';
         break;
       case 'mes_passado':
