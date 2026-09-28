@@ -363,7 +363,10 @@ export default function DashboardPage() {
           response = await fetch(
             `/api/dashboard/corretor?corretor_id=${encodeURIComponent(profile.corretor_id)}&range_only=1`,
             {
-              headers: { Authorization: `Bearer ${accessToken}` },
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'x-orion-view-profile-id': profile.id,
+              },
               cache: 'no-store',
               signal: controller.signal,
             },
@@ -512,7 +515,10 @@ export default function DashboardPage() {
           dashboardResponse = await fetch(
             `/api/dashboard/corretor?corretor_id=${encodeURIComponent(profile.corretor_id)}`,
             {
-              headers: { Authorization: `Bearer ${accessToken}` },
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'x-orion-view-profile-id': profile.id,
+              },
               cache: 'no-store',
               signal: dashboardController.signal,
             },

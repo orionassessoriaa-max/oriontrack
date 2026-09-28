@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireApiUser } from '@/lib/api/security';
+import { type ApiProfile, requireApiUser } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +35,7 @@ const LEAD_METRIC_COLUMNS = [
 
 const READ_TIMEOUT_MS = 4_000;
 const READ_ATTEMPTS = 2;
+const BROKER_ROLES = ['corretor', 'corretor_admin', 'corretor_membro'] as const;
 
 type ReadResult<T> = {
   data: T | null;
@@ -70,6 +71,35 @@ async function readWithRetry<T>(
   return lastResult;
 }
 
+async function resolveViewedProfile(request: Request, actor: ApiProfile, requestedCorretorId: string) {
+  const targetProfileId = String(request.headers.get('x-orion-view-profile-id') || '').trim();
+  if (!targetProfileId || targetProfileId === actor.id) return actor;
+
+  if (!['admin', 'gestor_trafego', 'account_manager'].includes(actor.tipo_usuario)) {
+    return null;
+  }
+
+  const { data: target, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id,email,email_real,nome,tipo_usuario,corretor_id,telefone,status,is_admin_master,equipe_orion')
+    .eq('id', targetProfileId)
+    .in('tipo_usuario', [...BROKER_ROLES])
+    .maybeSingle();
+
+  if (error || !target || target.corretor_id !== requestedCorretorId) return null;
+
+  if (actor.tipo_usuario === 'gestor_trafego') {
+    const { data: broker } = await supabaseAdmin
+      .from('corretores')
+      .select('gestor_trafego_id')
+      .eq('id', requestedCorretorId)
+      .maybeSingle();
+    if (broker?.gestor_trafego_id !== actor.id) return null;
+  }
+
+  return target as ApiProfile;
+}
+
 export async function GET(request: Request) {
   const auth = await requireApiUser(request, [...ALLOWED_ROLES]);
   if ('error' in auth) return auth.error;
@@ -80,7 +110,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Corretor nao informado.' }, { status: 400 });
   }
 
-  const isBroker = ['corretor', 'corretor_admin', 'corretor_membro'].includes(auth.profile.tipo_usuario);
+  // A permissao vem do usuario autenticado, mas os numeros devem representar
+  // o perfil escolhido no modo de visualizacao administrativa.
+  const viewedProfile = await resolveViewedProfile(request, auth.profile, requestedCorretorId);
+  if (!viewedProfile) {
+    return NextResponse.json({ error: 'Perfil visualizado nao autorizado.' }, { status: 403 });
+  }
+
+  const isBroker = BROKER_ROLES.includes(auth.profile.tipo_usuario as typeof BROKER_ROLES[number]);
   if (isBroker && auth.profile.corretor_id !== requestedCorretorId) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
@@ -111,15 +148,24 @@ export async function GET(request: Request) {
     if (siblings?.length) brokerIds = siblings.map((item) => item.id);
   }
 
+  const responsibleProfileId = viewedProfile.tipo_usuario === 'corretor_membro'
+    ? viewedProfile.id
+    : null;
+
   if (url.searchParams.get('range_only') === '1') {
-    const { data: oldestLead, error: oldestLeadError } = await supabaseAdmin
+    let oldestLeadQuery = supabaseAdmin
       .from('leads')
       .select('data_entrada')
       .in('corretor_id', brokerIds)
       .not('data_entrada', 'is', null)
       .order('data_entrada', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+
+    if (responsibleProfileId) {
+      oldestLeadQuery = oldestLeadQuery.eq('responsavel_profile_id', responsibleProfileId);
+    }
+
+    const { data: oldestLead, error: oldestLeadError } = await oldestLeadQuery.maybeSingle();
 
     if (oldestLeadError) {
       return NextResponse.json({ error: oldestLeadError.message }, { status: 500 });
@@ -131,9 +177,6 @@ export async function GET(request: Request) {
     );
   }
 
-  const responsibleProfileId = auth.profile.tipo_usuario === 'corretor_membro'
-    ? auth.profile.id
-    : null;
   const pageSize = 1000;
   const leads = [];
 
