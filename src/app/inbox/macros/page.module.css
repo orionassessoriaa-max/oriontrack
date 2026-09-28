@@ -105,6 +105,17 @@
 .audioRecorder .stopRecording { display: inline-flex; align-items: center; gap: 6px; border-color: rgba(244,63,94,.3); color: #fb7185; }
 .recordingDot { width: 9px; height: 9px; border-radius: 50%; background: #f43f5e; box-shadow: 0 0 0 5px rgba(244,63,94,.12); animation: recordPulse 1.2s ease-in-out infinite; }
 .audioRecorder > strong { color: var(--macro-text); font-size: 10px; }
+.filePicker { display: flex; min-height: 74px; align-items: center; gap: 12px; padding: 10px 12px; border: 1px dashed var(--macro-border-strong); border-radius: 13px; background: var(--macro-bg); }
+.filePicker > img { width: 54px; height: 54px; flex: 0 0 auto; border: 1px solid var(--macro-border); border-radius: 10px; object-fit: cover; }
+.fileIcon { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border-radius: 11px; background: color-mix(in srgb, var(--macro-accent) 12%, transparent); color: var(--macro-accent); }
+.filePicker > div { min-width: 0; flex: 1; }
+.filePicker strong, .filePicker small { display: block; }
+.filePicker strong { overflow: hidden; color: var(--macro-text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.filePicker small { margin-top: 4px; color: var(--macro-muted); font-size: 8px; font-weight: 750; }
+.filePicker > label { flex: 0 0 auto; padding: 8px 10px; border: 1px solid var(--macro-border); border-radius: 9px; color: var(--macro-text); font-size: 9px; font-weight: 900; cursor: pointer; }
+.filePicker input { display: none; }
+.filePicker .fileSelect { display: flex; width: 100%; align-items: center; justify-content: center; gap: 10px; border: 0; color: var(--macro-accent); text-align: left; }
+.fileSelect span { min-width: 0; }
 .actionsBlock { display: grid; gap: 12px; padding-top: 24px; border-top: 1px solid var(--macro-border); }
 .sectionHeading { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; color: var(--macro-accent); }
 .sectionHeading strong, .sectionHeading span { display: block; }
@@ -160,4 +171,6 @@
   .audioRecorder { align-items: stretch; flex-direction: column; }
   .audioRecorder audio { width: 100%; min-width: 0; }
   .audioRecorder button { width: 100%; margin-left: 0; }
+  .filePicker { align-items: stretch; flex-direction: column; }
+  .filePicker > label { text-align: center; }
 }

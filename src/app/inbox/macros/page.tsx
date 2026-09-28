@@ -8,6 +8,7 @@ import {
   Archive,
   ArrowLeft,
   CheckCircle2,
+  FileUp,
   Layers3,
   Loader2,
   Mic,
@@ -165,6 +166,32 @@ export default function UnityMacrosPage() {
     }));
   }
 
+  function selectMacroFile(index: number, file: File | undefined) {
+    if (!file) return;
+    if (file.size > 2_200_000) {
+      setNotice({ tone: 'error', text: 'O arquivo deve ter no maximo 2 MB para ser salvo na macro.' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = String(reader.result || '');
+      const fileBase64 = dataUrl.includes(';base64,') ? dataUrl.split(';base64,')[1] : '';
+      if (!fileBase64 || fileBase64.length > 3_000_000) {
+        setNotice({ tone: 'error', text: 'Nao foi possivel preparar este arquivo. Escolha um arquivo menor.' });
+        return;
+      }
+      setNotice(null);
+      updateMessage(index, {
+        type: 'file',
+        text: '',
+        fileBase64,
+        fileMimeType: file.type || 'application/octet-stream',
+        fileName: file.name,
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function startAudioRecording(index: number) {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setNotice({ tone: 'error', text: 'Este navegador nao permite gravar audio. Use Chrome ou Edge atualizado.' });
@@ -262,9 +289,11 @@ export default function UnityMacrosPage() {
 
   async function saveMacro() {
     const title = draft.title.trim();
-    const validMessages = draft.messages.filter((message) => message.type === 'audio'
-      ? Boolean(message.audioBase64)
-      : Boolean(message.text.trim()));
+    const validMessages = draft.messages.filter((message) => {
+      if (message.type === 'audio') return Boolean(message.audioBase64);
+      if (message.type === 'file') return Boolean(message.fileBase64 && message.fileName);
+      return Boolean(message.text.trim());
+    });
     if (!title || validMessages.length !== draft.messages.length) {
       setNotice({ tone: 'error', text: 'Informe o nome e complete todas as mensagens da sequencia.' });
       return;
@@ -277,7 +306,9 @@ export default function UnityMacrosPage() {
     const item: UnityMacro = {
       id: editingId || crypto.randomUUID(),
       title,
-      text: validMessages.find((message) => message.type === 'text')?.text.trim() || '[Mensagem de voz]',
+      text: validMessages.find((message) => message.type === 'text')?.text.trim()
+        || validMessages.find((message) => message.type === 'file')?.fileName
+        || '[Mensagem de voz]',
       messages: validMessages,
       intervalSeconds: Math.min(120, Math.max(0, draft.intervalSeconds || 0)),
       actions: draft.actions,
@@ -377,14 +408,15 @@ export default function UnityMacrosPage() {
                 <div className={styles.empty}><Loader2 className={styles.spin} size={24} />Carregando macros</div>
               ) : filteredMacros.length ? filteredMacros.map((macro) => (
                 <button key={macro.id} type="button" onClick={() => editMacro(macro)} className={`${styles.macroCard} ${editingId === macro.id ? styles.macroCardActive : ''}`}>
-                  <span className={styles.macroIcon}><MessageSquareText size={17} /></span>
+                  <span className={styles.macroIcon}>{macro.messages.some((message) => message.type === 'file') ? <FileUp size={17} /> : <MessageSquareText size={17} />}</span>
                   <span className={styles.macroBody}>
                     <strong>{macro.title}</strong>
                     <small>{macro.text}</small>
                     <span className={styles.actionSummary}>
                       <i><MessageSquareText size={11} /> {macro.messages.length} msg</i>
                       {macro.messages.some((message) => message.type === 'audio') && <i><AudioLines size={11} /> audio</i>}
-                      {macro.actions.closeConversation && <i><Archive size={11} /> encerra</i>}
+                      {macro.messages.some((message) => message.type === 'file') && <i><FileUp size={11} /> arquivo</i>}
+                      {macro.actions.closeConversation && <i><Archive size={11} /> arquiva</i>}
                       {macro.actions.status && <i><Layers3 size={11} /> muda etapa</i>}
                       {macro.actions.labelIds.length > 0 && <i><Tag size={11} /> etiqueta</i>}
                       {!macro.actions.closeConversation && !macro.actions.status && macro.actions.labelIds.length === 0 && <i>somente mensagem</i>}
@@ -439,10 +471,11 @@ export default function UnityMacrosPage() {
                       <div className={styles.sequenceRail}><span>{index + 1}</span>{index < draft.messages.length - 1 && <i />}</div>
                       <div className={styles.sequenceContent}>
                         <div className={styles.sequenceHeader}>
-                          <div><strong>Mensagem {index + 1}</strong><small>{message.type === 'audio' ? 'Audio gravado' : 'Texto'}</small></div>
+                          <div><strong>Mensagem {index + 1}</strong><small>{message.type === 'audio' ? 'Audio gravado' : message.type === 'file' ? 'Arquivo ou print' : 'Texto'}</small></div>
                           <div className={styles.typeSwitch}>
-                            <button type="button" className={message.type === 'text' ? styles.typeActive : ''} onClick={() => updateMessage(index, { type: 'text', audioBase64: undefined, audioMimeType: undefined, audioDuration: undefined })}>Texto</button>
-                            <button type="button" className={message.type === 'audio' ? styles.typeActive : ''} onClick={() => updateMessage(index, { type: 'audio', text: '' })}>Audio</button>
+                            <button type="button" className={message.type === 'text' ? styles.typeActive : ''} onClick={() => updateMessage(index, { type: 'text', audioBase64: undefined, audioMimeType: undefined, audioDuration: undefined, fileBase64: undefined, fileMimeType: undefined, fileName: undefined })}>Texto</button>
+                            <button type="button" className={message.type === 'audio' ? styles.typeActive : ''} onClick={() => updateMessage(index, { type: 'audio', text: '', fileBase64: undefined, fileMimeType: undefined, fileName: undefined })}>Audio</button>
+                            <button type="button" className={message.type === 'file' ? styles.typeActive : ''} onClick={() => updateMessage(index, { type: 'file', text: '', audioBase64: undefined, audioMimeType: undefined, audioDuration: undefined })}>Arquivo</button>
                           </div>
                         </div>
 
@@ -451,7 +484,7 @@ export default function UnityMacrosPage() {
                             <textarea maxLength={4000} rows={4} value={message.text} onChange={(event) => updateMessage(index, { text: event.target.value })} placeholder="Escreva exatamente como o cliente deve receber." />
                             <small>{message.text.length}/4000</small>
                           </label>
-                        ) : (
+                        ) : message.type === 'audio' ? (
                           <div className={styles.audioRecorder}>
                             {audioUrl ? (
                               <>
@@ -469,6 +502,20 @@ export default function UnityMacrosPage() {
                               <button type="button" disabled={recordingIndex !== null} className={styles.recordButton} onClick={() => void startAudioRecording(index)}><Mic size={16} /> Gravar audio</button>
                             )}
                           </div>
+                        ) : (
+                          <div className={styles.filePicker}>
+                            {message.fileBase64 && message.fileName ? (
+                              <>
+                                {message.fileMimeType?.startsWith('image/') ? (
+                                  <img src={`data:${message.fileMimeType};base64,${message.fileBase64}`} alt="Previa do arquivo da macro" />
+                                ) : <span className={styles.fileIcon}><FileUp size={19} /></span>}
+                                <div><strong>{message.fileName}</strong><small>{message.fileMimeType?.startsWith('image/') ? 'Print pronto para envio' : 'Arquivo pronto para envio'}</small></div>
+                                <label><input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" onChange={(event) => selectMacroFile(index, event.target.files?.[0])} />Trocar arquivo</label>
+                              </>
+                            ) : (
+                              <label className={styles.fileSelect}><FileUp size={17} /><span><strong>Selecionar arquivo ou print</strong><small>Imagem, PDF, documento ou planilha de ate 2 MB.</small></span><input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" onChange={(event) => selectMacroFile(index, event.target.files?.[0])} /></label>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -483,7 +530,7 @@ export default function UnityMacrosPage() {
               <label className={`${styles.actionCard} ${draft.actions.closeConversation ? styles.actionCardActive : ''}`}>
                 <input type="checkbox" checked={draft.actions.closeConversation} onChange={(event) => setDraft((current) => ({ ...current, actions: { ...current.actions, closeConversation: event.target.checked } }))} />
                 <span className={styles.actionIcon}><Archive size={18} /></span>
-                <span><strong>Encerrar atendimento</strong><small>Remove a conversa da caixa ativa depois de enviar a mensagem.</small></span>
+                <span><strong>Mover para arquivados</strong><small>Retira a conversa da fila ativa depois que toda a sequencia for enviada.</small></span>
                 <i>{draft.actions.closeConversation ? 'Ativo' : 'Inativo'}</i>
               </label>
 

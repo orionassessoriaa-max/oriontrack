@@ -1721,13 +1721,21 @@ export default function BrokerInboxPage() {
     audioDuration = '',
     audioBase64Override?: string,
     audioMimeType?: string,
-    options: { preserveComposer?: boolean } = {},
+    options: {
+      preserveComposer?: boolean;
+      mediaOverride?: {
+        base64: string;
+        mimeType: string;
+        fileName: string;
+        mediatype: 'image' | 'video' | 'audio' | 'document';
+      };
+    } = {},
   ) {
     if (!selectedConversation) return false;
     if (pendingAttachmentReadsRef.current > 0) return false;
     const finalMsg = textOverride || messageText.trim();
     const attachmentsForSend = options.preserveComposer ? [] : selectedAttachments;
-    if (!finalMsg && attachmentsForSend.length === 0 && !isAudio) return false;
+    if (!finalMsg && attachmentsForSend.length === 0 && !isAudio && !options.mediaOverride) return false;
     if (sendInFlightRef.current) return false;
     if (!isWhatsAppConnected) {
       setSendError('O WhatsApp esta desconectado. Reconecte a conta pelo QR Code antes de enviar.');
@@ -1763,6 +1771,11 @@ export default function BrokerInboxPage() {
       isAudio,
       audioDuration,
       audioSize: audioBase64Override?.length || 0,
+      mediaOverride: options.mediaOverride ? {
+        name: options.mediaOverride.fileName,
+        size: options.mediaOverride.base64.length,
+        type: options.mediaOverride.mimeType,
+      } : null,
       attachments: originalAttachments.map((attachment) => ({
         name: attachment.file.name,
         size: attachment.file.size,
@@ -1776,11 +1789,13 @@ export default function BrokerInboxPage() {
     sendRetryRef.current = { fingerprint: sendFingerprint, id: clientSendId };
 
     try {
-      const jobs = hasAudioData
-        ? [{ preview: audioBase64Override, file: null as File | null, isAudio: true }]
+      const jobs = options.mediaOverride
+        ? [{ preview: options.mediaOverride.base64, file: null as File | null, isAudio: false, mediaOverride: options.mediaOverride }]
+        : hasAudioData
+        ? [{ preview: audioBase64Override, file: null as File | null, isAudio: true, mediaOverride: null }]
         : originalAttachments.length
-          ? originalAttachments.map((attachment) => ({ preview: attachment.preview, file: attachment.file, isAudio: false }))
-          : [{ preview: '', file: null as File | null, isAudio: false }];
+          ? originalAttachments.map((attachment) => ({ preview: attachment.preview, file: attachment.file, isAudio: false, mediaOverride: null }))
+          : [{ preview: '', file: null as File | null, isAudio: false, mediaOverride: null }];
 
       const insertedMessages: InboxMessage[] = [];
       let realConversation: Conversation | null = null;
@@ -1788,7 +1803,7 @@ export default function BrokerInboxPage() {
       for (let index = 0; index < jobs.length; index += 1) {
         const job = jobs[index];
         const file = job.file;
-        let mediatype = 'document';
+        let mediatype = job.mediaOverride?.mediatype || 'document';
         if (file?.type.startsWith('image/')) mediatype = 'image';
         else if (file?.type.startsWith('video/')) mediatype = 'video';
         else if (file?.type.startsWith('audio/')) mediatype = 'audio';
@@ -1817,8 +1832,8 @@ export default function BrokerInboxPage() {
               } : {}),
               ...(job.preview ? {
                 media: job.preview,
-                mimetype: job.isAudio ? (audioMimeType || 'audio/ogg') : file?.type,
-                fileName: job.isAudio ? (audioMimeType?.includes('ogg') ? 'audio.ogg' : 'audio.webm') : file?.name,
+                mimetype: job.isAudio ? (audioMimeType || 'audio/ogg') : (job.mediaOverride?.mimeType || file?.type),
+                fileName: job.isAudio ? (audioMimeType?.includes('ogg') ? 'audio.ogg' : 'audio.webm') : (job.mediaOverride?.fileName || file?.name),
                 mediatype: job.isAudio ? 'audio' : mediatype,
               } : {}),
             }),
@@ -1961,6 +1976,13 @@ export default function BrokerInboxPage() {
           throw new Error('A conversa aberta mudou. A sequencia foi interrompida para nao enviar ao contato errado.');
         }
         const macroMessage = macro.messages[index];
+        const fileMediaType = macroMessage.fileMimeType?.startsWith('image/')
+          ? 'image'
+          : macroMessage.fileMimeType?.startsWith('video/')
+            ? 'video'
+            : macroMessage.fileMimeType?.startsWith('audio/')
+              ? 'audio'
+              : 'document';
         const sent = macroMessage.type === 'audio'
           ? await sendMessage(
               '[Audio Gravado]',
@@ -1970,7 +1992,17 @@ export default function BrokerInboxPage() {
               macroMessage.audioMimeType,
               { preserveComposer: true },
             )
-          : await sendMessage(macroMessage.text, false, '', undefined, undefined, { preserveComposer: true });
+          : macroMessage.type === 'file'
+            ? await sendMessage('', false, '', undefined, undefined, {
+                preserveComposer: true,
+                mediaOverride: {
+                  base64: macroMessage.fileBase64 || '',
+                  mimeType: macroMessage.fileMimeType || 'application/octet-stream',
+                  fileName: macroMessage.fileName || 'arquivo',
+                  mediatype: fileMediaType,
+                },
+              })
+            : await sendMessage(macroMessage.text, false, '', undefined, undefined, { preserveComposer: true });
         if (!sent) throw new Error(`A mensagem ${index + 1} nao foi confirmada. As acoes finais nao foram executadas.`);
         sentMessages += 1;
         messageWasSent = true;
@@ -2016,7 +2048,7 @@ export default function BrokerInboxPage() {
 
       if (macro.actions.closeConversation) {
         const closed = await updateConversationStatus('fechada');
-        if (!closed) throw new Error('A mensagem foi enviada, mas o atendimento nao foi encerrado.');
+        if (!closed) throw new Error('A mensagem foi enviada, mas a conversa nao foi movida para arquivados.');
       }
 
       await logLeadActivity({
@@ -2027,7 +2059,7 @@ export default function BrokerInboxPage() {
           `Sequencia: ${sentMessages} mensagem(ns)`,
           labelNames.length ? `Etiquetas: ${labelNames.join(', ')}` : '',
           macro.actions.status ? `Etapa: ${macro.actions.status}` : '',
-          macro.actions.closeConversation ? 'Atendimento encerrado' : '',
+          macro.actions.closeConversation ? 'Conversa movida para arquivados' : '',
         ].filter(Boolean).join(' | '),
       }).catch(() => null);
       return true;
@@ -3398,6 +3430,27 @@ export default function BrokerInboxPage() {
                             {c.ultima_mensagem_at ? formatHour(c.ultima_mensagem_at) : ''}
                           </span>
                         </div>
+                        {isUnityInbox && Boolean(c.tags?.length) && (
+                          <div className="flex min-w-0 flex-wrap gap-1 pb-0.5">
+                            {c.tags?.slice(0, 2).map((tag) => {
+                              const definition = unityLabels.find((label) => label.name.toLocaleLowerCase('pt-BR') === tag.toLocaleLowerCase('pt-BR'));
+                              return (
+                                <span
+                                  key={tag}
+                                  className="max-w-[105px] truncate rounded-full border px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wide"
+                                  style={{
+                                    borderColor: definition ? `${definition.color}66` : 'rgba(34,211,238,.3)',
+                                    backgroundColor: definition ? `${definition.color}1f` : 'rgba(34,211,238,.1)',
+                                    color: definition?.color || '#67e8f9',
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              );
+                            })}
+                            {(c.tags?.length || 0) > 2 && <span className="text-[8px] font-black text-slate-500">+{(c.tags?.length || 0) - 2}</span>}
+                          </div>
+                        )}
                         <p className="text-[10px] text-slate-400 font-medium truncate leading-tight">
                           {c.id.startsWith('new-') ? 'Inicie a conversa' : 'Ver histórico de atendimento...'}
                         </p>

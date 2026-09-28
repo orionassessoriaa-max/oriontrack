@@ -6,11 +6,14 @@ export type UnityMacroActions = {
 
 export type UnityMacroMessage = {
   id: string;
-  type: 'text' | 'audio';
+  type: 'text' | 'audio' | 'file';
   text: string;
   audioBase64?: string;
   audioMimeType?: string;
   audioDuration?: string;
+  fileBase64?: string;
+  fileMimeType?: string;
+  fileName?: string;
 };
 
 export type UnityMacro = {
@@ -38,15 +41,21 @@ export function sanitizeUnityMacros(value: unknown): UnityMacro[] {
       const message = rawMessage && typeof rawMessage === 'object'
         ? rawMessage as Record<string, unknown>
         : {};
-      const type = message.type === 'audio' ? 'audio' : 'text';
+      const type = message.type === 'audio' || message.type === 'file' ? message.type : 'text';
       const text = String(message.text || '').trim().slice(0, 4000);
       const audioBase64 = String(message.audioBase64 || '').trim();
+      const fileBase64 = String(message.fileBase64 || '').trim();
       const validAudio = type === 'audio'
         && audioBase64.length > 0
         && audioBase64.length <= 3_000_000
         && /^[a-z0-9+/=]+$/i.test(audioBase64);
+      const validFile = type === 'file'
+        && fileBase64.length > 0
+        && fileBase64.length <= 3_000_000
+        && /^[a-z0-9+/=]+$/i.test(fileBase64);
       if (type === 'text' && !text) return [];
       if (type === 'audio' && !validAudio) return [];
+      if (type === 'file' && !validFile) return [];
       return [{
         id: String(message.id || `mensagem-${index + 1}`),
         type,
@@ -56,12 +65,18 @@ export function sanitizeUnityMacros(value: unknown): UnityMacro[] {
           audioMimeType: String(message.audioMimeType || 'audio/webm').slice(0, 100),
           audioDuration: String(message.audioDuration || '').slice(0, 10),
         } : {}),
+        ...(validFile ? {
+          fileBase64,
+          fileMimeType: String(message.fileMimeType || 'application/octet-stream').slice(0, 120),
+          fileName: String(message.fileName || 'arquivo').replace(/[\\/]/g, '-').slice(0, 180),
+        } : {}),
       } satisfies UnityMacroMessage];
     });
     if (messages.length === 0 && legacyText) {
       messages.push({ id: 'mensagem-1', type: 'text', text: legacyText });
     }
     const text = messages.find((message) => message.type === 'text')?.text
+      || messages.find((message) => message.type === 'file')?.fileName
       || (messages.length ? '[Mensagem de voz]' : '');
     const key = title.toLocaleLowerCase('pt-BR');
     if (!title || messages.length === 0 || seen.has(key)) return [];

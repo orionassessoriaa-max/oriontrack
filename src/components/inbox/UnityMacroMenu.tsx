@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Archive, AudioLines, CheckCircle2, Layers3, Loader2, MessageSquareText, Pause, Play, Settings2, Tag, X } from 'lucide-react';
+import { Archive, AudioLines, CheckCircle2, FileUp, Layers3, Loader2, MessageSquareText, Pause, Play, Settings2, Tag, X } from 'lucide-react';
 import type { KanbanStage } from '@/lib/kanbanStages';
 import type { UnityMacro } from '@/lib/unityMacros';
 import styles from './UnityMacroMenu.module.css';
@@ -70,7 +70,7 @@ export default function UnityMacroMenu({
             {macros.length ? macros.map((macro) => (
               <div key={macro.id} className={`${styles.macroRow} ${executingId === macro.id ? styles.macroRunning : ''}`}>
                 <button className={styles.macroInfo} type="button" onClick={() => setSelected(macro)}>
-                  <span>{macro.messages.some((message) => message.type === 'audio') ? <AudioLines size={14} /> : <MessageSquareText size={14} />}</span>
+                  <span>{macro.messages.some((message) => message.type === 'file') ? <FileUp size={14} /> : macro.messages.some((message) => message.type === 'audio') ? <AudioLines size={14} /> : <MessageSquareText size={14} />}</span>
                   <div><strong>{macro.title}</strong><small>{macro.messages.length} {macro.messages.length === 1 ? 'mensagem' : 'mensagens'} · {macro.text}</small></div>
                 </button>
                 <div className={styles.transport}>
@@ -98,9 +98,10 @@ export default function UnityMacroMenu({
             <div className={styles.message}>{selected.text}</div>
             <div className={styles.actions}>
               <div><CheckCircle2 size={15} /><span><strong>Enviar {selected.messages.length} {selected.messages.length === 1 ? 'mensagem' : 'mensagens'}</strong><small>Intervalo de {selected.intervalSeconds}s. Nenhuma acao ocorre se algum envio falhar.</small></span></div>
+              {selected.messages.some((message) => message.type === 'file') && <div><FileUp size={15} /><span><strong>Enviar arquivos</strong><small>{selected.messages.filter((message) => message.type === 'file').map((message) => message.fileName).join(', ')}</small></span></div>}
               {selectedLabels.length > 0 && <div><Tag size={15} /><span><strong>2. Aplicar etiquetas</strong><small>{selectedLabels.map((label) => label.name).join(', ')}</small></span></div>}
               {selectedStage && <div><Layers3 size={15} /><span><strong>Mover para {selectedStage.label}</strong><small>Atualiza a etapa no CRM.</small></span></div>}
-              {selected.actions.closeConversation && <div><Archive size={15} /><span><strong>Encerrar atendimento</strong><small>Remove a conversa da caixa ativa.</small></span></div>}
+              {selected.actions.closeConversation && <div><Archive size={15} /><span><strong>Mover para arquivados</strong><small>Retira a conversa da fila ativa.</small></span></div>}
             </div>
             <div className={styles.footer}>
               <button type="button" onClick={() => setSelected(null)}>Cancelar</button>
