@@ -80,8 +80,8 @@ async function listConversations(
   let query = supabaseAdmin
     .from('whatsapp_conversas')
     .select(memberProfileId
-      ? '*,leads!inner(id,nome,status,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))'
-      : '*,leads(id,nome,status,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))')
+      ? '*,leads!inner(id,nome,status,etiqueta,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))'
+      : '*,leads(id,nome,status,etiqueta,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))')
     .order('ultima_mensagem_at', { ascending: false })
     .order('id', { ascending: true })
     // Busca um item extra para informar se existe historico a carregar, sem
@@ -219,13 +219,18 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      conversations: conversations.map((conversation) => ({
-        ...conversation,
-        hasOpenFollowUp: Boolean(
-          conversation.lead_id && openFollowUpLeadIds.has(String(conversation.lead_id))
-        ),
-        hasHumanReply: humanReplyConversationIds.has(String(conversation.id)),
-      })),
+      conversations: conversations.map((conversation) => {
+        const lead = conversation.leads as unknown as { etiqueta?: string | null } | null;
+        const etiqueta = String(lead?.etiqueta || '').trim();
+        return {
+          ...conversation,
+          tags: etiqueta ? [etiqueta] : [],
+          hasOpenFollowUp: Boolean(
+            conversation.lead_id && openFollowUpLeadIds.has(String(conversation.lead_id))
+          ),
+          hasHumanReply: humanReplyConversationIds.has(String(conversation.id)),
+        };
+      }),
       corretorIds,
       assignedLeadIds,
       hasMore: page.hasMore,

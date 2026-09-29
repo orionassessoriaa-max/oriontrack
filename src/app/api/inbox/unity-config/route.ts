@@ -123,18 +123,15 @@ export async function GET(request: Request) {
         }))
       : config.macros;
     const companyIds = context.companyRows.map((row: any) => String(row.id));
-    const { data: conversations, error: conversationError } = companyIds.length
-      ? await supabaseAdmin.from('whatsapp_conversas').select('tags').in('corretor_id', companyIds)
+    const { data: taggedLeads, error: taggedLeadError } = companyIds.length
+      ? await supabaseAdmin.from('leads').select('etiqueta').in('corretor_id', companyIds).not('etiqueta', 'is', null)
       : { data: [], error: null };
-    if (conversationError) throw conversationError;
-    const labelUsage = (conversations || []).reduce<Record<string, number>>((counts, conversation: any) => {
-      const tags = Array.isArray(conversation.tags)
-        ? conversation.tags.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-        : [];
-      for (const tag of new Set<string>(tags)) {
-        const key = tag.toLocaleLowerCase('pt-BR');
-        counts[key] = (counts[key] || 0) + 1;
-      }
+    if (taggedLeadError) throw taggedLeadError;
+    const labelUsage = (taggedLeads || []).reduce<Record<string, number>>((counts, lead) => {
+      const tag = String(lead.etiqueta || '').trim();
+      if (!tag) return counts;
+      const key = tag.toLocaleLowerCase('pt-BR');
+      counts[key] = (counts[key] || 0) + 1;
       return counts;
     }, {});
     return NextResponse.json({ ...config, macros, labelUsage }, { headers: { 'Cache-Control': 'no-store' } });
@@ -200,25 +197,19 @@ export async function PATCH(request: Request) {
         });
     if (renamedLabels.length) {
       const companyIds = context.companyRows.map((row: any) => String(row.id));
-      const { data: taggedConversations, error: taggedError } = await supabaseAdmin
-        .from('whatsapp_conversas')
-        .select('id,tags')
+      const { data: taggedLeads, error: taggedError } = await supabaseAdmin
+        .from('leads')
+        .select('id,etiqueta')
         .in('corretor_id', companyIds);
       if (taggedError) throw taggedError;
-      for (const conversation of taggedConversations || []) {
-        const currentTags = Array.isArray(conversation.tags) ? conversation.tags.map(String) : [];
-        let changed = false;
-        const nextTags = currentTags.map((tag) => {
-          const rename = renamedLabels.find((item) => item.from.toLocaleLowerCase('pt-BR') === tag.toLocaleLowerCase('pt-BR'));
-          if (!rename) return tag;
-          changed = true;
-          return rename.to;
-        });
-        if (changed) {
+      for (const lead of taggedLeads || []) {
+        const currentTag = String(lead.etiqueta || '').trim();
+        const rename = renamedLabels.find((item) => item.from.toLocaleLowerCase('pt-BR') === currentTag.toLocaleLowerCase('pt-BR'));
+        if (rename) {
           const { error: renameError } = await supabaseAdmin
-            .from('whatsapp_conversas')
-            .update({ tags: nextTags, updated_at: new Date().toISOString() })
-            .eq('id', conversation.id);
+            .from('leads')
+            .update({ etiqueta: rename.to, updated_at: new Date().toISOString() })
+            .eq('id', lead.id);
           if (renameError) throw renameError;
         }
       }
@@ -229,18 +220,21 @@ export async function PATCH(request: Request) {
       const tags = Array.from(new Set(body.tags.map((tag: unknown) => String(tag || '').trim()).filter(Boolean))).slice(0, 30);
       const { data: conversation, error: conversationError } = await supabaseAdmin
         .from('whatsapp_conversas')
-        .select('id,corretor_id')
+        .select('id,corretor_id,lead_id')
         .eq('id', String(body.conversation_id))
         .maybeSingle();
       if (conversationError) throw conversationError;
       if (!conversation || !companyIds.includes(String(conversation.corretor_id))) {
         return NextResponse.json({ error: 'Conversa fora da Unity.' }, { status: 403 });
       }
-      const { error: tagError } = await supabaseAdmin
-        .from('whatsapp_conversas')
-        .update({ tags, updated_at: new Date().toISOString() })
-        .eq('id', conversation.id);
-      if (tagError) throw tagError;
+      if (conversation.lead_id) {
+        const { error: tagError } = await supabaseAdmin
+          .from('leads')
+          .update({ etiqueta: tags[0] || null, updated_at: new Date().toISOString() })
+          .eq('id', conversation.lead_id)
+          .eq('corretor_id', conversation.corretor_id);
+        if (tagError) throw tagError;
+      }
     }
 
     return NextResponse.json({ ok: true, labels, quickReplies, macros });
