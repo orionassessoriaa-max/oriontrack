@@ -140,6 +140,13 @@ function conversationBelongsToBox(conversation: Conversation, box: ConversationB
   return conversation.status !== 'fechada' && Boolean(conversation.hasHumanReply) && !conversation.hasOpenFollowUp;
 }
 
+function conversationBoxFor(conversation: Conversation, isUnity = false): ConversationBox {
+  if (conversation.status === 'fechada') return 'closed';
+  if (conversation.hasOpenFollowUp) return 'followup';
+  if (isUnity && !conversation.hasHumanReply) return 'new';
+  return 'active';
+}
+
 type LeadTask = {
   id: string;
   titulo: string;
@@ -945,7 +952,18 @@ export default function BrokerInboxPage() {
     setInboxError(null);
     const previousSelection = selectedConversationRef.current;
     const currentBox = conversationBoxRef.current;
-    const rowsInCurrentBox = mergedRows.filter((row) => conversationBelongsToBox(row, currentBox, isUnityInbox));
+    // Links vindos do CRM precisam abrir o contato solicitado mesmo quando ele
+    // pertence a outra fila. Antes, um lead novo era descartado pela caixa
+    // "Em atendimento" e o Inbox selecionava o primeiro cliente da lista.
+    const directConversation = urlPhone && !previousSelection ? matchedConv : null;
+    const selectionBox = directConversation
+      ? conversationBoxFor(directConversation, isUnityInbox)
+      : currentBox;
+    if (directConversation && selectionBox !== currentBox) {
+      conversationBoxRef.current = selectionBox;
+      setConversationBox(selectionBox);
+    }
+    const rowsInCurrentBox = mergedRows.filter((row) => conversationBelongsToBox(row, selectionBox, isUnityInbox));
     const matchedConversationInCurrentBox = matchedConv
       ? rowsInCurrentBox.find((row) => row.id === matchedConv.id) || null
       : null;
@@ -955,11 +973,12 @@ export default function BrokerInboxPage() {
     // O primeiro envio move o lead de "Novos" para "Em atendimento". O
     // Realtime pode atualizar a lista antes de a resposta do POST chegar; nesse
     // intervalo nunca troque a conversa aberta pelo primeiro lead da fila.
-    const nextSelection = previousSelection && sendInFlightRef.current
+    const nextSelection = directConversation
+      || (previousSelection && sendInFlightRef.current
       ? refreshedPreviousSelection
       : previousSelection
       ? rowsInCurrentBox.find((row) => row.id === previousSelection.id) || matchedConversationInCurrentBox || rowsInCurrentBox[0] || null
-      : matchedConversationInCurrentBox || rowsInCurrentBox[0] || null;
+      : matchedConversationInCurrentBox || rowsInCurrentBox[0] || null);
     // O carregamento das mensagens pode terminar antes do React executar o
     // efeito que atualiza a ref. Grave a selecao imediatamente para o
     // historico sincronizado do celular nao ser descartado como conversa antiga.
@@ -3567,6 +3586,7 @@ export default function BrokerInboxPage() {
                         onExecute={executeUnityMacro}
                         onPause={pauseUnityMacro}
                         onResume={resumeUnityMacro}
+                        onOpen={fetchUnityConfig}
                       />
                     )}
                     <button

@@ -18,6 +18,7 @@ export default function UnityMacroMenu({
   onExecute,
   onPause,
   onResume,
+  onOpen,
 }: {
   macros: UnityMacro[];
   labels: UnityLabel[];
@@ -27,6 +28,7 @@ export default function UnityMacroMenu({
   onExecute: (macro: UnityMacro) => Promise<boolean>;
   onPause: (macroId: string) => void;
   onResume: (macroId: string) => void;
+  onOpen?: () => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<UnityMacro | null>(null);
@@ -56,7 +58,11 @@ export default function UnityMacroMenu({
 
   return (
     <div className={styles.root}>
-      <button type="button" className={styles.trigger} onClick={() => setOpen((current) => !current)}>
+      <button type="button" className={styles.trigger} onClick={() => setOpen((current) => {
+        const next = !current;
+        if (next) void onOpen?.();
+        return next;
+      })}>
         <MessageSquareText size={14} /> Macros
       </button>
 
