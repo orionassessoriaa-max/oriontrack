@@ -949,7 +949,15 @@ export default function BrokerInboxPage() {
     const matchedConversationInCurrentBox = matchedConv
       ? rowsInCurrentBox.find((row) => row.id === matchedConv.id) || null
       : null;
-    const nextSelection = previousSelection
+    const refreshedPreviousSelection = previousSelection
+      ? mergedRows.find((row) => row.id === previousSelection.id) || previousSelection
+      : null;
+    // O primeiro envio move o lead de "Novos" para "Em atendimento". O
+    // Realtime pode atualizar a lista antes de a resposta do POST chegar; nesse
+    // intervalo nunca troque a conversa aberta pelo primeiro lead da fila.
+    const nextSelection = previousSelection && sendInFlightRef.current
+      ? refreshedPreviousSelection
+      : previousSelection
       ? rowsInCurrentBox.find((row) => row.id === previousSelection.id) || matchedConversationInCurrentBox || rowsInCurrentBox[0] || null
       : matchedConversationInCurrentBox || rowsInCurrentBox[0] || null;
     // O carregamento das mensagens pode terminar antes do React executar o
@@ -1077,6 +1085,7 @@ export default function BrokerInboxPage() {
     if (!selectedConversation) return;
     const belongsToCurrentBox = conversationBelongsToBox(selectedConversation, conversationBox, isUnityInbox);
     if (!belongsToCurrentBox) {
+      if (sendInFlightRef.current) return;
       setSelectedConversation(null);
       setMessages([]);
     }
@@ -1907,9 +1916,15 @@ export default function BrokerInboxPage() {
       }
 
       if (realConversation) {
-        const nextConversation = isUnityInbox && selectedConversation.status === 'espera'
+        const movedFromNewToActive = isUnityInbox && selectedConversation.status === 'espera';
+        const nextConversation = movedFromNewToActive
           ? { ...realConversation, status: 'aberta', hasHumanReply: true }
           : { ...realConversation, hasHumanReply: isUnityInbox ? true : realConversation.hasHumanReply };
+        if (movedFromNewToActive) {
+          conversationBoxRef.current = 'active';
+          setConversationBox('active');
+        }
+        selectedConversationRef.current = nextConversation;
         setSelectedConversation(nextConversation);
         setConversations((current) => current.map((conversation) => conversation.id === selectedConversation.id || conversation.id === nextConversation.id
           ? { ...conversation, ...nextConversation }
