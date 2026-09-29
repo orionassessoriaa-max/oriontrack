@@ -212,14 +212,13 @@ async function snapshotConversation(accountId, conversation) {
     writeJsonAtomic(messageFile, messages);
   }
 
-  if (fs.existsSync(attachmentIndexFile) && fs.statSync(attachmentIndexFile).size > 2) {
-    const savedIndex = readJson(attachmentIndexFile);
-    return {
-      messages: messages.length,
-      attachments: savedIndex.length,
-      attachmentFailures: savedIndex.filter((item) => item.status === 'unavailable').length,
-    };
-  }
+  const savedIndex = fs.existsSync(attachmentIndexFile) && fs.statSync(attachmentIndexFile).size > 2
+    ? readJson(attachmentIndexFile)
+    : [];
+  const savedByAttachment = new Map(savedIndex.map((item) => [
+    `${String(item.message_id || '')}:${String(item.attachment_id || '')}`,
+    item,
+  ]));
 
   const attachmentIndex = [];
   for (const message of messages) {
@@ -228,14 +227,26 @@ async function snapshotConversation(accountId, conversation) {
       const attachment = attachments[index];
       const url = String(attachment?.data_url || attachment?.download_url || '');
       if (!url) continue;
+      const attachmentId = String(attachment.id || index + 1);
       const fileName = `${safePart(message.id)}-${safePart(attachment.id || index + 1)}.${extensionOf(attachment)}`;
       const relativeFile = path.join('chat', 'media', shard, safePart(conversationId), fileName);
+      const destination = path.join(OUTPUT_DIR, relativeFile);
+      const saved = savedByAttachment.get(`${String(message.id || '')}:${attachmentId}`);
+      if (saved?.file && fs.existsSync(destination) && fs.statSync(destination).size > 0) {
+        attachmentIndex.push({
+          ...saved,
+          bytes: fs.statSync(destination).size,
+          status: 'downloaded',
+        });
+        continue;
+      }
       try {
-        const bytes = await downloadAttachment(url, path.join(OUTPUT_DIR, relativeFile));
+        if (fs.existsSync(destination) && fs.statSync(destination).size === 0) fs.unlinkSync(destination);
+        const bytes = await downloadAttachment(url, destination);
         attachmentIndex.push({
           conversation_id: conversationId,
           message_id: String(message.id || ''),
-          attachment_id: String(attachment.id || index + 1),
+          attachment_id: attachmentId,
           file: relativeFile.replaceAll('\\', '/'),
           bytes,
           source_url: url,
@@ -247,7 +258,7 @@ async function snapshotConversation(accountId, conversation) {
         attachmentIndex.push({
           conversation_id: conversationId,
           message_id: String(message.id || ''),
-          attachment_id: String(attachment.id || index + 1),
+          attachment_id: attachmentId,
           file: null,
           bytes: 0,
           source_url: url,
@@ -296,9 +307,15 @@ const conversations = await loadPagedCollection({
   directory: path.join(OUTPUT_DIR, 'chat', 'conversation-pages'),
   label: 'Conversas Chat',
 });
+const uniqueConversations = [...new Map(
+  conversations.items.map((conversation) => [String(conversation.id), conversation]),
+).values()];
+if (uniqueConversations.length !== conversations.items.length) {
+  console.log(`Conversas duplicadas na paginacao ignoradas: ${conversations.items.length - uniqueConversations.length}`);
+}
 
 const beneficiaryPhones = new Set(
-  conversations.items.filter(hasBeneficiaryLabel).map((conversation) => normalizePhone(conversationPhone(conversation))).filter(Boolean),
+  uniqueConversations.filter(hasBeneficiaryLabel).map((conversation) => normalizePhone(conversationPhone(conversation))).filter(Boolean),
 );
 const scope = {
   rule: 'Excluir da futura migracao todo contato cujo telefone apareca em qualquer conversa com etiqueta Beneficiario Ativo.',
@@ -309,7 +326,7 @@ const scope = {
   excluded_person_ids: [],
   labels: {},
 };
-for (const conversation of conversations.items) {
+for (const conversation of uniqueConversations) {
   const excluded = beneficiaryPhones.has(normalizePhone(conversationPhone(conversation)));
   scope[excluded ? 'excluded_conversation_ids' : 'included_conversation_ids'].push(String(conversation.id));
   for (const label of labelsOf(conversation)) scope.labels[label] = (scope.labels[label] || 0) + 1;
@@ -324,7 +341,7 @@ let messageCount = 0;
 let attachmentCount = 0;
 let attachmentFailureCount = 0;
 await mapConcurrent(
-  conversations.items,
+  uniqueConversations,
   CONVERSATION_CONCURRENCY,
   async (conversation) => {
     const counts = await snapshotConversation(accountId, conversation);
@@ -348,7 +365,7 @@ const manifest = {
   account_id: accountId,
   counts: {
     crm_people: crm.items.length,
-    chat_conversations: conversations.items.length,
+    chat_conversations: uniqueConversations.length,
     messages: messageCount,
     attachments: attachmentCount,
     attachment_download_failures: attachmentFailureCount,
