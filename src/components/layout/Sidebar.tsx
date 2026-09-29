@@ -37,6 +37,7 @@ import {
   Settings,
   Shield,
   Sun,
+  Tag,
   TrendingUp,
   Trophy,
   User,
@@ -313,7 +314,10 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     .trim()
     .toUpperCase() === 'UNITY SAUDE';
   const unityMacrosMenu = isUnityProfile
-    ? [{ icon: MessageSquare, label: 'Macros', href: '/inbox/macros' }]
+    ? [
+        { icon: MessageSquare, label: 'Macros', href: '/inbox/macros' },
+        { icon: Tag, label: 'Etiquetas', href: '/inbox/etiquetas' },
+      ]
     : [];
 
   const corretorMenu = [

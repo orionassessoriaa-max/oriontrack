@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import { rateLimit, requireApiUser } from '@/lib/api/security';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sanitizeUnityMacros } from '@/lib/unityMacros';
+import { mergeUnityDefaultLabels, sanitizeUnityLabels } from '@/lib/unityLabels';
 
 const ALLOWED_ROLES = ['admin', 'corretor', 'corretor_admin', 'corretor_membro', 'account_manager'] as const;
 
-type UnityLabel = { id: string; name: string; color: string };
 type UnityQuickReply = { id: string; title: string; text: string };
 
 function normalizedCompany(value: unknown) {
@@ -56,19 +56,6 @@ async function resolveUnityContext(request: Request) {
   return { guard, target, companyRows: companyRows || [] };
 }
 
-function sanitizeLabels(value: unknown): UnityLabel[] {
-  if (!Array.isArray(value)) return [];
-  const seen = new Set<string>();
-  return value.slice(0, 50).flatMap((item: any) => {
-    const name = String(item?.name || '').trim().slice(0, 50);
-    const normalized = name.toLocaleLowerCase('pt-BR');
-    if (!name || seen.has(normalized)) return [];
-    seen.add(normalized);
-    const color = /^#[0-9a-f]{6}$/i.test(String(item?.color || '')) ? String(item.color) : '#06b6d4';
-    return [{ id: String(item?.id || crypto.randomUUID()), name, color }];
-  });
-}
-
 function sanitizeQuickReplies(value: unknown): UnityQuickReply[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
@@ -102,7 +89,7 @@ function readConfig(rows: any[], profileId: string) {
     : [];
 
   return {
-    labels: sanitizeLabels(config.labels),
+    labels: mergeUnityDefaultLabels(config.labels),
     quickReplies: sanitizeQuickReplies(personalReplies),
     macros: sanitizeUnityMacros(personalMacros),
   };
@@ -112,7 +99,23 @@ export async function GET(request: Request) {
   try {
     const context = await resolveUnityContext(request);
     if ('response' in context) return context.response;
-    return NextResponse.json(readConfig(context.companyRows, context.target.id), { headers: { 'Cache-Control': 'no-store' } });
+    const config = readConfig(context.companyRows, context.target.id);
+    const companyIds = context.companyRows.map((row: any) => String(row.id));
+    const { data: conversations, error: conversationError } = companyIds.length
+      ? await supabaseAdmin.from('whatsapp_conversas').select('tags').in('corretor_id', companyIds)
+      : { data: [], error: null };
+    if (conversationError) throw conversationError;
+    const labelUsage = (conversations || []).reduce<Record<string, number>>((counts, conversation: any) => {
+      const tags = Array.isArray(conversation.tags)
+        ? conversation.tags.map((item: unknown) => String(item || '').trim()).filter(Boolean)
+        : [];
+      for (const tag of new Set<string>(tags)) {
+        const key = tag.toLocaleLowerCase('pt-BR');
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      return counts;
+    }, {});
+    return NextResponse.json({ ...config, labelUsage }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {
     console.error('[unity_inbox_config] GET error:', error);
     return NextResponse.json({ error: error?.message || 'Erro ao carregar configuracao.' }, { status: 500 });
@@ -132,7 +135,7 @@ export async function PATCH(request: Request) {
     const body = await request.json().catch(() => ({}));
     const storedConfig = readStoredConfig(context.companyRows);
     const current = readConfig(context.companyRows, context.target.id);
-    const labels = body.labels === undefined ? current.labels : sanitizeLabels(body.labels);
+    const labels = body.labels === undefined ? current.labels : sanitizeUnityLabels(body.labels);
     const quickReplies = body.quickReplies === undefined ? current.quickReplies : sanitizeQuickReplies(body.quickReplies);
     const macros = body.macros === undefined ? current.macros : sanitizeUnityMacros(body.macros);
     const storedRepliesByProfile = storedConfig.quickRepliesByProfile && typeof storedConfig.quickRepliesByProfile === 'object'
@@ -165,6 +168,38 @@ export async function PATCH(request: Request) {
         })
         .eq('id', row.id);
       if (error) throw error;
+    }
+
+    const renamedLabels = body.labels === undefined
+      ? []
+      : labels.flatMap((label) => {
+          const previous = current.labels.find((item) => item.id === label.id);
+          return previous && previous.name !== label.name ? [{ from: previous.name, to: label.name }] : [];
+        });
+    if (renamedLabels.length) {
+      const companyIds = context.companyRows.map((row: any) => String(row.id));
+      const { data: taggedConversations, error: taggedError } = await supabaseAdmin
+        .from('whatsapp_conversas')
+        .select('id,tags')
+        .in('corretor_id', companyIds);
+      if (taggedError) throw taggedError;
+      for (const conversation of taggedConversations || []) {
+        const currentTags = Array.isArray(conversation.tags) ? conversation.tags.map(String) : [];
+        let changed = false;
+        const nextTags = currentTags.map((tag) => {
+          const rename = renamedLabels.find((item) => item.from.toLocaleLowerCase('pt-BR') === tag.toLocaleLowerCase('pt-BR'));
+          if (!rename) return tag;
+          changed = true;
+          return rename.to;
+        });
+        if (changed) {
+          const { error: renameError } = await supabaseAdmin
+            .from('whatsapp_conversas')
+            .update({ tags: nextTags, updated_at: new Date().toISOString() })
+            .eq('id', conversation.id);
+          if (renameError) throw renameError;
+        }
+      }
     }
 
     if (body.conversation_id && Array.isArray(body.tags)) {

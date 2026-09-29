@@ -12,6 +12,14 @@ type InboxTargetProfile = ApiProfile & {
   nome_empresa?: string | null;
 };
 
+function normalizedCompanyName(value: unknown) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
+
 function canViewTarget(actor: ApiProfile, target: InboxTargetProfile) {
   if (actor.id === target.id) return true;
   if (actor.tipo_usuario === 'admin') return true;
@@ -124,6 +132,25 @@ async function listOpenFollowUpLeadIds(leadIds: string[]) {
   return ids;
 }
 
+async function listHumanReplyConversationIds(conversationIds: string[]) {
+  const ids = new Set<string>();
+  if (!conversationIds.length) return ids;
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from('whatsapp_mensagens')
+      .select('conversa_id')
+      .in('conversa_id', conversationIds)
+      .eq('direction', 'outbound')
+      .contains('metadata', { sender_type: 'human' })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    (data || []).forEach((message) => ids.add(String(message.conversa_id)));
+    if (!data || data.length < pageSize) break;
+  }
+  return ids;
+}
+
 export async function GET(request: Request) {
   const guard = await requireApiUser(request, INBOX_LIST_ROLES as unknown as UserRole[]);
   if ('error' in guard) return guard.error;
@@ -177,8 +204,14 @@ export async function GET(request: Request) {
       conversations.map((conversation) => conversation.lead_id).filter(Boolean).map(String)
     ));
     let openFollowUpLeadIds = new Set<string>();
+    let humanReplyConversationIds = new Set<string>();
     try {
-      openFollowUpLeadIds = await listOpenFollowUpLeadIds(leadIds);
+      [openFollowUpLeadIds, humanReplyConversationIds] = await Promise.all([
+        listOpenFollowUpLeadIds(leadIds),
+        normalizedCompanyName(companyName) === 'UNITY SAUDE'
+          ? listHumanReplyConversationIds(conversations.map((conversation) => String(conversation.id)))
+          : Promise.resolve(new Set<string>()),
+      ]);
     } catch (followUpError) {
       // A sinalizacao de tarefa e complementar. Uma falha nela nao pode
       // impedir o corretor de abrir o Inbox e acessar as mensagens.
@@ -191,6 +224,7 @@ export async function GET(request: Request) {
         hasOpenFollowUp: Boolean(
           conversation.lead_id && openFollowUpLeadIds.has(String(conversation.lead_id))
         ),
+        hasHumanReply: humanReplyConversationIds.has(String(conversation.id)),
       })),
       corretorIds,
       assignedLeadIds,

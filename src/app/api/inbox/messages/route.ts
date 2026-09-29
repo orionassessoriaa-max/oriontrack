@@ -1411,10 +1411,17 @@ export async function POST(request: Request) {
     if (insertError) throw insertError;
     reservedMessageId = null;
 
+    const unityConversation = await isUnityBrokerage(conversation.corretor_id);
     await supabaseAdmin
       .from('whatsapp_conversas')
-      .update({ ultima_mensagem_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({
+        ultima_mensagem_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...(unityConversation && conversation.status === 'aguardando' ? { status: 'aberta' } : {}),
+      })
       .eq('id', conversationId);
+
+    if (unityConversation && conversation.status === 'aguardando') conversation.status = 'aberta';
 
     await writeAuditLog(request, guard.profile, {
       action: 'whatsapp.message.send',

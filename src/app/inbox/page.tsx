@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, useRef, useMemo, type ClipboardEvent } from 'react';
+import Link from 'next/link';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
@@ -54,7 +55,9 @@ import {
   Maximize2,
   Minimize2,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Tag,
+  UserPlus
 } from 'lucide-react';
 
 const SEM_INTERESSE_MOTIVOS = [
@@ -95,6 +98,7 @@ type Conversation = {
   source?: string;
   aiActive?: boolean;
   hasOpenFollowUp?: boolean;
+  hasHumanReply?: boolean;
   customFields?: Array<{ key: string; value: string }>;
 };
 
@@ -123,15 +127,17 @@ type SelectedAttachment = {
   file: File;
   preview: string;
 };
-type UnityLabel = { id: string; name: string; color: string };
+type UnityLabel = { id: string; name: string; color: string; active?: boolean };
 type UnityQuickReply = { id: string; title: string; text: string };
 
-type ConversationBox = 'active' | 'followup' | 'closed';
+type ConversationBox = 'new' | 'active' | 'followup' | 'closed';
 
-function conversationBelongsToBox(conversation: Conversation, box: ConversationBox) {
+function conversationBelongsToBox(conversation: Conversation, box: ConversationBox, isUnity = false) {
   if (box === 'closed') return conversation.status === 'fechada';
   if (box === 'followup') return conversation.status !== 'fechada' && Boolean(conversation.hasOpenFollowUp);
-  return conversation.status !== 'fechada';
+  if (!isUnity) return conversation.status !== 'fechada';
+  if (box === 'new') return !conversation.hasHumanReply && !conversation.hasOpenFollowUp;
+  return conversation.status !== 'fechada' && Boolean(conversation.hasHumanReply) && !conversation.hasOpenFollowUp;
 }
 
 type LeadTask = {
@@ -484,9 +490,6 @@ export default function BrokerInboxPage() {
   const [executingMacroId, setExecutingMacroId] = useState<string | null>(null);
   const [pausedMacroId, setPausedMacroId] = useState<string | null>(null);
   const macroExecutionRef = useRef<{ macroId: string; paused: boolean; resume: (() => void) | null } | null>(null);
-  const [labelDraft, setLabelDraft] = useState({ name: '', color: '#06b6d4' });
-  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
-  const [showLabelEditor, setShowLabelEditor] = useState(false);
   const [quickReplyDraft, setQuickReplyDraft] = useState({ title: '', text: '' });
   const [editingQuickReplyId, setEditingQuickReplyId] = useState<string | null>(null);
   const [savingUnityConfig, setSavingUnityConfig] = useState(false);
@@ -942,7 +945,7 @@ export default function BrokerInboxPage() {
     setInboxError(null);
     const previousSelection = selectedConversationRef.current;
     const currentBox = conversationBoxRef.current;
-    const rowsInCurrentBox = mergedRows.filter((row) => conversationBelongsToBox(row, currentBox));
+    const rowsInCurrentBox = mergedRows.filter((row) => conversationBelongsToBox(row, currentBox, isUnityInbox));
     const matchedConversationInCurrentBox = matchedConv
       ? rowsInCurrentBox.find((row) => row.id === matchedConv.id) || null
       : null;
@@ -1072,12 +1075,12 @@ export default function BrokerInboxPage() {
 
   useEffect(() => {
     if (!selectedConversation) return;
-    const belongsToCurrentBox = conversationBelongsToBox(selectedConversation, conversationBox);
+    const belongsToCurrentBox = conversationBelongsToBox(selectedConversation, conversationBox, isUnityInbox);
     if (!belongsToCurrentBox) {
       setSelectedConversation(null);
       setMessages([]);
     }
-  }, [conversationBox, selectedConversation]);
+  }, [conversationBox, isUnityInbox, selectedConversation]);
 
   // Setup Supabase Realtime subscription for messages and conversation events
   useEffect(() => {
@@ -1904,7 +1907,13 @@ export default function BrokerInboxPage() {
       }
 
       if (realConversation) {
-        setSelectedConversation(realConversation);
+        const nextConversation = isUnityInbox && selectedConversation.status === 'espera'
+          ? { ...realConversation, status: 'aberta', hasHumanReply: true }
+          : { ...realConversation, hasHumanReply: isUnityInbox ? true : realConversation.hasHumanReply };
+        setSelectedConversation(nextConversation);
+        setConversations((current) => current.map((conversation) => conversation.id === selectedConversation.id || conversation.id === nextConversation.id
+          ? { ...conversation, ...nextConversation }
+          : conversation));
       }
       sendRetryRef.current = null;
       return true;
@@ -2013,7 +2022,7 @@ export default function BrokerInboxPage() {
       }
 
       const labelNames = unityLabels
-        .filter((label) => macro.actions.labelIds.includes(label.id))
+        .filter((label) => label.active !== false && macro.actions.labelIds.includes(label.id))
         .map((label) => label.name);
       if (labelNames.length > 0) {
         const nextTags = Array.from(new Set([...(conversation.tags || []), ...labelNames]));
@@ -2775,59 +2784,6 @@ export default function BrokerInboxPage() {
     }
   };
 
-  const saveUnityLabel = async () => {
-    const name = labelDraft.name.trim();
-    if (!name) return;
-    const duplicate = unityLabels.some((label) => label.id !== editingLabelId && label.name.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'));
-    if (duplicate) return setSendError('Ja existe uma etiqueta com esse nome.');
-
-    const previous = editingLabelId ? unityLabels.find((label) => label.id === editingLabelId) : null;
-    const nextLabels = editingLabelId
-      ? unityLabels.map((label) => label.id === editingLabelId ? { ...label, name, color: labelDraft.color } : label)
-      : [...unityLabels, { id: crypto.randomUUID(), name, color: labelDraft.color }];
-
-    setSavingUnityConfig(true);
-    try {
-      await patchUnityConfig({ labels: nextLabels, quickReplies: unityQuickReplies });
-      setUnityLabels(nextLabels);
-      if (previous && previous.name !== name && selectedConversation?.tags?.includes(previous.name)) {
-        const nextTags = selectedConversation.tags.map((tag) => tag === previous.name ? name : tag);
-        const updated = { ...selectedConversation, tags: nextTags };
-        setSelectedConversation(updated);
-        setConversations((current) => current.map((conversation) => conversation.id === updated.id ? updated : conversation));
-        if (!selectedConversation.id.startsWith('new-')) {
-          await patchUnityConfig({ conversation_id: selectedConversation.id, tags: nextTags });
-        }
-        if (selectedConversation.lead_id) {
-          await supabase.from('leads').update({ etiqueta: nextTags[0] || null, updated_at: new Date().toISOString() }).eq('id', selectedConversation.lead_id);
-        }
-      }
-      setLabelDraft({ name: '', color: '#06b6d4' });
-      setEditingLabelId(null);
-      setShowLabelEditor(false);
-      setSendError(null);
-    } catch (labelError: any) {
-      setSendError(labelError?.message || 'Nao foi possivel salvar a etiqueta.');
-    } finally {
-      setSavingUnityConfig(false);
-    }
-  };
-
-  const deleteUnityLabel = async (label: UnityLabel) => {
-    if (!window.confirm(`Apagar a etiqueta "${label.name}"?`)) return;
-    const nextLabels = unityLabels.filter((item) => item.id !== label.id);
-    setSavingUnityConfig(true);
-    try {
-      await patchUnityConfig({ labels: nextLabels, quickReplies: unityQuickReplies });
-      setUnityLabels(nextLabels);
-      if (selectedConversation?.tags?.includes(label.name)) await handleRemoveTag(label.name);
-    } catch (labelError: any) {
-      setSendError(labelError?.message || 'Nao foi possivel apagar a etiqueta.');
-    } finally {
-      setSavingUnityConfig(false);
-    }
-  };
-
   const saveUnityQuickReply = async () => {
     const title = quickReplyDraft.title.trim().replace(/^\/+/, '');
     const text = quickReplyDraft.text.trim();
@@ -3005,8 +2961,15 @@ export default function BrokerInboxPage() {
 
     if (stageFilter !== 'todos' && normalizeLeadStatus(c.leadStatus) !== stageFilter) return false;
 
-    return conversationBelongsToBox(c, conversationBox);
+    return conversationBelongsToBox(c, conversationBox, isUnityInbox);
   });
+
+  const queueCounts = {
+    new: conversationsByResponsible.filter((conversation) => conversationBelongsToBox(conversation, 'new', isUnityInbox)).length,
+    active: conversationsByResponsible.filter((conversation) => conversationBelongsToBox(conversation, 'active', isUnityInbox)).length,
+    followup: conversationsByResponsible.filter((conversation) => conversationBelongsToBox(conversation, 'followup', isUnityInbox)).length,
+    closed: conversationsByResponsible.filter((conversation) => conversationBelongsToBox(conversation, 'closed', isUnityInbox)).length,
+  };
 
   const internalNotes = leadActivities
     .filter((activity) => activity.tipo === 'nota')
@@ -3298,6 +3261,22 @@ export default function BrokerInboxPage() {
             {/* Conversation box and filters */}
             <div className="p-4 border-b border-white/5 space-y-3.5">
               <div className="orion-inbox-box-tabs" role="tablist" aria-label="Caixas de conversa">
+                {isUnityInbox && (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={conversationBox === 'new'}
+                    aria-label={`Leads novos, ${queueCounts.new}`}
+                    title="Leads novos"
+                    onClick={() => { setConversationBox('new'); setSelectedConversation(null); }}
+                    className="orion-inbox-box-tab"
+                    style={conversationBox === 'new' ? { color: '#22d3ee', borderColor: '#22d3ee' } : undefined}
+                  >
+                    <UserPlus size={18} strokeWidth={2.2} aria-hidden="true" />
+                    <span className="text-[8px] font-black">{queueCounts.new}</span>
+                    <span className="sr-only">Leads novos</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   role="tab"
@@ -3306,8 +3285,10 @@ export default function BrokerInboxPage() {
                   title="Conversas ativas"
                   onClick={() => { setConversationBox('active'); setSelectedConversation(null); }}
                   className="orion-inbox-box-tab"
+                  style={isUnityInbox && conversationBox === 'active' ? { color: '#34d399', borderColor: '#34d399' } : undefined}
                 >
                   <MessageSquare size={19} strokeWidth={2.2} aria-hidden="true" />
+                  {isUnityInbox && <span className="text-[8px] font-black">{queueCounts.active}</span>}
                   <span className="sr-only">Conversas ativas</span>
                 </button>
                 <button
@@ -3318,8 +3299,10 @@ export default function BrokerInboxPage() {
                   title="Conversas em follow-up"
                   onClick={() => { setConversationBox('followup'); setSelectedConversation(null); }}
                   className="orion-inbox-box-tab"
+                  style={isUnityInbox && conversationBox === 'followup' ? { color: '#fbbf24', borderColor: '#fbbf24' } : undefined}
                 >
                   <Clock size={19} strokeWidth={2.2} aria-hidden="true" />
+                  {isUnityInbox && <span className="text-[8px] font-black">{queueCounts.followup}</span>}
                   <span className="sr-only">Conversas em follow-up</span>
                 </button>
                 <button
@@ -3330,15 +3313,19 @@ export default function BrokerInboxPage() {
                   title="Conversas encerradas"
                   onClick={() => { setConversationBox('closed'); setSelectedConversation(null); }}
                   className="orion-inbox-box-tab"
+                  style={isUnityInbox && conversationBox === 'closed' ? { color: '#94a3b8', borderColor: '#94a3b8' } : undefined}
                 >
                   <Archive size={19} strokeWidth={2.2} aria-hidden="true" />
+                  {isUnityInbox && <span className="text-[8px] font-black">{queueCounts.closed}</span>}
                   <span className="sr-only">Conversas encerradas</span>
                 </button>
               </div>
 
               <p className="px-1 text-[10px] font-semibold text-slate-500">
-                {conversationBox === 'active'
-                  ? 'Atendimentos em andamento e aguardando resposta.'
+                {conversationBox === 'new'
+                  ? 'Leads que ainda não receberam a primeira resposta humana.'
+                  : conversationBox === 'active'
+                  ? isUnityInbox ? 'Conversas assumidas e em atendimento.' : 'Atendimentos em andamento e aguardando resposta.'
                   : conversationBox === 'followup'
                     ? 'Conversas ativas que possuem uma tarefa de retorno pendente.'
                     : 'Histórico preservado. Uma nova resposta do lead reabre a conversa.'}
@@ -3416,8 +3403,11 @@ export default function BrokerInboxPage() {
                       }}
                       aria-current={isActive ? 'true' : undefined}
                       className={`w-full flex items-start gap-3 p-4 text-left transition-all ${
-                        isActive ? 'bg-cyan-600/10 border-l-4 border-cyan-500' : 'hover:bg-white/2'
+                        isActive ? `bg-cyan-600/10 border-l-4 ${isUnityInbox ? '' : 'border-cyan-500'}` : 'hover:bg-white/2'
                       }`}
+                      style={isActive && isUnityInbox ? {
+                        borderColor: conversationBox === 'new' ? '#22d3ee' : conversationBox === 'active' ? '#34d399' : conversationBox === 'followup' ? '#fbbf24' : '#94a3b8',
+                      } : undefined}
                     >
                       {/* Avatar */}
                       <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 border border-white/10 flex items-center justify-center text-xs font-black uppercase text-white shrink-0 shadow-lg">
@@ -4492,17 +4482,12 @@ export default function BrokerInboxPage() {
                   <div className="flex items-center justify-between gap-2">
                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Etiquetas</label>
                     {isUnityInbox && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingLabelId(null);
-                          setLabelDraft({ name: '', color: '#06b6d4' });
-                          setShowLabelEditor(true);
-                        }}
+                      <Link
+                        href="/inbox/etiquetas"
                         className="inline-flex items-center gap-1 rounded-lg bg-cyan-500/10 px-2 py-1 text-[9px] font-black text-cyan-400 hover:bg-cyan-500/20"
                       >
-                        <Plus size={11} /> Nova etiqueta
-                      </button>
+                        <Tag size={11} /> Gerenciar
+                      </Link>
                     )}
                   </div>
                   <select
@@ -4521,50 +4506,9 @@ export default function BrokerInboxPage() {
                   >
                     <option value="">Selecione uma etiqueta...</option>
                     {isUnityInbox
-                      ? unityLabels.map((label) => <option key={label.id} value={label.name}>{label.name}</option>)
+                      ? unityLabels.filter((label) => label.active !== false).map((label) => <option key={label.id} value={label.name}>{label.name}</option>)
                       : <option value="__nova_etiqueta__">+ Adicionar etiqueta</option>}
                   </select>
-
-                  {isUnityInbox && showLabelEditor && (
-                    <div className="space-y-2 rounded-xl border border-white/10 bg-slate-950/50 p-3">
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={labelDraft.name}
-                          onChange={(event) => setLabelDraft((current) => ({ ...current, name: event.target.value }))}
-                          placeholder="Nome da etiqueta"
-                          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs font-bold text-white outline-none focus:border-cyan-500/50"
-                        />
-                        <input
-                          type="color"
-                          value={labelDraft.color}
-                          onChange={(event) => setLabelDraft((current) => ({ ...current, color: event.target.value }))}
-                          className="h-9 w-11 cursor-pointer rounded-lg border border-white/10 bg-transparent p-1"
-                          aria-label="Cor da etiqueta"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <button type="button" onClick={() => setShowLabelEditor(false)} className="rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-400 hover:bg-white/5">Cancelar</button>
-                        <button type="button" onClick={() => void saveUnityLabel()} disabled={savingUnityConfig || !labelDraft.name.trim()} className="rounded-lg bg-cyan-600 px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-50">Salvar</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {isUnityInbox && unityLabels.length > 0 && (
-                    <div className="space-y-1.5 rounded-xl border border-white/5 bg-slate-950/30 p-2">
-                      {unityLabels.map((label) => (
-                        <div key={label.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5">
-                          <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
-                          <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-slate-300">{label.name}</span>
-                          <button type="button" onClick={() => {
-                            setEditingLabelId(label.id);
-                            setLabelDraft({ name: label.name, color: label.color });
-                            setShowLabelEditor(true);
-                          }} className="rounded-md p-1 text-slate-500 hover:bg-white/10 hover:text-cyan-400" aria-label={`Editar ${label.name}`}><Pencil size={11} /></button>
-                          <button type="button" onClick={() => void deleteUnityLabel(label)} className="rounded-md p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400" aria-label={`Apagar ${label.name}`}><Trash2 size={11} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
 
                   {/* Render current tags */}
                   <div className="flex flex-wrap gap-1.5 mt-2">

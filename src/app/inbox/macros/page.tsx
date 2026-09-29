@@ -29,7 +29,7 @@ import type { KanbanStage } from '@/lib/kanbanStages';
 import type { UnityMacro, UnityMacroMessage } from '@/lib/unityMacros';
 import styles from './page.module.css';
 
-type UnityLabel = { id: string; name: string; color: string };
+type UnityLabel = { id: string; name: string; color: string; active?: boolean };
 type Draft = Omit<UnityMacro, 'id'>;
 
 const EMPTY_DRAFT: Draft = {
@@ -546,14 +546,14 @@ export default function UnityMacrosPage() {
               <div className={styles.labelsAction}>
                 <div className={styles.sectionHeading}><Tag size={17} /><div><strong>Aplicar etiquetas</strong><span>Opcional. Selecione uma ou mais etiquetas ja cadastradas na Unity.</span></div></div>
                 <div className={styles.labelGrid}>
-                  {labels.length ? labels.map((label) => {
+                  {labels.some((label) => label.active !== false) ? labels.filter((label) => label.active !== false).map((label) => {
                     const selected = draft.actions.labelIds.includes(label.id);
                     return (
                       <button key={label.id} type="button" onClick={() => toggleLabel(label.id)} className={selected ? styles.labelSelected : ''}>
                         <i style={{ backgroundColor: label.color }} /> {label.name} {selected && <CheckCircle2 size={13} />}
                       </button>
                     );
-                  }) : <p>Nenhuma etiqueta cadastrada no Inbox.</p>}
+                  }) : <p>Nenhuma etiqueta ativa. Gerencie a biblioteca em Etiquetas.</p>}
                 </div>
               </div>
             </div>
