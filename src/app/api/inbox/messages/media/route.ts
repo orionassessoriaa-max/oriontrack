@@ -26,6 +26,16 @@ const MAX_PROXY_MEDIA_BYTES = Number(process.env.INBOX_MEDIA_PROXY_MAX_BYTES || 
  */
 const BUCKET_MIDIA = 'inbox-media';
 
+function tamanhoPareceCortado(bytes?: number | null, mimeType?: string | null) {
+  const tamanho = Number(bytes || 0);
+  if (!String(mimeType || '').toLowerCase().startsWith('audio/')) return false;
+  if (!Number.isInteger(tamanho) || tamanho < MAX_CACHE_BASE64_BYTES || tamanho > MAX_PROXY_MEDIA_BYTES) return false;
+
+  // Os cortes observados na central acontecem em limites binarios exatos:
+  // 256 KiB, 512 KiB e seus multiplos de potencia de dois.
+  return Number.isInteger(Math.log2(tamanho));
+}
+
 function caminhoNoBucket(url?: string | null) {
   const bruto = String(url || '');
   // Linha antiga guarda o caminho publico; se algum link assinado tiver sido
@@ -49,6 +59,15 @@ function caminhoNoBucket(url?: string | null) {
 async function lerDoBucket(url?: string | null, fallbackMimeType?: string | null) {
   const caminho = caminhoNoBucket(url);
   if (!caminho) return null;
+
+  const { data: info, error: infoError } = await supabaseAdmin.storage.from(BUCKET_MIDIA).info(caminho);
+  if (!infoError && tamanhoPareceCortado(info?.size, fallbackMimeType)) {
+    console.warn('[Media API] Ignorando copia de audio possivelmente cortada no bucket:', {
+      caminho,
+      bytes: info?.size,
+    });
+    return null;
+  }
 
   const { data, error } = await supabaseAdmin.storage.from(BUCKET_MIDIA).createSignedUrl(caminho, 3600);
   if (error || !data?.signedUrl) {
@@ -231,10 +250,16 @@ function longToNumber(value: any) {
  * comeco. Nesses casos vale mais buscar de novo na central do que servir o
  * pedaco que esta no banco.
  */
-function base64Truncado(base64?: string | null) {
+function base64Truncado(base64?: string | null, mimeType?: string | null) {
   if (!base64) return false;
   const bytes = base64ByteLength(base64);
-  return bytes >= MAX_CACHE_BASE64_BYTES;
+  return tamanhoPareceCortado(bytes, mimeType);
+}
+
+function respostaDeMidiaTruncada(payload: unknown, mimeType?: string | null) {
+  if (!payload || typeof payload !== 'object' || !('base64' in payload)) return false;
+  const base64 = typeof payload.base64 === 'string' ? payload.base64 : null;
+  return base64Truncado(base64, mimeType);
 }
 
 function base64ByteLength(base64: string) {
@@ -648,7 +673,7 @@ export async function GET(request: Request) {
     const directBase64 = pickMediaBase64(message.metadata);
     // Arquivo cortado no teto nao serve: melhor tentar baixar inteiro da
     // central e so cair para o pedaco se nao houver outro caminho.
-    const cortado = base64Truncado(directBase64);
+    const cortado = base64Truncado(directBase64, mimeType);
     if (directBase64 && !cortado && (!forceRefresh || !message.provider_message_id)) {
       return NextResponse.json({ base64: directBase64, mimeType, fileName });
     }
@@ -658,7 +683,7 @@ export async function GET(request: Request) {
     const directUrl = pickMediaUrl(message.metadata);
     if (directUrl && (!forceRefresh || !providerId)) {
       const proxied = await proxyRemoteMedia(directUrl, mimeType);
-      if (proxied) {
+      if (proxied && !respostaDeMidiaTruncada(proxied, mimeType)) {
         const recovered = { ...proxied, fileName };
         await cacheRecoveredMedia(message, recovered);
         return NextResponse.json(recovered);
@@ -724,7 +749,7 @@ export async function GET(request: Request) {
         try {
           for (const candidateId of providerIds) {
             const evoBase64 = await getEvolutionMediaBase64(evoInstance, candidateId);
-            if (evoBase64) {
+            if (evoBase64 && !base64Truncado(evoBase64, mimeType)) {
               const recovered = { base64: evoBase64, mimeType, fileName };
               await cacheRecoveredMedia(message, recovered);
               return NextResponse.json(recovered);
@@ -756,7 +781,7 @@ export async function GET(request: Request) {
           }, { instanceName: inst });
 
           const base64 = pickProviderPayloadBase64(payload);
-          if (base64) {
+          if (base64 && !base64Truncado(base64, mimeType)) {
             const recovered = {
               base64,
               mimeType: payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType,
@@ -770,7 +795,7 @@ export async function GET(request: Request) {
           if (url) {
             const recoveredMimeType = payload?.mimetype || payload?.mimeType || payload?.data?.mimetype || mimeType;
             const proxied = await proxyRemoteMedia(url, recoveredMimeType);
-            if (proxied) {
+            if (proxied && !respostaDeMidiaTruncada(proxied, recoveredMimeType)) {
               const recovered = {
                 ...proxied,
                 fileName: payload?.fileName || payload?.filename || payload?.data?.fileName || fileName,
@@ -792,7 +817,7 @@ export async function GET(request: Request) {
           console.log(`[Media API] UAZAPI falhou. Tentando Evolution API como fallback secundario.`);
           for (const candidateId of providerIds) {
             const evoBase64 = await getEvolutionMediaBase64(evoInstance, candidateId);
-            if (evoBase64) {
+            if (evoBase64 && !base64Truncado(evoBase64, mimeType)) {
               const recovered = { base64: evoBase64, mimeType, fileName };
               await cacheRecoveredMedia(message, recovered);
               return NextResponse.json(recovered);
@@ -802,11 +827,6 @@ export async function GET(request: Request) {
           console.warn(`[Media API] Evolution API fallback secundario falhou:`, evoErr?.message || evoErr);
         }
       }
-    }
-
-    const fallbackBase64 = pickMediaBase64(message.metadata);
-    if (fallbackBase64) {
-      return NextResponse.json({ base64: fallbackBase64, mimeType, fileName });
     }
 
     if (mediaMessage) {
@@ -822,10 +842,15 @@ export async function GET(request: Request) {
       }
     }
 
+    const fallbackBase64 = pickMediaBase64(message.metadata);
+    if (fallbackBase64 && !base64Truncado(fallbackBase64, mimeType)) {
+      return NextResponse.json({ base64: fallbackBase64, mimeType, fileName });
+    }
+
     const fallbackUrl = pickMediaUrl(message.metadata);
     if (fallbackUrl) {
       const proxied = await proxyRemoteMedia(fallbackUrl, mimeType);
-      if (proxied) {
+      if (proxied && !respostaDeMidiaTruncada(proxied, mimeType)) {
         const recovered = { ...proxied, fileName };
         await cacheRecoveredMedia(message, recovered);
         return NextResponse.json(recovered);

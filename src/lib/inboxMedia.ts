@@ -53,7 +53,11 @@ export async function guardarMidiaForaDoBanco(metadata: Record<string, any>) {
   // URLs do WhatsApp expiram. Elas não podem impedir o upload de uma cópia
   // recuperada em base64, ou a mídia desaparece do histórico depois de alguns
   // dias. Só uma URL do nosso bucket é considerada armazenamento permanente.
-  if (!base64Bruto || mediaEstaNoBucket(metadata?.media_url)) return metadata;
+  // Uma nova copia recuperada precisa substituir inclusive uma URL do nosso
+  // bucket. Algumas respostas antigas da central foram gravadas no Storage no
+  // limite exato de bytes e ficaram cortadas; impedir o novo upload aqui
+  // tornava esse cache defeituoso permanente.
+  if (!base64Bruto) return metadata;
 
   const limpo = base64Bruto.includes(';base64,') ? base64Bruto.split(';base64,')[1] : base64Bruto;
   let bytes: Buffer;
