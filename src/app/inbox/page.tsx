@@ -661,7 +661,7 @@ export default function BrokerInboxPage() {
     const token = await getToken();
     if (!token) return;
     try {
-      const response = await fetch('/api/inbox/unity-config', {
+      const response = await fetch('/api/inbox/unity-config?compact=1', {
         cache: 'no-store',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2010,6 +2010,7 @@ export default function BrokerInboxPage() {
     if (!isUnityInbox || !selectedConversation || selectedConversation.id.startsWith('new-') || executingMacroId) return false;
 
     const conversation = selectedConversation;
+    let executableMacro = macro;
     let messageWasSent = false;
     let sentMessages = 0;
     const control = { macroId: macro.id, paused: false, resume: null as (() => void) | null };
@@ -2018,12 +2019,32 @@ export default function BrokerInboxPage() {
     setPausedMacroId(null);
     setSendError(null);
     try {
-      for (let index = 0; index < macro.messages.length; index += 1) {
+      const needsMedia = macro.messages.some((message) =>
+        (message.type === 'audio' && !message.audioBase64)
+        || (message.type === 'file' && !message.fileBase64));
+      if (needsMedia) {
+        const token = await getToken();
+        if (!token) throw new Error('Sessao expirada. Entre novamente.');
+        const response = await fetch(`/api/inbox/unity-config?macro_id=${encodeURIComponent(macro.id)}`, {
+          cache: 'no-store',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(profile?.id ? { 'x-orion-view-profile-id': profile.id } : {}),
+          },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.macro) {
+          throw new Error(payload.error || 'Nao foi possivel carregar os arquivos desta macro.');
+        }
+        executableMacro = payload.macro as UnityMacro;
+      }
+
+      for (let index = 0; index < executableMacro.messages.length; index += 1) {
         await waitForMacroResume(control);
         if (selectedConversationRef.current?.id !== conversation.id) {
           throw new Error('A conversa aberta mudou. A sequencia foi interrompida para nao enviar ao contato errado.');
         }
-        const macroMessage = macro.messages[index];
+        const macroMessage = executableMacro.messages[index];
         const fileMediaType = macroMessage.fileMimeType?.startsWith('image/')
           ? 'image'
           : macroMessage.fileMimeType?.startsWith('video/')
@@ -2054,13 +2075,13 @@ export default function BrokerInboxPage() {
         if (!sent) throw new Error(`A mensagem ${index + 1} nao foi confirmada. As acoes finais nao foram executadas.`);
         sentMessages += 1;
         messageWasSent = true;
-        if (index < macro.messages.length - 1) {
-          await waitMacroInterval(macro.intervalSeconds, control);
+        if (index < executableMacro.messages.length - 1) {
+          await waitMacroInterval(executableMacro.intervalSeconds, control);
         }
       }
 
       const labelNames = unityLabels
-        .filter((label) => label.active !== false && macro.actions.labelIds.includes(label.id))
+        .filter((label) => label.active !== false && executableMacro.actions.labelIds.includes(label.id))
         .map((label) => label.name);
       if (labelNames.length > 0) {
         const nextTags = Array.from(new Set([...(conversation.tags || []), ...labelNames]));
@@ -2078,23 +2099,23 @@ export default function BrokerInboxPage() {
         }
       }
 
-      if (macro.actions.status) {
+      if (executableMacro.actions.status) {
         if (!conversation.lead_id) throw new Error('A mensagem foi enviada, mas esta conversa nao possui lead para alterar a etapa.');
         const token = await getToken();
         const response = await fetch(`/api/crm/leads/${conversation.lead_id}/status`, {
           method: 'PATCH',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: macro.actions.status }),
+          body: JSON.stringify({ status: executableMacro.actions.status }),
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || 'A mensagem foi enviada, mas a etapa nao foi atualizada.');
-        setLeadStatus(macro.actions.status);
+        setLeadStatus(executableMacro.actions.status);
         setConversations((current) => current.map((item) => item.id === conversation.id
-          ? { ...item, leadStatus: macro.actions.status }
+          ? { ...item, leadStatus: executableMacro.actions.status }
           : item));
       }
 
-      if (macro.actions.closeConversation) {
+      if (executableMacro.actions.closeConversation) {
         const closed = await updateConversationStatus('fechada');
         if (!closed) throw new Error('A mensagem foi enviada, mas a conversa nao foi movida para arquivados.');
       }
@@ -2106,8 +2127,8 @@ export default function BrokerInboxPage() {
           'Mensagem enviada',
           `Sequencia: ${sentMessages} mensagem(ns)`,
           labelNames.length ? `Etiquetas: ${labelNames.join(', ')}` : '',
-          macro.actions.status ? `Etapa: ${macro.actions.status}` : '',
-          macro.actions.closeConversation ? 'Conversa movida para arquivados' : '',
+          executableMacro.actions.status ? `Etapa: ${executableMacro.actions.status}` : '',
+          executableMacro.actions.closeConversation ? 'Conversa movida para arquivados' : '',
         ].filter(Boolean).join(' | '),
       }).catch(() => null);
       return true;

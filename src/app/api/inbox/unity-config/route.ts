@@ -100,6 +100,28 @@ export async function GET(request: Request) {
     const context = await resolveUnityContext(request);
     if ('response' in context) return context.response;
     const config = readConfig(context.companyRows, context.target.id);
+    const url = new URL(request.url);
+    const requestedMacroId = url.searchParams.get('macro_id');
+
+    if (requestedMacroId) {
+      const macro = config.macros.find((item) => item.id === requestedMacroId);
+      if (!macro) {
+        return NextResponse.json({ error: 'Macro nao encontrada para este usuario.' }, { status: 404 });
+      }
+      return NextResponse.json({ macro }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    const macros = url.searchParams.get('compact') === '1'
+      ? config.macros.map((macro) => ({
+          ...macro,
+          messages: macro.messages.map((message) => {
+            const compactMessage = { ...message };
+            delete compactMessage.audioBase64;
+            delete compactMessage.fileBase64;
+            return compactMessage;
+          }),
+        }))
+      : config.macros;
     const companyIds = context.companyRows.map((row: any) => String(row.id));
     const { data: conversations, error: conversationError } = companyIds.length
       ? await supabaseAdmin.from('whatsapp_conversas').select('tags').in('corretor_id', companyIds)
@@ -115,7 +137,7 @@ export async function GET(request: Request) {
       }
       return counts;
     }, {});
-    return NextResponse.json({ ...config, labelUsage }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ ...config, macros, labelUsage }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {
     console.error('[unity_inbox_config] GET error:', error);
     return NextResponse.json({ error: error?.message || 'Erro ao carregar configuracao.' }, { status: 500 });
