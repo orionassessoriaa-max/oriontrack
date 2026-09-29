@@ -1916,7 +1916,11 @@ export default function BrokerInboxPage() {
       }
 
       if (realConversation) {
-        const movedFromNewToActive = isUnityInbox && selectedConversation.status === 'espera';
+        // A fila "Novos" e definida pela ausencia de resposta humana, nao pelo
+        // status textual da conversa. Alguns leads ja chegam como "aberta";
+        // usar o status fazia a tela permanecer em Novos e saltar para outro
+        // cliente assim que hasHumanReply mudava para true.
+        const movedFromNewToActive = isUnityInbox && conversationBoxRef.current === 'new';
         const nextConversation = movedFromNewToActive
           ? { ...realConversation, status: 'aberta', hasHumanReply: true }
           : { ...realConversation, hasHumanReply: isUnityInbox ? true : realConversation.hasHumanReply };
@@ -3272,10 +3276,33 @@ export default function BrokerInboxPage() {
         <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(420px,1fr)_320px] 2xl:grid-cols-[360px_minmax(520px,1fr)_360px]">
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
-          <div className={`orion-inbox-list border-r border-white/5 ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col bg-slate-900/20 h-full overflow-hidden`}>
+          <div className={`orion-inbox-list ${isUnityInbox ? 'border-r border-slate-200 bg-[#f8fafc]' : 'border-r border-white/5 bg-slate-900/20'} ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col h-full overflow-hidden`}>
             {/* Conversation box and filters */}
-            <div className="p-4 border-b border-white/5 space-y-3.5">
-              <div className="orion-inbox-box-tabs" role="tablist" aria-label="Caixas de conversa">
+            <div className={`${isUnityInbox ? 'border-b border-slate-200 bg-white px-4 pb-3 pt-3' : 'border-b border-white/5 bg-slate-950/35 p-3.5'} space-y-3`}>
+              {/* Search Box */}
+              <div className="relative">
+                <Search className={`absolute left-3 top-2.5 ${isUnityInbox ? 'text-slate-400' : 'text-slate-500'}`} size={13} />
+                <input
+                  type="text"
+                  placeholder="Procurar nas conversas"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={`w-full rounded-lg py-2 pl-9 pr-3 text-[11px] font-semibold outline-none transition-colors ${isUnityInbox ? 'border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:border-[#635bff] focus:bg-white focus:ring-2 focus:ring-[#635bff]/10' : 'border border-white/8 bg-slate-950 text-white placeholder-slate-500 focus:border-cyan-500/50'}`}
+                />
+              </div>
+
+              {isUnityInbox && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-0.5">
+                    <h2 className="text-xl font-semibold tracking-tight text-slate-950">Conversas</h2>
+                    <span className="rounded-md bg-slate-100 px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-slate-500">
+                      {conversationBox === 'new' ? 'Novos' : conversationBox === 'active' ? 'Em atendimento' : conversationBox === 'followup' ? 'Follow up' : 'Encerradas'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className={`orion-inbox-box-tabs ${isUnityInbox ? 'grid grid-cols-4 gap-0 border-b border-slate-200' : ''}`} role="tablist" aria-label="Caixas de conversa">
                 {isUnityInbox && (
                   <button
                     type="button"
@@ -3284,12 +3311,12 @@ export default function BrokerInboxPage() {
                     aria-label={`Leads novos, ${queueCounts.new}`}
                     title="Leads novos"
                     onClick={() => { setConversationBox('new'); setSelectedConversation(null); }}
-                    className="orion-inbox-box-tab"
-                    style={conversationBox === 'new' ? { color: '#22d3ee', borderColor: '#22d3ee' } : undefined}
+                    className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
+                    style={conversationBox === 'new' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
                   >
-                    <UserPlus size={18} strokeWidth={2.2} aria-hidden="true" />
-                    <span className="text-[8px] font-black">{queueCounts.new}</span>
-                    <span className="sr-only">Leads novos</span>
+                    <UserPlus className={isUnityInbox ? 'hidden' : ''} size={18} strokeWidth={2.2} aria-hidden="true" />
+                    <span className={isUnityInbox ? 'truncate text-[9px] font-bold' : 'sr-only'}>Novos</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${conversationBox === 'new' ? 'bg-[#635bff]/10 text-[#635bff]' : 'bg-slate-100 text-slate-500'}`}>{queueCounts.new}</span>
                   </button>
                 )}
                 <button
@@ -3299,12 +3326,12 @@ export default function BrokerInboxPage() {
                   aria-label="Conversas ativas"
                   title="Conversas ativas"
                   onClick={() => { setConversationBox('active'); setSelectedConversation(null); }}
-                  className="orion-inbox-box-tab"
-                  style={isUnityInbox && conversationBox === 'active' ? { color: '#34d399', borderColor: '#34d399' } : undefined}
+                  className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
+                  style={isUnityInbox && conversationBox === 'active' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
                 >
-                  <MessageSquare size={19} strokeWidth={2.2} aria-hidden="true" />
-                  {isUnityInbox && <span className="text-[8px] font-black">{queueCounts.active}</span>}
-                  <span className="sr-only">Conversas ativas</span>
+                  <MessageSquare className={isUnityInbox ? 'hidden' : ''} size={19} strokeWidth={2.2} aria-hidden="true" />
+                  <span className={isUnityInbox ? 'truncate text-[9px] font-bold' : 'sr-only'}>Atendimento</span>
+                  {isUnityInbox && <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${conversationBox === 'active' ? 'bg-[#635bff]/10 text-[#635bff]' : 'bg-slate-100 text-slate-500'}`}>{queueCounts.active}</span>}
                 </button>
                 <button
                   type="button"
@@ -3313,12 +3340,12 @@ export default function BrokerInboxPage() {
                   aria-label="Conversas em follow-up"
                   title="Conversas em follow-up"
                   onClick={() => { setConversationBox('followup'); setSelectedConversation(null); }}
-                  className="orion-inbox-box-tab"
-                  style={isUnityInbox && conversationBox === 'followup' ? { color: '#fbbf24', borderColor: '#fbbf24' } : undefined}
+                  className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
+                  style={isUnityInbox && conversationBox === 'followup' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
                 >
-                  <Clock size={19} strokeWidth={2.2} aria-hidden="true" />
-                  {isUnityInbox && <span className="text-[8px] font-black">{queueCounts.followup}</span>}
-                  <span className="sr-only">Conversas em follow-up</span>
+                  <Clock className={isUnityInbox ? 'hidden' : ''} size={19} strokeWidth={2.2} aria-hidden="true" />
+                  <span className={isUnityInbox ? 'truncate text-[9px] font-bold' : 'sr-only'}>Follow up</span>
+                  {isUnityInbox && <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${conversationBox === 'followup' ? 'bg-[#635bff]/10 text-[#635bff]' : 'bg-slate-100 text-slate-500'}`}>{queueCounts.followup}</span>}
                 </button>
                 <button
                   type="button"
@@ -3327,16 +3354,16 @@ export default function BrokerInboxPage() {
                   aria-label="Conversas encerradas"
                   title="Conversas encerradas"
                   onClick={() => { setConversationBox('closed'); setSelectedConversation(null); }}
-                  className="orion-inbox-box-tab"
-                  style={isUnityInbox && conversationBox === 'closed' ? { color: '#94a3b8', borderColor: '#94a3b8' } : undefined}
+                  className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
+                  style={isUnityInbox && conversationBox === 'closed' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
                 >
-                  <Archive size={19} strokeWidth={2.2} aria-hidden="true" />
-                  {isUnityInbox && <span className="text-[8px] font-black">{queueCounts.closed}</span>}
-                  <span className="sr-only">Conversas encerradas</span>
+                  <Archive className={isUnityInbox ? 'hidden' : ''} size={19} strokeWidth={2.2} aria-hidden="true" />
+                  <span className={isUnityInbox ? 'truncate text-[9px] font-bold' : 'sr-only'}>Encerradas</span>
+                  {isUnityInbox && <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${conversationBox === 'closed' ? 'bg-[#635bff]/10 text-[#635bff]' : 'bg-slate-100 text-slate-500'}`}>{queueCounts.closed}</span>}
                 </button>
               </div>
 
-              <p className="px-1 text-[10px] font-semibold text-slate-500">
+              <p className={`${isUnityInbox ? 'hidden' : 'px-1'} text-[10px] font-semibold text-slate-500`}>
                 {conversationBox === 'new'
                   ? 'Leads que ainda não receberam a primeira resposta humana.'
                   : conversationBox === 'active'
@@ -3346,7 +3373,7 @@ export default function BrokerInboxPage() {
                     : 'Histórico preservado. Uma nova resposta do lead reabre a conversa.'}
               </p>
 
-              {profile?.tipo_usuario !== 'corretor_membro' && (responsibleOptions.length > 1 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
+              {!isUnityInbox && profile?.tipo_usuario !== 'corretor_membro' && (responsibleOptions.length > 1 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
                 <select
                   value={responsibleFilter}
                   onChange={(event) => setResponsibleFilter(event.target.value)}
@@ -3366,7 +3393,7 @@ export default function BrokerInboxPage() {
                 value={stageFilter}
                 onChange={(event) => setStageFilter(event.target.value)}
                 aria-label="Filtrar conversas por etapa do funil"
-                className="w-full rounded-xl border border-white/5 bg-slate-950 px-3 py-2 text-2xs font-black text-white outline-none focus:border-cyan-500/50"
+                className={`w-full rounded-lg px-3 py-2 text-[10px] font-bold outline-none ${isUnityInbox ? 'border border-slate-200 bg-white text-slate-700 focus:border-[#635bff]' : 'border border-white/5 bg-slate-950 text-white focus:border-cyan-500/50'}`}
               >
                 <option value="todos">Todas as etapas do funil</option>
                 {kanbanStages.map((stage) => (
@@ -3374,21 +3401,10 @@ export default function BrokerInboxPage() {
                 ))}
               </select>
 
-              {/* Search Box */}
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 text-slate-500" size={13} />
-                <input
-                  type="text"
-                  placeholder="Pesquisar conversa..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/5 rounded-xl pl-9 pr-4 py-2 text-2xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                />
-              </div>
             </div>
 
             {/* Conversas list */}
-            <div ref={conversationListRef} onScroll={handleConversationListScroll} aria-busy={loadingMoreConversations} className="flex-1 overflow-y-auto divide-y divide-white/2">
+            <div ref={conversationListRef} onScroll={handleConversationListScroll} aria-busy={loadingMoreConversations} className={`flex-1 overflow-y-auto ${isUnityInbox ? 'divide-y divide-slate-200 bg-white' : 'divide-y divide-white/2'}`}>
               {loading ? (
                 <div className="flex h-40 items-center justify-center">
                   <Loader2 className="animate-spin text-cyan-400" size={24} />
@@ -3417,34 +3433,34 @@ export default function BrokerInboxPage() {
                         setDetailsPanelOpen(false);
                       }}
                       aria-current={isActive ? 'true' : undefined}
-                      className={`w-full flex items-start gap-3 p-4 text-left transition-all ${
-                        isActive ? `bg-cyan-600/10 border-l-4 ${isUnityInbox ? '' : 'border-cyan-500'}` : 'hover:bg-white/2'
+                      className={`w-full flex items-start gap-3 text-left transition-all ${isUnityInbox ? 'px-4 py-3' : 'p-4'} ${
+                        isActive ? `${isUnityInbox ? 'bg-[#f1f0ff] border-l-4 border-[#635bff]' : 'bg-cyan-600/10 border-l-4 border-cyan-500'}` : `${isUnityInbox ? 'hover:bg-slate-50' : 'hover:bg-white/2'}`
                       }`}
-                      style={isActive && isUnityInbox ? {
-                        borderColor: conversationBox === 'new' ? '#22d3ee' : conversationBox === 'active' ? '#34d399' : conversationBox === 'followup' ? '#fbbf24' : '#94a3b8',
-                      } : undefined}
                     >
                       {/* Avatar */}
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 border border-white/10 flex items-center justify-center text-xs font-black uppercase text-white shrink-0 shadow-lg">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-xs font-black uppercase shrink-0 ${isUnityInbox ? 'border border-[#dfe4ff] bg-[#eef1ff] text-[#5148d8]' : 'bg-gradient-to-tr from-slate-700 to-slate-600 border border-white/10 text-white shadow-lg'}`}>
                         {cleanInboxDisplayName(c.nome_contato, c.telefone).slice(0, 2) || 'CT'}
                       </div>
 
                       {/* Content */}
                       <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex justify-between items-baseline">
-                          <span className="text-xs font-black text-white truncate block">{cleanInboxDisplayName(c.nome_contato, c.telefone)}</span>
-                          <span className="orion-inbox-conversation-time text-[9px] font-bold text-slate-500 shrink-0">
+                          <span className={`text-xs truncate block ${isUnityInbox ? 'font-semibold text-slate-950' : 'font-black text-white'}`}>{cleanInboxDisplayName(c.nome_contato, c.telefone)}</span>
+                          <span className={`orion-inbox-conversation-time text-[9px] font-medium shrink-0 ${isUnityInbox ? 'text-slate-400' : 'text-slate-500'}`}>
                             {c.ultima_mensagem_at ? formatHour(c.ultima_mensagem_at) : ''}
                           </span>
                         </div>
+                        <p className={`text-[10px] font-medium truncate leading-tight ${isUnityInbox ? 'text-slate-500' : 'text-slate-400'}`}>
+                          {c.id.startsWith('new-') ? 'Inicie a conversa' : 'Ver histórico de atendimento...'}
+                        </p>
                         {isUnityInbox && Boolean(c.tags?.length) && (
-                          <div className="flex min-w-0 flex-wrap gap-1 pb-0.5">
+                          <div className="flex min-w-0 flex-wrap gap-1 pt-0.5">
                             {c.tags?.slice(0, 2).map((tag) => {
                               const definition = unityLabels.find((label) => label.name.toLocaleLowerCase('pt-BR') === tag.toLocaleLowerCase('pt-BR'));
                               return (
                                 <span
                                   key={tag}
-                                  className="max-w-[105px] truncate rounded-full border px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wide"
+                                  className="max-w-[112px] truncate rounded-md border px-1.5 py-0.5 text-[8px] font-bold"
                                   style={{
                                     borderColor: definition ? `${definition.color}66` : 'rgba(34,211,238,.3)',
                                     backgroundColor: definition ? `${definition.color}1f` : 'rgba(34,211,238,.1)',
@@ -3458,12 +3474,9 @@ export default function BrokerInboxPage() {
                             {(c.tags?.length || 0) > 2 && <span className="text-[8px] font-black text-slate-500">+{(c.tags?.length || 0) - 2}</span>}
                           </div>
                         )}
-                        <p className="text-[10px] text-slate-400 font-medium truncate leading-tight">
-                          {c.id.startsWith('new-') ? 'Inicie a conversa' : 'Ver histórico de atendimento...'}
-                        </p>
                         
                         {/* Agent / Brand badge */}
-                        <div className="flex items-center gap-1.5 mt-2">
+                        <div className={`items-center gap-1.5 mt-2 ${isUnityInbox ? 'hidden' : 'flex'}`}>
                           <img src="/orion-empty-logo.png" alt="Orion" className="h-3 w-3 object-contain opacity-60" />
                           <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">{c.agentName}</span>
                           {c.leadStatus && (

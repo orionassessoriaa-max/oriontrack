@@ -1164,7 +1164,7 @@ export async function POST(request: Request) {
       }
       const { data: original, error: originalError } = await supabaseAdmin
         .from('whatsapp_mensagens')
-        .select('id, conversa_id, provider_message_id, mensagem, remetente, metadata')
+        .select('id, conversa_id, direction, provider_message_id, mensagem, remetente, metadata')
         .eq('id', replyToMessageId)
         .maybeSingle();
       if (originalError) throw originalError;
