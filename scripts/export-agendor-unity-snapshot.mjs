@@ -211,7 +211,12 @@ async function snapshotConversation(accountId, conversation) {
   }
 
   if (fs.existsSync(attachmentIndexFile) && fs.statSync(attachmentIndexFile).size > 2) {
-    return { messages: messages.length, attachments: readJson(attachmentIndexFile).length };
+    const savedIndex = readJson(attachmentIndexFile);
+    return {
+      messages: messages.length,
+      attachments: savedIndex.length,
+      attachmentFailures: savedIndex.filter((item) => item.status === 'unavailable').length,
+    };
   }
 
   const attachmentIndex = [];
@@ -223,19 +228,39 @@ async function snapshotConversation(accountId, conversation) {
       if (!url) continue;
       const fileName = `${safePart(message.id)}-${safePart(attachment.id || index + 1)}.${extensionOf(attachment)}`;
       const relativeFile = path.join('chat', 'media', shard, safePart(conversationId), fileName);
-      const bytes = await downloadAttachment(url, path.join(OUTPUT_DIR, relativeFile));
-      attachmentIndex.push({
-        conversation_id: conversationId,
-        message_id: String(message.id || ''),
-        attachment_id: String(attachment.id || index + 1),
-        file: relativeFile.replaceAll('\\', '/'),
-        bytes,
-        source_url: url,
-      });
+      try {
+        const bytes = await downloadAttachment(url, path.join(OUTPUT_DIR, relativeFile));
+        attachmentIndex.push({
+          conversation_id: conversationId,
+          message_id: String(message.id || ''),
+          attachment_id: String(attachment.id || index + 1),
+          file: relativeFile.replaceAll('\\', '/'),
+          bytes,
+          source_url: url,
+          status: 'downloaded',
+        });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.warn(`Anexo indisponivel no Agendor: conversa ${conversationId}, mensagem ${message.id}: ${detail}`);
+        attachmentIndex.push({
+          conversation_id: conversationId,
+          message_id: String(message.id || ''),
+          attachment_id: String(attachment.id || index + 1),
+          file: null,
+          bytes: 0,
+          source_url: url,
+          status: 'unavailable',
+          error: detail,
+        });
+      }
     }
   }
   writeJsonAtomic(attachmentIndexFile, attachmentIndex);
-  return { messages: messages.length, attachments: attachmentIndex.length };
+  return {
+    messages: messages.length,
+    attachments: attachmentIndex.length,
+    attachmentFailures: attachmentIndex.filter((item) => item.status === 'unavailable').length,
+  };
 }
 
 ensureDir(OUTPUT_DIR);
@@ -295,6 +320,7 @@ writeJsonAtomic(path.join(OUTPUT_DIR, 'migration-scope.json'), scope);
 
 let messageCount = 0;
 let attachmentCount = 0;
+let attachmentFailureCount = 0;
 await mapConcurrent(
   conversations.items,
   CONVERSATION_CONCURRENCY,
@@ -302,9 +328,10 @@ await mapConcurrent(
     const counts = await snapshotConversation(accountId, conversation);
     messageCount += counts.messages;
     attachmentCount += counts.attachments;
+    attachmentFailureCount += counts.attachmentFailures;
   },
   (done, total) => {
-    if (done % 50 === 0 || done === total) console.log(`Historicos: ${done}/${total} conversas, ${messageCount} mensagens, ${attachmentCount} anexos`);
+    if (done % 50 === 0 || done === total) console.log(`Historicos: ${done}/${total} conversas, ${messageCount} mensagens, ${attachmentCount} anexos, ${attachmentFailureCount} indisponiveis`);
   },
 );
 
@@ -322,6 +349,7 @@ const manifest = {
     chat_conversations: conversations.items.length,
     messages: messageCount,
     attachments: attachmentCount,
+    attachment_download_failures: attachmentFailureCount,
     beneficiary_phones_excluded: beneficiaryPhones.size,
     conversations_included_for_migration: scope.included_conversation_ids.length,
     conversations_excluded_from_migration: scope.excluded_conversation_ids.length,
