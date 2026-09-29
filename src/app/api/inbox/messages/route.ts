@@ -575,6 +575,10 @@ async function findExistingConversation(corretorId: string, phone: string, leadI
       .maybeSingle();
 
     if (data) return data;
+    // O mesmo telefone pode aparecer em leads diferentes, inclusive de outros
+    // vendedores. Quando o CRM informa um lead, nunca reutilize por telefone a
+    // conversa de outro cadastro: crie uma conversa vinculada ao lead atual.
+    return null;
   }
 
   const digits = phone.replace(/\D/g, '');
