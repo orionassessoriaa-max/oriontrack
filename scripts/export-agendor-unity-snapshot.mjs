@@ -8,8 +8,6 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
-import { Readable } from 'node:stream';
 import { createHash } from 'node:crypto';
 
 const OUTPUT_DIR = path.resolve(process.argv[2] || `agendor-unity-snapshot-${new Date().toISOString().slice(0, 10)}`);
@@ -190,12 +188,16 @@ function extensionOf(attachment) {
 async function downloadAttachment(url, destination) {
   if (fs.existsSync(destination) && fs.statSync(destination).size > 0) return fs.statSync(destination).size;
   const response = await fetchWithRetry(url, { headers: chatHeaders });
-  if (!response.body) throw new Error(`Anexo sem corpo: ${url}`);
   ensureDir(path.dirname(destination));
   const temporary = `${destination}.tmp-${process.pid}`;
-  await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(temporary, { mode: 0o600 }));
+  // Readable.fromWeb aciona uma falha interna do parser do Undici em alguns
+  // redirects antigos do Active Storage. Materializar a resposta antes da
+  // gravacao evita que um anexo derrube todo o processo retomavel.
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes.length) throw new Error(`Anexo vazio: ${url}`);
+  fs.writeFileSync(temporary, bytes, { mode: 0o600 });
   fs.renameSync(temporary, destination);
-  return fs.statSync(destination).size;
+  return bytes.length;
 }
 
 async function snapshotConversation(accountId, conversation) {
