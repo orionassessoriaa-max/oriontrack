@@ -5833,5 +5833,231 @@ main .orion-unity-inbox .orion-inbox-chat-title :is(h2, p, span) {
   }
 }
 
+
+/* ----------------------------------------------------------------------------
+   Chip de icone em todo o CRM: fundo solido na cor, glifo branco.
+
+   O padrao antigo era o contrario — fundo palido (bg-azul-50) com o icone na
+   cor forte. E isso que o dono chama de neon. A decisao de 30/09/2026 vale para
+   o sistema inteiro, nao so para os cartoes do painel.
+
+   O seletor pega so o que e chip de verdade: um div ou span que declara fundo
+   tingido E cujo unico filho e um svg.
+
+   div e span, e nao button nem a, de proposito: em CSS um no de TEXTO nao conta
+   para :only-child, entao "botao com icone e rotulo" tambem casaria e viraria
+   um quadrado colorido. Chip e decoracao; botao tem estilo proprio.
+
+   A coluna do menu nem entra na conta: estas regras sao escopadas em main e ela
+   e irma dele.
+   ---------------------------------------------------------------------------- */
+main :is(div, span)[class*="bg-blue-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-blue-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-blue-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-blue-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-blue-600/"]:has(> svg:only-child) {
+  background-color: #1d4ed8 !important;
+  background-image: none !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
 }
+
+main :is(div, span)[class*="bg-sky-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-sky-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-sky-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-sky-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-sky-600/"]:has(> svg:only-child) {
+  background-color: #0369a1 !important;
+  background-image: none !important;
+  border-color: #0369a1 !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-cyan-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-cyan-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-cyan-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-cyan-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-cyan-600/"]:has(> svg:only-child) {
+  background-color: #0e7490 !important;
+  background-image: none !important;
+  border-color: #0e7490 !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-teal-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-teal-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-teal-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-teal-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-teal-600/"]:has(> svg:only-child) {
+  background-color: #0f766e !important;
+  background-image: none !important;
+  border-color: #0f766e !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-indigo-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-indigo-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-indigo-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-indigo-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-indigo-600/"]:has(> svg:only-child) {
+  background-color: #4338ca !important;
+  background-image: none !important;
+  border-color: #4338ca !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-violet-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-violet-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-violet-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-violet-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-violet-600/"]:has(> svg:only-child) {
+  background-color: #6d28d9 !important;
+  background-image: none !important;
+  border-color: #6d28d9 !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-purple-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-purple-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-purple-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-purple-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-purple-600/"]:has(> svg:only-child) {
+  background-color: #6d28d9 !important;
+  background-image: none !important;
+  border-color: #6d28d9 !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-fuchsia-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-fuchsia-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-fuchsia-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-fuchsia-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-fuchsia-600/"]:has(> svg:only-child) {
+  background-color: #a21caf !important;
+  background-image: none !important;
+  border-color: #a21caf !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-emerald-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-emerald-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-emerald-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-emerald-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-emerald-600/"]:has(> svg:only-child) {
+  background-color: #059669 !important;
+  background-image: none !important;
+  border-color: #059669 !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-green-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-green-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-green-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-green-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-green-600/"]:has(> svg:only-child) {
+  background-color: #047857 !important;
+  background-image: none !important;
+  border-color: #047857 !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-lime-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-lime-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-lime-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-lime-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-lime-600/"]:has(> svg:only-child) {
+  background-color: #4d7c0f !important;
+  background-image: none !important;
+  border-color: #4d7c0f !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-amber-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-amber-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-amber-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-amber-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-amber-600/"]:has(> svg:only-child) {
+  background-color: #b45309 !important;
+  background-image: none !important;
+  border-color: #b45309 !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-yellow-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-yellow-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-yellow-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-yellow-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-yellow-600/"]:has(> svg:only-child) {
+  background-color: #a16207 !important;
+  background-image: none !important;
+  border-color: #a16207 !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-orange-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-orange-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-orange-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-orange-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-orange-600/"]:has(> svg:only-child) {
+  background-color: #ea580c !important;
+  background-image: none !important;
+  border-color: #ea580c !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-red-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-red-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-red-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-red-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-red-600/"]:has(> svg:only-child) {
+  background-color: #b91c1c !important;
+  background-image: none !important;
+  border-color: #b91c1c !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-rose-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-rose-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-rose-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-rose-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-rose-600/"]:has(> svg:only-child) {
+  background-color: #be123c !important;
+  background-image: none !important;
+  border-color: #be123c !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-pink-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-pink-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-pink-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-pink-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-pink-600/"]:has(> svg:only-child) {
+  background-color: #be185d !important;
+  background-image: none !important;
+  border-color: #be185d !important;
+  color: #ffffff !important;
+}
+
+main :is(div, span)[class*="bg-slate-50"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-slate-100"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-slate-500/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-slate-400/"]:has(> svg:only-child),
+main :is(div, span)[class*="bg-slate-600/"]:has(> svg:only-child) {
+  background-color: #475569 !important;
+  background-image: none !important;
+  border-color: #475569 !important;
+  color: #ffffff !important;
+}
+
+/* O glifo herda o branco do chip nos dois temas. O tema claro tem camada de
+   resgate que repinta texto para tom escuro, e sem isto o icone saia azulado
+   em cima do fundo colorido. */
+main :is(div, span)[class*="bg-"]:has(> svg:only-child) > svg,
+.theme-claro main :is(div, span)[class*="bg-"]:has(> svg:only-child) > svg {
+  color: #ffffff !important;
+  stroke: currentColor !important;
+}
+
+}
+
 
