@@ -52,8 +52,6 @@ import {
   ChevronDown,
   PanelRight,
   ExternalLink,
-  Maximize2,
-  Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
   Tag,
@@ -528,7 +526,6 @@ export default function BrokerInboxPage() {
   const [leadInfo, setLeadInfo] = useState<any>(null);
   const [leadDetailsOpen, setLeadDetailsOpen] = useState(false);
   const [detailsPanelOpen, setDetailsPanelOpen] = useState(false);
-  const [unityExpanded, setUnityExpanded] = useState(false);
   const [unityConversationListOpen, setUnityConversationListOpen] = useState(true);
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
 
@@ -3262,8 +3259,10 @@ export default function BrokerInboxPage() {
   }, [filteredChatMessages, mediaUrls, mediaLoadErrors, fetchMessageMedia]);
 
   return (
-    <InternalLayout immersive={isUnityInbox && unityExpanded}>
-      <div className={`orion-inbox-shell h-[calc(100dvh-64px)] sm:h-[calc(100dvh-72px)] min-h-0 flex flex-col gap-0 overflow-hidden ${isUnityInbox ? 'orion-unity-inbox' : ''} ${isUnityInbox && unityExpanded ? 'orion-unity-inbox-expanded' : ''} ${isUnityInbox && !unityConversationListOpen ? 'orion-unity-list-closed' : ''}`}>
+    // Sem modo expandido: quem esconde o menu agora e o proprio menu, pelo
+    // botao de minimizar da coluna lateral.
+    <InternalLayout>
+      <div className={`orion-inbox-shell h-[calc(100dvh-64px)] sm:h-[calc(100dvh-72px)] min-h-0 flex flex-col gap-0 overflow-hidden ${isUnityInbox ? 'orion-unity-inbox' : ''} ${isUnityInbox && !unityConversationListOpen ? 'orion-unity-list-closed' : ''}`}>
         
         {/* Connection status header bar */}
         {!isUnityInbox && canManageWhatsAppConnection && (isWhatsAppConnected ? (
@@ -3620,20 +3619,6 @@ export default function BrokerInboxPage() {
                         >
                           {unityConversationListOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
                           <span className="hidden 2xl:inline">Conversas</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setUnityExpanded((current) => {
-                            const nextExpanded = !current;
-                            if (!nextExpanded) setDetailsPanelOpen(false);
-                            return nextExpanded;
-                          })}
-                          className="orion-unity-layout-button inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-slate-200 transition hover:bg-white/10"
-                          aria-label={unityExpanded ? 'Mostrar menu do Orion' : 'Expandir atendimento'}
-                          title={unityExpanded ? 'Mostrar menu do Orion' : 'Expandir atendimento'}
-                        >
-                          {unityExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                          <span className="hidden 2xl:inline">{unityExpanded ? 'Restaurar' : 'Expandir'}</span>
                         </button>
                       </>
                     )}

@@ -210,7 +210,7 @@ export default function InternalLayout({ children, immersive = false }: { childr
           O espaco de baixo usa pb-* e nao py-*: py-5/sm:py-7 vinham DEPOIS na
           folha e derrubavam o pt-24, entao entre 640 e 1023px o conteudo ficava
           por baixo da barra fixa. */}
-      <main className={`w-full min-w-0 transition-all duration-300 ${immersive ? 'h-dvh overflow-hidden p-0' : 'px-3 pb-5 pt-24 sm:px-5 sm:pb-7 lg:pb-7 lg:pl-[276px] lg:pr-7 lg:pt-7'}`}>
+      <main className={`w-full min-w-0 transition-all duration-300 ${immersive ? 'h-dvh overflow-hidden p-0' : 'px-3 pb-5 pt-24 sm:px-5 sm:pb-7 lg:pb-7 lg:pl-[calc(var(--o-rail-w)+28px)] lg:pr-7 lg:pt-7'}`}>
         <div className="mx-auto max-w-none transition-all duration-300">
           {children}
         </div>

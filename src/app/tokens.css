@@ -207,6 +207,10 @@ html.theme-claro {
      tipo "Duraifu", arredondado), entao a regra mudou por decisao dele, nao por
      acidente: 12px no que se clica, 16px no que agrupa, 10px nos chips.
      Excecao registrada: o inbox da Unity segue o WhatsApp Web e fica reto. */
+  /* Largura do menu lateral. O Sidebar troca para 76px quando minimizado; o
+     valor mora aqui para o <main> acompanhar sem saber do estado do menu. */
+  --o-rail-w: 248px;
+
   --o-raio-controle: 12px;
   --o-raio-caixa: 16px;
   --o-raio-chip: 10px;

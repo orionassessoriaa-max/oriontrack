@@ -69,6 +69,24 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
   const [tema, setTema] = useState<string>('noturno');
   const [hasTeamMembers, setHasTeamMembers] = useState(true);
   const [hasCommercialAccess, setHasCommercialAccess] = useState(false);
+  // Menu minimizado. A largura mora numa variavel CSS no <html> para o <main>
+  // acompanhar sem o InternalLayout precisar saber deste estado.
+  const [railMini, setRailMini] = useState(false);
+
+  useEffect(() => {
+    const salvo = window.localStorage.getItem('orion:menu_minimizado') === '1';
+    setRailMini(salvo);
+    document.documentElement.style.setProperty('--o-rail-w', salvo ? '76px' : '248px');
+  }, []);
+
+  const alternarMenuMini = () => {
+    setRailMini((atual) => {
+      const proximo = !atual;
+      window.localStorage.setItem('orion:menu_minimizado', proximo ? '1' : '0');
+      document.documentElement.style.setProperty('--o-rail-w', proximo ? '76px' : '248px');
+      return proximo;
+    });
+  };
 
   useEffect(() => {
     const handleThemeChange = () => {
@@ -453,10 +471,27 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
           Abaixo de lg continua valendo a barra do topo com a gaveta, que ja
           existia: em tela estreita a coluna comeria metade do espaco.
           ------------------------------------------------------------------ */}
-      <aside className="orion-rail fixed left-0 top-0 z-50 hidden h-dvh w-[248px] flex-col border-r border-white/5 bg-[#0f172a] text-white lg:flex">
-        <Link href={homeHref} className="flex h-20 shrink-0 items-center px-5">
-          <img src="/brand-logo.png" alt="ORION TRACK" className="h-9 w-auto object-contain" />
-        </Link>
+      <aside
+        className={cn(
+          'orion-rail fixed left-0 top-0 z-50 hidden h-dvh flex-col border-r border-white/5 bg-[#0f172a] text-white lg:flex',
+          railMini && 'orion-rail-mini'
+        )}
+        style={{ width: 'var(--o-rail-w, 248px)' }}
+      >
+        <div className="flex h-20 shrink-0 items-center gap-2 px-4">
+          <Link href={homeHref} className="orion-rail-logo min-w-0 flex-1">
+            <img src="/brand-logo.png" alt="ORION TRACK" className="h-9 w-auto object-contain" />
+          </Link>
+          <button
+            type="button"
+            onClick={alternarMenuMini}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-white"
+            aria-label={railMini ? 'Expandir menu' : 'Minimizar menu'}
+            title={railMini ? 'Expandir menu' : 'Minimizar menu'}
+          >
+            {railMini ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+        </div>
 
         <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
           {loading ? (
@@ -469,6 +504,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  title={item.label}
                   data-ativo={isActive ? 'true' : undefined}
                   className={cn(
                     'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors',
@@ -476,7 +512,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                   )}
                 >
                   <item.icon size={17} strokeWidth={2} className="shrink-0" />
-                  <span className="truncate">{item.label}</span>
+                  <span className="orion-rail-rotulo truncate">{item.label}</span>
                   {isNotification && unreadCount > 0 && (
                     <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
                       {unreadCount}
