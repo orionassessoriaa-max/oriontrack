@@ -5785,5 +5785,55 @@ main .orion-inbox-messages .justify-end > .orion-inbox-message-bubble :is(p, spa
   -webkit-text-fill-color: #ffffff !important;
 }
 
+
+/* ----------------------------------------------------------------------------
+   Barra do topo da conversa: o titulo nao pode mais ser esmagado.
+
+   A regra antiga da barra e "grid-template-columns: minmax(0, 1fr) auto" com
+   "flex-wrap: nowrap" nos botoes. Como botao nao encolhe, quando falta largura
+   quem some e o titulo: o nome do lead virava "C." e o selo de validade
+   quebrava uma palavra por linha.
+
+   Faltou largura porque a coluna do menu levou 248px do conteudo e a fonte
+   maior engordou os botoes. Em vez de espremer, agora os botoes descem para
+   uma segunda linha e o titulo tem largura minima garantida.
+   ---------------------------------------------------------------------------- */
+main .orion-unity-inbox .orion-inbox-chat-header,
+.theme-claro main .orion-unity-inbox .orion-inbox-chat-header {
+  grid-template-columns: minmax(200px, 1fr) auto !important;
+  row-gap: 8px !important;
+}
+
+/* Os botoes podem quebrar linha; o que nao podem e comer o titulo. */
+main .orion-unity-inbox .orion-inbox-chat-actions,
+.theme-claro main .orion-unity-inbox .orion-inbox-chat-actions {
+  flex-wrap: wrap !important;
+  row-gap: 6px !important;
+}
+
+/* Selo de validade, protocolo e canal em uma linha cada, sem quebrar palavra
+   por palavra. O que nao couber vira reticencias. */
+main .orion-unity-inbox .orion-inbox-chat-title :is(h2, p, span) {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
+}
+
+/* Abaixo de 1500px a barra vira duas linhas: titulo em cima, botoes embaixo.
+   Com o menu aberto (248px) e a lista de conversas (360px), e a partir dai que
+   os seis botoes deixam de caber ao lado do nome. */
+@media (max-width: 1500px) {
+  main .orion-unity-inbox .orion-inbox-chat-header,
+  .theme-claro main .orion-unity-inbox .orion-inbox-chat-header {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  main .orion-unity-inbox .orion-inbox-chat-actions,
+  .theme-claro main .orion-unity-inbox .orion-inbox-chat-actions {
+    justify-content: flex-start !important;
+  }
+}
+
 }
 
