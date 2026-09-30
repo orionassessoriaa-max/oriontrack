@@ -484,12 +484,15 @@
    screens still use dark Tailwind utilities directly in JSX. */
 html.theme-claro,
 body.theme-claro {
-  background: #f6f8fb !important;
+  background: #f4f4f5 !important;
   color: #0f172a !important;
 }
 
 .theme-claro main {
-  background: #f6f8fb !important;
+  /* Era #f6f8fb. Esse tom tem azul na mistura e era ELE que aparecia: o main
+     pinta por cima do body e da raiz do layout, entao trocar so os dois de
+     baixo nao mudava nada na tela. */
+  background: #f4f4f5 !important;
   color: #0f172a !important;
 }
 
@@ -4762,10 +4765,33 @@ html.theme-noturno .orion-trafego {
    O acabamento vem com os componentes de src/components/orion.
    ============================================================================ */
 
-/* 1. Peso. O 900 estava em rotulo, titulo, numero e botao ao mesmo tempo:
-      quando tudo grita, nada destaca. */
+/* 1. Peso e tamanho.
+
+      Primeira tentativa: 900 para 600. O dono achou a tela fraca e pediu fonte
+      grossa. Entao o 900 vira 700 — some o exagero, fica o peso.
+
+      Tamanho: o CRM foi escrito quase inteiro entre 8 e 10px. Sao 638 usos de
+      text-[10px], 189 de text-[9px] e 64 de text-[8px]; e miudo para trabalhar
+      o dia todo. A escala sobe para um piso de 11.5px. */
 main .font-black {
-  font-weight: var(--o-peso-forte) !important;
+  font-weight: 700 !important;
+}
+
+main :is(.text-\[7px\], .text-\[8px\], .text-\[9px\], .text-\[10px\], .text-2xs, .text-3xs) {
+  font-size: 11.5px !important;
+  line-height: 1.35 !important;
+}
+
+main .text-\[11px\] {
+  font-size: 12.5px !important;
+}
+
+main .text-xs {
+  font-size: 13px !important;
+}
+
+main .text-sm {
+  font-size: 14.5px !important;
 }
 
 main .tracking-widest {
@@ -5149,10 +5175,18 @@ main [class*="bg-cyan-400/"] {
 
 main:has(.orion-unity-inbox) {
   height: 100dvh !important;
-  /* 5rem = a altura exata da barra fixa do topo (h-20 no Sidebar). Assim o
-     inbox comeca colado nela, sem faixa de fundo sobrando. */
+  /* Abaixo de lg o menu e a barra fixa de 5rem no topo: o inbox comeca
+     colado nela. */
   padding: 5rem 0 0 0 !important;
   overflow: hidden !important;
+}
+
+/* No desktop o menu e a coluna de 248px: o respiro sai do topo e vai para a
+   esquerda, senao o inbox ficaria por baixo da coluna. */
+@media (min-width: 1024px) {
+  main:has(.orion-unity-inbox) {
+    padding: 0 0 0 248px !important;
+  }
 }
 
 /* No modo expandido o InternalLayout recebe immersive: nao ha barra do topo,
@@ -5496,6 +5530,7 @@ main:has(.orion-unity-inbox) > div,
 
 
 }
+
 
 
 
