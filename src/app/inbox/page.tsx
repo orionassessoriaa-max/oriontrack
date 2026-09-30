@@ -84,6 +84,7 @@ const SEM_INTERESSE_MOTIVOS = [
   'Fora do perfil de atendimento',
   'Nao respondeu apos tentativas',
   'Numero errado',
+  'Beneficiário ativo',
 ];
 
 function WhatsAppGlyph({ className = '' }: { className?: string }) {

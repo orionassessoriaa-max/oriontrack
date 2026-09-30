@@ -293,6 +293,7 @@ const MOTIVOS_SEM_INTERESSE = [
   'Fora do perfil de atendimento',
   'Nao respondeu apos tentativas',
   'Numero errado',
+  'Beneficiário ativo',
 ];
 
 type CommercialModalState = {
