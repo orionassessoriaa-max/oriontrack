@@ -5633,7 +5633,20 @@ main:has(.orion-unity-inbox) > div,
   -webkit-text-fill-color: #cbd5e1 !important;
 }
 
+
+/* Barra de rolagem do menu: some da vista, mas a rolagem continua (roda do
+   mouse, teclado e toque). Sem ela o unico aviso de que existe item abaixo e
+   o proprio corte do ultimo item na borda da coluna. */
+.orion-rail nav {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
+.orion-rail nav::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
 
+}
 
