@@ -5429,9 +5429,11 @@ main:has(.orion-unity-inbox) > div,
    ---------------------------------------------------------------------------- */
 main .orion-inbox-messages .justify-end > .orion-inbox-message-bubble > div.uppercase,
 .theme-claro main .orion-inbox-messages .justify-end > .orion-inbox-message-bubble > div.uppercase {
-  color: #cbd5e1 !important;
-  -webkit-text-fill-color: #cbd5e1 !important;
-  opacity: 1 !important;
+  /* Branco, e nao cinza: a bolha enviada e verde escuro e cinza claro em cima
+     dela nao alcanca contraste de leitura. */
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: .85 !important;
 }
 
 main .orion-inbox-messages .justify-start > .orion-inbox-message-bubble > div.uppercase {
@@ -5757,7 +5759,31 @@ main .justify-end > .orion-inbox-message-bubble button.w-full :is(p, svg, span),
   border-radius: 999px !important;
 }
 
+
+/* ----------------------------------------------------------------------------
+   Bolha enviada: verde do WhatsApp.
+
+   A camada de normalizacao trocou o ciano pelo acento do sistema, e no tema
+   escuro o acento CLAREIA (#7fc4d8) — a bolha virava azul bebe e nada em cima
+   dela lia. O verde #005c4b e o mesmo que o WhatsApp usa na mensagem enviada do
+   tema escuro, e funciona nos dois temas aqui porque o texto e branco.
+
+   Vale para todos os inboxes e nao so para a Unity: o problema de contraste foi
+   criado pela normalizacao, que e global. Se alguma concessionaria precisar de
+   outra cor, o ajuste e por cima deste bloco.
+   ---------------------------------------------------------------------------- */
+main .orion-inbox-messages .justify-end > .orion-inbox-message-bubble,
+.theme-claro main .orion-inbox-messages .justify-end > .orion-inbox-message-bubble {
+  background: #005c4b !important;
+  background-image: none !important;
+  border-color: #005c4b !important;
 }
 
+main .orion-inbox-messages .justify-end > .orion-inbox-message-bubble :is(p, span, strong, svg, time),
+.theme-claro main .orion-inbox-messages .justify-end > .orion-inbox-message-bubble :is(p, span, strong, svg, time) {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
 
+}
 
