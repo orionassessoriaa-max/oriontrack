@@ -443,9 +443,6 @@ export default function BrokerInboxPage() {
   const [stageFilter, setStageFilter] = useState('todos');
   const [conversationBox, setConversationBox] = useState<ConversationBox>('active');
   const conversationBoxRef = useRef<ConversationBox>('active');
-  // Marca a troca de fila feita no clique das abas, para o efeito abaixo nao
-  // fechar a conversa que esta aberta (so a Unity).
-  const manualBoxSwitchRef = useRef(false);
 
   // Audio Recording States
   const [isRecording, setIsRecording] = useState(false);
@@ -1120,16 +1117,25 @@ export default function BrokerInboxPage() {
   }, [conversationBox]);
 
   useEffect(() => {
-    const manualSwitch = manualBoxSwitchRef.current;
-    manualBoxSwitchRef.current = false;
     if (!selectedConversation) return;
+
+    // Na Unity a conversa aberta NUNCA e fechada por nao pertencer a fila
+    // escolhida. Trocar de fila e filtrar a lista, nada mais.
+    //
+    // A tentativa anterior usava uma bandeira consumida na primeira execucao
+    // deste efeito, e era furada: a lista recarrega logo depois da troca,
+    // setSelectedConversation recebe um objeto novo, o efeito roda de novo com
+    // a bandeira ja gasta e fechava a conversa. O sintoma aparecia atrasado, no
+    // proximo recarregamento — foi o que confundiu a validacao do deploy de
+    // 30/09, em que a conversa parecia trocar ao mudar o tema.
+    //
+    // Quem fecha conversa na Unity e o botao Encerrar, que limpa a selecao
+    // explicitamente em updateConversationStatus.
+    if (isUnityInbox) return;
+
     const belongsToCurrentBox = conversationBelongsToBox(selectedConversation, conversationBox, isUnityInbox);
     if (!belongsToCurrentBox) {
       if (sendInFlightRef.current) return;
-      // Trocar de fila e so filtrar a lista: a conversa aberta continua aberta,
-      // como no WhatsApp. O fechamento automatico segue valendo quando quem
-      // muda de caixa e a propria conversa (encerrada, movida para follow up).
-      if (manualSwitch) return;
       setSelectedConversation(null);
       setMessages([]);
     }
@@ -1137,11 +1143,8 @@ export default function BrokerInboxPage() {
 
   const handleConversationBoxChange = useCallback((box: ConversationBox) => {
     setConversationBox(box);
-    if (isUnityInbox) {
-      manualBoxSwitchRef.current = true;
-      return;
-    }
-    setSelectedConversation(null);
+    // Fora da Unity o clique na fila continua fechando a conversa, como sempre.
+    if (!isUnityInbox) setSelectedConversation(null);
   }, [isUnityInbox]);
 
   // Setup Supabase Realtime subscription for messages and conversation events
