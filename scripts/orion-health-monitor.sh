@@ -186,10 +186,15 @@ while true; do
   deep_code="$(printf '%s' "$deep_result" | awk '{print $1}')"
   deep_time="$(printf '%s' "$deep_result" | awk '{print $2}')"
   replicas="$(docker service ls --filter "name=${SERVICE_NAME}" --format '{{.Replicas}}' 2>/dev/null | head -n 1)"
+  running_replicas="${replicas%%/*}"
+  desired_replicas="${replicas##*/}"
   dns_result="$(getent ahostsv4 "$(printf '%s' "$BASE_URL" | sed -E 's#https?://([^/]+).*#\1#')" 2>/dev/null | awk 'NR==1{print $1}')"
 
   state="UP"
-  if [ "$health_code" != "200" ] || [ "$replicas" != "1/1" ]; then
+  if [ "$health_code" != "200" ] || \
+    ! [[ "$running_replicas" =~ ^[0-9]+$ && "$desired_replicas" =~ ^[0-9]+$ ]] || \
+    [ "$desired_replicas" -lt 1 ] || \
+    [ "$running_replicas" -ne "$desired_replicas" ]; then
     state="DOWN"
   elif [ "$deep_code" != "200" ]; then
     state="DEGRADED"
