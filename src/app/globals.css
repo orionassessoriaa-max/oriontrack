@@ -6058,6 +6058,19 @@ main :is(div, span)[class*="bg-"]:has(> svg:only-child) > svg,
   stroke: currentColor !important;
 }
 
-}
 
+/* ----------------------------------------------------------------------------
+   Botao flutuante do Apolo: escondido no inbox.
+
+   Ele mora no canto inferior direito, fixo, e e exatamente onde fica o botao de
+   enviar mensagem. No inbox ele tapava a acao mais usada da tela.
+
+   Escondido so no inbox, e nao no sistema inteiro: nas outras telas ele nao
+   atrapalha nada e continua sendo o acesso ao assistente. O :has olha a pagina
+   inteira e casa quando o shell do inbox esta montado.
+   ---------------------------------------------------------------------------- */
+body:has(.orion-inbox-shell) .orion-apolo-botao {
+  display: none !important;
+}
+}
 
