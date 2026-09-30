@@ -45,10 +45,21 @@ function isFacilitaBrokerage(name?: string | null) {
   return normalizeAiText(name).includes('facilita');
 }
 
+function isThreeBrokerage(name?: string | null) {
+  return normalizeAiText(name).includes('three');
+}
+
 const FACILITA_NO_CALL_GUARDRAILS = `Regra exclusiva da Facilita Corretora:
 - Nunca ofereca ligacao, reuniao ou chamada.
 - Nunca pergunte dia, horario ou disponibilidade para ligacao.
 - Quando terminar de coletar os dados essenciais, encerre a coleta sem nova pergunta, defina "handoff": true e informe apenas que o atendimento sera encaminhado para continuidade.`;
+
+const THREE_QUALIFICATION_GUARDRAILS = `Regra exclusiva da Three Corretora, com prioridade sobre qualquer outra instrucao:
+- A qualificacao tem somente tres etapas: confirmar as idades, perguntar hospital ou regiao de preferencia e confirmar se a cotacao sera por CNPJ, MEI ou CPF.
+- A confirmacao de CNPJ, MEI ou CPF e sempre a ultima pergunta.
+- Depois da resposta sobre CNPJ, MEI ou CPF, defina "handoff": true e encaminhe imediatamente ao especialista da vez.
+- Nunca pergunte cidade, motivo da busca, cobertura, investimento, e-mail, dia, horario ou disponibilidade.
+- Nunca ofereca nem tente agendar ligacao, reuniao ou chamada.`;
 
 export function formatAiBrokerageDisplayName(name?: string | null) {
   const rawName = String(name || '').trim();
@@ -967,6 +978,64 @@ function setSummaryField(summary: string | null | undefined, label: string, valu
   return lines.filter(Boolean).join('\n');
 }
 
+async function finalizeThreeQualificationHandoff(params: {
+  session: { id: string; summary?: string | null };
+  lead: LeadRow;
+  conversationId: string;
+  adminProfile: ProfileRow;
+  aiConfig: { persona: string };
+  customerMessage: string;
+  signSenderName?: boolean;
+}) {
+  const { session, lead, conversationId, adminProfile, aiConfig, customerMessage, signSenderName } = params;
+  if (!(await isLeadAiSessionActive(session.id))) {
+    return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+  }
+
+  const documentChoice = documentChoiceFromAnswer(customerMessage);
+  const rawAnswer = customerMessage.trim();
+  const isDocumentNumber = rawAnswer.replace(/\D/g, '').length === 14;
+  const documentSummary = isDocumentNumber
+    ? rawAnswer
+    : documentChoice || (isAffirmativeAnswer(rawAnswer) && hasKnownValue(lead.possui_cnpj)
+      ? String(lead.possui_cnpj)
+      : rawAnswer);
+  let summary = setSummaryField(session.summary || leadFacts(lead), 'CNPJ/MEI', documentSummary);
+  summary = setSummaryField(summary, 'Pendente', 'Nao');
+  summary = appendSummaryLine(summary, 'IA encerrada: qualificacao da Three concluida e enviada ao especialista da vez.');
+
+  const reply = polishAiReply(
+    `Obrigada, ${leadFirstName(lead)}. Ja confirmei as informacoes e vou passar seu atendimento para o especialista da vez dar continuidade.`
+  );
+  registerAiOutbound(lead.telefone || '', reply);
+  const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
+  await insertMessage(conversationId, 'outbound', aiConfig.persona, reply, {
+    ...(payload || {}),
+    instance: aiInstanceName(adminProfile),
+    ai_agent: aiConfig.persona,
+  });
+
+  const { data: updatedSession, error: updateError } = await supabaseAdmin
+    .from('lead_ai_sessions')
+    .update({
+      status: 'handoff',
+      summary,
+      last_customer_message_at: new Date().toISOString(),
+      last_ai_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', session.id)
+    .eq('status', 'active')
+    .select('id')
+    .maybeSingle();
+  if (updateError) throw updateError;
+  if (!updatedSession) return { handled: false, handoff: true, reason: 'Sessao ja encerrada.' };
+
+  await updateLeadFromSummary(lead.id, summary);
+  await notifyResponsible(lead, summary, adminProfile);
+  return { handled: true, handoff: true, deterministic: 'three_qualification_handoff' };
+}
+
 async function finalizeScheduledHandoff(params: {
   session: any;
   lead: LeadRow;
@@ -1789,11 +1858,11 @@ export async function askAline(
     '- Nunca use nome completo falando com o cliente.',
     '- O nome completo so deve aparecer em resumo interno, banco de dados ou notificacao para o responsavel.',
   ].join('\n');
-  const brokerageRules = isFacilitaBrokerage(corretoraNome)
-    ? `\n\n${FACILITA_NO_CALL_GUARDRAILS}`
-    : isUnityBrokerage(corretoraNome)
-      ? `\n\n${UNITY_PLAN_GUARDRAILS}`
-      : '';
+  const brokerageRules = [
+    isFacilitaBrokerage(corretoraNome) ? FACILITA_NO_CALL_GUARDRAILS : '',
+    isUnityBrokerage(corretoraNome) ? UNITY_PLAN_GUARDRAILS : '',
+    isThreeBrokerage(corretoraNome) ? THREE_QUALIFICATION_GUARDRAILS : '',
+  ].filter(Boolean).map((rule) => `\n\n${rule}`).join('');
   const system = `${clockRule}\n\n${baseSystem}\n\n${RUNTIME_AI_GUARDRAILS}${brokerageRules}\n\n${nameRule}\n\n${handoffContactRule(contactMode, pessoa)}\n\nResponda exclusivamente com um objeto JSON valido, sem markdown, contendo reply (texto), handoff (booleano) e summary (texto).`;
   const lastMessage = messages[messages.length - 1];
   const alreadyHasCustomerMessage =
@@ -1935,6 +2004,7 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
 
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
   const signSenderName = isUnityBrokerage(corretora.nome || broker.nome_empresa);
+  const threeQualification = isThreeBrokerage(corretora.nome || broker.nome_empresa);
 
   const opName = formatOperadoraName(lead.operadora);
   const cameFromWhatsAppAd = options.entryChannel === 'whatsapp_ad';
@@ -1952,7 +2022,7 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
     `Olá, ${leadFirstName(lead)}! Tudo bem?`,
     aiIntroLine(introIdentity, aiConfig.persona),
     interestText,
-    cameFromWhatsAppAd || cameFromOrganicWhatsApp
+    !threeQualification && (cameFromWhatsAppAd || cameFromOrganicWhatsApp)
       ? 'Para eu te ajudar certinho, como você se chama?'
       : initialLeadQuestion(lead),
   ].join('\n\n'));
@@ -2097,7 +2167,8 @@ export async function continueLeadAiFromIncoming(options: {
 
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
   const signSenderName = isUnityBrokerage(corretora.nome || broker.nome_empresa);
-  const skipCallQuestion = isFacilitaBrokerage(corretora.nome || broker.nome_empresa);
+  const threeQualification = isThreeBrokerage(corretora.nome || broker.nome_empresa);
+  const skipCallQuestion = isFacilitaBrokerage(corretora.nome || broker.nome_empresa) || threeQualification;
 
   const previousOutbound = [...(history || [])]
     .reverse()
@@ -2120,6 +2191,97 @@ export async function continueLeadAiFromIncoming(options: {
     isHospitalPreferenceQuestion(previousOutboundText) &&
     isNoHospitalPreferenceAnswer(options.customerMessage);
   const cityAnswered = isCityQuestion(previousOutboundText);
+
+  if (
+    threeQualification &&
+    isInitialConfirmationQuestion(previousOutboundText) &&
+    !isGreetingOnly(options.customerMessage) &&
+    !isValueRequest(options.customerMessage)
+  ) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
+    let summary = session.summary || leadFacts(lead);
+    const leadUpdate: { idades?: string } = {};
+    if (hasKnownValue(lead.idades)) {
+      summary = setSummaryField(summary, 'Idades', String(lead.idades));
+    } else {
+      summary = setSummaryField(summary, 'Idades', options.customerMessage.trim());
+      leadUpdate.idades = options.customerMessage.trim();
+    }
+
+    if (leadUpdate.idades) {
+      const { error: leadUpdateError } = await supabaseAdmin.from('leads').update(leadUpdate).eq('id', lead.id);
+      if (leadUpdateError) throw leadUpdateError;
+    }
+
+    const reply = customerReplyForFollowUp(
+      'Para finalizar essa parte, qual hospital ou região você prefere para atendimento?',
+      lead,
+      Boolean(previousOutboundText),
+    );
+    registerAiOutbound(lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
+    await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+      ...(payload || {}),
+      instance: aiInstanceName(adminProfile),
+      ai_agent: aiConfig.persona,
+    });
+    await supabaseAdmin.from('lead_ai_sessions').update({
+      summary: setSummaryField(summary, 'Pendente', 'Hospital/regiao e confirmacao de CNPJ/MEI/CPF.'),
+      last_customer_message_at: new Date().toISOString(),
+      last_ai_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', session.id);
+
+    return { handled: true, handoff: false, deterministic: 'three_hospital_question' };
+  }
+
+  if (threeQualification && isHospitalPreferenceQuestion(previousOutboundText)) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
+    const preference = isNoHospitalPreferenceAnswer(options.customerMessage)
+      ? 'Sem preferencia'
+      : options.customerMessage.trim();
+    const summary = setSummaryField(session.summary || leadFacts(lead), 'Hospital/Regiao', preference);
+    const { error: leadUpdateError } = await supabaseAdmin
+      .from('leads')
+      .update({ hospital_preferencia: preference })
+      .eq('id', lead.id);
+    if (leadUpdateError) throw leadUpdateError;
+
+    const reply = customerReplyForFollowUp(cnpjConfirmationReply(lead), lead, Boolean(previousOutboundText));
+    registerAiOutbound(lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
+    await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+      ...(payload || {}),
+      instance: aiInstanceName(adminProfile),
+      ai_agent: aiConfig.persona,
+    });
+    await supabaseAdmin.from('lead_ai_sessions').update({
+      summary: setSummaryField(summary, 'Pendente', 'Confirmar CNPJ/MEI/CPF.'),
+      last_customer_message_at: new Date().toISOString(),
+      last_ai_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', session.id);
+
+    return { handled: true, handoff: false, deterministic: 'three_cnpj_question' };
+  }
+
+  if (threeQualification && isCnpjConfirmationQuestion(previousOutboundText) && !isGreetingOnly(options.customerMessage)) {
+    return finalizeThreeQualificationHandoff({
+      session,
+      lead,
+      conversationId: options.conversationId,
+      adminProfile,
+      aiConfig,
+      customerMessage: options.customerMessage,
+      signSenderName,
+    });
+  }
 
   if (
     (isInitialConfirmationQuestion(previousOutboundText) || (recentInitialConfirmation && !recentCnpjConfirmation)) &&
@@ -2573,14 +2735,16 @@ export async function stopLeadAiForHumanTakeover(leadId: string, brokerName?: st
 export async function checkLeadAiTimeouts() {
   await recoverStalledLeadAiSessions();
 
-  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const shortestTimeoutAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
-  // Find active sessions where the last AI message has been unanswered for 15 minutes.
+  // A Three trabalha com SLA de cinco minutos. As demais operacoes continuam
+  // com quinze, e sao filtradas novamente depois que a concessionaria do lead
+  // e conhecida.
   const { data: activeSessions, error } = await supabaseAdmin
     .from('lead_ai_sessions')
     .select('*')
     .eq('status', 'active')
-    .lte('last_ai_message_at', fifteenMinutesAgo);
+    .lte('last_ai_message_at', shortestTimeoutAgo);
 
   if (error) {
     console.error('[cron_timeout] Error fetching active sessions:', error);
@@ -2629,7 +2793,11 @@ export async function checkLeadAiTimeouts() {
 
     if (!lead) continue;
 
-    const suffix = '\n\nIA encerrada: lead nao respondeu a ultima mensagem da IA por mais de 15 minutos.';
+    const broker = await findBroker(lead.corretor_id);
+    const timeoutMinutes = isThreeBrokerage(broker?.nome_empresa) ? 5 : 15;
+    if (lastAiMessageAt > Date.now() - timeoutMinutes * 60 * 1000) continue;
+
+    const suffix = `\n\nIA encerrada: lead nao respondeu a ultima mensagem da IA por mais de ${timeoutMinutes} minutos.`;
     const newSummary = `${session.summary || leadFacts(lead)}${suffix}`.trim();
 
     const { data: updatedSession, error: updateError } = await supabaseAdmin
