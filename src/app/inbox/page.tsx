@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, useRef, useMemo, type ClipboardEvent, type DragEvent } from 'react';
+import { useCallback, useEffect, useState, useRef, useMemo, type ClipboardEvent, type DragEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -422,6 +422,29 @@ function formatarNumeroConectado(bruto: string) {
   return `+${pais} (${ddd}) ${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}`;
 }
 
+function InboxSidebarGroup({
+  title,
+  summary,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className="group shrink-0 border-b border-white/5 pb-4">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl border border-white/5 bg-slate-950/45 px-3.5 py-3 text-left transition hover:border-cyan-500/25 hover:bg-slate-950/70 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <span className="block text-[10px] font-black uppercase tracking-wider text-cyan-300">{title}</span>
+          {summary && <span className="mt-1 block truncate text-[9px] font-semibold text-slate-500">{summary}</span>}
+        </div>
+        <ChevronDown size={16} className="shrink-0 text-slate-400 transition-transform group-open:rotate-180 group-open:text-cyan-300" />
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
+}
+
 export default function BrokerInboxPage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -496,6 +519,7 @@ export default function BrokerInboxPage() {
   const messageFetchRequestRef = useRef(0);
   const messageFetchAbortRef = useRef<AbortController | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const quickSuggestionsRef = useRef<HTMLDivElement | null>(null);
   const [messageActionMenuId, setMessageActionMenuId] = useState<string | null>(null);
   const [messageActionMenuOpensUp, setMessageActionMenuOpensUp] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ message: InboxMessage; conversationId: string } | null>(null);
@@ -559,6 +583,7 @@ export default function BrokerInboxPage() {
   const [quickReplyDraft, setQuickReplyDraft] = useState({ title: '', text: '' });
   const [editingQuickReplyId, setEditingQuickReplyId] = useState<string | null>(null);
   const [savingUnityConfig, setSavingUnityConfig] = useState(false);
+  const [quickSuggestionsDismissed, setQuickSuggestionsDismissed] = useState(false);
 
   // Custom Fields & CRM Status States
   const [customFieldName, setCustomFieldName] = useState('');
@@ -3339,6 +3364,27 @@ export default function BrokerInboxPage() {
       .filter((reply) => !query || reply.title.toLocaleLowerCase('pt-BR').includes(query))
       .slice(0, 6);
   }, [isUnityInbox, messageText, unityQuickReplies]);
+  const quickSuggestionsOpen = !quickSuggestionsDismissed && unityQuickReplyMatches.length > 0;
+
+  useEffect(() => {
+    if (!quickSuggestionsOpen) return;
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (quickSuggestionsRef.current?.contains(target) || composerRef.current?.contains(target)) return;
+      setQuickSuggestionsDismissed(true);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setQuickSuggestionsDismissed(true);
+    };
+
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [quickSuggestionsOpen]);
 
   // Carrega sozinho a previa das imagens da conversa aberta.
   //
@@ -4432,14 +4478,15 @@ export default function BrokerInboxPage() {
                         </div>
                       )}
 
-                      {isUnityInbox && unityQuickReplyMatches.length > 0 && (
-                        <div className="orion-unity-quick-suggestions absolute bottom-[88px] left-0 right-0 z-30 overflow-hidden rounded-2xl border border-white/10 bg-[#111b21] p-1.5 shadow-2xl sm:left-12 sm:right-14">
+                      {isUnityInbox && quickSuggestionsOpen && (
+                        <div ref={quickSuggestionsRef} className="orion-unity-quick-suggestions absolute bottom-[88px] left-0 right-0 z-30 overflow-hidden rounded-2xl border border-white/10 bg-[#111b21] p-1.5 shadow-2xl sm:left-12 sm:right-14">
                           {unityQuickReplyMatches.map((reply) => (
                             <button
                               key={reply.id}
                               type="button"
                               onClick={() => {
                                 setMessageText(reply.text);
+                                setQuickSuggestionsDismissed(true);
                                 window.setTimeout(() => composerRef.current?.focus(), 0);
                               }}
                               className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/10"
@@ -4455,11 +4502,21 @@ export default function BrokerInboxPage() {
                       <textarea
                         ref={composerRef}
                         value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
+                        onChange={(e) => {
+                          const nextValue = e.target.value;
+                          if (!messageText.startsWith('/') && nextValue.startsWith('/')) setQuickSuggestionsDismissed(false);
+                          if (!nextValue.startsWith('/')) setQuickSuggestionsDismissed(true);
+                          setMessageText(nextValue);
+                        }}
                         onPaste={handleComposerPaste}
                         onKeyDown={(e) => {
+                          if (e.key === 'Escape' && quickSuggestionsOpen) {
+                            e.preventDefault();
+                            setQuickSuggestionsDismissed(true);
+                            return;
+                          }
                           if (isUnityInbox && (e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey) {
-                            if (messageText.startsWith('/') && unityQuickReplyMatches.length > 0) {
+                            if (messageText.startsWith('/') && quickSuggestionsOpen) {
                               e.preventDefault();
                               setMessageText(unityQuickReplyMatches[0].text);
                               return;
@@ -4603,9 +4660,11 @@ export default function BrokerInboxPage() {
 
 
                 {/* Follow-up / Tasks */}
-                <div className="space-y-3 shrink-0 border-b border-white/5 pb-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Follow-up</label>
+                <InboxSidebarGroup
+                  title="Follow-up"
+                  summary={highlightedTask ? highlightedTask.titulo : 'Nenhuma tarefa registrada'}
+                >
+                  <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-end gap-1.5">
                       <button
                         type="button"
@@ -4631,7 +4690,6 @@ export default function BrokerInboxPage() {
                         <ExternalLink size={11} />
                         Abrir no Kanban
                       </button>
-                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.04] px-3 py-2.5">
@@ -4723,12 +4781,16 @@ export default function BrokerInboxPage() {
                       </button>
                     </div>
                   </form>
-                </div>
+                  </div>
+                </InboxSidebarGroup>
 
                 {/* Tags manager */}
-                <div className="space-y-2 shrink-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Etiquetas</label>
+                <InboxSidebarGroup
+                  title="Etiquetas"
+                  summary={selectedConversation.tags?.length ? `${selectedConversation.tags.length} aplicada${selectedConversation.tags.length === 1 ? '' : 's'}` : 'Nenhuma etiqueta aplicada'}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-end gap-2">
                     {isUnityInbox && (
                       <Link
                         href="/inbox/etiquetas"
@@ -4777,11 +4839,15 @@ export default function BrokerInboxPage() {
                       </span>
                     )})}
                   </div>
-                </div>
+                  </div>
+                </InboxSidebarGroup>
 
                 {/* Internal Notes */}
-                <div className="space-y-2 flex-1 flex flex-col min-h-[160px]">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Anotações Internas</label>
+                <InboxSidebarGroup
+                  title="Anotações internas"
+                  summary={internalNotes.length ? `${internalNotes.length} registrada${internalNotes.length === 1 ? '' : 's'}` : 'Nenhuma anotação'}
+                >
+                  <div className="space-y-2">
                   
                   {/* Notes input */}
                   <div className="flex gap-2">
@@ -4843,11 +4909,14 @@ export default function BrokerInboxPage() {
                       </div>
                     )}
                   </div>
-                </div>
+                  </div>
+                </InboxSidebarGroup>
 
                 {/* Histórico de Ligações */}
-                <div className="space-y-2 flex-1 flex flex-col min-h-[160px] border-t border-white/5 pt-4">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Histórico de Ligações</label>
+                <InboxSidebarGroup
+                  title="Histórico de ligações"
+                  summary={`${leadActivities.filter((activity) => activity.tipo === 'ligacao').length} registrada${leadActivities.filter((activity) => activity.tipo === 'ligacao').length === 1 ? '' : 's'}`}
+                >
                   <div className="flex-1 overflow-y-auto bg-slate-950/40 border border-white/5 p-3 rounded-2xl space-y-2 max-h-[140px]">
                     {leadActivities.filter((act) => act.tipo === 'ligacao').length > 0 ? (
                       leadActivities
@@ -4880,15 +4949,15 @@ export default function BrokerInboxPage() {
                       </div>
                     )}
                   </div>
-                </div>
+                </InboxSidebarGroup>
 
                 {isUnityInbox && (
-                  <div className="space-y-3.5 shrink-0 border-t border-white/5 pt-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Minhas respostas rápidas</label>
-                        <p className="mt-1 text-[9px] font-semibold text-slate-500">Visíveis somente neste acesso. Digite / e o título para usar.</p>
-                      </div>
+                  <InboxSidebarGroup
+                    title="Respostas rápidas"
+                    summary={unityQuickReplies.length ? `${unityQuickReplies.length} salva${unityQuickReplies.length === 1 ? '' : 's'} neste acesso` : 'Nenhuma resposta salva'}
+                  >
+                    <div className="space-y-3.5">
+                      <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => {
@@ -4900,6 +4969,8 @@ export default function BrokerInboxPage() {
                         <Plus size={11} /> Nova
                       </button>
                     </div>
+
+                    <p className="text-[9px] font-semibold text-slate-500">Digite / e o título na mensagem para usar.</p>
 
                     <div className="space-y-2 rounded-xl border border-white/5 bg-slate-950/40 p-3">
                       <div className="relative">
@@ -4948,12 +5019,16 @@ export default function BrokerInboxPage() {
                         <p className="py-3 text-center text-[9px] font-black uppercase tracking-wider text-slate-600">Nenhuma resposta rápida criada</p>
                       )}
                     </div>
-                  </div>
+                    </div>
+                  </InboxSidebarGroup>
                 )}
 
                 {/* Custom attributes editable section */}
-                {!isUnityInbox && <div className="space-y-3.5 shrink-0 border-t border-white/5 pt-4">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Campos Personalizados</label>
+                {!isUnityInbox && <InboxSidebarGroup
+                  title="Campos personalizados"
+                  summary={selectedConversation.customFields?.length ? `${selectedConversation.customFields.length} cadastrado${selectedConversation.customFields.length === 1 ? '' : 's'}` : 'Nenhum campo cadastrado'}
+                >
+                  <div className="space-y-3.5">
                   
                   {/* Inputs for custom key-value addition */}
                   <div className="space-y-2">
@@ -5005,7 +5080,8 @@ export default function BrokerInboxPage() {
                       </div>
                     )}
                   </div>
-                </div>}
+                  </div>
+                </InboxSidebarGroup>}
               </>
             ) : (
               <div className="h-full flex items-center justify-center text-center text-2xs text-slate-500 uppercase tracking-widest font-black">
