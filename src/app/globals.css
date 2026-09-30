@@ -5682,5 +5682,36 @@ main .justify-end > .orion-inbox-message-bubble button.w-full :is(p, svg, span),
   -webkit-text-fill-color: #111b21 !important;
 }
 
+
+/* ----------------------------------------------------------------------------
+   Mensagem da ISA: bolha e nome em cinza.
+
+   O que o bot escreveu fica visualmente separado do que a equipe escreveu, sem
+   depender de ler o rotulo. O cinza e o mesmo nos dois temas porque a bolha e
+   escura nos dois.
+   ---------------------------------------------------------------------------- */
+main .orion-inbox-message-bubble[data-automacao="true"],
+.theme-claro main .orion-inbox-message-bubble[data-automacao="true"] {
+  background: #475569 !important;
+  border-color: #475569 !important;
+}
+
+main .orion-inbox-message-bubble[data-automacao="true"] > div.uppercase,
+.theme-claro main .orion-inbox-message-bubble[data-automacao="true"] > div.uppercase {
+  color: #cbd5e1 !important;
+  -webkit-text-fill-color: #cbd5e1 !important;
+}
+
+main .orion-inbox-message-bubble[data-automacao="true"] :is(p, span),
+.theme-claro main .orion-inbox-message-bubble[data-automacao="true"] :is(p, span) {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+main .orion-inbox-message-bubble[data-automacao="true"] button.w-full {
+  background: rgb(255 255 255 / .12) !important;
+  border-color: rgb(255 255 255 / .22) !important;
+}
+
 }
 

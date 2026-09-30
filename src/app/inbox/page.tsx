@@ -190,9 +190,14 @@ function inboxMessageSenderName(message: InboxMessage, fallback = 'Contato') {
   }
 
   // O historico antigo da Unity usa Hebert como remetente das automacoes do
-  // Agendor. O rotulo evita atribuir essas mensagens a uma pessoa da equipe.
-  if (message.direction === 'outbound' && /hebert/i.test(String(attributedSender || ''))) {
-    return 'AGENDOR';
+  // Agendor. Na pratica quem escrevia por esse canal era a ISA, entao o rotulo
+  // e ISA e nao o nome de uma pessoa da equipe.
+  //
+  // Ressalva registrada: se alguem da Unity chegou a digitar manualmente pelo
+  // Agendor, essa mensagem tambem aparece como ISA. Separar exige olhar o
+  // metadata.sender_type de cada linha, e ate agora so encontramos automacao.
+  if (message.direction === 'outbound' && /hebert|agendor/i.test(String(attributedSender || ''))) {
+    return 'ISA';
   }
 
   return cleanInboxDisplayName(attributedSender, fallback);
@@ -3819,7 +3824,13 @@ export default function BrokerInboxPage() {
                             </div>
                           )}
                           <div className={`flex min-w-0 max-w-full ${isMine ? 'justify-end' : 'justify-start'} animate-in fade-in-50 duration-200`}>
-                          <div className={`orion-inbox-message-bubble relative min-w-0 max-w-[86%] sm:max-w-[75%] rounded-[1.25rem] sm:rounded-[1.5rem] p-3 sm:p-3.5 shadow-lg space-y-1.5 ${
+                          <div
+                            /* Mensagem da ISA ganha tratamento proprio: bolha e
+                               nome em cinza, para separar num relance o que foi
+                               o bot do que foi a equipe. O CSS esta em
+                               globals.css, no bloco "Mensagem da ISA". */
+                            data-automacao={senderName === 'ISA' ? 'true' : undefined}
+                            className={`orion-inbox-message-bubble relative min-w-0 max-w-[86%] sm:max-w-[75%] rounded-[1.25rem] sm:rounded-[1.5rem] p-3 sm:p-3.5 shadow-lg space-y-1.5 ${
                             mediaKind === 'call'
                               ? isMine
                                 ? 'bg-emerald-600 text-white rounded-tr-none'
