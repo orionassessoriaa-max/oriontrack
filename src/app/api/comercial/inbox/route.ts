@@ -25,6 +25,9 @@ async function buildInboxPayload(guard: CommercialGuard) {
     .select('id,nome,telefone,email,empresa,estado,origem,campanha,sdr_id,closer_id,status,prioridade,vidas,ja_investiu_trafego,faturamento_mensal,investimento,data_entrada,ultimo_contato_at,utm_source,utm_campaign,updated_at')
     .limit(5000);
   leadQuery = applyCommercialLeadScope(leadQuery, guard.commercialRole, guard.profile.id);
+  if (guard.commercialRole === 'closer') {
+    leadQuery = leadQuery.eq('closer_id', guard.profile.id);
+  }
   const { data: leads, error: leadError } = await leadQuery;
   if (leadError) throw new Error(leadError.message);
   const phoneMap = new Map<string, any>();
@@ -35,6 +38,15 @@ async function buildInboxPayload(guard: CommercialGuard) {
   // as conversas pessoais ou de outras corretoras de quem está logado.
   const { data: conversations, error } = await supabaseAdmin.from('whatsapp_conversas').select('id,lead_id,corretor_id,telefone,nome_contato,status,ultima_mensagem_at,updated_at').is('corretor_id', null).order('ultima_mensagem_at', { ascending: false, nullsFirst: false }).limit(3000);
   if (error) throw new Error(error.message);
-  const result = (conversations || []).map((conversation) => ({ ...conversation, commercial_lead: phoneMap.get(digits(conversation.telefone)) || null })).filter((conversation) => conversation.commercial_lead);
+  const seenPhones = new Set<string>();
+  const result = (conversations || [])
+    .map((conversation) => ({ ...conversation, commercial_lead: phoneMap.get(digits(conversation.telefone)) || null }))
+    .filter((conversation) => {
+      if (!conversation.commercial_lead) return false;
+      const phone = digits(conversation.telefone);
+      if (!phone || seenPhones.has(phone)) return false;
+      seenPhones.add(phone);
+      return true;
+    });
   return { conversations: result, role: guard.commercialRole };
 }

@@ -46,6 +46,23 @@ export function inboxMessageProfileId(message: unknown) {
   return asUuid(profileIdFromUazapiInstance(instance));
 }
 
+export function inboxMessageInstanceName(message: unknown) {
+  const source = record(message);
+  const metadata = record(source.metadata);
+  const data = record(metadata.data);
+  const nestedMessage = record(metadata.message);
+  return String(
+    metadata.instance
+    || metadata.instanceName
+    || metadata.session
+    || data.instance
+    || data.instanceName
+    || nestedMessage.instance
+    || nestedMessage.instanceName
+    || ''
+  ).trim();
+}
+
 export function memberCanViewInboxMessage(
   viewerProfileId: string,
   message: unknown,

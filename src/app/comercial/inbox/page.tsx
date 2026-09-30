@@ -213,7 +213,7 @@ function base64ToObjectUrl(base64: string, mimeType: string) {
 
 export default function CommercialInboxPage() {
   const router = useRouter();
-  const { api, role, members } = useCommercial();
+  const { api, role, members, currentProfileId } = useCommercial();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -283,12 +283,19 @@ export default function CommercialInboxPage() {
 
   const loadMessages = useCallback(async (conversation: Conversation) => {
     try {
-      const payload = await api(`/api/inbox/messages?conversation_id=${conversation.id}`);
+      const ownerProfileId = role === 'coordenador'
+        ? ownerFilter !== 'todos'
+          ? ownerFilter
+          : conversation.commercial_lead.closer_id || conversation.commercial_lead.sdr_id
+        : currentProfileId;
+      const params = new URLSearchParams({ conversation_id: conversation.id });
+      if (ownerProfileId) params.set('commercial_owner_profile_id', ownerProfileId);
+      const payload = await api(`/api/inbox/messages?${params.toString()}`);
       setMessages(payload.messages || []);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Não foi possível carregar as mensagens.');
     }
-  }, [api]);
+  }, [api, currentProfileId, ownerFilter, role]);
 
   useEffect(() => {
     const initialTimer = window.setTimeout(() => {
@@ -770,7 +777,11 @@ export default function CommercialInboxPage() {
           <div className="kh-inbox-list-head"><strong>Conversas</strong><span>{filtered.length}</span></div>
           <label className="kh-inbox-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar nome ou telefone..." /></label>
           <div className="kh-inbox-filters">
-            <select value={ownerFilter} onChange={(event) => setOwnerFilter(event.target.value)} aria-label="Filtrar conversas por responsável">
+            <select value={ownerFilter} onChange={(event) => {
+              setOwnerFilter(event.target.value);
+              setSelected(null);
+              setMessages([]);
+            }} aria-label="Filtrar conversas por responsável">
               <option value="todos">Todos os responsáveis</option>
               {members.filter((member) => member.ativo && (member.papel === 'sdr' || member.papel === 'closer')).map((member) => <option key={member.profile_id} value={member.profile_id}>{member.nome}</option>)}
             </select>
@@ -783,7 +794,7 @@ export default function CommercialInboxPage() {
             {filtered.map((conversation) => (
               <button key={conversation.id} className={selected?.id === conversation.id ? 'active' : ''} onClick={() => setSelected(conversation)}>
                 <span className="kh-avatar">{(conversation.nome_contato || conversation.commercial_lead.nome).split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
-                <span className="kh-conversation-copy"><strong>{conversation.nome_contato || conversation.commercial_lead.nome}</strong><small>{conversation.commercial_lead.status}</small><small>SDR: {memberMap.get(conversation.commercial_lead.sdr_id || '')?.nome || 'Sem responsável'}</small></span>
+                <span className="kh-conversation-copy"><strong>{conversation.nome_contato || conversation.commercial_lead.nome}</strong><small>{conversation.commercial_lead.status}</small><small>Responsável: {memberMap.get(conversation.commercial_lead.closer_id || conversation.commercial_lead.sdr_id || '')?.nome || 'Sem responsável'}</small></span>
                 <time>{time(conversation.ultima_mensagem_at)}</time>
               </button>
             ))}

@@ -571,6 +571,8 @@ async function canAccessConversation(profile: any, conversation: any) {
 
       if (commercialMember.papel === 'sdr') {
         commercialQuery = commercialQuery.eq('sdr_id', profile.id);
+      } else if (commercialMember.papel === 'closer') {
+        commercialQuery = commercialQuery.eq('closer_id', profile.id);
       }
 
       const { data: commercialCandidates } = await commercialQuery.limit(100);
@@ -581,7 +583,7 @@ async function canAccessConversation(profile: any, conversation: any) {
       if (commercialLead) return true;
     }
 
-    if (commercialMember.papel === 'sdr' && !conversation.corretor_id) return false;
+    if (['sdr', 'closer'].includes(commercialMember.papel) && !conversation.corretor_id) return false;
   }
 
   if (profile.tipo_usuario === 'corretor_membro') {

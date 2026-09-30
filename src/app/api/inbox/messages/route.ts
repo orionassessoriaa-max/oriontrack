@@ -8,6 +8,7 @@ import { guardarMidiaForaDoBanco, removerBlobs } from '@/lib/inboxMedia';
 import { assinarMensagem, resolverAtendimentoCompartilhado } from '@/lib/atendimentoCompartilhado';
 import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 import {
+  inboxMessageInstanceName,
   inboxMessageProfileId,
   memberCanViewInboxMessage,
 } from '@/lib/inboxMessageVisibility';
@@ -515,13 +516,16 @@ async function canAccessConversation(profile: any, conversation: any) {
       const commercialLead = (commercialCandidates || []).find((lead) => {
         const leadPhone = String(lead.telefone || '').replace(/\D/g, '');
         const samePhone = leadPhone.slice(-8) === commercialLast8;
-        return samePhone && (commercialMember.papel !== 'sdr' || lead.sdr_id === profile.id);
+        if (!samePhone) return false;
+        if (commercialMember.papel === 'sdr') return lead.sdr_id === profile.id;
+        if (commercialMember.papel === 'closer') return lead.closer_id === profile.id;
+        return true;
       });
       if (commercialLead) return true;
     }
     // Se e conversa comercial mas nao pertence ao SDR, nao deixa a regra de
     // corretora abaixo abrir acesso cruzado por coincidencia de corretor_id.
-    if (commercialMember.papel === 'sdr' && !conversation.corretor_id) return false;
+    if (['sdr', 'closer'].includes(commercialMember.papel) && !conversation.corretor_id) return false;
   }
 
   if (conversation.lead_id && profile.tipo_usuario !== 'corretor_membro') {
@@ -736,6 +740,32 @@ async function canViewSpecificMessage(profile: ApiProfile, message: unknown) {
   return memberCanViewInboxMessage(profile.id, message, roles);
 }
 
+async function resolveCommercialOwnerProfileId(profile: ApiProfile, requestedProfileId: string) {
+  if (!requestedProfileId) return null;
+
+  const { data: owner, error: ownerError } = await supabaseAdmin
+    .from('comercial_membros')
+    .select('profile_id,ativo')
+    .eq('profile_id', requestedProfileId)
+    .eq('ativo', true)
+    .maybeSingle();
+  if (ownerError) throw ownerError;
+  if (!owner) return null;
+
+  if (profile.id === requestedProfileId || profile.tipo_usuario === 'admin') {
+    return requestedProfileId;
+  }
+
+  const { data: viewer, error: viewerError } = await supabaseAdmin
+    .from('comercial_membros')
+    .select('papel,ativo')
+    .eq('profile_id', profile.id)
+    .eq('ativo', true)
+    .maybeSingle();
+  if (viewerError) throw viewerError;
+  return viewer?.papel === 'coordenador' ? requestedProfileId : null;
+}
+
 export async function GET(request: Request) {
   try {
     const limited = rateLimit(request, 'inbox:messages:read', { limit: 120, windowMs: 60_000 });
@@ -754,6 +784,18 @@ export async function GET(request: Request) {
     if (!(await canAccessConversation(guard.profile, conversation))) {
       return NextResponse.json({ error: 'Conversa nao encontrada.' }, { status: 404 });
     }
+
+    const requestedCommercialOwnerId = String(searchParams.get('commercial_owner_profile_id') || '').trim();
+    const commercialOwnerProfileId = await resolveCommercialOwnerProfileId(
+      guard.profile,
+      requestedCommercialOwnerId,
+    );
+    if (requestedCommercialOwnerId && !commercialOwnerProfileId) {
+      return NextResponse.json({ error: 'Responsavel comercial invalido.' }, { status: 403 });
+    }
+    const commercialInstance = commercialOwnerProfileId
+      ? uazapiInstanceName(commercialOwnerProfileId).toLowerCase()
+      : null;
 
     const conversationIds = await findAccessibleConversationIdsByPhone(guard.profile, conversation);
 
@@ -813,6 +855,7 @@ export async function GET(request: Request) {
       const status = String(message?.metadata?.send_status || '');
       return status !== 'sending'
         && status !== 'failed'
+        && (!commercialInstance || inboxMessageInstanceName(message).toLowerCase() === commercialInstance)
         && (
           guard.profile.tipo_usuario !== 'corretor_membro'
           || memberCanViewInboxMessage(guard.profile.id, message, actorRoles)
