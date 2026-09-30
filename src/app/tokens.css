@@ -258,6 +258,16 @@ html.theme-claro {
    semantico direto, ele nao aparece nesta secao.
    --------------------------------------------------------------------------- */
 :root {
+  /* Botao primario: gradiente azul-indigo, igual nos dois temas. O dono
+     escolheu este desenho em 30/09/2026 comparando com o botao chapado no
+     acento. E a UNICA peca do sistema com gradiente — chip, aba ativa, anel
+     de foco e link seguem no azul petroleo. A tinta e branca fixa porque o
+     fundo e escuro nos dois temas, ao contrario do acento, que clareia. */
+  --o-btn-grad: linear-gradient(90deg, #2563eb 0%, #4f46e5 100%);
+  --o-btn-grad-hover: linear-gradient(90deg, #1d4ed8 0%, #4338ca 100%);
+  --o-btn-grad-ink: #ffffff;
+
+  /* Botao secundario, chapado no acento. */
   --o-btn-bg: var(--o-acento);
   --o-btn-bg-hover: var(--o-acento-hover);
   --o-btn-ink: var(--o-acento-sobre);

@@ -4796,12 +4796,32 @@ main .animate-pulse {
   animation: none !important;
 }
 
-/* 4. Gradiente em botao vira cor chapada. Fundo decorativo de secao continua,
-      porque ali o gradiente nao esta fingindo ser um controle. */
-main :is(button, a[role="button"])[class*="bg-gradient-to"] {
-  background-image: none !important;
-  background-color: var(--o-acento) !important;
-  color: var(--o-acento-sobre) !important;
+/* 4. Botao primario: um gradiente so, o azul-indigo, no lugar dos varios que
+      existem hoje (ciano-azul, esmeralda-verde, azul-indigo). O botao chapado
+      em ciano tambem entra aqui: e botao de acao, mesmo papel.
+
+      Vermelho e rosa ficam de fora: sao acoes destrutivas e perder a cor de
+      aviso e pior que perder a padronizacao.
+
+      Fundo decorativo de secao continua com gradiente, porque ali ele nao esta
+      fingindo ser um controle. */
+main :is(button, a[role="button"])[class*="bg-gradient-to"]:not([class*="rose"]):not([class*="red"]):not([class*="amber"]),
+main :is(button, a[role="button"]):is(.bg-cyan-500, .bg-cyan-600, .bg-cyan-700) {
+  background-image: var(--o-btn-grad) !important;
+  background-color: transparent !important;
+  color: var(--o-btn-grad-ink) !important;
+  border-color: transparent !important;
+}
+
+main :is(button, a[role="button"])[class*="bg-gradient-to"]:not([class*="rose"]):not([class*="red"]):not([class*="amber"]):hover,
+main :is(button, a[role="button"]):is(.bg-cyan-500, .bg-cyan-600, .bg-cyan-700):hover {
+  background-image: var(--o-btn-grad-hover) !important;
+}
+
+main :is(button, a[role="button"])[class*="bg-gradient-to"]:not([class*="rose"]):not([class*="red"]):not([class*="amber"]) :is(span, svg, strong),
+main :is(button, a[role="button"]):is(.bg-cyan-500, .bg-cyan-600, .bg-cyan-700) :is(span, svg, strong) {
+  color: var(--o-btn-grad-ink) !important;
+  -webkit-text-fill-color: var(--o-btn-grad-ink) !important;
 }
 
 /* 5. Ciano neon vira o acento do sistema. E a cor que mais aparece no CRM e a
@@ -4812,7 +4832,7 @@ main :is(.text-cyan-200, .text-cyan-300, .text-cyan-400, .text-cyan-500) svg {
   -webkit-text-fill-color: var(--o-acento) !important;
 }
 
-main :is(.bg-cyan-500, .bg-cyan-600, .bg-cyan-700) {
+main :is(.bg-cyan-500, .bg-cyan-600, .bg-cyan-700):not(button):not(a) {
   background-color: var(--o-acento) !important;
   color: var(--o-acento-sobre) !important;
 }
@@ -5476,6 +5496,7 @@ main:has(.orion-unity-inbox) > div,
 
 
 }
+
 
 
 
