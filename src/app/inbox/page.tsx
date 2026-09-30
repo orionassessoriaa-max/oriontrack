@@ -460,7 +460,7 @@ export default function BrokerInboxPage() {
 
   // Conversation filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [responsibleFilter, setResponsibleFilter] = useState('todos');
+  const [responsibleFilter, setResponsibleFilter] = useState('automatico');
   const [stageFilter, setStageFilter] = useState('todos');
   const [conversationBox, setConversationBox] = useState<ConversationBox>('active');
   const conversationBoxRef = useRef<ConversationBox>('active');
@@ -608,6 +608,11 @@ export default function BrokerInboxPage() {
     .trim()
     .toUpperCase();
   const isUnityInbox = normalizedBrokerageName === 'UNITY SAUDE';
+  const effectiveResponsibleFilter = responsibleFilter === 'automatico'
+    ? isUnityInbox && profile?.tipo_usuario === 'corretor_admin' && profile.id
+      ? profile.id
+      : 'todos'
+    : responsibleFilter;
   const taskResponsibleOptions = teamMembers.filter((member) => member.profile_id);
 
   // Load configuration from localStorage on mount
@@ -822,7 +827,11 @@ export default function BrokerInboxPage() {
     const token = await getToken();
     if (!token) throw new Error('Sessao expirada. Entre novamente.');
 
-    const response = await fetch('/api/inbox/conversations?limit=100&offset=0', {
+    const inboxQuery = new URLSearchParams({ limit: '100', offset: '0' });
+    if (effectiveResponsibleFilter !== 'todos') {
+      inboxQuery.set('responsible_profile_id', effectiveResponsibleFilter);
+    }
+    const response = await fetch(`/api/inbox/conversations?${inboxQuery.toString()}`, {
       method: 'GET',
       cache: 'no-store',
       signal: controller.signal,
@@ -1054,7 +1063,11 @@ export default function BrokerInboxPage() {
     loadingMoreConversationsRef.current = true;
     setLoadingMoreConversations(true);
     try {
-      const response = await fetch(`/api/inbox/conversations?limit=100&offset=${offset}`, {
+      const inboxQuery = new URLSearchParams({ limit: '100', offset: String(offset) });
+      if (effectiveResponsibleFilter !== 'todos') {
+        inboxQuery.set('responsible_profile_id', effectiveResponsibleFilter);
+      }
+      const response = await fetch(`/api/inbox/conversations?${inboxQuery.toString()}`, {
         cache: 'no-store',
         headers: { Authorization: `Bearer ${token}`, 'x-orion-view-profile-id': profile?.id || '' },
       });
@@ -1097,7 +1110,7 @@ export default function BrokerInboxPage() {
     if (profile?.tipo_usuario !== 'corretor_membro') {
       void fetchTeamMembers();
     }
-  }, [profile?.id, profile?.corretor_id, profile?.nome_empresa]);
+  }, [profile?.id, profile?.corretor_id, profile?.nome_empresa, effectiveResponsibleFilter]);
 
   useEffect(() => () => {
     inboxFetchAbortRef.current?.abort();
@@ -3101,9 +3114,9 @@ export default function BrokerInboxPage() {
 
 
   const conversationsByResponsible = conversations.filter((conversation) => {
-    if (responsibleFilter === 'todos') return true;
-    if (responsibleFilter === 'sem_responsavel') return !conversation.responsibleProfileId;
-    return conversation.responsibleProfileId === responsibleFilter;
+    if (effectiveResponsibleFilter === 'todos') return true;
+    if (effectiveResponsibleFilter === 'sem_responsavel') return !conversation.responsibleProfileId;
+    return conversation.responsibleProfileId === effectiveResponsibleFilter;
   });
 
   const filteredConversations = conversationsByResponsible.filter((c) => {
@@ -3514,25 +3527,25 @@ export default function BrokerInboxPage() {
                     : 'Histórico preservado. Uma nova resposta do lead reabre a conversa.'}
               </p>
 
-              {/* Filtro por responsavel. Ele ja funcionava; na Unity so nao era
-                  desenhado.
-
-                  Fora da Unity, integrante de time continua sem o filtro, porque
-                  ali cada um enxerga apenas os proprios leads e o seletor nao
-                  teria o que filtrar. Na Unity as filas sao compartilhadas, entao
-                  quem decide e o dado e nao o cargo: o seletor so aparece quando
-                  existe mais de um responsavel na lista, ou alguma conversa sem
-                  dono. Com um responsavel so, ele continua escondido sozinho. */}
-              {(isUnityInbox || profile?.tipo_usuario !== 'corretor_membro') && (responsibleOptions.length > 1 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
+              {/* Na Unity, administradores operacionais iniciam nos proprios
+                  leads e podem alternar para outro responsavel ou para a equipe
+                  inteira. Integrantes continuam restritos no servidor aos leads
+                  que foram formalmente atribuidos a eles. */}
+              {(isUnityInbox || profile?.tipo_usuario !== 'corretor_membro') && (responsibleOptions.length > 0 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
                 <select
-                  value={responsibleFilter}
+                  value={effectiveResponsibleFilter}
                   onChange={(event) => setResponsibleFilter(event.target.value)}
                   aria-label="Filtrar conversas por responsavel"
                   className={`w-full px-3 py-2 outline-none ${isUnityInbox ? 'rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-700' : 'rounded-xl border border-white/5 bg-slate-950 text-2xs font-black text-white focus:border-cyan-500/50'}`}
                 >
                   <option value="todos">Todos responsaveis</option>
+                  {isUnityInbox && profile?.id && (
+                    <option value={profile.id}>Meus leads</option>
+                  )}
                   {responsibleOptions.map((responsible) => (
-                    <option key={responsible.id} value={responsible.id}>{responsible.name}</option>
+                    responsible.id !== profile?.id && (
+                      <option key={responsible.id} value={responsible.id}>{responsible.name}</option>
+                    )
                   ))}
                   {conversations.some((conversation) => !conversation.responsibleProfileId) && (
                     <option value="sem_responsavel">Sem responsavel</option>

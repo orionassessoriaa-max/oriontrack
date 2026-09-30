@@ -75,11 +75,11 @@ async function listConversations(
   assignedLeadIds: string[],
   offset: number,
   limit: number,
-  memberProfileId: string | null
+  responsibleFilter: string | null
 ) {
   let query = supabaseAdmin
     .from('whatsapp_conversas')
-    .select(memberProfileId
+    .select(responsibleFilter
       ? '*,leads!inner(id,nome,status,etiqueta,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))'
       : '*,leads(id,nome,status,etiqueta,responsavel_profile_id,responsavel_membro:responsavel_membro_id(id,nome))')
     .order('ultima_mensagem_at', { ascending: false })
@@ -88,10 +88,13 @@ async function listConversations(
     // fazer uma contagem cara a cada atualizacao do Inbox.
     .range(offset, offset + limit);
 
-  if (memberProfileId) {
-    // Integrantes so recebem conversas de leads formalmente atribuidos a eles.
-    // Isso evita que a conta compartilhada da corretora exponha a fila inteira.
-    query = query.eq('leads.responsavel_profile_id', memberProfileId);
+  if (responsibleFilter === 'sem_responsavel') {
+    query = query.is('leads.responsavel_profile_id', null);
+  } else if (responsibleFilter) {
+    // O filtro acontece no banco, antes da paginacao. Filtrar somente no
+    // navegador faria um responsavel com conversas mais antigas desaparecer
+    // quando elas nao estivessem entre as 100 primeiras da fila geral.
+    query = query.eq('leads.responsavel_profile_id', responsibleFilter);
   } else if (assignedLeadIds.length > 0) {
     query = query.or(
       `corretor_id.in.(${corretorIds.join(',')}),lead_id.in.(${assignedLeadIds.join(',')})`
@@ -186,6 +189,30 @@ export async function GET(request: Request) {
       }
     }
 
+    const requestedResponsibleProfileId = String(
+      url.searchParams.get('responsible_profile_id') || ''
+    ).trim();
+    let responsibleProfileId = target.tipo_usuario === 'corretor_membro'
+      ? target.id
+      : null;
+
+    if (!responsibleProfileId && requestedResponsibleProfileId === 'sem_responsavel') {
+      responsibleProfileId = 'sem_responsavel';
+    } else if (!responsibleProfileId && requestedResponsibleProfileId) {
+      const { data: responsibleProfile, error: responsibleProfileError } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('id', requestedResponsibleProfileId)
+        .in('corretor_id', corretorIds)
+        .maybeSingle();
+
+      if (responsibleProfileError) throw responsibleProfileError;
+      if (!responsibleProfile) {
+        return NextResponse.json({ error: 'Responsavel fora desta corretora.' }, { status: 403 });
+      }
+      responsibleProfileId = responsibleProfile.id;
+    }
+
     const assignedLeadIds = target.tipo_usuario === 'corretor_membro'
       ? []
       : await listAssignedLeadIds(target.id);
@@ -194,7 +221,7 @@ export async function GET(request: Request) {
       assignedLeadIds,
       offset,
       limit,
-      target.tipo_usuario === 'corretor_membro' ? target.id : null
+      responsibleProfileId
     );
     const conversations = page.conversations;
     after(async () => {
