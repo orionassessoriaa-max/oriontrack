@@ -4745,6 +4745,92 @@ html.theme-noturno .orion-trafego {
 
 @layer components {
 
+/* ============================================================================
+   NORMALIZACAO — o design system aplicado nas 92 telas de uma vez
+   ----------------------------------------------------------------------------
+   Reescrever 51 mil linhas de pagina a mao nao e viavel, e o que da "cara de
+   IA" no CRM nao esta espalhado em mil decisoes: esta em cinco. Peso 900,
+   raio grande demais, brilho colorido, gradiente em botao e ciano neon.
+   Esta camada corrige as cinco em todas as telas ao mesmo tempo.
+
+   Escopo: tudo dentro de <main>, entao as telas de entrada (login, primeiro
+   acesso, reset, escolha de time) ficam fora — elas tem desenho proprio.
+   O inbox da Unity tambem nao e afetado: as regras dele vem depois, na mesma
+   camada, e sao mais especificas.
+
+   Isto NAO substitui a adocao tela por tela. E o piso: tira o que grita.
+   O acabamento vem com os componentes de src/components/orion.
+   ============================================================================ */
+
+/* 1. Peso. O 900 estava em rotulo, titulo, numero e botao ao mesmo tempo:
+      quando tudo grita, nada destaca. */
+main .font-black {
+  font-weight: var(--o-peso-forte) !important;
+}
+
+main .tracking-widest {
+  letter-spacing: var(--o-rotulo-espaco) !important;
+}
+
+/* 2. Raio, na escala nova. .rounded-full fica FORA de proposito: avatar e
+      pilula sao redondos na referencia tambem, e era essa regra que impedia
+      o avatar de ser um circulo. */
+main :is(.rounded-2xl, .rounded-3xl, .rounded-\[2rem\], .rounded-\[2\.5rem\], .rounded-\[1\.75rem\], .rounded-\[1\.5rem\], .rounded-\[1\.25rem\]) {
+  border-radius: var(--o-raio-caixa) !important;
+}
+
+main :is(.rounded-xl, .rounded-lg, .rounded-md) {
+  border-radius: var(--o-raio-controle) !important;
+}
+
+/* 3. Brilho. As sombras coloridas do projeto sao escritas como
+      shadow-[0_0_30px_rgba(...)]; o seletor pega justamente essas e deixa as
+      sombras de elevacao normais em paz. */
+main [class*="shadow-[0_0"],
+main [class*="drop-shadow-[0_0"] {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+main .animate-pulse {
+  animation: none !important;
+}
+
+/* 4. Gradiente em botao vira cor chapada. Fundo decorativo de secao continua,
+      porque ali o gradiente nao esta fingindo ser um controle. */
+main :is(button, a[role="button"])[class*="bg-gradient-to"] {
+  background-image: none !important;
+  background-color: var(--o-acento) !important;
+  color: var(--o-acento-sobre) !important;
+}
+
+/* 5. Ciano neon vira o acento do sistema. E a cor que mais aparece no CRM e a
+      que mais denuncia template: #06b6d4 em texto, fundo, borda e icone. */
+main :is(.text-cyan-200, .text-cyan-300, .text-cyan-400, .text-cyan-500),
+main :is(.text-cyan-200, .text-cyan-300, .text-cyan-400, .text-cyan-500) svg {
+  color: var(--o-acento) !important;
+  -webkit-text-fill-color: var(--o-acento) !important;
+}
+
+main :is(.bg-cyan-500, .bg-cyan-600, .bg-cyan-700) {
+  background-color: var(--o-acento) !important;
+  color: var(--o-acento-sobre) !important;
+}
+
+main :is(.bg-cyan-500, .bg-cyan-600, .bg-cyan-700) :is(span, svg, p, strong) {
+  color: var(--o-acento-sobre) !important;
+  -webkit-text-fill-color: var(--o-acento-sobre) !important;
+}
+
+main [class*="border-cyan"] {
+  border-color: var(--o-line-forte) !important;
+}
+
+main [class*="bg-cyan-500/"],
+main [class*="bg-cyan-400/"] {
+  background-color: var(--o-acento-suave) !important;
+}
+
 /* Tudo daqui para baixo mora em @layer components de proposito.
    Regra do cascade: entre duas declaracoes !important, a que esta numa camada
    vence a que esta fora dela. O design system deste arquivo ja usa
@@ -5390,5 +5476,6 @@ main:has(.orion-unity-inbox) > div,
 
 
 }
+
 
 
