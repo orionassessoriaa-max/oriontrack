@@ -46,6 +46,9 @@
   --o-petroleo-tinta: #0f4c5c;
 
   --o-ardosia-000: #ffffff;
+  /* 30/09/2026: o dono pediu o fundo do tema claro em cinza neutro, sem azul na
+     mistura. Este e o tom que esta no body e na raiz do InternalLayout. */
+  --o-ardosia-025: #f4f4f5;
   --o-ardosia-050: #f6f8f9;
   --o-ardosia-100: #f0f4f5;
   --o-ardosia-200: #dfe5e8;
@@ -94,6 +97,7 @@ html.theme-noturno {
   --o-surface:     var(--o-noite-800);
   --o-surface-2:   var(--o-noite-700);
   --o-line:        var(--o-noite-600);
+  --o-line-2:      var(--o-noite-700);
   --o-line-forte:  var(--o-noite-500);
 
   --o-ink:         var(--o-noite-050);
@@ -110,6 +114,14 @@ html.theme-noturno {
   /* Texto que vai POR CIMA do acento solido. */
   --o-acento-sobre: #071316;
 
+  /* Tinta que vai dentro do chip solido. No escuro o fundo do chip e claro,
+     entao a tinta e escura — o contrario do tema claro. */
+  --o-chip-ink: #071316;
+
+  /* Anel de foco. Precisa ser cor pronta e nao var com barra de opacidade,
+     porque o modificador /30 do Tailwind nao calcula em cima de var(). */
+  --o-foco-anel: rgb(127 196 216 / .30);
+
   --o-ok:            var(--o-verde-300);
   --o-ok-suave:      var(--o-verde-900);
   --o-atencao:       var(--o-ambar-300);
@@ -121,10 +133,11 @@ html.theme-noturno {
 }
 
 html.theme-claro {
-  --o-bg:          var(--o-ardosia-050);
+  --o-bg:          var(--o-ardosia-025);
   --o-surface:     var(--o-ardosia-000);
   --o-surface-2:   var(--o-ardosia-100);
   --o-line:        var(--o-ardosia-200);
+  --o-line-2:      #f0f3f6;
   --o-line-forte:  var(--o-petroleo-borda);
 
   --o-ink:         var(--o-ardosia-900);
@@ -136,6 +149,9 @@ html.theme-claro {
   --o-acento-suave: var(--o-petroleo-050);
   --o-acento-tinta: var(--o-petroleo-tinta);
   --o-acento-sobre: #ffffff;
+  --o-chip-ink: #ffffff;
+
+  --o-foco-anel: rgb(20 86 106 / .28);
 
   --o-ok:            var(--o-verde-600);
   --o-ok-suave:      var(--o-verde-050);
@@ -148,13 +164,52 @@ html.theme-claro {
 }
 
 /* ---------------------------------------------------------------------------
+   Superficie escura dentro do tema claro.
+   Alguns painens tem fundo escuro fixo e nao seguem o tema: o modal do criativo
+   da Meta, a sala do comercial. Sem isso eles recebem tinta de tema claro sobre
+   fundo escuro e o texto some. Marcar o container com esta classe devolve a
+   paleta certa para tudo que esta dentro.
+   --------------------------------------------------------------------------- */
+.o-superficie-escura {
+  --o-bg:          var(--o-noite-900);
+  --o-surface:     var(--o-noite-800);
+  --o-surface-2:   var(--o-noite-700);
+  --o-line:        var(--o-noite-600);
+  --o-line-2:      var(--o-noite-700);
+  --o-line-forte:  var(--o-noite-500);
+
+  --o-ink:         var(--o-noite-050);
+  --o-ink-2:       var(--o-noite-200);
+  --o-ink-3:       var(--o-noite-300);
+
+  --o-acento:       var(--o-petroleo-300);
+  --o-acento-hover: var(--o-petroleo-200);
+  --o-acento-suave: var(--o-noite-acento);
+  --o-acento-tinta: var(--o-petroleo-100);
+  --o-acento-sobre: #071316;
+  --o-chip-ink:     #071316;
+  --o-foco-anel:    rgb(127 196 216 / .30);
+
+  --o-ok:            var(--o-verde-300);
+  --o-ok-suave:      var(--o-verde-900);
+  --o-atencao:       var(--o-ambar-300);
+  --o-atencao-suave: var(--o-ambar-900);
+  --o-erro:          var(--o-tijolo-300);
+  --o-erro-suave:    var(--o-tijolo-900);
+}
+
+/* ---------------------------------------------------------------------------
    Forma, ritmo e tempo. Nao mudam com o tema.
    --------------------------------------------------------------------------- */
 :root {
-  /* Dois raios, so. 6px no que se clica, 10px no que se agrupa. Cartao de 16px
-     ou mais e cara de cartaz, nao de ferramenta de trabalho. */
-  --o-raio-controle: 6px;
-  --o-raio-caixa: 10px;
+  /* Raio. A escala anterior era 6/10px, com a justificativa de que cartao de
+     16px parece cartaz. O dono escolheu a referencia em 30/09/2026 (o painel
+     tipo "Duraifu", arredondado), entao a regra mudou por decisao dele, nao por
+     acidente: 12px no que se clica, 16px no que agrupa, 10px nos chips.
+     Excecao registrada: o inbox da Unity segue o WhatsApp Web e fica reto. */
+  --o-raio-controle: 12px;
+  --o-raio-caixa: 16px;
+  --o-raio-chip: 10px;
   --o-borda: 1px;
 
   /* Escala de espaco. Valor fora dela e erro: e assim que 1.059 cores nasceram. */
@@ -217,7 +272,25 @@ html.theme-claro {
 
   --o-cartao-bg: var(--o-surface);
   --o-cartao-borda: var(--o-line);
-  --o-cartao-padding: var(--o-esp-4);
+  /* A referencia respira: 20 a 24px dentro do cartao, nao 16. */
+  --o-cartao-padding: var(--o-esp-5);
+
+  /* Chip de icone: quadrado de canto mole com o fundo CHEIO na cor e o icone
+     em cima dela. O dono escolheu esse desenho em 30/09/2026, comparando tres
+     variantes: fundo palido com glifo preenchido, fundo cheio com icone
+     branco, e cinza sem cor. Ganhou o fundo cheio — e o unico que entrega
+     "solido e nao neon" com um pacote de icones feito de traco.
+
+     Quando o chip carrega estado (ok, atencao, erro), troca-se so o fundo pela
+     cor do estado; a tinta continua sendo --o-chip-ink. */
+  --o-chip-tamanho: 40px;
+  --o-chip-raio: var(--o-raio-chip);
+  --o-chip-bg: var(--o-acento);
+
+  /* Barra de progresso fina embaixo do numero, como nos cartoes de drive. */
+  --o-barra-altura: 4px;
+  --o-barra-trilho: var(--o-line-2);
+  --o-barra-cheia: var(--o-acento);
 
   --o-tabela-cabecalho-ink: var(--o-ink-3);
   --o-tabela-linha: var(--o-line);
