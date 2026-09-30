@@ -485,7 +485,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
           <button
             type="button"
             onClick={alternarMenuMini}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-white"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
             aria-label={railMini ? 'Expandir menu' : 'Minimizar menu'}
             title={railMini ? 'Expandir menu' : 'Minimizar menu'}
           >
