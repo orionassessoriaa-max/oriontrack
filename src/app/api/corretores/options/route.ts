@@ -93,8 +93,14 @@ export async function PATCH(request: Request) {
     if (!companyName) {
       return NextResponse.json({ error: 'Concessionaria sem nome cadastrado.' }, { status: 400 });
     }
-    const campaignsActive = body.campanhas_ativas === true;
-    const onboardingStatus = campaignsActive ? 'campanhas_ativas' : 'dados_completos';
+    if (body.campanhas_ativas !== true) {
+      return NextResponse.json(
+        { error: 'Marque Campanhas ativas antes de salvar a entrada.' },
+        { status: 400 },
+      );
+    }
+    const campaignsActive = true;
+    const onboardingStatus = 'campanhas_ativas';
     const selectedOperators = Array.isArray(body.operadoras)
       ? body.operadoras.map((item: unknown) => String(item || '').trim()).filter(Boolean).slice(0, 40)
       : [];

@@ -263,6 +263,11 @@ export default function EntradaGestorPage() {
   const saveEntrada = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedId) return;
+    if (!formData.campanhas_ativas) {
+      setSaved(false);
+      setError('Marque "Campanhas ativas" antes de salvar a entrada.');
+      return;
+    }
 
     setSaving(true);
     setSaved(false);
@@ -641,14 +646,15 @@ export default function EntradaGestorPage() {
                 <span>
                   <span className="block font-black text-emerald-900">Campanhas ativas</span>
                   <span className="mt-1 block text-sm font-bold text-emerald-700">
-                    Marque somente depois que as campanhas forem subidas. Isso deixa o status verde.
+                    Campo obrigatório. Salve a entrada somente depois que as campanhas forem subidas.
                   </span>
                 </span>
               </label>
 
               <div className="mt-8 flex justify-end">
                 <button
-                  disabled={saving}
+                  disabled={saving || !formData.campanhas_ativas}
+                  title={!formData.campanhas_ativas ? 'Marque Campanhas ativas para salvar' : undefined}
                   className="flex items-center gap-3 rounded-2xl bg-blue-600 px-8 py-5 font-black text-white shadow-xl shadow-blue-600/20 hover:bg-blue-700 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20} /> Salvar entrada</>}
