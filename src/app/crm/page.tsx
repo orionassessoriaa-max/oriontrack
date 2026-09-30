@@ -124,10 +124,14 @@ function cleanStageText(value: string, fallback: string) {
 }
 
 function normalizeKanbanColumns(raw: unknown): KanbanColumn[] {
-  const source = Array.isArray(raw) ? raw : DEFAULT_COLUMNS;
+  // Mesma regra do servidor (src/lib/kanbanStages.ts): lista configurada manda,
+  // padrao so quando nao ha configuracao. Antes as padrao eram reinseridas
+  // sempre e nenhuma etapa podia ser removida.
+  const configurado = Array.isArray(raw) && raw.length > 0;
+  const source = configurado ? (raw as Array<Partial<KanbanColumn>>) : DEFAULT_COLUMNS;
   const byId = new Map<string, KanbanColumn>();
 
-  [...(source as Array<Partial<KanbanColumn>>), ...DEFAULT_COLUMNS].forEach((item) => {
+  (source as Array<Partial<KanbanColumn>>).forEach((item) => {
     const id = cleanStageText(String(item?.id || item?.label || ''), '');
     if (!id || byId.has(id)) return;
     byId.set(id, {
@@ -138,12 +142,38 @@ function normalizeKanbanColumns(raw: unknown): KanbanColumn[] {
     });
   });
 
-  return Array.from(byId.values());
+  const columns = Array.from(byId.values());
+
+  // Rede de seguranca: sem etapa que conte como venda, relatorio e meta param
+  // de fechar. A padrao volta nesse caso.
+  if (!columns.some((column) => column.saleEquivalent)) {
+    const padrao = DEFAULT_COLUMNS.find((column) => column.id === 'Venda realizada');
+    if (padrao) columns.push({ ...padrao });
+  }
+
+  return columns;
 }
 
-function isFixedKanbanStatus(status: LeadStatus) {
+/**
+ * Etapa fixa e a que nao pode ser renomeada, movida nem excluida.
+ *
+ * "Venda realizada" deixa de ser fixa quando a concessionaria tem OUTRA etapa
+ * marcada como "conta como venda" — a Unity usa "Implantada". Sem essa outra
+ * etapa ela continua travada, senao o funil ficaria sem nenhum ponto de
+ * fechamento e relatorio, meta e comissao parariam de bater.
+ */
+function isFixedKanbanStatus(status: LeadStatus, columns?: KanbanColumn[]) {
+  const chave = normalizeStageKey(status);
+
+  if (chave === 'venda realizada') {
+    const temOutraVenda = (columns || []).some((column) => (
+      column.saleEquivalent && normalizeStageKey(column.id) !== 'venda realizada'
+    ));
+    return !temOutraVenda;
+  }
+
   if (FIXED_KANBAN_STATUSES.has(status)) return true;
-  return ['aguardando atendimento', 'em negociacao', 'venda realizada', 'sem interesse'].includes(normalizeStageKey(status));
+  return ['aguardando atendimento', 'em negociacao', 'sem interesse'].includes(chave);
 }
 
 function isDefaultKanbanStatus(status: LeadStatus) {
@@ -1346,7 +1376,7 @@ export default function CrmPage() {
 
   function startEditingColumn(column: KanbanColumn) {
     if (!canManageKanbanStructure) return;
-    if (isFixedKanbanStatus(column.id)) return;
+    if (isFixedKanbanStatus(column.id, columns)) return;
     setEditingColumnId(column.id);
     setStageDraft({ label: column.label, desc: column.desc, saleEquivalent: Boolean(column.saleEquivalent) });
   }
@@ -1372,7 +1402,7 @@ export default function CrmPage() {
       const index = current.findIndex((column) => column.id === columnId);
       const targetIndex = current.findIndex((column) => column.id === targetColumnId);
       if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return current;
-      if (index === targetIndex || isFixedKanbanStatus(current[index].id)) return current;
+      if (index === targetIndex || isFixedKanbanStatus(current[index].id, current)) return current;
 
       const next = [...current];
       const [moved] = next.splice(index, 1);
@@ -1396,7 +1426,7 @@ export default function CrmPage() {
 
   function deleteKanbanColumn(column: KanbanColumn) {
     if (!canManageKanbanStructure) return;
-    if (isFixedKanbanStatus(column.id)) return;
+    if (isFixedKanbanStatus(column.id, columns)) return;
     if (getLeadsByStatus(column.id).length > 0) {
       alert('Mova os leads desta etapa antes de excluir.');
       return;
@@ -2030,7 +2060,7 @@ export default function CrmPage() {
                     const commercialTotal = getCommercialTotal(column.id);
                     const limit = visibleLimits[column.id] || 50;
                     const visibleLeads = columnLeads.slice(0, limit);
-                    const isFixedColumn = isFixedKanbanStatus(column.id);
+                    const isFixedColumn = isFixedKanbanStatus(column.id, columns);
                     const isEditingColumn = editingColumnId === column.id;
                     const isStoredColumn = columns.some((item) => item.id === column.id);
                     const canEditColumn = canManageKanbanStructure && !isFixedColumn && isStoredColumn;

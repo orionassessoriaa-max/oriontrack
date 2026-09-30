@@ -25,9 +25,15 @@ function clean(value: unknown, fallback = '') {
 
 export function normalizeKanbanStages(raw: unknown): KanbanStage[] {
   const source = Array.isArray(raw) ? raw : [];
+
+  // A lista configurada manda. Antes as oito etapas padrao eram sempre
+  // reinseridas no fim, e por isso nenhuma concessionaria conseguia remover
+  // uma delas: apagava na tela e o servidor devolvia. A tela sempre salva a
+  // lista inteira, entao lista nao vazia significa configuracao completa.
+  const base: unknown[] = source.length ? source : DEFAULT_KANBAN_STAGES;
   const byId = new Map<string, KanbanStage>();
 
-  [...source, ...DEFAULT_KANBAN_STAGES].forEach((value) => {
+  base.forEach((value) => {
     const item = value as Partial<KanbanStage>;
     const id = clean(item?.id || item?.label);
     if (!id || byId.has(id)) return;
@@ -40,7 +46,17 @@ export function normalizeKanbanStages(raw: unknown): KanbanStage[] {
     });
   });
 
-  return Array.from(byId.values());
+  const stages = Array.from(byId.values());
+
+  // Rede de seguranca: funil sem nenhuma etapa que conte como venda quebra
+  // relatorio, meta e comissao. Se a configuracao nao tiver nenhuma, a etapa
+  // padrao volta.
+  if (!stages.some((stage) => stage.saleEquivalent)) {
+    const padrao = DEFAULT_KANBAN_STAGES.find((stage) => stage.id === 'Venda realizada');
+    if (padrao) stages.push({ ...padrao });
+  }
+
+  return stages;
 }
 
 export function getKanbanStage(stages: KanbanStage[], status?: string | null) {
