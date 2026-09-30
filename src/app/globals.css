@@ -5529,9 +5529,90 @@ main:has(.orion-unity-inbox) > div,
 
 
 
+
+/* ----------------------------------------------------------------------------
+   Menu lateral: escuro nos dois temas.
+
+   A "camada de resgate" do tema claro repinta texto para tom escuro no
+   documento inteiro. Como a coluna e escura por desenho, o menu saia cinza
+   escuro sobre azul quase preto: apagado, ilegivel. Aqui a coluna volta a ter
+   paleta propria, independente do tema, como acontece com o inbox da Unity.
+   ---------------------------------------------------------------------------- */
+.orion-rail,
+.theme-claro .orion-rail {
+  background: #0f172a !important;
+  border-right-color: rgb(255 255 255 / .06) !important;
+}
+
+.theme-claro .orion-rail :is(a, span, button, p, svg) {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* Item do menu: cinza claro parado, branco no hover. Contraste de 8:1 contra
+   o fundo da coluna, que e o que a leitura o dia inteiro exige. */
+.orion-rail nav a,
+.theme-claro .orion-rail nav a {
+  color: #cbd5e1 !important;
+  -webkit-text-fill-color: #cbd5e1 !important;
+  background: transparent !important;
+  font-size: 14px !important;
+}
+
+.orion-rail nav a:hover,
+.theme-claro .orion-rail nav a:hover {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  background: rgb(255 255 255 / .06) !important;
+}
+
+/* Item ativo: fundo no acento e texto branco cheio. */
+.orion-rail nav a[data-ativo="true"],
+.theme-claro .orion-rail nav a[data-ativo="true"] {
+  background: #14566a !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.orion-rail nav a[data-ativo="true"] svg,
+.theme-claro .orion-rail nav a[data-ativo="true"] svg {
+  color: #ffffff !important;
+}
+
+/* Rodape: nome, cargo e os botoes de tema e sair. */
+.theme-claro .orion-rail .orion-rail-nome {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.theme-claro .orion-rail .orion-rail-cargo {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
 }
 
 
+/* O rodape da coluna tambem caiu na camada de resgate: o bloco bg-white/5
+   virava claro e o texto branco sumia em cima dele.
 
+   Escopo pelo filho direto do rodape, e nao por [class*="bg-white"]: aquele
+   seletor casava tambem com hover:bg-white/5 dos itens do menu, e o hover
+   ficava pintado o tempo todo. */
+.orion-rail-rodape > :is(a, div),
+.theme-claro .orion-rail-rodape > :is(a, div) {
+  background: rgb(255 255 255 / .06) !important;
+  border-color: rgb(255 255 255 / .10) !important;
+}
+
+.theme-claro .orion-rail [class*="bg-[#14566a]"],
+.orion-rail [class*="bg-[#14566a]"] {
+  background: #14566a !important;
+}
+
+.theme-claro .orion-rail .orion-rail-rodape :is(a, button) {
+  color: #cbd5e1 !important;
+  -webkit-text-fill-color: #cbd5e1 !important;
+}
+
+}
 
 

@@ -469,6 +469,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  data-ativo={isActive ? 'true' : undefined}
                   className={cn(
                     'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors',
                     isActive ? 'bg-[#14566a] text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'
@@ -487,7 +488,7 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
           )}
         </nav>
 
-        <div className="shrink-0 space-y-2 border-t border-white/5 p-3">
+        <div className="orion-rail-rodape shrink-0 space-y-2 border-t border-white/5 p-3">
           {isViewingAsUser && (
             <button
               type="button"
@@ -514,8 +515,8 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
                 {initials}
               </span>
               <span className="min-w-0 leading-tight">
-                <span className="block truncate text-[12.5px] font-semibold text-white">{profile?.nome || 'Usuario'}</span>
-                <span className="block truncate text-[10.5px] font-medium uppercase tracking-wider text-slate-400">{roleLabel}</span>
+                <span className="orion-rail-nome block truncate text-[12.5px] font-semibold text-white">{profile?.nome || 'Usuario'}</span>
+                <span className="orion-rail-cargo block truncate text-[10.5px] font-medium uppercase tracking-wider text-slate-400">{roleLabel}</span>
               </span>
             </Link>
             <button
