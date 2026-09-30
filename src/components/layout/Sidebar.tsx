@@ -430,12 +430,122 @@ export default function Sidebar({ onCollapsedChange }: SidebarProps) {
     if (window.innerWidth < 1024) setCollapsed(true);
   };
 
+  const homeHref =
+    profile?.tipo_usuario === 'admin'
+      ? '/admin'
+      : profile?.tipo_usuario === 'gestor_trafego'
+        ? '/trafego'
+        : profile?.tipo_usuario === 'designer'
+          ? '/designer'
+          : profile?.tipo_usuario === 'account_manager'
+            ? '/account'
+            : profile?.tipo_usuario === 'corretor_membro'
+              ? '/crm'
+              : '/dashboard';
+
   return (
     <>
-      {/* Top Horizontal Navbar Header */}
+      {/* ------------------------------------------------------------------
+          Menu lateral (desktop, lg+).
+
+          A barra horizontal so cabia 5 itens e escondia o resto atras de um
+          "MAIS" — o menu de admin tem 29. Na vertical cabem todos, com rolagem.
+          Abaixo de lg continua valendo a barra do topo com a gaveta, que ja
+          existia: em tela estreita a coluna comeria metade do espaco.
+          ------------------------------------------------------------------ */}
+      <aside className="orion-rail fixed left-0 top-0 z-50 hidden h-dvh w-[248px] flex-col border-r border-white/5 bg-[#0f172a] text-white lg:flex">
+        <Link href={homeHref} className="flex h-20 shrink-0 items-center px-5">
+          <img src="/brand-logo.png" alt="ORION TRACK" className="h-9 w-auto object-contain" />
+        </Link>
+
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
+          {loading ? (
+            <div className="flex justify-center py-6"><Loader2 className="animate-spin text-slate-500" size={16} /></div>
+          ) : (
+            getMenu().map((item) => {
+              const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+              const isNotification = item.href === '/notificacoes';
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors',
+                    isActive ? 'bg-[#14566a] text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  )}
+                >
+                  <item.icon size={17} strokeWidth={2} className="shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                  {isNotification && unreadCount > 0 && (
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+                      {unreadCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })
+          )}
+        </nav>
+
+        <div className="shrink-0 space-y-2 border-t border-white/5 p-3">
+          {isViewingAsUser && (
+            <button
+              type="button"
+              onClick={stopViewingAsCorretor}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-amber-300 transition hover:bg-amber-400/15"
+            >
+              <RotateCcw size={13} /> Sair do {impersonationRoleLabel}
+            </button>
+          )}
+
+          {canSwitchOperation && !isViewingAsUser && (
+            <Link
+              href="/selecionar-time"
+              onClick={rememberDualOperationAccess}
+              className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-300 transition hover:bg-white/10 hover:text-white"
+            >
+              <ArrowLeftRight size={13} /> Trocar operação
+            </Link>
+          )}
+
+          <div className="flex items-center gap-2 rounded-xl bg-white/5 p-2">
+            <Link href="/perfil" className="flex min-w-0 flex-1 items-center gap-2.5" title="Ver meu perfil">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#14566a] text-[11px] font-bold">
+                {initials}
+              </span>
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate text-[12.5px] font-semibold text-white">{profile?.nome || 'Usuario'}</span>
+                <span className="block truncate text-[10.5px] font-medium uppercase tracking-wider text-slate-400">{roleLabel}</span>
+              </span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                const newTheme = tema === 'noturno' ? 'claro' : 'noturno';
+                window.localStorage.setItem('orion:tema_sistema', newTheme);
+                window.dispatchEvent(new Event('orion:theme_changed'));
+              }}
+              className="shrink-0 p-1.5 text-slate-400 transition-colors hover:text-white"
+              title={tema === 'noturno' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+            >
+              {tema === 'noturno' ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+            <button
+              type="button"
+              onClick={signOut}
+              className="shrink-0 p-1.5 text-slate-400 transition-colors hover:text-rose-400"
+              title="Sair"
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Barra do topo: agora so abaixo de lg. */}
       <div className={cn(
         "orion-topbar",
-        "fixed left-0 right-0 top-0 z-50 flex h-20 w-full items-center justify-between border-b px-4 text-white shadow-xl transition-all duration-300 sm:px-6",
+        "fixed left-0 right-0 top-0 z-50 flex h-20 w-full items-center justify-between border-b px-4 text-white shadow-xl transition-all duration-300 sm:px-6 lg:hidden",
         isDark ? "bg-[#020617] border-white/5" : "bg-[#0f172a] border-white/10"
       )}>
         <div className="flex items-center gap-6">
