@@ -3455,11 +3455,21 @@ export default function BrokerInboxPage() {
                     : 'Histórico preservado. Uma nova resposta do lead reabre a conversa.'}
               </p>
 
-              {!isUnityInbox && profile?.tipo_usuario !== 'corretor_membro' && (responsibleOptions.length > 1 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
+              {/* Filtro por responsavel. Ele ja funcionava; na Unity so nao era
+                  desenhado.
+
+                  Fora da Unity, integrante de time continua sem o filtro, porque
+                  ali cada um enxerga apenas os proprios leads e o seletor nao
+                  teria o que filtrar. Na Unity as filas sao compartilhadas, entao
+                  quem decide e o dado e nao o cargo: o seletor so aparece quando
+                  existe mais de um responsavel na lista, ou alguma conversa sem
+                  dono. Com um responsavel so, ele continua escondido sozinho. */}
+              {(isUnityInbox || profile?.tipo_usuario !== 'corretor_membro') && (responsibleOptions.length > 1 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
                 <select
                   value={responsibleFilter}
                   onChange={(event) => setResponsibleFilter(event.target.value)}
-                  className="w-full rounded-xl border border-white/5 bg-slate-950 px-3 py-2 text-2xs font-black text-white outline-none focus:border-cyan-500/50"
+                  aria-label="Filtrar conversas por responsavel"
+                  className={`w-full px-3 py-2 outline-none ${isUnityInbox ? 'rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-700' : 'rounded-xl border border-white/5 bg-slate-950 text-2xs font-black text-white focus:border-cyan-500/50'}`}
                 >
                   <option value="todos">Todos responsaveis</option>
                   {responsibleOptions.map((responsible) => (
