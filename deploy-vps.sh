@@ -187,6 +187,17 @@ crontab "$CRON_TMP"
 rm -f "$CRON_TMP"
 echo "Monitor de saude instalado no cron a cada 10 minutos."
 
+# Lembretes de tarefas: o processo central percorre todas as concessionarias,
+# envia o aviso do dia e o aviso da janela de 30 minutos sem duplicar envios.
+TASK_REMINDER_CRON_TAG="# oriontrack-task-reminders"
+TASK_REMINDER_CRON_LINE="*/5 * * * * curl -s -m 120 -X POST -H \"Authorization: Bearer $CRON_SECRET\" $APP_URL/api/tarefas/lembretes >> /var/log/oriontrack-task-reminders.log 2>&1 $TASK_REMINDER_CRON_TAG"
+CRON_TMP="$(mktemp)"
+crontab -l 2>/dev/null | grep -F -v "$TASK_REMINDER_CRON_TAG" > "$CRON_TMP" || true
+printf '%s\n' "$TASK_REMINDER_CRON_LINE" >> "$CRON_TMP"
+crontab "$CRON_TMP"
+rm -f "$CRON_TMP"
+echo "Lembretes de tarefas instalados no cron a cada 5 minutos."
+
 # Aquecimento do cache da Meta: a resposta vale meia hora, entao so a primeira
 # visita do gestor era lenta. Rodando antes dele, a tela ja abre com o dado.
 AQUECE_CRON_TAG="# oriontrack-aquece-meta"

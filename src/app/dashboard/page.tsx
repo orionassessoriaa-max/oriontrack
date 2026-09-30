@@ -38,6 +38,7 @@ import OrionFunnel from '@/components/ui/OrionFunnel';
 import { motion } from 'framer-motion';
 import { isLeadSale, normalizeLeadStatus } from '@/lib/leadStatus';
 import { isOrionLead, resolveLeadOrigin } from '@/lib/leadOrigin';
+import TaskDuePopup from '@/components/tasks/TaskDuePopup';
 
 type CorretorDashboardData = {
   id: string;
@@ -958,6 +959,7 @@ export default function DashboardPage() {
 
   return (
     <InternalLayout>
+      <TaskDuePopup />
       {/* Header Section */}
       <div className="mb-10 flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
         <div className="min-w-0 2xl:min-w-[320px]">
