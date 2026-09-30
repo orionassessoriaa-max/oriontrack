@@ -181,6 +181,14 @@ function inboxMessageSenderName(message: InboxMessage, fallback = 'Contato') {
     ? metadata.ai_agent || metadata.sender_name || message.remetente
     : message.remetente;
 
+  // Mensagem de automacao e a ISA, o bot da Unity. O sinal vem do proprio
+  // import do Agendor: message_type 3 foi gravado como sender_type
+  // 'automation' (scripts/migrate-agendor-unity-to-orion.mjs). Nao da para
+  // olhar o texto da mensagem, que muda a cada fluxo.
+  if (message.direction === 'outbound' && metadata.sender_type === 'automation') {
+    return 'ISA';
+  }
+
   // O historico antigo da Unity usa Hebert como remetente das automacoes do
   // Agendor. O rotulo evita atribuir essas mensagens a uma pessoa da equipe.
   if (message.direction === 'outbound' && /hebert/i.test(String(attributedSender || ''))) {
@@ -976,11 +984,17 @@ export default function BrokerInboxPage() {
     // O primeiro envio move o lead de "Novos" para "Em atendimento". O
     // Realtime pode atualizar a lista antes de a resposta do POST chegar; nesse
     // intervalo nunca troque a conversa aberta pelo primeiro lead da fila.
+    // Trocar de fila e so filtrar a lista. Antes, quando a conversa aberta nao
+    // pertencia a fila escolhida, esta linha caia em rowsInCurrentBox[0] e o
+    // Inbox abria o primeiro cliente da nova fila sozinho. Na Unity a conversa
+    // aberta continua aberta, como no WhatsApp; nas outras concessionarias o
+    // comportamento antigo segue igual.
+    const keepOpenAcrossBoxes = isUnityInbox ? refreshedPreviousSelection : null;
     const nextSelection = directConversation
       || (previousSelection && sendInFlightRef.current
       ? refreshedPreviousSelection
       : previousSelection
-      ? rowsInCurrentBox.find((row) => row.id === previousSelection.id) || matchedConversationInCurrentBox || rowsInCurrentBox[0] || null
+      ? rowsInCurrentBox.find((row) => row.id === previousSelection.id) || keepOpenAcrossBoxes || matchedConversationInCurrentBox || rowsInCurrentBox[0] || null
       : matchedConversationInCurrentBox || rowsInCurrentBox[0] || null);
     // O carregamento das mensagens pode terminar antes do React executar o
     // efeito que atualiza a ref. Grave a selecao imediatamente para o

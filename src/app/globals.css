@@ -5648,5 +5648,39 @@ main:has(.orion-unity-inbox) > div,
   height: 0 !important;
 }
 
+
+/* ----------------------------------------------------------------------------
+   Anexo dentro do balao da conversa.
+
+   O bloco do arquivo usa bg-white/10 na mensagem enviada. A camada de resgate
+   do tema claro repinta qualquer bg-white/* para um azul quase branco, e o
+   texto do bloco e branco: sumia. Aqui o anexo volta a ter contraste proprio,
+   escuro na bolha de saida e claro na de entrada.
+
+   O seletor usa button.w-full porque e o botao do arquivo; o botao do menu da
+   mensagem (a setinha no canto) nao e w-full e fica de fora.
+   ---------------------------------------------------------------------------- */
+main .justify-end > .orion-inbox-message-bubble button.w-full,
+.theme-claro main .justify-end > .orion-inbox-message-bubble button.w-full {
+  background: rgb(255 255 255 / .16) !important;
+  border-color: rgb(255 255 255 / .28) !important;
+}
+
+main .justify-end > .orion-inbox-message-bubble button.w-full :is(p, svg, span),
+.theme-claro main .justify-end > .orion-inbox-message-bubble button.w-full :is(p, svg, span) {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.theme-claro main .justify-start > .orion-inbox-message-bubble button.w-full {
+  background: rgb(11 20 26 / .06) !important;
+  border-color: rgb(11 20 26 / .14) !important;
+}
+
+.theme-claro main .justify-start > .orion-inbox-message-bubble button.w-full :is(p, svg, span) {
+  color: #111b21 !important;
+  -webkit-text-fill-color: #111b21 !important;
+}
+
 }
 
