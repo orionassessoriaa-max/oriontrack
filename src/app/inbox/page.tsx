@@ -430,6 +430,7 @@ export default function BrokerInboxPage() {
   const [hasMoreConversations, setHasMoreConversations] = useState(false);
   const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [unreadConversationIds, setUnreadConversationIds] = useState<Set<string>>(new Set());
   
   // Connection states
   const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
@@ -507,6 +508,31 @@ export default function BrokerInboxPage() {
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  useEffect(() => {
+    if (!profile?.id) {
+      setUnreadConversationIds(new Set());
+      return;
+    }
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(`orion:inbox-unread:${profile.id}`) || '[]');
+      setUnreadConversationIds(new Set(Array.isArray(saved) ? saved.map(String) : []));
+    } catch {
+      setUnreadConversationIds(new Set());
+    }
+  }, [profile?.id]);
+
+  const setConversationUnread = useCallback((conversationId: string, unread: boolean) => {
+    if (!profile?.id || !conversationId) return;
+    setUnreadConversationIds((current) => {
+      const next = new Set(current);
+      if (unread) next.add(conversationId);
+      else next.delete(conversationId);
+      localStorage.setItem(`orion:inbox-unread:${profile.id}`, JSON.stringify([...next]));
+      return next;
+    });
+  }, [profile?.id]);
 
   // Audio Playback States
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -1193,7 +1219,6 @@ export default function BrokerInboxPage() {
         { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
         (payload) => {
           ultimoEventoRealtimeRef.current = Date.now();
-          if (document.visibilityState !== 'visible') return;
           const newMsg = payload.new as InboxMessage;
           // A linha com status "sending" e apenas a reserva idempotente do
           // servidor. Ela ainda nao foi confirmada pelo WhatsApp e nao deve
@@ -1201,6 +1226,16 @@ export default function BrokerInboxPage() {
           if (newMsg.direction === 'outbound' && newMsg.metadata?.send_status === 'sending') return;
           const currentSelected = selectedConversationRef.current;
           const belongsToVisibleInbox = visibleConversationIdsRef.current.has(newMsg.conversa_id);
+          const belongsToConversationList = conversationsRef.current.some((conversation) => conversation.id === newMsg.conversa_id);
+          const isOpenAndVisible = document.visibilityState === 'visible'
+            && Boolean(currentSelected)
+            && (currentSelected?.id === newMsg.conversa_id || belongsToVisibleInbox);
+
+          if (isUnityInbox && newMsg.direction === 'inbound' && belongsToConversationList && !isOpenAndVisible) {
+            setConversationUnread(newMsg.conversa_id, true);
+          }
+
+          if (document.visibilityState !== 'visible') return;
 
           // O payload bruto do Realtime chega antes do filtro de autoria da
           // API. Integrantes recarregam a timeline autorizada em vez de anexar
@@ -1278,7 +1313,7 @@ export default function BrokerInboxPage() {
       }
       supabase.removeChannel(channel);
     };
-  }, [profile?.corretor_id, profile?.tipo_usuario]);
+  }, [isUnityInbox, profile?.corretor_id, profile?.tipo_usuario, setConversationUnread]);
 
   // Scroll to bottom when messages list changes
   useEffect(() => {
@@ -3589,10 +3624,12 @@ export default function BrokerInboxPage() {
               ) : filteredConversations.length > 0 ? (
                 filteredConversations.map((c) => {
                   const isActive = selectedConversation?.id === c.id;
+                  const isUnread = isUnityInbox && unreadConversationIds.has(c.id);
                   return (
                     <button
                       key={c.id}
                       onClick={() => {
+                        setConversationUnread(c.id, false);
                         selectedConversationRef.current = c;
                         setSelectedConversation(c);
                         setDetailsPanelOpen(false);
@@ -3610,8 +3647,8 @@ export default function BrokerInboxPage() {
                       {/* Content */}
                       <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex justify-between items-baseline">
-                          <span className={`text-xs truncate block ${isUnityInbox ? 'font-semibold text-slate-950' : 'font-black text-white'}`}>{cleanInboxDisplayName(c.nome_contato, c.telefone)}</span>
-                          <span className={`orion-inbox-conversation-time text-[9px] font-medium shrink-0 ${isUnityInbox ? 'text-slate-400' : 'text-slate-500'}`}>
+                          <span className={`text-xs truncate block ${isUnityInbox ? isUnread ? 'font-black text-[#00a884]' : 'font-semibold text-slate-950' : 'font-black text-white'}`}>{cleanInboxDisplayName(c.nome_contato, c.telefone)}</span>
+                          <span className={`orion-inbox-conversation-time text-[9px] shrink-0 ${isUnityInbox ? isUnread ? 'font-black text-[#00a884]' : 'font-medium text-slate-400' : 'font-medium text-slate-500'}`}>
                             {c.ultima_mensagem_at ? formatHour(c.ultima_mensagem_at) : ''}
                           </span>
                         </div>
