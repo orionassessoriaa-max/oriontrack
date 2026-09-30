@@ -3766,8 +3766,12 @@ export default function BrokerInboxPage() {
                     </div>
                   ) : displayChatMessages.length > 0 ? (
                     <>
+                      {/* Sem sticky: o selo de inicio da conversa rola junto com as
+                          mensagens em vez de flutuar por cima delas. Ele continua
+                          clicavel enquanto esta visivel, mas deixa de ser atalho
+                          permanente para o topo. */}
                       {displayChatMessages.length > 8 && (
-                        <div className="sticky top-0 z-10 flex justify-center pb-2">
+                        <div className="flex justify-center pb-2">
                           <button
                             type="button"
                             onClick={() => messagesContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
