@@ -3661,10 +3661,11 @@ body.theme-claro {
 
 .theme-claro .orion-leads-table-shell > #orion-leads-scroll {
   padding-inline: 0 !important;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 18px !important;
-  background: #ffffff !important;
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.04) !important;
+  border: 1px solid var(--o-line) !important;
+  /* 18px e raio de cartaz. Ferramenta de trabalho usa 6px. */
+  border-radius: 6px !important;
+  background: var(--o-surface) !important;
+  box-shadow: 0 1px 3px rgb(34 50 58 / 0.07) !important;
 }
 
 .theme-claro .orion-leads-table {
@@ -3674,62 +3675,123 @@ body.theme-claro {
 }
 
 .theme-claro .orion-leads-table thead tr {
-  background: #f8fafc !important;
+  background: var(--o-surface-2) !important;
 }
 
+/* Cabecalho: faixa clara e um fio embaixo. A caixa fechada em volta de cada
+   celula era o que fazia a tabela parecer uma grade de planilha. */
 .theme-claro .orion-leads-table th {
-  height: 58px !important;
-  border: 1px solid #e5e7eb !important;
-  background: #f8fafc !important;
-  color: #667085 !important;
-  font-size: 11px !important;
-  font-weight: 900 !important;
-  letter-spacing: 0.02em !important;
+  height: 38px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--o-line) !important;
+  background: var(--o-surface-2) !important;
+  color: var(--o-ink-3) !important;
+  font-size: 10.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.09em !important;
   text-transform: uppercase !important;
 }
 
+/* 82px de altura minima deixava dez leads ocupando a tela inteira. */
 .theme-claro .orion-leads-table td {
-  min-height: 82px !important;
-  border: 1px solid #e5e7eb !important;
-  background: #ffffff !important;
-  color: #344054 !important;
-  font-size: 13px !important;
-  line-height: 1.55 !important;
+  min-height: 0 !important;
+  height: 44px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--o-line-2, #f0f3f6) !important;
+  background: var(--o-surface) !important;
+  color: var(--o-ink-2) !important;
+  font-size: 13.5px !important;
+  line-height: 1.5 !important;
 }
 
 .theme-claro .orion-leads-table tr:hover td {
-  background: #f8fbff !important;
+  background: #fbfcfd !important;
 }
 
+/* O indice e referencia, nao conteudo. */
 .theme-claro .orion-leads-table td:first-child {
-  background: #ffffff !important;
-  color: #344054 !important;
+  background: var(--o-surface) !important;
+  color: var(--o-ink-3) !important;
 }
 
+/* Nome e investimento sao o que o corretor procura: destacam por peso 500 e
+   tinta mais escura, nao por peso 900. */
 .theme-claro .orion-leads-table td:nth-child(3),
 .theme-claro .orion-leads-table td:nth-child(10) {
-  color: #172033 !important;
-  font-weight: 900 !important;
+  color: var(--o-ink) !important;
+  font-weight: 500 !important;
 }
 
+/* Campo editavel sem caixa. Com borda permanente, cada telefone e cada CNPJ
+   viravam um retangulo e a tabela inteira virava grade. A borda aparece quando
+   o cursor chega perto ou quando o campo recebe foco, que e quando ela informa
+   alguma coisa. */
 .theme-claro .orion-leads-table input,
 .theme-claro .orion-leads-table select,
 .theme-claro .orion-leads-table textarea {
-  min-height: 34px !important;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 9px !important;
-  background: #ffffff !important;
-  color: #172033 !important;
-  -webkit-text-fill-color: #172033 !important;
+  min-height: 30px !important;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--o-ink) !important;
+  -webkit-text-fill-color: var(--o-ink) !important;
   box-shadow: none !important;
+  transition: border-color 120ms, background 120ms !important;
+}
+
+.theme-claro .orion-leads-table tr:hover input,
+.theme-claro .orion-leads-table tr:hover select,
+.theme-claro .orion-leads-table tr:hover textarea {
+  border-color: var(--o-line) !important;
+  background: var(--o-surface) !important;
 }
 
 .theme-claro .orion-leads-table input:focus,
 .theme-claro .orion-leads-table select:focus,
 .theme-claro .orion-leads-table textarea:focus {
-  border-color: #2563eb !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+  border-color: var(--o-acento) !important;
+  box-shadow: 0 0 0 3px var(--o-foco-anel) !important;
   outline: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Achatar as etiquetas de dentro das celulas.
+   Telefone (4), Possui CNPJ (6) e Tem plano ativo (8) eram chips com fundo e
+   anel. Eram eles que desenhavam a grade de caixinhas e, junto com a quebra de
+   linha do plano ativo, o que empurrava a linha para mais de 80px de altura.
+   Viram texto: a cor continua informando, a caixa some.
+   A coluna 21 (Anuncio) fica de fora de proposito: la o botao solido e o unico
+   elemento clicavel da linha e precisa parecer clicavel.
+   --------------------------------------------------------------------------- */
+.theme-claro .orion-leads-table td:nth-child(4) > *,
+.theme-claro .orion-leads-table td:nth-child(6) > *,
+.theme-claro .orion-leads-table td:nth-child(8) > * {
+  padding: 0 !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+  line-height: 1.5 !important;
+}
+
+/* O telefone e numero: alinha em mono como o resto dos numeros da tabela. */
+.theme-claro .orion-leads-table td:nth-child(4) > * {
+  font-family: "IBM Plex Mono", ui-monospace, monospace !important;
+  font-size: 12.5px !important;
+  color: var(--o-ink-2) !important;
+}
+
+/* Linha mais baixa: o respiro vertical agora vem da propria celula. */
+.theme-claro .orion-leads-table td {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
 }
 
 .theme-claro .orion-leads-table .bg-emerald-50,
@@ -4678,3 +4740,653 @@ html.theme-noturno .orion-trafego {
   color: #334155 !important;
   -webkit-text-fill-color: #334155 !important;
 }
+
+@layer components {
+
+/* Tudo daqui para baixo mora em @layer components de proposito.
+   Regra do cascade: entre duas declaracoes !important, a que esta numa camada
+   vence a que esta fora dela. O design system deste arquivo ja usa
+   "main :is(.rounded-xl, .rounded-full) { border-radius: 12px !important }"
+   dentro dessa camada, entao um !important solto no fim do arquivo perdia em
+   silencio — era por isso que o avatar da Unity nao ficava redondo e o select
+   continuava com 20px de raio. Dentro da mesma camada quem decide e a
+   especificidade, e estes seletores sao bem mais especificos. */
+
+/* ============================================================================
+   Inbox da Unity — estilo WhatsApp Web
+   ----------------------------------------------------------------------------
+   Um layout so, duas paletas. O escuro copia o WhatsApp Web escuro; o claro usa
+   a mesma estrutura com a paleta clara do proprio WhatsApp. Quem troca e o tema
+   da pagina, entao nada aqui depende de .theme-claro para funcionar: sao tokens.
+
+   Escopo: .orion-unity-inbox (o shell, classe que ja existia) e
+   .orion-inbox-unity (a coluna esquerda). Sem essas classes nada casa, entao
+   nenhuma outra concessionaria e afetada.
+
+   As regras ficam FORA de @layer e depois de tudo, porque as regras base do
+   inbox sao sem tema e com !important — foi isso que fez o Tailwind perder.
+   ============================================================================ */
+
+.orion-unity-inbox {
+  /* Paleta escura do WhatsApp Web. */
+  --wa-fundo: #0b141a;
+  --wa-painel: #111b21;
+  --wa-barra: #202c33;
+  --wa-campo: #202c33;
+  --wa-hover: #202c33;
+  --wa-ativo: #2a3942;
+  --wa-fio: #222d34;
+  --wa-tinta: #e9edef;
+  --wa-tinta-2: #8696a0;
+  --wa-verde: #00a884;
+  --wa-verde-sobre: #0b141a;
+}
+
+.theme-claro .orion-unity-inbox {
+  /* Mesma estrutura, paleta clara do proprio WhatsApp. */
+  --wa-fundo: #eae6df;
+  --wa-painel: #ffffff;
+  --wa-barra: #f0f2f5;
+  --wa-campo: #f0f2f5;
+  --wa-hover: #f5f6f6;
+  --wa-ativo: #f0f2f5;
+  --wa-fio: #e9edef;
+  --wa-tinta: #111b21;
+  --wa-tinta-2: #667781;
+  --wa-verde: #008069;
+  --wa-verde-sobre: #ffffff;
+}
+
+/* --- Colado nas bordas: nada de cartao flutuando -------------------------- */
+.orion-unity-inbox,
+.theme-claro .orion-unity-inbox {
+  padding: 0 !important;
+  gap: 0 !important;
+  background: var(--wa-fundo) !important;
+  overflow: hidden !important;
+}
+
+.orion-unity-inbox .orion-inbox-panel,
+.theme-claro .orion-unity-inbox .orion-inbox-panel {
+  gap: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: var(--wa-fundo) !important;
+}
+
+/* --- Coluna esquerda ------------------------------------------------------ */
+.orion-inbox-unity,
+.theme-claro .orion-inbox-unity {
+  background: var(--wa-painel) !important;
+  border-right: 1px solid var(--wa-fio) !important;
+  border-left: 0 !important;
+  border-radius: 0 !important;
+  color: var(--wa-tinta) !important;
+}
+
+/* Cabecalho na mesma superficie da lista, separado so por um fio. */
+.orion-inbox-unity > div:first-child {
+  background: var(--wa-painel) !important;
+  border-bottom: 1px solid var(--wa-fio) !important;
+  padding: 10px 12px !important;
+}
+
+/* --- Busca ---------------------------------------------------------------- */
+.orion-inbox-unity input[type="text"] {
+  border: 0 !important;
+  background: var(--wa-campo) !important;
+  color: var(--wa-tinta) !important;
+  -webkit-text-fill-color: var(--wa-tinta) !important;
+  border-radius: 8px !important;
+  font-size: 12.5px !important;
+  font-weight: 400 !important;
+  padding-top: 7px !important;
+  padding-bottom: 7px !important;
+}
+
+.orion-inbox-unity input[type="text"]::placeholder {
+  color: var(--wa-tinta-2) !important;
+  -webkit-text-fill-color: var(--wa-tinta-2) !important;
+}
+
+.orion-inbox-unity input[type="text"]:focus {
+  background: var(--wa-campo) !important;
+  box-shadow: inset 0 0 0 1px var(--wa-verde) !important;
+}
+
+.orion-inbox-unity .relative > svg {
+  color: var(--wa-tinta-2) !important;
+}
+
+/* --- Titulo --------------------------------------------------------------- */
+.orion-inbox-unity h2 {
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  color: var(--wa-tinta) !important;
+  letter-spacing: 0 !important;
+}
+
+.orion-inbox-unity h2 + span {
+  background: var(--wa-campo) !important;
+  color: var(--wa-tinta-2) !important;
+  border-radius: 999px !important;
+  font-size: 9px !important;
+  padding: 2px 8px !important;
+}
+
+/* --- As quatro filas numa linha -------------------------------------------
+   A regra base manda repeat(3, ...) e as filas sao quatro: era isso que jogava
+   "Encerradas" para baixo. Empilhar rotulo e contador e o que faz os quatro
+   caberem a 320px de coluna. */
+.orion-inbox-unity .orion-inbox-box-tabs {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.orion-inbox-unity .orion-inbox-box-tab {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 1px !important;
+  min-width: 0 !important;
+  min-height: 36px !important;
+  padding: 4px 3px !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* O fundo e a cor de cada fila estao no bloco "Uma cor por fila", no fim do
+   arquivo: azul, verde, laranja e cinza. */
+
+.orion-inbox-unity .orion-inbox-box-tab:focus-visible {
+  outline: 2px solid var(--wa-verde) !important;
+  outline-offset: 1px !important;
+}
+
+.orion-inbox-unity .orion-inbox-box-tab > span:first-of-type {
+  max-width: 100% !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.orion-inbox-unity .orion-inbox-box-tab > span:last-child {
+  flex: none !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  font-size: 9.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 600 !important;
+  opacity: 0.85 !important;
+}
+
+/* --- Filtro de etapa ------------------------------------------------------ */
+.orion-inbox-unity select {
+  height: 30px !important;
+  padding: 0 28px 0 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background-color: var(--wa-campo) !important;
+  color: var(--wa-tinta-2) !important;
+  -webkit-text-fill-color: var(--wa-tinta-2) !important;
+  font-size: 11.5px !important;
+  font-weight: 400 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.orion-inbox-unity select:focus {
+  box-shadow: inset 0 0 0 1px var(--wa-verde) !important;
+}
+
+/* --- A lista -------------------------------------------------------------- */
+.orion-inbox-unity > div:last-child {
+  background: var(--wa-painel) !important;
+  border-top: 0 !important;
+}
+
+.orion-inbox-unity > div:last-child > button {
+  min-height: 0 !important;
+  padding: 9px 13px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--wa-fio) !important;
+  background: transparent !important;
+  align-items: center !important;
+}
+
+.orion-inbox-unity > div:last-child > button:hover {
+  background: var(--wa-hover) !important;
+}
+
+.orion-inbox-unity > div:last-child > button[aria-current="true"] {
+  background: var(--wa-ativo) !important;
+}
+
+.orion-inbox-unity > div:last-child > button .h-10.w-10 {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 999px !important;
+  border: 0 !important;
+  background: var(--wa-barra) !important;
+  color: var(--wa-tinta-2) !important;
+  -webkit-text-fill-color: var(--wa-tinta-2) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.orion-inbox-unity > div:last-child > button span.text-xs {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: var(--wa-tinta) !important;
+  -webkit-text-fill-color: var(--wa-tinta) !important;
+}
+
+.orion-inbox-unity .orion-inbox-conversation-time {
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  color: var(--wa-tinta-2) !important;
+  -webkit-text-fill-color: var(--wa-tinta-2) !important;
+}
+
+.orion-inbox-unity > div:last-child > button p {
+  font-size: 12.5px !important;
+  font-weight: 400 !important;
+  color: var(--wa-tinta-2) !important;
+  -webkit-text-fill-color: var(--wa-tinta-2) !important;
+}
+
+.orion-inbox-unity > div:last-child > button span[style*="border-color"] {
+  border-width: 1px !important;
+  border-radius: 4px !important;
+  padding: 0 5px !important;
+  font-size: 9.5px !important;
+  font-weight: 500 !important;
+}
+
+/* O divide-y do Tailwind pinta claro; aqui manda o fio da paleta. */
+.orion-inbox-unity > div:last-child > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--wa-fio) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Unity: inbox fixo, colado nas bordas, sem rolagem de pagina.
+
+   A conta que sobrava: o <main> do InternalLayout poe 112px em cima e 28px nas
+   laterais e embaixo (lg:p-7 lg:pt-28), e o shell ainda pedia
+   calc(100dvh - 64px). Somando: 112 + (100dvh - 64) + 28 = 100dvh + 76px.
+   Esses 76px eram a barra de rolagem que aparecia sem motivo, e o p-7 era a
+   margem branca em volta que fazia o inbox parecer um cartao.
+
+   Aqui o main vira exatamente 100dvh, mantem so o respiro de cima (o cabecalho
+   do app e fixo e passaria por cima sem ele) e zera o resto. Como o box-sizing
+   do projeto e border-box, o filho com height 100% recebe 100dvh menos o topo.
+
+   O :has() escopa no main que contem o inbox da Unity, sem precisar mexer no
+   InternalLayout, que e compartilhado com o resto do sistema.
+   ---------------------------------------------------------------------------- */
+
+main:has(.orion-unity-inbox) {
+  height: 100dvh !important;
+  /* 5rem = a altura exata da barra fixa do topo (h-20 no Sidebar). Assim o
+     inbox comeca colado nela, sem faixa de fundo sobrando. */
+  padding: 5rem 0 0 0 !important;
+  overflow: hidden !important;
+}
+
+/* No modo expandido o InternalLayout recebe immersive: nao ha barra do topo,
+   entao o respiro de 5rem viraria uma faixa vazia. */
+main:has(.orion-unity-inbox-expanded) {
+  padding-top: 0 !important;
+}
+
+main:has(.orion-unity-inbox) > div {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-width: none !important;
+}
+
+.orion-unity-inbox,
+.theme-claro .orion-unity-inbox {
+  height: 100% !important;
+  max-height: 100% !important;
+  border-radius: 0 !important;
+}
+
+/* As tres colunas tinham 4px de raio cada uma: era esse o "box com bordas
+   arredondadas". Eu tinha zerado so a da esquerda. */
+.orion-unity-inbox .orion-inbox-list,
+.orion-unity-inbox .orion-inbox-chat,
+.orion-unity-inbox .orion-inbox-details,
+.theme-claro .orion-unity-inbox .orion-inbox-list,
+.theme-claro .orion-unity-inbox .orion-inbox-chat,
+.theme-claro .orion-unity-inbox .orion-inbox-details {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Rolagem mora dentro da lista e da conversa, nunca na pagina. */
+.orion-unity-inbox .orion-inbox-list,
+.orion-unity-inbox .orion-inbox-chat {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* A entrada animada (.theme-noturno main > div, orion-fade-in-up) desloca o
+   filho 24px para baixo com fill both. Numa tela de altura fixa isso faz o
+   inbox vazar 24px por baixo enquanto a animacao corre. O WhatsApp Web nao
+   desliza a tela ao abrir; aqui tambem nao. */
+main:has(.orion-unity-inbox) > div,
+.theme-noturno main:has(.orion-unity-inbox) > div {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+/* Barra de rolagem da lista: fina e discreta, como a do WhatsApp Web. */
+.orion-inbox-unity > div:last-child {
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--wa-fio) transparent !important;
+}
+
+.orion-inbox-unity > div:last-child::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+.orion-inbox-unity > div:last-child::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.orion-inbox-unity > div:last-child::-webkit-scrollbar-thumb {
+  background: var(--wa-fio) !important;
+  border-radius: 3px !important;
+}
+
+.orion-inbox-unity > div:last-child::-webkit-scrollbar-thumb:hover {
+  background: var(--wa-tinta-2) !important;
+}
+
+/* No tema claro havia uma regra pintando os textos das abas de cinza; sobre o
+   verde da aba ativa o rotulo sumia. Aqui os dois spans herdam a cor do botao,
+   entao ativo = branco, inativo = cinza, nos dois temas. */
+.orion-inbox-unity .orion-inbox-box-tab > span,
+.theme-claro .orion-inbox-unity .orion-inbox-box-tab > span {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* A conversa aberta vinha com barra roxa (#635bff). Aqui ela usa o mesmo verde
+   da fila selecionada; o padding compensa os 4px da barra para o texto nao
+   pular quando a linha e selecionada. */
+.orion-inbox-unity > div:last-child > button[aria-current="true"] {
+  border-left: 4px solid var(--wa-verde) !important;
+  padding-left: 9px !important;
+}
+
+/* O spinner de carregamento era ciano neon. */
+.orion-inbox-unity > div:last-child .animate-spin {
+  color: var(--wa-verde) !important;
+}
+
+/* Cantos retos nos controles da coluna: busca, filas, filtro de etapa e o
+   selo do topo. O avatar continua redondo (e circulo no WhatsApp tambem) e a
+   etiqueta mantem o raio minimo de 4px. */
+.orion-inbox-unity input[type="text"],
+.orion-inbox-unity select,
+.orion-inbox-unity .orion-inbox-box-tab,
+.orion-inbox-unity h2 + span,
+.theme-claro .orion-inbox-unity input[type="text"],
+.theme-claro .orion-inbox-unity select,
+.theme-claro .orion-inbox-unity .orion-inbox-box-tab,
+.theme-claro .orion-inbox-unity h2 + span {
+  border-radius: 0 !important;
+}
+
+/* Sem realce ao passar o mouse: a linha e a fila so mudam quando estao
+   realmente selecionadas. O :hover do Tailwind (hover:bg-slate-50) e o meu
+   ficam neutralizados aqui; a linha aberta continua com fundo e barra verde. */
+.orion-inbox-unity > div:last-child > button:hover {
+  background: transparent !important;
+}
+
+.orion-inbox-unity > div:last-child > button[aria-current="true"]:hover {
+  background: var(--wa-ativo) !important;
+}
+
+
+/* No tema claro havia "main :is(input, select, textarea)" pintando o select de
+   branco — mesma camada, especificidade maior que a minha. Estes seletores
+   somam a classe da coluna para ganhar sem precisar de gambiarra. */
+.orion-inbox-list.orion-inbox-unity select,
+.orion-inbox-list.orion-inbox-unity input[type="text"] {
+  background-color: var(--wa-campo) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.orion-inbox-list.orion-inbox-unity select:focus,
+.orion-inbox-list.orion-inbox-unity input[type="text"]:focus {
+  box-shadow: inset 0 0 0 1px var(--wa-verde) !important;
+}
+
+
+/* "main button:hover:not(:disabled) { transform: translateY(-1px) }" e global do
+   layout (layer components, linha ~128): e ele que levanta a linha quando o
+   mouse passa. Aqui a coluna da Unity fica parada — sem subida, sem sombra e
+   sem transicao de transform. */
+.orion-inbox-unity button:hover,
+.orion-inbox-unity button:hover:not(:disabled),
+.orion-inbox-unity a:hover,
+.orion-inbox-unity > div:last-child > button:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.orion-inbox-unity button,
+.orion-inbox-unity a {
+  transition: background-color 120ms ease, color 120ms ease !important;
+}
+
+
+/* ----------------------------------------------------------------------------
+   O que sobrava de arredondado e de elevado nao estava nos meus seletores: os
+   dois filhos da coluna (cabecalho e lista) carregam a classe bg-white, e o
+   arquivo tem ".theme-noturno .bg-white { border-radius: 20px; box-shadow: ... }"
+   (linha ~1040) mais ".theme-claro .bg-white:hover { transform: translateY(-2px) }"
+   (linha ~1885). Era o box da lista com canto de 20px e sombra, e a lista
+   inteira subindo com o mouse — nao a linha.
+
+   Em vez de caçar classe por classe, a coluna inteira fica reta e plana: raio e
+   sombra zerados em tudo, transform travado no hover. As tres excecoes vem
+   logo abaixo, com especificidade maior.
+   ---------------------------------------------------------------------------- */
+.orion-inbox-list.orion-inbox-unity,
+.orion-inbox-list.orion-inbox-unity :is(div, button, span, input, select, a, p, h2, svg, label) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.orion-inbox-list.orion-inbox-unity:hover,
+.orion-inbox-list.orion-inbox-unity :is(div, button, span, input, select, a, p, h2, svg, label):hover {
+  transform: none !important;
+}
+
+/* Excecao 1: o avatar continua redondo, como no WhatsApp. */
+.orion-inbox-list.orion-inbox-unity > div:last-child > button .h-10.w-10 {
+  border-radius: 999px !important;
+}
+
+/* Excecao 2: a etiqueta do lead mantem os 4px do design system. */
+.orion-inbox-list.orion-inbox-unity > div:last-child > button span[style*="border-color"] {
+  border-radius: 4px !important;
+}
+
+/* Excecao 3: o anel verde de foco da busca e do filtro (e box-shadow). */
+.orion-inbox-list.orion-inbox-unity select:focus,
+.orion-inbox-list.orion-inbox-unity input[type="text"]:focus {
+  box-shadow: inset 0 0 0 1px var(--wa-verde) !important;
+}
+
+
+/* ----------------------------------------------------------------------------
+   Barra do topo da conversa: cantos retos tambem, igual a coluna. Os botoes
+   (CONVERSAS, EXPANDIR, MACROS, DADOS DO LEAD, ENCAMINHAR, ENCERRAR) usam
+   rounded-xl, e o selo de validade e o protocolo tem raio proprio.
+   O :is() soma um elemento para ganhar dos seletores de duas classes que ja
+   existem no arquivo. Os baloes da conversa NAO entram aqui: continuam
+   arredondados, como no WhatsApp.
+   ---------------------------------------------------------------------------- */
+.orion-unity-inbox .orion-inbox-chat-header,
+.orion-unity-inbox .orion-inbox-chat-header :is(div, button, span, a, input, select, p, h2, h3, label) {
+  border-radius: 0 !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Nome de quem mandou a mensagem no tema claro.
+
+   O rotulo e uma <div> com text-white (saida) ou text-cyan-300 (entrada). As
+   regras claras que ja existiam escureceram so <p> e <span> do balao, entao a
+   <div> continuava branca sobre o verde claro: sumia. Aqui ela recebe a mesma
+   tinta escura do texto, e a de entrada um verde legivel sobre o balao branco.
+   ---------------------------------------------------------------------------- */
+.theme-claro .orion-unity-inbox .orion-inbox-messages .justify-end > .orion-inbox-message-bubble > div.uppercase {
+  color: #111b21 !important;
+  -webkit-text-fill-color: #111b21 !important;
+  opacity: 0.75 !important;
+}
+
+.theme-claro .orion-unity-inbox .orion-inbox-messages .justify-start > .orion-inbox-message-bubble > div.uppercase {
+  color: #008069 !important;
+  -webkit-text-fill-color: #008069 !important;
+}
+
+
+/* ----------------------------------------------------------------------------
+   Botoes da barra da conversa: sem neon, fundo solido e texto branco.
+
+   O que havia: contorno ciano com glow, borda rosa no MACROS, azul com sombra
+   luminosa no DADOS DO LEAD e texto vermelho no ENCERRAR. Tudo vira o mesmo
+   azul petroleo do design system (--o-acento no tema claro), com o texto e os
+   icones em branco. box-shadow e text-shadow zerados: e deles que vinha o neon.
+   ---------------------------------------------------------------------------- */
+.orion-unity-inbox .orion-inbox-chat-header button,
+.theme-claro .orion-unity-inbox .orion-inbox-chat-header button {
+  background: #14566a !important;
+  background-image: none !important;
+  border: 0 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  opacity: 1 !important;
+}
+
+.orion-unity-inbox .orion-inbox-chat-header button:hover,
+.theme-claro .orion-unity-inbox .orion-inbox-chat-header button:hover {
+  background: #0f4152 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.orion-unity-inbox .orion-inbox-chat-header button :is(svg, span, div),
+.theme-claro .orion-unity-inbox .orion-inbox-chat-header button :is(svg, span, div) {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  stroke: currentColor !important;
+  filter: none !important;
+}
+
+.orion-unity-inbox .orion-inbox-chat-header button:focus-visible {
+  outline: 2px solid #ffffff !important;
+  outline-offset: 1px !important;
+}
+
+
+/* ----------------------------------------------------------------------------
+   Uma cor por fila: azul, verde, laranja e cinza, solidas e com texto branco.
+   A ordem dos nth-child segue a ordem dos botoes no JSX (Novos, Atendimento,
+   Follow up, Encerradas) e so a Unity tem as quatro abas.
+   A fila selecionada ganha um anel branco por dentro em vez de mudar de cor,
+   assim da para ver onde voce esta sem perder a cor de cada fila.
+   ---------------------------------------------------------------------------- */
+.orion-inbox-unity .orion-inbox-box-tab:nth-child(1),
+.orion-inbox-unity .orion-inbox-box-tab:nth-child(1):hover {
+  background: #1d4ed8 !important;
+}
+
+.orion-inbox-unity .orion-inbox-box-tab:nth-child(2),
+.orion-inbox-unity .orion-inbox-box-tab:nth-child(2):hover {
+  background: #059669 !important;
+}
+
+.orion-inbox-unity .orion-inbox-box-tab:nth-child(3),
+.orion-inbox-unity .orion-inbox-box-tab:nth-child(3):hover {
+  background: #ea580c !important;
+}
+
+.orion-inbox-unity .orion-inbox-box-tab:nth-child(4),
+.orion-inbox-unity .orion-inbox-box-tab:nth-child(4):hover {
+  background: #64748b !important;
+}
+
+.orion-inbox-unity .orion-inbox-box-tab,
+.orion-inbox-unity .orion-inbox-box-tab:hover,
+.theme-claro .orion-inbox-unity .orion-inbox-box-tab,
+.theme-claro .orion-inbox-unity .orion-inbox-box-tab:hover {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border: 0 !important;
+}
+
+.orion-inbox-unity .orion-inbox-box-tab[aria-selected="true"] {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Cor cheia nas quatro: quem esta selecionada se identifica pelo anel branco. */
+.orion-inbox-unity .orion-inbox-box-tab,
+.orion-inbox-unity .orion-inbox-box-tab:not([aria-selected="true"]) {
+  opacity: 1 !important;
+}
+
+/* O contador nao e um selo: e o numero solto embaixo do rotulo. Sem fundo,
+   sem borda e sem padding era isso que parecia um iconezinho. */
+.orion-inbox-unity .orion-inbox-box-tab > span:last-child,
+.theme-claro .orion-inbox-unity .orion-inbox-box-tab > span:last-child {
+  background: none !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  font-size: 11px !important;
+  line-height: 1.15 !important;
+  font-weight: 700 !important;
+  opacity: 1 !important;
+}
+
+/* Garante que nenhum icone volte a aparecer nas abas da Unity. */
+.orion-inbox-unity .orion-inbox-box-tab svg {
+  display: none !important;
+}
+
+
+
+}
+
+

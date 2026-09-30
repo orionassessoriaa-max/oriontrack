@@ -432,6 +432,9 @@ export default function BrokerInboxPage() {
   const [stageFilter, setStageFilter] = useState('todos');
   const [conversationBox, setConversationBox] = useState<ConversationBox>('active');
   const conversationBoxRef = useRef<ConversationBox>('active');
+  // Marca a troca de fila feita no clique das abas, para o efeito abaixo nao
+  // fechar a conversa que esta aberta (so a Unity).
+  const manualBoxSwitchRef = useRef(false);
 
   // Audio Recording States
   const [isRecording, setIsRecording] = useState(false);
@@ -1101,14 +1104,29 @@ export default function BrokerInboxPage() {
   }, [conversationBox]);
 
   useEffect(() => {
+    const manualSwitch = manualBoxSwitchRef.current;
+    manualBoxSwitchRef.current = false;
     if (!selectedConversation) return;
     const belongsToCurrentBox = conversationBelongsToBox(selectedConversation, conversationBox, isUnityInbox);
     if (!belongsToCurrentBox) {
       if (sendInFlightRef.current) return;
+      // Trocar de fila e so filtrar a lista: a conversa aberta continua aberta,
+      // como no WhatsApp. O fechamento automatico segue valendo quando quem
+      // muda de caixa e a propria conversa (encerrada, movida para follow up).
+      if (manualSwitch) return;
       setSelectedConversation(null);
       setMessages([]);
     }
   }, [conversationBox, isUnityInbox, selectedConversation]);
+
+  const handleConversationBoxChange = useCallback((box: ConversationBox) => {
+    setConversationBox(box);
+    if (isUnityInbox) {
+      manualBoxSwitchRef.current = true;
+      return;
+    }
+    setSelectedConversation(null);
+  }, [isUnityInbox]);
 
   // Setup Supabase Realtime subscription for messages and conversation events
   useEffect(() => {
@@ -3316,7 +3334,10 @@ export default function BrokerInboxPage() {
         <div className="orion-inbox-panel flex-1 min-h-0 overflow-hidden border-y border-white/5 bg-slate-950/10 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(420px,1fr)_320px] 2xl:grid-cols-[360px_minmax(520px,1fr)_360px]">
           
           {/* COLUMN 1: CONVERSATIONS SIDEBAR */}
-          <div className={`orion-inbox-list ${isUnityInbox ? 'border-r border-slate-200 bg-[#f8fafc]' : 'border-r border-white/5 bg-slate-900/20'} ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col h-full overflow-hidden`}>
+          {/* orion-inbox-unity: gancho da coluna no estilo WhatsApp Web (o CSS
+              mora em globals.css, no bloco "Inbox da Unity"). So a Unity casa
+              com essa classe, entao as outras concessionarias nao mudam. */}
+          <div className={`orion-inbox-list ${isUnityInbox ? 'orion-inbox-unity border-r border-slate-200 bg-[#f8fafc]' : 'border-r border-white/5 bg-slate-900/20'} ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col h-full overflow-hidden`}>
             {/* Conversation box and filters */}
             <div className={`${isUnityInbox ? 'border-b border-slate-200 bg-white px-4 pb-3 pt-3' : 'border-b border-white/5 bg-slate-950/35 p-3.5'} space-y-3`}>
               {/* Search Box */}
@@ -3350,7 +3371,7 @@ export default function BrokerInboxPage() {
                     aria-selected={conversationBox === 'new'}
                     aria-label={`Leads novos, ${queueCounts.new}`}
                     title="Leads novos"
-                    onClick={() => { setConversationBox('new'); setSelectedConversation(null); }}
+                    onClick={() => handleConversationBoxChange('new')}
                     className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
                     style={conversationBox === 'new' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
                   >
@@ -3365,7 +3386,7 @@ export default function BrokerInboxPage() {
                   aria-selected={conversationBox === 'active'}
                   aria-label="Conversas ativas"
                   title="Conversas ativas"
-                  onClick={() => { setConversationBox('active'); setSelectedConversation(null); }}
+                  onClick={() => handleConversationBoxChange('active')}
                   className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
                   style={isUnityInbox && conversationBox === 'active' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
                 >
@@ -3379,7 +3400,7 @@ export default function BrokerInboxPage() {
                   aria-selected={conversationBox === 'followup'}
                   aria-label="Conversas em follow-up"
                   title="Conversas em follow-up"
-                  onClick={() => { setConversationBox('followup'); setSelectedConversation(null); }}
+                  onClick={() => handleConversationBoxChange('followup')}
                   className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
                   style={isUnityInbox && conversationBox === 'followup' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
                 >
@@ -3393,7 +3414,7 @@ export default function BrokerInboxPage() {
                   aria-selected={conversationBox === 'closed'}
                   aria-label="Conversas encerradas"
                   title="Conversas encerradas"
-                  onClick={() => { setConversationBox('closed'); setSelectedConversation(null); }}
+                  onClick={() => handleConversationBoxChange('closed')}
                   className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
                   style={isUnityInbox && conversationBox === 'closed' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
                 >
