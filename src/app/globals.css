@@ -1390,16 +1390,14 @@ body.theme-noturno main :is(input, select, textarea):disabled,
   }
 }
 
-/* Apply grow entry animation to main page structures */
-.theme-noturno main > div {
-  animation: orion-fade-in-up 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
+/* A entrada animada saiu em 30/09/2026.
 
-/* Stagger animations for consecutive sections */
-.theme-noturno main > div:nth-child(1) { animation-delay: 80ms; }
-.theme-noturno main > div:nth-child(2) { animation-delay: 160ms; }
-.theme-noturno main > div:nth-child(3) { animation-delay: 240ms; }
-.theme-noturno main > div:nth-child(4) { animation-delay: 320ms; }
+   Alem de a tela balancar a cada navegacao, ela criava um bug de posicao: o
+   "transform" da animacao faz do elemento um bloco de contencao, e todo modal
+   "fixed inset-0" dentro dele passa a se posicionar pela pagina inteira em vez
+   de pela janela. Era por isso que o aviso de agenda abria la embaixo, fora da
+   area visivel. O @keyframes fica no arquivo porque outras regras ainda o
+   referenciam pontualmente. */
 
 /* Pulse animations for special highlighted elements */
 .theme-noturno .orion-pulse-neon {

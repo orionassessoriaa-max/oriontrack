@@ -39,31 +39,35 @@ interface StatCardProps {
 }
 
 export function StatCard({ title, value, icon: Icon, color = 'blue', loading = false }: StatCardProps) {
-  const colorClasses: Record<string, string> = {
-    blue: 'text-blue-600 bg-blue-50',
-    green: 'text-green-600 bg-green-50',
-    yellow: 'text-yellow-600 bg-yellow-50',
-    purple: 'text-purple-600 bg-purple-50',
-    indigo: 'text-indigo-600 bg-indigo-50',
-    orange: 'text-orange-600 bg-orange-50',
-    red: 'text-red-600 bg-red-50',
-    cyan: 'text-cyan-600 bg-cyan-50',
+  // Chip solido: fundo cheio na cor e icone branco. Escolha do dono em
+  // 30/09/2026, comparando com fundo palido e com cinza. O tom palido anterior
+  // (bg-blue-50 com icone azul) era o que ele chamava de neon.
+  const chipClasses: Record<string, string> = {
+    blue: 'bg-[#1d4ed8]',
+    green: 'bg-[#059669]',
+    yellow: 'bg-[#b45309]',
+    purple: 'bg-[#6d28d9]',
+    indigo: 'bg-[#4338ca]',
+    orange: 'bg-[#ea580c]',
+    red: 'bg-[#b91c1c]',
+    cyan: 'bg-[#0e7490]',
   };
 
+  // Empilhado, e nao lado a lado. Com a coluna do menu ocupando 248px, oito
+  // cartoes numa linha ficam com pouco mais de 100px: no layout antigo o rotulo
+  // quebrava em tres linhas e o icone montava por cima dele.
   return (
-    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md relative overflow-hidden">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{title}</p>
-        {Icon && (
-          <div className={cn("p-2 rounded-lg", colorClasses[color])}>
-            <Icon size={18} />
-          </div>
-        )}
-      </div>
+    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
+      {Icon && (
+        <span className={cn('mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl text-white', chipClasses[color] || chipClasses.blue)}>
+          <Icon size={17} strokeWidth={2} />
+        </span>
+      )}
+      <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider leading-snug">{title}</p>
       {loading ? (
-        <div className="h-8 w-16 bg-slate-100 animate-pulse rounded-lg" />
+        <div className="mt-1 h-7 w-14 bg-slate-100 rounded-lg" />
       ) : (
-        <p className="text-2xl font-black text-gray-900">{value}</p>
+        <p className="mt-1 text-2xl font-bold text-gray-900 leading-none">{value}</p>
       )}
     </div>
   );

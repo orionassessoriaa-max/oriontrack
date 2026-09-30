@@ -29,6 +29,29 @@ function formatTime(value: string) {
   });
 }
 
+const CHAVE_VISTO = 'orion:agenda_vista_em';
+
+function hojeISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function vistoHoje(profileId: string) {
+  try {
+    return window.localStorage.getItem(`${CHAVE_VISTO}:${profileId}`) === hojeISO();
+  } catch {
+    // Navegador com armazenamento bloqueado: melhor mostrar do que engolir.
+    return false;
+  }
+}
+
+function marcarVistoHoje(profileId: string) {
+  try {
+    window.localStorage.setItem(`${CHAVE_VISTO}:${profileId}`, hojeISO());
+  } catch {
+    // sem armazenamento, o popup volta a aparecer na proxima abertura
+  }
+}
+
 export default function TaskDuePopup() {
   const { profile } = useAuth();
   const [open, setOpen] = useState(false);
@@ -72,7 +95,14 @@ export default function TaskDuePopup() {
       if (!initialized.current) {
         initialized.current = true;
         seenImminentIds.current = imminent;
-        if (today.length > 0) setOpen(true);
+        // Uma vez por dia, e nao a cada vez que a tela inicial abre. Quem
+        // trabalha no CRM entra na home varias vezes por dia e levava o mesmo
+        // aviso em todas. O alerta de tarefa que esta vencendo continua
+        // aparecendo sempre, logo abaixo: aquele e novidade, este nao era.
+        if (today.length > 0 && !vistoHoje(requestedProfileId)) {
+          marcarVistoHoje(requestedProfileId);
+          setOpen(true);
+        }
         return;
       }
 
