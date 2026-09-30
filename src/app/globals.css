@@ -127,10 +127,9 @@
       color 180ms ease;
   }
 
-  main button:hover:not(:disabled),
-  main a:hover {
-    transform: translateY(-1px);
-  }
+  /* Aqui havia um transform: translateY(-1px) em todo botao e link. Era ele
+     que fazia a tela inteira tremer com o mouse. Removido em 30/09/2026 a
+     pedido do dono; o feedback de hover agora e so de cor. */
 
   /* Default panels are clean light panels with dark compatibility */
   .orion-panel {
@@ -4850,6 +4849,27 @@ main :is(button, a[role="button"]):is(.bg-cyan-500, .bg-cyan-600, .bg-cyan-700) 
   -webkit-text-fill-color: var(--o-btn-grad-ink) !important;
 }
 
+/* 6. Nada se mexe nem brilha quando o mouse passa.
+
+      O CRM tem 69 usos de hover:-translate-y, 41 de hover:scale e cerca de 70
+      de hover:shadow. Somados ao levantar global de botao, davam a sensacao de
+      tela balancando. O hover continua existindo, mas so em cor de fundo, que
+      e o que diz "da para clicar" sem mexer o layout.
+
+      As regras do tema claro que levantavam painel e cartao (translateY(-2px)
+      em .orion-panel, .bg-white e afins) entram aqui pelo mesmo motivo. */
+main [class*="hover:-translate"]:hover,
+main [class*="hover:translate"]:hover,
+main [class*="hover:scale"]:hover,
+main :is(.orion-panel, .orion-table-shell, .dark-dashboard-panel, .bg-white, [class*="bg-white"]):hover {
+  transform: none !important;
+}
+
+main [class*="hover:shadow"]:hover,
+main :is(.orion-panel, .orion-table-shell, .dark-dashboard-panel, .bg-white, [class*="bg-white"]):hover {
+  box-shadow: none !important;
+}
+
 /* 5. Ciano neon vira o acento do sistema. E a cor que mais aparece no CRM e a
       que mais denuncia template: #06b6d4 em texto, fundo, borda e icone. */
 main :is(.text-cyan-200, .text-cyan-300, .text-cyan-400, .text-cyan-500),
@@ -5614,5 +5634,6 @@ main:has(.orion-unity-inbox) > div,
 }
 
 }
+
 
 
