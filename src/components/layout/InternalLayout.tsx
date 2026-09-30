@@ -168,7 +168,7 @@ export default function InternalLayout({ children, immersive = false }: { childr
 
   if (!profile) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f8fafc] p-6">
+      <div className="flex min-h-screen items-center justify-center bg-[#f4f4f5] p-6">
         <div className="max-w-md rounded-[2rem] border border-amber-100 bg-white p-8 text-center shadow-sm">
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
             <AlertCircle size={28} />
@@ -200,7 +200,7 @@ export default function InternalLayout({ children, immersive = false }: { childr
 
   return (
     <div className={`flex min-h-screen flex-col transition-colors duration-300 ${
-      isDark ? 'bg-[#020617] text-white' : 'bg-[#f8fafc] text-slate-800'
+      isDark ? 'bg-[#020617] text-white' : 'bg-[#f4f4f5] text-slate-800'
     }`}>
       {!immersive && <Sidebar onCollapsedChange={setSidebarCollapsed} />}
       <main className={`w-full min-w-0 transition-all duration-300 ${immersive ? 'h-dvh overflow-hidden p-0' : 'px-3 py-5 pt-24 sm:px-5 sm:py-7 lg:p-7 lg:pt-28'}`}>

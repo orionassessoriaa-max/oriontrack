@@ -38,7 +38,9 @@
   }
 
   body.theme-claro {
-    background: #f6f8fb !important;
+    /* Cinza neutro. O #f6f8fb anterior tinha azul na mistura e puxava a tela
+       inteira para o frio. */
+    background: #f4f4f5 !important;
     color: #0f172a !important;
   }
 
