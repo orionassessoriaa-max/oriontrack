@@ -3563,11 +3563,10 @@ export default function BrokerInboxPage() {
                     : 'Histórico preservado. Uma nova resposta do lead reabre a conversa.'}
               </p>
 
-              {/* Na Unity, administradores operacionais iniciam nos proprios
-                  leads e podem alternar para outro responsavel ou para a equipe
-                  inteira. Integrantes continuam restritos no servidor aos leads
-                  que foram formalmente atribuidos a eles. */}
-              {(isUnityInbox || profile?.tipo_usuario !== 'corretor_membro') && (responsibleOptions.length > 0 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
+              {/* O filtro por responsavel e uma ferramenta administrativa.
+                  Integrantes continuam restritos no servidor aos leads que
+                  foram formalmente atribuidos a eles. */}
+              {(profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor_admin') && (responsibleOptions.length > 0 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
                 <select
                   value={effectiveResponsibleFilter}
                   onChange={(event) => setResponsibleFilter(event.target.value)}
