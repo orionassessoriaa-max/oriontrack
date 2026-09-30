@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, useRef, useMemo, type ClipboardEvent } from 'react';
+import { useCallback, useEffect, useState, useRef, useMemo, type ClipboardEvent, type DragEvent } from 'react';
 import Link from 'next/link';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -55,8 +55,27 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Tag,
-  UserPlus
+  UserPlus,
+  FileUp
 } from 'lucide-react';
+
+const INBOX_ATTACHMENT_ACCEPT = 'image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain';
+const INBOX_ATTACHMENT_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt']);
+
+function isSupportedInboxAttachment(file: File) {
+  if (file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/')) return true;
+  if ([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+  ].includes(file.type)) return true;
+
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  return INBOX_ATTACHMENT_EXTENSIONS.has(extension);
+}
 
 const SEM_INTERESSE_MOTIVOS = [
   'Preco acima do esperado',
@@ -435,7 +454,9 @@ export default function BrokerInboxPage() {
   // File states
   const [selectedAttachments, setSelectedAttachments] = useState<SelectedAttachment[]>([]);
   const [preparingAttachments, setPreparingAttachments] = useState(false);
+  const [composerDragActive, setComposerDragActive] = useState(false);
   const pendingAttachmentReadsRef = useRef(0);
+  const composerDragDepthRef = useRef(0);
 
   // Conversation filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -2995,6 +3016,44 @@ export default function BrokerInboxPage() {
     void addAttachments(files);
   };
 
+  const handleComposerDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    if (!isUnityInbox || !event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current += 1;
+    setComposerDragActive(true);
+  };
+
+  const handleComposerDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!isUnityInbox || !event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleComposerDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!isUnityInbox) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
+    if (composerDragDepthRef.current === 0) setComposerDragActive(false);
+  };
+
+  const handleComposerDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (!isUnityInbox) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current = 0;
+    setComposerDragActive(false);
+
+    const droppedFiles = Array.from(event.dataTransfer.files);
+    const supportedFiles = droppedFiles.filter(isSupportedInboxAttachment);
+    if (supportedFiles.length !== droppedFiles.length) {
+      setSendError('Alguns arquivos nao foram aceitos. Envie imagens, videos, audios, PDF, Word, Excel ou TXT.');
+    }
+    if (supportedFiles.length > 0) void addAttachments(supportedFiles);
+  };
+
   const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     if (!isUnityInbox || sendingMessage) return;
     const clipboardImages = Array.from(event.clipboardData.items)
@@ -4172,7 +4231,24 @@ export default function BrokerInboxPage() {
                     </button>
                   </div>
                 ) : (
-                <div className="orion-inbox-composer p-2.5 sm:p-4 border-t border-white/5 bg-[#050b16] shrink-0">
+                <div
+                  className="orion-inbox-composer relative p-2.5 sm:p-4 border-t border-white/5 bg-[#050b16] shrink-0"
+                  onDragEnter={handleComposerDragEnter}
+                  onDragOver={handleComposerDragOver}
+                  onDragLeave={handleComposerDragLeave}
+                  onDrop={handleComposerDrop}
+                >
+                  {isUnityInbox && composerDragActive && (
+                    <div className="pointer-events-none absolute inset-1 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-emerald-400 bg-[#111b21]/95 text-emerald-300 shadow-2xl">
+                      <div className="flex items-center gap-3 rounded-xl bg-emerald-500/10 px-5 py-3">
+                        <FileUp size={22} />
+                        <div>
+                          <p className="text-sm font-black">Solte para anexar</p>
+                          <p className="text-[10px] font-semibold text-slate-300">PDF, imagem, video, audio ou documento</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {isUnityInbox && activeReply && (
                     <div className="orion-unity-reply-preview mb-3 flex items-start justify-between gap-3 rounded-xl border-l-2 border-cyan-400 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
                       <div className="min-w-0">
@@ -4268,7 +4344,7 @@ export default function BrokerInboxPage() {
                             multiple
                             onChange={handleFileChange}
                             className="hidden"
-                            accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
+                            accept={INBOX_ATTACHMENT_ACCEPT}
                           />
                         </label>
                         <button
@@ -4350,7 +4426,7 @@ export default function BrokerInboxPage() {
                           }
                         }}
                         rows={isUnityInbox ? 3 : 1}
-                        placeholder={isUnityInbox ? 'Escreva, cole uma imagem ou digite / para respostas rápidas' : 'Digite "/" para respostas rápidas ou escreva uma'}
+                        placeholder={isUnityInbox ? 'Escreva, cole ou arraste um arquivo; digite / para respostas rápidas' : 'Digite "/" para respostas rápidas ou escreva uma'}
                         className={`min-w-0 flex-1 bg-slate-950 border border-white/5 rounded-2xl px-3 sm:px-4 py-3 font-bold text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-none transition-all duration-100 overflow-y-auto ${isUnityInbox ? 'orion-inbox-unity-input text-sm leading-5' : 'text-xs'}`}
                         style={{ height: isUnityInbox ? '76px' : '44px' }}
                       />
