@@ -5,8 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Lock, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '@/lib/supabase/client';
+import { useDarkEntryScreen } from '@/hooks/useDarkEntryScreen';
 
 export default function ResetPasswordPage() {
+  useDarkEntryScreen();
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);

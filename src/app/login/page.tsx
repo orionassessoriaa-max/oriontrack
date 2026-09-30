@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/types';
 import { canSelectOperationalTeam, TEAM_SELECTION_STORAGE_KEY } from '@/lib/teamSelection';
+import { useDarkEntryScreen } from '@/hooks/useDarkEntryScreen';
 
 function isTemporaryAuthFailure(message?: string | null) {
   return /failed to fetch|network|timeout|timed out|fetch failed|load failed/i.test(String(message || ''));
@@ -23,6 +24,8 @@ function loginErrorMessage(message?: string | null) {
 }
 
 export default function LoginPage() {
+  useDarkEntryScreen();
+
   const [view, setView] = useState<'login' | 'recovery'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

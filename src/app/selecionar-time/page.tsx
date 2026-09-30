@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, Bot, Loader2, Shield, Sparkles, Target, Trophy } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { canSelectOperationalTeam, DUAL_OPERATION_ACCESS_KEY, getTeamHome, TEAM_SELECTION_STORAGE_KEY, type OrionTeamKey } from '@/lib/teamSelection';
+import { useDarkEntryScreen } from '@/hooks/useDarkEntryScreen';
 
 const teams: Array<{
   id: OrionTeamKey;
@@ -36,6 +37,8 @@ const teams: Array<{
 ];
 
 export default function SelecionarTimePage() {
+  useDarkEntryScreen();
+
   const router = useRouter();
   const { user, actualProfile, loading, signOut } = useAuth();
 

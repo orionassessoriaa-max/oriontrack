@@ -6,6 +6,7 @@ import { ArrowRight, CheckCircle2, Loader2, Lock, Mail, ShieldCheck } from 'luci
 import { motion } from 'framer-motion';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useDarkEntryScreen } from '@/hooks/useDarkEntryScreen';
 
 function getPasswordStrength(password: string) {
   let score = 0;
@@ -31,6 +32,8 @@ function getPasswordStrength(password: string) {
 }
 
 export default function PrimeiroAcessoPage() {
+  useDarkEntryScreen();
+
   const router = useRouter();
   const { user, profile, loading } = useAuth();
   const [emailReal, setEmailReal] = useState('');
