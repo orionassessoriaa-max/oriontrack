@@ -3725,7 +3725,7 @@ export default function BrokerInboxPage() {
                       </span>
                     </div>
                     <div className="hidden sm:flex flex-wrap items-center gap-2 text-[9px] font-bold text-slate-500">
-                      <span>Nº PROTOCOLO: {selectedConversation.protocolNumber}</span>
+                      <span>Telefone: {formatarNumeroConectado(selectedConversation.telefone)}</span>
                       <span>•</span>
                       <span>Canal: Comercial | {selectedConversation.agentName}</span>
                     </div>
@@ -4531,6 +4531,11 @@ export default function BrokerInboxPage() {
             </div>
             {selectedConversation ? (
               <>
+                <div className="shrink-0 rounded-2xl border border-white/5 bg-slate-950/45 px-3.5 py-3">
+                  <span className="block text-[8px] font-black uppercase tracking-widest text-slate-500">Protocolo do atendimento</span>
+                  <span className="mt-1 block break-all text-[10px] font-black text-slate-200">{selectedConversation.protocolNumber}</span>
+                </div>
+
                 {/* Status do Lead no CRM */}
                 <div className="space-y-2 shrink-0 border-b border-white/5 pb-4">
                   <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Status no CRM / Leads</label>
