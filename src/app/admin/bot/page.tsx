@@ -16,7 +16,6 @@ import {
   Plus,
   Save,
   Smartphone,
-  Sparkles,
   Wand2,
 } from 'lucide-react';
 
@@ -722,7 +721,6 @@ export default function AdminBotPage() {
 
                     <div className="rounded-[24px] border border-slate-800 bg-slate-900/40 p-5">
                       <div className="mb-5 flex items-center gap-2 text-cyan-300">
-                        <Sparkles className="h-5 w-5" />
                         <h3 className="text-lg font-black text-white">Criar bot</h3>
                       </div>
 
@@ -1055,7 +1053,6 @@ export default function AdminBotPage() {
                   <div className="rounded-[24px] border border-slate-800 bg-slate-900/30 p-5">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-cyan-300">
-                        <Sparkles className="h-5 w-5" />
                         <h3 className="text-sm font-black uppercase tracking-[0.18em] text-white">Modelos prontos</h3>
                       </div>
                       <span className="text-xs font-bold text-slate-500">Opcional</span>

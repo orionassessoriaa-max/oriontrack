@@ -22,7 +22,6 @@ import {
   Plus,
   Search,
   Send,
-  Sparkles,
   Trash2,
   Upload,
   X,
@@ -803,7 +802,6 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <div className="mb-3 flex items-center gap-2 text-cyan-300">
-                <Sparkles size={17} aria-hidden="true" />
                 <p className="text-xs font-black uppercase tracking-[0.2em]">Central de criativos</p>
               </div>
               <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
@@ -819,7 +817,6 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
               onClick={openGenerator}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-6 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition duration-200 hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/40"
             >
-              <Sparkles size={18} aria-hidden="true" />
               Gerar criativo
             </button>
           </div>
@@ -1257,7 +1254,6 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                 disabled={editingPrompt.trim().length < 12}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-45"
               >
-                <Sparkles size={17} />
                 Refazer imagem com este prompt
               </button>
             </div>
@@ -1271,7 +1267,6 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
             <div className="flex items-start justify-between gap-5 border-b border-slate-800 px-5 py-5 sm:px-7">
               <div>
                 <div className="flex items-center gap-2 text-cyan-400">
-                  <Sparkles size={17} />
                   <p className="text-xs font-black uppercase tracking-[0.2em]">Geracao com IA</p>
                 </div>
                 <h2 id="creative-generator-title" className="mt-1 text-2xl font-black text-white">Criar novo criativo</h2>
@@ -1422,7 +1417,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                     </label>
                   </div>
                   <button type="button" onClick={() => requestGeneration('batch')} disabled={queuing || prompt.trim().length < 12 || !destinationId || !batchOperator.trim() || !batchRegion.trim()} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-45">
-                    {queuing ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                    {queuing ? <Loader2 className="animate-spin" size={18} /> : null}
                     {queuing ? 'Colocando na fila...' : `Gerar ${batchQuantity} em segundo plano`}
                   </button>
                 </div>
@@ -1436,7 +1431,7 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                   disabled={generating || saving || prompt.trim().length < 12 || !destinationId || !batchOperator.trim() || !batchRegion.trim()}
                   className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {generating ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                  {generating ? <Loader2 className="animate-spin" size={18} /> : null}
                   {generating ? 'Criando a arte...' : generatedDataUrl ? 'Gerar outra versao' : 'Gerar criativo'}
                 </button>
                 {generating && (

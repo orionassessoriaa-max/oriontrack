@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Compass,
   MessageSquare,
-  Sparkles,
+  Calculator,
   User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -320,7 +320,7 @@ export default function ApoloOnePage() {
       text: 'Me passe uma copy para WhatsApp para rebater o cliente que achou o plano caro.'
     },
     {
-      icon: Sparkles,
+      icon: Calculator,
       title: 'Simulador',
       desc: 'Como fazer novas simulações de plano?',
       text: 'Como faço uma nova simulação de planos de saúde no simulador?'

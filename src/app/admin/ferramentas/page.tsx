@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { supabase } from '@/lib/supabase/client';
 import { FerramentaCatalogItem, FerramentaStatus, FERRAMENTA_STATUS_LABEL } from '@/lib/ferramentas';
-import { Building2, Check, Loader2, Search, Settings2, Sparkles } from 'lucide-react';
+import { Building2, Check, Loader2, Search, Settings2 } from 'lucide-react';
 
 type Corretora = {
   id: string;
@@ -219,7 +219,6 @@ export default function AdminFerramentasPage() {
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-300">Catalogo</p>
                   <h2 className="mt-1 text-2xl font-black text-white">Ferramentas por titulo</h2>
                 </div>
-                <Sparkles size={24} className="text-cyan-300" />
               </div>
 
               <div className="grid gap-4 xl:grid-cols-2">

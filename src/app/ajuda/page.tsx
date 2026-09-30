@@ -15,7 +15,6 @@ import {
   Settings,
   HelpCircle,
   Cpu,
-  Sparkles
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -262,7 +261,7 @@ function AjudaContent() {
           onClick={handleLaunchApoloOne}
           className="w-full lg:w-auto shrink-0 flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-8 py-5 font-black text-white transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-lg shadow-blue-600/15 relative z-10"
         >
-          Iniciar Apolo One <Sparkles size={16} />
+          Iniciar Apolo One
         </button>
       </div>
 

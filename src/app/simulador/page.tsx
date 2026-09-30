@@ -13,7 +13,6 @@ import {
   Check,
   FileText,
   Layers,
-  Sparkles,
   Filter,
   ArrowRight,
   Search,
@@ -1014,7 +1013,6 @@ Payload: {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-300">
-                      <Sparkles size={16} className="text-cyan-400" />
                       <span>Perfis rapidos</span>
                     </h3>
                     <p className="mt-1 text-[10px] font-bold text-slate-500">

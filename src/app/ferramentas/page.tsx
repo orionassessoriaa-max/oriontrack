@@ -12,7 +12,6 @@ import {
   Loader2,
   Play,
   Search,
-  Sparkles,
   X,
   Info,
   Calendar,
@@ -870,7 +869,6 @@ export default function FerramentasPage() {
                     <div className="space-y-7">
                       <div className="space-y-4">
                         <span className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-red-200">
-                          <Sparkles size={14} className="text-red-400" />
                           Ferramentas que mudam a rotina
                         </span>
                         <h3 className="max-w-2xl text-3xl font-black leading-[1.02] tracking-tight text-white md:text-5xl xl:text-6xl">

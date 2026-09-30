@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ChevronDown,
   ShieldAlert,
-  Sparkles,
   Image as ImageIcon,
   Pause,
   Play,
@@ -531,7 +530,7 @@ export default function GestorDashboardPage() {
                   disabled={loading || otimizando}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 text-xs font-black uppercase tracking-wider text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
                 >
-                  {otimizando ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+                  {otimizando ? <Loader2 className="animate-spin" size={15} /> : null}
                   {otimizando ? 'Analisando' : 'Gerar ações'}
                 </button>
               </div>
@@ -815,7 +814,7 @@ export default function GestorDashboardPage() {
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button type="button" onClick={() => setGenerationOffer(null)} disabled={queuingGeneration} className="tf-no-lift min-h-11 rounded-xl border px-4 text-sm font-bold disabled:opacity-50" style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink)' }}>Agora não</button>
                 <button type="button" onClick={() => void queueMissingCreatives()} disabled={queuingGeneration} className="tf-no-lift inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-black text-white disabled:opacity-50" style={{ background: 'var(--tf-accent)' }}>
-                  {queuingGeneration ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                  {queuingGeneration ? <Loader2 className="animate-spin" size={16} /> : null}
                   {generationReference ? 'Sim, criar com referência' : 'Sim, criar sem referência'}
                 </button>
               </div>

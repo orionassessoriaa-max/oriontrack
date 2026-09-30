@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Bot, Loader2, Shield, Sparkles, Target, Trophy } from 'lucide-react';
+import { ArrowRight, Bot, Loader2, Shield, Target, Trophy } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { canSelectOperationalTeam, DUAL_OPERATION_ACCESS_KEY, getTeamHome, TEAM_SELECTION_STORAGE_KEY, type OrionTeamKey } from '@/lib/teamSelection';
 import { useDarkEntryScreen } from '@/hooks/useDarkEntryScreen';
@@ -148,7 +148,6 @@ export default function SelecionarTimePage() {
                   </div>
                   <div className="flex items-center justify-between border-t border-white/10 pt-5">
                     <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-300">
-                      <Sparkles size={15} className="text-cyan-300" />
                       Acessar painel
                     </span>
                     <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-slate-950 transition group-hover:translate-x-1">

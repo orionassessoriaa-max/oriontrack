@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import MetaDatePicker from '@/components/ui/MetaDatePicker';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { ArrowLeft, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, CircleDollarSign, ExternalLink, FileImage, FilePlus2, FileVideo2, Folder, HardDrive, Layers3, Loader2, Maximize2, Megaphone, Pencil, RefreshCw, Search, Sparkles, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
+import { ArrowLeft, BarChart3, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown, CircleDollarSign, ExternalLink, FileImage, FilePlus2, FileVideo2, Folder, HardDrive, Layers3, Loader2, Maximize2, Megaphone, Pencil, RefreshCw, Search, Wand2, X, AlertCircle, UploadCloud } from 'lucide-react';
 import { TRAFFIC_RULES, formatBRL, formatPercent } from '@/lib/trafego/rules';
 import { normalizeOptimizationDraft, type NormalizedOptimizationDraft } from '@/lib/trafego/optimizationDraft';
 
@@ -788,7 +788,7 @@ export default function OtimizacoesPage() {
               className="tf-no-lift inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold text-white transition disabled:opacity-60"
               style={{ background: 'var(--tf-accent)' }}
             >
-              {reviewing ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+              {reviewing ? <Loader2 className="animate-spin" size={16} /> : null}
               Revisar com IA
             </button>
           </div>
@@ -981,7 +981,6 @@ export default function OtimizacoesPage() {
                   style={{ background: 'var(--tf-surface)', borderColor: 'var(--tf-border)', boxShadow: 'var(--tf-shadow)' }}
                 >
                   <div className="mb-2 flex items-center gap-2">
-                    <Sparkles size={16} style={{ color: 'var(--tf-accent-ink)' }} />
                     <h3 className="text-base font-bold">Leitura da IA</h3>
                   </div>
                   <p className="whitespace-pre-line text-sm leading-relaxed" style={{ color: 'var(--tf-ink-soft)' }}>
@@ -1231,7 +1230,7 @@ export default function OtimizacoesPage() {
                             className="tf-no-lift inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg px-3 text-xs font-bold text-white transition disabled:opacity-50"
                             style={{ background: 'var(--tf-accent)' }}
                           >
-                            {apoloBusy || uploadingCreative ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+                            {apoloBusy || uploadingCreative ? <Loader2 className="animate-spin" size={14} /> : null}
                             Enviar
                           </button>
                         </div>
@@ -1788,7 +1787,7 @@ function DraftView({
               className="tf-no-lift inline-flex min-h-10 items-center gap-2 rounded-lg px-4 text-xs font-black text-white transition disabled:cursor-not-allowed disabled:opacity-45"
               style={{ background: 'var(--tf-accent)' }}
             >
-              {creating ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+              {creating ? <Loader2 className="animate-spin" size={14} /> : null}
               {creating ? 'Criando na Meta...' : actionLabel}
             </button>
           </div>

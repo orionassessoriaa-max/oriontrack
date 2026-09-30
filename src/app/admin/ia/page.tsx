@@ -12,7 +12,6 @@ import {
   Search, 
   Trash2, 
   Save, 
-  Sparkles, 
   Check, 
   ChevronRight, 
   AlertCircle,
@@ -971,8 +970,7 @@ export default function AdminIaPage() {
                         type="button"
                         onClick={handleUseSelectedPromptModel}
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-cyan-300 transition-all hover:border-cyan-400/50 hover:bg-cyan-950/40"
-                      >
-                        <Sparkles size={12} /> Usar modelo selecionado
+                      > Usar modelo selecionado
                       </button>
                     </div>
                     <textarea

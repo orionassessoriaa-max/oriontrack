@@ -5,7 +5,7 @@ import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
 import { supabase } from '@/lib/supabase/client';
-import { Bell, Loader2, RefreshCw, ShieldAlert, HelpCircle, Send, Settings, Save, Sparkles, TrendingUp, DollarSign, Smartphone } from 'lucide-react';
+import { Bell, Loader2, RefreshCw, ShieldAlert, HelpCircle, Send, Settings, Save, TrendingUp, DollarSign, Smartphone } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import UnityWhatsAppConnection from '@/components/inbox/UnityWhatsAppConnection';

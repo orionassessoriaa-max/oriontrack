@@ -6,7 +6,9 @@ import {
   MessageSquare,
   X,
   Send,
-  Sparkles,
+  Images,
+  ShieldAlert,
+  Calculator,
   Compass,
   Copy,
   Bot,
@@ -205,7 +207,7 @@ export default function ApoloAiWidget() {
           text: 'Quais as melhores estratégias e práticas para reduzir o CPL em campanhas de planos de saúde no Meta Ads?'
         },
         {
-          icon: Sparkles,
+          icon: Images,
           title: 'Criativos de Tráfego',
           desc: 'Ideias de criativos que mais convertem na área da saúde.',
           text: 'Pode me dar ideias e conceitos de criativos em imagem e vídeo de alta conversão para o nicho de planos de saúde?'
@@ -246,7 +248,7 @@ export default function ApoloAiWidget() {
           text: 'Quais as regras fundamentais de hierarquia visual e composição para desenhar um banner comercial de planos de saúde?'
         },
         {
-          icon: Sparkles,
+          icon: Palette,
           title: 'Estilo Canva',
           desc: 'Como manter um visual premium usando ferramentas online.',
           text: 'Quais técnicas e fontes posso utilizar no Canva para criar posts de redes sociais com aspecto premium e corporativo?'
@@ -275,7 +277,7 @@ export default function ApoloAiWidget() {
           text: 'Escreva um roteiro simpático de pós-venda para mandar no WhatsApp 30 dias após o fechamento do contrato.'
         },
         {
-          icon: Sparkles,
+          icon: ShieldAlert,
           title: 'Gestão de Crise',
           desc: 'Como lidar com corretores e clientes descontentes.',
           text: 'Como contornar conflitos na distribuição de leads ou reclamações de clientes na carteira de forma assertiva?'
@@ -321,7 +323,7 @@ export default function ApoloAiWidget() {
         text: 'Onde vejo minhas notificações e avisos de tabelas?'
       },
       {
-        icon: Sparkles,
+        icon: Calculator,
         title: 'Simular Planos',
         desc: 'Como faço uma nova simulação de plano de saúde?',
         text: 'Como posso fazer uma simulação de plano de saúde?'

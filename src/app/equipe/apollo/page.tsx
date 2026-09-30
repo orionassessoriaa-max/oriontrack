@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import InternalLayout from '@/components/layout/InternalLayout';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { Award, CheckCircle2, Crown, DollarSign, Loader2, Lock, Pencil, Plus, Save, Sparkles, Target, Trophy, X } from 'lucide-react';
+import { Award, CheckCircle2, Crown, DollarSign, Loader2, Lock, Pencil, Plus, Save, TrendingUp, Target, Trophy, X } from 'lucide-react';
 
 type TeamMember = {
   id: string;
@@ -255,7 +255,7 @@ export default function ApolloTeamPage() {
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Metric icon={Target} label="Meta do mes" value={brl(metaValue)} tone="blue" />
             <Metric icon={CheckCircle2} label="Restante para meta" value={brl(data.summary.faltanteMeta)} tone="emerald" />
-            <Metric icon={Sparkles} label="Previsao aberta" value={brl(data.summary.previsaoAberta)} tone="amber" />
+            <Metric icon={TrendingUp} label="Previsao aberta" value={brl(data.summary.previsaoAberta)} tone="amber" />
             <Metric icon={DollarSign} label="Vendas" value={brl(data.summary.totalVendas)} tone="violet" />
           </section>
 

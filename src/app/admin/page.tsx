@@ -22,7 +22,6 @@ import {
   ChevronRight,
   UserCog,
   LayoutDashboard,
-  Sparkles,
   AlertTriangle,
   Bot
 } from 'lucide-react';

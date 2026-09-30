@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Sparkles, ArrowRight, HelpCircle, RefreshCw, Clock, Table } from 'lucide-react';
+import { CheckCircle2, Copy, Crown, Loader2, Plus, Send, Settings, ShieldCheck, Target, Trash2, TrendingUp, Users, Trophy, BookOpen, Shuffle, ArrowRight, HelpCircle, RefreshCw, Clock, Table } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useDialog } from '@/components/providers/DialogProvider';
@@ -588,7 +588,7 @@ export default function CorretorTeamManager({ corretorId }: CorretorTeamManagerP
           {/* Feature Showcase Grid */}
           <div className="grid gap-4 sm:grid-cols-3 max-w-3xl mx-auto pt-4 text-left">
             {[
-              { icon: Sparkles, title: "Automação de Vendas", text: "Distribua clientes instantaneamente de forma justa para sua equipe ativa." },
+              { icon: Shuffle, title: "Automação de Vendas", text: "Distribua clientes instantaneamente de forma justa para sua equipe ativa." },
               { icon: Users, title: "Acessos Exclusivos", text: "Seus corretores têm login exclusivo para gerenciar o funil do CRM." },
               { icon: Crown, title: "Ranking Gamificado", text: "Estimule vendas e performance com um ranking atualizado em tempo real." },
             ].map((f, i) => {

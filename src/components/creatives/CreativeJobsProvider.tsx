@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, CheckCircle2, Loader2, Sparkles, TriangleAlert } from 'lucide-react';
+import { Ban, CheckCircle2, Loader2, TriangleAlert } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 
@@ -97,7 +97,6 @@ function CreativeJobsProgress({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
             <p className="flex items-center gap-2 text-sm font-black text-white">
-              <Sparkles size={15} className="text-cyan-400" />
               {failed ? 'Falha na geração' : canceled ? 'Geração cancelada' : finished ? 'Criativos finalizados' : 'Criando em segundo plano'}
             </p>
             <p className="text-xs font-black tabular-nums text-cyan-300">
