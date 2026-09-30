@@ -3,6 +3,13 @@ const IGNORED_INBOX_PHONE_KEYS = new Set([
   '6192370710', // Numero interno do Apolo Notificador.
 ]);
 
+// Contatos desta lista nao devem nem entrar no processamento do webhook. O
+// numero da administracao Orion fica fora daqui de proposito: ele continua
+// oculto no Inbox, mas pode responder a um teste de IA e manter o fluxo ativo.
+const IGNORED_INBOX_WEBHOOK_PHONE_KEYS = new Set([
+  '6192370710', // Numero interno do Apolo Notificador.
+]);
+
 const IGNORED_INBOX_INSTANCES = new Set([
   'apolo_master_sender',
 ]);
@@ -24,6 +31,10 @@ function phoneKey(value: unknown) {
 
 export function isIgnoredInboxContact(value: unknown) {
   return IGNORED_INBOX_PHONE_KEYS.has(phoneKey(value));
+}
+
+export function isIgnoredInboxWebhookContact(value: unknown) {
+  return IGNORED_INBOX_WEBHOOK_PHONE_KEYS.has(phoneKey(value));
 }
 
 export function isIgnoredInboxSource(instance: unknown, ownerPhone: unknown) {

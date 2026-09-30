@@ -11,7 +11,7 @@ import { ensureCommercialConversation, findCommercialConversation, isCommercialA
 import { normalizeWhatsAppMessageId, whatsappMessageIdCandidates } from '@/lib/whatsappMessageId';
 import { reciboAvanca, reciboDoProvedor } from '@/lib/whatsappRecibo';
 import { getReceptiveAiConfig, handleReceptiveIncoming } from '@/lib/receptiveAi';
-import { isIgnoredInboxContact, isIgnoredInboxSource } from '@/lib/inboxIgnoredContacts';
+import { isIgnoredInboxSource, isIgnoredInboxWebhookContact } from '@/lib/inboxIgnoredContacts';
 
 function readText(body: any) {
   return pickString(
@@ -1511,7 +1511,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (isIgnoredInboxContact(phone)) {
+    if (isIgnoredInboxWebhookContact(phone)) {
       return NextResponse.json({ ok: true, ignored: true, reason: 'internal_apolo_number' });
     }
 
