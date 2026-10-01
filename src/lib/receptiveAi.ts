@@ -1,7 +1,7 @@
 import 'server-only';
 import { startLeadAiIfEligible } from '@/lib/leadAiAgent';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { normalizePhone, sendUazapiTypingPresence, uazapiFetch } from '@/lib/uazapi';
+import { normalizePhone, phoneMatchKey, sendUazapiTypingPresence, uazapiFetch } from '@/lib/uazapi';
 import { normalizeWhatsAppMessageId } from '@/lib/whatsappMessageId';
 import { assinarMensagem } from '@/lib/atendimentoCompartilhado';
 import { isClickToWhatsAppAd } from '@/lib/receptiveAdDetection';
@@ -255,12 +255,28 @@ async function sendBeneficiaryChannels(instance: string, conversationId: string,
 }
 
 async function createSalesLead(options: { corretorId: string; phone: string; contactName: string; source: string; temporaryOwnerId?: string | null }) {
+  const normalizedPhone = normalizePhone(options.phone);
+  const last8 = normalizedPhone.slice(-8);
+  const last8WithHyphen = `${last8.slice(0, 4)}-${last8.slice(4)}`;
+  const { data: possibleMatches, error: matchError } = await supabaseAdmin
+    .from('leads')
+    .select('id, telefone')
+    .eq('corretor_id', options.corretorId)
+    .or(`telefone.ilike.%${last8},telefone.ilike.%${last8WithHyphen}`)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (matchError) throw matchError;
+
+  const canonicalKey = phoneMatchKey(normalizedPhone);
+  const existingLead = (possibleMatches || []).find((lead) => phoneMatchKey(lead.telefone) === canonicalKey);
+  if (existingLead) return { id: existingLead.id };
+
   const { data, error } = await supabaseAdmin
     .from('leads')
     .insert({
       corretor_id: options.corretorId,
       nome: options.contactName || 'Contato WhatsApp',
-      telefone: normalizePhone(options.phone),
+      telefone: normalizedPhone,
       status: 'Aguardando atendimento',
       origem: 'Orion',
       utm_source: options.source === 'click_to_whatsapp' ? 'meta' : 'whatsapp',
@@ -356,6 +372,10 @@ export async function handleReceptiveIncoming(options: {
 
   if (existingSession?.state === 'lead_created') {
     return { handled: false, leadId: options.leadId || existingSession.lead_id, state: 'lead_created' };
+  }
+
+  if (existingSession?.state === 'entry_pending' && !entry) {
+    return { handled: true, leadId: null, state: 'entry_pending' };
   }
 
   if (existingSession?.state === 'source_pending') {

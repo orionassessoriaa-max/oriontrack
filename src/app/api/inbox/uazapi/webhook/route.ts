@@ -1101,13 +1101,15 @@ async function findLead(profile: any, phone: string) {
     .limit(20);
 
   const rows = data || [];
-  const exactRows = rows.filter((row) => normalizePhone(row?.telefone) === digits);
-  const activeAiLead = await pickLeadWithActiveAiSession(exactRows.length > 0 ? exactRows : rows);
+  const canonicalKey = phoneMatchKey(digits);
+  const equivalentRows = rows.filter((row) => phoneMatchKey(row?.telefone) === canonicalKey);
+  const activeAiLead = await pickLeadWithActiveAiSession(equivalentRows);
   if (activeAiLead) return activeAiLead;
 
-  const exact = exactRows[0];
-  if (digits.length >= 12) return exact || null;
-  return exact || rows[0] || null;
+  // A consulta ja vem da mais recente para a mais antiga. Usar sempre o mesmo
+  // registro canonico impede que a mesma pessoa alterne entre dois leads apenas
+  // porque o provedor ora envia o nono digito e ora o omite.
+  return equivalentRows[0] || null;
 }
 
 async function findCommercialLead(phone: string) {
@@ -1744,25 +1746,19 @@ export async function POST(request: Request) {
     }
 
     if (fromMe && lead?.id) {
-      after(async () => {
-        try {
-          // O eco das mensagens da propria IA ja saiu antes, no isAiOutbound,
-          // entao um fromMe que chega aqui e alguem do time respondendo pelo
-          // inbox de verdade. No comercial isso encerra a sessao em definitivo:
-          // antes a IA voltava a escrever por cima do SDR depois de 90s.
-          // O isAiOutbound cobre o eco quando o envio saiu deste mesmo
-          // processo. Com mais de um container, ou apos restart, o Set em
-          // memoria nao ajuda, entao confirmamos pela mensagem gravada.
-          if (commercialMode) {
-            if (!await isCommercialAiEcho(conversation.id, message)) {
-              await stopCommercialAiForHumanTakeover(lead.id, profile?.nome);
-            }
+      try {
+        // Persiste a tomada humana antes de responder ao webhook. Se isso ficar
+        // em background, outra replica pode executar o cron nesse intervalo e
+        // reiniciar a IA enquanto o vendedor ja esta falando com o cliente.
+        if (commercialMode) {
+          if (!await isCommercialAiEcho(conversation.id, message)) {
+            await stopCommercialAiForHumanTakeover(lead.id, profile?.nome);
           }
-          else await stopLeadAiForHumanTakeover(lead.id, profile?.nome);
-        } catch (takeoverError) {
-          console.error('[uazapi_webhook] Failed stopping AI after human takeover:', takeoverError);
         }
-      });
+        else await stopLeadAiForHumanTakeover(lead.id, profile?.nome);
+      } catch (takeoverError) {
+        console.error('[uazapi_webhook] Failed stopping AI after human takeover:', takeoverError);
+      }
     }
 
     if (!fromMe && (lead?.id || receptiveConfig)) {

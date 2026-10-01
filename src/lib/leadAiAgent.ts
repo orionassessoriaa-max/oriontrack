@@ -297,6 +297,13 @@ export function leadFirstName(lead: LeadRow, fallback = 'tudo bem') {
   return first || fallback;
 }
 
+function hasReliableLeadName(lead: LeadRow) {
+  const name = String(lead.nome || '').replace(/\s+/g, ' ').trim();
+  if (!name) return false;
+  if (/^contato(?: whatsapp)?$/i.test(name)) return false;
+  return !/^\+?\d[\d\s().-]+$/.test(name);
+}
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -2022,32 +2029,59 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
     `Olá, ${leadFirstName(lead)}! Tudo bem?`,
     aiIntroLine(introIdentity, aiConfig.persona),
     interestText,
-    !threeQualification && (cameFromWhatsAppAd || cameFromOrganicWhatsApp)
+    !threeQualification && (cameFromWhatsAppAd || cameFromOrganicWhatsApp) && !hasReliableLeadName(lead)
       ? 'Para eu te ajudar certinho, como você se chama?'
       : initialLeadQuestion(lead),
   ].join('\n\n'));
 
-  const { data: existing } = await supabaseAdmin
+  const { data: existing, error: existingError } = await supabaseAdmin
     .from('lead_ai_sessions')
-    .select('id, status')
+    .select('id, status, updated_at')
     .eq('lead_id', lead.id)
     .maybeSingle();
 
-  if (existing?.status === 'active') return { started: false, eligible: true, reason: 'Sessao ja ativa.' };
+  if (existingError) throw existingError;
+  if (existing && existing.status !== 'error') {
+    return {
+      started: false,
+      eligible: true,
+      reason: existing.status === 'active' ? 'Sessao ja ativa.' : 'Sessao ja encerrada.',
+    };
+  }
 
-  await supabaseAdmin
-    .from('lead_ai_sessions')
-    .upsert([{
-      lead_id: lead.id,
-      corretor_id: lead.corretor_id,
-      admin_profile_id: adminProfile.id,
-      responsavel_profile_id: lead.responsavel_profile_id || null,
-      persona: aiConfig.persona,
-      status: 'active',
-      summary: leadFacts(lead),
-      last_ai_message_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }], { onConflict: 'lead_id' });
+  const claimedAt = new Date().toISOString();
+  const sessionPayload = {
+    corretor_id: lead.corretor_id,
+    admin_profile_id: adminProfile.id,
+    responsavel_profile_id: lead.responsavel_profile_id || null,
+    persona: aiConfig.persona,
+    status: 'active',
+    summary: leadFacts(lead),
+    last_ai_message_at: claimedAt,
+    updated_at: claimedAt,
+  };
+
+  if (existing) {
+    let retryQuery = supabaseAdmin
+      .from('lead_ai_sessions')
+      .update(sessionPayload)
+      .eq('id', existing.id)
+      .eq('status', 'error');
+    retryQuery = existing.updated_at
+      ? retryQuery.eq('updated_at', existing.updated_at)
+      : retryQuery.is('updated_at', null);
+    const { data: claimed, error: claimError } = await retryQuery.select('id').maybeSingle();
+    if (claimError) throw claimError;
+    if (!claimed) return { started: false, eligible: true, reason: 'Sessao assumida por outro processo.' };
+  } else {
+    const { error: claimError } = await supabaseAdmin
+      .from('lead_ai_sessions')
+      .insert({ lead_id: lead.id, ...sessionPayload });
+    if (claimError?.code === '23505') {
+      return { started: false, eligible: true, reason: 'Sessao assumida por outro processo.' };
+    }
+    if (claimError) throw claimError;
+  }
 
   try {
     await configureUazapiWebhook(senderInstance);
