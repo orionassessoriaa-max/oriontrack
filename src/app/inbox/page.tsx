@@ -1253,8 +1253,7 @@ export default function BrokerInboxPage() {
           const belongsToVisibleInbox = visibleConversationIdsRef.current.has(newMsg.conversa_id);
           const belongsToConversationList = conversationsRef.current.some((conversation) => conversation.id === newMsg.conversa_id);
           const isOpenAndVisible = document.visibilityState === 'visible'
-            && Boolean(currentSelected)
-            && (currentSelected?.id === newMsg.conversa_id || belongsToVisibleInbox);
+            && currentSelected?.id === newMsg.conversa_id;
 
           if (isUnityInbox && newMsg.direction === 'inbound' && belongsToConversationList && !isOpenAndVisible) {
             setConversationUnread(newMsg.conversa_id, true);
@@ -1772,6 +1771,15 @@ export default function BrokerInboxPage() {
       setLeadInfo(previous);
       alert('Erro ao atualizar dados do lead: ' + error.message);
       return;
+    }
+
+    if (field === 'nome' && nextValue) {
+      setSelectedConversation((current) => current ? { ...current, nome_contato: nextValue } : current);
+      setConversations((current) => current.map((conversation) => (
+        conversation.id === selectedConversation.id
+          ? { ...conversation, nome_contato: nextValue }
+          : conversation
+      )));
     }
 
     await logLeadActivity({
@@ -4629,6 +4637,7 @@ export default function BrokerInboxPage() {
 
                     {leadDetailsOpen && (
                       <div className="mt-3 grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                        {isUnityInbox && <EditableLeadInfoCard key={`${leadInfo.id}-nome`} label="Nome do lead" field="nome" value={leadInfo.nome || ''} onSave={handleUpdateLeadField} className="col-span-2" />}
                         <EditableLeadInfoCard key={`${leadInfo.id}-idades`} label="Idade" field="idades" value={leadInfo.idades || ''} onSave={handleUpdateLeadField} />
                         <EditableLeadInfoCard key={`${leadInfo.id}-tem_plano_ativo`} label="Plano ativo" field="tem_plano_ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Nao informado']} />
                         <EditableLeadInfoCard key={`${leadInfo.id}-possui_cnpj`} label="Possui CNPJ?" field="possui_cnpj" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Tenho MEI', 'Nao informado']} />
@@ -5540,6 +5549,7 @@ export default function BrokerInboxPage() {
                   'Sem interesse / Descartado',
                   'Não atendeu as tentativas',
                   'Fora da área de comercialização',
+                   ...(isUnityInbox ? ['Beneficiário Ativo'] : []),
                   'Outro motivo'
                 ].map((reason) => (
                   <button
