@@ -436,14 +436,19 @@ function InboxSidebarGroup({
   summary?: string;
   children: ReactNode;
 }) {
+  // Secao do painel do lead como LINHA de lista, nao como cartao.
+  //
+  // Cinco cartoes empilhados criavam dez linhas de borda para separar cinco
+  // assuntos, e como cada um precisava de respiro interno a coluna virava uma
+  // pilha de retangulos quase vazios. O fio separa igual e pesa um decimo.
   return (
-    <details className="group shrink-0 border-b border-white/5 pb-4">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl border border-white/5 bg-slate-950/45 px-3.5 py-3 text-left transition hover:border-cyan-500/25 hover:bg-slate-950/70 [&::-webkit-details-marker]:hidden">
+    <details className="orion-painel-secao group shrink-0">
+      <summary className="orion-painel-secao-topo flex cursor-pointer list-none items-center justify-between gap-3 text-left [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
-          <span className="block text-[10px] font-black uppercase tracking-wider text-cyan-300">{title}</span>
-          {summary && <span className="mt-1 block truncate text-[9px] font-semibold text-slate-500">{summary}</span>}
+          <span className="orion-painel-secao-titulo block">{title}</span>
+          {summary && <span className="orion-painel-secao-apoio mt-0.5 block truncate">{summary}</span>}
         </div>
-        <ChevronDown size={16} className="shrink-0 text-slate-400 transition-transform group-open:rotate-180 group-open:text-cyan-300" />
+        <ChevronDown size={15} className="orion-painel-secao-seta shrink-0 transition-transform group-open:rotate-180" />
       </summary>
       <div className="mt-3">{children}</div>
     </details>
@@ -4711,21 +4716,29 @@ export default function BrokerInboxPage() {
                     </button>
 
                     {leadDetailsOpen && (
-                      <div className="mt-3 grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                        {isUnityInbox && <EditableLeadInfoCard key={`${leadInfo.id}-nome`} label="Nome do lead" field="nome" value={leadInfo.nome || ''} onSave={handleUpdateLeadField} className="col-span-2" />}
+                      <div className="orion-lead-info-lista mt-3">
+                        {/* Catorze campos em tres grupos. Lista corrida de
+                            catorze linhas e lista de compras; agrupada, o
+                            atendente sabe onde procurar sem ler tudo. */}
+                        <p className="orion-lead-info-grupo">Contato</p>
+                        {isUnityInbox && <EditableLeadInfoCard key={`${leadInfo.id}-nome`} label="Nome" field="nome" value={leadInfo.nome || ''} onSave={handleUpdateLeadField} />}
                         <EditableLeadInfoCard key={`${leadInfo.id}-idades`} label="Idade" field="idades" value={leadInfo.idades || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-tem_plano_ativo`} label="Plano ativo" field="tem_plano_ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Nao informado']} />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-possui_cnpj`} label="Possui CNPJ?" field="possui_cnpj" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Tenho MEI', 'Nao informado']} />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-cnpj`} label="CNPJ" field="cnpj" value={leadInfo.cnpj || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-plano_atual`} label="Plano atual" field="plano_atual" value={leadInfo.plano_atual || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-investimento`} label="Investimento" field="investimento" value={leadInfo.investimento || ''} onSave={handleUpdateLeadField} />
                         <EditableLeadInfoCard key={`${leadInfo.id}-cidade`} label="Cidade" field="cidade" value={leadInfo.cidade || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-operadora`} label="Pagina" field="operadora" value={leadInfo.operadora || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-email`} label="E-mail" field="email" value={leadInfo.email || ''} onSave={handleUpdateLeadField} />
+
+                        <p className="orion-lead-info-grupo">Plano</p>
+                        <EditableLeadInfoCard key={`${leadInfo.id}-tem_plano_ativo`} label="Plano ativo" field="tem_plano_ativo" value={normalizePlanoAtivo(leadInfo.tem_plano_ativo)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Nao informado']} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-plano_atual`} label="Plano atual" field="plano_atual" value={leadInfo.plano_atual || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-possui_cnpj`} label="Possui CNPJ" field="possui_cnpj" value={normalizeCnpjOwnership(leadInfo.possui_cnpj)} onSave={handleUpdateLeadField} options={['Sim', 'Nao', 'Tenho MEI', 'Nao informado']} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-cnpj`} label="CNPJ" field="cnpj" value={leadInfo.cnpj || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-investimento`} label="Investimento" field="investimento" value={leadInfo.investimento || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-hospital_preferencia`} label="Hospital ou região" field="hospital_preferencia" value={leadInfo.hospital_preferencia || ''} onSave={handleUpdateLeadField} multiline />
+
+                        <p className="orion-lead-info-grupo">Origem</p>
                         <EditableLeadInfoCard key={`${leadInfo.id}-origem`} label="Origem" field="origem" value={leadInfo.origem || ''} onSave={handleUpdateLeadField} />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-email`} label="E-mail" field="email" value={leadInfo.email || ''} onSave={handleUpdateLeadField} className="col-span-2" />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-motivo_busca`} label="Motivo da busca" field="motivo_busca" value={leadInfo.motivo_busca || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-hospital_preferencia`} label="Hospital/Regiao" field="hospital_preferencia" value={leadInfo.hospital_preferencia || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
-                        <EditableLeadInfoCard key={`${leadInfo.id}-observacoes`} label="Observacoes" field="observacoes" value={leadInfo.observacoes || ''} onSave={handleUpdateLeadField} className="col-span-2" multiline />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-operadora`} label="Página" field="operadora" value={leadInfo.operadora || ''} onSave={handleUpdateLeadField} />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-motivo_busca`} label="Motivo da busca" field="motivo_busca" value={leadInfo.motivo_busca || ''} onSave={handleUpdateLeadField} multiline />
+                        <EditableLeadInfoCard key={`${leadInfo.id}-observacoes`} label="Observações" field="observacoes" value={leadInfo.observacoes || ''} onSave={handleUpdateLeadField} multiline />
                       </div>
                     )}
                   </div>
@@ -6053,6 +6066,19 @@ function normalizePlanoAtivo(value?: string | null) {
   return 'Nao informado';
 }
 
+/**
+ * Um campo do lead como LINHA, nao como cartao.
+ *
+ * Eram catorze cartoes empilhados, cada um com rotulo em cima e valor embaixo:
+ * vinte e oito andares para catorze informacoes. Aqui rotulo e valor dividem a
+ * linha, e o olho desce pela coluna da esquerda procurando o que quer.
+ *
+ * Campo vazio mostra travessao em vez de sumir — se sumisse, ninguem
+ * preencheria, e sao esses campos que alimentam a cotacao.
+ *
+ * A edicao acontece no lugar: clica no valor, vira campo, Enter ou sair salva.
+ * Nada de abrir caixa, que era o que inflava o painel.
+ */
 function EditableLeadInfoCard({
   label,
   field,
@@ -6071,6 +6097,7 @@ function EditableLeadInfoCard({
   multiline?: boolean;
 }) {
   const [draft, setDraft] = useState(value || '');
+  const [editando, setEditando] = useState(false);
 
   // O efeito so dispara quando o valor muda. Se o campo estava vazio nos dois
   // leads, o texto digitado e nao salvo continuava na tela do lead seguinte, e
@@ -6082,52 +6109,85 @@ function EditableLeadInfoCard({
 
   const save = (nextValue = draft) => {
     onSave(field, nextValue);
+    setEditando(false);
   };
 
+  const vazio = !String(value || '').trim() || String(value).trim() === 'Nao informado';
+
+  // Lista fechada: o seletor ja e a propria edicao, sem passo intermediario.
   if (options?.length) {
     return (
-      <label className={`orion-lead-info-card block rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
-        <span className="mb-1 block text-[8px] font-black uppercase tracking-wider text-slate-500">{label}</span>
+      <div className={`orion-lead-info-linha flex items-center justify-between gap-3 py-2 ${className}`}>
+        <span className="orion-lead-info-rotulo shrink-0">{label}</span>
         <select
           value={draft}
           onChange={(event) => {
             setDraft(event.target.value);
-            save(event.target.value);
+            onSave(field, event.target.value);
           }}
-          className="w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs font-black text-white outline-none focus:border-cyan-500/60"
+          className="orion-lead-info-select min-w-0 max-w-[60%] text-right"
         >
           {options.map((option) => (
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
-      </label>
+      </div>
+    );
+  }
+
+  // Texto longo ocupa a largura toda: forcar observacao numa coluna estreita
+  // so gera rolagem lateral dentro do campo.
+  if (multiline) {
+    return (
+      <div className={`orion-lead-info-linha py-2 ${className}`}>
+        <span className="orion-lead-info-rotulo block">{label}</span>
+        {editando ? (
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => save()}
+            rows={3}
+            className="orion-lead-info-campo mt-1 w-full resize-y"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditando(true)}
+            className={`orion-lead-info-valor mt-0.5 block w-full text-left ${vazio ? 'orion-lead-info-vazio' : ''}`}
+          >
+            {vazio ? '—' : value}
+          </button>
+        )}
+      </div>
     );
   }
 
   return (
-    <label className={`orion-lead-info-card block rounded-xl border border-white/5 bg-slate-950/40 p-3 ${className}`}>
-      <span className="mb-1 block text-[8px] font-black uppercase tracking-wider text-slate-500">{label}</span>
-      {multiline ? (
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={() => save()}
-          placeholder="-"
-          rows={3}
-          className="w-full resize-y rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs font-black text-white outline-none placeholder:text-slate-600 focus:border-cyan-500/60"
-        />
-      ) : (
+    <div className={`orion-lead-info-linha flex items-center justify-between gap-3 py-2 ${className}`}>
+      <span className="orion-lead-info-rotulo shrink-0">{label}</span>
+      {editando ? (
         <input
+          autoFocus
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={() => save()}
           onKeyDown={(event) => {
             if (event.key === 'Enter') event.currentTarget.blur();
+            if (event.key === 'Escape') { setDraft(value || ''); setEditando(false); }
           }}
-          placeholder="-"
-          className="w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs font-black text-white outline-none placeholder:text-slate-600 focus:border-cyan-500/60"
+          className="orion-lead-info-campo min-w-0 max-w-[60%] text-right"
         />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditando(true)}
+          className={`orion-lead-info-valor min-w-0 truncate text-right ${vazio ? 'orion-lead-info-vazio' : ''}`}
+          title={vazio ? 'Clique para preencher' : value}
+        >
+          {vazio ? '—' : value}
+        </button>
       )}
-    </label>
+    </div>
   );
 }
