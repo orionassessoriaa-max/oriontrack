@@ -147,6 +147,7 @@ type SelectedAttachment = {
 };
 type UnityLabel = { id: string; name: string; color: string; active?: boolean };
 type UnityQuickReply = { id: string; title: string; text: string };
+type UnreadConversationDetail = { count: number; preview: string; receivedAt: string };
 
 type ConversationBox = 'new' | 'active' | 'followup' | 'closed';
 
@@ -454,6 +455,7 @@ export default function BrokerInboxPage() {
   const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [unreadConversationIds, setUnreadConversationIds] = useState<Set<string>>(new Set());
+  const [unreadConversationDetails, setUnreadConversationDetails] = useState<Record<string, UnreadConversationDetail>>({});
   
   // Connection states
   const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
@@ -536,6 +538,7 @@ export default function BrokerInboxPage() {
   useEffect(() => {
     if (!profile?.id) {
       setUnreadConversationIds(new Set());
+      setUnreadConversationDetails({});
       return;
     }
 
@@ -545,15 +548,38 @@ export default function BrokerInboxPage() {
     } catch {
       setUnreadConversationIds(new Set());
     }
+
+    try {
+      const savedDetails = JSON.parse(localStorage.getItem(`orion:inbox-unread-details:${profile.id}`) || '{}');
+      setUnreadConversationDetails(savedDetails && typeof savedDetails === 'object' && !Array.isArray(savedDetails) ? savedDetails : {});
+    } catch {
+      setUnreadConversationDetails({});
+    }
   }, [profile?.id]);
 
-  const setConversationUnread = useCallback((conversationId: string, unread: boolean) => {
+  const setConversationUnread = useCallback((conversationId: string, unread: boolean, message?: InboxMessage) => {
     if (!profile?.id || !conversationId) return;
     setUnreadConversationIds((current) => {
       const next = new Set(current);
       if (unread) next.add(conversationId);
       else next.delete(conversationId);
       localStorage.setItem(`orion:inbox-unread:${profile.id}`, JSON.stringify([...next]));
+      return next;
+    });
+
+    setUnreadConversationDetails((current) => {
+      const next = { ...current };
+      if (unread) {
+        const existing = next[conversationId];
+        next[conversationId] = {
+          count: Math.min(999, (existing?.count || 0) + 1),
+          preview: String(message?.mensagem || existing?.preview || '').trim(),
+          receivedAt: String(message?.created_at || existing?.receivedAt || new Date().toISOString()),
+        };
+      } else {
+        delete next[conversationId];
+      }
+      localStorage.setItem(`orion:inbox-unread-details:${profile.id}`, JSON.stringify(next));
       return next;
     });
   }, [profile?.id]);
@@ -1256,7 +1282,7 @@ export default function BrokerInboxPage() {
             && currentSelected?.id === newMsg.conversa_id;
 
           if (isUnityInbox && newMsg.direction === 'inbound' && belongsToConversationList && !isOpenAndVisible) {
-            setConversationUnread(newMsg.conversa_id, true);
+            setConversationUnread(newMsg.conversa_id, true, newMsg);
           }
 
           if (document.visibilityState !== 'visible') return;
@@ -3671,6 +3697,8 @@ export default function BrokerInboxPage() {
                 filteredConversations.map((c) => {
                   const isActive = selectedConversation?.id === c.id;
                   const isUnread = isUnityInbox && unreadConversationIds.has(c.id);
+                  const unreadDetail = isUnread ? unreadConversationDetails[c.id] : undefined;
+                  const unreadCount = Math.max(1, unreadDetail?.count || 0);
                   return (
                     <button
                       key={c.id}
@@ -3694,12 +3722,21 @@ export default function BrokerInboxPage() {
                       <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex justify-between items-baseline">
                           <span className={`text-xs truncate block ${isUnityInbox ? isUnread ? 'font-black text-[#00a884]' : 'font-semibold text-slate-950' : 'font-black text-white'}`}>{cleanInboxDisplayName(c.nome_contato, c.telefone)}</span>
-                          <span className={`orion-inbox-conversation-time text-[9px] shrink-0 ${isUnityInbox ? isUnread ? 'font-black text-[#00a884]' : 'font-medium text-slate-400' : 'font-medium text-slate-500'}`}>
-                            {c.ultima_mensagem_at ? formatHour(c.ultima_mensagem_at) : ''}
-                          </span>
+                          <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                            <span className={`orion-inbox-conversation-time text-[9px] ${isUnityInbox ? isUnread ? 'font-black text-[#00a884]' : 'font-medium text-slate-400' : 'font-medium text-slate-500'}`}>
+                              {(unreadDetail?.receivedAt || c.ultima_mensagem_at) ? formatHour(unreadDetail?.receivedAt || c.ultima_mensagem_at || '') : ''}
+                            </span>
+                            {isUnread && (
+                              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00a884] px-1 text-[8px] font-black leading-none text-white">
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <p className={`text-[10px] font-medium truncate leading-tight ${isUnityInbox ? 'text-slate-500' : 'text-slate-400'}`}>
-                          {c.id.startsWith('new-') ? 'Inicie a conversa' : 'Ver histórico de atendimento...'}
+                        <p className={`text-[10px] truncate leading-tight ${isUnityInbox ? isUnread ? 'font-bold text-slate-700' : 'font-medium text-slate-500' : 'font-medium text-slate-400'}`}>
+                          {isUnread && unreadDetail?.preview
+                            ? `~${cleanInboxDisplayName(c.nome_contato, c.telefone)}: ${unreadDetail.preview}`
+                            : c.id.startsWith('new-') ? 'Inicie a conversa' : 'Ver histórico de atendimento...'}
                         </p>
                         {isUnityInbox && Boolean(c.tags?.length) && (
                           <div className="flex min-w-0 flex-wrap gap-1 pt-0.5">

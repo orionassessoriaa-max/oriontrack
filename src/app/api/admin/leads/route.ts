@@ -347,13 +347,20 @@ export async function POST(request: Request) {
 
     const { data: corretor } = await supabaseAdmin
       .from('corretores')
-      .select('id')
+      .select('id, nome_empresa')
       .eq('id', corretorId)
       .maybeSingle();
 
     if (!corretor) {
       return NextResponse.json({ error: 'Corretor nao encontrado.' }, { status: 404 });
     }
+
+    const normalizedCompany = String(corretor.nome_empresa || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+    const isUnityManualLead = normalizedCompany === 'UNITY SAUDE';
 
     const originConfigId = String(body.origem_config_id || '').trim();
     let originConfig: {
@@ -434,6 +441,7 @@ export async function POST(request: Request) {
       origem,
       origem_config_id: originConfig?.id || null,
       utm_source: origem,
+      utm_medium: isUnityManualLead ? 'manual_admin' : undefined,
       etiqueta: body.etiqueta ? String(body.etiqueta).slice(0, 60) : null,
       responsavel_membro_id: responsibleMember?.id || null,
       responsavel_profile_id: responsibleMember?.profile_id || null,
@@ -501,10 +509,14 @@ export async function POST(request: Request) {
     }
 
     let botStart = null;
-    try {
-      botStart = await startLeadBotIfEligible(data.id);
-    } catch (botErr) {
-      console.error('[Manual lead] Failed starting lead bot:', botErr);
+    if (isUnityManualLead) {
+      botStart = { handled: false, reason: 'Lead manual da Unity nao aciona a ISA.' };
+    } else {
+      try {
+        botStart = await startLeadBotIfEligible(data.id);
+      } catch (botErr) {
+        console.error('[Manual lead] Failed starting lead bot:', botErr);
+      }
     }
 
     return NextResponse.json({ ok: true, lead_id: data.id, lead: data, bot: botStart });

@@ -1958,6 +1958,24 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
   const broker = await findBroker(lead.corretor_id);
   if (!broker?.nome_empresa) return { started: false, eligible: false, reason: 'Lead sem concessionaria.' };
 
+  if (isUnityBrokerage(broker.nome_empresa)) {
+    const markedAsManual = String(lead.utm_medium || '').trim().toLowerCase() === 'manual_admin';
+    const { data: manualAudit } = markedAsManual
+      ? { data: { id: lead.id } }
+      : await supabaseAdmin
+        .from('audit_logs')
+        .select('id')
+        .eq('action', 'lead.create_admin')
+        .eq('entity_type', 'lead')
+        .eq('entity_id', lead.id)
+        .limit(1)
+        .maybeSingle();
+
+    if (markedAsManual || manualAudit?.id) {
+      return { started: false, eligible: true, reason: 'Lead manual da Unity nao aciona a ISA.' };
+    }
+  }
+
   const { data: corretora } = await supabaseAdmin
     .from('corretoras')
     .select('id, nome')
