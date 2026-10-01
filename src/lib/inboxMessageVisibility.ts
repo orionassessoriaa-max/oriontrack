@@ -78,6 +78,18 @@ export function memberCanViewInboxMessage(
   // tentar abrir audios, imagens e documentos enviados pelo cliente.
   if (source.direction === 'inbound') return true;
 
+  // A IA usa o perfil/instancia administrativa para enviar, mas a mensagem
+  // pertence ao atendimento do lead e precisa continuar visivel depois do
+  // handoff. O campo ai_agent historicamente foi gravado tanto como booleano
+  // quanto com o nome da persona (por exemplo, "Aline"). Essa verificacao
+  // precisa acontecer antes da autoria pelo perfil, ou o integrante que
+  // recebeu o lead enxerga apenas as respostas do cliente.
+  const aiAgent = metadata.ai_agent;
+  const isAiMessage = aiAgent === true
+    || (typeof aiAgent === 'string' && aiAgent.trim().length > 0)
+    || String(metadata.sender_type || '').trim().toLowerCase() === 'ai';
+  if (isAiMessage) return true;
+
   const actorProfileId = inboxMessageProfileId(message);
 
   if (actorProfileId) {
@@ -85,9 +97,8 @@ export function memberCanViewInboxMessage(
     return SUPERVISOR_ROLES.has(String(roleByProfileId.get(actorProfileId) || '').toLowerCase());
   }
 
-  // Respostas da IA pertencem ao atendimento do lead. Uma mensagem humana
-  // enviada sem autoria comprovada nao pode vazar para outro integrante.
-  if (metadata.ai_agent === true || metadata.sender_type === 'ai') return true;
+  // Uma mensagem humana enviada sem autoria comprovada nao pode vazar para
+  // outro integrante.
   return false;
 }
 
