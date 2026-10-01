@@ -118,3 +118,26 @@ export async function fetchOrionSpendForPeriod(
     return belongsToOrion ? total + Number(row.spend || 0) : total;
   }, 0);
 }
+
+export async function fetchAccountSpendForPeriod(
+  accountId: string,
+  since: string,
+  until: string,
+  accessToken: string,
+  graphVersion: string
+) {
+  const normalizedId = normalizeAccountId(accountId);
+  const insightsUrl = new URL(`https://graph.facebook.com/${graphVersion}/act_${normalizedId}/insights`);
+  insightsUrl.searchParams.set('fields', 'spend');
+  insightsUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
+  insightsUrl.searchParams.set('limit', '500');
+  insightsUrl.searchParams.set('access_token', accessToken);
+
+  const rows = await fetchAll<{ spend?: string }>(
+    insightsUrl,
+    1800,
+    'account-period-spend'
+  );
+
+  return rows.reduce((total, row) => total + Number(row.spend || 0), 0);
+}

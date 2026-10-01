@@ -3639,7 +3639,7 @@ export default function BrokerInboxPage() {
               {/* O filtro por responsavel e uma ferramenta administrativa.
                   Integrantes continuam restritos no servidor aos leads que
                   foram formalmente atribuidos a eles. */}
-              {(profile?.tipo_usuario === 'admin' || profile?.tipo_usuario === 'corretor_admin') && (responsibleOptions.length > 0 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
+              {(['admin', 'corretor', 'corretor_admin'].includes(profile?.tipo_usuario || '')) && (responsibleOptions.length > 0 || conversations.some((conversation) => !conversation.responsibleProfileId)) && (
                 <select
                   value={effectiveResponsibleFilter}
                   onChange={(event) => setResponsibleFilter(event.target.value)}

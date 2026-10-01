@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { rateLimit } from '@/lib/api/security';
+import { isUnityBrokerage } from '@/lib/atendimentoCompartilhado';
 import { isGestorLinkedToConcessionariaCorretor } from '@/lib/gestorAccess';
-import { fetchOrionCumulativeSpend, fetchOrionSpendForPeriod } from '@/lib/meta/orionSpend';
+import { fetchAccountSpendForPeriod, fetchOrionCumulativeSpend, fetchOrionSpendForPeriod } from '@/lib/meta/orionSpend';
 import { metaCachedFetch } from '@/lib/meta/cachedFetch';
 
 async function requireTrafficAccess(request: Request) {
@@ -198,13 +199,26 @@ export async function POST(request: Request) {
     }
 
     if (body.somente_orion === true) {
-      const spend = await fetchOrionSpendForPeriod(
+      const orionSpend = await fetchOrionSpendForPeriod(
         accountId,
         metaRange.since,
         metaRange.until,
         accessToken,
         graphVersion
       );
+      // A Unity usa a conta Meta vinculada, mas as campanhas ativas ainda
+      // carregam o prefixo historico [YB]. Sem o fallback, o filtro nominal
+      // "Orion" descartava todo o investimento e zerava o CPL do dashboard.
+      const useUnityAccountFallback = orionSpend === 0 && isUnityBrokerage(metaAccount.nome_empresa);
+      const spend = useUnityAccountFallback
+        ? await fetchAccountSpendForPeriod(
+          accountId,
+          metaRange.since,
+          metaRange.until,
+          accessToken,
+          graphVersion
+        )
+        : orionSpend;
 
       return NextResponse.json({
         success: true,
@@ -213,6 +227,7 @@ export async function POST(request: Request) {
         meta_ad_account_name: metaAccount.meta_ad_account_name,
         spend,
         somente_orion: true,
+        spend_source: useUnityAccountFallback ? 'unity_account_total' : 'orion_campaigns',
       });
     }
 
