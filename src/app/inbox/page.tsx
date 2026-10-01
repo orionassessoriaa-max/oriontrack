@@ -2796,10 +2796,7 @@ export default function BrokerInboxPage() {
 
   const handleForwardLead = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedConversation?.lead_id) {
-      alert('Esta conversa não possui um Lead associado.');
-      return;
-    }
+    if (!selectedConversation) return;
     if (!selectedMemberId) {
       alert('Selecione um membro responsável.');
       return;
@@ -2813,10 +2810,7 @@ export default function BrokerInboxPage() {
     }
 
     try {
-      const endpoint = profile?.tipo_usuario === 'corretor_membro'
-        ? '/api/inbox/lead-assignment'
-        : '/api/corretor/times';
-      const response = await fetch(endpoint, {
+      const response = await fetch('/api/inbox/lead-assignment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2825,6 +2819,7 @@ export default function BrokerInboxPage() {
         body: JSON.stringify({ 
           action: 'assign_lead', 
           lead_id: selectedConversation.lead_id, 
+          conversation_id: selectedConversation.id,
           member_id: selectedMemberId, 
           corretor_id: profile?.corretor_id || selectedConversation?.corretor_id 
         }),
@@ -2835,19 +2830,17 @@ export default function BrokerInboxPage() {
         throw new Error(payload.error || 'Erro ao reatribuir lead.');
       }
 
-      // Log assignment activity in CRM timeline
       const member = teamMembers.find((item) => item.id === selectedMemberId);
-      await supabase.from('lead_atividades').insert([{
-        lead_id: selectedConversation.lead_id,
-        profile_id: profile?.id,
-        tipo: 'sistema',
-        titulo: 'Responsável alterado',
-        descricao: member ? `Encaminhado para o responsável: ${member.nome}` : 'Encaminhado para um novo responsável.'
-      }]);
+      const resolvedLeadId = String(payload.lead?.id || selectedConversation.lead_id || '');
 
       // Update local conversation agentName
       if (member) {
-        const updated = { ...selectedConversation, agentName: member.nome };
+        const updated = {
+          ...selectedConversation,
+          lead_id: resolvedLeadId || selectedConversation.lead_id,
+          agentName: member.nome,
+          responsibleProfileId: member.profile_id || null,
+        };
         setSelectedConversation(updated);
         setConversations(current => current.map(c => c.id === selectedConversation.id ? updated : c));
       }
@@ -3813,10 +3806,6 @@ export default function BrokerInboxPage() {
                     </button>
                     <button
                       onClick={() => {
-                        if (!selectedConversation?.lead_id) {
-                          alert('Esta conversa não possui um Lead associado.');
-                          return;
-                        }
                         setShowForwardModal(true);
                       }}
                       className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 border border-cyan-500/10 text-[9px] font-black uppercase tracking-wider text-white transition-all cursor-pointer"

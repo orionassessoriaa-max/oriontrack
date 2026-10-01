@@ -2,6 +2,7 @@ import { after, NextResponse } from 'next/server';
 import { ApiProfile, requireApiUser } from '@/lib/api/security';
 import { isIgnoredInboxContact } from '@/lib/inboxIgnoredContacts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { phoneMatchKey } from '@/lib/uazapi';
 import { syncRecentInboxChats } from '@/lib/uazapiInboxSync';
 import { UserRole } from '@/types';
 
@@ -107,10 +108,21 @@ async function listConversations(
   if (error) throw error;
   // Numeros internos nunca pertencem ao funil e nao podem reaparecer mesmo
   // se algum provedor ou importacao gravar uma conversa fora do webhook.
-  const page = (data || []).filter((conversation) => !isIgnoredInboxContact(conversation.telefone));
+  const rawPage = data || [];
+  const page = rawPage.filter((conversation) => !isIgnoredInboxContact(conversation.telefone));
+  const conversations = Array.from(page.reduce((byPhone: Map<string, any>, conversation: any) => {
+    const key = phoneMatchKey(conversation.telefone) || `conversation:${conversation.id}`;
+    const current = byPhone.get(key);
+    // A lista preserva uma unica entrada por contato. Quando ha uma conversa
+    // antiga sem lead e outra ja vinculada, a vinculada representa o contato;
+    // as mensagens continuam sendo reunidas pelo telefone ao abrir o chat.
+    if (!current || (!current.lead_id && conversation.lead_id)) byPhone.set(key, conversation);
+    return byPhone;
+  }, new Map<string, any>()).values());
   return {
-    conversations: page.slice(0, limit),
-    hasMore: page.length > limit,
+    conversations: conversations.slice(0, limit),
+    hasMore: rawPage.length > limit,
+    nextOffset: rawPage.length > limit ? offset + limit : null,
   };
 }
 
@@ -261,7 +273,7 @@ export async function GET(request: Request) {
       corretorIds,
       assignedLeadIds,
       hasMore: page.hasMore,
-      nextOffset: page.hasMore ? offset + conversations.length : null,
+      nextOffset: page.nextOffset,
     }, {
       headers: { 'Cache-Control': 'no-store' },
     });
