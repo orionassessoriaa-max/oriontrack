@@ -117,6 +117,10 @@ type Conversation = {
   aiActive?: boolean;
   hasOpenFollowUp?: boolean;
   hasHumanReply?: boolean;
+  // Vem calculado do servidor: mensagens recebidas depois da ultima vez que
+  // ESTA pessoa abriu a conversa. Sobrevive a recarregar e a trocar de maquina.
+  unreadCount?: number;
+  unreadLastAt?: string | null;
   customFields?: Array<{ key: string; value: string }>;
 };
 
@@ -556,6 +560,28 @@ export default function BrokerInboxPage() {
       setUnreadConversationDetails({});
     }
   }, [profile?.id]);
+
+  /**
+   * Grava no servidor que esta pessoa leu esta conversa ate agora. E o que
+   * zera o contador de verdade; o estado local some ao recarregar.
+   *
+   * Falha de rede nao atrapalha: o atendente ja esta vendo as mensagens, e a
+   * proxima abertura tenta de novo.
+   */
+  const marcarConversaLida = useCallback(async (conversationId: string) => {
+    if (!conversationId || conversationId.startsWith('new-')) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await fetch('/api/inbox/conversations/lida', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversa_id: conversationId }),
+      });
+    } catch {
+      // silencioso de proposito
+    }
+  }, []);
 
   const setConversationUnread = useCallback((conversationId: string, unread: boolean, message?: InboxMessage) => {
     if (!profile?.id || !conversationId) return;
@@ -3539,23 +3565,26 @@ export default function BrokerInboxPage() {
           {/* orion-inbox-unity: gancho da coluna no estilo WhatsApp Web (o CSS
               mora em globals.css, no bloco "Inbox da Unity"). So a Unity casa
               com essa classe, entao as outras concessionarias nao mudam. */}
-          <div className={`orion-inbox-list ${isUnityInbox ? 'orion-inbox-unity border-r border-slate-200 bg-[#f8fafc]' : 'border-r border-white/5 bg-slate-900/20'} ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col h-full overflow-hidden`}>
+          {/* O visual do inbox e o mesmo em todas as concessionarias desde
+              01/10/2026. O CSS mora em globals.css, no bloco "Inbox — estilo
+              WhatsApp Web"; o que continua variando por concessionaria sao as
+              REGRAS, nos condicionais de isUnityInbox espalhados abaixo. */}
+          <div className={`orion-inbox-list border-r border-slate-200 bg-[#f8fafc] ${selectedConversation ? 'hidden lg:flex' : 'flex'} flex-col h-full overflow-hidden`}>
             {/* Conversation box and filters */}
-            <div className={`${isUnityInbox ? 'border-b border-slate-200 bg-white px-4 pb-3 pt-3' : 'border-b border-white/5 bg-slate-950/35 p-3.5'} space-y-3`}>
+            <div className="border-b border-slate-200 bg-white px-4 pb-3 pt-3 space-y-3">
               {/* Search Box */}
               <div className="relative">
-                <Search className={`absolute left-3 top-2.5 ${isUnityInbox ? 'text-slate-400' : 'text-slate-500'}`} size={13} />
+                <Search className="absolute left-3 top-2.5 text-slate-400" size={13} />
                 <input
                   type="text"
                   placeholder="Procurar nas conversas"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full rounded-lg py-2 pl-9 pr-3 text-[11px] font-semibold outline-none transition-colors ${isUnityInbox ? 'border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:border-[#635bff] focus:bg-white focus:ring-2 focus:ring-[#635bff]/10' : 'border border-white/8 bg-slate-950 text-white placeholder-slate-500 focus:border-cyan-500/50'}`}
+                  className="w-full rounded-lg py-2 pl-9 pr-3 text-[11px] font-semibold outline-none transition-colors border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400"
                 />
               </div>
 
-              {isUnityInbox && (
-                <div className="space-y-2">
+              <div className="space-y-2">
                   <div className="flex items-center justify-between px-0.5">
                     <h2 className="text-xl font-semibold tracking-tight text-slate-950">Conversas</h2>
                     <span className="rounded-md bg-slate-100 px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-slate-500">
@@ -3563,9 +3592,11 @@ export default function BrokerInboxPage() {
                     </span>
                   </div>
                 </div>
-              )}
 
-              <div className={`orion-inbox-box-tabs ${isUnityInbox ? 'grid grid-cols-4 gap-0 border-b border-slate-200' : ''}`} role="tablist" aria-label="Caixas de conversa">
+              {/* A grade se divide sozinha: a Unity tem quatro abas, as outras
+                  concessionarias tem tres. Quem decide quais filas existem
+                  continua sendo a regra, logo abaixo. */}
+              <div className="orion-inbox-box-tabs grid gap-0 border-b border-slate-200" role="tablist" aria-label="Caixas de conversa">
                 {isUnityInbox && (
                   <button
                     type="button"
@@ -3574,12 +3605,11 @@ export default function BrokerInboxPage() {
                     aria-label={`Leads novos, ${queueCounts.new}`}
                     title="Leads novos"
                     onClick={() => handleConversationBoxChange('new')}
-                    className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
-                    style={conversationBox === 'new' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
+                    className="orion-inbox-box-tab relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500"
                   >
-                    <UserPlus className={isUnityInbox ? 'hidden' : ''} size={18} strokeWidth={2.2} aria-hidden="true" />
-                    <span className={isUnityInbox ? 'truncate text-[9px] font-bold' : 'sr-only'}>Novos</span>
-                    <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${conversationBox === 'new' ? 'bg-[#635bff]/10 text-[#635bff]' : 'bg-slate-100 text-slate-500'}`}>{queueCounts.new}</span>
+                    <UserPlus className="hidden" size={18} strokeWidth={2.2} aria-hidden="true" />
+                    <span className="truncate text-[9px] font-bold">Novos</span>
+                    <span className="rounded px-1.5 py-0.5 text-[8px] font-bold bg-slate-100 text-slate-500">{queueCounts.new}</span>
                   </button>
                 )}
                 <button
@@ -3589,12 +3619,11 @@ export default function BrokerInboxPage() {
                   aria-label="Conversas ativas"
                   title="Conversas ativas"
                   onClick={() => handleConversationBoxChange('active')}
-                  className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
-                  style={isUnityInbox && conversationBox === 'active' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
+                  className="orion-inbox-box-tab relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500"
                 >
-                  <MessageSquare className={isUnityInbox ? 'hidden' : ''} size={19} strokeWidth={2.2} aria-hidden="true" />
-                  <span className={isUnityInbox ? 'truncate text-[9px] font-bold' : 'sr-only'}>Atendimento</span>
-                  {isUnityInbox && <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${conversationBox === 'active' ? 'bg-[#635bff]/10 text-[#635bff]' : 'bg-slate-100 text-slate-500'}`}>{queueCounts.active}</span>}
+                  <MessageSquare className="hidden" size={19} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="truncate text-[9px] font-bold">Atendimento</span>
+                  <span className="rounded px-1.5 py-0.5 text-[8px] font-bold bg-slate-100 text-slate-500">{queueCounts.active}</span>
                 </button>
                 <button
                   type="button"
@@ -3603,12 +3632,11 @@ export default function BrokerInboxPage() {
                   aria-label="Conversas em follow-up"
                   title="Conversas em follow-up"
                   onClick={() => handleConversationBoxChange('followup')}
-                  className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
-                  style={isUnityInbox && conversationBox === 'followup' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
+                  className="orion-inbox-box-tab relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500"
                 >
-                  <Clock className={isUnityInbox ? 'hidden' : ''} size={19} strokeWidth={2.2} aria-hidden="true" />
-                  <span className={isUnityInbox ? 'truncate text-[9px] font-bold' : 'sr-only'}>Follow up</span>
-                  {isUnityInbox && <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${conversationBox === 'followup' ? 'bg-[#635bff]/10 text-[#635bff]' : 'bg-slate-100 text-slate-500'}`}>{queueCounts.followup}</span>}
+                  <Clock className="hidden" size={19} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="truncate text-[9px] font-bold">Follow up</span>
+                  <span className="rounded px-1.5 py-0.5 text-[8px] font-bold bg-slate-100 text-slate-500">{queueCounts.followup}</span>
                 </button>
                 <button
                   type="button"
@@ -3617,12 +3645,11 @@ export default function BrokerInboxPage() {
                   aria-label="Conversas encerradas"
                   title="Conversas encerradas"
                   onClick={() => handleConversationBoxChange('closed')}
-                  className={`orion-inbox-box-tab ${isUnityInbox ? 'relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500' : ''}`}
-                  style={isUnityInbox && conversationBox === 'closed' ? { color: '#635bff', borderColor: '#635bff' } : undefined}
+                  className="orion-inbox-box-tab relative flex min-w-0 flex-col items-center gap-1 border-b-2 border-transparent px-1 pb-2 pt-1 text-slate-500"
                 >
-                  <Archive className={isUnityInbox ? 'hidden' : ''} size={19} strokeWidth={2.2} aria-hidden="true" />
-                  <span className={isUnityInbox ? 'truncate text-[9px] font-bold' : 'sr-only'}>Encerradas</span>
-                  {isUnityInbox && <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${conversationBox === 'closed' ? 'bg-[#635bff]/10 text-[#635bff]' : 'bg-slate-100 text-slate-500'}`}>{queueCounts.closed}</span>}
+                  <Archive className="hidden" size={19} strokeWidth={2.2} aria-hidden="true" />
+                  <span className="truncate text-[9px] font-bold">Encerradas</span>
+                  <span className="rounded px-1.5 py-0.5 text-[8px] font-bold bg-slate-100 text-slate-500">{queueCounts.closed}</span>
                 </button>
               </div>
 
@@ -3696,14 +3723,23 @@ export default function BrokerInboxPage() {
               ) : filteredConversations.length > 0 ? (
                 filteredConversations.map((c) => {
                   const isActive = selectedConversation?.id === c.id;
-                  const isUnread = isUnityInbox && unreadConversationIds.has(c.id);
-                  const unreadDetail = isUnread ? unreadConversationDetails[c.id] : undefined;
-                  const unreadCount = Math.max(1, unreadDetail?.count || 0);
+                  // Duas fontes: o servidor, que sabe o que chegou enquanto o
+                  // CRM estava fechado, e o Realtime, que marca o que chega com
+                  // a tela aberta. Vale a maior — recarregar nao zera o aviso e
+                  // mensagem nova nao espera o proximo carregamento.
+                  const unreadDoServidor = isUnityInbox ? (c.unreadCount || 0) : 0;
+                  const unreadDetail = unreadConversationDetails[c.id];
+                  const unreadLocal = unreadConversationIds.has(c.id)
+                    ? Math.max(1, unreadDetail?.count || 0)
+                    : 0;
+                  const unreadCount = Math.max(unreadDoServidor, isUnityInbox ? unreadLocal : 0);
+                  const isUnread = isUnityInbox && unreadCount > 0;
                   return (
                     <button
                       key={c.id}
                       onClick={() => {
                         setConversationUnread(c.id, false);
+                        void marcarConversaLida(c.id);
                         selectedConversationRef.current = c;
                         setSelectedConversation(c);
                         setDetailsPanelOpen(false);
@@ -3727,7 +3763,9 @@ export default function BrokerInboxPage() {
                               {(unreadDetail?.receivedAt || c.ultima_mensagem_at) ? formatHour(unreadDetail?.receivedAt || c.ultima_mensagem_at || '') : ''}
                             </span>
                             {isUnread && (
-                              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00a884] px-1 text-[8px] font-black leading-none text-white">
+                              {/* Do tamanho do contador do WhatsApp: 20px com
+                                  numero de 11px. Com 16px e fonte 8 ninguem via. */}
+                              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold leading-none text-white">
                                 {unreadCount > 99 ? '99+' : unreadCount}
                               </span>
                             )}

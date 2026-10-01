@@ -166,6 +166,71 @@ async function listHumanReplyConversationIds(conversationIds: string[]) {
   return ids;
 }
 
+/**
+ * Quantas mensagens recebidas chegaram depois da ultima vez que ESTA pessoa
+ * abriu cada conversa.
+ *
+ * Antes isso vivia no localStorage e so era escrito pelo Realtime com a tela
+ * aberta: quem fechava o CRM nao via nada marcado ao voltar. Agora e derivado
+ * do dado, entao sobrevive a recarregar, trocar de maquina e ficar offline.
+ *
+ * Se a tabela de leitura ainda nao existir no banco, devolve vazio em vez de
+ * estourar — o Inbox precisa abrir mesmo com a migracao pendente.
+ */
+async function countUnreadByConversation(conversationIds: string[], profileId: string) {
+  const unread = new Map<string, { count: number; lastAt: string | null }>();
+  if (!conversationIds.length) return unread;
+
+  const { data: leituras, error: leiturasError } = await supabaseAdmin
+    .from('inbox_conversa_leituras')
+    .select('conversa_id, lido_ate')
+    .eq('profile_id', profileId)
+    .in('conversa_id', conversationIds);
+
+  if (leiturasError) {
+    console.error('[Inbox conversations] Leituras indisponiveis:', leiturasError.message);
+    return unread;
+  }
+
+  const lidoAte = new Map<string, string>();
+  (leituras || []).forEach((row) => lidoAte.set(String(row.conversa_id), String(row.lido_ate)));
+
+  // Uma consulta so para todas as conversas da pagina, filtrando pelo corte
+  // mais antigo; o resto e separado em memoria, como ja faz o human reply.
+  const cortes = conversationIds.map((id) => lidoAte.get(id)).filter(Boolean) as string[];
+  const corteMaisAntigo = cortes.length === conversationIds.length
+    ? cortes.sort()[0]
+    : null;
+
+  let query = supabaseAdmin
+    .from('whatsapp_mensagens')
+    .select('conversa_id, created_at')
+    .in('conversa_id', conversationIds)
+    .eq('direction', 'inbound')
+    .order('created_at', { ascending: false })
+    .limit(5000);
+
+  if (corteMaisAntigo) query = query.gt('created_at', corteMaisAntigo);
+
+  const { data: mensagens, error: mensagensError } = await query;
+  if (mensagensError) {
+    console.error('[Inbox conversations] Contagem de nao lidas indisponivel:', mensagensError.message);
+    return unread;
+  }
+
+  (mensagens || []).forEach((mensagem) => {
+    const conversaId = String(mensagem.conversa_id);
+    const corte = lidoAte.get(conversaId);
+    if (corte && String(mensagem.created_at) <= corte) return;
+    const atual = unread.get(conversaId) || { count: 0, lastAt: null };
+    atual.count += 1;
+    if (!atual.lastAt || String(mensagem.created_at) > atual.lastAt) atual.lastAt = String(mensagem.created_at);
+    unread.set(conversaId, atual);
+  });
+
+  return unread;
+}
+
 export async function GET(request: Request) {
   const guard = await requireApiUser(request, INBOX_LIST_ROLES as unknown as UserRole[]);
   if ('error' in guard) return guard.error;
@@ -244,12 +309,14 @@ export async function GET(request: Request) {
     ));
     let openFollowUpLeadIds = new Set<string>();
     let humanReplyConversationIds = new Set<string>();
+    let unreadByConversation = new Map<string, { count: number; lastAt: string | null }>();
     try {
-      [openFollowUpLeadIds, humanReplyConversationIds] = await Promise.all([
+      [openFollowUpLeadIds, humanReplyConversationIds, unreadByConversation] = await Promise.all([
         listOpenFollowUpLeadIds(leadIds),
         normalizedCompanyName(companyName) === 'UNITY SAUDE'
           ? listHumanReplyConversationIds(conversations.map((conversation) => String(conversation.id)))
           : Promise.resolve(new Set<string>()),
+        countUnreadByConversation(conversations.map((conversation) => String(conversation.id)), guard.profile.id),
       ]);
     } catch (followUpError) {
       // A sinalizacao de tarefa e complementar. Uma falha nela nao pode
@@ -268,6 +335,8 @@ export async function GET(request: Request) {
             conversation.lead_id && openFollowUpLeadIds.has(String(conversation.lead_id))
           ),
           hasHumanReply: humanReplyConversationIds.has(String(conversation.id)),
+          unreadCount: unreadByConversation.get(String(conversation.id))?.count || 0,
+          unreadLastAt: unreadByConversation.get(String(conversation.id))?.lastAt || null,
         };
       }),
       corretorIds,
