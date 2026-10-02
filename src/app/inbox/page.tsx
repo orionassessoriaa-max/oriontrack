@@ -212,6 +212,16 @@ function inboxMessageSenderName(message: InboxMessage, fallback = 'Contato') {
     return 'ISA';
   }
 
+  // Na linha compartilhada da Unity, mensagens enviadas pelo celular podem
+  // chegar tecnicamente vinculadas ao dono da instancia. A assinatura que o
+  // sistema acrescenta ao texto identifica quem realmente escreveu. Ela deve
+  // prevalecer para mensagens humanas, inclusive no historico sincronizado.
+  if (message.direction === 'outbound' && metadata.sender_type === 'human') {
+    const providerText = String(metadata.text || message.mensagem || '').trim();
+    const signedSender = providerText.match(/^\*([^*\n]{2,80})\*\s*(?:\n|$)/)?.[1]?.trim();
+    return cleanInboxDisplayName(signedSender || attributedSender, fallback);
+  }
+
   // O historico antigo da Unity usa Hebert como remetente das automacoes do
   // Agendor. Na pratica quem escrevia por esse canal era a ISA, entao o rotulo
   // e ISA e nao o nome de uma pessoa da equipe.
