@@ -67,6 +67,7 @@ type CreativeFolder = {
   id: string;
   key: string;
   name: string;
+  status: 'active' | 'inactive';
   corretor_ids: string[];
   drive_folder_id: string;
   drive_web_view_link: string | null;
@@ -868,10 +869,22 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                   <ArrowLeft size={19} />
                 </button>
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-black uppercase tracking-[0.14em] text-cyan-500">
-                    {selectedFolder.name}
-                    {selectedRegion ? ` / ${selectedRegion.name}` : ''}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-xs font-black uppercase tracking-[0.14em] text-cyan-500">
+                      {selectedFolder.name}
+                      {selectedRegion ? ` / ${selectedRegion.name}` : ''}
+                    </p>
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-widest ${
+                        selectedFolder.status === 'active'
+                          ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
+                          : 'border-slate-600 bg-slate-800/80 text-slate-300'
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${selectedFolder.status === 'active' ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                      {selectedFolder.status === 'active' ? 'Ativa' : 'Inativa'}
+                    </span>
+                  </div>
                   <h2 className="truncate text-2xl font-black text-slate-100">
                     {selectedOperator?.name || selectedRegion?.name || selectedFolder.name}
                   </h2>
@@ -1158,6 +1171,16 @@ export default function CreativeLibrary({ managerName, gestorId }: Props) {
                           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent" />
                           <span className="absolute bottom-3 left-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/15 text-cyan-300 backdrop-blur">
                             <FolderOpen size={24} />
+                          </span>
+                          <span
+                            className={`absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest shadow-lg backdrop-blur ${
+                              folder.status === 'active'
+                                ? 'border-emerald-300/25 bg-emerald-500/90 text-white'
+                                : 'border-slate-500/40 bg-slate-900/85 text-slate-200'
+                            }`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full ${folder.status === 'active' ? 'bg-white' : 'bg-slate-400'}`} />
+                            {folder.status === 'active' ? 'Ativa' : 'Inativa'}
                           </span>
                         </div>
                         <div className="flex items-end justify-between gap-4 p-5 pr-16">

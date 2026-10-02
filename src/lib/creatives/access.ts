@@ -61,11 +61,16 @@ export function groupCreativeFolders(corretores: CreativeCorretor[]) {
   return [...grouped.entries()]
     .map(([key, entries]) => {
       const owner = entries.find((entry) => Boolean(entry.meta_ad_account_id)) || entries[0];
+      const active = entries.some((entry) => {
+        const status = String(entry.status || 'ativo').toLowerCase();
+        return status === 'active' || status === 'ativo';
+      });
       return {
         id: owner.id,
         key,
         name: String(owner.nome_empresa || owner.nome).trim(),
         corretor_ids: entries.map((entry) => entry.id),
+        status: active ? 'active' as const : 'inactive' as const,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
