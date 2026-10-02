@@ -8,6 +8,7 @@ import { UserRole } from '@/types';
 
 const INBOX_LIST_ROLES = ['admin', 'account_manager', 'corretor', 'corretor_admin', 'corretor_membro'] as const;
 const INBOX_TARGET_ROLES = ['account_manager', 'corretor', 'corretor_admin', 'corretor_membro'] as const;
+const UNREAD_TRACKING_STARTED_AT = '2026-10-01T20:48:14.000Z';
 
 type InboxTargetProfile = ApiProfile & {
   nome_empresa?: string | null;
@@ -187,20 +188,45 @@ async function countUnreadByConversation(conversationIds: string[], profileId: s
     .eq('profile_id', profileId)
     .in('conversa_id', conversationIds);
 
+  const lidoAte = new Map<string, string>();
   if (leiturasError) {
-    console.error('[Inbox conversations] Leituras indisponiveis:', leiturasError.message);
-    return unread;
+    console.warn('[Inbox conversations] Tabela de leituras indisponivel, usando auditoria:', leiturasError.message);
+  } else {
+    (leituras || []).forEach((row) => lidoAte.set(String(row.conversa_id), String(row.lido_ate)));
   }
 
-  const lidoAte = new Map<string, string>();
-  (leituras || []).forEach((row) => lidoAte.set(String(row.conversa_id), String(row.lido_ate)));
+  // Compatibilidade imediata enquanto a migration da tabela dedicada nao
+  // estiver disponivel. O marcador vive em audit_logs e continua valido
+  // depois que a migration for aplicada, evitando que conversas ja abertas
+  // reaparecam como nao lidas na troca de armazenamento.
+  const semLeitura = conversationIds.filter((id) => !lidoAte.has(id));
+  if (semLeitura.length) {
+    const { data: marcadores, error: marcadoresError } = await supabaseAdmin
+      .from('audit_logs')
+      .select('entity_id,created_at')
+      .eq('actor_profile_id', profileId)
+      .eq('action', 'inbox.conversation.read')
+      .eq('entity_type', 'whatsapp_conversa')
+      .in('entity_id', semLeitura)
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
+    if (marcadoresError) {
+      console.error('[Inbox conversations] Marcadores alternativos indisponiveis:', marcadoresError.message);
+    } else {
+      (marcadores || []).forEach((row) => {
+        const conversaId = String(row.entity_id || '');
+        if (conversaId && !lidoAte.has(conversaId)) {
+          lidoAte.set(conversaId, String(row.created_at));
+        }
+      });
+    }
+  }
 
   // Uma consulta so para todas as conversas da pagina, filtrando pelo corte
   // mais antigo; o resto e separado em memoria, como ja faz o human reply.
-  const cortes = conversationIds.map((id) => lidoAte.get(id)).filter(Boolean) as string[];
-  const corteMaisAntigo = cortes.length === conversationIds.length
-    ? cortes.sort()[0]
-    : null;
+  const cortes = conversationIds.map((id) => lidoAte.get(id) || UNREAD_TRACKING_STARTED_AT);
+  const corteMaisAntigo = cortes.sort()[0];
 
   let query = supabaseAdmin
     .from('whatsapp_mensagens')
@@ -220,8 +246,8 @@ async function countUnreadByConversation(conversationIds: string[], profileId: s
 
   (mensagens || []).forEach((mensagem) => {
     const conversaId = String(mensagem.conversa_id);
-    const corte = lidoAte.get(conversaId);
-    if (corte && String(mensagem.created_at) <= corte) return;
+    const corte = lidoAte.get(conversaId) || UNREAD_TRACKING_STARTED_AT;
+    if (String(mensagem.created_at) <= corte) return;
     const atual = unread.get(conversaId) || { count: 0, lastAt: null };
     atual.count += 1;
     if (!atual.lastAt || String(mensagem.created_at) > atual.lastAt) atual.lastAt = String(mensagem.created_at);
