@@ -37,7 +37,7 @@ export function isAiOutbound(phone: string, text: string) {
 
 const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
-const UNITY_SDR_PROFILE_ID = '7a7fde6f-f36f-4334-a20a-96972d7388ea';
+const UNITY_SDR_PROFILE_ID = '246bff56-c2b3-44f2-8205-613070294d00';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
 const DEFAULT_ELEVENLABS_FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
 
