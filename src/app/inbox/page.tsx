@@ -3762,15 +3762,15 @@ export default function BrokerInboxPage() {
                       {/* Content */}
                       <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex justify-between items-baseline">
-                          <span className={`text-xs truncate block ${isUnityInbox ? isUnread ? 'font-black text-[#00a884]' : 'font-semibold text-slate-950' : 'font-black text-white'}`}>{cleanInboxDisplayName(c.nome_contato, c.telefone)}</span>
+                          <span className={`text-xs truncate block ${isUnityInbox ? isUnread ? 'orion-inbox-unread-name font-black text-[#00a884]' : 'font-semibold text-slate-950' : 'font-black text-white'}`}>{cleanInboxDisplayName(c.nome_contato, c.telefone)}</span>
                           <div className="ml-2 flex shrink-0 items-center gap-1.5">
-                            <span className={`orion-inbox-conversation-time text-[9px] ${isUnityInbox ? isUnread ? 'font-black text-[#00a884]' : 'font-medium text-slate-400' : 'font-medium text-slate-500'}`}>
+                            <span className={`orion-inbox-conversation-time text-[9px] ${isUnityInbox ? isUnread ? 'orion-inbox-unread-time font-black text-[#00a884]' : 'font-medium text-slate-400' : 'font-medium text-slate-500'}`}>
                               {(unreadDetail?.receivedAt || c.ultima_mensagem_at) ? formatHour(unreadDetail?.receivedAt || c.ultima_mensagem_at || '') : ''}
                             </span>
                             {/* Selo do tamanho do contador do WhatsApp: 20px com
                                 numero de 11px. Com 16px e fonte 8 ninguem via. */}
                             {isUnread && (
-                              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold leading-none text-white">
+                              <span className="orion-inbox-unread-badge inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold leading-none text-white">
                                 {unreadCount > 99 ? '99+' : unreadCount}
                               </span>
                             )}

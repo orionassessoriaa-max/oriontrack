@@ -5351,6 +5351,37 @@ main:has(.orion-inbox-shell) > div,
   box-shadow: inset 0 0 0 1px var(--wa-verde) !important;
 }
 
+/* O estado nao lido precisa vencer a normalizacao visual do Inbox. Sem estas
+   classes, o tema claro repinta o horario de cinza e a regra que achata todos
+   os spans transforma o contador verde em um pequeno retangulo sem destaque. */
+.orion-inbox-list .orion-inbox-unread-name,
+.orion-inbox-list .orion-inbox-conversation-time.orion-inbox-unread-time,
+.theme-claro .orion-inbox-list .orion-inbox-unread-name,
+.theme-claro .orion-inbox-list .orion-inbox-conversation-time.orion-inbox-unread-time {
+  color: #00a884 !important;
+  -webkit-text-fill-color: #00a884 !important;
+  font-weight: 800 !important;
+}
+
+.orion-inbox-list.orion-inbox-list .orion-inbox-unread-badge,
+.theme-claro .orion-inbox-list.orion-inbox-list .orion-inbox-unread-badge {
+  display: inline-flex !important;
+  width: auto !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 999px !important;
+  background: #00a884 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  padding: 0 6px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 20px !important;
+  opacity: 1 !important;
+}
+
 
 /* "main button:hover:not(:disabled) { transform: translateY(-1px) }" e global do
    layout (layer components, linha ~128): e ele que levanta a linha quando o

@@ -798,6 +798,7 @@ export async function GET(request: Request) {
       : null;
 
     const conversationIds = await findAccessibleConversationIdsByPhone(guard.profile, conversation);
+    const unityConversation = await isUnityBrokerage(conversation?.corretor_id);
 
     // Reserva orfa: a linha e gravada antes de chamar o provedor e apagada
     // quando o envio falha. Se o processo morre no meio, ela fica no banco com
@@ -848,7 +849,7 @@ export async function GET(request: Request) {
       if (!page || page.length < pageSize) break;
     }
 
-    const actorRoles = guard.profile.tipo_usuario === 'corretor_membro'
+    const actorRoles = guard.profile.tipo_usuario === 'corretor_membro' && !unityConversation
       ? await messageActorRoles(history)
       : new Map<string, string>();
     const visibleHistory = history.filter((message) => {
@@ -858,6 +859,12 @@ export async function GET(request: Request) {
         && (!commercialInstance || inboxMessageInstanceName(message).toLowerCase() === commercialInstance)
         && (
           guard.profile.tipo_usuario !== 'corretor_membro'
+          // A Unity opera um unico numero compartilhado. Mensagens enviadas
+          // pelo celular chegam identificadas pela instancia dona da linha,
+          // nao pelo integrante que assinou o texto. Depois que o lead muda
+          // de responsavel, esconder essas mensagens deixa o historico
+          // incompleto para quem assumiu o atendimento.
+          || unityConversation
           || memberCanViewInboxMessage(guard.profile.id, message, actorRoles)
         );
     });

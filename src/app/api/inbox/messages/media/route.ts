@@ -612,6 +612,21 @@ async function canAccessConversation(profile: any, conversation: any) {
   return false;
 }
 
+async function isUnityBrokerage(corretorId: string | null | undefined) {
+  if (!corretorId) return false;
+  const { data, error } = await supabaseAdmin
+    .from('corretores')
+    .select('nome_empresa')
+    .eq('id', corretorId)
+    .maybeSingle();
+  if (error) throw error;
+  return String(data?.nome_empresa || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase() === 'UNITY SAUDE';
+}
+
 async function canAccessMessage(profile: { id: string; tipo_usuario: string }, message: unknown) {
   if (profile.tipo_usuario !== 'corretor_membro') return true;
   const actorProfileId = inboxMessageProfileId(message);
@@ -650,7 +665,11 @@ export async function GET(request: Request) {
     if (!(await canAccessConversation(guard.profile, conversation))) {
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
     }
-    if (!(await canAccessMessage(guard.profile, message))) {
+    // A Unity usa uma linha compartilhada. A autoria tecnica da midia pode
+    // ficar no perfil dono da instancia mesmo quando outro integrante enviou
+    // pelo celular. Quem ja possui acesso ao lead deve conseguir abrir todo o
+    // historico dessa conversa, inclusive propostas e cotacoes anteriores.
+    if (!(await isUnityBrokerage(conversation.corretor_id)) && !(await canAccessMessage(guard.profile, message))) {
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
     }
 
