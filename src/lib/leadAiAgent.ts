@@ -1571,10 +1571,11 @@ function formatResponsibleSummary(lead: LeadRow, summary: string) {
 }
 
 async function assignQualifiedLead(lead: LeadRow) {
-  if (lead.responsavel_profile_id) return lead;
-
   const broker = await findBroker(lead.corretor_id);
-  const configuredSdrId = isUnityBrokerage(broker?.nome_empresa)
+  const isUnity = isUnityBrokerage(broker?.nome_empresa);
+  if (!isUnity && lead.responsavel_profile_id) return lead;
+
+  const configuredSdrId = isUnity
     ? UNITY_SDR_PROFILE_ID
     : null;
 
@@ -1605,8 +1606,7 @@ async function assignQualifiedLead(lead: LeadRow) {
           responsavel_membro_id: member?.id || null,
           updated_at: now,
         })
-        .eq('id', lead.id)
-        .is('responsavel_profile_id', null);
+        .eq('id', lead.id);
       if (error) throw error;
       if (member?.id) {
         await supabaseAdmin.from('corretor_time_membros').update({ ultimo_lead_at: now }).eq('id', member.id);

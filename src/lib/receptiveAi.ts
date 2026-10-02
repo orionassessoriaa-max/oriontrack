@@ -337,6 +337,43 @@ export async function handleReceptiveIncoming(options: {
     return data;
   };
 
+  // A conversa e unica na tabela. O INSERT funciona como uma trava atomica:
+  // entre webhooks concorrentes, somente um processo ganha o direito de enviar
+  // o menu inicial. O upsert anterior permitia que ambos enviassem a saudacao.
+  const claimEntrySession = async () => {
+    const { error } = await supabaseAdmin
+      .from('whatsapp_receptive_sessions')
+      .insert({
+        conversa_id: options.conversationId,
+        corretor_id: options.corretorId,
+        telefone: normalizePhone(options.phone),
+        state: 'entry_pending',
+        updated_at: new Date().toISOString(),
+      });
+    if (error?.code === '23505') return false;
+    if (error) throw error;
+    return true;
+  };
+
+  const closeActiveBeneficiaryConversation = async () => {
+    const { data: conversation, error: conversationError } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .select('tags')
+      .eq('id', options.conversationId)
+      .maybeSingle();
+    if (conversationError) throw conversationError;
+
+    const currentTags = Array.isArray(conversation?.tags) ? conversation.tags : [];
+    const tags = currentTags.includes('Beneficiário Ativo')
+      ? currentTags
+      : [...currentTags, 'Beneficiário Ativo'];
+    const { error } = await supabaseAdmin
+      .from('whatsapp_conversas')
+      .update({ status: 'resolvida', tags, updated_at: new Date().toISOString() })
+      .eq('id', options.conversationId);
+    if (error) throw error;
+  };
+
   const linkLead = async (leadId: string, state: string, origin?: string | null) => {
     await ensureSession(state, { lead_id: leadId, origem: origin || null });
     const { error } = await supabaseAdmin
@@ -401,6 +438,7 @@ export async function handleReceptiveIncoming(options: {
   if (entry === 'beneficiary') {
     await ensureSession('beneficiary_routed', { lead_id: null, origem: 'beneficiario_ativo' });
     await sendBeneficiaryChannels(options.instance, options.conversationId, options.phone, options.config.persona);
+    await closeActiveBeneficiaryConversation();
     return { handled: true, leadId: null, state: 'beneficiary_routed' };
   }
 
@@ -421,7 +459,20 @@ export async function handleReceptiveIncoming(options: {
     return { handled: true, leadId: null, state: 'beneficiary_routed' };
   }
 
-  await ensureSession('entry_pending');
-  await sendEntryButtons(options.instance, options.conversationId, options.phone, options.config.persona);
+  const claimed = await claimEntrySession();
+  if (claimed) {
+    try {
+      await sendEntryButtons(options.instance, options.conversationId, options.phone, options.config.persona);
+    } catch (error) {
+      // Se o provedor recusou o envio, libere a trava para a proxima mensagem
+      // recebida poder tentar novamente.
+      await supabaseAdmin
+        .from('whatsapp_receptive_sessions')
+        .delete()
+        .eq('conversa_id', options.conversationId)
+        .eq('state', 'entry_pending');
+      throw error;
+    }
+  }
   return { handled: true, leadId: null, state: 'entry_pending' };
 }
