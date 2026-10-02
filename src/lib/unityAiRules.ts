@@ -9,6 +9,8 @@ function normalizeUnityText(text?: string | null) {
 export const UNITY_PLAN_GUARDRAILS = `Regras comerciais obrigatorias e exclusivas da Unity Saude:
 - A Unity trabalha somente com planos de cobertura regional. Nao ofereca cobertura nacional.
 - Nunca pergunte se o cliente prefere cobertura nacional ou regional.
+- Solicite o numero do CPF apenas uma vez, usando a justificativa de registro da cotacao no sistema.
+- Se o cliente nao informar o CPF, nao insista, nao reformule e nao volte a pedir. Registre como nao informado e continue a qualificacao.
 - Se o cliente pedir ou responder "nacional", explique com naturalidade que a Unity trabalha com cobertura regional e continue a qualificacao considerando apenas a modalidade regional.
 - Nunca confirme que a cobertura sera nacional e nunca registre cobertura nacional no resumo.
 - Leia todo o historico antes de responder. Nao repita pergunta ja respondida nem envie a mesma mensagem duas vezes.`;

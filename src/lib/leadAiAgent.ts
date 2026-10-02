@@ -38,6 +38,7 @@ export function isAiOutbound(phone: string, text: string) {
 const AI_TEST_BROKERAGE = 'ORION TESTE';
 const AI_PERSONA = 'Aline';
 const UNITY_SDR_PROFILE_ID = '246bff56-c2b3-44f2-8205-613070294d00';
+const UNITY_CPF_QUESTION = 'Para registrar a cotação em sistema, por favor informe o CPF.';
 const DEFAULT_ELEVENLABS_VOICE_ID = '33B4UnXyTNbgLmdEDh5P';
 const DEFAULT_ELEVENLABS_FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
 
@@ -590,6 +591,16 @@ function isInitialConfirmationQuestion(text?: string | null) {
     normalized.includes('voce gostaria de receber uma cotacao') &&
     normalized.includes('correto')
   );
+}
+
+function isLeadNameQuestion(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return normalized.includes('como voce se chama') || normalized.includes('qual e o seu nome');
+}
+
+function isUnityCpfQuestion(text?: string | null) {
+  const normalized = normalizeAiText(text);
+  return normalized.includes('registrar a cotacao') && normalized.includes('informe o cpf');
 }
 
 function isAffirmativeAnswer(text?: string | null) {
@@ -1496,6 +1507,7 @@ function extractSummaryField(summary: string, key: string) {
     'CNPJ/MEI',
     'Possui CNPJ/MEI',
     'CNPJ informado',
+    'CPF',
     'Cidade',
     'Investimento',
     'Investimento pretendido',
@@ -1556,6 +1568,7 @@ function formatResponsibleSummary(lead: LeadRow, summary: string) {
     `*Telefone:* ${cleanSummaryValue(lead.telefone)}`,
     `*Idades:* ${field('Idades|Idade\\(s\\)', lead.idades)}`,
     `*CNPJ/MEI:* ${field('CNPJ/MEI|Possui CNPJ/MEI', lead.possui_cnpj)}`,
+    `*CPF:* ${field('CPF')}`,
     `*Cidade:* ${field('Cidade', lead.cidade)}`,
     `*Investimento:* ${field('Investimento|Investimento pretendido', lead.investimento)}`,
     `*Plano atual:* ${field('Plano\\s+Atual|Plano atual', lead.plano_atual)}`,
@@ -2028,7 +2041,8 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
   if (!conversation) return { started: false, eligible: true, reason: 'Conversa nao criada.' };
 
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
-  const signSenderName = isUnityBrokerage(corretora.nome || broker.nome_empresa);
+  const unityQualification = isUnityBrokerage(corretora.nome || broker.nome_empresa);
+  const signSenderName = unityQualification;
   const threeQualification = isThreeBrokerage(corretora.nome || broker.nome_empresa);
 
   const opName = formatOperadoraName(lead.operadora);
@@ -2049,7 +2063,9 @@ export async function startLeadAiIfEligible(leadId: string, options: { entryChan
     interestText,
     !threeQualification && (cameFromWhatsAppAd || cameFromOrganicWhatsApp) && !hasReliableLeadName(lead)
       ? 'Para eu te ajudar certinho, como você se chama?'
-      : initialLeadQuestion(lead),
+      : unityQualification
+        ? UNITY_CPF_QUESTION
+        : initialLeadQuestion(lead),
   ].join('\n\n'));
 
   const { data: existing, error: existingError } = await supabaseAdmin
@@ -2218,7 +2234,8 @@ export async function continueLeadAiFromIncoming(options: {
   const history = [...(recentHistory || [])].reverse();
 
   const formattedBrokerageName = formatAiBrokerageDisplayName(corretora.nome || broker.nome_empresa);
-  const signSenderName = isUnityBrokerage(corretora.nome || broker.nome_empresa);
+  const unityQualification = isUnityBrokerage(corretora.nome || broker.nome_empresa);
+  const signSenderName = unityQualification;
   const threeQualification = isThreeBrokerage(corretora.nome || broker.nome_empresa);
   const skipCallQuestion = isFacilitaBrokerage(corretora.nome || broker.nome_empresa) || threeQualification;
 
@@ -2243,6 +2260,87 @@ export async function continueLeadAiFromIncoming(options: {
     isHospitalPreferenceQuestion(previousOutboundText) &&
     isNoHospitalPreferenceAnswer(options.customerMessage);
   const cityAnswered = isCityQuestion(previousOutboundText);
+
+  if (unityQualification && isLeadNameQuestion(previousOutboundText)) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
+    const informedName = options.customerMessage.trim();
+    const summary = setSummaryField(session.summary || leadFacts(lead), 'Nome', informedName);
+    const { error: leadUpdateError } = await supabaseAdmin
+      .from('leads')
+      .update({ nome: informedName })
+      .eq('id', lead.id);
+    if (leadUpdateError) throw leadUpdateError;
+
+    const reply = UNITY_CPF_QUESTION;
+    registerAiOutbound(lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
+    await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+      ...(payload || {}),
+      instance: aiInstanceName(adminProfile),
+      ai_agent: aiConfig.persona,
+    });
+    await supabaseAdmin.from('lead_ai_sessions').update({
+      summary: setSummaryField(summary, 'Pendente', 'CPF solicitado uma unica vez.'),
+      last_customer_message_at: new Date().toISOString(),
+      last_ai_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', session.id);
+
+    return { handled: true, handoff: false, deterministic: 'unity_cpf_after_name' };
+  }
+
+  if (unityQualification && isUnityCpfQuestion(previousOutboundText)) {
+    if (!(await isLeadAiSessionActive(session.id))) {
+      return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
+    }
+
+    const rawDocument = options.customerMessage.trim();
+    const digits = rawDocument.replace(/\D/g, '');
+    let summary = session.summary || leadFacts(lead);
+    const leadUpdate: { possui_cnpj?: string; cnpj?: string } = {};
+
+    if (digits.length === 11) {
+      summary = setSummaryField(summary, 'CPF', rawDocument);
+      leadUpdate.possui_cnpj = 'Não';
+    } else if (digits.length === 14) {
+      summary = setSummaryField(summary, 'CPF', 'Não informado; cliente informou CNPJ.');
+      summary = setSummaryField(summary, 'CNPJ informado', rawDocument);
+      leadUpdate.possui_cnpj = 'Sim';
+      leadUpdate.cnpj = rawDocument;
+    } else {
+      // A solicitacao e unica. Qualquer recusa ou resposta invalida avanca o
+      // fluxo sem repetir nem reformular o pedido de CPF.
+      summary = setSummaryField(summary, 'CPF', 'Não informado (solicitado uma vez).');
+    }
+
+    if (Object.keys(leadUpdate).length) {
+      const { error: leadUpdateError } = await supabaseAdmin
+        .from('leads')
+        .update(leadUpdate)
+        .eq('id', lead.id);
+      if (leadUpdateError) throw leadUpdateError;
+    }
+
+    const reply = initialLeadQuestion(lead);
+    registerAiOutbound(lead.telefone || '', reply);
+    const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
+    await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
+      ...(payload || {}),
+      instance: aiInstanceName(adminProfile),
+      ai_agent: aiConfig.persona,
+    });
+    await supabaseAdmin.from('lead_ai_sessions').update({
+      summary: setSummaryField(summary, 'Pendente', 'Confirmar interesse e continuar qualificacao.'),
+      last_customer_message_at: new Date().toISOString(),
+      last_ai_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', session.id);
+
+    return { handled: true, handoff: false, deterministic: 'unity_cpf_captured_once' };
+  }
 
   if (
     threeQualification &&
@@ -2344,7 +2442,14 @@ export async function continueLeadAiFromIncoming(options: {
       return { handled: false, handoff: true, reason: 'Atendimento assumido por uma pessoa.' };
     }
 
-    const reply = customerReplyForFollowUp(cnpjConfirmationReply(lead), lead, Boolean(previousOutboundText));
+    const unityCpfAlreadyRequested = unityQualification && Boolean(extractSummaryField(session.summary || '', 'CPF'));
+    const reply = customerReplyForFollowUp(
+      unityCpfAlreadyRequested
+        ? nextQuestionAfterCnpjConfirmation(lead, true, skipCallQuestion)
+        : cnpjConfirmationReply(lead),
+      lead,
+      Boolean(previousOutboundText),
+    );
     registerAiOutbound(lead.telefone || '', reply);
     const payload = await sendAiAdminText(adminProfile, lead.telefone || '', reply, aiConfig.persona, signSenderName);
     await insertMessage(options.conversationId, 'outbound', aiConfig.persona, reply, {
@@ -2356,14 +2461,20 @@ export async function continueLeadAiFromIncoming(options: {
     await supabaseAdmin
       .from('lead_ai_sessions')
       .update({
-        summary: appendSummaryLine(session.summary || leadFacts(lead), '*Pendente*: Confirmar se a simulacao sera por CNPJ/MEI ou CPF.'),
+        summary: unityCpfAlreadyRequested
+          ? setSummaryField(session.summary || leadFacts(lead), 'Pendente', 'Continuar qualificacao sem repetir o pedido de CPF.')
+          : appendSummaryLine(session.summary || leadFacts(lead), '*Pendente*: Confirmar se a simulacao sera por CNPJ/MEI ou CPF.'),
         last_customer_message_at: new Date().toISOString(),
         last_ai_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', session.id);
 
-    return { handled: true, handoff: false, deterministic: 'cnpj_confirmation' };
+    return {
+      handled: true,
+      handoff: false,
+      deterministic: unityCpfAlreadyRequested ? 'unity_after_initial_confirmation' : 'cnpj_confirmation',
+    };
   }
 
   if (
@@ -3004,6 +3115,7 @@ async function updateLeadFromSummary(leadId: string, summary?: string | null) {
       'CNPJ/MEI',
       'Possui CNPJ/MEI',
       'CNPJ informado',
+      'CPF',
       'Cidade',
       'Investimento',
       'Investimento pretendido',
